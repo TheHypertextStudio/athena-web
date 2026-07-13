@@ -12,6 +12,7 @@ import {
   useUpdateCalendarItemById,
 } from '@/components/calendar/calendar-mutations';
 import {
+  isInlineEditableScheduleItem,
   scheduleInstantAt,
   type ScheduleItem,
   type ScheduleLane,
@@ -20,6 +21,10 @@ import {
 
 import { type AgendaEntry, isTimeboxed, useAgenda } from './agenda-context';
 import AgendaEntryCard from './agenda-entry-card';
+import { isAgendaEntryInlineEditable, toAgendaScheduleItem } from './agenda-schedule-item';
+
+const INLINE_UPDATE_FAILURE_COPY =
+  'Could not update this item. Your previous time has been restored.';
 
 /** Start time in ms for a timeboxed entry, or `null` for untimed. */
 function startMs(entry: AgendaEntry): number | null {
@@ -93,7 +98,7 @@ function TimelineArrangement({
   readonly onOpenCalendarItem: (itemId: string) => void;
 }): JSX.Element {
   const router = useRouter();
-  const { date, displayTimezone, pixelsPerHour, setTimebox } = useAgenda();
+  const { date, displayTimezone, pixelsPerHour, setTimebox, timeboxFailed } = useAgenda();
   const [now] = useState(() => new Date().toISOString());
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
@@ -108,51 +113,15 @@ function TimelineArrangement({
         month: 'short',
         day: 'numeric',
       }),
-      items: entries.filter(isTimeboxed).map(
-        (entry): ScheduleItem => ({
-          id: entry.id,
-          title: entry.title,
-          startsAt: entry.startsAt,
-          endsAt: entry.endsAt,
-          color: entry.layerColor ?? entry.calendar?.color ?? undefined,
-          editable:
-            entry.planItemId !== undefined || entry.calendarItem?.permissions.canEditCore === true,
-          dragObject: entry.calendarItem
-            ? {
-                kind: 'calendar_item',
-                itemId: entry.calendarItem.id,
-                title: entry.title,
-              }
-            : entry.taskId && entry.organizationId
-              ? {
-                  kind: 'task',
-                  taskId: entry.taskId,
-                  organizationId: entry.organizationId,
-                  title: entry.title,
-                }
-              : undefined,
-          dropTarget:
-            entry.calendarItem !== undefined &&
-            ['provider_event', 'native_event', 'native_block', 'timebox'].includes(
-              entry.calendarItem.kind,
-            ),
-        }),
-      ),
+      items: entries.flatMap((entry) => {
+        const item = toAgendaScheduleItem(entry, date, displayTimezone);
+        return item ? [item] : [];
+      }),
     }),
-    [date, entries],
+    [date, displayTimezone, entries],
   );
 
-  const persistBounds = (
-    item: ScheduleItem,
-    targetLane: ScheduleLane,
-    startMinutes: number,
-    endMinutes: number,
-  ): void => {
-    const entry = entryById.get(item.id);
-    if (!entry) return;
-    const startsAt = scheduleInstantAt(targetLane.date, startMinutes, displayTimezone);
-    const endsAt = scheduleInstantAt(targetLane.date, endMinutes, displayTimezone);
-    if (!startsAt || !endsAt) return;
+  const persistExactBounds = (entry: AgendaEntry, startsAt: string, endsAt: string): void => {
     if (entry.planItemId) {
       setTimebox(entry, startsAt, endsAt);
     } else if (entry.calendarItem) {
@@ -163,6 +132,75 @@ function TimelineArrangement({
     }
   };
 
+  const persistMove = (
+    item: ScheduleItem,
+    targetLane: ScheduleLane,
+    startMinutes: number,
+    endMinutes: number,
+  ): void => {
+    const entry = entryById.get(item.id);
+    if (
+      !entry ||
+      targetLane.editable === false ||
+      !isAgendaEntryInlineEditable(entry, displayTimezone)
+    )
+      return;
+    const startsAt = scheduleInstantAt(targetLane.date, startMinutes, displayTimezone, 'reject');
+    const endsAt = scheduleInstantAt(targetLane.date, endMinutes, displayTimezone, 'reject');
+    if (
+      !startsAt ||
+      !endsAt ||
+      !isInlineEditableScheduleItem({
+        canPersistBounds: true,
+        allDay: false,
+        startsAt,
+        endsAt,
+        displayTimezone,
+      })
+    )
+      return;
+    persistExactBounds(entry, startsAt, endsAt);
+  };
+
+  const persistResize = (
+    item: ScheduleItem,
+    targetLane: ScheduleLane,
+    edge: 'start' | 'end',
+    startMinutes: number,
+    endMinutes: number,
+  ): void => {
+    const entry = entryById.get(item.id);
+    if (
+      !entry ||
+      targetLane.editable === false ||
+      !entry.startsAt ||
+      !entry.endsAt ||
+      !isAgendaEntryInlineEditable(entry, displayTimezone)
+    )
+      return;
+    const startsAt =
+      edge === 'start'
+        ? scheduleInstantAt(targetLane.date, startMinutes, displayTimezone, 'reject')
+        : entry.startsAt;
+    const endsAt =
+      edge === 'end'
+        ? scheduleInstantAt(targetLane.date, endMinutes, displayTimezone, 'reject')
+        : entry.endsAt;
+    if (
+      !startsAt ||
+      !endsAt ||
+      !isInlineEditableScheduleItem({
+        canPersistBounds: true,
+        allDay: false,
+        startsAt,
+        endsAt,
+        displayTimezone,
+      })
+    )
+      return;
+    persistExactBounds(entry, startsAt, endsAt);
+  };
+
   return (
     <>
       <SchedulingCanvas
@@ -171,6 +209,11 @@ function TimelineArrangement({
         pixelsPerHour={pixelsPerHour}
         now={now}
         minimumLaneWidth={180}
+        error={
+          timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
+            ? INLINE_UPDATE_FAILURE_COPY
+            : null
+        }
         emptyMessage="Nothing scheduled."
         onOpenItem={({ item }) => {
           const entry = entryById.get(item.id);
@@ -184,10 +227,10 @@ function TimelineArrangement({
           }
         }}
         onMoveItem={({ item, toLane, startMinutes, endMinutes }) => {
-          persistBounds(item, toLane, startMinutes, endMinutes);
+          persistMove(item, toLane, startMinutes, endMinutes);
         }}
-        onResizeItem={({ item, lane: targetLane, startMinutes, endMinutes }) => {
-          persistBounds(item, targetLane, startMinutes, endMinutes);
+        onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
+          persistResize(item, targetLane, edge, startMinutes, endMinutes);
         }}
         onDropObjectOnItem={({ object, targetItem }) => {
           const target = entryById.get(targetItem.id)?.calendarItem;

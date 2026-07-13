@@ -7,6 +7,34 @@ export interface ScheduleItemLaneBounds {
   readonly endMinutes: number;
 }
 
+/** Return whether exact item bounds are safe to rewrite through one viewer wall-clock lane. */
+export function isInlineEditableScheduleItem({
+  canPersistBounds,
+  allDay,
+  startsAt,
+  endsAt,
+  displayTimezone,
+}: {
+  readonly canPersistBounds: boolean;
+  readonly allDay: boolean;
+  readonly startsAt: string | null | undefined;
+  readonly endsAt: string | null | undefined;
+  readonly displayTimezone: string;
+}): boolean {
+  if (!canPersistBounds || allDay || !startsAt || !endsAt) return false;
+  const elapsedMinutes = scheduleElapsedMinutes(startsAt, endsAt);
+  const start = scheduleWallPositionForInstant(startsAt, displayTimezone);
+  const end = scheduleWallPositionForInstant(endsAt, displayTimezone);
+  return (
+    elapsedMinutes !== null &&
+    elapsedMinutes > 0 &&
+    start !== null &&
+    end !== null &&
+    start.date === end.date &&
+    start.wallMinutes < end.wallMinutes
+  );
+}
+
 /** Return an ISO instant's `YYYY-MM-DD` date in the required canvas timezone. */
 export function dateKeyForInstant(instant: string, displayTimezone: string): string | null {
   return scheduleWallPositionForInstant(instant, displayTimezone)?.date ?? null;

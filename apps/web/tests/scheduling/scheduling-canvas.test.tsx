@@ -1073,6 +1073,76 @@ describe('SchedulingCanvas', () => {
     });
   });
 
+  it('keeps a read-only all-day pill openable, droppable, and relationship-draggable', () => {
+    const dragObject = {
+      kind: 'calendar_item' as const,
+      itemId: ALL_DAY_ITEM.id,
+      title: ALL_DAY_ITEM.title,
+    };
+    const target = {
+      ...ALL_DAY_ITEM,
+      editable: false,
+      dragObject,
+      dropTarget: true,
+    };
+    const sourceLane = lane('ada', 'Ada', [target], false);
+    const onOpenItem = vi.fn();
+    const onDropObjectOnItem = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={onOpenItem}
+        onDropObjectOnItem={onDropObjectOnItem}
+      />,
+    );
+
+    const pill = screen.getByRole('button', { name: ALL_DAY_ITEM.title });
+    fireEvent.click(pill);
+    expect(onOpenItem).toHaveBeenCalledWith({ item: target, lane: sourceLane });
+
+    const affordance = screen.getByRole('button', {
+      name: `Drag ${ALL_DAY_ITEM.title} to create a relationship`,
+    });
+    expect(affordance).toHaveAttribute('draggable', 'true');
+    const dragTransfer = { effectAllowed: 'none', setData: vi.fn() };
+    fireEvent.dragStart(affordance, { dataTransfer: dragTransfer });
+    expect(dragTransfer.effectAllowed).toBe('link');
+    expect(dragTransfer.setData.mock.calls).toEqual([
+      [SCHEDULE_DRAG_MIME, JSON.stringify(dragObject)],
+      ['text/plain', ALL_DAY_ITEM.title],
+    ]);
+
+    const taskPayload = {
+      kind: 'task',
+      taskId: 'task_1',
+      organizationId: 'org_1',
+      title: 'Prepare offsite',
+    };
+    const taskTransfer = {
+      types: [SCHEDULE_DRAG_MIME],
+      dropEffect: 'none',
+      getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(taskPayload) : ''),
+    };
+    fireEvent.dragOver(pill, { dataTransfer: taskTransfer });
+    fireEvent.drop(pill, { dataTransfer: taskTransfer });
+    expect(onDropObjectOnItem).toHaveBeenCalledWith({
+      object: taskPayload,
+      targetItem: target,
+      targetLane: sourceLane,
+    });
+
+    const selfTransfer = {
+      types: [SCHEDULE_DRAG_MIME],
+      dropEffect: 'none',
+      getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(dragObject) : ''),
+    };
+    fireEvent.drop(pill, { dataTransfer: selfTransfer });
+    expect(onDropObjectOnItem).toHaveBeenCalledOnce();
+  });
+
   it('separates relationship drag onto a dedicated affordance with the exact typed payload', () => {
     const dragObject = {
       kind: 'calendar_item' as const,

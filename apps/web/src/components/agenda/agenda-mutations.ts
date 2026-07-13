@@ -26,6 +26,8 @@ import type { AgendaEntry } from './agenda-context';
 
 /** The agenda's in-place edit operations, each acting on a single plan entry. */
 export interface AgendaPlanMutations {
+  /** Whether the latest timebox write failed after its optimistic update was restored. */
+  timeboxFailed: boolean;
   /** Check an entry off for the day (or un-check it). */
   toggleDone: (entry: AgendaEntry) => void;
   /** Place the entry on the timeline for the given local clock window (ISO instants). */
@@ -325,7 +327,14 @@ export function useAgendaPlanMutations(date: string): AgendaPlanMutations {
   );
 
   return useMemo(
-    () => ({ toggleDone, setTimebox, clearTimebox, moveToDay, removeFromPlan }),
-    [toggleDone, setTimebox, clearTimebox, moveToDay, removeFromPlan],
+    () => ({
+      timeboxFailed: timebox.isError,
+      toggleDone,
+      setTimebox,
+      clearTimebox,
+      moveToDay,
+      removeFromPlan,
+    }),
+    [timebox.isError, toggleDone, setTimebox, clearTimebox, moveToDay, removeFromPlan],
   );
 }

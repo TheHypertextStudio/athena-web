@@ -47,6 +47,9 @@ import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query'
  */
 const CALENDAR_ITEMS_PREFIX: QueryKey = ['me', 'calendar-items'];
 
+/** Serialize dynamic optimistic snapshots shared by Calendar and the always-mounted Agenda rail. */
+const DYNAMIC_UPDATE_QUEUES = new WeakMap<object, Promise<void>>();
+
 /** Whether a cached query key is a `calendarItems(startISO, endISO)` range entry (not a detail). */
 function isRangeKey(key: QueryKey): boolean {
   return key[0] === 'me' && key[1] === 'calendar-items' && key[2] !== 'detail';
@@ -127,6 +130,11 @@ function removeCalendarItemFromRanges(
 interface CombinedRollback {
   rollback: () => void;
   rangeKeys: QueryKey[];
+}
+
+/** Rollback context for serialized dynamic writes, including release of the next optimistic edit. */
+interface SerializedCombinedRollback extends CombinedRollback {
+  releaseQueue: () => void;
 }
 
 /**
@@ -225,7 +233,12 @@ export interface UpdateCalendarItemByIdVariables {
 /** Update arbitrary calendar items from the shared scheduling canvas. */
 export function useUpdateCalendarItemById() {
   const queryClient = useQueryClient();
-  return useApiMutation<CalendarItemOut, UpdateCalendarItemByIdVariables, CombinedRollback>({
+  return useApiMutation<
+    CalendarItemOut,
+    UpdateCalendarItemByIdVariables,
+    SerializedCombinedRollback
+  >({
+    scope: { id: 'calendar-item-by-id-updates' },
     mutationFn: ({ itemId, patch }) =>
       unwrap(
         () =>
@@ -235,7 +248,17 @@ export function useUpdateCalendarItemById() {
           }),
         'Could not update the calendar item.',
       ),
-    onMutate: ({ itemId, patch }) => {
+    onMutate: async ({ itemId, patch }) => {
+      const previousWrite = DYNAMIC_UPDATE_QUEUES.get(queryClient) ?? Promise.resolve();
+      let releaseQueue = (): void => undefined;
+      const currentWrite = new Promise<void>((resolve) => {
+        releaseQueue = resolve;
+      });
+      DYNAMIC_UPDATE_QUEUES.set(
+        queryClient,
+        previousWrite.then(() => currentWrite),
+      );
+      await previousWrite;
       const pendingPatch = (item: CalendarItemOut): CalendarItemOut => ({
         ...item,
         ...patch,
@@ -253,16 +276,21 @@ export function useUpdateCalendarItemById() {
           rangePatch.rollback();
         },
         rangeKeys: rangePatch.rangeKeys,
+        releaseQueue,
       };
     },
     onError: (_error, _vars, context) => context?.rollback(),
     onSettled: async (_data, _error, vars, context) => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(vars.itemId) }),
-        ...(context?.rangeKeys ?? []).map((key) =>
-          queryClient.invalidateQueries({ queryKey: key }),
-        ),
-      ]);
+      try {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(vars.itemId) }),
+          ...(context?.rangeKeys ?? []).map((key) =>
+            queryClient.invalidateQueries({ queryKey: key }),
+          ),
+        ]);
+      } finally {
+        context?.releaseQueue();
+      }
     },
   });
 }

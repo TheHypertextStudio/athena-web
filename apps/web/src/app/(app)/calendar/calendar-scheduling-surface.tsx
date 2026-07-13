@@ -1,6 +1,6 @@
 'use client';
 
-import type { CalendarPreferences } from '@docket/types';
+import type { CalendarItemOut, CalendarPreferences } from '@docket/types';
 import type { JSX } from 'react';
 
 import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
@@ -11,6 +11,7 @@ import {
 } from '@/components/calendar/calendar-mutations';
 import type { CalendarRegionSelection } from '@/components/calendar/create-block-form';
 import {
+  isInlineEditableScheduleItem,
   type ScheduleItem,
   type ScheduleItemMove,
   type ScheduleItemResize,
@@ -18,9 +19,12 @@ import {
   SchedulingCanvas,
 } from '@/components/scheduling';
 
-import type { CalendarAxis } from './calendar-schedule-model';
+import { canPersistCalendarItemBounds, type CalendarAxis } from './calendar-schedule-model';
 import type { CalendarDateAxisState } from './use-calendar-date-axis';
 import type { CalendarPeopleAxisState } from './use-calendar-people-axis';
+
+const INLINE_UPDATE_FAILURE_COPY =
+  'Could not update this item. Your previous time has been restored.';
 
 /** Props for the shared canvas and its axis-specific status/sidebar affordances. */
 export interface CalendarSchedulingSurfaceProps {
@@ -64,22 +68,60 @@ export function CalendarSchedulingSurface({
   const relateItems = useRelateCalendarItems();
   const minLaneWidth = preferences?.minLaneWidth ?? 240;
 
-  const updateBounds = (
+  const sourceIsInlineEditable = (source: CalendarItemOut): boolean =>
+    isInlineEditableScheduleItem({
+      canPersistBounds: canPersistCalendarItemBounds(source),
+      allDay: Boolean(source.allDayStartDate && source.allDayEndDate),
+      startsAt: source.startsAt,
+      endsAt: source.endsAt,
+      displayTimezone,
+    });
+  const persistExactBounds = (itemId: string, startsAt: string, endsAt: string): void => {
+    updateItem.mutate({
+      itemId,
+      patch: { startsAt, endsAt },
+    });
+  };
+  const candidateIsSafe = (startsAt: string, endsAt: string): boolean =>
+    isInlineEditableScheduleItem({
+      canPersistBounds: true,
+      allDay: false,
+      startsAt,
+      endsAt,
+      displayTimezone,
+    });
+  const moveBounds = (
     itemId: string,
     date: string,
     startMinutes: number,
     endMinutes: number,
   ): void => {
-    const startsAt = scheduleInstantAt(date, startMinutes, displayTimezone);
-    const endsAt = scheduleInstantAt(date, endMinutes, displayTimezone);
-    if (!startsAt || !endsAt) return;
-    updateItem.mutate({
-      itemId,
-      patch: {
-        startsAt,
-        endsAt,
-      },
-    });
+    const source = dateAxis.itemById.get(itemId);
+    if (!source || !sourceIsInlineEditable(source)) return;
+    const startsAt = scheduleInstantAt(date, startMinutes, displayTimezone, 'reject');
+    const endsAt = scheduleInstantAt(date, endMinutes, displayTimezone, 'reject');
+    if (!startsAt || !endsAt || !candidateIsSafe(startsAt, endsAt)) return;
+    persistExactBounds(itemId, startsAt, endsAt);
+  };
+  const resizeBounds = (
+    itemId: string,
+    date: string,
+    edge: 'start' | 'end',
+    startMinutes: number,
+    endMinutes: number,
+  ): void => {
+    const source = dateAxis.itemById.get(itemId);
+    if (!source?.startsAt || !source.endsAt || !sourceIsInlineEditable(source)) return;
+    const startsAt =
+      edge === 'start'
+        ? scheduleInstantAt(date, startMinutes, displayTimezone, 'reject')
+        : source.startsAt;
+    const endsAt =
+      edge === 'end'
+        ? scheduleInstantAt(date, endMinutes, displayTimezone, 'reject')
+        : source.endsAt;
+    if (!startsAt || !endsAt || !candidateIsSafe(startsAt, endsAt)) return;
+    persistExactBounds(itemId, startsAt, endsAt);
   };
 
   return (
@@ -109,9 +151,12 @@ export function CalendarSchedulingSurface({
             minimumLaneWidth={minLaneWidth}
             initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
             error={
-              (axis === 'dates' && dateAxis.itemsError) || (axis === 'people' && peopleAxis.error)
-                ? 'Calendar updates are temporarily unavailable. Showing what we have.'
-                : null
+              updateItem.isError || linkTask.isError || relateItems.isError
+                ? INLINE_UPDATE_FAILURE_COPY
+                : (axis === 'dates' && dateAxis.itemsError) ||
+                    (axis === 'people' && peopleAxis.error)
+                  ? 'Calendar updates are temporarily unavailable. Showing what we have.'
+                  : null
             }
             emptyMessage={
               axis === 'dates'
@@ -129,6 +174,10 @@ export function CalendarSchedulingSurface({
                 onVisibleLaneCountChange(next);
               }
             }}
+            onOpenItem={({ item }: { item: ScheduleItem }) => {
+              if (axis === 'people' && item.id.startsWith('busy:')) return;
+              onOpenItem(item.id);
+            }}
             {...(axis === 'dates'
               ? {
                   onReachBoundary,
@@ -141,14 +190,19 @@ export function CalendarSchedulingSurface({
                       endsAt,
                     });
                   },
-                  onOpenItem: ({ item }: { item: ScheduleItem }) => {
-                    onOpenItem(item.id);
-                  },
                   onMoveItem: ({ item, toLane, startMinutes, endMinutes }: ScheduleItemMove) => {
-                    updateBounds(item.id, toLane.date, startMinutes, endMinutes);
+                    if (toLane.editable === false) return;
+                    moveBounds(item.id, toLane.date, startMinutes, endMinutes);
                   },
-                  onResizeItem: ({ item, lane, startMinutes, endMinutes }: ScheduleItemResize) => {
-                    updateBounds(item.id, lane.date, startMinutes, endMinutes);
+                  onResizeItem: ({
+                    item,
+                    lane,
+                    edge,
+                    startMinutes,
+                    endMinutes,
+                  }: ScheduleItemResize) => {
+                    if (lane.editable === false) return;
+                    resizeBounds(item.id, lane.date, edge, startMinutes, endMinutes);
                   },
                 }
               : {})}

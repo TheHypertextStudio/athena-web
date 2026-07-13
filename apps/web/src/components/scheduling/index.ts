@@ -8,6 +8,7 @@ export {
 export {
   dateKeyForInstant,
   findDateLane,
+  isInlineEditableScheduleItem,
   isScheduleItemEditable,
   itemBoundsInLane,
   type ScheduleItemLaneBounds,

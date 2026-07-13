@@ -15,7 +15,10 @@ import {
   overlapsDate,
   toScheduleItem,
 } from '../../src/app/(app)/calendar/calendar-schedule-model';
-import { itemBoundsInLane } from '../../src/components/scheduling/scheduling-date-lanes';
+import {
+  isInlineEditableScheduleItem,
+  itemBoundsInLane,
+} from '../../src/components/scheduling/scheduling-date-lanes';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
@@ -117,6 +120,9 @@ describe('calendar schedule timezone model', () => {
     expect(toScheduleItem(calendarItem(), '2026-07-02', null, 'Asia/Tokyo')).toMatchObject({
       editable: true,
     });
+    expect(toScheduleItem(calendarItem(), '2026-07-01', null, 'America/Los_Angeles')).toMatchObject(
+      { editable: false },
+    );
 
     const allDay = toScheduleItem(
       calendarItem({
@@ -134,6 +140,58 @@ describe('calendar schedule timezone model', () => {
       endsAt: '2026-07-01T15:00:00Z',
       allDay: true,
     });
+  });
+
+  it.each(['provider_event', 'native_event', 'native_block', 'timebox'] as const)(
+    'keeps a permitted same-day %s inline editable',
+    (kind) => {
+      expect(
+        toScheduleItem(
+          calendarItem({
+            kind,
+            startsAt: '2026-07-13T16:00:00Z',
+            endsAt: '2026-07-13T17:00:00Z',
+          }),
+          '2026-07-13',
+          null,
+          'America/Los_Angeles',
+        ).editable,
+      ).toBe(true);
+    },
+  );
+
+  it.each([
+    {
+      label: 'provider permission denial',
+      overrides: {
+        kind: 'provider_event' as const,
+        permissions: {
+          canEditCore: false,
+          canDelete: false,
+          readOnlyReason: 'provider_scope' as const,
+        },
+      },
+    },
+    {
+      label: 'provider conflict',
+      overrides: { kind: 'provider_event' as const, hasConflict: true },
+    },
+    { label: 'derived task timebox', overrides: { kind: 'task_timebox' as const } },
+    { label: 'derived availability', overrides: { kind: 'availability_block' as const } },
+  ])('keeps $label read-only without removing relationship behavior', ({ overrides }) => {
+    const item = toScheduleItem(
+      calendarItem({
+        startsAt: '2026-07-13T16:00:00Z',
+        endsAt: '2026-07-13T17:00:00Z',
+        ...overrides,
+      }),
+      '2026-07-13',
+      null,
+      'America/Los_Angeles',
+    );
+
+    expect(item.editable).toBe(false);
+    if (item.dropTarget) expect(item.dropTarget).toBe(true);
   });
 
   it('builds date and resource lanes with viewer-zone membership and metadata-only resource zones', () => {
@@ -169,5 +227,50 @@ describe('calendar schedule timezone model', () => {
       startsAt: '2026-07-01T15:00:00Z',
       endsAt: '2026-07-02T15:00:00Z',
     });
+  });
+});
+
+describe('inline schedule editability policy', () => {
+  const timed = {
+    canPersistBounds: true,
+    allDay: false,
+    startsAt: '2026-07-02T06:30:00Z',
+    endsAt: '2026-07-02T07:30:00Z',
+  } as const;
+
+  it('uses one viewer-timezone date instead of UTC or resource dates', () => {
+    expect(isInlineEditableScheduleItem({ ...timed, displayTimezone: 'Asia/Tokyo' })).toBe(true);
+    expect(isInlineEditableScheduleItem({ ...timed, displayTimezone: 'America/Los_Angeles' })).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    ['persistence denied', { canPersistBounds: false }],
+    ['all day', { allDay: true }],
+    ['malformed start', { startsAt: 'not-an-instant' }],
+    ['malformed end', { endsAt: 'not-an-instant' }],
+    ['zero duration', { endsAt: timed.startsAt }],
+    ['negative duration', { startsAt: timed.endsAt, endsAt: timed.startsAt }],
+  ])('rejects %s bounds', (_label, overrides) => {
+    expect(
+      isInlineEditableScheduleItem({
+        ...timed,
+        ...overrides,
+        displayTimezone: 'Asia/Tokyo',
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a repeated-fold wall inversion that exact elapsed time alone would accept', () => {
+    expect(
+      isInlineEditableScheduleItem({
+        canPersistBounds: true,
+        allDay: false,
+        startsAt: '2026-11-01T08:45:00Z',
+        endsAt: '2026-11-01T09:15:00Z',
+        displayTimezone: 'America/Los_Angeles',
+      }),
+    ).toBe(false);
   });
 });

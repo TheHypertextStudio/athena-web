@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SchedulingAllDayItem } from './scheduling-all-day-item';
 import {
   deriveLaneGeometry,
   deriveSnapMinutes,
@@ -210,17 +211,14 @@ export default function SchedulingCanvas({
                   {lane.items
                     .filter((item) => item.allDay)
                     .map((item) => (
-                      <button
+                      <SchedulingAllDayItem
                         key={item.id}
-                        type="button"
-                        className="bg-secondary-container text-on-secondary-container max-w-full truncate rounded px-1.5 py-0.5 text-[10px]"
-                        style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
-                        onClick={() => {
-                          onOpenItem?.({ item, lane });
-                        }}
-                      >
-                        {renderItem?.({ item, lane, allDay: true }) ?? item.title}
-                      </button>
+                        item={item}
+                        lane={lane}
+                        renderItem={renderItem}
+                        onOpenItem={onOpenItem}
+                        onDropObjectOnItem={onDropObjectOnItem}
+                      />
                     ))}
                 </div>
               </div>

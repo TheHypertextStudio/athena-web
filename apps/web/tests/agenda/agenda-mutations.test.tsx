@@ -11,6 +11,7 @@ import {
   DailyPlanItemId,
   type AgendaOut,
   type DailyPlanItemOut,
+  type HubTodayOut,
   OrganizationId,
   TaskId,
 } from '@docket/types';
@@ -108,6 +109,31 @@ function agendaOut(): AgendaOut {
   };
 }
 
+/** The Hub Today cache that must move and roll back with the other Agenda projections. */
+function todayOut(): HubTodayOut {
+  return {
+    date: DAY,
+    plan: [
+      {
+        id: TASK_ID,
+        organizationId: ORG_ID,
+        title: 'Draft launch memo',
+        state: 'started',
+        priority: 'medium',
+      },
+    ],
+    calendar: [
+      {
+        taskId: TASK_ID,
+        organizationId: ORG_ID,
+        startsAt: OLD_START,
+        endsAt: OLD_END,
+      },
+    ],
+    needsAttention: { approvals: [], blocked: [], dueToday: [], inbox: 0 },
+  };
+}
+
 /** A fresh QueryClient wrapper for hook tests. */
 function makeWrapper(): {
   client: QueryClient;
@@ -185,5 +211,61 @@ describe('useAgendaPlanMutations', () => {
     });
     expect(client.getQueryData<AgendaOut>(queryKeys.agenda(DAY))?.entries).toEqual([]);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.agenda(TARGET_DAY) });
+  });
+
+  it('restores daily-plan, agenda, and today caches and exposes only a failure boolean', async () => {
+    const { client, wrapper } = makeWrapper();
+    client.setQueryData(queryKeys.dailyPlan(DAY), { items: [dailyPlanItem()] });
+    client.setQueryData(queryKeys.agenda(DAY), agendaOut());
+    client.setQueryData(queryKeys.today(DAY), todayOut());
+    let rejectPatch: ((reason: Error) => void) | undefined;
+    dailyPlanPatch.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectPatch = reject;
+        }),
+    );
+
+    const { result } = renderHook(() => useAgendaPlanMutations(DAY), { wrapper });
+
+    act(() => {
+      result.current.setTimebox(agendaEntry(), NEW_START, NEW_END);
+    });
+
+    await waitFor(() => {
+      expect(dailyPlanPatch).toHaveBeenCalledOnce();
+    });
+    expect(
+      client.getQueryData<{ items: DailyPlanItemOut[] }>(queryKeys.dailyPlan(DAY))?.items[0],
+    ).toMatchObject({ timeboxStartsAt: NEW_START, timeboxEndsAt: NEW_END });
+    expect(client.getQueryData<AgendaOut>(queryKeys.agenda(DAY))?.entries[0]).toMatchObject({
+      startsAt: NEW_START,
+      endsAt: NEW_END,
+    });
+    expect(client.getQueryData<HubTodayOut>(queryKeys.today(DAY))?.calendar[0]).toMatchObject({
+      startsAt: NEW_START,
+      endsAt: NEW_END,
+    });
+
+    act(() => {
+      rejectPatch?.(new Error('Hostile provider detail that must never reach the context'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.timeboxFailed).toBe(true);
+    });
+    expect(client.getQueryData(queryKeys.dailyPlan(DAY))).toEqual({ items: [dailyPlanItem()] });
+    expect(client.getQueryData(queryKeys.agenda(DAY))).toEqual(agendaOut());
+    expect(client.getQueryData(queryKeys.today(DAY))).toEqual(todayOut());
+    expect(Object.keys(result.current).sort()).toEqual(
+      [
+        'clearTimebox',
+        'moveToDay',
+        'removeFromPlan',
+        'setTimebox',
+        'timeboxFailed',
+        'toggleDone',
+      ].sort(),
+    );
   });
 });

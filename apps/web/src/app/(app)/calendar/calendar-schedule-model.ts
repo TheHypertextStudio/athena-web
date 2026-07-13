@@ -2,12 +2,14 @@ import type { CalendarItemOut, ScheduleComparisonOut } from '@docket/types';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import {
+  isInlineEditableScheduleItem,
   scheduleDateRange,
   scheduleInstantAt,
-  scheduleWallPositionForInstant,
   type ScheduleItem,
   type ScheduleLane,
 } from '@/components/scheduling';
+
+const DERIVED_READ_ONLY_KINDS = new Set(['task_timebox', 'availability_block']);
 
 /** The resource dimension rendered by the calendar canvas. */
 export type CalendarAxis = 'dates' | 'people';
@@ -84,6 +86,16 @@ export function overlapsDate(
   return new Date(item.startsAt).getTime() < laneEnd && new Date(item.endsAt).getTime() > laneStart;
 }
 
+/** Return whether the calendar domain permits writing an item's exact time bounds. */
+export function canPersistCalendarItemBounds(item: CalendarItemOut): boolean {
+  return (
+    item.permissions.canEditCore &&
+    !item.hasConflict &&
+    item.status !== 'conflicted' &&
+    !DERIVED_READ_ONLY_KINDS.has(item.kind)
+  );
+}
+
 /** Convert one calendar item into the geometry-only scheduling contract. */
 export function toScheduleItem(
   item: CalendarItemOut,
@@ -97,14 +109,6 @@ export function toScheduleItem(
   const endsAt =
     item.endsAt ??
     requiredScheduleInstant(item.allDayEndDate ?? shiftISODate(date, 1), 0, displayTimezone);
-  const startPosition = item.startsAt
-    ? scheduleWallPositionForInstant(item.startsAt, displayTimezone)
-    : null;
-  const endPosition = item.endsAt
-    ? scheduleWallPositionForInstant(item.endsAt, displayTimezone)
-    : null;
-  const singleDay =
-    startPosition !== null && endPosition !== null && startPosition.date === endPosition.date;
   return {
     id: item.id,
     title: item.title,
@@ -112,7 +116,13 @@ export function toScheduleItem(
     endsAt,
     allDay,
     color: color ?? undefined,
-    editable: item.permissions.canEditCore && !allDay && singleDay,
+    editable: isInlineEditableScheduleItem({
+      canPersistBounds: canPersistCalendarItemBounds(item),
+      allDay,
+      startsAt: item.startsAt,
+      endsAt: item.endsAt,
+      displayTimezone,
+    }),
     dragObject:
       item.kind === 'task_timebox' || item.kind === 'availability_block'
         ? undefined

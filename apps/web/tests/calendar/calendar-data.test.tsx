@@ -96,6 +96,7 @@ import {
   useLinkTaskToItem,
   useRetryCalendarItemWrite,
   useUpdateCalendarItem,
+  useUpdateCalendarItemById,
   useUpdateLayerVisibility,
 } from '../../src/components/calendar/calendar-mutations';
 import { queryKeys, useApiListQuery, useApiQuery } from '../../src/lib/query';
@@ -396,6 +397,165 @@ describe('useUpdateCalendarItem', () => {
     // Every other server-only field is untouched from the pre-mutation snapshot.
     expect(cached?.htmlLink).toBe(providerItem().htmlLink);
     expect(cached?.externalEventId).toBe(providerItem().externalEventId);
+  });
+});
+
+describe('useUpdateCalendarItemById', () => {
+  it('rolls back provider sync state, detail, and every containing range after rejection', async () => {
+    const { client, wrapper } = makeWrapper();
+    const original = providerItem({ syncState: 'provider_error' });
+    const firstRangeKey = queryKeys.calendarItems(START, END);
+    const secondRangeKey = queryKeys.calendarItems(
+      '2026-06-30T00:00:00.000Z',
+      '2026-07-03T00:00:00.000Z',
+    );
+    const unrelatedRangeKey = queryKeys.calendarItems(
+      '2026-08-01T00:00:00.000Z',
+      '2026-08-02T00:00:00.000Z',
+    );
+    client.setQueryData(queryKeys.calendarItem(ITEM_ID), original);
+    for (const key of [firstRangeKey, secondRangeKey]) {
+      client.setQueryData<CalendarItemsRangeOut>(key, {
+        layers: [layer()],
+        items: [original, nativeItem({ id: OTHER_ITEM_ID, title: 'Unrelated' })],
+      });
+    }
+    client.setQueryData<CalendarItemsRangeOut>(unrelatedRangeKey, {
+      layers: [layer()],
+      items: [nativeItem({ id: OTHER_ITEM_ID, title: 'Outside' })],
+    });
+    let rejectPatch: ((reason: Error) => void) | undefined;
+    itemPatch.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectPatch = reject;
+        }),
+    );
+
+    const { result } = renderHook(() => useUpdateCalendarItemById(), { wrapper });
+
+    act(() => {
+      result.current.mutate({
+        itemId: ITEM_ID,
+        patch: {
+          startsAt: '2026-07-01T18:00:00Z',
+          endsAt: '2026-07-01T19:00:00Z',
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(client.getQueryData<CalendarItemOut>(queryKeys.calendarItem(ITEM_ID))?.syncState).toBe(
+        'push_pending',
+      );
+    });
+    for (const key of [firstRangeKey, secondRangeKey]) {
+      expect(
+        client.getQueryData<CalendarItemsRangeOut>(key)?.items.find((item) => item.id === ITEM_ID),
+      ).toMatchObject({ startsAt: '2026-07-01T18:00:00Z', syncState: 'push_pending' });
+    }
+
+    act(() => {
+      rejectPatch?.(new Error('hostile provider rollback text'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(client.getQueryData(queryKeys.calendarItem(ITEM_ID))).toEqual(original);
+    for (const key of [firstRangeKey, secondRangeKey]) {
+      expect(
+        client.getQueryData<CalendarItemsRangeOut>(key)?.items.find((item) => item.id === ITEM_ID),
+      ).toEqual(original);
+      expect(
+        client
+          .getQueryData<CalendarItemsRangeOut>(key)
+          ?.items.find((item) => item.id === OTHER_ITEM_ID)?.title,
+      ).toBe('Unrelated');
+    }
+    expect(client.getQueryData<CalendarItemsRangeOut>(unrelatedRangeKey)?.items).toEqual([
+      nativeItem({ id: OTHER_ITEM_ID, title: 'Outside' }),
+    ]);
+  });
+
+  it('serializes overlapping writes so an older rollback cannot clobber a newer optimistic edit', async () => {
+    const { client, wrapper } = makeWrapper();
+    const original = providerItem({ syncState: 'clean' });
+    const rangeKey = queryKeys.calendarItems(START, END);
+    client.setQueryData(queryKeys.calendarItem(ITEM_ID), original);
+    client.setQueryData<CalendarItemsRangeOut>(rangeKey, {
+      layers: [layer()],
+      items: [original],
+    });
+
+    let rejectFirst: ((reason: Error) => void) | undefined;
+    let resolveSecond:
+      | ((response: ReturnType<typeof okResponse<CalendarItemOut>>) => void)
+      | undefined;
+    itemPatch
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectFirst = reject;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveSecond = resolve;
+          }),
+      );
+
+    const { result } = renderHook(
+      () => ({
+        calendarSurface: useUpdateCalendarItemById(),
+        agendaSurface: useUpdateCalendarItemById(),
+      }),
+      { wrapper },
+    );
+    const firstPatch = {
+      startsAt: '2026-07-01T18:00:00Z',
+      endsAt: '2026-07-01T19:00:00Z',
+    };
+    const secondPatch = {
+      startsAt: '2026-07-01T20:00:00Z',
+      endsAt: '2026-07-01T21:00:00Z',
+    };
+
+    act(() => {
+      result.current.calendarSurface.mutate({ itemId: ITEM_ID, patch: firstPatch });
+    });
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      result.current.agendaSurface.mutate({ itemId: ITEM_ID, patch: secondPatch });
+    });
+    expect(itemPatch).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      rejectFirst?.(new Error('older write rejected'));
+    });
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledTimes(2);
+    });
+    expect(client.getQueryData<CalendarItemOut>(queryKeys.calendarItem(ITEM_ID))).toMatchObject({
+      ...secondPatch,
+      syncState: 'push_pending',
+    });
+    expect(
+      client
+        .getQueryData<CalendarItemsRangeOut>(rangeKey)
+        ?.items.find((item) => item.id === ITEM_ID),
+    ).toMatchObject({ ...secondPatch, syncState: 'push_pending' });
+
+    act(() => {
+      resolveSecond?.(okResponse(providerItem(secondPatch)));
+    });
+    await waitFor(() => {
+      expect(result.current.agendaSurface.isSuccess).toBe(true);
+    });
   });
 });
 

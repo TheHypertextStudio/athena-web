@@ -1,7 +1,6 @@
 'use client';
 
 /** `agenda/agenda-canvas` — list and shared-fluid-canvas arrangements of one agenda. */
-import { Stack } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -13,15 +12,17 @@ import {
 } from '@/components/calendar/calendar-mutations';
 import {
   isInlineEditableScheduleItem,
-  scheduleInstantAt,
+  itemBoundsInLane,
+  moveScheduleInstantRange,
+  resizeScheduleInstantRange,
   type ScheduleItem,
   type ScheduleLane,
   SchedulingCanvas,
 } from '@/components/scheduling';
 import { useNow } from '@/lib/use-now';
 
-import { type AgendaEntry, isTimeboxed, useAgenda } from './agenda-context';
-import AgendaEntryCard from './agenda-entry-card';
+import { type AgendaEntry, useAgenda } from './agenda-context';
+import { AgendaListArrangement } from './agenda-list-arrangement';
 import {
   isAgendaEntryInlineEditable,
   isAgendaRelationshipTarget,
@@ -31,32 +32,19 @@ import {
 const INLINE_UPDATE_FAILURE_COPY =
   'Could not update this item. Your previous time has been restored.';
 
-/** Start time in ms for a timeboxed entry, or `null` for untimed. */
-function startMs(entry: AgendaEntry): number | null {
-  return isTimeboxed(entry) ? new Date(entry.startsAt).getTime() : null;
-}
-
-/** Order timeboxed entries first and untimed entries by plan order. */
-function chronological(entries: readonly AgendaEntry[]): AgendaEntry[] {
-  return [...entries].sort((left, right) => {
-    const leftStart = startMs(left);
-    const rightStart = startMs(right);
-    if (leftStart !== null && rightStart !== null) return leftStart - rightStart;
-    if (leftStart !== null) return -1;
-    if (rightStart !== null) return 1;
-    return left.sort - right.sort;
-  });
-}
-
 /** Arranges the agenda for the active list/timeline view. */
 export default function AgendaCanvas(): JSX.Element {
-  const { displayTimezone, entries, view } = useAgenda();
+  const { displayTimezone, entries, loading, view } = useAgenda();
   const router = useRouter();
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   return (
     <>
       {view === 'list' ? (
-        <ListArrangement entries={entries} onOpenCalendarItem={setOpenItemId} />
+        <AgendaListArrangement
+          entries={entries}
+          loading={loading}
+          onOpenCalendarItem={setOpenItemId}
+        />
       ) : (
         <TimelineArrangement entries={entries} onOpenCalendarItem={setOpenItemId} />
       )}
@@ -74,26 +62,6 @@ export default function AgendaCanvas(): JSX.Element {
   );
 }
 
-/** The chronological list arrangement. */
-function ListArrangement({
-  entries,
-  onOpenCalendarItem,
-}: {
-  readonly entries: readonly AgendaEntry[];
-  readonly onOpenCalendarItem: (itemId: string) => void;
-}): JSX.Element {
-  const ordered = useMemo(() => chronological(entries), [entries]);
-  return (
-    <Stack as="ul" gap={1}>
-      {ordered.map((entry) => (
-        <li key={entry.id}>
-          <AgendaEntryCard entry={entry} onOpenCalendarItem={onOpenCalendarItem} />
-        </li>
-      ))}
-    </Stack>
-  );
-}
-
 /** One agenda day rendered through the same arbitrary-lane engine as the full calendar. */
 function TimelineArrangement({
   entries,
@@ -103,8 +71,15 @@ function TimelineArrangement({
   readonly onOpenCalendarItem: (itemId: string) => void;
 }): JSX.Element {
   const router = useRouter();
-  const { date, displayTimezone, pixelsPerHour, setTimebox, timeboxFailed, clearTimeboxFailure } =
-    useAgenda();
+  const {
+    date,
+    displayTimezone,
+    loading,
+    pixelsPerHour,
+    setTimebox,
+    timeboxFailed,
+    clearTimeboxFailure,
+  } = useAgenda();
   const now = useNow().toISOString();
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
@@ -155,7 +130,6 @@ function TimelineArrangement({
     item: ScheduleItem,
     targetLane: ScheduleLane,
     startMinutes: number,
-    endMinutes: number,
   ): void => {
     const entry = entryById.get(item.id);
     if (
@@ -164,21 +138,25 @@ function TimelineArrangement({
       !isAgendaEntryInlineEditable(entry, displayTimezone)
     )
       return;
-    const startsAt = scheduleInstantAt(targetLane.date, startMinutes, displayTimezone, 'reject');
-    const endsAt = scheduleInstantAt(targetLane.date, endMinutes, displayTimezone, 'reject');
+    const moved = moveScheduleInstantRange({
+      startsAt: item.startsAt,
+      endsAt: item.endsAt,
+      targetDate: targetLane.date,
+      startMinutes,
+      displayTimezone,
+    });
     if (
-      !startsAt ||
-      !endsAt ||
+      !moved ||
       !isInlineEditableScheduleItem({
         canPersistBounds: true,
         allDay: false,
-        startsAt,
-        endsAt,
+        startsAt: moved.startsAt,
+        endsAt: moved.endsAt,
         displayTimezone,
       })
     )
       return;
-    persistExactBounds(entry, startsAt, endsAt);
+    persistExactBounds(entry, moved.startsAt, moved.endsAt);
   };
 
   const persistResize = (
@@ -197,27 +175,32 @@ function TimelineArrangement({
       !isAgendaEntryInlineEditable(entry, displayTimezone)
     )
       return;
-    const startsAt =
-      edge === 'start'
-        ? scheduleInstantAt(targetLane.date, startMinutes, displayTimezone, 'reject')
-        : entry.startsAt;
-    const endsAt =
-      edge === 'end'
-        ? scheduleInstantAt(targetLane.date, endMinutes, displayTimezone, 'reject')
-        : entry.endsAt;
+    const originalBounds = itemBoundsInLane(
+      { ...item, startsAt: entry.startsAt, endsAt: entry.endsAt },
+      targetLane,
+      displayTimezone,
+    );
+    if (!originalBounds) return;
+    const resized = resizeScheduleInstantRange({
+      startsAt: entry.startsAt,
+      endsAt: entry.endsAt,
+      edge,
+      targetDate: targetLane.date,
+      edgeMinutes: edge === 'start' ? startMinutes : endMinutes,
+      displayTimezone,
+    });
     if (
-      !startsAt ||
-      !endsAt ||
+      !resized ||
       !isInlineEditableScheduleItem({
         canPersistBounds: true,
         allDay: false,
-        startsAt,
-        endsAt,
+        startsAt: resized.startsAt,
+        endsAt: resized.endsAt,
         displayTimezone,
       })
     )
       return;
-    persistExactBounds(entry, startsAt, endsAt);
+    persistExactBounds(entry, resized.startsAt, resized.endsAt);
   };
 
   return (
@@ -227,13 +210,14 @@ function TimelineArrangement({
         lanes={[lane]}
         pixelsPerHour={pixelsPerHour}
         now={now}
+        viewportHeight="100%"
         minimumLaneWidth={180}
         error={
           timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
             ? INLINE_UPDATE_FAILURE_COPY
             : null
         }
-        emptyMessage="Nothing scheduled."
+        emptyMessage={loading ? '' : 'Nothing scheduled. Use the calendar to plan this day.'}
         onOpenItem={({ item }) => {
           const entry = entryById.get(item.id);
           if (!entry) return;
@@ -245,8 +229,8 @@ function TimelineArrangement({
             router.push('/calendar');
           }
         }}
-        onMoveItem={({ item, toLane, startMinutes, endMinutes }) => {
-          persistMove(item, toLane, startMinutes, endMinutes);
+        onMoveItem={({ item, toLane, startMinutes }) => {
+          persistMove(item, toLane, startMinutes);
         }}
         onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
           persistResize(item, targetLane, edge, startMinutes, endMinutes);

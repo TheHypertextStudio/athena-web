@@ -141,7 +141,9 @@ export function AppShell({
   const prevOrgIdRef = React.useRef(activeOrgId);
   React.useEffect(() => {
     if (prevOrgIdRef.current === activeOrgId) return undefined;
+    const previousOrgId = prevOrgIdRef.current;
     prevOrgIdRef.current = activeOrgId;
+    if (previousOrgId === null) return undefined;
     setRebinding(true);
     const timer = setTimeout(() => {
       setRebinding(false);

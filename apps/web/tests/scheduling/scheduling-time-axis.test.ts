@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveScheduleTicks,
   majorTickInterval,
+  resolveScheduleWallInstant,
+  resolveScheduleWallTime,
   resolveScheduleTimezone,
   scheduleDateRange,
   scheduleElapsedMinutes,
@@ -27,6 +29,48 @@ describe('schedule wall-clock model', () => {
       scheduleInstantAt('2026-11-01', 90, 'America/Los_Angeles', 'later'),
     );
     expect(scheduleInstantAt('2026-03-08', 150, 'America/Los_Angeles', 'reject')).toBeNull();
+  });
+
+  it('classifies normal, skipped, and repeated wall times with exact labeled candidates', () => {
+    expect(resolveScheduleWallTime('2026-07-13', 9 * 60, 'America/Los_Angeles')).toEqual({
+      kind: 'normal',
+      instant: '2026-07-13T16:00:00Z',
+    });
+    expect(resolveScheduleWallTime('2026-03-08', 150, 'America/Los_Angeles')).toEqual({
+      kind: 'skipped',
+    });
+    expect(resolveScheduleWallTime('2026-11-01', 90, 'America/Los_Angeles')).toEqual({
+      kind: 'repeated',
+      candidates: [
+        {
+          occurrence: 'earlier',
+          instant: '2026-11-01T08:30:00Z',
+          offset: '-07:00',
+          zoneLabel: 'PDT',
+        },
+        {
+          occurrence: 'later',
+          instant: '2026-11-01T09:30:00Z',
+          offset: '-08:00',
+          zoneLabel: 'PST',
+        },
+      ],
+    });
+  });
+
+  it('resolves a repeated target only when an exact repeated source supplies its occurrence', () => {
+    expect(resolveScheduleWallInstant('2026-11-01', 90, 'America/Los_Angeles')).toEqual({
+      kind: 'repeated',
+    });
+    expect(
+      resolveScheduleWallInstant('2026-11-01', 75, 'America/Los_Angeles', '2026-11-01T09:30:30Z'),
+    ).toEqual({ kind: 'resolved', instant: '2026-11-01T09:15:00Z' });
+    expect(
+      resolveScheduleWallInstant('2026-11-01', 90, 'America/Los_Angeles', '2026-11-01T07:30:00Z'),
+    ).toEqual({ kind: 'repeated' });
+    expect(resolveScheduleWallInstant('2026-03-08', 150, 'America/Los_Angeles')).toEqual({
+      kind: 'skipped',
+    });
   });
 
   it('falls back from an invalid preferred timezone to the viewer timezone', () => {

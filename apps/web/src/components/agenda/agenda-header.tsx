@@ -13,14 +13,11 @@ import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { Button, Row } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
-import { todayISODate } from '@/lib/today';
-
 import { shiftISODate, useAgenda } from './agenda-context';
 import AgendaViewSwitcher from './agenda-view-switcher';
 
 /** Format a `YYYY-MM-DD` day as a relative label, falling back to `Mon, Jun 30`. */
-function formatAgendaDate(iso: string): string {
-  const today = todayISODate();
+function formatAgendaDate(iso: string, today: string): string {
   if (iso === today) return 'Today';
   if (iso === shiftISODate(today, 1)) return 'Tomorrow';
   if (iso === shiftISODate(today, -1)) return 'Yesterday';
@@ -33,7 +30,7 @@ function formatAgendaDate(iso: string): string {
 
 /** The agenda day navigator: ‹ prev · the day · next › with a jump-to-today. */
 export default function AgendaHeader(): JSX.Element {
-  const { date, isToday, goToPreviousDay, goToNextDay, goToToday } = useAgenda();
+  const { date, today, isToday, goToPreviousDay, goToNextDay, goToToday } = useAgenda();
   return (
     <Row justify="between" className="shrink-0 px-1 pb-1">
       <Row gap={1}>
@@ -41,7 +38,7 @@ export default function AgendaHeader(): JSX.Element {
           <ChevronLeft />
         </Button>
         <span className="text-on-surface w-28 shrink-0 px-1 text-center text-sm font-semibold whitespace-nowrap">
-          {formatAgendaDate(date)}
+          {formatAgendaDate(date, today)}
         </span>
         <Button variant="ghost" size="icon" aria-label="Next day" onClick={goToNextDay}>
           <ChevronRight />

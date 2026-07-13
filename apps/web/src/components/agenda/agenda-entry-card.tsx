@@ -29,6 +29,7 @@ import { type JSX, useRef } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { OrgChip } from '@/components/org-chip';
+import { formatScheduleInstantRange, formatScheduleInstantTime } from '@/components/scheduling';
 import { formatClock } from '@/lib/format-time';
 import { prefersReducedMotion } from '@/lib/motion';
 
@@ -80,7 +81,7 @@ export default function AgendaEntryCard({
   onOpenCalendarItem,
 }: AgendaEntryCardProps): JSX.Element {
   const { orgName } = useActiveOrg();
-  const { toggleDone } = useAgenda();
+  const { displayTimezone, toggleDone } = useAgenda();
   const checkRef = useRef<HTMLButtonElement>(null);
   const block = layout === 'block';
 
@@ -98,8 +99,10 @@ export default function AgendaEntryCard({
   }
   const time = isTimeboxed(entry)
     ? block
-      ? `${formatClock(entry.startsAt)} – ${formatClock(entry.endsAt)}`
-      : formatClock(entry.startsAt)
+      ? (formatScheduleInstantRange(entry.startsAt, entry.endsAt, displayTimezone) ??
+        `${formatClock(entry.startsAt, displayTimezone)} – ${formatClock(entry.endsAt, displayTimezone)}`)
+      : (formatScheduleInstantTime(entry.startsAt, displayTimezone) ??
+        formatClock(entry.startsAt, displayTimezone))
     : block
       ? 'Anytime'
       : '—';

@@ -8,10 +8,15 @@
  */
 import type { ReactNode } from 'react';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const agendaState = vi.hoisted(() => ({ loading: false, error: null as string | null }));
+const agendaState = vi.hoisted(() => ({
+  loading: false,
+  error: null as string | null,
+  retrying: false,
+  retry: vi.fn(),
+}));
 
 vi.mock('../../src/components/agenda/agenda-context', () => ({
   AgendaProvider: ({ children }: { children: ReactNode }) => children,
@@ -32,6 +37,8 @@ describe('Agenda degraded-data rendering', () => {
   beforeEach(() => {
     agendaState.loading = false;
     agendaState.error = null;
+    agendaState.retrying = false;
+    agendaState.retry.mockReset();
   });
 
   it('keeps the agenda controls and canvas visible when the server read fails', () => {
@@ -45,14 +52,21 @@ describe('Agenda degraded-data rendering', () => {
     expect(
       screen.getByText('Calendar updates are temporarily unavailable. Showing what we have.'),
     ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(agendaState.retry).toHaveBeenCalledOnce();
+    expect(screen.getByText('Agenda date controls')).toBeTruthy();
+    expect(screen.getByText('Agenda canvas')).toBeTruthy();
   });
 
-  it('uses the skeleton only while the first read is pending', () => {
+  it('keeps the agenda canvas mounted while the first read is pending', () => {
     agendaState.loading = true;
 
     render(<Agenda />);
 
     expect(screen.getByText('Agenda date controls')).toBeTruthy();
-    expect(screen.queryByText('Agenda canvas')).toBeNull();
+    expect(screen.getByText('Agenda canvas')).toBeTruthy();
+    expect(screen.getByText('Loading calendar…')).toBeTruthy();
   });
 });

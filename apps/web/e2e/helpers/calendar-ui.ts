@@ -49,6 +49,7 @@ export async function dragScheduleItemToLane(
   targetDate: string,
 ): Promise<void> {
   const { body } = scheduleItem(page, itemId);
+  await body.scrollIntoViewIfNeeded();
   const [bodyBox, laneBox] = await Promise.all([
     body.boundingBox(),
     scheduleLane(page, targetDate).boundingBox(),
@@ -101,6 +102,98 @@ export async function dragLocatorToLocator(
   await page.mouse.up();
 }
 
+/** Return the rendered text/background contrast ratio for one visible element. */
+export async function renderedContrastRatio(locator: Locator): Promise<number> {
+  return locator.evaluate((element) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1;
+    canvas.height = 1;
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Browser canvas context is unavailable for contrast sampling.');
+    const sample = (value: string): readonly [number, number, number, number] => {
+      context.clearRect(0, 0, 1, 1);
+      context.fillStyle = value;
+      context.fillRect(0, 0, 1, 1);
+      const [red = 0, green = 0, blue = 0, alpha = 0] = context.getImageData(0, 0, 1, 1).data;
+      return [red, green, blue, alpha / 255];
+    };
+    const foreground = sample(getComputedStyle(element).color);
+    let node: Element | null = element;
+    let background: readonly [number, number, number, number] | null = null;
+    while (node) {
+      const candidate = sample(getComputedStyle(node).backgroundColor);
+      if (candidate[3] >= 0.99) {
+        background = candidate;
+        break;
+      }
+      node = node.parentElement;
+    }
+    const resolvedBackground = background ?? ([255, 255, 255, 1] as const);
+    const luminance = ([red, green, blue]: readonly number[]): number => {
+      const linear = [red, green, blue].map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+    };
+    const foregroundLuminance = luminance(foreground);
+    const backgroundLuminance = luminance(resolvedBackground);
+    return (
+      (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+      (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+    );
+  });
+}
+
+/** Focus a control through keyboard modality and report whether its focus treatment is visible. */
+export async function hasVisibleKeyboardFocus(page: Page, locator: Locator): Promise<boolean> {
+  await locator.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  return locator.evaluate((element) => {
+    if (document.activeElement !== element) return false;
+    const style = getComputedStyle(element);
+    const visibleOutline =
+      style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0;
+    return visibleOutline || style.boxShadow !== 'none';
+  });
+}
+
+/** Wait until an open sheet and the browser compositor have settled for geometry capture. */
+export async function waitForSheetCompositorStability(page: Page, sheet: Locator): Promise<void> {
+  await sheet.waitFor({ state: 'visible' });
+  const handle = await sheet.elementHandle();
+  if (!handle) throw new Error('Visible sheet has no element handle.');
+  try {
+    await page.waitForFunction(
+      (element) =>
+        getComputedStyle(element).transform === 'none' &&
+        element
+          .getAnimations()
+          .every(
+            (animation) =>
+              !animation.pending &&
+              (animation.playState === 'finished' || animation.playState === 'idle'),
+          ),
+      handle,
+    );
+  } finally {
+    await handle.dispose();
+  }
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        let remainingFrames = 4;
+        const settle = (): void => {
+          remainingFrames -= 1;
+          if (remainingFrames === 0) resolve();
+          else requestAnimationFrame(settle);
+        };
+        requestAnimationFrame(settle);
+      }),
+  );
+}
+
 /** Persist and attach a full-page PNG alongside the describe-level Playwright video. */
 export async function attachCalendarScreenshot(
   page: Page,
@@ -109,7 +202,11 @@ export async function attachCalendarScreenshot(
 ): Promise<void> {
   await page.waitForFunction(() => {
     const main = document.querySelector('main#main-content');
-    return main !== null && !main.classList.contains('animate-org-rebind');
+    return (
+      main !== null &&
+      !main.classList.contains('animate-org-rebind') &&
+      getComputedStyle(main).opacity === '1'
+    );
   });
   await page.evaluate(
     () =>

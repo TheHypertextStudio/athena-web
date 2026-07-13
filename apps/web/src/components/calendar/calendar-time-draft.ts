@@ -1,6 +1,13 @@
 import { scheduleInstantAt, scheduleWallPositionForInstant } from '@/components/scheduling';
 
-import { toLocalInputValue } from './datetime-input';
+import { calendarRangeError } from './calendar-range-validation';
+import {
+  fromLocalInputValue,
+  type LocalInputOccurrence,
+  localInputOccurrenceForInstant,
+  localInputResolutionError,
+  toLocalInputValue,
+} from './datetime-input';
 
 /** Exact draft region supplied by the scheduling canvas or toolbar. */
 export interface CalendarRegionSelection {
@@ -22,7 +29,16 @@ export interface CalendarTimeDraft {
   readonly startsEdited: boolean;
   /** Whether the user owns the current end wall value. */
   readonly endsEdited: boolean;
+  /** Explicit occurrence represented by a repeated start wall value. */
+  readonly startsOccurrence: LocalInputOccurrence | null;
+  /** Explicit occurrence represented by a repeated end wall value. */
+  readonly endsOccurrence: LocalInputOccurrence | null;
 }
+
+/** Exact range resolved from a creation draft, or application-owned correction guidance. */
+export type ResolvedCalendarTimeDraft =
+  | { readonly startsAt: string; readonly endsAt: string }
+  | { readonly error: string };
 
 /** Initialize wall fields and independent edit ownership from exact seed instants. */
 export function calendarTimeDraftFromSeed(
@@ -35,7 +51,54 @@ export function calendarTimeDraftFromSeed(
     endsAt: toLocalInputValue(seed.endsAt, displayTimezone),
     startsEdited: false,
     endsEdited: false,
+    startsOccurrence: localInputOccurrenceForInstant(seed.startsAt, displayTimezone),
+    endsOccurrence: localInputOccurrenceForInstant(seed.endsAt, displayTimezone),
   };
+}
+
+/** Re-render untouched exact seeds in a newly selected display timezone. */
+export function rebaseCalendarTimeDraft(
+  draft: CalendarTimeDraft,
+  displayTimezone: string,
+): CalendarTimeDraft {
+  return {
+    ...draft,
+    startsAt: draft.startsEdited
+      ? draft.startsAt
+      : toLocalInputValue(draft.seed.startsAt, displayTimezone),
+    endsAt: draft.endsEdited ? draft.endsAt : toLocalInputValue(draft.seed.endsAt, displayTimezone),
+    startsOccurrence: draft.startsEdited
+      ? draft.startsOccurrence
+      : localInputOccurrenceForInstant(draft.seed.startsAt, displayTimezone),
+    endsOccurrence: draft.endsEdited
+      ? draft.endsOccurrence
+      : localInputOccurrenceForInstant(draft.seed.endsAt, displayTimezone),
+  };
+}
+
+/** Resolve exact creation bounds while requiring choices only for edited repeated wall times. */
+export function resolveCalendarTimeDraft(
+  draft: CalendarTimeDraft,
+  displayTimezone: string,
+): ResolvedCalendarTimeDraft {
+  const startError = draft.startsEdited
+    ? localInputResolutionError(draft.startsAt, displayTimezone, draft.startsOccurrence, 'start')
+    : null;
+  const endError = draft.endsEdited
+    ? localInputResolutionError(draft.endsAt, displayTimezone, draft.endsOccurrence, 'end')
+    : null;
+  if (startError || endError) return { error: startError ?? endError ?? 'Choose valid times.' };
+
+  const startsAt = draft.startsEdited
+    ? fromLocalInputValue(draft.startsAt, displayTimezone, draft.startsOccurrence)
+    : draft.seed.startsAt;
+  const endsAt = draft.endsEdited
+    ? fromLocalInputValue(draft.endsAt, displayTimezone, draft.endsOccurrence)
+    : draft.seed.endsAt;
+  const rangeError = calendarRangeError(startsAt, endsAt);
+  return rangeError || !startsAt || !endsAt
+    ? { error: rangeError ?? 'Choose valid start and end times in your calendar timezone.' }
+    : { startsAt, endsAt };
 }
 
 /** Create the next future half-hour region on the selected timezone's wall clock. */

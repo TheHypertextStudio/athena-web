@@ -23,8 +23,32 @@ export const Popover = PopoverPrimitive.Root;
 /** Element that toggles the popover open (Radix passthrough). */
 export const PopoverTrigger = PopoverPrimitive.Trigger;
 
-/** Optional positioning anchor decoupled from the trigger (Radix passthrough). */
-export const PopoverAnchor = PopoverPrimitive.Anchor;
+/** Minimal geometry contract accepted by Radix for virtual popover anchors. */
+export interface PopoverVirtualAnchor {
+  readonly getBoundingClientRect: () => DOMRect;
+}
+
+/** Standard nullable React ref used to position a popover from consumer-owned geometry. */
+export type PopoverVirtualAnchorRef = React.RefObject<PopoverVirtualAnchor | null>;
+
+type RadixPopoverAnchorProps = React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Anchor>;
+
+/** Props for a positioning anchor decoupled from the popover trigger. */
+export interface PopoverAnchorProps extends Omit<RadixPopoverAnchorProps, 'virtualRef'> {
+  readonly virtualRef?: PopoverVirtualAnchorRef;
+}
+
+/** Optional positioning anchor decoupled from the trigger. */
+export const PopoverAnchor = React.forwardRef<HTMLDivElement, PopoverAnchorProps>(
+  ({ virtualRef, ...props }, forwardedRef) => (
+    <PopoverPrimitive.Anchor
+      {...props}
+      ref={forwardedRef}
+      virtualRef={virtualRef as RadixPopoverAnchorProps['virtualRef']}
+    />
+  ),
+);
+PopoverAnchor.displayName = PopoverPrimitive.Anchor.displayName;
 
 /**
  * Floating panel that holds the popover body; rendered through a portal.

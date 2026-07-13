@@ -70,6 +70,30 @@ function ctxWrapper(initial: ActiveContext) {
   };
 }
 
+function ContextRebindControls(): React.JSX.Element {
+  const { setContext } = useContextState();
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          setContext(ACME.id);
+        }}
+      >
+        Resolve Acme
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setContext(GLOBEX.id);
+        }}
+      >
+        Switch to Globex
+      </button>
+    </>
+  );
+}
+
 describe('ContextProvider / useContextState', () => {
   it('defaults to no bound org with no accent and comfortable density', () => {
     const { result } = renderHook(() => useContextState(), { wrapper: ctxWrapper(null) });
@@ -104,6 +128,24 @@ describe('ContextProvider / useContextState', () => {
 });
 
 describe('AppShell', () => {
+  it('keeps the first resolved org steady and cross-fades a later org switch', () => {
+    render(
+      <ContextProvider initialContext={null}>
+        <ContextRebindControls />
+        <AppShell sidebar={<nav aria-label="Navigation" />}>
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+    const main = screen.getByRole('main');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolve Acme' }));
+    expect(main).not.toHaveClass('animate-org-rebind');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch to Globex' }));
+    expect(main).toHaveClass('animate-org-rebind');
+  });
+
   it('applies --org-accent and data-density when an org is bound, around sidebar + tab bar', () => {
     const { container } = render(
       <ContextProvider initialContext={ACME.id} initialDensity="compact">

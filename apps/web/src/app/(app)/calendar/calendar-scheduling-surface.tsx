@@ -1,54 +1,49 @@
 'use client';
 
-import type { CalendarItemOut, CalendarPreferences } from '@docket/types';
+import type { CalendarItemOut } from '@docket/types';
 import { type JSX, useCallback, useEffect } from 'react';
 
-import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
 import {
   useLinkTaskToCalendarItem,
   useRelateCalendarItems,
   useUpdateCalendarItemById,
 } from '@/components/calendar/calendar-mutations';
-import type { CalendarRegionSelection } from '@/components/calendar/create-block-form';
 import {
-  isInlineEditableScheduleItem,
+  resolveScheduleWallInstant,
   type ScheduleItem,
   type ScheduleItemMove,
   type ScheduleItemResize,
-  scheduleInstantAt,
+  type ScheduleLane,
+  type ScheduleRegionSelection,
   SchedulingCanvas,
 } from '@/components/scheduling';
 
-import { canPersistCalendarItemBounds, type CalendarAxis } from './calendar-schedule-model';
-import type { SharedCalendarItemDetail } from './calendar-shared-item-details';
-import type { CalendarDateAxisState } from './use-calendar-date-axis';
-import type { CalendarPeopleAxisState } from './use-calendar-people-axis';
+import {
+  calendarAllDayBounds,
+  movedCalendarItemBounds,
+  resizedCalendarItemBounds,
+} from './calendar-schedule-editing';
+import type { CalendarSchedulingSurfaceProps } from './calendar-scheduling-contract';
+import {
+  calendarSchedulingEmptyMessage,
+  calendarSchedulingError,
+} from './calendar-scheduling-copy';
+import { CalendarReadFailureNotice } from './calendar-read-failure-notice';
+import { CalendarSchedulingSidebar } from './calendar-scheduling-sidebar';
+import { CalendarScheduleItemContent } from './calendar-schedule-item-content';
+import { CalendarSyncAlert } from './calendar-sync-alert';
 
-const INLINE_UPDATE_FAILURE_COPY =
-  'Could not update this item. Your previous time has been restored.';
+export type {
+  CalendarCanvasRegionSelection,
+  CalendarSchedulingSurfaceProps,
+} from './calendar-scheduling-contract';
+
 const RELATIONSHIP_TARGET_KINDS: ReadonlySet<CalendarItemOut['kind']> = new Set([
   'provider_event',
   'native_event',
   'native_block',
   'timebox',
 ]);
-
-/** Props for the shared canvas and its axis-specific status/sidebar affordances. */
-export interface CalendarSchedulingSurfaceProps {
-  readonly axis: CalendarAxis;
-  readonly visibleLaneCount: number;
-  readonly pixelsPerHour: number;
-  readonly displayTimezone: string;
-  readonly now?: string;
-  readonly preferences?: CalendarPreferences;
-  readonly dateAxis: CalendarDateAxisState;
-  readonly peopleAxis: CalendarPeopleAxisState;
-  readonly onVisibleLaneCountChange: (count: number) => void;
-  readonly onReachBoundary: (direction: 'previous' | 'next') => void;
-  readonly onSelectRegion: (selection: CalendarRegionSelection) => void;
-  readonly onOpenItem: (itemId: string) => void;
-  readonly onOpenSharedItem: (detail: SharedCalendarItemDetail) => void;
-}
 
 /**
  * Render the always-mounted scheduling grid and translate gestures into calendar mutations.
@@ -60,13 +55,17 @@ export interface CalendarSchedulingSurfaceProps {
 export function CalendarSchedulingSurface({
   axis,
   visibleLaneCount,
+  horizontalAnchorKey = 0,
   pixelsPerHour,
   displayTimezone,
   now,
   preferences,
   dateAxis,
   peopleAxis,
+  selectedRegion,
+  selectedRegionAnchorRef,
   onVisibleLaneCountChange,
+  onVisibleDateRangeChange,
   onReachBoundary,
   onSelectRegion,
   onOpenItem,
@@ -79,6 +78,15 @@ export function CalendarSchedulingSurface({
   const resetUpdateItem = updateItem.reset;
   const resetLinkTask = linkTask.reset;
   const resetRelateItems = relateItems.reset;
+  const inlineMutationFailed = updateItem.isError || linkTask.isError || relateItems.isError;
+  const readError = calendarSchedulingError(
+    axis,
+    false,
+    dateAxis.itemsError || dateAxis.layersError,
+    peopleAxis.error,
+  );
+  const retryRead = axis === 'dates' ? dateAxis.retry : peopleAxis.retry;
+  const readRetrying = axis === 'dates' ? dateAxis.retrying : peopleAxis.retrying;
   const clearInlineFailures = useCallback(() => {
     resetUpdateItem();
     resetLinkTask();
@@ -95,14 +103,6 @@ export function CalendarSchedulingSurface({
     peopleAxis.comparisonOrgId,
   ]);
 
-  const sourceIsInlineEditable = (source: CalendarItemOut): boolean =>
-    isInlineEditableScheduleItem({
-      canPersistBounds: canPersistCalendarItemBounds(source),
-      allDay: Boolean(source.allDayStartDate && source.allDayEndDate),
-      startsAt: source.startsAt,
-      endsAt: source.endsAt,
-      displayTimezone,
-    });
   const persistExactBounds = (itemId: string, startsAt: string, endsAt: string): void => {
     clearInlineFailures();
     updateItem.mutate({
@@ -110,92 +110,86 @@ export function CalendarSchedulingSurface({
       patch: { startsAt, endsAt },
     });
   };
-  const candidateIsSafe = (startsAt: string, endsAt: string): boolean =>
-    isInlineEditableScheduleItem({
-      canPersistBounds: true,
-      allDay: false,
-      startsAt,
-      endsAt,
+  const persistAllDayBounds = (itemId: string, startDate: string, endDate: string): void => {
+    const patch = calendarAllDayBounds(dateAxis.itemById.get(itemId), startDate, endDate);
+    if (!patch) return;
+    clearInlineFailures();
+    updateItem.mutate({ itemId, patch });
+  };
+  const resolveWallInstant = (date: string, minutes: number): string | null => {
+    const resolution = resolveScheduleWallInstant(date, minutes, displayTimezone);
+    return resolution.kind === 'resolved' ? resolution.instant : null;
+  };
+  const moveBounds = (itemId: string, date: string, startMinutes: number): void => {
+    const moved = movedCalendarItemBounds(
+      dateAxis.itemById.get(itemId),
+      date,
+      startMinutes,
       displayTimezone,
-    });
-  const resolveWallInstant = (date: string, minutes: number): string | null =>
-    scheduleInstantAt(date, minutes, displayTimezone, 'reject');
-  const moveBounds = (
-    itemId: string,
-    date: string,
-    startMinutes: number,
-    endMinutes: number,
-  ): void => {
-    const source = dateAxis.itemById.get(itemId);
-    if (!source || !sourceIsInlineEditable(source)) return;
-    const startsAt = resolveWallInstant(date, startMinutes);
-    const endsAt = resolveWallInstant(date, endMinutes);
-    if (!startsAt || !endsAt || !candidateIsSafe(startsAt, endsAt)) return;
-    persistExactBounds(itemId, startsAt, endsAt);
+    );
+    if (!moved) return;
+    persistExactBounds(itemId, moved.startsAt, moved.endsAt);
   };
   const resizeBounds = (
-    itemId: string,
-    date: string,
+    item: ScheduleItem,
+    lane: ScheduleLane,
     edge: 'start' | 'end',
     startMinutes: number,
     endMinutes: number,
   ): void => {
-    const source = dateAxis.itemById.get(itemId);
-    if (!source?.startsAt || !source.endsAt || !sourceIsInlineEditable(source)) return;
-    const startsAt = edge === 'start' ? resolveWallInstant(date, startMinutes) : source.startsAt;
-    const endsAt = edge === 'end' ? resolveWallInstant(date, endMinutes) : source.endsAt;
-    if (!startsAt || !endsAt || !candidateIsSafe(startsAt, endsAt)) return;
-    persistExactBounds(itemId, startsAt, endsAt);
+    const resized = resizedCalendarItemBounds({
+      source: dateAxis.itemById.get(item.id),
+      item,
+      lane,
+      edge,
+      startMinutes,
+      endMinutes,
+      displayTimezone,
+    });
+    if (!resized) return;
+    persistExactBounds(item.id, resized.startsAt, resized.endsAt);
   };
 
   return (
-    <>
-      {dateAxis.conflictCount || dateAxis.failedCount ? (
-        <div
-          role="alert"
-          className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm font-medium"
-        >
-          {dateAxis.conflictCount
-            ? `${String(dateAxis.conflictCount)} sync conflict${dateAxis.conflictCount === 1 ? '' : 's'}`
-            : null}
-          {dateAxis.conflictCount && dateAxis.failedCount ? ' · ' : null}
-          {dateAxis.failedCount
-            ? `${String(dateAxis.failedCount)} sync error${dateAxis.failedCount === 1 ? '' : 's'}`
-            : null}
-        </div>
-      ) : null}
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <CalendarSyncAlert
+        conflictCount={dateAxis.conflictCount}
+        failedCount={dateAxis.failedCount}
+      />
 
-      <div className="grid min-w-0 grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="min-w-0">
+      <CalendarReadFailureNotice message={readError} onRetry={retryRead} retrying={readRetrying} />
+
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 @4xl:grid-cols-[minmax(0,1fr)_16rem]">
+        <div className="min-h-0 min-w-0">
           <SchedulingCanvas
             displayTimezone={displayTimezone}
             lanes={axis === 'dates' ? dateAxis.lanes : peopleAxis.lanes}
             pixelsPerHour={pixelsPerHour}
             now={now}
+            viewportHeight="100%"
             minimumLaneWidth={minLaneWidth}
             initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
-            error={
-              updateItem.isError || linkTask.isError || relateItems.isError
-                ? INLINE_UPDATE_FAILURE_COPY
-                : (axis === 'dates' && dateAxis.itemsError) ||
-                    (axis === 'people' && peopleAxis.error)
-                  ? 'Calendar updates are temporarily unavailable. Showing what we have.'
-                  : null
-            }
-            emptyMessage={
-              axis === 'dates'
-                ? dateAxis.itemsPending
-                  ? 'Loading calendar items…'
-                  : 'Nothing scheduled.'
-                : peopleAxis.comparisonPending
-                  ? 'Loading shared schedules…'
-                  : peopleAxis.selectedActorIds.length === 0
-                    ? 'Choose people to compare.'
-                    : 'No shared availability for this date.'
-            }
+            horizontalAnchorKey={axis === 'dates' ? horizontalAnchorKey : undefined}
+            selectedRegion={selectedRegion}
+            selectedRegionAnchorRef={selectedRegionAnchorRef}
+            error={calendarSchedulingError(axis, inlineMutationFailed, false, false)}
+            emptyMessage={calendarSchedulingEmptyMessage(
+              axis,
+              dateAxis.itemsPending,
+              peopleAxis.comparisonPending,
+              peopleAxis.selectedActorIds.length,
+            )}
             onViewportGeometry={({ visibleLaneCount: next }) => {
               if (axis === 'dates' && next > 0 && next !== visibleLaneCount) {
                 onVisibleLaneCountChange(next);
+              }
+            }}
+            onVisibleLaneRange={({ startLane, endLane }) => {
+              if (axis === 'dates') {
+                onVisibleDateRangeChange({
+                  startDate: startLane.date,
+                  endDate: endLane.date,
+                });
               }
             }}
             onOpenItem={({ item }: { item: ScheduleItem }) => {
@@ -209,18 +203,20 @@ export function CalendarSchedulingSurface({
             {...(axis === 'dates'
               ? {
                   onReachBoundary,
-                  onSelectRegion: ({ lane, startMinutes, endMinutes }) => {
+                  onSelectRegion: (canvasRegion: ScheduleRegionSelection) => {
+                    const { lane, startMinutes, endMinutes } = canvasRegion;
                     const startsAt = resolveWallInstant(lane.date, startMinutes);
                     const endsAt = resolveWallInstant(lane.date, endMinutes);
                     if (!startsAt || !endsAt) return;
                     onSelectRegion({
                       startsAt,
                       endsAt,
+                      canvasRegion,
                     });
                   },
-                  onMoveItem: ({ item, toLane, startMinutes, endMinutes }: ScheduleItemMove) => {
+                  onMoveItem: ({ item, toLane, startMinutes }: ScheduleItemMove) => {
                     if (toLane.editable === false) return;
-                    moveBounds(item.id, toLane.date, startMinutes, endMinutes);
+                    moveBounds(item.id, toLane.date, startMinutes);
                   },
                   onResizeItem: ({
                     item,
@@ -230,19 +226,22 @@ export function CalendarSchedulingSurface({
                     endMinutes,
                   }: ScheduleItemResize) => {
                     if (lane.editable === false) return;
-                    resizeBounds(item.id, lane.date, edge, startMinutes, endMinutes);
+                    resizeBounds(item, lane, edge, startMinutes, endMinutes);
+                  },
+                  onMoveAllDayItem: ({ item, startDate, endDate }) => {
+                    persistAllDayBounds(item.id, startDate, endDate);
+                  },
+                  onResizeAllDayItem: ({ item, startDate, endDate }) => {
+                    persistAllDayBounds(item.id, startDate, endDate);
                   },
                 }
               : {})}
-            renderItem={({ item }) => {
+            renderItem={({ item, density }) => {
               const source = dateAxis.itemById.get(item.id);
-              return (
-                <span className="flex min-w-0 flex-col">
-                  <span className="truncate">{item.title}</span>
-                  {source?.kind === 'timebox' ? (
-                    <span className="text-on-surface-variant text-[10px] font-normal">Timebox</span>
-                  ) : null}
-                </span>
+              return source ? (
+                <CalendarScheduleItemContent item={source} density={density} />
+              ) : (
+                item.title
               );
             }}
             onDropObjectOnItem={({ object, targetItem }) => {
@@ -269,28 +268,8 @@ export function CalendarSchedulingSurface({
           />
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-2">
-          {axis === 'dates' ? (
-            <>
-              <h2 className="text-on-surface text-sm font-semibold">Layers</h2>
-              {dateAxis.layersError ? (
-                <p role="status" className="text-on-surface-variant text-xs">
-                  Layer controls are temporarily unavailable.
-                </p>
-              ) : null}
-              <CalendarLayerPanel layers={dateAxis.layers} />
-            </>
-          ) : (
-            <div className="border-outline-variant rounded-lg border p-3">
-              <h2 className="text-on-surface text-sm font-semibold">Shared schedules</h2>
-              <p className="text-on-surface-variant mt-1 text-xs">
-                Details appear only from layers each person shared with this workspace. Private
-                provider events always appear as Busy.
-              </p>
-            </div>
-          )}
-        </aside>
+        <CalendarSchedulingSidebar axis={axis} dateAxis={dateAxis} />
       </div>
-    </>
+    </div>
   );
 }

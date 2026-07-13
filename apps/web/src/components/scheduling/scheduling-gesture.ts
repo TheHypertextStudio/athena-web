@@ -81,19 +81,24 @@ function targetLaneIndex({
   return Math.floor(contentX / laneGeometry.laneWidth);
 }
 
-/** Keep a moved duration intact while constraining it to one 24-hour lane. */
+/** Keep a moved preview visible, allowing a clipped end segment to slide toward midnight. */
 function movedBounds(
   original: SchedulingGestureBounds,
   deltaMinutes: number,
 ): Pick<ScheduleGesturePreview, 'startMinutes' | 'endMinutes'> {
+  const shiftedStart = original.startMinutes + deltaMinutes;
+  if (
+    deltaMinutes > 0 &&
+    original.endMinutes === MINUTES_PER_DAY &&
+    shiftedStart < MINUTES_PER_DAY
+  ) {
+    return { startMinutes: shiftedStart, endMinutes: MINUTES_PER_DAY };
+  }
   const duration = Math.max(
     0,
     Math.min(MINUTES_PER_DAY, original.endMinutes - original.startMinutes),
   );
-  const startMinutes = Math.max(
-    0,
-    Math.min(MINUTES_PER_DAY - duration, original.startMinutes + deltaMinutes),
-  );
+  const startMinutes = Math.max(0, Math.min(MINUTES_PER_DAY - duration, shiftedStart));
   return { startMinutes, endMinutes: startMinutes + duration };
 }
 
@@ -146,9 +151,9 @@ export function deriveGesturePreview(
   return {
     laneIndex: original.laneIndex,
     startMinutes: original.startMinutes,
-    endMinutes: Math.min(
-      MINUTES_PER_DAY,
-      Math.max(original.startMinutes + minimumDuration, original.endMinutes + deltaMinutes),
+    endMinutes: Math.max(
+      original.startMinutes + minimumDuration,
+      original.endMinutes + deltaMinutes,
     ),
   };
 }

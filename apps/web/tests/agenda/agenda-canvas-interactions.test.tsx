@@ -18,12 +18,21 @@ const router = vi.hoisted(() => ({ push: vi.fn() }));
 const canvas = vi.hoisted<{ props: SchedulingCanvasProps | undefined }>(() => ({
   props: undefined,
 }));
-const agendaState = vi.hoisted(() => ({
+const agendaState = vi.hoisted<{
+  date: string;
+  displayTimezone: string;
+  pixelsPerHour: number;
+  view: 'timeline' | 'list';
+  entries: unknown[];
+  setTimebox: ReturnType<typeof vi.fn>;
+  clearTimeboxFailure: ReturnType<typeof vi.fn>;
+  timeboxFailed: boolean;
+}>(() => ({
   date: '2026-07-13',
   displayTimezone: 'America/Los_Angeles',
   pixelsPerHour: 72,
-  view: 'timeline' as const,
-  entries: [] as unknown[],
+  view: 'timeline',
+  entries: [],
   setTimebox: vi.fn(),
   clearTimeboxFailure: vi.fn(),
   timeboxFailed: false,
@@ -62,12 +71,13 @@ vi.mock('../../src/components/scheduling', async (importOriginal) => {
                   >
                     {item.title}
                   </button>
-                  {item.editable && props.onMoveItem ? (
+                  {item.editable && (item.allDay ? props.onMoveAllDayItem : props.onMoveItem) ? (
                     <button type="button" aria-label={`Move ${item.title}`}>
                       Move
                     </button>
                   ) : null}
-                  {item.editable && props.onResizeItem ? (
+                  {item.editable &&
+                  (item.allDay ? props.onResizeAllDayItem : props.onResizeItem) ? (
                     <button type="button" aria-label={`Resize ${item.title}`}>
                       Resize
                     </button>
@@ -190,6 +200,7 @@ beforeEach(() => {
   canvas.props = undefined;
   agendaState.date = '2026-07-13';
   agendaState.entries = [];
+  agendaState.view = 'timeline';
   agendaState.setTimebox.mockReset();
   agendaState.clearTimeboxFailure.mockReset();
   agendaState.timeboxFailed = false;
@@ -213,6 +224,23 @@ afterEach(() => {
 });
 
 describe('Agenda scheduling interactions', () => {
+  it('keeps the list view informative when the day has no entries', () => {
+    agendaState.view = 'list';
+    render(<AgendaCanvas />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Nothing scheduled. Use the calendar to plan this day.',
+    );
+  });
+
+  it('teaches the next action when the timeline has no entries', () => {
+    render(<AgendaCanvas />);
+
+    expect(canvasProps().emptyMessage).toBe(
+      'Nothing scheduled. Use the calendar to plan this day.',
+    );
+  });
+
   it('converts a Jul 13 plan timebox proposal through the LA display timezone', () => {
     const entry = planTimebox();
     renderTimeline([entry]);
@@ -311,38 +339,19 @@ describe('Agenda scheduling interactions', () => {
     );
   });
 
-  it.each([
-    {
-      label: 'multi-day',
-      item: calendarItem('01BX5ZZKBKACTAV9WEVGEMMVB1', 'Overnight provider event', {
-        startsAt: '2026-07-14T06:30:00Z',
-        endsAt: '2026-07-14T08:30:00Z',
-      }),
-    },
-    {
-      label: 'all-day',
-      item: calendarItem('01BX5ZZKBKACTAV9WEVGEMMVB2', 'Provider offsite', {
-        startsAt: null,
-        endsAt: null,
-        allDayStartDate: '2026-07-13',
-        allDayEndDate: '2026-07-14',
-      }),
-    },
-  ])('keeps a $label provider item openable and drop-capable without a PATCH path', ({ item }) => {
+  it('moves a writable cross-midnight provider item through its exact calendar PATCH path', () => {
+    const item = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVB1', 'Overnight provider event', {
+      startsAt: '2026-07-14T06:30:00Z',
+      endsAt: '2026-07-14T08:30:00Z',
+    });
     renderTimeline([calendarEntry(item)]);
     const scheduleItem = canvasProps().lanes[0]!.items[0]!;
 
     expect(scheduleItem).toMatchObject({
-      editable: false,
+      editable: true,
       dropTarget: true,
       readOnlyLabel: undefined,
     });
-    expect(screen.queryByRole('button', { name: `Move ${item.title}` })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: `Resize ${item.title}` })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: `Open ${item.title}` }));
-
-    expect(screen.getByLabelText('Calendar item drawer')).toHaveTextContent(item.id);
 
     act(() => {
       const props = canvasProps();
@@ -354,18 +363,67 @@ describe('Agenda scheduling interactions', () => {
         startMinutes: 540,
         endMinutes: 600,
       });
-      props.onResizeItem?.({
-        item: lane.items[0]!,
-        lane,
-        edge: 'end',
-        startMinutes: 540,
-        endMinutes: 600,
-      });
     });
-    expect(mutationState.update.mutate).not.toHaveBeenCalled();
+    expect(mutationState.update.mutate).toHaveBeenCalledWith({
+      itemId: item.id,
+      patch: {
+        startsAt: '2026-07-13T16:00:00Z',
+        endsAt: '2026-07-13T18:00:00Z',
+      },
+    });
   });
 
-  it('keeps malformed and repeated-fold-crossing items read-only', () => {
+  it('keeps single-day all-day items useful without exposing inert date controls', () => {
+    const item = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVB2', 'Provider offsite', {
+      startsAt: null,
+      endsAt: null,
+      allDayStartDate: '2026-07-13',
+      allDayEndDate: '2026-07-14',
+    });
+    renderTimeline([calendarEntry(item)]);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+    const scheduleItem = lane.items[0]!;
+
+    expect(scheduleItem).toMatchObject({
+      allDay: true,
+      editable: false,
+      dropTarget: true,
+      readOnlyLabel: undefined,
+      dragObject: {
+        kind: 'calendar_item',
+        itemId: item.id,
+        title: item.title,
+      },
+    });
+    expect(props.onMoveAllDayItem).toBeUndefined();
+    expect(props.onResizeAllDayItem).toBeUndefined();
+    expect(screen.queryByRole('button', { name: `Move ${item.title}` })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: `Resize ${item.title}` })).not.toBeInTheDocument();
+
+    act(() => {
+      props.onDropObjectOnItem?.({
+        object: {
+          kind: 'task',
+          taskId: TASK_ID,
+          organizationId: ORG_ID,
+          title: 'Draft launch memo',
+        },
+        targetItem: scheduleItem,
+        targetLane: lane,
+      });
+    });
+    expect(mutationState.link.mutate).toHaveBeenCalledWith({
+      itemId: item.id,
+      taskId: TASK_ID,
+      organizationId: ORG_ID,
+      role: 'related',
+    });
+    fireEvent.click(screen.getByRole('button', { name: `Open ${item.title}` }));
+    expect(screen.getByLabelText('Calendar item drawer')).toHaveTextContent(item.id);
+  });
+
+  it('keeps malformed items read-only while allowing exact repeated-fold bounds', () => {
     renderTimeline([
       calendarEntry(
         calendarItem('01BX5ZZKBKACTAV9WEVGEMMVC1', 'Malformed', { startsAt: 'hostile' }),
@@ -378,7 +436,33 @@ describe('Agenda scheduling interactions', () => {
       ),
     ]);
 
-    expect(canvasProps().lanes[0]!.items.map((item) => item.editable)).toEqual([false, false]);
+    expect(canvasProps().lanes[0]!.items.map((item) => item.editable)).toEqual([false, true]);
+  });
+
+  it('preserves exact elapsed duration when moving across the fall-back transition', () => {
+    const crossingFold = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVC3', 'Crossing fold', {
+      startsAt: '2026-11-01T07:30:00Z',
+      endsAt: '2026-11-01T09:30:00Z',
+    });
+    agendaState.date = '2026-11-01';
+    renderTimeline([calendarEntry(crossingFold)]);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+
+    act(() => {
+      props.onMoveItem?.({
+        item: lane.items[0]!,
+        fromLane: lane,
+        toLane: lane,
+        startMinutes: 45,
+        endMinutes: 165,
+      });
+    });
+
+    expect(mutationState.update.mutate).toHaveBeenCalledWith({
+      itemId: crossingFold.id,
+      patch: { startsAt: '2026-11-01T07:45:00Z', endsAt: '2026-11-01T09:45:00Z' },
+    });
   });
 
   it('preserves a later-fold untouched edge and rejects a skipped changed edge', () => {
@@ -423,6 +507,36 @@ describe('Agenda scheduling interactions', () => {
         endMinutes: 180,
       });
     });
+    expect(mutationState.update.mutate).not.toHaveBeenCalled();
+  });
+
+  it('rejects ambiguous Agenda moves and resize edges instead of choosing a fold occurrence', () => {
+    const ordinary = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVD3', 'Before fold', {
+      startsAt: '2026-11-01T07:30:00Z',
+      endsAt: '2026-11-01T07:50:00Z',
+    });
+    agendaState.date = '2026-11-01';
+    renderTimeline([calendarEntry(ordinary)]);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+
+    act(() => {
+      props.onMoveItem?.({
+        item: lane.items[0]!,
+        fromLane: lane,
+        toLane: lane,
+        startMinutes: 60,
+        endMinutes: 80,
+      });
+      props.onResizeItem?.({
+        item: lane.items[0]!,
+        lane,
+        edge: 'end',
+        startMinutes: 30,
+        endMinutes: 60,
+      });
+    });
+
     expect(mutationState.update.mutate).not.toHaveBeenCalled();
   });
 

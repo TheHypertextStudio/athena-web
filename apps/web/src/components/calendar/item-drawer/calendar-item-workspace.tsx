@@ -5,6 +5,7 @@ import { Badge, SheetDescription, SheetTitle } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { CALENDAR_ITEM_KIND_ICON, CALENDAR_ITEM_KIND_LABEL } from '../calendar-item-card';
+import { CalendarDrawerClose } from '../calendar-drawer-close';
 import { CoreFieldsForm } from './core-fields-form';
 import { LinkedTasksSection } from './linked-tasks-section';
 import { itemTimeLabel } from './presentation';
@@ -21,6 +22,8 @@ export interface CalendarItemWorkspaceProps {
   layer?: CalendarLayerOut;
   /** Close the drawer after deletion. */
   onClose: () => void;
+  /** Report whether editable core fields differ from their saved values. */
+  onDirtyChange: (dirty: boolean) => void;
   /** Navigate to a linked task detail page. */
   onOpenTask: (orgId: string, taskId: string) => void;
   /** Open another calendar item in the drawer. */
@@ -33,6 +36,7 @@ export function CalendarItemWorkspace({
   item,
   layer,
   onClose,
+  onDirtyChange,
   onOpenTask,
   onOpenItem,
 }: CalendarItemWorkspaceProps): JSX.Element {
@@ -53,11 +57,12 @@ export function CalendarItemWorkspace({
           <SheetTitle className="text-on-surface min-w-0 flex-1 text-base font-semibold">
             {item.title}
           </SheetTitle>
+          <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
           <SheetDescription className="sr-only">
             Calendar item details, relationships, and linked tasks.
           </SheetDescription>
         </div>
-        <p className="text-on-surface-variant text-sm">{itemTimeLabel(item)}</p>
+        <p className="text-on-surface-variant text-sm">{itemTimeLabel(item, displayTimezone)}</p>
         <div className="flex flex-wrap items-center gap-2">
           {layer ? (
             <Badge variant="outline" className="gap-1.5 font-normal">
@@ -89,7 +94,11 @@ export function CalendarItemWorkspace({
 
       <section className="flex flex-col gap-2">
         <h3 className="text-on-surface text-sm font-semibold">Details</h3>
-        <CoreFieldsForm displayTimezone={displayTimezone} item={item} />
+        <CoreFieldsForm
+          displayTimezone={displayTimezone}
+          item={item}
+          onDirtyChange={onDirtyChange}
+        />
       </section>
 
       <CalendarItemRelationsSection itemId={item.id} onOpenItem={onOpenItem} />

@@ -1,12 +1,25 @@
 import { Temporal } from '@js-temporal/polyfill';
 
 import { deriveSnapMinutes, MINUTES_PER_DAY } from './scheduling-geometry';
+import { resolveScheduleTimezone, resolveScheduleWallTime } from './scheduling-wall-time';
+
+export {
+  resolveScheduleTimezone,
+  resolveScheduleWallTime,
+  scheduleElapsedMinutes,
+  scheduleInstantAt,
+  scheduleWallPositionForInstant,
+  resolveScheduleWallInstant,
+} from './scheduling-wall-time';
+export type {
+  ScheduleTimeDisambiguation,
+  ScheduleWallInstantResolution,
+  ScheduleWallTimeCandidate,
+  ScheduleWallTimeResolution,
+} from './scheduling-wall-time';
 
 const MINIMUM_MAJOR_TICK_SEPARATION = 44;
 const MAJOR_TICK_INTERVALS = [15, 30, 60, 120] as const;
-
-/** How Temporal resolves a skipped or repeated wall-clock position. */
-export type ScheduleTimeDisambiguation = 'compatible' | 'earlier' | 'later' | 'reject';
 
 /** One wall-clock line emitted for the scheduling grid. */
 export interface ScheduleTick {
@@ -38,139 +51,6 @@ export interface ScheduleDateRange {
   readonly startISO: string;
   /** Exclusive ISO instant at the local midnight after the last date. */
   readonly endISO: string;
-}
-
-/** Return whether a string names a timezone supported by the current runtime. */
-function isSupportedTimezone(timezone: string | undefined): timezone is string {
-  if (!timezone) return false;
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: timezone }).resolvedOptions();
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Resolve a preferred IANA timezone, falling back to the viewer runtime and then UTC.
- *
- * @param preferred - Consumer-selected timezone when available.
- * @returns A timezone accepted by both native `Intl` and Temporal.
- */
-export function resolveScheduleTimezone(preferred?: string): string {
-  if (isSupportedTimezone(preferred)) return preferred;
-
-  let viewerTimezone: string | undefined;
-  try {
-    viewerTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    viewerTimezone = undefined;
-  }
-  return isSupportedTimezone(viewerTimezone) ? viewerTimezone : 'UTC';
-}
-
-/**
- * Convert an exact ISO instant to one canvas-zone wall-clock position.
- *
- * @param instant - Exact ISO instant to place on the wall-clock axis.
- * @param timezone - Required IANA timezone shared by the canvas.
- * @returns The bare local date and minute offset from local midnight, or `null` for invalid input.
- */
-export function scheduleWallPositionForInstant(
-  instant: string,
-  timezone: string,
-): { readonly date: string; readonly wallMinutes: number } | null {
-  try {
-    const zonedDateTime = Temporal.Instant.from(instant).toZonedDateTimeISO(timezone);
-    return {
-      date: zonedDateTime.toPlainDate().toString(),
-      wallMinutes: zonedDateTime.hour * 60 + zonedDateTime.minute,
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Measure signed physical duration between two exact ISO instants.
- *
- * @param startInstant - Inclusive exact start instant.
- * @param endInstant - Exclusive exact end instant.
- * @returns Elapsed minutes, or `null` when either instant is invalid.
- */
-export function scheduleElapsedMinutes(startInstant: string, endInstant: string): number | null {
-  try {
-    const start = Temporal.Instant.from(startInstant);
-    const end = Temporal.Instant.from(endInstant);
-    return Number(end.epochNanoseconds - start.epochNanoseconds) / 60_000_000_000;
-  } catch {
-    return null;
-  }
-}
-
-/** Return one plain date-time at a bounded minute offset from local midnight. */
-function plainDateTimeAt(
-  date: Temporal.PlainDate,
-  wallMinutes: number,
-): Temporal.PlainDateTime | null {
-  if (!Number.isInteger(wallMinutes) || wallMinutes < 0 || wallMinutes > MINUTES_PER_DAY) {
-    return null;
-  }
-  return date.toPlainDateTime().add({ minutes: wallMinutes });
-}
-
-/** Resolve one wall-clock position to a zoned value under an explicit ambiguity policy. */
-function zonedDateTimeAt(
-  date: Temporal.PlainDate,
-  wallMinutes: number,
-  timezone: string,
-  disambiguation: ScheduleTimeDisambiguation,
-): Temporal.ZonedDateTime | null {
-  const plainDateTime = plainDateTimeAt(date, wallMinutes);
-  if (!plainDateTime) return null;
-
-  try {
-    return Temporal.ZonedDateTime.from(
-      {
-        year: plainDateTime.year,
-        month: plainDateTime.month,
-        day: plainDateTime.day,
-        hour: plainDateTime.hour,
-        minute: plainDateTime.minute,
-        timeZone: timezone,
-      },
-      { disambiguation },
-    );
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Convert a lane wall-clock position to an exact ISO instant.
- *
- * @param date - Bare ISO date represented by the lane.
- * @param wallMinutes - Whole minute offset from local midnight, including `1440` for the next day.
- * @param timezone - IANA timezone shared by the scheduling canvas.
- * @param disambiguation - Temporal policy for skipped or repeated local times.
- * @returns An ISO instant, or `null` when the input or requested resolution is invalid.
- */
-export function scheduleInstantAt(
-  date: string,
-  wallMinutes: number,
-  timezone: string,
-  disambiguation: ScheduleTimeDisambiguation = 'compatible',
-): string | null {
-  try {
-    const plainDate = Temporal.PlainDate.from(date);
-    return (
-      zonedDateTimeAt(plainDate, wallMinutes, resolveScheduleTimezone(timezone), disambiguation)
-        ?.toInstant()
-        .toString() ?? null
-    );
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -210,25 +90,6 @@ export function majorTickInterval(pixelsPerHour: number): number {
       (minutes) => (minutes / 60) * safePixelsPerHour >= MINIMUM_MAJOR_TICK_SEPARATION,
     ) ?? 120
   );
-}
-
-/** Classify a wall-clock position by round-tripping its earlier and later resolutions. */
-function scheduleTickTransition(
-  date: Temporal.PlainDate,
-  wallMinutes: number,
-  timezone: string,
-): ScheduleTick['transition'] {
-  if (zonedDateTimeAt(date, wallMinutes, timezone, 'reject')) return 'normal';
-
-  const plainDateTime = plainDateTimeAt(date, wallMinutes);
-  const earlier = zonedDateTimeAt(date, wallMinutes, timezone, 'earlier');
-  const later = zonedDateTimeAt(date, wallMinutes, timezone, 'later');
-  if (!plainDateTime || !earlier || !later) return 'skipped';
-
-  return earlier.toPlainDateTime().equals(plainDateTime) &&
-    later.toPlainDateTime().equals(plainDateTime)
-    ? 'repeated'
-    : 'skipped';
 }
 
 /** Format a requested wall time that has no corresponding instant. */
@@ -278,14 +139,14 @@ export function deriveScheduleTicks({
   const ticks: ScheduleTick[] = [];
 
   for (let wallMinutes = 0; wallMinutes <= MINUTES_PER_DAY; wallMinutes += snapMinutes) {
-    const transition = scheduleTickTransition(plainDate, wallMinutes, zone);
-    const plainDateTime = plainDateTimeAt(plainDate, wallMinutes);
-    if (!plainDateTime) continue;
-    const zonedDateTime = zonedDateTimeAt(plainDate, wallMinutes, zone, 'earlier');
+    const resolution = resolveScheduleWallTime(date, wallMinutes, zone);
+    const transition = resolution?.kind ?? 'skipped';
+    const plainDateTime = plainDate.toPlainDateTime().add({ minutes: wallMinutes });
+    const instant = resolution?.kind === 'normal' ? resolution.instant : null;
     const label =
-      transition === 'skipped' || !zonedDateTime
+      transition !== 'normal' || !instant
         ? formatSkippedWallTime(skippedFormatter, plainDateTime)
-        : zonedFormatter.format(new Date(zonedDateTime.epochMilliseconds));
+        : zonedFormatter.format(new Date(instant));
 
     ticks.push({
       wallMinutes,

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 
 /** One schedulable item rendered inside a {@link ScheduleLane}. */
 export interface ScheduleItem {
@@ -92,8 +92,30 @@ export interface ScheduleItemResize {
   readonly endMinutes: number;
 }
 
+/** A proposed move for an all-day item using an inclusive-start/exclusive-end date range. */
+export interface ScheduleAllDayItemMove {
+  readonly item: ScheduleItem;
+  readonly fromLane: ScheduleLane;
+  readonly toLane: ScheduleLane;
+  readonly startDate: string;
+  readonly endDate: string;
+}
+
+/** A proposed true-edge resize for an all-day item's calendar-date range. */
+export interface ScheduleAllDayItemResize {
+  readonly item: ScheduleItem;
+  readonly fromLane: ScheduleLane;
+  readonly toLane: ScheduleLane;
+  readonly edge: 'start' | 'end';
+  readonly startDate: string;
+  readonly endDate: string;
+}
+
 /** One direct-manipulation operation supported by a timed scheduling item. */
 export type ScheduleGestureMode = 'move' | 'resize-start' | 'resize-end';
+
+/** Amount of visible detail that fits inside a rendered scheduling item. */
+export type ScheduleItemDensity = 'marker' | 'compact' | 'full';
 
 /** Valid wall-clock and lane bounds shown before a scheduling gesture commits. */
 export interface ScheduleGesturePreview {
@@ -102,11 +124,20 @@ export interface ScheduleGesturePreview {
   readonly endMinutes: number;
 }
 
+/** Exact label and commit eligibility for one direct-manipulation preview. */
+export interface ScheduleGestureTimePresentation {
+  readonly label: string;
+  readonly valid: boolean;
+  readonly announcement?: string;
+}
+
 /** Context supplied to a consumer-owned scheduling item renderer. */
 export interface ScheduleItemRenderContext {
   readonly item: ScheduleItem;
   readonly lane: ScheduleLane;
   readonly allDay: boolean;
+  /** Layout-derived detail level consumers should honor when rendering item content. */
+  readonly density: ScheduleItemDensity;
 }
 
 /** Public contract for the pure, callback-driven scheduling canvas. */
@@ -121,16 +152,25 @@ export interface SchedulingCanvasProps {
   readonly now?: string;
   /** Deterministic width override; when omitted the canvas observes its own viewport. */
   readonly viewportWidth?: number;
+  /** Consumer-owned viewport height; defaults to a bounded responsive calendar surface. */
+  readonly viewportHeight?: string | number;
   /** Minimum readable lane width; the visible lane count is derived from this and the viewport. */
   readonly minimumLaneWidth?: number;
   /** Lane aligned at the leading edge when a rolling window mounts. */
   readonly initialLaneIndex?: number;
-  /** Minute-of-day initially brought near the top of the viewport (default: 07:00). */
+  /** Consumer-owned signal that realigns the initial lane even when the lane window is unchanged. */
+  readonly horizontalAnchorKey?: string | number;
+  /** Minute brought near the top; defaults to one hour before live time, or 07:00 off today. */
   readonly initialScrollMinutes?: number;
   /** Reports the live viewport-derived geometry to a rolling lane source. */
   readonly onViewportGeometry?: (geometry: {
     readonly visibleLaneCount: number;
     readonly laneWidth: number;
+  }) => void;
+  /** Reports the first and last lanes intersecting the live horizontal viewport. */
+  readonly onVisibleLaneRange?: (range: {
+    readonly startLane: ScheduleLane;
+    readonly endLane: ScheduleLane;
   }) => void;
   /** Requests the preceding/following window when horizontal scrolling reaches a boundary. */
   readonly onReachBoundary?: (direction: 'previous' | 'next') => void;
@@ -140,6 +180,10 @@ export interface SchedulingCanvasProps {
   readonly emptyMessage?: string;
   /** Customize item content without transferring gesture or geometry ownership. */
   readonly renderItem?: (context: ScheduleItemRenderContext) => ReactNode;
+  /** Consumer-owned committed selection kept visible after its pointer gesture completes. */
+  readonly selectedRegion?: ScheduleRegionSelection | null;
+  /** Optional ref to the committed selection element for contextual consumer UI. */
+  readonly selectedRegionAnchorRef?: Ref<HTMLDivElement>;
   /** Receive a pointer-created time region. */
   readonly onSelectRegion?: (selection: ScheduleRegionSelection) => void;
   /** Receive item activation. */
@@ -148,6 +192,10 @@ export interface SchedulingCanvasProps {
   readonly onMoveItem?: (request: ScheduleItemMove) => void;
   /** Receive a proposed start/end resize. */
   readonly onResizeItem?: (request: ScheduleItemResize) => void;
+  /** Receive a proposed calendar-date move for an all-day item. */
+  readonly onMoveAllDayItem?: (request: ScheduleAllDayItemMove) => void;
+  /** Receive a proposed calendar-date resize for an all-day item. */
+  readonly onResizeAllDayItem?: (request: ScheduleAllDayItemResize) => void;
   /** Associate a cross-surface task/event with an item target. */
   readonly onDropObjectOnItem?: (request: ScheduleObjectDrop) => void;
 }

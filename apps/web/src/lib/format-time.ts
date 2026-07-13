@@ -11,8 +11,12 @@
  */
 
 /** Format an ISO instant as a locale wall-clock label, e.g. `9:30 AM`. */
-export function formatClock(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+export function formatClock(iso: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
+  }).format(new Date(iso));
 }
 
 /** The local `HH:mm` (24h) value of an ISO instant, for an `<input type="time">`. */

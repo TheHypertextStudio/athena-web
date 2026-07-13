@@ -1,6 +1,7 @@
 /** Pointer editing, collision layout, permissions, and resilient-error browser contracts. */
 import { CalendarItemId } from '@docket/types';
 import type { OrgCreateResult, ScheduleComparisonOut } from '@docket/types';
+import type { Locator, Page } from '@playwright/test';
 
 import { signUpAndOnboard } from './helpers/app';
 import {
@@ -17,6 +18,7 @@ import {
   dragScheduleResizeGrip,
   scheduleItem,
   scheduleViewport,
+  waitForSheetCompositorStability,
 } from './helpers/calendar-ui';
 import { expect, test } from './helpers/fixtures';
 import { apiJson } from './helpers/net';
@@ -29,6 +31,57 @@ const COLLISION_IDS = [
   CalendarItemId.parse('F5NV2AHRZ6ENW3BJS08FPX4CKT'),
   CalendarItemId.parse('F6NV2AHRZ6ENW3BJS08FPX4CKT'),
 ] as const;
+
+/** Prove every critical drawer control remains inside a horizontally contained workspace. */
+async function expectDrawerContentContained(page: Page, drawer: Locator): Promise<void> {
+  await waitForSheetCompositorStability(page, drawer);
+  const workspace = drawer.locator(':scope > div').first();
+  await expect(workspace).toBeVisible();
+  await expect
+    .poll(() => workspace.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
+
+  const drawerBox = await drawer.boundingBox();
+  if (!drawerBox) throw new Error('Calendar item drawer has no browser geometry.');
+  const [drawerStackingOrder, highestStickyStackingOrder] = await Promise.all([
+    drawer.evaluate((element) => Number.parseInt(getComputedStyle(element).zIndex, 10)),
+    page
+      .locator('main#main-content .sticky')
+      .evaluateAll((elements) =>
+        Math.max(
+          ...elements.map((element) => Number.parseInt(getComputedStyle(element).zIndex, 10) || 0),
+        ),
+      ),
+  ]);
+  expect(drawerStackingOrder).toBeGreaterThan(highestStickyStackingOrder);
+  expect(
+    await drawer.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      return hit === element || (hit !== null && element.contains(hit));
+    }),
+  ).toBe(true);
+  for (const control of [
+    drawer.getByRole('button', { name: 'Close calendar item' }),
+    drawer.getByLabel('Starts'),
+    drawer.getByLabel('Ends'),
+    drawer.getByRole('button', { name: 'New', exact: true }),
+    drawer.getByRole('button', { name: 'Link', exact: true }),
+  ]) {
+    await expect(control).toBeVisible();
+    const controlBox = await control.boundingBox();
+    if (!controlBox) throw new Error('Calendar drawer control has no browser geometry.');
+    expect(controlBox.x).toBeGreaterThanOrEqual(drawerBox.x);
+    expect(controlBox.x + controlBox.width).toBeLessThanOrEqual(drawerBox.x + drawerBox.width);
+    expect(
+      await control.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+        return hit === element || (hit !== null && element.contains(hit));
+      }),
+    ).toBe(true);
+  }
+}
 
 test.use({ timezoneId: 'UTC', video: 'on' });
 
@@ -128,6 +181,7 @@ test.describe('fluid scheduling interaction contract', () => {
   test('provider read-only items remain openable but expose no direct edit targets', async ({
     page,
   }, testInfo) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
     await signUpAndOnboard(page, 'FluidReadOnly');
     const layer = makeCalendarLayer({
@@ -165,6 +219,10 @@ test.describe('fluid scheduling interaction contract', () => {
     const drawer = page.getByRole('dialog');
     await expect(drawer.getByText('Read-only — no calendar write access granted')).toBeVisible();
     await expect(drawer.getByLabel('Title')).toBeDisabled();
+    await expectDrawerContentContained(page, drawer);
+    await attachCalendarScreenshot(page, testInfo, 'fluid-provider-read-only-desktop');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectDrawerContentContained(page, drawer);
     expect(state.itemPatches).toHaveLength(0);
     await attachCalendarScreenshot(page, testInfo, 'fluid-provider-read-only');
   });
@@ -220,7 +278,7 @@ test.describe('fluid scheduling interaction contract', () => {
     expect(state.itemPatches).toHaveLength(0);
   });
 
-  test('hostile range failures show only safe copy over the intact schedule grid', async ({
+  test('hostile range failures show safe retry notices above intact, usable grids', async ({
     page,
   }, testInfo) => {
     await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
@@ -249,26 +307,40 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect(schedule).toBeVisible();
     await expect(schedule).toHaveAttribute('data-lane-count', /[1-9][0-9]*/);
     await expect.poll(() => schedule.locator('[data-schedule-tick]').count()).toBeGreaterThan(0);
-    const calendarAlert = schedule.getByRole('alert');
-    await expect(calendarAlert).toBeVisible();
-    await expect(calendarAlert).toHaveText(
-      'Calendar updates are temporarily unavailable. Showing what we have.',
-    );
-    const [scheduleBox, alertBox] = await Promise.all([
+    const safeCopy = 'Calendar updates are temporarily unavailable. Showing what we have.';
+    const calendarNotice = page
+      .locator('main#main-content')
+      .getByRole('status')
+      .filter({ hasText: safeCopy });
+    await expect(calendarNotice).toBeVisible();
+    await expect(calendarNotice.getByText(safeCopy, { exact: true })).toBeVisible();
+    await expect(calendarNotice.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    const [scheduleBox, noticeBox] = await Promise.all([
       schedule.boundingBox(),
-      calendarAlert.boundingBox(),
+      calendarNotice.boundingBox(),
     ]);
-    if (!scheduleBox || !alertBox) throw new Error('Degraded calendar notice has no geometry.');
-    expect(alertBox.x).toBeGreaterThanOrEqual(scheduleBox.x);
-    expect(alertBox.x + alertBox.width).toBeLessThanOrEqual(scheduleBox.x + scheduleBox.width);
+    if (!scheduleBox || !noticeBox) throw new Error('Degraded calendar notice has no geometry.');
+    expect(noticeBox.y + noticeBox.height).toBeLessThanOrEqual(scheduleBox.y);
+    expect(noticeBox.x).toBeLessThan(scheduleBox.x + scheduleBox.width);
+    expect(noticeBox.x + noticeBox.width).toBeGreaterThan(scheduleBox.x);
+    await expect
+      .poll(() =>
+        schedule.evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2,
+          );
+          return hit !== null && element.contains(hit);
+        }),
+      )
+      .toBe(true);
     const agenda = page.getByRole('complementary', { name: 'Agenda' });
     await expect(agenda).toBeVisible();
     await expect(agenda.getByRole('region', { name: 'Schedule' })).toBeVisible();
-    await expect(
-      agenda.getByRole('status').filter({
-        hasText: 'Calendar updates are temporarily unavailable. Showing what we have.',
-      }),
-    ).toBeVisible();
+    const agendaNotice = agenda.getByRole('status').filter({ hasText: safeCopy });
+    await expect(agendaNotice).toBeVisible();
+    await expect(agendaNotice.getByRole('button', { name: 'Retry' })).toBeEnabled();
     await expect(page.locator('body')).not.toContainText('Internal server error');
     await expect(page.locator('body')).not.toContainText('AGENT_MAX_TURNS');
     await attachCalendarScreenshot(page, testInfo, 'fluid-safe-error-overlay');
@@ -276,24 +348,36 @@ test.describe('fluid scheduling interaction contract', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(schedule).toHaveAttribute('data-visible-lane-count', '1');
     await expect(schedule).toHaveAttribute('data-lane-count', '3');
-    await expect(calendarAlert).toHaveText(
-      'Calendar updates are temporarily unavailable. Showing what we have.',
-    );
-    await expect(calendarAlert).toBeVisible();
+    await expect(calendarNotice).toBeVisible();
+    await expect(calendarNotice.getByRole('button', { name: 'Retry' })).toBeEnabled();
     await expect
       .poll(async () => {
-        const [narrowScheduleBox, narrowAlertBox] = await Promise.all([
+        const [narrowScheduleBox, narrowNoticeBox] = await Promise.all([
           schedule.boundingBox(),
-          calendarAlert.boundingBox(),
+          calendarNotice.boundingBox(),
         ]);
         return Boolean(
           narrowScheduleBox &&
-          narrowAlertBox &&
-          narrowAlertBox.x >= narrowScheduleBox.x &&
-          narrowAlertBox.x + narrowAlertBox.width <= narrowScheduleBox.x + narrowScheduleBox.width,
+          narrowNoticeBox &&
+          narrowNoticeBox.y + narrowNoticeBox.height <= narrowScheduleBox.y &&
+          narrowNoticeBox.x < narrowScheduleBox.x + narrowScheduleBox.width &&
+          narrowNoticeBox.x + narrowNoticeBox.width > narrowScheduleBox.x,
         );
       })
       .toBe(true);
     await attachCalendarScreenshot(page, testInfo, 'fluid-safe-error-narrow');
+
+    const rangeRequestCountBeforeRetry = state.rangeRequests.length;
+    state.rangeFailure = undefined;
+    await calendarNotice.getByRole('button', { name: 'Retry' }).click();
+    await expect
+      .poll(() => state.rangeRequests.length)
+      .toBeGreaterThan(rangeRequestCountBeforeRetry);
+    await expect(calendarNotice).toHaveCount(0);
+    await expect(schedule).toBeVisible();
+    await expect.poll(() => schedule.locator('[data-schedule-tick]').count()).toBeGreaterThan(0);
+
+    await expect(page.locator('body')).not.toContainText('Internal server error');
+    await expect(page.locator('body')).not.toContainText('AGENT_MAX_TURNS');
   });
 });

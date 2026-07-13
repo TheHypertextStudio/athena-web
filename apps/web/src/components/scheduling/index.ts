@@ -25,6 +25,11 @@ export {
   type DeriveLaneGeometryOptions,
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
+export { moveScheduleInstantRange, type MovedScheduleInstantRange } from './scheduling-exact-move';
+export {
+  resizeScheduleInstantRange,
+  type ResizedScheduleInstantRange,
+} from './scheduling-exact-resize';
 export {
   layoutScheduleOverlaps,
   type ScheduleOverlapInput,
@@ -33,6 +38,8 @@ export {
 export {
   deriveScheduleTicks,
   majorTickInterval,
+  resolveScheduleWallInstant,
+  resolveScheduleWallTime,
   resolveScheduleTimezone,
   scheduleDateRange,
   scheduleElapsedMinutes,
@@ -42,16 +49,24 @@ export {
   type ScheduleDateRange,
   type ScheduleTick,
   type ScheduleTimeDisambiguation,
+  type ScheduleWallInstantResolution,
+  type ScheduleWallTimeCandidate,
+  type ScheduleWallTimeResolution,
 } from './scheduling-time-axis';
+export { formatScheduleInstantRange, formatScheduleInstantTime } from './scheduling-time-label';
 export {
   useScheduleDisplayDate,
   type ScheduleDisplayDateState,
   type UseScheduleDisplayDateOptions,
 } from './use-schedule-display-date';
 export type {
+  ScheduleAllDayItemMove,
+  ScheduleAllDayItemResize,
   ScheduleItem,
+  ScheduleItemDensity,
   ScheduleItemMove,
   ScheduleItemOpen,
+  ScheduleItemRenderContext,
   ScheduleItemResize,
   ScheduleLane,
   ScheduleDragObject,

@@ -8,11 +8,12 @@
  * editing task links, relationships, fields, or sync actions does not grow this orchestrator.
  */
 import { Sheet, SheetContent, SheetDescription, SheetTitle, Skeleton } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import { type JSX, useEffect, useState } from 'react';
 
 import { useApiListQuery, useApiQuery } from '@/lib/query';
 
 import { calendarItemDef, calendarLayersDef } from './calendar-data';
+import { CalendarDrawerClose } from './calendar-drawer-close';
 import { CalendarItemWorkspace } from './item-drawer/calendar-item-workspace';
 
 /** Props for {@link CalendarItemDrawer}. */
@@ -37,11 +38,29 @@ export default function CalendarItemDrawer({
   onOpenTask,
   onOpenItem,
 }: CalendarItemDrawerProps): JSX.Element {
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  useEffect(() => {
+    setHasUnsavedChanges(false);
+  }, [itemId]);
+  const confirmDiscard = (): boolean => {
+    if (hasUnsavedChanges && !window.confirm('Discard your unsaved calendar changes?'))
+      return false;
+    setHasUnsavedChanges(false);
+    return true;
+  };
+  const requestClose = (): void => {
+    if (!confirmDiscard()) return;
+    onClose();
+  };
+  const requestOpenTask = (orgId: string, taskId: string): void => {
+    if (!confirmDiscard()) return;
+    onOpenTask(orgId, taskId);
+  };
   return (
     <Sheet
       open={itemId !== null}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open) requestClose();
       }}
     >
       <SheetContent side="right" className="w-[26rem]">
@@ -55,8 +74,10 @@ export default function CalendarItemDrawer({
             key={itemId}
             displayTimezone={displayTimezone}
             initialItemId={itemId}
-            onClose={onClose}
-            onOpenTask={onOpenTask}
+            onClose={requestClose}
+            onDirtyChange={setHasUnsavedChanges}
+            onBeforeItemChange={confirmDiscard}
+            onOpenTask={requestOpenTask}
             onOpenItem={onOpenItem}
           />
         )}
@@ -69,6 +90,8 @@ interface CalendarItemDrawerContentProps {
   displayTimezone: string;
   initialItemId: string;
   onClose: () => void;
+  onDirtyChange: (dirty: boolean) => void;
+  onBeforeItemChange: () => boolean;
   onOpenTask: (orgId: string, taskId: string) => void;
   onOpenItem?: (itemId: string) => void;
 }
@@ -77,6 +100,8 @@ function CalendarItemDrawerContent({
   displayTimezone,
   initialItemId,
   onClose,
+  onDirtyChange,
+  onBeforeItemChange,
   onOpenTask,
   onOpenItem,
 }: CalendarItemDrawerContentProps): JSX.Element | null {
@@ -88,6 +113,7 @@ function CalendarItemDrawerContent({
     ? layersQuery.data?.items.find((value) => value.id === item.layerId)
     : undefined;
   const openItem = (nextItemId: string): void => {
+    if (!onBeforeItemChange()) return;
     if (onOpenItem) onOpenItem(nextItemId);
     else setActiveItemId(nextItemId);
   };
@@ -95,6 +121,7 @@ function CalendarItemDrawerContent({
   if (itemQuery.isPending) {
     return (
       <div className="flex flex-col gap-3 p-4">
+        <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
         <SheetTitle className="sr-only">Loading calendar item</SheetTitle>
         <SheetDescription className="sr-only">Loading calendar item details.</SheetDescription>
         <Skeleton className="h-6 w-2/3" />
@@ -106,6 +133,7 @@ function CalendarItemDrawerContent({
   if (itemQuery.isError) {
     return (
       <div className="flex flex-col gap-2 p-4">
+        <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
         <SheetTitle className="sr-only">Calendar item error</SheetTitle>
         <SheetDescription className="sr-only">
           Calendar item details could not load.
@@ -123,6 +151,7 @@ function CalendarItemDrawerContent({
       item={item}
       layer={layer}
       onClose={onClose}
+      onDirtyChange={onDirtyChange}
       onOpenTask={onOpenTask}
       onOpenItem={openItem}
     />

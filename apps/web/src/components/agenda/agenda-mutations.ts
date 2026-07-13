@@ -18,6 +18,7 @@ import type { AgendaOut, DailyPlanItemOut, DailyPlanItemStatus, HubTodayOut } fr
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
+import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
 import { api } from '@/lib/api';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
@@ -141,7 +142,7 @@ export function useAgendaPlanMutations(date: string): AgendaPlanMutations {
         })),
       ),
     onError: (_error, _vars, context) => context?.rollback(),
-    invalidateKeys: dayKeys,
+    invalidateKeys: [...dayKeys, CALENDAR_ITEMS_PREFIX],
   });
 
   const move = useApiMutation({
@@ -193,7 +194,7 @@ export function useAgendaPlanMutations(date: string): AgendaPlanMutations {
         queryClient.invalidateQueries({ queryKey: queryKeys.today(vars.targetDate) }),
       ]);
     },
-    invalidateKeys: dayKeys,
+    invalidateKeys: [...dayKeys, CALENDAR_ITEMS_PREFIX],
   });
 
   const toggleDone = useCallback(

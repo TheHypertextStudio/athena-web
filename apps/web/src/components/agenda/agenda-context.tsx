@@ -28,9 +28,11 @@ import {
   useApiQuery,
   usePrefetchApi,
 } from '@/lib/query';
+import { useNow } from '@/lib/use-now';
 import { startViewTransition } from '@/lib/view-transition';
 
 import { type AgendaPlanMutations, useAgendaPlanMutations } from './agenda-mutations';
+import { filterAgendaForDisplayDate } from './agenda-day-filter';
 import {
   type AgendaEntry,
   type AgendaView,
@@ -56,10 +58,12 @@ const DEFAULT_PIXELS_PER_HOUR = 72;
 
 interface AgendaContextValue extends AgendaPlanMutations {
   date: string;
+  today: string;
   isToday: boolean;
   entries: AgendaEntry[];
   loading: boolean;
   error: string | null;
+  retrying: boolean;
   displayTimezone: string;
   pixelsPerHour: number;
   view: AgendaView;
@@ -67,6 +71,7 @@ interface AgendaContextValue extends AgendaPlanMutations {
   goToPreviousDay: () => void;
   goToNextDay: () => void;
   goToToday: () => void;
+  retry: () => void;
 }
 
 const AgendaContext = createContext<AgendaContextValue | null>(null);
@@ -100,7 +105,7 @@ function calendarDayRange(date: string, displayTimezone: string) {
 /** Provide the selected agenda day, normalized entries, and in-place mutations. */
 export function AgendaProvider({ initialDate, children }: AgendaProviderProps): JSX.Element {
   const [view, setViewState] = useState<AgendaView>('timeline');
-  const [now] = useState(() => new Date().toISOString());
+  const now = useNow().toISOString();
   const preferencesQuery = useApiQuery(
     apiQueryOptions(
       queryKeys.hubPreferences(),
@@ -114,20 +119,23 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const { date, isToday, today, setDate } = useScheduleDisplayDate({
     initialDate,
     displayTimezone,
-    preferencesReady: preferencesQuery.data !== undefined || preferencesQuery.isError,
+    preferencesReady: preferencesQuery.data !== undefined,
     now,
   });
   const query = useApiListQuery(agendaDef(date));
-  const data: AgendaOut | null = query.data ?? null;
+  const data: AgendaOut | null =
+    query.data && !query.isPlaceholderData
+      ? filterAgendaForDisplayDate(query.data, date, displayTimezone)
+      : null;
   const calendarRange = calendarDayRange(date, displayTimezone);
   const calendarQuery = useApiListQuery(
     calendarItemsDef(calendarRange.startISO, calendarRange.endISO),
   );
   const planQuery = useApiListQuery(planDef(date));
   const planByTask = useMemo(() => {
-    const items = planQuery.data?.items ?? [];
+    const items = planQuery.isPlaceholderData ? [] : (planQuery.data?.items ?? []);
     return new Map<string, DailyPlanItemOut>(items.map((item) => [item.refTaskId, item]));
-  }, [planQuery.data]);
+  }, [planQuery.data, planQuery.isPlaceholderData]);
 
   const prefetch = usePrefetchApi();
   useEffect(() => {
@@ -144,16 +152,17 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       const item = entry.taskId ? planByTask.get(entry.taskId) : undefined;
       return item ? { ...entry, planItemId: item.id, done: item.status === 'done' } : entry;
     });
-    const layeredEntries = calendarQuery.data
-      ? calendarItemsToAgendaEntries(calendarQuery.data).filter(
-          (entry) => data === null || entry.calendarItem?.kind !== 'task_timebox',
-        )
-      : [];
+    const layeredEntries =
+      calendarQuery.data && !calendarQuery.isPlaceholderData
+        ? calendarItemsToAgendaEntries(calendarQuery.data).filter(
+            (entry) => data === null || entry.calendarItem?.kind !== 'task_timebox',
+          )
+        : [];
     const merged = new Map<string, AgendaEntry>();
     for (const entry of legacyEntries) merged.set(entry.id, entry);
     for (const entry of layeredEntries) merged.set(entry.id, entry);
     return [...merged.values()];
-  }, [calendarQuery.data, data, planByTask]);
+  }, [calendarQuery.data, calendarQuery.isPlaceholderData, data, planByTask]);
 
   const mutations = useAgendaPlanMutations(date);
   const setView = useCallback((next: AgendaView) => {
@@ -170,17 +179,33 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const goToToday = useCallback(() => {
     setDate(today);
   }, [setDate, today]);
+  const retry = useCallback(() => {
+    void preferencesQuery.refetch();
+    void query.refetch();
+    void calendarQuery.refetch();
+    void planQuery.refetch();
+  }, [calendarQuery, planQuery, preferencesQuery, query]);
 
   const value = useMemo<AgendaContextValue>(
     () => ({
       date,
+      today,
       isToday,
       entries,
-      loading: query.isPending && calendarQuery.isPending,
+      loading:
+        query.isPending ||
+        query.isPlaceholderData ||
+        calendarQuery.isPending ||
+        calendarQuery.isPlaceholderData,
       error:
-        query.isError || calendarQuery.isError
+        preferencesQuery.isError || query.isError || calendarQuery.isError || planQuery.isError
           ? 'Calendar updates are temporarily unavailable.'
           : null,
+      retrying:
+        preferencesQuery.isFetching ||
+        query.isFetching ||
+        calendarQuery.isFetching ||
+        planQuery.isFetching,
       displayTimezone,
       pixelsPerHour,
       view,
@@ -188,16 +213,26 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       goToPreviousDay,
       goToNextDay,
       goToToday,
+      retry,
       ...mutations,
     }),
     [
       date,
+      today,
       isToday,
       entries,
       query.isPending,
+      query.isPlaceholderData,
       query.isError,
+      query.isFetching,
       calendarQuery.isPending,
+      calendarQuery.isPlaceholderData,
       calendarQuery.isError,
+      calendarQuery.isFetching,
+      planQuery.isError,
+      planQuery.isFetching,
+      preferencesQuery.isError,
+      preferencesQuery.isFetching,
       displayTimezone,
       pixelsPerHour,
       view,
@@ -205,6 +240,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       goToPreviousDay,
       goToNextDay,
       goToToday,
+      retry,
       mutations,
     ],
   );

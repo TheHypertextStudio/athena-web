@@ -1,8 +1,16 @@
 import type { ScheduleItemLaneBounds } from './scheduling-date-lanes';
-import { scheduleInstantAt, scheduleWallPositionForInstant } from './scheduling-time-axis';
+import { moveScheduleInstantRange } from './scheduling-exact-move';
+import { resizeScheduleInstantRange } from './scheduling-exact-resize';
+import {
+  resolveScheduleWallInstant,
+  resolveScheduleWallTime,
+  scheduleInstantAt,
+  scheduleWallPositionForInstant,
+} from './scheduling-wall-time';
 import type {
   ScheduleGestureMode,
   ScheduleGesturePreview,
+  ScheduleGestureTimePresentation,
   ScheduleItem,
   ScheduleLane,
 } from './scheduling-types';
@@ -23,6 +31,16 @@ interface ScheduleInstantRange {
   readonly endsAt: string;
 }
 
+type SchedulePreviewRangeResolution =
+  | { readonly kind: 'resolved'; readonly range: ScheduleInstantRange }
+  | { readonly kind: 'skipped' | 'repeated' | 'invalid' };
+
+const REPEATED_EDIT_GUIDANCE =
+  'That time repeats because clocks change. Open the item to choose Earlier or Later.';
+const SKIPPED_EDIT_GUIDANCE =
+  'That time does not exist because clocks change. Open the item to choose another time.';
+const INVALID_EDIT_GUIDANCE = 'That edit cannot be placed at this time. Open the item to edit it.';
+
 /** Return the short zone name emitted for one exact instant. */
 function shortZoneName(formatter: Intl.DateTimeFormat, instant: Date): string | undefined {
   return formatter.formatToParts(instant).find((part) => part.type === 'timeZoneName')?.value;
@@ -31,10 +49,25 @@ function shortZoneName(formatter: Intl.DateTimeFormat, instant: Date): string | 
 /** Return whether an exact instant occupies one of a zone's repeated wall-clock positions. */
 function isRepeatedWallPosition(instant: string, timezone: string): boolean {
   const position = scheduleWallPositionForInstant(instant, timezone);
-  return (
-    position !== null &&
-    scheduleInstantAt(position.date, position.wallMinutes, timezone, 'reject') === null
-  );
+  return position
+    ? resolveScheduleWallTime(position.date, position.wallMinutes, timezone)?.kind === 'repeated'
+    : false;
+}
+
+/** Format one exact instant, adding its short zone when the wall position is repeated. */
+export function formatScheduleInstantTime(instant: string, timezone: string): string | null {
+  const date = new Date(instant);
+  if (Number.isNaN(date.valueOf())) return null;
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      timeZone: timezone,
+      hour: 'numeric',
+      minute: '2-digit',
+      ...(isRepeatedWallPosition(instant, timezone) ? { timeZoneName: 'short' as const } : {}),
+    }).format(date);
+  } catch {
+    return null;
+  }
 }
 
 /** Format exact instants, adding short zone names whenever they disambiguate the range. */
@@ -90,47 +123,87 @@ function clippedItemRange(
   return startsAt && endsAt ? { startsAt, endsAt } : null;
 }
 
-/** Resolve exact instants for a live preview without coercing skipped or repeated wall times. */
+/** Resolve exact instants and the reason an ambiguous live preview cannot commit. */
 function previewRange(
   options: ScheduleItemTimeRangeOptions,
   base: ScheduleInstantRange,
-): ScheduleInstantRange | null {
-  const { preview, previewMode, laneIndex, bounds, lanes, displayTimezone } = options;
-  if (!preview || !previewMode) return base;
+): SchedulePreviewRangeResolution {
+  const { item, preview, previewMode, laneIndex, bounds, lanes, displayTimezone } = options;
+  if (!preview || !previewMode) return { kind: 'resolved', range: base };
   if (
     preview.laneIndex === laneIndex &&
     preview.startMinutes === bounds.startMinutes &&
     preview.endMinutes === bounds.endMinutes
   ) {
-    return base;
+    return { kind: 'resolved', range: base };
   }
 
   const targetLane = lanes[preview.laneIndex];
-  if (!targetLane) return null;
-  const proposedStart = scheduleInstantAt(
+  if (!targetLane) return { kind: 'invalid' };
+  const exactItemRange = { startsAt: item.startsAt, endsAt: item.endsAt };
+  if (previewMode === 'move') {
+    const target = resolveScheduleWallInstant(
+      targetLane.date,
+      preview.startMinutes,
+      displayTimezone,
+      item.startsAt,
+    );
+    if (target.kind !== 'resolved') return target;
+    const moved = moveScheduleInstantRange({
+      ...exactItemRange,
+      targetDate: targetLane.date,
+      startMinutes: preview.startMinutes,
+      displayTimezone,
+    });
+    return moved ? { kind: 'resolved', range: moved } : { kind: 'invalid' };
+  }
+  const edge = previewMode === 'resize-start' ? 'start' : 'end';
+  const edgeMinutes = edge === 'start' ? preview.startMinutes : preview.endMinutes;
+  const target = resolveScheduleWallInstant(
     targetLane.date,
-    preview.startMinutes,
+    edgeMinutes,
     displayTimezone,
-    'reject',
+    edge === 'start' ? item.startsAt : item.endsAt,
   );
-  const proposedEnd = scheduleInstantAt(
-    targetLane.date,
-    preview.endMinutes,
+  if (target.kind !== 'resolved') return target;
+  const resized = resizeScheduleInstantRange({
+    ...exactItemRange,
+    edge,
+    targetDate: targetLane.date,
+    edgeMinutes,
     displayTimezone,
-    'reject',
+  });
+  return resized ? { kind: 'resolved', range: resized } : { kind: 'invalid' };
+}
+
+/** Present the exact label and commit policy represented by one scheduling card. */
+export function presentScheduleItemTimeRange(
+  options: ScheduleItemTimeRangeOptions,
+): ScheduleGestureTimePresentation {
+  const base = clippedItemRange(options.item, options.lane, options.displayTimezone);
+  if (!base)
+    return { label: 'Unavailable time', valid: false, announcement: INVALID_EDIT_GUIDANCE };
+  const resolution = previewRange(options, base);
+  if (resolution.kind !== 'resolved') {
+    const announcement =
+      resolution.kind === 'repeated'
+        ? REPEATED_EDIT_GUIDANCE
+        : resolution.kind === 'skipped'
+          ? SKIPPED_EDIT_GUIDANCE
+          : INVALID_EDIT_GUIDANCE;
+    return { label: 'Unavailable time', valid: false, announcement };
+  }
+  const label = formatScheduleInstantRange(
+    resolution.range.startsAt,
+    resolution.range.endsAt,
+    options.displayTimezone,
   );
-  const startsAt = previewMode === 'resize-end' ? base.startsAt : proposedStart;
-  const endsAt = previewMode === 'resize-start' ? base.endsAt : proposedEnd;
-  return startsAt && endsAt ? { startsAt, endsAt } : null;
+  return label
+    ? { label, valid: true }
+    : { label: 'Unavailable time', valid: false, announcement: INVALID_EDIT_GUIDANCE };
 }
 
 /** Format the exact item or preview instants represented by one scheduling card. */
 export function formatScheduleItemTimeRange(options: ScheduleItemTimeRangeOptions): string {
-  const base = clippedItemRange(options.item, options.lane, options.displayTimezone);
-  if (!base) return 'Unavailable time';
-  const range = previewRange(options, base);
-  return range
-    ? (formatScheduleInstantRange(range.startsAt, range.endsAt, options.displayTimezone) ??
-        'Unavailable time')
-    : 'Unavailable time';
+  return presentScheduleItemTimeRange(options).label;
 }

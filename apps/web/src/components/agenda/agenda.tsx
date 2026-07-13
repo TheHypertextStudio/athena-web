@@ -12,7 +12,7 @@
  */
 import { type JSX, type ReactNode } from 'react';
 
-import { Skeleton, Stack } from '@docket/ui/primitives';
+import { Button, Stack } from '@docket/ui/primitives';
 
 import AgendaCanvas from './agenda-canvas';
 import AgendaHeader from './agenda-header';
@@ -53,34 +53,53 @@ interface AgendaViewportProps {
  * with a quiet status notice instead of replacing the agenda with raw server error copy.
  */
 function AgendaViewport({ children }: AgendaViewportProps): JSX.Element {
-  const { loading, error } = useAgenda();
+  const { loading, error, retry, retrying } = useAgenda();
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       {loading ? (
-        <AgendaSkeleton />
-      ) : (
-        <>
-          {error ? <AgendaDegradedNotice /> : null}
-          {children}
-        </>
-      )}
+        <AgendaLoadingNotice />
+      ) : error ? (
+        <AgendaDegradedNotice onRetry={retry} retrying={retrying} />
+      ) : null}
+      {children}
     </div>
   );
 }
 
-/** Loading placeholder shaped like the day grid. */
-function AgendaSkeleton(): JSX.Element {
-  return <Skeleton className="h-[28rem] w-full rounded-xl" />;
-}
-
-/** A quiet, non-blocking disclosure that the rendered agenda could not refresh. */
-function AgendaDegradedNotice(): JSX.Element {
+/** A quiet disclosure that enrichment is loading while the usable calendar structure stays put. */
+function AgendaLoadingNotice(): JSX.Element {
   return (
     <div
       role="status"
       className="border-border bg-muted/40 text-muted-foreground text-caption mb-2 rounded-lg border px-3 py-2"
     >
-      Calendar updates are temporarily unavailable. Showing what we have.
+      Loading calendar…
+    </div>
+  );
+}
+
+interface AgendaDegradedNoticeProps {
+  readonly onRetry: () => void;
+  readonly retrying: boolean;
+}
+
+/** A quiet, non-blocking disclosure with one explicit way to refresh the rendered agenda. */
+function AgendaDegradedNotice({ onRetry, retrying }: AgendaDegradedNoticeProps): JSX.Element {
+  return (
+    <div
+      role="status"
+      className="border-border bg-muted/40 text-muted-foreground text-caption mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2"
+    >
+      <span>Calendar updates are temporarily unavailable. Showing what we have.</span>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0 [@media(pointer:coarse)]:h-10"
+        disabled={retrying}
+        onClick={onRetry}
+      >
+        {retrying ? 'Retrying…' : 'Retry'}
+      </Button>
     </div>
   );
 }

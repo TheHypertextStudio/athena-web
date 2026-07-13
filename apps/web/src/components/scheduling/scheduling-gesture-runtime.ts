@@ -10,6 +10,7 @@ import { deriveGesturePreview } from './scheduling-gesture';
 import type {
   ScheduleGestureMode,
   ScheduleGesturePreview,
+  ScheduleGestureTimePresentation,
   ScheduleItem,
   ScheduleLane,
   SchedulingCanvasProps,
@@ -17,6 +18,12 @@ import type {
 
 /** Euclidean distance required to activate an armed pointer gesture. */
 export const SCHEDULING_GESTURE_ACTIVATION_PIXELS = 4;
+
+/** Delay that separates an intentional touch edit from a normal schedule pan. */
+export const SCHEDULING_TOUCH_LONG_PRESS_MS = 350;
+
+/** Touch movement that commits an armed pointer to viewport panning. */
+export const SCHEDULING_TOUCH_PAN_ACTIVATION_PIXELS = 6;
 
 const AUTO_SCROLL_EDGE_PIXELS = 32;
 const AUTO_SCROLL_STEP_PIXELS = 16;
@@ -37,10 +44,10 @@ export interface UseSchedulingGestureOptions {
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
   readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
-  readonly formatPreviewTimeRange: (
+  readonly presentPreviewTimeRange: (
     mode: ScheduleGestureMode,
     preview: ScheduleGesturePreview,
-  ) => string;
+  ) => ScheduleGestureTimePresentation;
   readonly onAnnouncementChange: (announcement: string) => void;
 }
 
@@ -62,14 +69,21 @@ export interface SchedulingGestureController {
 export interface SchedulingPointerSession {
   readonly pointerId: number;
   readonly target: HTMLElement;
+  readonly sourceItemId: string;
+  readonly sourceLaneId: string;
+  readonly sourceStartMinutes: number;
+  readonly sourceEndMinutes: number;
   readonly originX: number;
   readonly originY: number;
   readonly originViewportX: number;
   readonly originContentX: number;
   readonly originScrollLeft: number;
   readonly originScrollTop: number;
+  readonly pointerType: string;
   active: boolean;
+  panning: boolean;
   captured: boolean;
+  longPressTimer: number | null;
   readonly move: (event: PointerEvent) => void;
   readonly up: (event: PointerEvent) => void;
   readonly cancel: (event: PointerEvent) => void;
@@ -79,6 +93,10 @@ export interface SchedulingPointerSession {
 
 /** Remove every global and capture-loss listener installed for a pointer session. */
 export function detachSchedulingPointerSession(session: SchedulingPointerSession): void {
+  if (session.longPressTimer !== null) {
+    window.clearTimeout(session.longPressTimer);
+    session.longPressTimer = null;
+  }
   window.removeEventListener('pointermove', session.move);
   window.removeEventListener('pointerup', session.up);
   window.removeEventListener('pointercancel', session.cancel);
@@ -173,6 +191,18 @@ export interface SchedulingKeyboardGestureOptions {
   readonly editable: boolean;
 }
 
+/** Find the next lane that accepts edits without trapping keyboard users on a blocked neighbor. */
+function nextEditableLaneIndex(
+  lanes: readonly ScheduleLane[],
+  fromIndex: number,
+  direction: -1 | 1,
+): number | null {
+  for (let index = fromIndex + direction; index >= 0 && index < lanes.length; index += direction) {
+    if (lanes[index]?.editable ?? true) return index;
+  }
+  return null;
+}
+
 /** Derive one active-snap keyboard adjustment, or `undefined` for an unrelated key. */
 export function deriveKeyboardGesturePreview(
   current: SchedulingKeyboardGestureOptions,
@@ -180,8 +210,13 @@ export function deriveKeyboardGesturePreview(
   key: string,
 ): ScheduleGesturePreview | null | undefined {
   const vertical = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0;
-  const horizontal =
+  const horizontalDirection =
     mode === 'move' ? (key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0) : 0;
+  const targetLaneIndex =
+    horizontalDirection === 0
+      ? current.laneIndex
+      : nextEditableLaneIndex(current.lanes, current.laneIndex, horizontalDirection);
+  const horizontal = targetLaneIndex === null ? 0 : targetLaneIndex - current.laneIndex;
   if (vertical === 0 && horizontal === 0) return undefined;
   return deriveGesturePreview({
     mode,

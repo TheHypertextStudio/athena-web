@@ -1,7 +1,9 @@
 'use client';
 
 import {
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,73 +11,32 @@ import {
   useState,
 } from 'react';
 
-import { MINUTES_PER_DAY, pixelsToMinutes } from './scheduling-geometry';
+import { pixelsToMinutes } from './scheduling-geometry';
+import {
+  SCHEDULING_TOUCH_LONG_PRESS_MS,
+  SCHEDULING_TOUCH_PAN_ACTIVATION_PIXELS,
+} from './scheduling-gesture-runtime';
+import {
+  deriveSchedulingRegionSelection,
+  detachSchedulingRegionSession,
+  releaseSchedulingRegionCapture,
+  type SchedulingRegionPreview,
+  type SchedulingRegionSession,
+} from './scheduling-region-session';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
-
-interface RegionSelectionPreview {
-  readonly laneId: string;
-  readonly startMinutes: number;
-  readonly endMinutes: number;
-}
 
 interface UseSchedulingRegionSelectionOptions {
   readonly lanes: readonly ScheduleLane[];
   readonly pixelsPerHour: number;
   readonly snapMinutes: number;
+  readonly viewportRef: RefObject<HTMLElement | null>;
   readonly onSelectRegion?: SchedulingCanvasProps['onSelectRegion'];
 }
 
-interface RegionSelectionSession {
-  readonly pointerId: number;
-  readonly laneId: string;
-  readonly target: HTMLElement;
-  readonly rectTop: number;
-  readonly originMinutes: number;
-  readonly pixelsPerHour: number;
-  readonly snapMinutes: number;
-  captured: boolean;
-  readonly move: (event: PointerEvent) => void;
-  readonly up: (event: PointerEvent) => void;
-  readonly cancel: (event: PointerEvent) => void;
-  readonly escape: (event: KeyboardEvent) => void;
-  readonly lostCapture: (event: PointerEvent) => void;
-}
-
 interface SchedulingRegionSelectionController {
-  readonly preview: RegionSelectionPreview | null;
+  readonly preview: SchedulingRegionPreview | null;
   readonly onPointerDown: (lane: ScheduleLane, event: ReactPointerEvent<HTMLDivElement>) => void;
-}
-
-function deriveSelection(
-  laneId: string,
-  originMinutes: number,
-  currentMinutes: number,
-  snapMinutes: number,
-): RegionSelectionPreview {
-  let startMinutes = Math.min(originMinutes, currentMinutes);
-  let endMinutes = Math.max(originMinutes, currentMinutes);
-  if (startMinutes === endMinutes) {
-    if (endMinutes === MINUTES_PER_DAY) startMinutes -= snapMinutes;
-    else endMinutes += snapMinutes;
-  }
-  return { laneId, startMinutes, endMinutes };
-}
-
-function detachSession(session: RegionSelectionSession): void {
-  window.removeEventListener('pointermove', session.move);
-  window.removeEventListener('pointerup', session.up);
-  window.removeEventListener('pointercancel', session.cancel);
-  window.removeEventListener('keydown', session.escape);
-  session.target.removeEventListener('lostpointercapture', session.lostCapture);
-}
-
-function releaseCapture(session: RegionSelectionSession): void {
-  if (!session.captured) return;
-  try {
-    session.target.releasePointerCapture(session.pointerId);
-  } catch {
-    // The browser may have released capture before cleanup observes the session ending.
-  }
+  readonly onClickCapture: (event: ReactMouseEvent<HTMLDivElement>) => void;
 }
 
 /** Own one pointer-exclusive, cancellable scheduling-region selection session. */
@@ -83,15 +44,16 @@ export function useSchedulingRegionSelection(
   options: UseSchedulingRegionSelectionOptions,
 ): SchedulingRegionSelectionController {
   const optionsRef = useRef(options);
-  const sessionRef = useRef<RegionSelectionSession | null>(null);
+  const sessionRef = useRef<SchedulingRegionSession | null>(null);
+  const suppressClickRef = useRef(false);
   const mountedRef = useRef(true);
-  const [preview, setPreview] = useState<RegionSelectionPreview | null>(null);
+  const [preview, setPreview] = useState<SchedulingRegionPreview | null>(null);
 
   useLayoutEffect(() => {
     optionsRef.current = options;
   }, [options]);
 
-  const showPreview = useCallback((next: RegionSelectionPreview | null): void => {
+  const showPreview = useCallback((next: SchedulingRegionPreview | null): void => {
     if (mountedRef.current) setPreview(next);
   }, []);
 
@@ -99,22 +61,20 @@ export function useSchedulingRegionSelection(
     const session = sessionRef.current;
     if (!session) return;
     sessionRef.current = null;
-    detachSession(session);
-    if (shouldReleaseCapture) releaseCapture(session);
+    detachSchedulingRegionSession(session);
+    if (shouldReleaseCapture) releaseSchedulingRegionCapture(session);
     if (shouldRender && mountedRef.current) setPreview(null);
   }, []);
 
   const onPointerDown = useCallback(
     (lane: ScheduleLane, event: ReactPointerEvent<HTMLDivElement>): void => {
       const currentOptions = optionsRef.current;
-      if (
-        !currentOptions.onSelectRegion ||
-        sessionRef.current ||
-        event.button !== 0 ||
-        event.target !== event.currentTarget
-      )
-        return;
-      event.preventDefault();
+      const selectable =
+        currentOptions.onSelectRegion !== undefined && event.target === event.currentTarget;
+      const touchPannable = event.pointerType === 'touch';
+      if ((!selectable && !touchPannable) || sessionRef.current || event.button !== 0) return;
+      suppressClickRef.current = false;
+      if (!touchPannable) event.preventDefault();
       const rectTop = event.currentTarget.getBoundingClientRect().top;
       const originMinutes = pixelsToMinutes(
         event.clientY - rectTop,
@@ -124,13 +84,13 @@ export function useSchedulingRegionSelection(
       const cancel = (shouldReleaseCapture = true): void => {
         if (sessionRef.current === session) stopSession(shouldReleaseCapture);
       };
-      const selectionAt = (clientY: number): RegionSelectionPreview => {
+      const selectionAt = (clientY: number): SchedulingRegionPreview => {
         const currentMinutes = pixelsToMinutes(
           clientY - session.rectTop,
           session.pixelsPerHour,
           session.snapMinutes,
         );
-        return deriveSelection(
+        return deriveSchedulingRegionSelection(
           session.laneId,
           session.originMinutes,
           currentMinutes,
@@ -139,11 +99,36 @@ export function useSchedulingRegionSelection(
       };
       const move = (pointerEvent: PointerEvent): void => {
         if (pointerEvent.pointerId !== session.pointerId) return;
+        const deltaX = pointerEvent.clientX - session.originX;
+        const deltaY = pointerEvent.clientY - session.originY;
+        if (!session.active) {
+          if (
+            session.pointerType !== 'touch' ||
+            Math.hypot(deltaX, deltaY) < SCHEDULING_TOUCH_PAN_ACTIVATION_PIXELS
+          )
+            return;
+          session.panning = true;
+          suppressClickRef.current = true;
+          if (session.longPressTimer !== null) {
+            window.clearTimeout(session.longPressTimer);
+            session.longPressTimer = null;
+          }
+          pointerEvent.preventDefault();
+          if (session.viewport) {
+            session.viewport.scrollLeft = session.originScrollLeft - deltaX;
+            session.viewport.scrollTop = session.originScrollTop - deltaY;
+          }
+          return;
+        }
         pointerEvent.preventDefault();
         showPreview(selectionAt(pointerEvent.clientY));
       };
       const up = (pointerEvent: PointerEvent): void => {
         if (pointerEvent.pointerId !== session.pointerId) return;
+        if (!session.active) {
+          stopSession();
+          return;
+        }
         const finalPreview = selectionAt(pointerEvent.clientY);
         const latestOptions = optionsRef.current;
         const currentLane = latestOptions.lanes.find(
@@ -165,15 +150,25 @@ export function useSchedulingRegionSelection(
       const escape = (keyboardEvent: KeyboardEvent): void => {
         if (keyboardEvent.key === 'Escape') cancel();
       };
-      const session: RegionSelectionSession = {
+      const session: SchedulingRegionSession = {
         pointerId: event.pointerId,
         laneId: lane.id,
         target: event.currentTarget,
+        viewport: currentOptions.viewportRef.current,
         rectTop,
+        originX: event.clientX,
+        originY: event.clientY,
+        originScrollLeft: currentOptions.viewportRef.current?.scrollLeft ?? 0,
+        originScrollTop: currentOptions.viewportRef.current?.scrollTop ?? 0,
         originMinutes,
         pixelsPerHour: currentOptions.pixelsPerHour,
         snapMinutes: currentOptions.snapMinutes,
+        pointerType: event.pointerType,
+        selectable,
+        active: selectable && event.pointerType !== 'touch',
+        panning: false,
         captured: false,
+        longPressTimer: null,
         move,
         up,
         cancel: pointerCancel,
@@ -183,7 +178,6 @@ export function useSchedulingRegionSelection(
         },
       };
       sessionRef.current = session;
-      showPreview(deriveSelection(lane.id, originMinutes, originMinutes, session.snapMinutes));
       try {
         session.target.setPointerCapture(session.pointerId);
         session.captured = true;
@@ -195,6 +189,30 @@ export function useSchedulingRegionSelection(
       window.addEventListener('pointercancel', pointerCancel);
       window.addEventListener('keydown', escape);
       session.target.addEventListener('lostpointercapture', session.lostCapture);
+      if (session.active) {
+        showPreview(
+          deriveSchedulingRegionSelection(
+            lane.id,
+            originMinutes,
+            originMinutes,
+            session.snapMinutes,
+          ),
+        );
+      } else if (session.selectable) {
+        session.longPressTimer = window.setTimeout(() => {
+          if (sessionRef.current !== session || session.panning) return;
+          session.longPressTimer = null;
+          session.active = true;
+          showPreview(
+            deriveSchedulingRegionSelection(
+              lane.id,
+              originMinutes,
+              originMinutes,
+              session.snapMinutes,
+            ),
+          );
+        }, SCHEDULING_TOUCH_LONG_PRESS_MS);
+      }
     },
     [showPreview, stopSession],
   );
@@ -203,7 +221,8 @@ export function useSchedulingRegionSelection(
     const session = sessionRef.current;
     if (
       session &&
-      (!options.onSelectRegion || !options.lanes.some((lane) => lane.id === session.laneId))
+      (!options.lanes.some((lane) => lane.id === session.laneId) ||
+        (session.selectable && !options.onSelectRegion))
     ) {
       stopSession();
     }
@@ -217,5 +236,15 @@ export function useSchedulingRegionSelection(
     };
   }, [stopSession]);
 
-  return { preview, onPointerDown };
+  return {
+    preview,
+    onPointerDown,
+    onClickCapture: (event) => {
+      const shouldSuppress = suppressClickRef.current;
+      suppressClickRef.current = false;
+      if (!shouldSuppress || event.detail === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+    },
+  };
 }

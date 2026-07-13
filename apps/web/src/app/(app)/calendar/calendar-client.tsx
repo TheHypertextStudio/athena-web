@@ -9,13 +9,11 @@
  */
 import type { CalendarPreferences, HubPreferences } from '@docket/types';
 import { useRouter } from 'next/navigation';
-import { type JSX, useEffect, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
-import CreateBlockForm, {
-  type CalendarRegionSelection,
-} from '@/components/calendar/create-block-form';
+import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -31,7 +29,10 @@ import { useNow } from '@/lib/use-now';
 
 import { CalendarComparisonControls } from './calendar-comparison-controls';
 import type { CalendarAxis } from './calendar-schedule-model';
-import { CalendarSchedulingSurface } from './calendar-scheduling-surface';
+import {
+  type CalendarCanvasRegionSelection,
+  CalendarSchedulingSurface,
+} from './calendar-scheduling-surface';
 import {
   CalendarSharedItemDetails,
   type SharedCalendarItemDetail,
@@ -47,10 +48,18 @@ export default function CalendarClient(): JSX.Element {
   const router = useRouter();
   const [axis, setAxis] = useState<CalendarAxis>('dates');
   const [visibleLaneCount, setVisibleLaneCount] = useState(1);
+  const [horizontalAnchorKey, setHorizontalAnchorKey] = useState(0);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [openSharedItem, setOpenSharedItem] = useState<SharedCalendarItemDetail | null>(null);
-  const [selection, setSelection] = useState<CalendarRegionSelection | null>(null);
+  const [selection, setSelection] = useState<CalendarCanvasRegionSelection | null>(null);
+  const selectionAnchorRef = useRef<HTMLDivElement>(null);
   const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
+  const pixelsPerHourEdited = useRef(false);
+  const [visibleDateRange, setVisibleDateRange] = useState<{
+    readonly startDate: string;
+    readonly endDate: string;
+  } | null>(null);
+  const visibleDateRangeRef = useRef(visibleDateRange);
   const now = useNow().toISOString();
 
   const preferencesQuery = useApiQuery(
@@ -74,7 +83,9 @@ export default function CalendarClient(): JSX.Element {
     now,
   });
   useEffect(() => {
-    if (preferences?.pixelsPerHour !== undefined) setPixelsPerHour(preferences.pixelsPerHour);
+    if (!pixelsPerHourEdited.current && preferences?.pixelsPerHour !== undefined) {
+      setPixelsPerHour(preferences.pixelsPerHour);
+    }
   }, [preferences?.pixelsPerHour]);
 
   const savePreferences = useApiMutation<HubPreferences, CalendarPreferences>({
@@ -90,24 +101,38 @@ export default function CalendarClient(): JSX.Element {
   useEffect(() => {
     setOpenSharedItem(null);
   }, [anchorDate, axis, peopleAxis.comparisonOrgId]);
+  useEffect(() => {
+    visibleDateRangeRef.current = null;
+    setVisibleDateRange(null);
+  }, [anchorDate, axis]);
 
-  const visibleEnd = shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1));
+  const visibleStart = axis === 'dates' ? (visibleDateRange?.startDate ?? anchorDate) : anchorDate;
+  const visibleEnd =
+    axis === 'dates'
+      ? (visibleDateRange?.endDate ?? shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1)))
+      : anchorDate;
   const heading =
-    axis === 'people' || visibleLaneCount <= 1
-      ? (formatCalendarDate(anchorDate) ?? anchorDate)
-      : `${formatCalendarDate(anchorDate) ?? anchorDate} – ${formatCalendarDate(visibleEnd) ?? visibleEnd}`;
+    visibleStart === visibleEnd
+      ? (formatCalendarDate(visibleStart) ?? visibleStart)
+      : `${formatCalendarDate(visibleStart) ?? visibleStart} – ${formatCalendarDate(visibleEnd) ?? visibleEnd}`;
   const navigate = (direction: 'previous' | 'next'): void => {
     const magnitude = axis === 'people' ? 1 : visibleLaneCount;
-    setAnchorDate((date) => shiftISODate(date, direction === 'next' ? magnitude : -magnitude));
+    const currentStart = visibleDateRangeRef.current?.startDate ?? anchorDate;
+    visibleDateRangeRef.current = null;
+    setVisibleDateRange(null);
+    setAnchorDate(shiftISODate(currentStart, direction === 'next' ? magnitude : -magnitude));
   };
 
   return (
-    <div className="flex w-full flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="flex h-full min-h-0 w-full flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <CalendarToolbar
         heading={heading}
         axis={axis}
         pixelsPerHour={pixelsPerHour}
         onToday={() => {
+          visibleDateRangeRef.current = null;
+          setVisibleDateRange(null);
+          setHorizontalAnchorKey((current) => current + 1);
           setAnchorDate(today);
         }}
         onPrevious={() => {
@@ -117,7 +142,10 @@ export default function CalendarClient(): JSX.Element {
           navigate('next');
         }}
         onAxisChange={setAxis}
-        onZoomChange={setPixelsPerHour}
+        onZoomChange={(nextPixelsPerHour) => {
+          pixelsPerHourEdited.current = true;
+          setPixelsPerHour(nextPixelsPerHour);
+        }}
         onZoomCommit={(nextPixelsPerHour) => {
           savePreferences.mutate({ ...(preferences ?? {}), pixelsPerHour: nextPixelsPerHour });
         }}
@@ -127,6 +155,7 @@ export default function CalendarClient(): JSX.Element {
             layers={dateAxis.layers}
             preferences={preferences}
             selection={selection}
+            selectionAnchorRef={selection ? selectionAnchorRef : undefined}
             onSelectionConsumed={() => {
               setSelection(null);
             }}
@@ -149,17 +178,34 @@ export default function CalendarClient(): JSX.Element {
       <CalendarSchedulingSurface
         axis={axis}
         visibleLaneCount={visibleLaneCount}
+        horizontalAnchorKey={horizontalAnchorKey}
         pixelsPerHour={pixelsPerHour}
         displayTimezone={displayTimezone}
         now={now}
         preferences={preferences}
         dateAxis={dateAxis}
         peopleAxis={peopleAxis}
-        onVisibleLaneCountChange={setVisibleLaneCount}
-        onReachBoundary={(direction) => {
-          setAnchorDate((date) =>
-            shiftISODate(date, direction === 'next' ? visibleLaneCount : -visibleLaneCount),
-          );
+        selectedRegion={selection?.canvasRegion}
+        selectedRegionAnchorRef={selectionAnchorRef}
+        onVisibleLaneCountChange={(count) => {
+          const visibleAnchor = visibleDateRangeRef.current?.startDate;
+          if (axis === 'dates' && visibleAnchor && visibleAnchor !== anchorDate) {
+            visibleDateRangeRef.current = null;
+            setVisibleDateRange(null);
+            setAnchorDate(visibleAnchor);
+          }
+          setVisibleLaneCount(count);
+        }}
+        onVisibleDateRangeChange={(range) => {
+          visibleDateRangeRef.current = range;
+          setVisibleDateRange(range);
+        }}
+        onReachBoundary={() => {
+          const currentStart = visibleDateRangeRef.current?.startDate ?? anchorDate;
+          visibleDateRangeRef.current = null;
+          setVisibleDateRange(null);
+          // Recenter on the lanes already in view so overscan extends without dropping a drag source.
+          setAnchorDate(currentStart);
         }}
         onSelectRegion={setSelection}
         onOpenItem={setOpenItemId}

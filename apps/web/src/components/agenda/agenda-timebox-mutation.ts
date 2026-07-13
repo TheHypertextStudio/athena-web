@@ -18,6 +18,7 @@ import {
 } from '@docket/types';
 import { type DefaultError, type UseMutationResult, useQueryClient } from '@tanstack/react-query';
 
+import { CALENDAR_ITEMS_PREFIX } from '@/components/calendar/calendar-mutation-cache';
 import { api } from '@/lib/api';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { acquireSerializedOptimisticWrite } from '@/lib/serialized-optimistic-write';
@@ -95,7 +96,12 @@ export function useAgendaTimeboxMutation(
   date: string,
 ): UseMutationResult<DailyPlanItemOut, DefaultError, AgendaTimeboxVariables, AgendaTimeboxContext> {
   const queryClient = useQueryClient();
-  const dayKeys = [queryKeys.dailyPlan(date), queryKeys.agenda(date), queryKeys.today(date)];
+  const dayKeys = [
+    queryKeys.dailyPlan(date),
+    queryKeys.agenda(date),
+    queryKeys.today(date),
+    CALENDAR_ITEMS_PREFIX,
+  ];
 
   return useApiMutation<DailyPlanItemOut, AgendaTimeboxVariables, AgendaTimeboxContext>({
     mutationFn: (vars) =>

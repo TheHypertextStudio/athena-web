@@ -1,7 +1,7 @@
 'use client';
 
 import type { CalendarItemOut, CalendarLayerOut } from '@docket/types';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import { calendarItemsDef, calendarLayersDef } from '@/components/calendar/calendar-data';
@@ -29,6 +29,8 @@ export interface CalendarDateAxisState {
   readonly itemsPending: boolean;
   readonly itemsError: boolean;
   readonly layersError: boolean;
+  readonly retrying: boolean;
+  readonly retry: () => void;
   readonly conflictCount: number;
   readonly failedCount: number;
 }
@@ -69,6 +71,10 @@ export function useCalendarDateAxis(
     () => new Map<string, CalendarItemOut>(items.map((item) => [item.id, item])),
     [items],
   );
+  const retry = useCallback(() => {
+    if (itemsQuery.isError) void itemsQuery.refetch();
+    if (layersQuery.isError) void layersQuery.refetch();
+  }, [itemsQuery.isError, itemsQuery.refetch, layersQuery.isError, layersQuery.refetch]);
 
   return {
     windowStartDate,
@@ -80,9 +86,11 @@ export function useCalendarDateAxis(
     items,
     itemById,
     layers,
-    itemsPending: itemsQuery.isPending,
+    itemsPending: itemsQuery.isPending || itemsQuery.isPlaceholderData,
     itemsError: itemsQuery.isError,
     layersError: layersQuery.isError,
+    retrying: itemsQuery.isFetching || layersQuery.isFetching,
+    retry,
     conflictCount: items.filter((item) => item.hasConflict).length,
     failedCount: items.filter((item) => !item.hasConflict && item.syncState === 'provider_error')
       .length,

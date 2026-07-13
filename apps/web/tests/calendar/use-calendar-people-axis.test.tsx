@@ -96,6 +96,77 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useCalendarPeopleAxis workspace boundaries', () => {
+  it('exposes a retry action that refreshes a failed shared-schedule read in place', async () => {
+    membersGet.mockResolvedValue(okResponse({ items: [member(ACTOR_A, 'Ada')] }));
+    schedulesGet
+      .mockRejectedValueOnce(new Error('hostile provider schedule failure'))
+      .mockResolvedValueOnce(okResponse(comparison(ACTOR_A, 'Ada')));
+
+    const { result } = renderHook(() => useCalendarPeopleAxis('people', '2026-07-13', 'UTC'), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe(true);
+    });
+    expect(typeof result.current.retry).toBe('function');
+
+    act(() => {
+      result.current.retry();
+    });
+
+    await waitFor(() => {
+      expect(schedulesGet).toHaveBeenCalledTimes(2);
+      expect(result.current.error).toBe(false);
+    });
+  });
+
+  it('uses the same retry action when the people picker fails to load', async () => {
+    membersGet
+      .mockRejectedValueOnce(new Error('hostile internal member failure'))
+      .mockResolvedValueOnce(okResponse({ items: [member(ACTOR_A, 'Ada')] }));
+    schedulesGet.mockResolvedValue(okResponse(comparison(ACTOR_A, 'Ada')));
+
+    const { result } = renderHook(() => useCalendarPeopleAxis('people', '2026-07-13', 'UTC'), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBe(true);
+    });
+    act(() => {
+      result.current.retry();
+    });
+
+    await waitFor(() => {
+      expect(membersGet).toHaveBeenCalledTimes(2);
+      expect(result.current.error).toBe(false);
+      expect(result.current.selectedActorIds).toEqual([ACTOR_A]);
+    });
+  });
+
+  it('keeps selected member lanes mounted while schedule data is pending', async () => {
+    membersGet.mockResolvedValue(okResponse({ items: [member(ACTOR_A, 'Ada')] }));
+    schedulesGet.mockImplementation(() => new Promise(() => undefined));
+
+    const { result } = renderHook(() => useCalendarPeopleAxis('people', '2026-07-13', 'UTC'), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedActorIds).toEqual([ACTOR_A]);
+    });
+    expect(result.current.comparisonPending).toBe(true);
+    expect(result.current.lanes).toEqual([
+      expect.objectContaining({
+        id: `person:${ACTOR_A}`,
+        resourceId: ACTOR_A,
+        label: 'Ada',
+        items: [],
+      }),
+    ]);
+  });
+
   it('clears Alpha placeholders before selecting and rendering deferred Beta data', async () => {
     let resolveBetaMembers: ((response: ReturnType<typeof okResponse>) => void) | undefined;
     membersGet.mockImplementation(({ param }: { param: { orgId: string } }) =>
@@ -157,5 +228,36 @@ describe('useCalendarPeopleAxis workspace boundaries', () => {
         query: expect.objectContaining({ actorIds: [ACTOR_B] }),
       }),
     );
+  });
+
+  it('keeps an intentional empty people selection instead of selecting everyone again', async () => {
+    membersGet.mockResolvedValue(
+      okResponse({ items: [member(ACTOR_A, 'Ada'), member(ACTOR_B, 'Grace')] }),
+    );
+    schedulesGet.mockImplementation(({ query }: { query: { actorIds: string[] } }) =>
+      Promise.resolve(okResponse(comparison(query.actorIds[0] ?? ACTOR_A, 'Ada'))),
+    );
+
+    const { result } = renderHook(() => useCalendarPeopleAxis('people', '2026-07-13', 'UTC'), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedActorIds).toEqual([ACTOR_A, ACTOR_B]);
+    });
+    act(() => {
+      result.current.toggleActor(ACTOR_A, false);
+    });
+    await waitFor(() => {
+      expect(result.current.selectedActorIds).toEqual([ACTOR_B]);
+    });
+    act(() => {
+      result.current.toggleActor(ACTOR_B, false);
+    });
+
+    await waitFor(() => {
+      expect(result.current.selectedActorIds).toEqual([]);
+    });
+    expect(result.current.comparisonPending).toBe(false);
   });
 });

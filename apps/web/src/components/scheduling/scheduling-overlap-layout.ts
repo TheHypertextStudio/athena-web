@@ -1,5 +1,8 @@
 import { itemBoundsInLane, type ScheduleItemLaneBounds } from './scheduling-date-lanes';
 import { minutesToPixels } from './scheduling-geometry';
+import { colorAffectedOverlapComponents } from './scheduling-overlap-coloring';
+import { findAffectedOverlapComponents } from './scheduling-overlap-components';
+import { layoutVisualOverlapSweep, type OverlapLayoutInterval } from './scheduling-overlap-sweep';
 import type { ScheduleItem, ScheduleLane } from './scheduling-types';
 
 /** One timed item's bounds after clipping it to a scheduling lane. */
@@ -10,6 +13,10 @@ export interface ScheduleOverlapInput {
   readonly startMinutes: number;
   /** Exclusive wall-minute position at which the lane segment truly ends. */
   readonly endMinutes: number;
+  /** Optional exact-instant minute used to detect overlaps hidden by a DST wall-clock gap. */
+  readonly exactStartMinutes?: number;
+  /** Optional exact-instant minute used to detect overlaps hidden by a DST wall-clock gap. */
+  readonly exactEndMinutes?: number;
 }
 
 /** One item's deterministic column inside its transitive visual-overlap cluster. */
@@ -35,11 +42,19 @@ export interface PositionedScheduleItem {
   readonly top: number;
   readonly height: number;
   readonly placement: ScheduleOverlapPlacement;
+  /** Stable identifier shared by every item in one transitive collision cluster. */
+  readonly clusterId: string;
 }
 
 /** An overlap input annotated with the end of its minimum rendered box. */
 interface VisualInterval extends ScheduleOverlapInput {
   readonly effectiveEndMinutes: number;
+}
+
+/** Internal placement paired with its stable transitive-overlap cluster. */
+interface ClusteredScheduleOverlapPlacement {
+  readonly placement: ScheduleOverlapPlacement;
+  readonly clusterId: string;
 }
 
 /** Keep computed CSS geometry concise and deterministic across equivalent renders. */
@@ -72,34 +87,52 @@ export function scheduleOverlapHorizontalStyle(
   };
 }
 
-/** Sort intervals independently of provider or API response order. */
+/** Keep optional exact coordinates in one total order: valid, invalid, then absent. */
+function compareOptionalExact(
+  left: number | undefined,
+  right: number | undefined,
+  direction: 1 | -1,
+): number {
+  const leftRank = left === undefined ? 2 : Number.isNaN(left) ? 1 : 0;
+  const rightRank = right === undefined ? 2 : Number.isNaN(right) ? 1 : 0;
+  if (leftRank !== rightRank) return leftRank - rightRank;
+  if (leftRank !== 0 || left === undefined || right === undefined || left === right) return 0;
+  return left < right ? -direction : direction;
+}
+
+/** Sort intervals independently of provider or API response order with a total tuple order. */
 function compareIntervals(a: VisualInterval, b: VisualInterval): number {
   if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes;
+  const exactStartOrder = compareOptionalExact(a.exactStartMinutes, b.exactStartMinutes, 1);
+  if (exactStartOrder !== 0) return exactStartOrder;
   if (a.effectiveEndMinutes !== b.effectiveEndMinutes) {
     return b.effectiveEndMinutes - a.effectiveEndMinutes;
   }
+  const exactEndOrder = compareOptionalExact(a.exactEndMinutes, b.exactEndMinutes, -1);
+  if (exactEndOrder !== 0) return exactEndOrder;
   if (a.id < b.id) return -1;
   if (a.id > b.id) return 1;
   return 0;
 }
 
-/** Assign the lowest available column to each interval in one connected cluster. */
-function placeCluster(cluster: readonly VisualInterval[]): ScheduleOverlapPlacement[] {
-  const columnEnds: number[] = [];
-  const columnIndexes: number[] = [];
-
-  for (const item of cluster) {
-    const availableColumn = columnEnds.findIndex((endMinutes) => endMinutes <= item.startMinutes);
-    const columnIndex = availableColumn === -1 ? columnEnds.length : availableColumn;
-    columnEnds[columnIndex] = item.effectiveEndMinutes;
-    columnIndexes.push(columnIndex);
-  }
-
-  return cluster.map((item, index) => ({
-    id: item.id,
-    columnIndex: columnIndexes[index] ?? 0,
-    columnCount: columnEnds.length,
-  }));
+/** Return whether two cards collide visually or overlap as exact instants across a DST change. */
+function intervalsConflict(left: OverlapLayoutInterval, right: OverlapLayoutInterval): boolean {
+  const visuallyOverlap =
+    left.startMinutes < right.effectiveEndMinutes && right.startMinutes < left.effectiveEndMinutes;
+  const exactlyOverlap =
+    left.exactStartMinutes !== undefined &&
+    left.exactEndMinutes !== undefined &&
+    right.exactStartMinutes !== undefined &&
+    right.exactEndMinutes !== undefined &&
+    Number.isFinite(left.exactStartMinutes) &&
+    Number.isFinite(left.exactEndMinutes) &&
+    Number.isFinite(right.exactStartMinutes) &&
+    Number.isFinite(right.exactEndMinutes) &&
+    left.exactStartMinutes < left.exactEndMinutes &&
+    right.exactStartMinutes < right.exactEndMinutes &&
+    left.exactStartMinutes < right.exactEndMinutes &&
+    right.exactStartMinutes < left.exactEndMinutes;
+  return visuallyOverlap || exactlyOverlap;
 }
 
 /**
@@ -114,13 +147,13 @@ function placeCluster(cluster: readonly VisualInterval[]): ScheduleOverlapPlacem
  * @param inputs - Timed item bounds clipped to one lane in the canvas display timezone.
  * @param pixelsPerHour - Current vertical scale for the shared scheduling canvas.
  * @param minimumInteractivePixels - Minimum rendered item height used by the event card.
- * @returns Stable placements ordered by start, effective end descending, and id ascending.
+ * @returns Stable placements ordered by wall start, exact start, duration, and stable id.
  */
-export function layoutScheduleOverlaps(
+function layoutScheduleOverlapsWithClusters(
   inputs: readonly ScheduleOverlapInput[],
   pixelsPerHour: number,
   minimumInteractivePixels: number,
-): ScheduleOverlapPlacement[] {
+): ClusteredScheduleOverlapPlacement[] {
   if (inputs.length === 0) return [];
 
   const safePixelsPerHour = Math.max(1, pixelsPerHour);
@@ -132,22 +165,29 @@ export function layoutScheduleOverlaps(
     }))
     .sort(compareIntervals);
 
-  const placements: ScheduleOverlapPlacement[] = [];
-  let cluster: VisualInterval[] = [];
-  let clusterEndMinutes = Number.NEGATIVE_INFINITY;
+  const visualLayout = layoutVisualOverlapSweep(sorted);
+  const affectedComponents = findAffectedOverlapComponents(sorted, visualLayout);
+  const layout = colorAffectedOverlapComponents(
+    sorted,
+    visualLayout,
+    affectedComponents,
+    intervalsConflict,
+  );
+  return layout.flatMap(({ clusterId, columnIndex, columnCount }, index) => {
+    const item = sorted[index];
+    return item ? [{ clusterId, placement: { id: item.id, columnIndex, columnCount } }] : [];
+  });
+}
 
-  for (const item of sorted) {
-    if (cluster.length > 0 && item.startMinutes >= clusterEndMinutes) {
-      placements.push(...placeCluster(cluster));
-      cluster = [];
-      clusterEndMinutes = Number.NEGATIVE_INFINITY;
-    }
-    cluster.push(item);
-    clusterEndMinutes = Math.max(clusterEndMinutes, item.effectiveEndMinutes);
-  }
-
-  if (cluster.length > 0) placements.push(...placeCluster(cluster));
-  return placements;
+/** Return stable collision columns while keeping internal cluster identity encapsulated. */
+export function layoutScheduleOverlaps(
+  inputs: readonly ScheduleOverlapInput[],
+  pixelsPerHour: number,
+  minimumInteractivePixels: number,
+): ScheduleOverlapPlacement[] {
+  return layoutScheduleOverlapsWithClusters(inputs, pixelsPerHour, minimumInteractivePixels).map(
+    ({ placement }) => placement,
+  );
 }
 
 /**
@@ -165,7 +205,7 @@ export function positionScheduleLaneItems(
   pixelsPerHour: number,
   minimumInteractivePixels: number,
 ): PositionedScheduleItem[] {
-  const positionedById = new Map<string, Omit<PositionedScheduleItem, 'placement'>>();
+  const positionedById = new Map<string, Omit<PositionedScheduleItem, 'placement' | 'clusterId'>>();
 
   for (const item of lane.items) {
     const bounds = itemBoundsInLane(item, lane, displayTimezone);
@@ -181,18 +221,20 @@ export function positionScheduleLaneItems(
     });
   }
 
-  const placements = layoutScheduleOverlaps(
+  const placements = layoutScheduleOverlapsWithClusters(
     [...positionedById.values()].map(({ item, bounds }) => ({
       id: item.id,
       startMinutes: bounds.startMinutes,
       endMinutes: bounds.endMinutes,
+      exactStartMinutes: Date.parse(item.startsAt) / 60_000,
+      exactEndMinutes: Date.parse(item.endsAt) / 60_000,
     })),
     pixelsPerHour,
     minimumInteractivePixels,
   );
 
-  return placements.flatMap((placement) => {
+  return placements.flatMap(({ placement, clusterId }) => {
     const positioned = positionedById.get(placement.id);
-    return positioned ? [{ ...positioned, placement }] : [];
+    return positioned ? [{ ...positioned, placement, clusterId }] : [];
   });
 }

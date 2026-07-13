@@ -96,6 +96,31 @@ describe('deriveRollingDateWindow', () => {
       initialLaneIndex: 1,
     });
   });
+
+  it.each([
+    { boundaryStart: '2026-07-10', expectedStart: '2026-07-07' },
+    { boundaryStart: '2026-07-16', expectedStart: '2026-07-13' },
+  ])(
+    'keeps the prior three-lane source viewport when rebasing around $boundaryStart',
+    ({ boundaryStart, expectedStart }) => {
+      const rebased = deriveRollingDateWindow(boundaryStart, 3);
+      const retainedDates = Array.from({ length: rebased.laneCount }, (_, index) => {
+        const date = new Date(`${rebased.startDate}T00:00:00Z`);
+        date.setUTCDate(date.getUTCDate() + index);
+        return date.toISOString().slice(0, 10);
+      });
+
+      expect(rebased).toMatchObject({
+        startDate: expectedStart,
+        laneCount: 9,
+        initialLaneIndex: 3,
+      });
+      expect(retainedDates).toEqual(
+        expect.arrayContaining(['2026-07-13', '2026-07-14', '2026-07-15']),
+      );
+      expect(retainedDates[rebased.initialLaneIndex]).toBe(boundaryStart);
+    },
+  );
 });
 
 describe('calendar schedule timezone model', () => {
@@ -117,12 +142,15 @@ describe('calendar schedule timezone model', () => {
     expect(overlapsDate(item, '2026-07-02', 'UTC')).toBe(true);
   });
 
-  it('uses the viewer zone for same-day editability and all-day fallback instants', () => {
+  it('keeps exact timed ranges editable across viewer dates and uses zoned all-day instants', () => {
     expect(toScheduleItem(calendarItem(), '2026-07-02', null, 'Asia/Tokyo')).toMatchObject({
       editable: true,
     });
     expect(toScheduleItem(calendarItem(), '2026-07-01', null, 'America/Los_Angeles')).toMatchObject(
-      { editable: false, readOnlyLabel: undefined },
+      {
+        editable: true,
+        readOnlyLabel: undefined,
+      },
     );
 
     const allDay = toScheduleItem(
@@ -140,6 +168,7 @@ describe('calendar schedule timezone model', () => {
       startsAt: '2026-06-30T15:00:00Z',
       endsAt: '2026-07-01T15:00:00Z',
       allDay: true,
+      editable: true,
     });
   });
 
@@ -176,7 +205,7 @@ describe('calendar schedule timezone model', () => {
     },
     {
       label: 'provider conflict',
-      readOnlyLabel: 'Read-only',
+      readOnlyLabel: 'Conflict',
       overrides: { kind: 'provider_event' as const, hasConflict: true },
     },
     {
@@ -275,6 +304,46 @@ describe('calendar schedule timezone model', () => {
     expect(new Set(lane.items.map((item) => item.id)).size).toBe(2);
     expect(positionScheduleLaneItems(lane, 'UTC', 72, 18)).toHaveLength(2);
   });
+
+  it('filters overfetched all-day comparison items against the requested local date', () => {
+    const person: ScheduleComparisonOut['people'][number] = {
+      actorId: ActorId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ'),
+      displayName: 'Grace',
+      avatar: null,
+      timezone: 'America/Los_Angeles',
+      items: [
+        {
+          access: 'busy',
+          startsAt: null,
+          endsAt: null,
+          allDayStartDate: '2026-07-01',
+          allDayEndDate: '2026-07-02',
+        },
+        {
+          access: 'busy',
+          startsAt: null,
+          endsAt: null,
+          allDayStartDate: '2026-07-02',
+          allDayEndDate: '2026-07-03',
+        },
+        {
+          access: 'busy',
+          startsAt: null,
+          endsAt: null,
+          allDayStartDate: '2026-07-03',
+          allDayEndDate: '2026-07-04',
+        },
+      ],
+    };
+
+    const lane = buildComparisonLane(person, '2026-07-02', 'Asia/Tokyo');
+
+    expect(lane.items).toHaveLength(1);
+    expect(lane.items[0]).toMatchObject({
+      startsAt: '2026-07-01T15:00:00Z',
+      endsAt: '2026-07-02T15:00:00Z',
+    });
+  });
 });
 
 describe('inline schedule editability policy', () => {
@@ -285,11 +354,23 @@ describe('inline schedule editability policy', () => {
     endsAt: '2026-07-02T07:30:00Z',
   } as const;
 
-  it('uses one viewer-timezone date instead of UTC or resource dates', () => {
+  it('accepts valid exact ranges even when the viewer timezone crosses midnight', () => {
     expect(isInlineEditableScheduleItem({ ...timed, displayTimezone: 'Asia/Tokyo' })).toBe(true);
     expect(isInlineEditableScheduleItem({ ...timed, displayTimezone: 'America/Los_Angeles' })).toBe(
-      false,
+      true,
     );
+  });
+
+  it('allows an event that ends exactly at the following local midnight', () => {
+    expect(
+      isInlineEditableScheduleItem({
+        canPersistBounds: true,
+        allDay: false,
+        startsAt: '2026-07-14T06:30:00Z',
+        endsAt: '2026-07-14T07:00:00Z',
+        displayTimezone: 'America/Los_Angeles',
+      }),
+    ).toBe(true);
   });
 
   it.each([
@@ -309,7 +390,7 @@ describe('inline schedule editability policy', () => {
     ).toBe(false);
   });
 
-  it('rejects a repeated-fold wall inversion that exact elapsed time alone would accept', () => {
+  it('accepts a positive exact range through a repeated fold', () => {
     expect(
       isInlineEditableScheduleItem({
         canPersistBounds: true,
@@ -318,6 +399,6 @@ describe('inline schedule editability policy', () => {
         endsAt: '2026-11-01T09:15:00Z',
         displayTimezone: 'America/Los_Angeles',
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

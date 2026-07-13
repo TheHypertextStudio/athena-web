@@ -61,9 +61,16 @@ function transitionBands(ticks: readonly ScheduleTick[]): ScheduleTransitionBand
   return bands;
 }
 
-/** Compact copy for a daylight-saving wall-clock anomaly. */
-function transitionLabel(transition: ScheduleTransitionBand['transition']): string {
-  return transition === 'skipped' ? 'Skipped hour · DST' : 'Repeated hour · DST';
+/** Compact, duration-accurate copy for a daylight-saving wall-clock anomaly. */
+function transitionLabel(band: ScheduleTransitionBand): string {
+  const minutes = band.endWallMinutes - band.startWallMinutes;
+  const duration =
+    minutes === 60
+      ? 'hour'
+      : minutes > 0 && minutes % 60 === 0
+        ? `${String(minutes / 60)} hours`
+        : `${String(minutes)} minutes`;
+  return `${band.transition === 'skipped' ? 'Skipped' : 'Repeated'} ${duration} · DST`;
 }
 
 /**
@@ -109,7 +116,7 @@ export function SchedulingTimeGrid({
   return (
     <div className="relative flex" style={{ height: gridHeight }}>
       <div
-        className="border-outline-variant bg-surface sticky left-0 z-20 shrink-0 border-r"
+        className="border-outline-variant bg-surface sticky left-0 z-[50] shrink-0 border-r"
         style={{ width: gutterWidth }}
       >
         {ticks
@@ -168,7 +175,7 @@ export function SchedulingTimeGrid({
                     height: tickTop(band.endWallMinutes - band.startWallMinutes, pixelsPerHour),
                   }}
                 >
-                  {transitionLabel(band.transition)}
+                  {transitionLabel(band)}
                 </span>
               ))}
             </div>

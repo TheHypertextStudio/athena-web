@@ -41,8 +41,9 @@ afterEach(() => {
 });
 
 describe('Agenda timebox mutation', () => {
-  it('optimistically patches the rendered agenda cache when setting a timebox', async () => {
+  it('patches Agenda optimistically and refreshes concurrently open Calendar ranges', async () => {
     const { client, wrapper } = makeWrapper();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
     client.setQueryData(queryKeys.dailyPlan(DAY), { items: [dailyPlanItem()] });
     client.setQueryData(queryKeys.agenda(DAY), agendaOut());
 
@@ -66,6 +67,7 @@ describe('Agenda timebox mutation', () => {
         endsAt: NEW_END,
       }),
     ]);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['me', 'calendar-items'] });
   });
 
   it('restores all projections and exposes only a failure boolean', async () => {

@@ -52,6 +52,8 @@ describe('SchedulingCanvas notice', () => {
     expect(header).toContainElement(notice);
     expect(header).toHaveClass('sticky', 'top-0');
     expect(notice).toHaveClass('sticky', 'break-words');
+    expect(notice).toHaveClass('border-destructive', 'border-l-2');
+    expect(notice).not.toHaveClass('rounded-lg', 'shadow-sm');
     expect(notice.parentElement).toHaveClass('absolute', 'top-full', 'pointer-events-none');
     expect(screen.getByLabelText('Today time grid')).toBeInTheDocument();
   });
@@ -85,5 +87,21 @@ describe('SchedulingCanvas notice', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('No calendar items yet.');
+    expect(screen.getByRole('status')).toHaveClass('italic');
+  });
+
+  it('keeps the time grid visible without rendering deliberately blank empty copy', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[EMPTY_LANE]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        emptyMessage="   "
+      />,
+    );
+
+    expect(screen.getByLabelText('Today time grid')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

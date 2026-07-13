@@ -5,6 +5,7 @@ import { Badge, Sheet, SheetContent, SheetDescription, SheetTitle } from '@docke
 import { type JSX } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
+import { CalendarDrawerClose } from '@/components/calendar/calendar-drawer-close';
 import { formatScheduleInstantRange } from '@/components/scheduling/scheduling-time-label';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -86,7 +87,12 @@ export function CalendarSharedItemDetails({
         {detail ? (
           <div className="flex flex-col gap-5">
             <header className="flex flex-col gap-2">
-              <SheetTitle className="text-base font-semibold">{detail.item.title}</SheetTitle>
+              <div className="flex items-start gap-2">
+                <SheetTitle className="min-w-0 flex-1 text-base font-semibold">
+                  {detail.item.title}
+                </SheetTitle>
+                <CalendarDrawerClose label="Close shared calendar item" onClick={onClose} />
+              </div>
               <SheetDescription>
                 Shared by {detail.personName} with this workspace.
               </SheetDescription>

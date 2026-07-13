@@ -75,7 +75,7 @@ test('drags an Agenda task into a timebox and a calendar event into another even
 
   const agenda = page.getByRole('complementary', { name: 'Agenda' });
   const agendaTaskDrag = agenda.getByRole('button', {
-    name: `Drag ${taskTitle} to create a relationship`,
+    name: `Create relationship from ${taskTitle}`,
   });
   await expect(agendaTaskDrag).toBeVisible();
   await dragLocatorToLocator(page, agendaTaskDrag, scheduleItem(page, timebox.id).card);
@@ -93,9 +93,21 @@ test('drags an Agenda task into a timebox and a calendar event into another even
 
   const main = page.locator('main#main-content');
   const eventDrag = main.getByRole('button', {
-    name: `Drag ${sourceEvent.title} to create a relationship`,
+    name: `Create relationship from ${sourceEvent.title}`,
   });
   await expect(eventDrag).toBeVisible();
+  await eventDrag.focus();
+  await page.keyboard.press('Enter');
+  const keyboardTarget = main.locator('[data-schedule-relationship-target]').first();
+  await expect(keyboardTarget).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  expect(
+    await page.evaluate(() =>
+      Boolean(document.activeElement?.closest('[data-schedule-relationship-covered][inert]')),
+    ),
+  ).toBe(false);
+  await page.keyboard.press('Escape');
+
   await dragLocatorToLocator(page, eventDrag, scheduleItem(page, targetEvent.id).card);
 
   await expect.poll(() => state.relationPosts.length).toBe(1);

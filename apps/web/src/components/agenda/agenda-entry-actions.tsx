@@ -25,13 +25,11 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
-  Row,
   Stack,
 } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import { type JSX, useRef, useState } from 'react';
 
-import { clockValue, toISODateTime } from '@/lib/format-time';
-
+import { AgendaTimeboxForm } from './agenda-timebox-form';
 import { type AgendaEntry, isTimeboxed, shiftISODate, useAgenda } from './agenda-context';
 
 /** Which popover editor is open (the actions that need input), or `null` when none is. */
@@ -48,13 +46,13 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
   const { date, clearTimebox, moveToDay, removeFromPlan } = useAgenda();
   const [editor, setEditor] = useState<EntryEditor>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const openingEditor = useRef(false);
   const timeboxed = isTimeboxed(entry);
 
   const openEditor = (next: Exclude<EntryEditor, null>): void => {
+    openingEditor.current = true;
     setMenuOpen(false);
-    window.setTimeout(() => {
-      setEditor(next);
-    }, 0);
+    setEditor(next);
   };
 
   return (
@@ -77,7 +75,15 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
             </Button>
           </DropdownMenuTrigger>
         </PopoverAnchor>
-        <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuContent
+          align="end"
+          className="w-44"
+          onCloseAutoFocus={(event) => {
+            if (!openingEditor.current) return;
+            openingEditor.current = false;
+            event.preventDefault();
+          }}
+        >
           <DropdownMenuItem
             onSelect={() => {
               openEditor('timebox');
@@ -120,9 +126,9 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent align="end" className="w-64">
+      <PopoverContent align="end" className={editor === 'timebox' ? 'w-80' : 'w-64'}>
         {editor === 'timebox' ? (
-          <TimeboxForm
+          <AgendaTimeboxForm
             entry={entry}
             date={date}
             onDone={() => {
@@ -151,64 +157,6 @@ interface EntryEditorProps {
   date: string;
   /** Close the popover (called after a successful submit or cancel). */
   onDone: () => void;
-}
-
-/** Start/end time fields that set (or re-set) the entry's timebox window for the day. */
-function TimeboxForm({ entry, date, onDone }: EntryEditorProps): JSX.Element {
-  const { setTimebox } = useAgenda();
-  const [start, setStart] = useState(() =>
-    isTimeboxed(entry) ? clockValue(entry.startsAt) : '09:00',
-  );
-  const [end, setEnd] = useState(() => (isTimeboxed(entry) ? clockValue(entry.endsAt) : '10:00'));
-  const valid = end > start;
-
-  return (
-    <Stack
-      as="form"
-      gap={3}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (!valid) return;
-        setTimebox(entry, toISODateTime(date, start), toISODateTime(date, end));
-        onDone();
-      }}
-    >
-      <Row gap={2} align="end">
-        <Stack gap={1} className="flex-1">
-          <label htmlFor="timebox-start" className="text-on-surface-variant text-xs font-medium">
-            Start
-          </label>
-          <Input
-            id="timebox-start"
-            type="time"
-            value={start}
-            onChange={(event) => {
-              setStart(event.target.value);
-            }}
-          />
-        </Stack>
-        <Stack gap={1} className="flex-1">
-          <label htmlFor="timebox-end" className="text-on-surface-variant text-xs font-medium">
-            End
-          </label>
-          <Input
-            id="timebox-end"
-            type="time"
-            value={end}
-            onChange={(event) => {
-              setEnd(event.target.value);
-            }}
-          />
-        </Stack>
-      </Row>
-      {valid ? null : (
-        <p className="text-destructive text-xs">End time must be after the start time.</p>
-      )}
-      <Button type="submit" size="sm" disabled={!valid}>
-        Set timebox
-      </Button>
-    </Stack>
-  );
 }
 
 /** A day field that moves the entry to another day (re-adds it there, unscheduled). */

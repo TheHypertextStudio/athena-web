@@ -29,6 +29,7 @@ import * as React from 'react';
 export function useMediaQuery(query: string): boolean {
   const subscribe = React.useCallback(
     (onChange: () => void): (() => void) => {
+      if (typeof window.matchMedia !== 'function') return () => undefined;
       const mql = window.matchMedia(query);
       mql.addEventListener('change', onChange);
       return () => {
@@ -37,10 +38,10 @@ export function useMediaQuery(query: string): boolean {
     },
     [query],
   );
-
-  return React.useSyncExternalStore(
-    subscribe,
-    () => window.matchMedia(query).matches,
-    () => false,
+  const getSnapshot = React.useCallback(
+    () => (typeof window.matchMedia === 'function' ? window.matchMedia(query).matches : false),
+    [query],
   );
+
+  return React.useSyncExternalStore(subscribe, getSnapshot, () => false);
 }

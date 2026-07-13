@@ -263,9 +263,104 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('CalendarItemDrawer', () => {
+  it('keeps a visible close action while item details are loading', () => {
+    itemGet.mockReturnValue(new Promise(() => undefined));
+    const { onClose } = renderDrawer(ITEM_ID);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close calendar item' }));
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('provides a visible close action', async () => {
+    const { onClose } = renderDrawer(ITEM_ID);
+
+    await screen.findByLabelText('Title');
+    fireEvent.click(screen.getByRole('button', { name: 'Close calendar item' }));
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('guards explicit dismissal when editable fields have unsaved changes', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { onClose } = renderDrawer(ITEM_ID);
+    const title = await screen.findByLabelText('Title');
+
+    fireEvent.change(title, { target: { value: 'Unsaved review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close calendar item' }));
+
+    expect(confirm).toHaveBeenCalledWith('Discard your unsaved calendar changes?');
+    expect(onClose).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Close calendar item' }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('guards related-item navigation when editable fields have unsaved changes', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    itemRelationsGet.mockResolvedValue(
+      okResponse({
+        items: [
+          {
+            sourceItemId: ITEM_ID,
+            targetItemId: RELATED_ITEM_ID,
+            targetTitle: 'Customer interview',
+            targetKind: 'provider_event',
+            role: 'contained',
+            createdByUserId: '01BX5ZZKBKACTAV9WEVGEMMVA1',
+            createdAt: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+      }),
+    );
+    itemGet.mockImplementation(({ param }: { param: { id: string } }) =>
+      Promise.resolve(
+        okResponse(
+          param.id === RELATED_ITEM_ID
+            ? makeItem({ id: RELATED_ITEM_ID, title: 'Customer interview' })
+            : makeItem(),
+        ),
+      ),
+    );
+    renderDrawer(ITEM_ID);
+    const title = await screen.findByLabelText('Title');
+    const relatedItem = await screen.findByRole('button', { name: 'Customer interview' });
+
+    fireEvent.change(title, { target: { value: 'Unsaved review' } });
+    fireEvent.click(relatedItem);
+
+    expect(confirm).toHaveBeenCalledWith('Discard your unsaved calendar changes?');
+    expect(itemGet).not.toHaveBeenCalledWith({ param: { id: RELATED_ITEM_ID } });
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(relatedItem);
+    await waitFor(() => {
+      expect(itemGet).toHaveBeenCalledWith({ param: { id: RELATED_ITEM_ID } });
+    });
+  });
+
+  it('guards linked-task navigation when editable fields have unsaved changes', async () => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const { onOpenTask } = renderDrawer(ITEM_ID);
+    const title = await screen.findByLabelText('Title');
+    const linkedTask = screen.getByRole('button', { name: 'Prep notes' });
+
+    fireEvent.change(title, { target: { value: 'Unsaved review' } });
+    fireEvent.click(linkedTask);
+
+    expect(confirm).toHaveBeenCalledWith('Discard your unsaved calendar changes?');
+    expect(onOpenTask).not.toHaveBeenCalled();
+
+    confirm.mockReturnValue(true);
+    fireEvent.click(linkedTask);
+    expect(onOpenTask).toHaveBeenCalledWith(ORG_ID, TASK_A);
+  });
+
   it('rebases untouched timed fields when the display timezone hydrates', async () => {
     const { rerenderDrawer } = renderDrawer(ITEM_ID, 'UTC');
 
@@ -304,7 +399,7 @@ describe('CalendarItemDrawer', () => {
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
   });
 
-  it('rejects an edited time inside a repeated wall-clock hour', async () => {
+  it('offers and persists an explicit occurrence inside a repeated wall-clock hour', async () => {
     itemGet.mockResolvedValue(
       okResponse(
         makeItem({
@@ -319,12 +414,21 @@ describe('CalendarItemDrawer', () => {
     fireEvent.change(screen.getByLabelText('Starts'), {
       target: { value: '2026-11-01T01:30' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Later · PST' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
-    expect(
-      screen.getByText('Choose valid start and end times in your calendar timezone.'),
-    ).toBeInTheDocument();
-    expect(itemPatch).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(itemPatch).toHaveBeenCalledWith({
+        param: { id: ITEM_ID },
+        json: {
+          title: 'Design review',
+          description: '',
+          location: '',
+          startsAt: '2026-11-01T09:30:00Z',
+          endsAt: '2026-11-01T10:30:00.000Z',
+        },
+      });
+    });
   });
 
   it('preserves timed instants when another field changes in a different display timezone', async () => {

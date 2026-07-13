@@ -2,7 +2,6 @@
 
 import {
   type KeyboardEvent as ReactKeyboardEvent,
-  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -10,18 +9,19 @@ import {
   useState,
 } from 'react';
 
-import { deriveGesturePreview, formatSchedulingGestureAnnouncement } from './scheduling-gesture';
+import { formatSchedulingGestureAnnouncement } from './scheduling-gesture';
+import { commitSchedulingGesture } from './scheduling-gesture-commit';
 import {
-  autoScrollSchedulingViewport,
   deriveKeyboardGesturePreview,
-  detachSchedulingPointerSession,
-  releaseSchedulingPointerSession,
-  SCHEDULING_GESTURE_ACTIVATION_PIXELS,
   schedulingPreviewsEqual,
   type SchedulingGestureController,
   type SchedulingPointerSession,
   type UseSchedulingGestureOptions,
 } from './scheduling-gesture-runtime';
+import {
+  beginSchedulingPointerSession,
+  endSchedulingPointerSession,
+} from './scheduling-pointer-session';
 import type { ScheduleGestureMode, ScheduleGesturePreview } from './scheduling-types';
 
 /** Own the armed-to-active pointer lifecycle for one scheduling item. */
@@ -52,15 +52,20 @@ export function useSchedulingGesture(
       if (mountedRef.current) setPreview(next);
       const current = optionsRef.current;
       const targetLane = next ? current.lanes[next.laneIndex] : undefined;
+      if (!next || !mode || !targetLane) {
+        current.onAnnouncementChange('');
+        return;
+      }
+      const presentation = current.presentPreviewTimeRange(mode, next);
       current.onAnnouncementChange(
-        next && mode && targetLane
+        presentation.valid
           ? formatSchedulingGestureAnnouncement(
               mode,
               current.item.title,
               targetLane.label,
-              current.formatPreviewTimeRange(mode, next),
+              presentation.label,
             )
-          : '',
+          : (presentation.announcement ?? ''),
       );
     },
     [],
@@ -71,8 +76,7 @@ export function useSchedulingGesture(
       const session = sessionRef.current;
       if (!session) return;
       sessionRef.current = null;
-      detachSchedulingPointerSession(session);
-      if (releaseCapture) releaseSchedulingPointerSession(session);
+      endSchedulingPointerSession(session, releaseCapture);
       if (renderPreview) showPreview(null);
       else {
         previewRef.current = null;
@@ -85,153 +89,27 @@ export function useSchedulingGesture(
 
   const commitPreview = useCallback(
     (mode: ScheduleGestureMode, next: ScheduleGesturePreview, announce = false): void => {
-      const current = optionsRef.current;
-      const targetLane = current.lanes[next.laneIndex];
-      const sourceEditable = current.editable && (current.lane.editable ?? true);
-      if (!sourceEditable || !targetLane || !(targetLane.editable ?? true)) return;
-      const changed =
-        next.laneIndex !== current.laneIndex ||
-        next.startMinutes !== current.bounds.startMinutes ||
-        next.endMinutes !== current.bounds.endMinutes;
-      if (!changed) return;
-      if (announce) {
-        current.onAnnouncementChange(
-          formatSchedulingGestureAnnouncement(
-            mode,
-            current.item.title,
-            targetLane.label,
-            current.formatPreviewTimeRange(mode, next),
-          ),
-        );
-      }
-      if (mode === 'move') {
-        current.onMoveItem?.({
-          item: current.item,
-          fromLane: current.lane,
-          toLane: targetLane,
-          startMinutes: next.startMinutes,
-          endMinutes: next.endMinutes,
-        });
-        return;
-      }
-      current.onResizeItem?.({
-        item: current.item,
-        lane: current.lane,
-        edge: mode === 'resize-start' ? 'start' : 'end',
-        startMinutes: next.startMinutes,
-        endMinutes: next.endMinutes,
-      });
+      commitSchedulingGesture(optionsRef.current, mode, next, announce);
     },
     [],
   );
 
   const beginPointer = useCallback(
-    (mode: ScheduleGestureMode, event: ReactPointerEvent<HTMLButtonElement>): void => {
-      const current = optionsRef.current;
-      const enabled =
-        current.editable &&
-        (mode === 'move' ? current.onMoveItem !== undefined : current.onResizeItem !== undefined);
-      if (!enabled || event.button !== 0) return;
-      stopSession();
-      suppressBodyClickRef.current = false;
-      showPreview(null);
-      event.stopPropagation();
-      const viewport = current.viewportRef.current;
-      if (!viewport) return;
-      const viewportRect = viewport.getBoundingClientRect();
-      const viewportWidth =
-        viewportRect.width ||
-        viewport.clientWidth ||
-        current.gutterWidth + current.laneWidth * current.lanes.length;
-      const originViewportX = event.clientX - viewportRect.left;
-      const cancel = (releaseCapture = true): void => {
-        if (sessionRef.current !== session) return;
-        stopSession(releaseCapture);
-      };
-      const move = (pointerEvent: PointerEvent): void => {
-        if (pointerEvent.pointerId !== session.pointerId) return;
-        const deltaX = pointerEvent.clientX - session.originX;
-        const deltaY = pointerEvent.clientY - session.originY;
-        if (!session.active) {
-          if (Math.hypot(deltaX, deltaY) < SCHEDULING_GESTURE_ACTIVATION_PIXELS) return;
-          session.active = true;
-          suppressBodyClickRef.current = mode === 'move';
-          try {
-            session.target.setPointerCapture(session.pointerId);
-            session.captured = true;
-          } catch {
-            session.captured = false;
-          }
-        }
-        pointerEvent.preventDefault();
-        autoScrollSchedulingViewport(viewport, pointerEvent.clientX, pointerEvent.clientY);
-        const latest = optionsRef.current;
-        if (!latest.lanes.some((candidate) => candidate.id === latest.lane.id)) {
-          cancel();
-          return;
-        }
-        showPreview(
-          deriveGesturePreview({
-            mode,
-            original: { laneIndex: latest.laneIndex, ...latest.bounds },
-            delta: { x: deltaX, y: deltaY },
-            laneGeometry: {
-              laneWidth: latest.laneWidth,
-              gutterWidth: latest.gutterWidth,
-              viewportWidth,
-              originViewportX: session.originViewportX,
-              originContentX: session.originContentX,
-              scrollDelta: {
-                x: viewport.scrollLeft - session.originScrollLeft,
-                y: viewport.scrollTop - session.originScrollTop,
-              },
-            },
-            pixelsPerHour: latest.pixelsPerHour,
-            snapMinutes: latest.snapMinutes,
-            itemEditable: latest.editable,
-            lanes: latest.lanes,
-          }),
-          mode,
-        );
-      };
-      const up = (pointerEvent: PointerEvent): void => {
-        if (pointerEvent.pointerId !== session.pointerId) return;
-        const next = previewRef.current;
-        const active = session.active;
-        stopSession();
-        if (active && next) commitPreview(mode, next);
-      };
-      const pointerCancel = (pointerEvent: PointerEvent): void => {
-        if (pointerEvent.pointerId === session.pointerId) cancel();
-      };
-      const escape = (keyboardEvent: KeyboardEvent): void => {
-        if (keyboardEvent.key === 'Escape') cancel();
-      };
-      const session: SchedulingPointerSession = {
-        pointerId: event.pointerId,
-        target: event.currentTarget,
-        originX: event.clientX,
-        originY: event.clientY,
-        originViewportX,
-        originContentX: originViewportX + viewport.scrollLeft - current.gutterWidth,
-        originScrollLeft: viewport.scrollLeft,
-        originScrollTop: viewport.scrollTop,
-        active: false,
-        captured: false,
-        move,
-        up,
-        cancel: pointerCancel,
-        escape,
-        lostCapture: (captureEvent) => {
-          if (captureEvent.pointerId === session.pointerId) cancel(false);
-        },
-      };
-      sessionRef.current = session;
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', pointerCancel);
-      window.addEventListener('keydown', escape);
-      session.target.addEventListener('lostpointercapture', session.lostCapture);
+    (
+      mode: ScheduleGestureMode,
+      event: Parameters<SchedulingGestureController['onBodyPointerDown']>[0],
+    ): void => {
+      beginSchedulingPointerSession({
+        mode,
+        event,
+        optionsRef,
+        sessionRef,
+        previewRef,
+        suppressBodyClickRef,
+        showPreview,
+        stopSession,
+        commitPreview,
+      });
     },
     [commitPreview, showPreview, stopSession],
   );
@@ -249,8 +127,28 @@ export function useSchedulingGesture(
   );
 
   useEffect(() => {
-    if (!options.lanes.some((candidate) => candidate.id === options.lane.id)) stopSession();
-  }, [options.lane.id, options.lanes, stopSession]);
+    const session = sessionRef.current;
+    if (!session) return;
+    const sourceChanged =
+      options.item.id !== session.sourceItemId ||
+      options.lane.id !== session.sourceLaneId ||
+      options.bounds.startMinutes !== session.sourceStartMinutes ||
+      options.bounds.endMinutes !== session.sourceEndMinutes;
+    if (
+      sourceChanged ||
+      !options.lanes.some((candidate) => candidate.id === session.sourceLaneId)
+    ) {
+      stopSession();
+    }
+  }, [
+    options.bounds.endMinutes,
+    options.bounds.startMinutes,
+    options.item.id,
+    options.lane.id,
+    options.laneIndex,
+    options.lanes,
+    stopSession,
+  ]);
 
   useEffect(() => {
     mountedRef.current = true;

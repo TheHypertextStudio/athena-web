@@ -136,4 +136,34 @@ describe('schedule date lanes', () => {
       ),
     ).toEqual({ startMinutes: 90, endMinutes: 150 });
   });
+
+  it('uses elapsed duration when a fall-back event has distinct but compressed wall bounds', () => {
+    const crossingItem: ScheduleItem = {
+      id: 'crossing-fall-back',
+      title: 'Crossing fall back',
+      startsAt: '2026-11-01T07:30:00Z',
+      endsAt: '2026-11-01T09:30:00Z',
+    };
+
+    expect(
+      itemBoundsInLane(crossingItem, lane('fall-back', '2026-11-01', 'UTC'), 'America/Los_Angeles'),
+    ).toEqual({ startMinutes: 30, endMinutes: 150 });
+  });
+
+  it('keeps spring-forward endpoints aligned with their visible wall-clock labels', () => {
+    const crossingItem: ScheduleItem = {
+      id: 'crossing-spring-forward',
+      title: 'Crossing spring forward',
+      startsAt: '2026-03-08T09:30:00Z',
+      endsAt: '2026-03-08T10:30:00Z',
+    };
+
+    expect(
+      itemBoundsInLane(
+        crossingItem,
+        lane('spring-forward', '2026-03-08', 'UTC'),
+        'America/Los_Angeles',
+      ),
+    ).toEqual({ startMinutes: 90, endMinutes: 210 });
+  });
 });

@@ -13,6 +13,7 @@ import {
   scheduleWallPositionForInstant,
   SchedulingCanvas,
   type ScheduleItem,
+  type ScheduleItemRenderContext,
   type ScheduleLane,
 } from '@/components/scheduling';
 
@@ -84,6 +85,7 @@ function timedItemOrder(): (string | undefined)[] {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('SchedulingCanvas', () => {
@@ -1296,7 +1298,7 @@ describe('SchedulingCanvas', () => {
     expect(onOpenItem).toHaveBeenCalledWith({ item: target, lane: sourceLane });
 
     const affordance = screen.getByRole('button', {
-      name: `Drag ${ALL_DAY_ITEM.title} to create a relationship`,
+      name: `Create relationship from ${ALL_DAY_ITEM.title}`,
     });
     expect(affordance).toHaveAttribute('draggable', 'true');
     const dragTransfer = { effectAllowed: 'none', setData: vi.fn() };
@@ -1571,6 +1573,23 @@ describe('SchedulingCanvas', () => {
     expect(skipped[0]?.closest('[data-schedule-transition-layer]')).toHaveClass('z-0');
   });
 
+  it('labels a non-hour DST transition with its exact wall-clock duration', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="Australia/Lord_Howe"
+        lanes={[{ ...lane('lord-howe', 'Lord Howe'), date: '2026-10-04' }]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    const skipped = document.querySelector(
+      '[data-schedule-transition-lane="lord-howe"][data-schedule-transition="skipped"]',
+    );
+    expect(skipped).toHaveStyle({ top: '120px', height: '30px' });
+    expect(skipped).toHaveTextContent('Skipped 30 minutes · DST');
+  });
+
   it('keeps one display-zone geometry while showing resource timezones as header metadata', () => {
     const instantA = { ...TIMED_ITEM, id: 'same-a', title: 'Same A' };
     const instantB = { ...TIMED_ITEM, id: 'same-b', title: 'Same B' };
@@ -1637,7 +1656,7 @@ describe('SchedulingCanvas', () => {
   });
 
   it.each([5, 6])(
-    'clamps resize targets inside the first and last cards of a %i-column collision',
+    'keeps directly manipulable cards readable and discloses overflow in a %i-item collision',
     (columnCount) => {
       const items = Array.from({ length: columnCount }, (_, index) =>
         timedItem(
@@ -1658,26 +1677,25 @@ describe('SchedulingCanvas', () => {
       );
 
       const firstItem = items[0]!;
-      const lastItem = items.at(-1)!;
       const firstCard = renderedItem(firstItem.id);
-      const lastCard = renderedItem(lastItem.id);
       expect(firstCard).toHaveAttribute('data-layout-column', '0');
-      expect(lastCard).toHaveAttribute('data-layout-column', String(columnCount - 1));
-      expect(firstCard).toHaveAttribute('data-layout-column-count', String(columnCount));
-      expect(lastCard).toHaveAttribute('data-layout-column-count', String(columnCount));
+      expect(firstCard).toHaveAttribute('data-layout-column-count', '2');
       expect(firstCard).toHaveStyle({ left: '4px' });
-      expect(lastCard.style.left).not.toBe(firstCard.style.left);
-      expect(firstCard.style.width).toBe(lastCard.style.width);
       expect(firstCard.style.width).not.toBe('calc(100% - 8px)');
+      expect(
+        screen.getByRole('button', {
+          name: `Show ${String(columnCount - 1)} more events in Dense`,
+        }),
+      ).toBeInTheDocument();
 
       const firstStart = screen.getByRole('button', {
         name: `Resize ${firstItem.title} from start`,
       });
       const lastEnd = screen.getByRole('button', {
-        name: `Resize ${lastItem.title} from end`,
+        name: `Resize ${firstItem.title} from end`,
       });
       expect(firstStart.closest('[data-schedule-item]')).toBe(firstCard);
-      expect(lastEnd.closest('[data-schedule-item]')).toBe(lastCard);
+      expect(lastEnd.closest('[data-schedule-item]')).toBe(firstCard);
       expect(firstStart).toHaveClass(
         'left-0',
         'max-w-full',
@@ -1808,6 +1826,40 @@ describe('SchedulingCanvas', () => {
     expect(renderedItem('short-b')).toHaveAttribute('data-layout-column-count', '1');
   });
 
+  it('uses a 40px minimum height for coarse pointers and includes it in collision layout', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane('touch', 'Touch', [
+            timedItem('touch-a', 'Touch A', '09:00', '09:05'),
+            timedItem('touch-b', 'Touch B', '09:30', '09:35'),
+          ]),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(renderedItem('touch-a')).toHaveStyle({ height: '40px' });
+    expect(renderedItem('touch-b')).toHaveStyle({ height: '40px' });
+    expect(renderedItem('touch-a')).toHaveAttribute('data-layout-column-count', '2');
+    expect(renderedItem('touch-b')).toHaveAttribute('data-layout-column-count', '2');
+  });
+
   it('supports canonical sequential keyboard and pointer activation for identical-time items', async () => {
     const user = userEvent.setup();
     const onOpenItem = vi.fn();
@@ -1901,14 +1953,18 @@ describe('SchedulingCanvas', () => {
       expect(control).toHaveClass(
         'hover:bg-surface-container-high',
         'active:bg-surface-container-highest',
-        'transition-colors',
+        'transition-[color,background-color,opacity]',
+        'group-hover:opacity-100',
+        '[@media(pointer:coarse)]:opacity-100',
         'motion-reduce:transition-none',
       );
     }
   });
 
-  it('uses marker, compact, and full treatments while showing locale time at full height', () => {
-    const renderItem = vi.fn(({ item }: { readonly item: ScheduleItem }) => `Custom ${item.title}`);
+  it('passes density to custom renderers and keeps compact exact time visibly inline', () => {
+    const renderItem = vi.fn(
+      ({ item, density }: ScheduleItemRenderContext) => `Custom ${density} ${item.title}`,
+    );
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -1917,6 +1973,7 @@ describe('SchedulingCanvas', () => {
             timedItem('marker', 'Marker', '09:00', '09:05'),
             timedItem('compact', 'Compact', '10:00', '10:30'),
             timedItem('full', 'Full', '11:00', '12:00'),
+            ALL_DAY_ITEM,
           ]),
         ]}
         pixelsPerHour={72}
@@ -1928,14 +1985,22 @@ describe('SchedulingCanvas', () => {
     expect(renderedItem('marker')).toHaveAttribute('data-item-density', 'marker');
     expect(renderedItem('compact')).toHaveAttribute('data-item-density', 'compact');
     expect(renderedItem('full')).toHaveAttribute('data-item-density', 'full');
+    expect(screen.getByRole('button', { name: 'Custom compact Team offsite' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Marker.*9:00.*9:05/ })).toBeInTheDocument();
     expect(
-      screen.getByRole('button', { name: /^Custom Compact.*10:00.*10:30/ }),
+      screen.getByRole('button', { name: /^Custom compact Compact.*10:00.*10:30/ }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Custom Full.*11:00.*12:00/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /^Custom full Full.*11:00.*12:00/ }),
+    ).toBeInTheDocument();
+    const compactVisibleRange = [...renderedItem('compact').querySelectorAll('span')].find(
+      (element) => element.textContent.includes('10:00 AM – 10:30 AM'),
+    );
+    expect(compactVisibleRange).toBeDefined();
+    expect(compactVisibleRange).not.toHaveClass('sr-only');
     expect(renderedItem('full')).toHaveTextContent(/11:00.*12:00/);
     expect(renderedItem('full').getAttribute('style')).toContain('color-mix');
-    expect(renderItem).toHaveBeenCalledTimes(3);
+    expect(renderItem).toHaveBeenCalledTimes(4);
   });
 
   it('distinguishes overlapping items with duplicate titles by their accessible time range', () => {

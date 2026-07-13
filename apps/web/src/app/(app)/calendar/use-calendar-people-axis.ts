@@ -1,7 +1,7 @@
 'use client';
 
-import type { OrgSummary } from '@docket/types';
-import { useEffect, useMemo, useState } from 'react';
+import { ActorId, type OrgSummary, type ScheduleComparisonOut } from '@docket/types';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import type { ScheduleLane } from '@/components/scheduling';
@@ -28,6 +28,8 @@ export interface CalendarPeopleAxisState {
   readonly membersPending: boolean;
   readonly error: boolean;
   readonly comparisonPending: boolean;
+  readonly retrying: boolean;
+  readonly retry: () => void;
   readonly selectWorkspace: (orgId: string) => void;
   readonly toggleActor: (actorId: string, selected: boolean) => void;
 }
@@ -42,6 +44,7 @@ export function useCalendarPeopleAxis(
   const sharedWorkspaces = useMemo(() => orgs.filter((org) => !org.isPersonal), [orgs]);
   const [comparisonOrgId, setComparisonOrgId] = useState('');
   const [selectedActorIds, setSelectedActorIds] = useState<string[]>([]);
+  const [initializedSelectionOrgId, setInitializedSelectionOrgId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!comparisonOrgId && sharedWorkspaces[0]) setComparisonOrgId(sharedWorkspaces[0].id);
@@ -67,9 +70,17 @@ export function useCalendarPeopleAxis(
   );
 
   useEffect(() => {
-    if (axis !== 'people' || activeMembers.length === 0 || selectedActorIds.length > 0) return;
+    if (
+      axis !== 'people' ||
+      !comparisonOrgId ||
+      activeMembers.length === 0 ||
+      initializedSelectionOrgId === comparisonOrgId
+    ) {
+      return;
+    }
     setSelectedActorIds(activeMembers.map((member) => member.actorId));
-  }, [activeMembers, axis, selectedActorIds.length]);
+    setInitializedSelectionOrgId(comparisonOrgId);
+  }, [activeMembers, axis, comparisonOrgId, initializedSelectionOrgId]);
 
   const range = dateRange(anchorDate, 1, displayTimezone);
   const actorIdsKey = [...selectedActorIds].sort().join(',');
@@ -97,12 +108,37 @@ export function useCalendarPeopleAxis(
       },
     ),
   );
+  const peopleByActorId = useMemo<ReadonlyMap<string, ScheduleComparisonOut['people'][number]>>(
+    () => new Map((comparisonQuery.data?.people ?? []).map((person) => [person.actorId, person])),
+    [comparisonQuery.data],
+  );
+  const activeMemberByActorId = useMemo<ReadonlyMap<string, ComparisonMember>>(
+    () => new Map(activeMembers.map((member) => [member.actorId, member])),
+    [activeMembers],
+  );
   const lanes = useMemo(
     () =>
-      (comparisonQuery.data?.people ?? []).map((person) =>
-        buildComparisonLane(person, anchorDate, displayTimezone),
-      ),
-    [anchorDate, comparisonQuery.data, displayTimezone],
+      selectedActorIds.flatMap((actorId) => {
+        const person = peopleByActorId.get(actorId);
+        if (person) return [buildComparisonLane(person, anchorDate, displayTimezone)];
+        const member = activeMemberByActorId.get(actorId);
+        return member
+          ? [
+              buildComparisonLane(
+                {
+                  actorId: ActorId.parse(actorId),
+                  displayName: member.displayName,
+                  avatar: null,
+                  timezone: null,
+                  items: [],
+                },
+                anchorDate,
+                displayTimezone,
+              ),
+            ]
+          : [];
+      }),
+    [activeMemberByActorId, anchorDate, displayTimezone, peopleByActorId, selectedActorIds],
   );
   const detailByItemId = useMemo(
     () =>
@@ -126,6 +162,15 @@ export function useCalendarPeopleAxis(
       ),
     [comparisonQuery.data],
   );
+  const retry = useCallback(() => {
+    if (membersQuery.isError) void membersQuery.refetch();
+    if (comparisonQuery.isError) void comparisonQuery.refetch();
+  }, [
+    comparisonQuery.isError,
+    comparisonQuery.refetch,
+    membersQuery.isError,
+    membersQuery.refetch,
+  ]);
 
   return {
     sharedWorkspaces,
@@ -136,12 +181,16 @@ export function useCalendarPeopleAxis(
     detailByItemId,
     membersPending: membersQuery.isPending,
     error: comparisonQuery.isError || membersQuery.isError,
-    comparisonPending: comparisonQuery.isPending,
+    comparisonPending: selectedActorIds.length > 0 && comparisonQuery.isPending,
+    retrying: membersQuery.isFetching || comparisonQuery.isFetching,
+    retry,
     selectWorkspace: (orgId: string) => {
+      if (orgId === comparisonOrgId) return;
       setComparisonOrgId(orgId);
       setSelectedActorIds([]);
     },
     toggleActor: (actorId: string, selected: boolean) => {
+      setInitializedSelectionOrgId(comparisonOrgId);
       setSelectedActorIds((current) =>
         selected ? [...current, actorId] : current.filter((id) => id !== actorId),
       );

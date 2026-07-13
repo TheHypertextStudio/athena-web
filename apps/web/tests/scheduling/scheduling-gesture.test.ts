@@ -88,6 +88,17 @@ describe('deriveGesturePreview', () => {
     ).toEqual({ laneIndex: 0, startMinutes: 23 * 60, endMinutes: 24 * 60 });
   });
 
+  it('slides a clipped overnight start segment later without pinning its start', () => {
+    expect(
+      deriveGesturePreview(
+        gesture({
+          original: { laneIndex: 0, startMinutes: 23 * 60 + 30, endMinutes: 24 * 60 },
+          delta: { x: 0, y: 15 },
+        }),
+      ),
+    ).toEqual({ laneIndex: 0, startMinutes: 23 * 60 + 45, endMinutes: 24 * 60 });
+  });
+
   it('resizes the start edge and enforces the day and post-movement minimum', () => {
     expect(deriveGesturePreview(gesture({ mode: 'resize-start', delta: { x: 0, y: 30 } }))).toEqual(
       { laneIndex: 0, startMinutes: 9 * 60 + 30, endMinutes: 10 * 60 },
@@ -103,7 +114,7 @@ describe('deriveGesturePreview', () => {
     ).toEqual({ laneIndex: 0, startMinutes: 0, endMinutes: 75 });
   });
 
-  it('resizes the end edge and enforces the day and post-movement minimum', () => {
+  it('resizes the end edge and enforces the post-movement minimum', () => {
     expect(deriveGesturePreview(gesture({ mode: 'resize-end', delta: { x: 0, y: 30 } }))).toEqual({
       laneIndex: 0,
       startMinutes: 9 * 60,
@@ -117,7 +128,19 @@ describe('deriveGesturePreview', () => {
           delta: { x: 0, y: 120 },
         }),
       ),
-    ).toEqual({ laneIndex: 0, startMinutes: 23 * 60, endMinutes: 24 * 60 });
+    ).toEqual({ laneIndex: 0, startMinutes: 23 * 60, endMinutes: 25 * 60 + 30 });
+  });
+
+  it('lets the true end edge cross midnight', () => {
+    expect(
+      deriveGesturePreview(
+        gesture({
+          mode: 'resize-end',
+          original: { laneIndex: 0, startMinutes: 23 * 60, endMinutes: 23 * 60 + 30 },
+          delta: { x: 0, y: 60 },
+        }),
+      ),
+    ).toEqual({ laneIndex: 0, startMinutes: 23 * 60, endMinutes: 24 * 60 + 30 });
   });
 
   it('rounds at the exact half-snap threshold', () => {

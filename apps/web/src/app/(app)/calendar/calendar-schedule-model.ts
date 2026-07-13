@@ -1,4 +1,8 @@
-import type { CalendarItemOut, ScheduleComparisonOut } from '@docket/types';
+import type {
+  CalendarItemOut,
+  ScheduleComparisonItemOut,
+  ScheduleComparisonOut,
+} from '@docket/types';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import {
@@ -72,7 +76,10 @@ export function deriveRollingDateWindow(
 
 /** Return whether a normalized calendar item overlaps a local date lane. */
 export function overlapsDate(
-  item: CalendarItemOut,
+  item: Pick<
+    CalendarItemOut | ScheduleComparisonItemOut,
+    'startsAt' | 'endsAt' | 'allDayStartDate' | 'allDayEndDate'
+  >,
   date: string,
   displayTimezone: string,
 ): boolean {
@@ -99,9 +106,8 @@ export function canPersistCalendarItemBounds(item: CalendarItemOut): boolean {
 /** Return application-owned copy only for explicit calendar-domain read-only states. */
 function calendarReadOnlyLabel(item: CalendarItemOut): string | undefined {
   if (DERIVED_READ_ONLY_KINDS.has(item.kind)) return undefined;
-  return !item.permissions.canEditCore || item.hasConflict || item.status === 'conflicted'
-    ? 'Read-only'
-    : undefined;
+  if (item.hasConflict || item.status === 'conflicted') return 'Conflict';
+  return !item.permissions.canEditCore ? 'Read-only' : undefined;
 }
 
 /** Convert one calendar item into the geometry-only scheduling contract. */
@@ -124,13 +130,16 @@ export function toScheduleItem(
     endsAt,
     allDay,
     color: color ?? undefined,
-    editable: isInlineEditableScheduleItem({
-      canPersistBounds: canPersistCalendarItemBounds(item),
-      allDay,
-      startsAt: item.startsAt,
-      endsAt: item.endsAt,
-      displayTimezone,
-    }),
+    editable:
+      canPersistCalendarItemBounds(item) &&
+      (allDay ||
+        isInlineEditableScheduleItem({
+          canPersistBounds: true,
+          allDay: false,
+          startsAt: item.startsAt,
+          endsAt: item.endsAt,
+          displayTimezone,
+        })),
     readOnlyLabel: calendarReadOnlyLabel(item),
     dragObject:
       item.kind === 'task_timebox' || item.kind === 'availability_block'
@@ -175,24 +184,30 @@ export function buildComparisonLane(
     label: person.displayName,
     timezone: person.timezone ?? undefined,
     editable: false,
-    items: person.items.map((item, index) => {
-      const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
-      return {
-        id:
-          item.access === 'details'
-            ? item.itemId
-            : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? 'unknown'}:${item.endsAt ?? item.allDayEndDate ?? 'unknown'}:${index}`,
-        title: item.access === 'details' ? item.title : 'Busy',
-        startsAt:
-          item.startsAt ??
-          requiredScheduleInstant(item.allDayStartDate ?? date, 0, displayTimezone),
-        endsAt:
-          item.endsAt ??
-          requiredScheduleInstant(item.allDayEndDate ?? shiftISODate(date, 1), 0, displayTimezone),
-        allDay,
-        editable: false,
-        openable: item.access === 'details',
-      };
-    }),
+    items: person.items
+      .filter((item) => overlapsDate(item, date, displayTimezone))
+      .map((item, index) => {
+        const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
+        return {
+          id:
+            item.access === 'details'
+              ? item.itemId
+              : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? 'unknown'}:${item.endsAt ?? item.allDayEndDate ?? 'unknown'}:${index}`,
+          title: item.access === 'details' ? item.title : 'Busy',
+          startsAt:
+            item.startsAt ??
+            requiredScheduleInstant(item.allDayStartDate ?? date, 0, displayTimezone),
+          endsAt:
+            item.endsAt ??
+            requiredScheduleInstant(
+              item.allDayEndDate ?? shiftISODate(date, 1),
+              0,
+              displayTimezone,
+            ),
+          allDay,
+          editable: false,
+          openable: item.access === 'details',
+        };
+      }),
   };
 }

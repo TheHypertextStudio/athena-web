@@ -70,5 +70,24 @@ describe('useAgendaPlanMutations', () => {
     });
     expect(client.getQueryData<AgendaOut>(queryKeys.agenda(DAY))?.entries).toEqual([]);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.agenda(TARGET_DAY) });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['me', 'calendar-items'] });
+  });
+
+  it('refreshes concurrently open Calendar ranges after removing a planned task', async () => {
+    const { client, wrapper } = makeWrapper();
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    client.setQueryData(queryKeys.dailyPlan(DAY), { items: [dailyPlanItem()] });
+    client.setQueryData(queryKeys.agenda(DAY), agendaOut());
+
+    const { result } = renderHook(() => useAgendaPlanMutations(DAY), { wrapper });
+    act(() => {
+      result.current.removeFromPlan(agendaEntry());
+    });
+
+    await waitFor(() => {
+      expect(dailyPlanDelete).toHaveBeenCalled();
+    });
+    expect(client.getQueryData<AgendaOut>(queryKeys.agenda(DAY))?.entries).toEqual([]);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['me', 'calendar-items'] });
   });
 });

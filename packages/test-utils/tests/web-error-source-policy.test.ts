@@ -47,6 +47,12 @@ function propertyName(node: ts.Node): string | undefined {
   return undefined;
 }
 
+function bindingPropertyName(node: ts.Node): string | undefined {
+  if (!ts.isBindingElement(node)) return undefined;
+  const property = node.propertyName ?? node.name;
+  return ts.isIdentifier(property) || ts.isStringLiteralLike(property) ? property.text : undefined;
+}
+
 function describeNode(node: ts.Node, sourceFile: ts.SourceFile): string {
   return node.getText(sourceFile).replace(/\s+/g, ' ').slice(0, 120);
 }
@@ -75,11 +81,12 @@ function scanSource(filePath: string, sourceText: string): ErrorSourceViolation[
 
   function visit(node: ts.Node): void {
     const name = propertyName(node);
+    const diagnosticName = name ?? bindingPropertyName(node);
 
     if (name === 'message' && !RAW_MESSAGE_BOUNDARIES.has(relativePath)) {
       report(node, 'raw-error-message');
     }
-    if (name && PROVIDER_DIAGNOSTIC_PROPERTIES.has(name)) {
+    if (diagnosticName && PROVIDER_DIAGNOSTIC_PROPERTIES.has(diagnosticName)) {
       report(node, 'provider-diagnostic');
     }
     if (
@@ -114,18 +121,33 @@ describe('web error source policy', () => {
       const b = query.error?.['message'];
       const c = provider.lastError;
       const d = body['error_description'];
+      const { lastError } = provider;
+      const { lastError: storedDiagnostic } = provider;
+      const { error_description } = body;
+      const { error_description: providerDescription } = body;
       readProblem(response, 'fallback');
       readError(caught, 'fallback');
     `;
 
-    expect(scanSource(resolve(WORKSPACE_ROOT, 'apps/web/src/fixture.ts'), fixture)).toEqual(
+    const violations = scanSource(resolve(WORKSPACE_ROOT, 'apps/web/src/fixture.ts'), fixture);
+    expect(violations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ rule: 'raw-error-message' }),
         expect.objectContaining({ rule: 'provider-diagnostic' }),
         expect.objectContaining({ rule: 'legacy-string-reader' }),
+        expect.objectContaining({ rule: 'provider-diagnostic', text: 'lastError' }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: 'lastError: storedDiagnostic',
+        }),
+        expect.objectContaining({ rule: 'provider-diagnostic', text: 'error_description' }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: 'error_description: providerDescription',
+        }),
       ]),
     );
-    expect(scanSource(resolve(WORKSPACE_ROOT, 'apps/web/src/fixture.ts'), fixture)).toHaveLength(6);
+    expect(violations).toHaveLength(10);
   });
 
   it('keeps raw server, provider, and exception messages out of production UI source', () => {

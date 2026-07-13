@@ -60,25 +60,50 @@ function bindingPropertyName(node: ts.Node): string | undefined {
   return staticPropertyName(node.propertyName ?? node.name);
 }
 
-function isAssignmentTarget(node: ts.ObjectLiteralExpression): boolean {
-  let expression: ts.Expression = node;
-  let parent = node.parent;
-  while (ts.isParenthesizedExpression(parent)) {
-    expression = parent;
-    parent = parent.parent;
+function isWithinAssignmentTargetPattern(node: ts.Node): boolean {
+  let current = node;
+  for (;;) {
+    const parent = current.parent;
+    if (ts.isParenthesizedExpression(parent) && parent.expression === current) {
+      current = parent;
+      continue;
+    }
+    if (
+      ts.isObjectLiteralExpression(parent) &&
+      parent.properties.some((property) => property === current)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (
+      ts.isArrayLiteralExpression(parent) &&
+      parent.elements.some((element) => element === current)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (ts.isPropertyAssignment(parent) && parent.initializer === current) {
+      current = parent;
+      continue;
+    }
+    if (
+      (ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent)) &&
+      parent.expression === current
+    ) {
+      current = parent;
+      continue;
+    }
+    return (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      parent.left === current
+    );
   }
-  return (
-    ts.isBinaryExpression(parent) &&
-    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-    parent.left === expression
-  );
 }
 
 function assignmentBindingPropertyName(node: ts.Node): string | undefined {
   if (!ts.isShorthandPropertyAssignment(node) && !ts.isPropertyAssignment(node)) return undefined;
-  if (!ts.isObjectLiteralExpression(node.parent) || !isAssignmentTarget(node.parent)) {
-    return undefined;
-  }
+  if (!isWithinAssignmentTargetPattern(node)) return undefined;
   return ts.isShorthandPropertyAssignment(node) ? node.name.text : staticPropertyName(node.name);
 }
 
@@ -163,11 +188,19 @@ describe('web error source policy', () => {
       ({ error_description } = body);
       ({ error_description: assignedProviderDescription } = body);
       ({ ['error_description']: computedAssignedProviderDescription } = body);
+      ({ connection: { lastError: nestedAssignedDiagnostic } } = provider);
+      ([{ error_description: nestedArrayProviderDescription }] = providers);
       ({ message } = applicationCopy);
       const applicationRecord = {
         lastError: safeDiagnostic,
         error_description: safeProviderDescription,
       };
+      const nestedApplicationRecord = {
+        connection: { lastError: safeNestedDiagnostic },
+        providers: [{ error_description: safeNestedProviderDescription }],
+      };
+      ({ connection = { lastError: safeDefaultDiagnostic } } = provider);
+      ([layer = { error_description: safeDefaultProviderDescription }] = providers);
       readProblem(response, 'fallback');
       readError(caught, 'fallback');
     `;
@@ -212,9 +245,17 @@ describe('web error source policy', () => {
           rule: 'provider-diagnostic',
           text: "['error_description']: computedAssignedProviderDescription",
         }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: 'lastError: nestedAssignedDiagnostic',
+        }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: 'error_description: nestedArrayProviderDescription',
+        }),
       ]),
     );
-    expect(violations).toHaveLength(18);
+    expect(violations).toHaveLength(20);
     expect(violations.filter((violation) => violation.text === 'lastError')).toHaveLength(2);
     expect(violations.filter((violation) => violation.text === 'error_description')).toHaveLength(
       2,
@@ -231,6 +272,14 @@ describe('web error source policy', () => {
         text: 'error_description: safeProviderDescription',
       }),
     );
+    for (const text of [
+      'lastError: safeNestedDiagnostic',
+      'error_description: safeNestedProviderDescription',
+      'lastError: safeDefaultDiagnostic',
+      'error_description: safeDefaultProviderDescription',
+    ]) {
+      expect(violations).not.toContainEqual(expect.objectContaining({ text }));
+    }
   });
 
   it('keeps raw server, provider, and exception messages out of production UI source', () => {

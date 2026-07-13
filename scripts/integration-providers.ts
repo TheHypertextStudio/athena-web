@@ -61,6 +61,8 @@ export function copyToClipboard(text: string): boolean {
 export interface SetupUrls {
   readonly apiBase: string;
   readonly webBases: readonly string[];
+  /** The selected cloud project, when the environment is hosted. */
+  readonly projectId?: string;
 }
 
 /** Stable identifiers for every provider supported by the interactive setup wizard. */
@@ -96,13 +98,19 @@ export interface ProviderGroup {
   readonly launchUrl?: (env: Environment, urls: SetupUrls) => string;
   /** Registry var names to prompt for, in order. */
   readonly vars: readonly string[];
+  /** Values required for the provider's primary identity capability. */
+  readonly requiredVars?: readonly string[];
+  /** Docket-owned policy values shown separately from provider-console credentials. */
+  readonly policyVars?: readonly string[];
+  /** Optional connector/webhook values offered after the primary capability is configured. */
+  readonly optionalVars?: readonly string[];
+  /** Human-readable label for the optional capability. */
+  readonly optionalLabel?: string;
   /** Environment-specific override for providers whose local and hosted transports differ. */
   readonly varsForEnvironment?: (env: Environment) => readonly string[];
-  /** Variables required to call the provider configured; defaults to every entry in {@link vars}. */
-  readonly requiredVars?: readonly string[];
   /** Non-secret cloud values that belong in GitHub environment variables, not Secret Manager. */
   readonly cloudVariables?: readonly string[];
-  /** Explicit, copy-pasteable setup instructions for the chosen environment (shown all at once). */
+  /** Explicit setup instructions for the chosen environment, split into progressive numbered steps. */
   readonly instructions?: (env: Environment, urls: SetupUrls) => readonly string[];
   /**
    * A step-by-step alternative to {@link instructions}: each step shows a short, natural-language
@@ -111,6 +119,8 @@ export interface ProviderGroup {
    * value demanded at the end. Used by the GitHub App, whose console has many sequential steps.
    */
   readonly steps?: (env: Environment, urls: SetupUrls) => readonly ProviderStep[];
+  /** Additional guided steps for an optional connector/webhook capability. */
+  readonly optionalSteps?: (env: Environment, urls: SetupUrls) => readonly ProviderStep[];
   /**
    * Turnkey secrets generated FOR the user (not prompted): the returned values are shown +
    * copied to the clipboard, saved like any collected var, and skipped in the prompt loop.
@@ -328,6 +338,8 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'GOOGLE_OAUTH_PUBLIC',
       'GOOGLE_OAUTH_TEST_EMAILS',
     ],
+    requiredVars: ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'],
+    policyVars: ['GOOGLE_OAUTH_PUBLIC', 'GOOGLE_OAUTH_TEST_EMAILS'],
     cloudVariables: ['GOOGLE_OAUTH_PUBLIC', 'GOOGLE_OAUTH_TEST_EMAILS'],
     credentialBundle: {
       message: 'Downloaded Google OAuth Web-client JSON (path, or blank for manual entry)',
@@ -338,8 +350,8 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'Creates an OAuth 2.0 Web-application client. ~5 min. You need a Google account.',
       '',
       '1) Open https://console.cloud.google.com/ and sign in.',
-      '2) Top bar → project picker → "New Project" → Name: "Docket" → Create, then make sure',
-      '   that project is selected in the picker.',
+      `2) In the project picker, select "${urls.projectId ?? 'the target project shown in the Docket preflight summary'}".`,
+      '   Do not create a second project when this environment already has one.',
       '3) Enable the APIs you need: ☰ menu → "APIs & Services" → "Library". Search each, open it,',
       '   click "Enable":',
       '     • "Google People API"   (required — sign-in profile)',
@@ -360,10 +372,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '7) Under "Authorized redirect URIs" click "+ Add URI" and add one per Docket frontend',
       '   (the callback is browser-facing — it lives on the product origin, not the API), exactly:',
       ...urls.webBases.map((web) => `     ${web}/api/auth/callback/google`),
-      '8) Click "Create". Keep the result open: bootstrap will ask for the Client ID, then mask the',
-      '   Client Secret while you paste it. You can choose downloaded-JSON import instead.',
-      '9) For production testing, keep public access off and provide the comma-separated Docket',
-      '   user emails allowed to exercise Google OAuth until Google verification is approved.',
+      '8) Click "Create". Keep the result open: this wizard will ask for the Client ID, then mask',
+      '   the Client Secret while you paste it. You can choose downloaded-JSON import instead.',
+      '9) Docket access policy is configured separately after this console flow. Keep the',
+      '   consent screen in Testing until Google verification is approved.',
     ],
   },
   {
@@ -379,6 +391,14 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'GITHUB_APP_PRIVATE_KEY',
       'GITHUB_APP_WEBHOOK_SECRET',
     ],
+    requiredVars: ['GITHUB_APP_CLIENT_ID', 'GITHUB_APP_CLIENT_SECRET'],
+    optionalVars: [
+      'GITHUB_APP_ID',
+      'GITHUB_APP_SLUG',
+      'GITHUB_APP_PRIVATE_KEY',
+      'GITHUB_APP_WEBHOOK_SECRET',
+    ],
+    optionalLabel: 'GitHub connector and webhook firehose',
     steps: (env, urls) => {
       // Homepage + the OAuth/connect callbacks are browser-facing (product origin); only the
       // webhook is the API origin (GitHub's servers POST it directly).
@@ -386,9 +406,9 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       return [
         {
           note: [
-            'GitHub is one GitHub App that does three jobs at once: sign-in, the issue and',
-            'pull-request connector, and the real-time webhook firehose. We will create it together,',
-            'one field at a time, and paste back the values it gives you.',
+            'GitHub uses one GitHub App for Docket sign-in. The same app can later power the',
+            'issue and pull-request connector plus its real-time webhook firehose; those optional',
+            'settings are handled in a separate section after the app exists.',
             '',
             'Setting up locally? This is optional — local dev runs against a built-in mock, so you',
             'can press Enter past these prompts to skip and wire up GitHub later.',
@@ -423,97 +443,26 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
               `  • ${web}/internal/integrations/github/callback`,
             ]),
             '',
-            "(It's one app for every environment. In prod, oAuthProxy means you register ONLY the",
-            'production callbacks and previews proxy through them — see the env-and-bootstrap spec.)',
+            `For ${env}, use the ${appName(env)} app. In prod, oAuthProxy means you register ONLY`,
+            'the production callbacks and previews proxy through them — see the env-and-bootstrap spec.',
             '',
-            'Then tick all three checkboxes:',
+            'Then select:',
             '',
-            '  • "Expire user authorization tokens"  (gives Docket a refresh token)',
             '  • "Request user authorization (OAuth) during installation"',
-            '  • "Redirect on update"',
+            '  • "Redirect on update" under the Post installation section',
             '',
-            'Leave the "Setup URL" field alone — GitHub greys it out once you tick the',
-            'OAuth-during-install box, which is what we want.',
-          ],
-        },
-        {
-          note:
-            env === 'local'
-              ? [
-                  'Webhook — skip it for local dev. Local runs against a built-in mock, so just',
-                  'leave "Active" unchecked and move on.',
-                  '',
-                  '(When you deploy to production you will set the Webhook URL once, to your public',
-                  'API at https://your-api-host/internal/ingest/github, and turn it on. We have already',
-                  'generated GITHUB_APP_WEBHOOK_SECRET and will save it for that day.)',
-                ]
-              : [
-                  'Now the "Webhook" section — this is what makes the firehose real-time. Unlike the',
-                  "callbacks above, this is server-to-server (GitHub's servers POST it), so it points",
-                  'at the public API host.',
-                  '',
-                  '  • Tick "Active".',
-                  `  • Webhook URL:  ${urls.apiBase}/internal/ingest/github`,
-                  '  • Secret: choose "Generate and copy" below, then paste from your clipboard.',
-                  '  • Leave "Enable SSL verification" on.',
-                ],
-          var: 'GITHUB_APP_WEBHOOK_SECRET',
-        },
-        {
-          note: [
-            'Scroll to "Repository permissions". Docket only reads — keep it least-privilege:',
-            '',
-            '  • Issues:         Read-only',
-            '  • Pull requests:  Read-only',
-            '',
-            '(GitHub flips "Metadata" to Read-only for you automatically once you set those.)',
-            '',
-            'Then open "Account permissions" just below and set:',
-            '',
-            "  • Email addresses:  Read-only   (so sign-in can read the user's email)",
+            'After selecting OAuth-during-install, the Setup URL field may turn gray. That is',
+            'expected; leave it unchanged.',
           ],
         },
         {
           note: [
-            'Right under the permissions is "Subscribe to events". Heads up: these checkboxes only',
-            'appear after you have set the repository permissions above, so do that first if the',
-            'list looks empty.',
+            'Create the app now. At the bottom, under "Where can this GitHub App be installed?",',
+            'choose "Only on this account", then click the big green "Create GitHub App" button.',
             '',
-            'Check these four:',
-            '',
-            '  • Issues',
-            '  • Issue comment',
-            '  • Pull request',
-            '  • Pull request review comment',
+            "GitHub drops you on the app's General settings tab. The sign-in credentials come next;",
+            'optional connector and webhook settings are handled separately after that.',
           ],
-        },
-        {
-          note: [
-            'Almost done with the form. At the very bottom, under "Where can this GitHub App be',
-            'installed?", choose "Only on this account".',
-            '',
-            'Now click the big green "Create GitHub App" button. GitHub drops you on the app\'s',
-            'General settings tab, which is where we grab the rest of the values.',
-          ],
-        },
-        {
-          note: [
-            "You're on the app's General tab now. Near the top, under the \"About\" heading, you'll",
-            'see "App ID:" followed by a number (for example, 4176808).',
-            '',
-            'Copy that number and paste it here.',
-          ],
-          var: 'GITHUB_APP_ID',
-        },
-        {
-          note: [
-            "Next we need the app's URL slug — the short name in its public URL.",
-            '',
-            'In the left sidebar click "Public page". The address bar will read',
-            'github.com/apps/SOMETHING — that SOMETHING (e.g. "docket-by-project-athena") is the',
-            'slug. Copy just that last part and paste it here, then come back to the General tab.',
-          ],
-          var: 'GITHUB_APP_SLUG',
         },
         {
           note: [
@@ -532,21 +481,74 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
           ],
           var: 'GITHUB_APP_CLIENT_SECRET',
         },
-        {
-          note: [
-            'Last one — the private key.',
-            '',
-            'Keep scrolling the General tab to the "Private keys" section and click "Generate a',
-            'private key". GitHub immediately downloads a .pem file to your computer (it never',
-            'shows the contents on screen), so note where it lands — usually your Downloads folder.',
-            '',
-            'Then drag that .pem file straight into this terminal, or type/paste its path, and',
-            'press Enter. No need to convert anything — Docket base64-encodes it for you.',
-          ],
-          var: 'GITHUB_APP_PRIVATE_KEY',
-        },
       ];
     },
+    optionalSteps: (env, urls) => [
+      {
+        note: [
+          'Now configure the optional GitHub connector in the app settings sidebar.',
+          '',
+          'Open "Permissions & events" in the sidebar. Docket only reads — keep it least-privilege:',
+          '',
+          '  • Repository permissions → Issues:         Read-only',
+          '  • Repository permissions → Pull requests:  Read-only',
+          '  • Account permissions → Email addresses:   Read-only',
+          '',
+          'GitHub turns Metadata to Read-only automatically when repository access is configured.',
+        ],
+      },
+      {
+        note: [
+          'In the same "Permissions & events" section, enable only these webhook events:',
+          '',
+          '  • Issues',
+          '  • Issue comment',
+          '  • Pull request',
+          '  • Pull request review comment',
+          '',
+          'The event checkboxes appear in this sidebar after the permissions are set.',
+        ],
+      },
+      {
+        note:
+          env === 'local'
+            ? [
+                'Skip the webhook for local development. Leave "Active" unchecked; local Docket',
+                'uses a built-in mock and does not need a public webhook target.',
+              ]
+            : [
+                'Configure the optional webhook firehose:',
+                '',
+                '  • Tick "Active".',
+                `  • Webhook URL:  ${urls.apiBase}/internal/ingest/github`,
+                '  • Secret: use the generated value Docket copies for you below.',
+                '  • Leave "Enable SSL verification" on.',
+              ],
+        var: 'GITHUB_APP_WEBHOOK_SECRET',
+      },
+      {
+        note: [
+          'Collect the remaining connector values from the app settings:',
+          '',
+          '  • General → About → App ID (the numeric value)',
+          '  • Sidebar → Public page → the final segment of github.com/apps/<slug>',
+          '  • General → Private keys → Generate a private key; provide the downloaded .pem path',
+          '    or paste the PEM below. Docket base64-encodes it for storage.',
+        ],
+        var: 'GITHUB_APP_ID',
+      },
+      {
+        note: ['Paste the short app URL slug from the Public page here, without github.com/apps/.'],
+        var: 'GITHUB_APP_SLUG',
+      },
+      {
+        note: [
+          'Provide the generated private key .pem path or its pasted contents. Docket encodes it',
+          'for storage and never prints the key.',
+        ],
+        var: 'GITHUB_APP_PRIVATE_KEY',
+      },
+    ],
     // Self-chosen secret — generate it for the user instead of making them run openssl.
     generate: () => ({ GITHUB_APP_WEBHOOK_SECRET: generateHexSecret() }),
     // Turnkey: the user gives the downloaded .pem path (or pastes the PEM); we base64-encode it.
@@ -559,6 +561,9 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     consoleUrl: 'https://linear.app/settings/api/applications/new',
     launchUrl: linearOAuthAppManifestUrl,
     vars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET', 'LINEAR_WEBHOOK_SECRET'],
+    requiredVars: ['LINEAR_CLIENT_ID', 'LINEAR_CLIENT_SECRET'],
+    optionalVars: ['LINEAR_WEBHOOK_SECRET'],
+    optionalLabel: 'Linear webhook delivery',
     instructions: (env, urls) => [
       'Creates a Linear OAuth2 application. ~2 min. You need a Linear workspace admin.',
       '',

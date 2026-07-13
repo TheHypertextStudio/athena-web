@@ -18,10 +18,10 @@ These follow directly from the engineering plan; everything below is pinned to t
 - **Domains (canonical example; substitute real domains in bootstrap):**
   | Logical | Dev | Prod |
   |---|---|---|
-  | API (auth + MCP + OIDC issuer) | `http://localhost:8787` | `https://api.docket.app` |
-  | Product web | `http://localhost:3000` | `https://app.docket.app` |
+  | API (auth + MCP + OIDC issuer) | `http://localhost:8787` | `https://docket-api.hypertext.studio` |
+  | Product web | `http://localhost:3000` | `https://docket.hypertext.studio` |
   | Marketing | `http://localhost:3001` | `https://docket.app` |
-  | Admin | `http://localhost:3002` | `https://admin.docket.app` |
+  | Admin | `http://localhost:3002` | `https://docket-admin.hypertext.studio` |
 
   All four prod hosts share the apex `docket.app` so **passkey RP ID = `docket.app`** works across subdomains.
 
@@ -93,12 +93,12 @@ API but is reached **same-origin** through each Next app's `/api/auth/*` rewrite
 (which the OAuth `redirect_uri` + session cookie are built from) resolves to the browser's host. So
 the redirect URI you register with each provider is the _product_ origin, per frontend:
 
-| Provider | Dev redirect URI (per frontend)                            | Prod redirect URI                                        |
-| -------- | ---------------------------------------------------------- | -------------------------------------------------------- |
-| Google   | `https://docket.localhost/api/auth/callback/google`        | `https://app.docket.app/api/auth/callback/google`        |
-| GitHub   | `https://docket.localhost/api/auth/callback/github`        | `https://app.docket.app/api/auth/callback/github`        |
-| Linear   | `https://docket.localhost/api/auth/oauth2/callback/linear` | `https://app.docket.app/api/auth/oauth2/callback/linear` |
-| Apple    | _n/a — Apple rejects `localhost`/non-HTTPS_                | `https://app.docket.app/api/auth/callback/apple`         |
+| Provider | Dev redirect URI (per frontend)                     | Prod redirect URI                                          |
+| -------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| Google   | `https://docket.localhost/api/auth/callback/google` | `https://docket.hypertext.studio/api/auth/callback/google` |
+| GitHub   | `https://docket.localhost/api/auth/callback/github` | `https://docket.hypertext.studio/api/auth/callback/github` |
+| Linear   | `https://docket.localhost/api/auth/callback/linear` | `https://docket.hypertext.studio/api/auth/callback/linear` |
+| Apple    | _n/a — Apple rejects `localhost`/non-HTTPS_         | `https://docket.hypertext.studio/api/auth/callback/apple`  |
 
 Register the same set for **each** signing-in frontend (web + `admin.…`). The GitHub App also gets
 a connect callback `…/internal/integrations/github/callback` (browser-facing → product origin) per
@@ -119,23 +119,23 @@ GitHub/Google, so previews route OAuth through production's registered callback.
 **production** callback needs registering; local + prod register their own and run OAuth directly
 (local leaves both vars blank ⇒ the plugin is not mounted).
 
-**GitHub uses one GitHub App (not an OAuth App)** that does three jobs: sign-in (user-to-server
-OAuth, `user:email` only — no `repo` scope), the issue/PR connector, and the webhook firehose. The
-six `GITHUB_APP_*` vars are created and pasted in via `pnpm integrations`, exactly like the other
-providers; `bootstrap` follows the general rule — **create from scratch by default, but if a
-provider's vars are already present (a re-run, or pasted from the team's secret store), verify and
-skip rather than redo the work.** It does NOT pull credentials from production Secret Manager (an
-earlier design did, which broke first-time setup and used the wrong gcloud project).
+**GitHub uses one GitHub App per hosted environment by default (not an OAuth App)**. Its primary
+capability is sign-in (user-to-server OAuth, `user:email` only — no `repo` scope); the issue/PR
+connector and webhook firehose are optional follow-on settings in the same app. The six
+`GITHUB_APP_*` vars are created and pasted in via `pnpm integrations`, exactly like the other
+providers. On a re-run, the wizard classifies existing values as ready, placeholder, missing, or
+unreadable and offers Keep, Repair, or Replace instead of repeating completed setup.
 
-Conceptually it is one app reused across environments — a GitHub App allows several callback URLs,
-so register each environment's `…/api/auth/callback/github` (sign-in, Better Auth) and
-`…/internal/integrations/github/callback` (install/connect) as you set that environment up. The **webhook
-is environment-aware**: local setup skips it entirely (`APP_MODE=local` selects the mock observer,
-so local needs no webhook), and only **production** sets the public webhook URL — `…/internal/ingest/github`
-on the public API host — and turns it on. To exercise the real firehose locally, use the persistent
-cloudflared tunnel that `pnpm bootstrap` (Phase 1) sets up — it fronts the stable portless host
-(`https://docket.localhost`, which proxies `/v1` to the API), NOT a bare `localhost:port` (dev ports
-are ephemeral under portless). See `docs/local-development.md` → "Tunnels & local OAuth".
+The GitHub identity section registers each environment's product-origin callbacks:
+`…/api/auth/callback/github` (sign-in) and `…/internal/integrations/github/callback` (install/connect).
+Select **Request user authorization (OAuth) during installation** and **Redirect on update** under
+**Post installation**. Selecting OAuth-during-install can gray out the Setup URL field; that is
+expected and the field should be left unchanged. When the optional connector is enabled, open
+**Permissions & events** in the GitHub sidebar, set Issues and Pull requests to read-only, grant
+Email addresses read-only, and subscribe to Issues, Issue comment, Pull request, and Pull request
+review comment. The optional webhook uses `…/internal/ingest/github` on the public API host; local
+setup skips it because `APP_MODE=local` selects the mock observer. To exercise the real firehose
+locally, use the persistent cloudflared tunnel that `pnpm bootstrap` (Phase 1) sets up.
 
 **Linear `genericOAuth` config values (constants in `@docket/auth`, not env):** `authorizationUrl = https://linear.app/oauth/authorize`, `tokenUrl = https://api.linear.app/oauth/token`, `userInfoUrl = https://api.linear.app/graphql` (resolve identity via the `viewer` GraphQL query in `getUserInfo`), `scopes = ["read"]` for login (request `["read","write","issues:create"]` only on the migration connect flow), `pkce: true`, comma-separated scope serialization (Linear quirk — pass scopes as a single comma-joined string).
 
@@ -429,17 +429,27 @@ Verified commands:
 >
 > Before any cloud write it **confirms the gcloud + gh accounts and the GCP project** (never assumes the active ones): it lists every authenticated account and every accessible project and lets the operator choose, scoping gcloud via `CLOUDSDK_CORE_ACCOUNT` (no global-config mutation) and `gh auth switch`-ing only when a different account is picked. `pnpm bootstrap` runs the same confirmation up front and reuses it.
 
-The wizard first shows `missing` / `partial` / `configured` status without reading credential values,
-then lets the operator select only providers to configure or explicitly rotate. Provider consoles
-remain operator-controlled, so the runner offers to open each console, shows one action at a time,
-and waits at a checkpoint with Back/Retry/Skip/Exit controls. Inputs are schema-validated and
-sensitive values are masked; a skipped provider writes nothing.
+The wizard first asks which environment and providers matter, then resolves only the selected
+environment's project, API URL, and product URL. It shows `missing` / `partial` / `configured`
+status without displaying credential values, preserves ready fields, and identifies placeholders for
+repair. Provider consoles remain operator-controlled, so the runner offers to open each console,
+shows one short guided action at a time, and waits at a checkpoint with Back/Retry/Skip/Exit
+controls. Each provider gets one explicit review before any local or cloud write; inputs are
+schema-validated and sensitive values are masked.
 
-- **Google:** create a Web OAuth client with the exact generated origins/callbacks, then copy Client
-  ID and masked Client Secret one at a time. Downloaded-JSON import remains an alternate path.
-  Production defaults to staged access through `GOOGLE_OAUTH_PUBLIC=false` plus
-  `GOOGLE_OAUTH_TEST_EMAILS`.
-- **GitHub:** "Create ONE **GitHub App** under your org (Org → Settings → Developer settings → GitHub Apps) at `https://github.com/organizations/<org>/settings/apps` (not an OAuth App) — it powers sign-in, the issue/PR connector, and the webhook firehose. User-authorization callback `<…/internal/integrations/github/callback>`, setup URL `<…/internal/integrations/github/setup>`, webhook URL `<…/internal/ingest/github>`. Repository permissions Issues/PRs/Metadata read; account permission Email addresses read; subscribe to Issues/Issue comment/Pull request events; create one app per environment." Prompt `GITHUB_APP_ID`, `GITHUB_APP_SLUG`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_PRIVATE_KEY` (single-line base64 PEM), `GITHUB_APP_WEBHOOK_SECRET`.
+- **Google:** select the project shown in the preflight summary, create a Web OAuth client with the
+  exact generated origins/callbacks, then copy Client ID and masked Client Secret one at a time.
+  Downloaded-JSON import remains an alternate path. After the console flow, configure the
+  Docket-owned `GOOGLE_OAUTH_PUBLIC` and `GOOGLE_OAUTH_TEST_EMAILS` policy values separately.
+- **GitHub:** create a **GitHub App** under the org at
+  `https://github.com/organizations/<org>/settings/apps` (not an OAuth App). The identity section
+  registers the product-origin sign-in and connect callbacks, selects Request user authorization
+  during installation, and selects Redirect on update under Post installation. OAuth-during-install
+  can gray the Setup URL field; leave it unchanged. If the optional connector is selected, use the
+  sidebar's **Permissions & events** section for read-only Issues/Pull requests/Email access and
+  Issues, Issue comment, Pull request, and Pull request review comment events; configure the webhook
+  at `<…/internal/ingest/github>`. Prompt `GITHUB_APP_CLIENT_ID` and `GITHUB_APP_CLIENT_SECRET`
+  for sign-in first, then optionally collect App ID, slug, private key, and webhook secret.
 - **Linear:** open Linear's supported pre-populated application form with the public/private
   distribution, Docket identity, `/api/auth/callback/linear` redirect URIs, authorization-code
   grant, and Issue/Comment webhook already filled. The operator reviews and submits the form, then
@@ -458,7 +468,7 @@ Verified commands; run against **test mode** for dev and **live mode** for prod 
    - Optional annual: `--recurring.interval year --lookup-key team_annual`.
 3. Webhook endpoints:
    - **Dev:** do **not** create a Dashboard endpoint; instead instruct the operator to run `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` in a side terminal, and capture `STRIPE_WEBHOOK_SECRET` via `stripe listen --print-secret`.
-   - **Prod:** create the real endpoint → `stripe webhook_endpoints create --url https://api.docket.app/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` → capture the returned signing secret into prod `STRIPE_WEBHOOK_SECRET`.
+   - **Prod:** create the real endpoint → `stripe webhook_endpoints create --url https://docket-api.hypertext.studio/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` → capture the returned signing secret into prod `STRIPE_WEBHOOK_SECRET`.
 4. Prompt for the runtime publishable key (`STRIPE_PUBLISHABLE_KEY`, mode-matched) and secret key
    (`STRIPE_SECRET_KEY`). The API returns only the publishable key through `GET /v1/config`.
 5. Offer to seed test data for the e2e flow with `stripe trigger checkout.session.completed` (dev only) so the billing path can be smoke-tested immediately.

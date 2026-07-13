@@ -45,6 +45,7 @@ import {
 
 import { findVar } from '../packages/env/src/registry';
 import type { VarSpec } from '../packages/env/src/registry';
+import { isRealValue } from '../packages/env/src';
 import {
   PROVIDER_GROUPS,
   providerVars,
@@ -84,6 +85,46 @@ export function tryRun(cmd: string): string {
     return execSync(cmd, { encoding: 'utf8', stdio: 'pipe' }).trim();
   } catch {
     return '';
+  }
+}
+
+/** Capture a command without exposing its output; `null` distinguishes failure from empty output. */
+function captureCommand(file: string, args: readonly string[]): string | null {
+  try {
+    return execFileSync(file, args, { encoding: 'utf8', stdio: 'pipe' }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/** Read a non-secret GitHub Actions variable, preferring the selected environment. */
+function readGitHubVariable(repo: string, env: Environment, name: string): string {
+  const scoped = captureCommand('gh', ['variable', 'get', name, '--env', env, '--repo', repo]);
+  if (scoped) return scoped;
+  return captureCommand('gh', ['variable', 'get', name, '--repo', repo]) ?? '';
+}
+
+/** Read non-secret GitHub variables from repository and environment scopes. */
+function readGitHubVariables(repo: string, env?: Environment): Map<string, string> {
+  const args = ['variable', 'list'];
+  if (env) args.push('--env', env);
+  args.push('--repo', repo, '--json', 'name,value');
+  const raw = captureCommand('gh', args);
+  if (!raw) return new Map();
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return new Map();
+    const rows: (readonly [string, string])[] = [];
+    for (const entry of parsed) {
+      if (!entry || typeof entry !== 'object') continue;
+      const record = entry as Record<string, unknown>;
+      const name = typeof record['name'] === 'string' ? record['name'] : '';
+      const value = typeof record['value'] === 'string' ? record['value'] : '';
+      if (name) rows.push([name, value]);
+    }
+    return new Map(rows);
+  } catch {
+    return new Map();
   }
 }
 
@@ -275,23 +316,60 @@ export function openExternalUrl(url: string): boolean {
 /** Metadata-only readiness state shown in the provider picker and final handoff. */
 export type ProviderConfigurationStatus = 'missing' | 'partial' | 'configured';
 
+/** Value state used to repair placeholders without displaying credential contents. */
+export type CredentialStatus = 'missing' | 'placeholder' | 'ready' | 'inaccessible';
+
 const LEGACY_SECRET_NAMES: Readonly<Partial<Record<string, string>>> = {
   GITHUB_APP_CLIENT_ID: 'docket-github-client-id',
   GITHUB_APP_CLIENT_SECRET: 'docket-github-client-secret',
 };
 
-/** Classify a provider without reading any credential values. */
+/** Classify a value without retaining or displaying its contents. */
+export function classifyCredentialValue(value: string | undefined): CredentialStatus {
+  if (!value || value.trim().length === 0) return 'missing';
+  return isRealValue(value) ? 'ready' : 'placeholder';
+}
+
+export function requiredProviderVars(group: ProviderGroup, env: Environment): readonly string[] {
+  const vars = providerVars(group, env);
+  if (group.requiredVars) return group.requiredVars.filter((name) => vars.includes(name));
+  const policy = new Set(group.policyVars ?? []);
+  const optional = new Set(group.optionalVars ?? []);
+  return vars.filter((name) => !policy.has(name) && !optional.has(name));
+}
+
+export function policyProviderVars(group: ProviderGroup, env: Environment): readonly string[] {
+  const vars = new Set(providerVars(group, env));
+  return (group.policyVars ?? []).filter((name) => vars.has(name));
+}
+
+export function optionalProviderVars(group: ProviderGroup, env: Environment): readonly string[] {
+  const vars = new Set(providerVars(group, env));
+  return (group.optionalVars ?? []).filter((name) => vars.has(name));
+}
+
+export function setupProviderVars(
+  group: ProviderGroup,
+  env: Environment,
+  includeOptional: boolean,
+): readonly string[] {
+  return [
+    ...requiredProviderVars(group, env),
+    ...policyProviderVars(group, env),
+    ...(includeOptional ? optionalProviderVars(group, env) : []),
+  ].filter((name, index, all) => all.indexOf(name) === index);
+}
+
+/** Classify a provider by its primary capability, not optional connector fields. */
 export function classifyProviderStatus(
   group: ProviderGroup,
   configuredVars: ReadonlySet<string>,
   env: Environment = 'production',
 ): ProviderConfigurationStatus {
-  const vars = providerVars(group, env);
+  const vars = requiredProviderVars(group, env);
   const configuredCount = vars.filter((name) => configuredVars.has(name)).length;
   if (configuredCount === 0) return 'missing';
-  const required = group.requiredVars?.filter((name) => vars.includes(name)) ?? vars;
-  if (required.length === 0) return 'configured';
-  return required.every((name) => configuredVars.has(name)) ? 'configured' : 'partial';
+  return vars.every((name) => configuredVars.has(name)) ? 'configured' : 'partial';
 }
 
 /** Canonical Cloud Run secret bindings for configured server-side provider variables. */
@@ -545,35 +623,82 @@ interface CloudTarget {
 interface CloudConfigurationState {
   readonly configuredVars: Set<string>;
   readonly secretNames: Set<string>;
+  readonly variableValues: Map<string, string>;
+  readonly fieldStatuses: Map<string, CredentialStatus>;
+  /** Secret objects whose latest versions contain usable values. */
+  readonly usableSecretNames: Set<string>;
 }
 
-/** Read only secret/variable names for rerun status; credential values are never accessed. */
-function readCloudConfiguration(env: Environment, target: CloudTarget): CloudConfigurationState {
-  const secretNames = new Set(
-    tryRun(`gcloud secrets list --project=${target.project} --format='value(name)'`)
+/** Read cloud readiness without printing credential values. */
+function readCloudConfiguration(
+  env: Environment,
+  target: CloudTarget,
+  groups: readonly ProviderGroup[] = PROVIDER_GROUPS,
+): CloudConfigurationState {
+  const listedSecrets = captureCommand('gcloud', [
+    'secrets',
+    'list',
+    `--project=${target.project}`,
+    '--format=value(name)',
+  ]);
+  const listedSecretNames = new Set(
+    (listedSecrets ?? '')
       .split('\n')
       .map((name) => name.trim())
       .filter(Boolean),
   );
-  const variableNames = new Set(
-    tryRun(`gh variable list --env ${env} --repo ${target.repo} --json name --jq '.[].name'`)
-      .split('\n')
-      .map((name) => name.trim())
-      .filter(Boolean),
-  );
+  const secretNames = new Set<string>();
+  const usableSecretNames = new Set<string>();
+  const variableValues = readGitHubVariables(target.repo);
+  for (const [name, value] of readGitHubVariables(target.repo, env)) {
+    variableValues.set(name, value);
+  }
   const configuredVars = new Set<string>();
-  for (const group of PROVIDER_GROUPS) {
+  const fieldStatuses = new Map<string, CredentialStatus>();
+  for (const group of groups) {
     for (const varName of providerVars(group, env)) {
-      const configured = group.cloudVariables?.includes(varName)
-        ? variableNames.has(varName)
-        : secretNames.has(secretName(env, varName)) ||
-          (env === 'production' &&
-            LEGACY_SECRET_NAMES[varName] !== undefined &&
-            secretNames.has(LEGACY_SECRET_NAMES[varName]));
-      if (configured) configuredVars.add(varName);
+      if (group.cloudVariables?.includes(varName)) {
+        const status = variableValues.has(varName)
+          ? classifyCredentialValue(variableValues.get(varName))
+          : 'missing';
+        fieldStatuses.set(varName, status);
+        if (status === 'ready') configuredVars.add(varName);
+        continue;
+      }
+
+      const canonical = secretName(env, varName);
+      const legacy = env === 'production' ? LEGACY_SECRET_NAMES[varName] : undefined;
+      const source = listedSecretNames.has(canonical)
+        ? canonical
+        : legacy && listedSecretNames.has(legacy)
+          ? legacy
+          : undefined;
+      const value = source
+        ? captureCommand('gcloud', [
+            'secrets',
+            'versions',
+            'access',
+            'latest',
+            `--secret=${source}`,
+            `--project=${target.project}`,
+          ])
+        : undefined;
+      const status: CredentialStatus = !source
+        ? listedSecrets === null
+          ? 'inaccessible'
+          : 'missing'
+        : value === null
+          ? 'inaccessible'
+          : classifyCredentialValue(value);
+      fieldStatuses.set(varName, status);
+      if (status === 'ready') {
+        configuredVars.add(varName);
+        secretNames.add(source);
+        usableSecretNames.add(source);
+      }
     }
   }
-  return { configuredVars, secretNames };
+  return { configuredVars, secretNames, variableValues, fieldStatuses, usableSecretNames };
 }
 
 /** Verify the selected gcloud session before the wizard asks the operator for any credentials. */
@@ -692,6 +817,80 @@ interface SetupOptions {
   readonly providers?: ProviderId[];
 }
 
+export interface IntegrationCliOptions {
+  readonly environments?: Environment[];
+  readonly providers?: ProviderId[];
+  readonly help: boolean;
+}
+
+const ENVIRONMENTS: readonly Environment[] = ['local', 'staging', 'production'];
+const PROVIDER_IDS: readonly ProviderId[] = PROVIDER_GROUPS.map((group) => group.id);
+
+/** Parse focused standalone wizard flags; repeated flags are accepted and de-duplicated. */
+export function parseIntegrationArgs(args: readonly string[]): IntegrationCliOptions {
+  const environments: Environment[] = [];
+  const providers: ProviderId[] = [];
+  let help = false;
+  const values = (raw: string, flag: string): string[] =>
+    raw
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+      .map((value) => {
+        if (flag === '--env' && !ENVIRONMENTS.includes(value as Environment)) {
+          throw new Error(`Unknown integration environment: ${value}`);
+        }
+        if (flag === '--provider' && !PROVIDER_IDS.includes(value as ProviderId)) {
+          throw new Error(`Unknown integration provider: ${value}`);
+        }
+        return value;
+      });
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg || arg === '--') continue;
+    if (arg === '--help' || arg === '-h') {
+      help = true;
+      continue;
+    }
+    const inline = /^(--env|--provider)=(.*)$/.exec(arg);
+    const flag = inline?.[1] ?? (arg === '--env' || arg === '--provider' ? arg : undefined);
+    if (!flag) throw new Error(`Unknown integrations flag: ${arg}`);
+    const raw = inline?.[2] ?? args[++index];
+    if (!raw || raw.startsWith('--')) throw new Error(`${flag} requires a value`);
+    for (const value of values(raw, flag)) {
+      if (flag === '--env' && !environments.includes(value as Environment)) {
+        environments.push(value as Environment);
+      }
+      if (flag === '--provider' && !providers.includes(value as ProviderId)) {
+        providers.push(value as ProviderId);
+      }
+    }
+  }
+
+  return {
+    environments: environments.length > 0 ? environments : undefined,
+    providers: providers.length > 0 ? providers : undefined,
+    help,
+  };
+}
+
+function integrationHelp(): string {
+  return [
+    'Usage: pnpm integrations -- [flags]',
+    '',
+    '  --env <name>       configure local, staging, or production (repeatable)',
+    '  --provider <id>    focus on a provider id (repeatable; e.g. github)',
+    '  --help, -h         show this help',
+    '',
+    'Examples:',
+    '  pnpm integrations -- --env production --provider github',
+    '  pnpm integrations -- --env staging,production --provider google',
+    '',
+    'With no flags, the wizard asks for the environment and providers interactively.',
+  ].join('\n');
+}
+
 /** Split a comma-separated origins string into trimmed, non-empty entries. */
 function splitOrigins(raw: string | undefined): string[] {
   return (raw ?? '')
@@ -709,39 +908,45 @@ function splitOrigins(raw: string | undefined): string[] {
  * `local` derives both straight from `.env.local` (no prompt): `apiBase` from `API_URL`, and
  * `webBases` from `BETTER_AUTH_TRUSTED_ORIGINS` (the configured web + admin origins) — these are the
  * exact hosts the browser is on, which is what OAuth `redirect_uri`s must match. `staging`/`production`
- * read the GitHub environment's `API_URL` + `WEB_URL`, falling back to a prompt.
+ * read environment-scoped GitHub `API_URL` + `WEB_URL`, then repository-level variables, falling back
+ * to a prompt only when neither scope has a value.
  */
 async function resolveSetupUrls(
   env: Environment,
   repo: string,
   envLocal: Record<string, string>,
+  projectId?: string,
 ): Promise<SetupUrls> {
   if (env === 'local') {
     const apiBase = nonEmpty(envLocal, 'API_URL') ?? DEFAULT_LOCAL_API_URL;
     const webBases = splitOrigins(envLocal['BETTER_AUTH_TRUSTED_ORIGINS']);
     return { apiBase, webBases: webBases.length > 0 ? webBases : ['https://docket.localhost'] };
   }
-  const apiFromGh = repo ? tryRun(`gh variable get API_URL --env ${env} --repo ${repo}`) : '';
+  const apiFromGh = repo ? readGitHubVariable(repo, env, 'API_URL') : '';
   const apiBase =
     apiFromGh ||
     unwrap(
       await text({
-        message: `API base URL for ${env} (webhook target)`,
-        placeholder: 'https://api.docket.app',
+        message: `API base URL for ${env} (public webhook target; usually GitHub variable API_URL)`,
+        placeholder:
+          env === 'production'
+            ? 'https://docket-api.hypertext.studio'
+            : 'https://<staging-api-host>',
         validate: (v) => (v && v.length > 0 ? undefined : 'required'),
       }),
     );
-  const webFromGh = repo ? tryRun(`gh variable get WEB_URL --env ${env} --repo ${repo}`) : '';
+  const webFromGh = repo ? readGitHubVariable(repo, env, 'WEB_URL') : '';
   const webBase =
     webFromGh ||
     unwrap(
       await text({
-        message: `Product (web app) URL for ${env} (OAuth callbacks live here)`,
-        placeholder: 'https://app.docket.app',
+        message: `Product URL for ${env} (OAuth callbacks; usually GitHub variable WEB_URL)`,
+        placeholder:
+          env === 'production' ? 'https://docket.hypertext.studio' : 'https://<staging-web-host>',
         validate: (v) => (v && v.length > 0 ? undefined : 'required'),
       }),
     );
-  return { apiBase, webBases: [webBase] };
+  return { apiBase, webBases: [webBase], projectId };
 }
 
 type GuidedResult = 'complete' | 'skip' | 'exit';
@@ -751,9 +956,9 @@ async function runGuidedSteps(
   group: ProviderGroup,
   steps: readonly ProviderStep[],
   env: Environment,
-  envLocal: Record<string, string>,
-  configuredVars: ReadonlySet<string>,
-  rotate: boolean,
+  currentValues: ReadonlyMap<string, string>,
+  fieldStatuses: ReadonlyMap<string, CredentialStatus>,
+  replaceAll: boolean,
   collected: Record<string, string>,
   generatedValues: Readonly<Record<string, string>>,
   setupUrl?: string,
@@ -778,27 +983,31 @@ async function runGuidedSteps(
         warn(`Could not open browser. Open manually: ${url}`);
     }
 
-    const alreadyConfigured = current.var ? configuredVars.has(current.var) : false;
+    const status = current.var ? (fieldStatuses.get(current.var) ?? 'missing') : 'missing';
+    const alreadyReady = status === 'ready';
+    const shouldCollect = current.var !== undefined && (!alreadyReady || replaceAll);
     const action = unwrap(
-      await select<'continue' | 'back' | 'retry' | 'skip' | 'exit'>({
+      await select<'continue' | 'replace' | 'back' | 'retry' | 'skip' | 'exit'>({
         message: current.var
-          ? alreadyConfigured && !rotate
-            ? `${current.var} is already configured. Continue?`
-            : `Ready to enter ${current.var}?`
+          ? alreadyReady
+            ? `${current.var} is ready. Keep it or replace it?`
+            : `${current.var} is ${status}. Enter a value now?`
           : 'Finished this step?',
         initialValue: 'continue',
         options: [
           {
             value: 'continue',
-            label:
-              alreadyConfigured && !rotate
+            label: current.var
+              ? alreadyReady && !replaceAll
                 ? 'Keep existing'
-                : current.var
-                  ? current.var in generatedValues
-                    ? 'Generate and copy'
-                    : 'Enter value'
-                  : 'Done',
+                : current.var in generatedValues
+                  ? 'Generate and copy'
+                  : 'Enter value'
+              : 'Done',
           },
+          ...(current.var && alreadyReady && !replaceAll
+            ? [{ value: 'replace' as const, label: 'Replace existing' }]
+            : []),
           ...(index > 0 ? [{ value: 'back' as const, label: 'Back' }] : []),
           { value: 'retry', label: 'Show this step again' },
           { value: 'skip', label: 'Skip this provider' },
@@ -812,7 +1021,7 @@ async function runGuidedSteps(
     }
     if (action === 'retry') continue;
     if (action === 'skip' || action === 'exit') return action;
-    if (current.var && (!alreadyConfigured || rotate)) {
+    if (current.var && (shouldCollect || action === 'replace')) {
       const spec = findVar(current.var);
       if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
       const generated = generatedValues[current.var];
@@ -824,7 +1033,15 @@ async function runGuidedSteps(
         collected[current.var] = generated;
         ok(`${current.var} generated and copied without being displayed`);
       } else {
-        const value = await promptVar(spec, { env, current: nonEmpty(envLocal, current.var) });
+        const value = await promptVar(spec, {
+          env,
+          current:
+            spec.sensitive || replaceAll || action === 'replace'
+              ? undefined
+              : status === 'ready'
+                ? currentValues.get(current.var)
+                : undefined,
+        });
         if (value !== undefined) {
           collected[current.var] = group.transform?.[current.var]?.(value) ?? value;
         }
@@ -833,6 +1050,85 @@ async function runGuidedSteps(
     index += 1;
   }
   return 'complete';
+}
+
+function readLocalConfiguration(
+  envLocal: Readonly<Record<string, string>>,
+  env: Environment,
+  groups: readonly ProviderGroup[] = PROVIDER_GROUPS,
+): CloudConfigurationState {
+  const variableValues = new Map(Object.entries(envLocal));
+  const configuredVars = new Set<string>();
+  const fieldStatuses = new Map<string, CredentialStatus>();
+  for (const group of groups) {
+    for (const varName of providerVars(group, env)) {
+      const status = classifyCredentialValue(envLocal[varName]);
+      fieldStatuses.set(varName, status);
+      if (status === 'ready') configuredVars.add(varName);
+    }
+  }
+  return {
+    configuredVars,
+    secretNames: new Set(),
+    variableValues,
+    fieldStatuses,
+    usableSecretNames: new Set(),
+  };
+}
+
+function providerFieldNote(group: ProviderGroup, varName: string): readonly string[] {
+  if (varName === 'GOOGLE_OAUTH_PUBLIC') {
+    return [
+      'Docket access policy — GOOGLE_OAUTH_PUBLIC.',
+      'Enter false while the Google consent screen is in Testing or Google verification is pending.',
+      'Change it to true only after Google public OAuth verification is approved.',
+    ];
+  }
+  if (varName === 'GOOGLE_OAUTH_TEST_EMAILS') {
+    return [
+      'Docket access policy — GOOGLE_OAUTH_TEST_EMAILS.',
+      'Enter the comma-separated Google account emails allowed to sign in while the consent screen',
+      'is in Testing. This is a Docket allowlist, not a Google Console credential.',
+    ];
+  }
+  const spec = findVar(varName);
+  return [
+    `Provider credential — ${varName}.`,
+    `Enter it from ${group.label}${spec?.where ? ` (${spec.where})` : ''}.`,
+  ];
+}
+
+function providerStatusSummary(
+  groups: readonly ProviderGroup[],
+  env: Environment,
+  state: CloudConfigurationState,
+): string {
+  return groups
+    .map((group) => {
+      const primary = classifyProviderStatus(group, state.configuredVars, env);
+      const optional = optionalProviderVars(group, env);
+      if (optional.length === 0) return `${group.label}: ${primary}`;
+      const optionalReady = optional.filter((name) => state.configuredVars.has(name)).length;
+      return `${group.label}: ${primary} · optional connector ${optionalReady}/${optional.length}`;
+    })
+    .join('\n');
+}
+
+async function reviewCollectedValues(
+  group: ProviderGroup,
+  collected: Readonly<Record<string, string>>,
+): Promise<boolean> {
+  const changes = Object.entries(collected).map(([name, value]) => {
+    const spec = findVar(name);
+    return spec?.sensitive ? `${name} (secret)` : `${name} = ${value}`;
+  });
+  note(changes.join('\n'), `${group.label} — review before writing`);
+  return unwrap(
+    await confirm({
+      message: `Write these ${String(changes.length)} ${group.label} value(s) now?`,
+      initialValue: true,
+    }),
+  );
 }
 
 /** Configure selected providers for a single environment. */
@@ -850,119 +1146,184 @@ async function setupEnvironment(
     `Environment: ${env}`,
   );
 
-  // Parse .env.local once (only local reads it) and reuse for the setup URLs + keep-existing defaults.
-  const envLocal = env === 'local' ? parseEnvFile(resolve(ROOT, '.env.local')) : {};
-  const urls = await resolveSetupUrls(env, repo, envLocal);
-
-  // Cloud targets resolve a GCP project + repo once per environment.
-  let cloud: CloudTarget | undefined;
-  if (env !== 'local') {
-    const repoForCloud =
-      repo || unwrap(await text({ message: 'GitHub owner/repo', placeholder: 'owner/repo' }));
-    const project = await chooseGcloudProject(defaultProject, env);
-    if (!repoForCloud || !project) {
-      warn(`skipping ${env} cloud writes — repo/project not provided`);
-    } else {
-      cloud = { repo: repoForCloud, project };
-      await ensureCloudSession(cloud);
-    }
-  }
-
-  const cloudState = cloud
-    ? readCloudConfiguration(env, cloud)
-    : { configuredVars: new Set<string>(), secretNames: new Set<string>() };
-  const configuredVars =
-    env === 'local'
-      ? new Set(
-          Object.entries(envLocal)
-            .filter(([, value]) => value !== '')
-            .map(([name]) => name),
-        )
-      : cloudState.configuredVars;
-  const statuses = new Map(
-    PROVIDER_GROUPS.map((group) => [group.id, classifyProviderStatus(group, configuredVars, env)]),
-  );
-  note(
-    PROVIDER_GROUPS.map((group) => {
-      const status = statuses.get(group.id) ?? 'missing';
-      const icon = status === 'configured' ? '✓' : status === 'partial' ? '◐' : '○';
-      return `${icon} ${group.label.padEnd(24)} ${status}`;
-    }).join('\n'),
-    'Integration status (credential values were not read)',
-  );
+  // Choose the work first. The wizard only asks for URLs and cloud access after it knows which
+  // provider pages are relevant, so a focused run does not begin with unrelated prompts.
   const chosenIds =
     providerIds ??
     unwrap(
       await multiselect<ProviderId>({
-        message: 'Which providers do you want to configure or rotate?',
+        message: 'What do you want to set up in this environment?',
         required: true,
         options: PROVIDER_GROUPS.map((group) => ({
           value: group.id,
           label: group.label,
-          hint: `${statuses.get(group.id) ?? 'missing'}${group.optional ? ', optional' : ''}`,
+          hint: group.optional ? 'optional' : undefined,
         })),
       }),
     );
-  const rotateIds = new Set<ProviderId>();
-  for (const providerId of chosenIds) {
-    if (statuses.get(providerId) !== 'configured') continue;
-    const group = PROVIDER_GROUPS.find((candidate) => candidate.id === providerId);
-    if (!group) continue;
-    const rotate = unwrap(
-      await confirm({
-        message: `${group.label} is already configured. Add new credential versions?`,
-        initialValue: false,
-      }),
-    );
-    if (rotate) rotateIds.add(providerId);
+  const chosenGroups = PROVIDER_GROUPS.filter((group) => chosenIds.includes(group.id));
+  if (chosenGroups.length === 0) {
+    warn(`No providers selected for ${env}.`);
+    return;
   }
 
-  for (const group of PROVIDER_GROUPS.filter((candidate) => chosenIds.includes(candidate.id))) {
-    const vars = providerVars(group, env);
-    const rotate = rotateIds.has(group.id);
-    if (statuses.get(group.id) === 'configured' && !rotate) {
-      ok(`${group.label}: kept existing configuration`);
+  const envLocal = env === 'local' ? parseEnvFile(resolve(ROOT, '.env.local')) : {};
+  let cloud: CloudTarget | undefined;
+  let urls: SetupUrls;
+  if (env === 'local') {
+    urls = await resolveSetupUrls(env, repo, envLocal);
+  } else {
+    const repoForCloud =
+      repo || unwrap(await text({ message: 'GitHub owner/repo', placeholder: 'owner/repo' }));
+    const project = await chooseGcloudProject(defaultProject, env);
+    if (!repoForCloud || !project) {
+      warn(`Cannot configure ${env} without both a GitHub repo and GCP project.`);
+      return;
+    }
+    cloud = { repo: repoForCloud, project };
+    await ensureCloudSession(cloud);
+    urls = await resolveSetupUrls(env, repoForCloud, envLocal, project);
+  }
+
+  let state: CloudConfigurationState;
+  if (env === 'local') {
+    state = readLocalConfiguration(envLocal, env, chosenGroups);
+  } else {
+    if (!cloud) throw new Error(`Cloud target for ${env} was not initialized.`);
+    // Read every provider so selecting one provider cannot retire usable mounts for another.
+    state = readCloudConfiguration(env, cloud);
+  }
+  note(
+    providerStatusSummary(chosenGroups, env, state),
+    'Selected integration status (credential values are never displayed)',
+  );
+
+  for (const group of chosenGroups) {
+    const primaryStatus = classifyProviderStatus(group, state.configuredVars, env);
+    const action = unwrap(
+      await select<'keep' | 'configure' | 'replace' | 'skip' | 'exit'>({
+        message:
+          primaryStatus === 'configured'
+            ? `${group.label} is configured. What should happen to its primary sign-in capability?`
+            : `${group.label} is ${primaryStatus}. What should happen next?`,
+        initialValue: primaryStatus === 'configured' ? 'keep' : 'configure',
+        options: [
+          ...(primaryStatus === 'configured'
+            ? [{ value: 'keep' as const, label: 'Keep existing' }]
+            : [{ value: 'configure' as const, label: 'Set up or repair missing fields' }]),
+          ...(primaryStatus === 'configured'
+            ? [{ value: 'replace' as const, label: 'Replace primary credentials' }]
+            : [{ value: 'keep' as const, label: 'Leave it incomplete for now' }]),
+          { value: 'skip' as const, label: 'Skip this provider' },
+          { value: 'exit' as const, label: 'Exit integration setup' },
+        ],
+      }),
+    );
+    if (action === 'exit') return;
+    if (action === 'skip') {
+      warn(`${group.label}: skipped; no values were changed`);
       continue;
     }
+
+    const configurePrimary = action === 'configure' || action === 'replace';
+    const replacePrimary = action === 'replace';
+    const optionalVars = optionalProviderVars(group, env);
+    let includeOptional = false;
+    let replaceOptional = false;
+    if (optionalVars.length > 0) {
+      const optionalReady = optionalVars.every((name) => state.fieldStatuses.get(name) === 'ready');
+      const optionalAction = unwrap(
+        await select<'keep' | 'configure' | 'replace'>({
+          message: optionalReady
+            ? `Optional ${group.optionalLabel ?? 'connector settings'} are ready. What should happen?`
+            : `Set up the optional ${group.optionalLabel ?? 'connector settings'} now?`,
+          initialValue: optionalReady ? 'keep' : 'keep',
+          options: [
+            { value: 'keep', label: 'Leave optional settings as they are' },
+            { value: 'configure', label: 'Set up or repair optional settings' },
+            ...(optionalReady
+              ? [{ value: 'replace' as const, label: 'Replace optional settings' }]
+              : []),
+          ],
+        }),
+      );
+      includeOptional = optionalAction !== 'keep';
+      replaceOptional = optionalAction === 'replace';
+    }
+
+    let editPolicy = false;
+    const policyVars = policyProviderVars(group, env);
+    if (policyVars.length > 0) {
+      const policyReady = policyVars.every((name) => state.fieldStatuses.get(name) === 'ready');
+      const policyAction = unwrap(
+        await select<'keep' | 'edit'>({
+          message: policyReady
+            ? `${group.label} Docket access policy is configured. Keep or edit it?`
+            : `${group.label} Docket access policy is incomplete. Configure it now?`,
+          initialValue: policyReady ? 'keep' : 'edit',
+          options: [
+            { value: 'keep', label: 'Keep current policy' },
+            { value: 'edit', label: 'Configure or edit policy' },
+          ],
+        }),
+      );
+      editPolicy = policyAction === 'edit';
+    }
+
     const collected: Record<string, string> = {};
-
-    const generatedValues = group.generate?.(env) ?? {};
+    const generatedValues = includeOptional ? (group.generate?.(env) ?? {}) : {};
     const setupUrl = group.launchUrl?.(env, urls) ?? group.consoleUrl;
+    let guidedResult: GuidedResult = 'complete';
 
-    let guidedResult: GuidedResult;
-    if (group.steps) {
-      guidedResult = await runGuidedSteps(
-        group,
-        group.steps(env, urls),
-        env,
-        envLocal,
-        configuredVars,
-        rotate,
-        collected,
-        generatedValues,
-        setupUrl,
-      );
-    } else {
-      guidedResult = await runGuidedSteps(
-        group,
-        splitInstructionSteps(group.instructions?.(env, urls) ?? []),
-        env,
-        envLocal,
-        configuredVars,
-        rotate,
-        collected,
-        generatedValues,
-        setupUrl,
-      );
+    if (configurePrimary) {
+      if (group.steps) {
+        guidedResult = await runGuidedSteps(
+          group,
+          group.steps(env, urls),
+          env,
+          state.variableValues,
+          state.fieldStatuses,
+          replacePrimary,
+          collected,
+          generatedValues,
+          setupUrl,
+        );
+      } else if (group.instructions) {
+        guidedResult = await runGuidedSteps(
+          group,
+          splitInstructionSteps(group.instructions(env, urls)),
+          env,
+          state.variableValues,
+          state.fieldStatuses,
+          replacePrimary,
+          collected,
+          generatedValues,
+          setupUrl,
+        );
+      }
+    }
+    if (guidedResult === 'exit') return;
+    if (guidedResult === 'skip') {
+      warn(`${group.label}: skipped; no values were written`);
+      continue;
+    }
 
-      if (guidedResult === 'complete' && group.credentialBundle) {
-        const bundle = group.credentialBundle;
+    const requiredVars = requiredProviderVars(group, env);
+    const requiredNeedsInput = requiredVars.some(
+      (name) => state.fieldStatuses.get(name) !== 'ready' || replacePrimary,
+    );
+    if (configurePrimary && requiredNeedsInput && group.credentialBundle) {
+      const bundle = group.credentialBundle;
+      const canImportWithoutReplacingReady = requiredVars.every(
+        (name) => state.fieldStatuses.get(name) !== 'ready',
+      );
+      if (replacePrimary || canImportWithoutReplacingReady) {
         const method = unwrap(
           await select<'manual' | 'bundle'>({
             message: `How do you want to enter ${group.label} credentials?`,
             initialValue: 'manual',
             options: [
-              { value: 'manual', label: 'Copy and paste values', hint: 'recommended' },
+              { value: 'manual', label: 'Enter values one at a time', hint: 'recommended' },
               { value: 'bundle', label: 'Import downloaded credential file' },
             ],
           }),
@@ -986,7 +1347,7 @@ async function setupEnvironment(
           ).trim();
           parsed ??= bundle.parse(raw, urls);
           for (const [varName, value] of Object.entries(parsed)) {
-            if (!vars.includes(varName)) {
+            if (!requiredVars.includes(varName)) {
               throw new Error(`${group.title} imported unknown variable ${varName}.`);
             }
             const spec = findVar(varName);
@@ -999,44 +1360,70 @@ async function setupEnvironment(
           ok(`imported ${Object.keys(parsed).join(', ')} from credential file`);
         }
       }
+    }
 
-      if (guidedResult === 'complete') {
-        const captureSteps = vars
-          .filter((varName) => !(varName in collected) && (!configuredVars.has(varName) || rotate))
-          .map((varName) => ({
-            note: [`Copy ${varName} from ${group.label}, then return to this terminal.`],
-            var: varName,
-          }));
-        guidedResult = await runGuidedSteps(
-          group,
-          captureSteps,
-          env,
-          envLocal,
-          configuredVars,
-          rotate,
-          collected,
-          generatedValues,
-          setupUrl,
-        );
+    if (includeOptional && group.optionalSteps) {
+      guidedResult = await runGuidedSteps(
+        group,
+        group.optionalSteps(env, urls),
+        env,
+        state.variableValues,
+        state.fieldStatuses,
+        replaceOptional,
+        collected,
+        generatedValues,
+      );
+      if (guidedResult === 'exit') return;
+      if (guidedResult === 'skip') {
+        warn(`${group.label}: optional setup skipped; no values were written`);
+        continue;
       }
     }
 
-    if (guidedResult === 'exit') return;
-    if (guidedResult === 'skip') {
-      warn(`${group.label}: skipped; no collected values were written`);
-      continue;
+    const captureVars = setupProviderVars(group, env, includeOptional).filter((name) => {
+      if (name in collected) return false;
+      if (env === 'local' && name === 'GITHUB_APP_WEBHOOK_SECRET') return false;
+      const status = state.fieldStatuses.get(name) ?? 'missing';
+      if (requiredVars.includes(name))
+        return configurePrimary && (status !== 'ready' || replacePrimary);
+      if (policyVars.includes(name)) return editPolicy && (status !== 'ready' || editPolicy);
+      return includeOptional && (status !== 'ready' || replaceOptional);
+    });
+    if (captureVars.length > 0) {
+      guidedResult = await runGuidedSteps(
+        group,
+        captureVars.map((varName) => ({ note: providerFieldNote(group, varName), var: varName })),
+        env,
+        state.variableValues,
+        state.fieldStatuses,
+        false,
+        collected,
+        generatedValues,
+      );
+      if (guidedResult === 'exit') return;
+      if (guidedResult === 'skip') {
+        warn(`${group.label}: skipped; no values were written`);
+        continue;
+      }
     }
 
     if (Object.keys(collected).length === 0) {
-      warn(
-        `${group.label}: ${classifyProviderStatus(group, configuredVars, env)}; no values were changed`,
-      );
+      ok(`${group.label}: no values changed`);
+      continue;
+    }
+    if (!(await reviewCollectedValues(group, collected))) {
+      warn(`${group.label}: changes discarded at review`);
       continue;
     }
 
     if (env === 'local') {
       upsertEnvVars(resolve(ROOT, '.env.local'), collected);
-      Object.keys(collected).forEach((name) => configuredVars.add(name));
+      for (const [name, value] of Object.entries(collected)) {
+        state.variableValues.set(name, value);
+        const status = classifyCredentialValue(value);
+        state.fieldStatuses.set(name, status);
+        if (status === 'ready') state.configuredVars.add(name);
+      }
       ok(`wrote ${Object.keys(collected).join(', ')} to .env.local`);
     } else if (cloud) {
       for (const [name, value] of Object.entries(collected)) {
@@ -1045,23 +1432,22 @@ async function setupEnvironment(
           pushVariable(env, cloud, name, value);
         } else {
           pushSecret(env, cloud, name, value);
-          cloudState.secretNames.add(secretName(env, name));
+          state.secretNames.add(secretName(env, name));
+          state.usableSecretNames.add(secretName(env, name));
         }
-        configuredVars.add(name);
+        state.variableValues.set(name, value);
+        const status = classifyCredentialValue(value);
+        state.fieldStatuses.set(name, status);
+        if (status === 'ready') state.configuredVars.add(name);
       }
     }
-    const finalStatus = classifyProviderStatus(group, configuredVars, env);
+    const finalStatus = classifyProviderStatus(group, state.configuredVars, env);
     if (finalStatus === 'configured') ok(`${group.label}: configured and ready for deployment`);
     else warn(`${group.label}: ${finalStatus}; rerun setup to provide the remaining values`);
   }
 
-  if (cloud) pushApiSecretBindings(env, cloud, cloudState.secretNames);
-  note(
-    PROVIDER_GROUPS.map(
-      (group) => `${group.label}: ${classifyProviderStatus(group, configuredVars, env)}`,
-    ).join('\n'),
-    `${env} integration readiness`,
-  );
+  if (cloud) pushApiSecretBindings(env, cloud, state.usableSecretNames);
+  note(providerStatusSummary(chosenGroups, env, state), `${env} integration readiness`);
 }
 
 // ── entrypoint ───────────────────────────────────────────────────────────────────
@@ -1116,8 +1502,13 @@ export async function runIntegrationSetup(opts: SetupOptions = {}): Promise<void
 
 // Self-invoke only when run directly (not when imported by bootstrap).
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  runIntegrationSetup().catch((err: unknown) => {
-    log.error(`Integration setup failed: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(1);
-  });
+  const cli = parseIntegrationArgs(process.argv.slice(2));
+  if (cli.help) {
+    note(integrationHelp(), 'Docket integrations');
+  } else {
+    runIntegrationSetup(cli).catch((err: unknown) => {
+      log.error(`Integration setup failed: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    });
+  }
 }

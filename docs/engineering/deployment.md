@@ -48,10 +48,14 @@ Prompts for: GCP project ID, region, GitHub repo (`owner/repo`), passkey domain,
 3. Creates Artifact Registry repository `docket`
 4. Creates WIF pool `github` + OIDC provider `github-actions`, bound to your specific repo
 5. Creates Secret Manager secrets: `docket-database-url`, `docket-auth-secret`, `docket-cron-secret`
-6. Shows metadata-only status for all integrations and lets the operator select missing providers
-7. Guides one provider-console action at a time, with browser opening, back/retry/skip/exit controls
-8. Writes credentials atomically to Secret Manager and publishes `API_SECRET_BINDINGS`
-9. Writes a `.env.local` skeleton with independent generated development secrets
+6. Lets the operator select the environment and providers before resolving provider URLs or opening
+   unrelated consoles
+7. Reads latest cloud secret payloads without printing them, preserves ready values, and identifies
+   missing, placeholder, or inaccessible fields for repair
+8. Guides each provider through short console steps, then shows one reviewed write point per provider
+9. Validates credentials before the first cloud write, writes them to Secret Manager, and publishes
+   `API_SECRET_BINDINGS`
+10. Writes a `.env.local` skeleton with independent generated development secrets
 
 ### Prerequisites
 
@@ -74,7 +78,8 @@ The bootstrap script checks for these and exits if any are missing or unauthenti
    from the exact API image before deploying that image to Cloud Run.
 3. Bootstrap sets the production GitHub environment variables `API_URL`, `WEB_URL`, `ADMIN_URL`,
    `PASSKEY_RP_ID`, `BETTER_AUTH_ALLOWED_HOSTS`, `GOOGLE_OAUTH_PUBLIC`, and
-   `API_SECRET_BINDINGS`; the Google guide collects `GOOGLE_OAUTH_TEST_EMAILS`.
+   `API_SECRET_BINDINGS`; the integrations wizard collects `GOOGLE_OAUTH_TEST_EMAILS` as a
+   separate Docket access-policy value after the Google Console flow.
 4. Keep `GOOGLE_OAUTH_PUBLIC=false` and set
    `GOOGLE_OAUTH_TEST_EMAILS=willieechalmers@gmail.com` while Google verification is pending.
 5. Keep the `docket` Vercel project's Git integration enabled for `main`. In Project Settings →
@@ -308,16 +313,15 @@ block injects them as `:latest`. So the deploy is green today with connectors ho
 and redeploy. Browser linking uses the product origin so Better Auth's session cookie remains
 first-party through the Vercel rewrite:
 
-| Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                                                                                                  |
-| -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| GitHub   | GitHub → Settings → Developer settings → OAuth Apps          | `https://docket-api.hypertext.studio/api/auth/callback/github` | `docket-github-client-id`, `docket-github-client-secret`                                                                        |
-| Linear   | Linear → Settings → API → OAuth applications                 | `https://docket-api.hypertext.studio/api/auth/callback/linear` | `docket-linear-client-id`, `docket-linear-client-secret`; webhook delivery additionally requires `docket-linear-webhook-secret` |
-| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket.hypertext.studio/api/auth/callback/google`     | `docket-google-client-id`, `docket-google-client-secret`                                                                        |
+| Provider | Register at                                                  | Callback URL                                                   | Secrets to set                                                                                                                               |
+| -------- | ------------------------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| GitHub   | GitHub → Settings → Developer settings → GitHub Apps         | `https://docket.hypertext.studio/api/auth/callback/github`     | `docket-github-app-client-id`, `docket-github-app-client-secret`; connector additionally needs App ID, slug, private key, and webhook secret |
+| Linear   | Linear → Settings → API → OAuth applications                 | `https://docket-api.hypertext.studio/api/auth/callback/linear` | `docket-linear-client-id`, `docket-linear-client-secret`, `docket-linear-webhook-secret`                                                     |
+| Google   | Google Cloud Console → APIs & Services → Credentials → OAuth | `https://docket.hypertext.studio/api/auth/callback/google`     | `docket-google-client-id`, `docket-google-client-secret`                                                                                     |
 
 ```bash
-# Add the real value as a new secret version (repeat per secret), then redeploy:
-printf '%s' '<the-client-id>'     | gcloud secrets versions add docket-github-client-id     --project=athena-services --data-file=-
-printf '%s' '<the-client-secret>' | gcloud secrets versions add docket-github-client-secret --project=athena-services --data-file=-
+# Prefer the reviewed, environment-aware writer so values are classified and bound correctly:
+pnpm integrations -- --env production --provider github
 
 # Pick up the new :latest values (either re-run the deploy workflow, or update in place):
 gcloud run services update docket-api --region=us-central1 --project=athena-services

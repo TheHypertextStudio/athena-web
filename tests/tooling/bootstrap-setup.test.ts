@@ -11,7 +11,13 @@ import {
 } from '../../scripts/integration-providers';
 import {
   buildApiSecretBindings,
+  classifyCredentialValue,
   normalizeCloudSecret,
+  parseIntegrationArgs,
+  policyProviderVars,
+  requiredProviderVars,
+  setupProviderVars,
+  splitInstructionSteps,
   wrapLines,
 } from '../../scripts/integrations-setup';
 
@@ -94,6 +100,97 @@ describe('mandatory production provider catalog', () => {
       'MAIL_FROM',
     ]);
     expect(providerVars(email, 'production')).toEqual(['RESEND_API_KEY', 'MAIL_FROM']);
+  });
+
+  it('separates primary, Docket policy, and optional connector fields', () => {
+    const google = PROVIDER_GROUPS.find((group) => group.id === 'google');
+    const github = PROVIDER_GROUPS.find((group) => group.id === 'github');
+    if (!google || !github) throw new Error('provider catalog is incomplete');
+
+    expect(requiredProviderVars(google, 'production')).toEqual([
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+    ]);
+    expect(policyProviderVars(google, 'production')).toEqual([
+      'GOOGLE_OAUTH_PUBLIC',
+      'GOOGLE_OAUTH_TEST_EMAILS',
+    ]);
+    expect(setupProviderVars(google, 'production', false)).toEqual([
+      'GOOGLE_CLIENT_ID',
+      'GOOGLE_CLIENT_SECRET',
+      'GOOGLE_OAUTH_PUBLIC',
+      'GOOGLE_OAUTH_TEST_EMAILS',
+    ]);
+    expect(requiredProviderVars(github, 'production')).toEqual([
+      'GITHUB_APP_CLIENT_ID',
+      'GITHUB_APP_CLIENT_SECRET',
+    ]);
+    expect(setupProviderVars(github, 'production', false)).not.toContain('GITHUB_APP_PRIVATE_KEY');
+    expect(setupProviderVars(github, 'production', true)).toContain('GITHUB_APP_PRIVATE_KEY');
+  });
+
+  it('recognizes placeholder values without exposing or printing them', () => {
+    expect(classifyCredentialValue('')).toBe('missing');
+    expect(classifyCredentialValue('your-client-id...')).toBe('placeholder');
+    expect(classifyCredentialValue('real-value')).toBe('ready');
+  });
+
+  it('keeps GitHub identity setup separate from optional Permissions & events setup', () => {
+    const github = PROVIDER_GROUPS.find((group) => group.id === 'github');
+    if (!github?.steps || !github.optionalSteps)
+      throw new Error('GitHub provider flow is incomplete');
+    const identityCopy = github
+      .steps('production', {
+        apiBase: 'https://docket-api.hypertext.studio',
+        webBases: ['https://docket.hypertext.studio'],
+      })
+      .flatMap((step) => step.note);
+    const connectorCopy = github
+      .optionalSteps('production', {
+        apiBase: 'https://docket-api.hypertext.studio',
+        webBases: ['https://docket.hypertext.studio'],
+      })
+      .flatMap((step) => step.note);
+    expect(identityCopy.join('\n')).toContain('Redirect on update');
+    expect(identityCopy.join('\n')).toContain('Setup URL field may turn gray');
+    expect(identityCopy.join('\n')).not.toContain('Expire user authorization tokens');
+    expect(connectorCopy.join('\n')).toContain('Permissions & events');
+    expect(connectorCopy.join('\n')).toContain('Repository permissions');
+  });
+
+  it('accepts focused standalone environment and provider flags', () => {
+    expect(parseIntegrationArgs(['--env', 'staging,production', '--provider=github'])).toEqual({
+      environments: ['staging', 'production'],
+      providers: ['github'],
+      help: false,
+    });
+    expect(() => parseIntegrationArgs(['--provider', 'not-a-provider'])).toThrow(
+      /Unknown integration provider/,
+    );
+  });
+
+  it('uses progressive steps for every provider guide instead of a static checklist dump', () => {
+    const staticGuides = PROVIDER_GROUPS.filter((group) => group.instructions);
+    expect(staticGuides).not.toHaveLength(0);
+
+    for (const group of staticGuides) {
+      const steps = splitInstructionSteps(
+        group.instructions?.('production', {
+          apiBase: 'https://docket-api.hypertext.studio',
+          webBases: ['https://docket.hypertext.studio'],
+          projectId: 'athena-services',
+        }) ?? [],
+      );
+      expect(steps.length, `${group.label} needs multiple operator steps`).toBeGreaterThan(1);
+      expect(steps.every((step) => step.note.length > 0)).toBe(true);
+    }
+
+    const setupSource = readFileSync(
+      resolve(import.meta.dirname, '../../scripts/integrations-setup.ts'),
+      'utf8',
+    );
+    expect(setupSource).toContain('splitInstructionSteps(group.instructions(env, urls))');
+    expect(setupSource).not.toContain('runInstructionChecklist');
   });
 });
 

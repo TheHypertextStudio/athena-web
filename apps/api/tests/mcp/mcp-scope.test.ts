@@ -426,9 +426,10 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
     const wa = res.headers.get('www-authenticate') ?? '';
     expect(wa).toContain('error="insufficient_scope"');
     expect(wa).toContain('scope="work:read work:write"');
-    const problem = (await res.json()) as { code: string; scope: string };
+    const problem = (await res.json()) as { code: string; scope: string; type: string };
     expect(problem.code).toBe('insufficient_scope');
     expect(problem.scope).toBe('work:write');
+    expect(problem.type).toMatch(/\/problems\/insufficient_scope$/);
   });
 
   it('does not step-up a tools/call the token can satisfy (proceeds to the transport)', async () => {

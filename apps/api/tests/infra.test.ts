@@ -47,11 +47,13 @@ describe('openapi', () => {
     const doc = (await res.json()) as {
       openapi: string;
       info: { title: string };
+      externalDocs: { url: string };
       components: { securitySchemes: { bearerAuth: { scheme: string } } };
       paths: Record<string, unknown>;
     };
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.info.title).toBe('Docket API');
+    expect(doc.externalDocs.url).toMatch(/\/problems$/);
     expect(doc.components.securitySchemes.bearerAuth.scheme).toBe('bearer');
     // Paths are generated from the route annotations — the validator-bearing routes appear,
     // and every documented path is prefixed by the app's `/v1` basePath.

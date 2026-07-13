@@ -406,8 +406,8 @@ const NOT_READY_MESSAGE: Partial<Record<AccountExportStatus, string>> = {
  *
  * @remarks
  * Mounted at `/v1/me/account/exports` in `server.ts`, **outside** the typed RPC `AppType`: it
- * streams a ZIP (not a JSON envelope) and is navigated to from the settings download action, so
- * it stays out of the contract `hc<AppType>` consumes (same convention as cron/webhooks/stream).
+ * streams a ZIP (not a JSON envelope) and is fetched by the settings download action, so it stays
+ * out of the contract `hc<AppType>` consumes (same convention as cron/webhooks/stream).
  * Authorization is implicit: only the caller's own `ready` export, keyed by their fresh session,
  * is served — the `:exportId` is verified to belong to them. The bytes flow through `BlobStore.get`,
  * so it works identically against local disk and prod Vercel Blob alike.

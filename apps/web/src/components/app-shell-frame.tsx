@@ -19,6 +19,7 @@ import AccountMenu from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import Agenda from '@/components/agenda/agenda';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
+import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
@@ -34,7 +35,6 @@ import {
   readLastOrg,
   renderLink,
   resolveActiveOrg,
-  signInReturnPath,
   workspaceKeyFromPath,
   writeDensity,
   writeLastOrg,
@@ -47,7 +47,8 @@ import { userErrorMessage } from '@/lib/problem';
  *
  * @remarks
  * Mounted by the `(app)` route-group layout so every authenticated page shares one shell.
- * It gates access on the Better Auth session (redirecting to `/sign-in` when signed out) and
+ * It gates access on the Better Auth session (opening the blocking sign-in interlock when signed
+ * out) and
  * loads the caller's orgs once for the {@link Sidebar}'s workspace switcher. There is no
  * cross-org "Hub" mode that swaps the sidebar: the sidebar's Workspace section always reflects
  * the active workspace, resolved as route org ?? persisted last-used ?? personal space.
@@ -56,17 +57,20 @@ import { userErrorMessage } from '@/lib/problem';
  * {@link useActiveOrg} so they can render org chips and resolve entity nouns without refetching.
  */
 export function AppShellFrame({ children }: { children: ReactNode }): JSX.Element {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { data: session, isPending } = authClient.useSession();
+  const { requireAuthentication } = useAuthenticationInterlock();
 
   const routeOrgId = orgIdFromPath(pathname);
   const userId = session?.user.id ?? null;
 
   useEffect(() => {
-    if (!isPending && !session) router.replace(signInReturnPath(pathname, searchParams.toString()));
-  }, [isPending, pathname, router, searchParams, session]);
+    if (!isPending && !session) {
+      const search = searchParams.toString();
+      requireAuthentication(`${pathname}${search ? `?${search}` : ''}`);
+    }
+  }, [isPending, pathname, requireAuthentication, searchParams, session]);
 
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
   // layer, gated on an authenticated session and static-tiered (membership rarely changes within a

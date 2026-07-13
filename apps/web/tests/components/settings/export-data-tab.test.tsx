@@ -4,13 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { exportOptionsGet, exportGet, exportsGet, exportsPost, reauth } = vi.hoisted(() => ({
-  exportOptionsGet: vi.fn(),
-  exportGet: vi.fn(),
-  exportsGet: vi.fn(),
-  exportsPost: vi.fn(),
-  reauth: vi.fn(),
-}));
+const { exportOptionsGet, exportGet, exportsGet, exportsPost, reauth, requireAuthentication } =
+  vi.hoisted(() => ({
+    exportOptionsGet: vi.fn(),
+    exportGet: vi.fn(),
+    exportsGet: vi.fn(),
+    exportsPost: vi.fn(),
+    reauth: vi.fn(),
+    requireAuthentication: vi.fn(),
+  }));
 
 vi.mock('../../../src/lib/api', () => ({
   api: {
@@ -30,6 +32,10 @@ vi.mock('../../../src/lib/api', () => ({
 }));
 
 vi.mock('../../../src/components/settings/use-reauth', () => ({ useReauth: () => reauth }));
+vi.mock('../../../src/components/authentication-interlock', () => ({
+  useAuthenticationInterlock: () => ({ requireAuthentication }),
+  useOptionalAuthenticationInterlock: () => ({ requireAuthentication }),
+}));
 
 import { ExportDataTab } from '../../../src/components/settings/export-data-tab';
 
@@ -86,6 +92,7 @@ beforeEach(() => {
   exportGet.mockReset().mockResolvedValue(okResponse(readyExport()));
   exportsPost.mockReset().mockResolvedValue(okResponse(readyExport()));
   reauth.mockReset().mockResolvedValue(undefined);
+  requireAuthentication.mockReset();
 });
 
 afterEach(cleanup);
@@ -142,5 +149,22 @@ describe('ExportDataTab', () => {
         'This export is no longer available. You can create a new export below.',
       ),
     ).toBeVisible();
+  });
+
+  it('opens the auth interlock instead of navigating to a raw unauthorized response', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        Response.json({ code: 'unauthorized', title: 'Authentication required' }, { status: 401 }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    renderTab();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download your data' }));
+
+    await waitFor(() => {
+      expect(requireAuthentication).toHaveBeenCalledTimes(1);
+    });
+    expect(fetchMock).toHaveBeenCalledWith(readyExport().downloadUrl, { credentials: 'include' });
   });
 });

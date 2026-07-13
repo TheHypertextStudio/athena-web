@@ -259,6 +259,10 @@ function buildDocumentation() {
     // `app` has basePath `/v1`, so generated paths already carry `/v1` — the server URL must
     // NOT repeat it (else paths resolve to `/v1/v1/...`).
     servers: [{ url: env.API_URL }],
+    externalDocs: {
+      description: 'Docket problem types and recovery guidance',
+      url: `${(env.WEB_URL || env.API_URL || 'http://localhost').replace(/\/$/, '')}/problems`,
+    },
     components: {
       securitySchemes: {
         bearerAuth: { type: 'http' as const, scheme: 'bearer' },

@@ -50,7 +50,8 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import type { ApiInfiniteDef } from './query-core';
+import { useOptionalAuthenticationInterlock } from '@/components/authentication-interlock';
+import { AuthenticationRequiredError, type ApiInfiniteDef } from './query-core';
 
 export * from './query-core';
 export { queryKeys } from './query-keys';
@@ -188,7 +189,10 @@ export interface ApiMutationOptions<TData, TVariables, TContext> extends Omit<
  *
  * Invalidation runs in `onSettled` after any caller-supplied `onSettled`, so a successful write
  * reconciles the optimistic cache with the server's response and a failed one repairs it. All
- * generics are inferred from `mutationFn`, so the variables and result stay fully typed.
+ * generics are inferred from `mutationFn`, so the variables and result stay fully typed. A known
+ * `unauthorized` response from this foreground operation opens the authentication interlock; it
+ * does not redirect or sign the person out, and other 401 codes (including `reauth_required`)
+ * remain contextual errors for the initiating screen.
  *
  * @typeParam TData - The mutation result type (inferred from `mutationFn`).
  * @typeParam TVariables - The mutation input type (inferred from `mutationFn`).
@@ -202,9 +206,20 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
   },
 ): UseMutationResult<TData, DefaultError, TVariables, TContext> {
   const queryClient = useQueryClient();
-  const { invalidateKeys, onSettled, ...rest } = options;
+  const authenticationInterlock = useOptionalAuthenticationInterlock();
+  const { invalidateKeys, mutationFn, onSettled, ...rest } = options;
   return useMutation<TData, DefaultError, TVariables, TContext>({
     ...rest,
+    mutationFn: async (variables) => {
+      try {
+        return await mutationFn(variables);
+      } catch (error) {
+        if (error instanceof AuthenticationRequiredError) {
+          authenticationInterlock?.requireAuthentication();
+        }
+        throw error;
+      }
+    },
     onSettled: async (data, error, variables, onMutateResult, context) => {
       await onSettled?.(data, error, variables, onMutateResult, context);
       if (invalidateKeys && invalidateKeys.length > 0) {

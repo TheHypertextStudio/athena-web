@@ -106,8 +106,8 @@ export function SchedulingItemCard({
   const density = itemDensity(visibleHeight);
   const bodyClassName =
     density === 'marker'
-      ? 'focus-visible:ring-ring relative z-10 size-full p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
-      : 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col overflow-hidden px-2 py-1 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset';
+      ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+      : 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col overflow-hidden rounded-sm px-2 py-1 text-left text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset';
   const timeRange = formatScheduleWallTimeRange(visibleBounds);
   const content = renderItem?.({ item, lane, allDay: false }) ?? item.title;
   const dragObject = item.dragObject;
@@ -119,8 +119,8 @@ export function SchedulingItemCard({
     <article
       className={
         dropActive
-          ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-hidden rounded-md border shadow-md ring-2'
-          : 'border-outline-variant bg-surface-container-low group absolute z-10 overflow-hidden rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md'
+          ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-visible rounded-md border shadow-md ring-2'
+          : 'border-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md'
       }
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -163,10 +163,17 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Resize ${item.title} from start`}
-          className="bg-primary/50 focus-visible:ring-ring absolute inset-x-0 top-0 z-20 h-1.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset"
+          className="focus-visible:ring-ring absolute -top-3 -left-3 z-20 size-6 cursor-ns-resize touch-none bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:-top-8 [@media(pointer:coarse)]:-left-8 [@media(pointer:coarse)]:size-11"
+          data-schedule-resize-target="start"
           onPointerDown={gesture.onStartResizePointerDown}
           onKeyDown={gesture.onStartResizeKeyDown}
-        />
+        >
+          <span
+            aria-hidden="true"
+            className="bg-primary/70 pointer-events-none absolute right-0 bottom-2.5 h-0.5 w-3 rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+            data-schedule-resize-indicator="start"
+          />
+        </button>
       ) : null}
       <button
         type="button"
@@ -231,10 +238,17 @@ export function SchedulingItemCard({
         <button
           type="button"
           aria-label={`Resize ${item.title} from end`}
-          className="bg-primary/50 focus-visible:ring-ring absolute inset-x-0 bottom-0 z-20 h-1.5 cursor-ns-resize rounded-sm opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset"
+          className="focus-visible:ring-ring absolute -right-3 -bottom-3 z-20 size-6 cursor-ns-resize touch-none bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-inset [@media(pointer:coarse)]:-right-8 [@media(pointer:coarse)]:-bottom-8 [@media(pointer:coarse)]:size-11"
+          data-schedule-resize-target="end"
           onPointerDown={gesture.onEndResizePointerDown}
           onKeyDown={gesture.onEndResizeKeyDown}
-        />
+        >
+          <span
+            aria-hidden="true"
+            className="bg-primary/70 pointer-events-none absolute top-2.5 left-0 h-0.5 w-3 rounded-full opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(pointer:coarse)]:opacity-100"
+            data-schedule-resize-indicator="end"
+          />
+        </button>
       ) : null}
     </article>
   );

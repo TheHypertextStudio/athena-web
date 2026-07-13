@@ -5,6 +5,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -28,13 +29,16 @@ export function useSchedulingGesture(
   options: UseSchedulingGestureOptions,
 ): SchedulingGestureController {
   const optionsRef = useRef(options);
-  optionsRef.current = options;
   const [preview, setPreview] = useState<ScheduleGesturePreview | null>(null);
   const previewRef = useRef<ScheduleGesturePreview | null>(null);
   const previewModeRef = useRef<ScheduleGestureMode | null>(null);
   const sessionRef = useRef<SchedulingPointerSession | null>(null);
   const suppressBodyClickRef = useRef(false);
   const mountedRef = useRef(true);
+
+  useLayoutEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const showPreview = useCallback(
     (next: ScheduleGesturePreview | null, mode?: ScheduleGestureMode) => {
@@ -74,34 +78,42 @@ export function useSchedulingGesture(
     [showPreview],
   );
 
-  const commitPreview = useCallback((mode: ScheduleGestureMode, next: ScheduleGesturePreview) => {
-    const current = optionsRef.current;
-    const targetLane = current.lanes[next.laneIndex];
-    const sourceEditable = current.editable && (current.lane.editable ?? true);
-    if (!sourceEditable || !targetLane || !(targetLane.editable ?? true)) return;
-    const changed =
-      next.laneIndex !== current.laneIndex ||
-      next.startMinutes !== current.bounds.startMinutes ||
-      next.endMinutes !== current.bounds.endMinutes;
-    if (!changed) return;
-    if (mode === 'move') {
-      current.onMoveItem?.({
+  const commitPreview = useCallback(
+    (mode: ScheduleGestureMode, next: ScheduleGesturePreview, announce = false): void => {
+      const current = optionsRef.current;
+      const targetLane = current.lanes[next.laneIndex];
+      const sourceEditable = current.editable && (current.lane.editable ?? true);
+      if (!sourceEditable || !targetLane || !(targetLane.editable ?? true)) return;
+      const changed =
+        next.laneIndex !== current.laneIndex ||
+        next.startMinutes !== current.bounds.startMinutes ||
+        next.endMinutes !== current.bounds.endMinutes;
+      if (!changed) return;
+      if (announce) {
+        current.onAnnouncementChange(
+          formatSchedulingGestureAnnouncement(mode, current.item.title, targetLane.label, next),
+        );
+      }
+      if (mode === 'move') {
+        current.onMoveItem?.({
+          item: current.item,
+          fromLane: current.lane,
+          toLane: targetLane,
+          startMinutes: next.startMinutes,
+          endMinutes: next.endMinutes,
+        });
+        return;
+      }
+      current.onResizeItem?.({
         item: current.item,
-        fromLane: current.lane,
-        toLane: targetLane,
+        lane: current.lane,
+        edge: mode === 'resize-start' ? 'start' : 'end',
         startMinutes: next.startMinutes,
         endMinutes: next.endMinutes,
       });
-      return;
-    }
-    current.onResizeItem?.({
-      item: current.item,
-      lane: current.lane,
-      edge: mode === 'resize-start' ? 'start' : 'end',
-      startMinutes: next.startMinutes,
-      endMinutes: next.endMinutes,
-    });
-  }, []);
+    },
+    [],
+  );
 
   const beginPointer = useCallback(
     (mode: ScheduleGestureMode, event: ReactPointerEvent<HTMLButtonElement>): void => {
@@ -200,8 +212,8 @@ export function useSchedulingGesture(
         up,
         cancel: pointerCancel,
         escape,
-        lostCapture: () => {
-          cancel(false);
+        lostCapture: (captureEvent) => {
+          if (captureEvent.pointerId === session.pointerId) cancel(false);
         },
       };
       sessionRef.current = session;
@@ -221,7 +233,7 @@ export function useSchedulingGesture(
       if (next === undefined) return;
       event.preventDefault();
       event.stopPropagation();
-      if (next) commitPreview(mode, next);
+      if (next) commitPreview(mode, next, true);
     },
     [commitPreview],
   );
@@ -230,13 +242,13 @@ export function useSchedulingGesture(
     if (!options.lanes.some((candidate) => candidate.id === options.lane.id)) stopSession();
   }, [options.lane.id, options.lanes, stopSession]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
       mountedRef.current = false;
       stopSession(true, false);
-    },
-    [stopSession],
-  );
+    };
+  }, [stopSession]);
 
   return {
     preview,

@@ -70,7 +70,7 @@ export interface SchedulingPointerSession {
   readonly up: (event: PointerEvent) => void;
   readonly cancel: (event: PointerEvent) => void;
   readonly escape: (event: KeyboardEvent) => void;
-  readonly lostCapture: () => void;
+  readonly lostCapture: (event: PointerEvent) => void;
 }
 
 /** Remove every global and capture-loss listener installed for a pointer session. */

@@ -1,7 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -83,6 +87,18 @@ afterEach(() => {
 });
 
 describe('SchedulingCanvas', () => {
+  it('updates gesture options after commit instead of mutating a ref during render', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/scheduling/use-scheduling-gesture.ts'),
+      'utf8',
+    );
+
+    expect(source.match(/optionsRef\.current = options;/g)).toHaveLength(1);
+    expect(source).toMatch(
+      /useLayoutEffect\(\(\) => \{\s*optionsRef\.current = options;\s*\}, \[options\]\);/,
+    );
+  });
+
   it('renders arbitrary lanes, a 24-hour grid, and all-day/timed items without view modes', () => {
     render(
       <SchedulingCanvas
@@ -203,6 +219,33 @@ describe('SchedulingCanvas', () => {
     });
   });
 
+  it('keeps live pointer previews mounted through a StrictMode effect replay', () => {
+    const onMoveItem = vi.fn();
+    render(
+      <StrictMode>
+        <SchedulingCanvas
+          displayTimezone="UTC"
+          lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+          pixelsPerHour={60}
+          viewportWidth={500}
+          onMoveItem={onMoveItem}
+        />
+      </StrictMode>,
+    );
+
+    const body = screen.getByRole('button', { name: /^Focus block/ });
+    fireEvent.pointerDown(body, { button: 0, pointerId: 71, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(window, { pointerId: 71, clientX: 100, clientY: 130 });
+
+    expect(renderedItem('focus')).toHaveAttribute('data-gesture-preview', 'move');
+    expect(renderedItem('focus')).toHaveTextContent('9:30 AM – 10:30 AM');
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Ada, 9:30 AM – 10:30 AM.',
+    );
+    expect(onMoveItem).not.toHaveBeenCalled();
+    fireEvent.pointerCancel(window, { pointerId: 71 });
+  });
+
   it('commits a body move across an editable arbitrary lane', () => {
     const onMoveItem = vi.fn();
     const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
@@ -300,6 +343,25 @@ describe('SchedulingCanvas', () => {
     );
 
     const startGrip = screen.getByRole('button', { name: 'Resize Focus block from start' });
+    const startIndicator = startGrip.querySelector('[data-schedule-resize-indicator="start"]');
+    expect(renderedItem('focus')).toHaveClass('overflow-visible');
+    expect(startGrip).toHaveAttribute('data-schedule-resize-target', 'start');
+    expect(startGrip).toHaveClass(
+      '-top-3',
+      '-left-3',
+      'size-6',
+      'touch-none',
+      'bg-transparent',
+      '[@media(pointer:coarse)]:-top-8',
+      '[@media(pointer:coarse)]:-left-8',
+      '[@media(pointer:coarse)]:size-11',
+    );
+    expect(startIndicator).toHaveClass(
+      'bottom-2.5',
+      'h-0.5',
+      'opacity-0',
+      '[@media(pointer:coarse)]:opacity-100',
+    );
     fireEvent.pointerDown(startGrip, { button: 0, pointerId: 11, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 11, clientY: 130 });
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
@@ -308,6 +370,24 @@ describe('SchedulingCanvas', () => {
     fireEvent.pointerUp(window, { pointerId: 11, clientY: 130 });
 
     const endGrip = screen.getByRole('button', { name: 'Resize Focus block from end' });
+    const endIndicator = endGrip.querySelector('[data-schedule-resize-indicator="end"]');
+    expect(endGrip).toHaveAttribute('data-schedule-resize-target', 'end');
+    expect(endGrip).toHaveClass(
+      '-right-3',
+      '-bottom-3',
+      'size-6',
+      'touch-none',
+      'bg-transparent',
+      '[@media(pointer:coarse)]:-right-8',
+      '[@media(pointer:coarse)]:-bottom-8',
+      '[@media(pointer:coarse)]:size-11',
+    );
+    expect(endIndicator).toHaveClass(
+      'top-2.5',
+      'h-0.5',
+      'opacity-0',
+      '[@media(pointer:coarse)]:opacity-100',
+    );
     fireEvent.pointerDown(endGrip, { button: 0, pointerId: 12, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 12, clientY: 130 });
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
@@ -408,6 +488,7 @@ describe('SchedulingCanvas', () => {
   });
 
   it('keeps a short overview item unchanged after zero-distance resizes', () => {
+    const onOpenItem = vi.fn();
     const onResizeItem = vi.fn();
     const short = timedItem('short-overview', 'Short overview', '09:00', '09:05');
     render(
@@ -416,9 +497,31 @@ describe('SchedulingCanvas', () => {
         lanes={[lane('ada', 'Ada', [short])]}
         pixelsPerHour={24}
         viewportWidth={500}
+        onOpenItem={onOpenItem}
+        onMoveItem={vi.fn()}
         onResizeItem={onResizeItem}
       />,
     );
+
+    const article = renderedItem('short-overview');
+    const body = screen.getByRole('button', { name: /^Short overview/ });
+    expect(article).toHaveClass('overflow-visible');
+    expect(body).toHaveClass('cursor-grab', 'overflow-hidden', 'rounded-sm');
+    expect(screen.getByRole('button', { name: 'Move Short overview' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resize Short overview from start' })).toHaveClass(
+      '-top-3',
+      '-left-3',
+      'size-6',
+      '[@media(pointer:coarse)]:size-11',
+    );
+    expect(screen.getByRole('button', { name: 'Resize Short overview from end' })).toHaveClass(
+      '-right-3',
+      '-bottom-3',
+      'size-6',
+      '[@media(pointer:coarse)]:size-11',
+    );
+    fireEvent.click(body);
+    expect(onOpenItem).toHaveBeenCalledOnce();
 
     for (const edge of ['start', 'end'] as const) {
       const grip = screen.getByRole('button', {
@@ -491,7 +594,7 @@ describe('SchedulingCanvas', () => {
     expect(releasePointerCapture).toHaveBeenCalledWith(18);
   });
 
-  it('cancels on lost pointer capture and ignores the later pointerup', () => {
+  it('cancels only its matching lost pointer capture and ignores the later pointerup', () => {
     const onMoveItem = vi.fn();
     render(
       <SchedulingCanvas
@@ -510,7 +613,14 @@ describe('SchedulingCanvas', () => {
     });
     fireEvent.pointerDown(body, { button: 0, pointerId: 181, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 181, clientX: 100, clientY: 130 });
-    fireEvent(body, new Event('lostpointercapture', { bubbles: false }));
+    const mismatchedCapture = new Event('lostpointercapture', { bubbles: false });
+    Object.defineProperty(mismatchedCapture, 'pointerId', { value: 999 });
+    fireEvent(body, mismatchedCapture);
+    expect(renderedItem('focus')).toHaveAttribute('data-gesture-preview', 'move');
+
+    const matchingCapture = new Event('lostpointercapture', { bubbles: false });
+    Object.defineProperty(matchingCapture, 'pointerId', { value: 181 });
+    fireEvent(body, matchingCapture);
     fireEvent.pointerUp(window, { pointerId: 181, clientX: 100, clientY: 130 });
 
     expect(renderedItem('focus')).not.toHaveAttribute('data-gesture-preview');
@@ -565,14 +675,26 @@ describe('SchedulingCanvas', () => {
     const move = screen.getByRole('button', { name: 'Move Focus block' });
     fireEvent.keyDown(move, { key: 'ArrowDown' });
     fireEvent.keyUp(move, { key: 'ArrowDown' });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Ada, 9:10 AM – 10:10 AM.',
+    );
     fireEvent.keyDown(move, { key: 'ArrowRight' });
     fireEvent.keyUp(move, { key: 'ArrowRight' });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Grace, 9:00 AM – 10:00 AM.',
+    );
     fireEvent.keyDown(screen.getByRole('button', { name: 'Resize Focus block from start' }), {
       key: 'ArrowDown',
     });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Resizing start of Focus block in Ada, 9:10 AM – 10:00 AM.',
+    );
     fireEvent.keyDown(screen.getByRole('button', { name: 'Resize Focus block from end' }), {
       key: 'ArrowUp',
     });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Resizing end of Focus block in Ada, 9:00 AM – 9:50 AM.',
+    );
 
     expect(onMoveItem.mock.calls).toEqual([
       [
@@ -642,6 +764,7 @@ describe('SchedulingCanvas', () => {
 
     expect(onMoveItem).not.toHaveBeenCalled();
     expect(onResizeItem).not.toHaveBeenCalled();
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('');
   });
 
   it('takes one bounded auto-scroll step per active pointer movement near viewport edges', () => {
@@ -655,7 +778,10 @@ describe('SchedulingCanvas', () => {
       />,
     );
     const viewport = screen.getByRole('region', { name: 'Schedule' });
-    const scrollBy = vi.fn();
+    const scrollBy = vi.fn((options: ScrollToOptions) => {
+      viewport.scrollLeft += options.left ?? 0;
+      viewport.scrollTop += options.top ?? 0;
+    });
     Object.defineProperties(viewport, {
       clientWidth: { configurable: true, value: 500 },
       clientHeight: { configurable: true, value: 500 },
@@ -672,12 +798,18 @@ describe('SchedulingCanvas', () => {
 
     const body = screen.getByRole('button', { name: /^Focus block/ });
     fireEvent.pointerDown(body, { button: 0, pointerId: 19, clientX: 250, clientY: 250 });
-    fireEvent.pointerMove(window, { pointerId: 19, clientX: 490, clientY: 490 });
-    fireEvent.pointerMove(window, { pointerId: 19, clientX: 491, clientY: 491 });
+    fireEvent.pointerMove(window, { pointerId: 19, clientX: 250, clientY: 490 });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Ada, 1:20 PM – 2:20 PM.',
+    );
+    fireEvent.pointerMove(window, { pointerId: 19, clientX: 250, clientY: 491 });
+    expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent(
+      'Moving Focus block to Ada, 1:30 PM – 2:30 PM.',
+    );
 
     expect(scrollBy).toHaveBeenCalledTimes(2);
-    expect(scrollBy).toHaveBeenNthCalledWith(1, { left: 16, top: 16, behavior: 'auto' });
-    expect(scrollBy).toHaveBeenNthCalledWith(2, { left: 16, top: 16, behavior: 'auto' });
+    expect(scrollBy).toHaveBeenNthCalledWith(1, { left: 0, top: 16, behavior: 'auto' });
+    expect(scrollBy).toHaveBeenNthCalledWith(2, { left: 0, top: 16, behavior: 'auto' });
     fireEvent.pointerCancel(window, { pointerId: 19 });
   });
 

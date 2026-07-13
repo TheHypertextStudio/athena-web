@@ -50,7 +50,11 @@ function propertyName(node: ts.Node): string | undefined {
 function bindingPropertyName(node: ts.Node): string | undefined {
   if (!ts.isBindingElement(node)) return undefined;
   const property = node.propertyName ?? node.name;
-  return ts.isIdentifier(property) || ts.isStringLiteralLike(property) ? property.text : undefined;
+  if (ts.isIdentifier(property) || ts.isStringLiteralLike(property)) return property.text;
+  if (ts.isComputedPropertyName(property) && ts.isStringLiteralLike(property.expression)) {
+    return property.expression.text;
+  }
+  return undefined;
 }
 
 function describeNode(node: ts.Node, sourceFile: ts.SourceFile): string {
@@ -123,8 +127,11 @@ describe('web error source policy', () => {
       const d = body['error_description'];
       const { lastError } = provider;
       const { lastError: storedDiagnostic } = provider;
+      const { ['lastError']: computedDiagnostic } = provider;
       const { error_description } = body;
       const { error_description: providerDescription } = body;
+      const { ['error_description']: computedProviderDescription } = body;
+      const { message } = applicationCopy;
       readProblem(response, 'fallback');
       readError(caught, 'fallback');
     `;
@@ -140,14 +147,25 @@ describe('web error source policy', () => {
           rule: 'provider-diagnostic',
           text: 'lastError: storedDiagnostic',
         }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: "['lastError']: computedDiagnostic",
+        }),
         expect.objectContaining({ rule: 'provider-diagnostic', text: 'error_description' }),
         expect.objectContaining({
           rule: 'provider-diagnostic',
           text: 'error_description: providerDescription',
         }),
+        expect.objectContaining({
+          rule: 'provider-diagnostic',
+          text: "['error_description']: computedProviderDescription",
+        }),
       ]),
     );
-    expect(violations).toHaveLength(10);
+    expect(violations).toHaveLength(12);
+    expect(violations).not.toContainEqual(
+      expect.objectContaining({ rule: 'raw-error-message', text: 'message' }),
+    );
   });
 
   it('keeps raw server, provider, and exception messages out of production UI source', () => {

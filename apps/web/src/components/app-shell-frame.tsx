@@ -12,6 +12,7 @@ import {
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, Search } from '@docket/ui/icons';
+import { Skeleton } from '@docket/ui/primitives';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -25,6 +26,7 @@ import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
+import { userErrorMessage } from '@/lib/problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
@@ -39,7 +41,6 @@ import {
   writeDensity,
   writeLastOrg,
 } from './app-shell-utils';
-import { userErrorMessage } from '@/lib/problem';
 
 /**
  * The authenticated app-shell frame: the single flattened sidebar, the multi-document tab bar,
@@ -62,9 +63,6 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const { data: session, isPending } = authClient.useSession();
   const { requireAuthentication } = useAuthenticationInterlock();
 
-  const routeOrgId = orgIdFromPath(pathname);
-  const userId = session?.user.id ?? null;
-
   useEffect(() => {
     if (!isPending && !session) {
       const search = searchParams.toString();
@@ -72,6 +70,39 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     }
   }, [isPending, pathname, requireAuthentication, searchParams, session]);
 
+  if (!session) {
+    return <AppShellLoadingFrame homeKey={homeKeyFromPath(pathname)} />;
+  }
+
+  return (
+    <AuthenticatedAppShellFrame
+      pathname={pathname}
+      routeOrgId={orgIdFromPath(pathname)}
+      userId={session.user.id}
+    >
+      {children}
+    </AuthenticatedAppShellFrame>
+  );
+}
+
+interface AuthenticatedAppShellFrameProps {
+  /** Current route pathname used to select shell navigation. */
+  readonly pathname: string;
+  /** Organization bound by the current route, if any. */
+  readonly routeOrgId: string | null;
+  /** Authenticated user whose shell preferences should be restored. */
+  readonly userId: string;
+  /** Authenticated route content. */
+  readonly children: ReactNode;
+}
+
+/** Mount authenticated queries and providers only after the session has resolved. */
+function AuthenticatedAppShellFrame({
+  pathname,
+  routeOrgId,
+  userId,
+  children,
+}: AuthenticatedAppShellFrameProps): JSX.Element {
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
   // layer, gated on an authenticated session and static-tiered (membership rarely changes within a
   // session), shared with the rest of the app under queryKeys.orgs().
@@ -80,7 +111,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
       queryKeys.orgs(),
       () => api.v1.orgs.$get(),
       'Could not load your organizations.',
-      { enabled: Boolean(session), staleTime: STALE.static },
+      { staleTime: STALE.static },
     ),
   );
   const orgs = useMemo(() => orgsQ.data?.items ?? [], [orgsQ.data]);
@@ -88,12 +119,8 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     ? userErrorMessage(orgsQ.error, 'Could not load your workspaces.')
     : null;
 
-  if (isPending || !session) {
-    return (
-      <main className="bg-surface text-on-surface-variant text-body flex min-h-screen items-center justify-center">
-        Loading your workspace…
-      </main>
-    );
+  if (orgsQ.isPending) {
+    return <AppShellLoadingFrame homeKey={homeKeyFromPath(pathname)} />;
   }
 
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
@@ -115,6 +142,104 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
         </CommandPaletteProvider>
       </ActiveOrgContext>
     </ContextProvider>
+  );
+}
+
+/** Props for the shell shown before authenticated context is available. */
+export interface AppShellLoadingFrameProps {
+  /** Home destination to highlight when the pathname is already known. */
+  readonly homeKey?: HomeNavKey;
+}
+
+/**
+ * Render Docket's stable shell while session or workspace context resolves.
+ *
+ * @remarks
+ * Home links remain available because they do not depend on workspace data. Search, workspace
+ * switching, account actions, the agenda query, and route children stay unmounted until an
+ * authenticated session exists. The same frame is reused by the route-group Suspense fallback,
+ * preventing either client session settlement or query-string hydration from blanking the app.
+ */
+export function AppShellLoadingFrame({ homeKey }: AppShellLoadingFrameProps = {}): JSX.Element {
+  const sidebar = (
+    <Sidebar
+      loading
+      workspaces={[]}
+      activeHomeKey={homeKey}
+      hrefForHome={(key) => `/${key}`}
+      hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
+      renderLink={renderLink}
+      onSelectWorkspace={() => undefined}
+      onCreateWorkspace={() => undefined}
+      onOpenSearch={() => undefined}
+      footer={<AppShellAccountSkeleton />}
+    />
+  );
+
+  return (
+    <ContextProvider initialContext={null} initialDensity="comfortable">
+      <VocabularyProvider>
+        <AppShell
+          sidebar={sidebar}
+          mobileBrand={<span className="text-body font-semibold">Docket</span>}
+          mobileActions={<Skeleton className="size-9 rounded-lg" aria-hidden="true" />}
+          aside={{
+            node: <AppShellAgendaSkeleton />,
+            label: 'Agenda',
+            icon: <Calendar aria-hidden="true" />,
+          }}
+        >
+          <AppShellContentSkeleton />
+        </AppShell>
+      </VocabularyProvider>
+    </ContextProvider>
+  );
+}
+
+/** Main-panel loading treatment shaped like a page header and a short working set. */
+function AppShellContentSkeleton(): JSX.Element {
+  return (
+    <div
+      role="status"
+      aria-label="Loading your workspace"
+      aria-busy="true"
+      className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-6 sm:px-8 sm:py-8"
+    >
+      <span className="sr-only">Loading your workspace</span>
+      <div className="flex flex-col gap-3" aria-hidden="true">
+        <Skeleton className="h-7 w-44 rounded-md" />
+        <Skeleton className="h-4 w-72 max-w-full rounded-md" />
+      </div>
+      <div className="grid gap-4" aria-hidden="true">
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <Skeleton className="h-20 w-4/5 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
+/** Inert account-area placeholder that preserves the sidebar's vertical balance. */
+function AppShellAccountSkeleton(): JSX.Element {
+  return (
+    <div className="flex items-center gap-2 px-2 py-2" aria-hidden="true">
+      <Skeleton className="size-7 shrink-0 rounded-full" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-24 rounded" />
+        <Skeleton className="h-3 w-32 rounded" />
+      </div>
+    </div>
+  );
+}
+
+/** Query-free agenda placeholder used to keep the desktop rail geometry stable. */
+function AppShellAgendaSkeleton(): JSX.Element {
+  return (
+    <div className="flex flex-col gap-4 p-4" aria-hidden="true">
+      <Skeleton className="h-5 w-20 rounded" />
+      <Skeleton className="h-16 w-full rounded-lg" />
+      <Skeleton className="h-16 w-full rounded-lg" />
+    </div>
   );
 }
 

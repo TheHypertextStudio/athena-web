@@ -72,6 +72,54 @@
   useful than horizontally scrolling a nominally dense table.
 - **State**: COMPLETE — implementation, focused validation, documentation, and design review are
   complete; unrelated root-suite failures are recorded above rather than absorbed into this task.
+### [APP-SHELL-LOADING-001] Keep the app shell visible during authenticated loading
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Description**: Remove full-screen workspace loading views from authenticated routes so the
+  Docket shell appears immediately after sign-in and on cold app loads. Loading feedback belongs
+  inside the shell regions whose session, workspace, or page data is unresolved.
+- **Plan**:
+  1. Add component coverage proving the real shell renders while the Better Auth session is pending
+     and that unauthenticated users still enter the sign-in interlock after session resolution.
+  2. Replace the authenticated layout's full-screen Suspense fallback with a shell-shaped fallback
+     that preserves the responsive navigation and content frame.
+  3. Render `AppShellFrame` during session settlement with stable Home navigation available, an
+     empty/provisional workspace switcher, a scoped main-panel skeleton, and no authenticated-only
+     queries or actions until the session exists.
+  4. Preserve the current signed-out interlock and post-sign-in onboarding decision; this change
+     affects presentation during navigation, not authentication policy or landing destinations.
+  5. Verify focused tests and the repository gates before completing the task.
+- **Research**: Two independent boundaries currently blank the app: the `(app)` layout Suspense
+  fallback and `AppShellFrame`'s `isPending || !session` early return. The shell can safely render
+  its static Home navigation before workspace data exists, but the agenda, notification polling,
+  account menu, recovery banner, workspace actions, and routed page content must remain gated until
+  authenticated context is ready.
+- **Design Direction**: Use progressive disclosure inside the persistent shell. Keep the shell's
+  stable navigation interactive, visually reserve the workspace/account regions, and show a calm
+  content-panel skeleton. Never replace the authenticated viewport with centered loading copy.
+- **Implementation**: Replaced both authenticated full-screen loading boundaries with the real
+  responsive app shell. The provisional frame keeps Home navigation available, reserves workspace,
+  account, main-content, and agenda geometry with accessible skeletons, and leaves Search and
+  workspace switching inert until context resolves. The organization query begins only after a
+  session exists, while authenticated providers, route children, and private actions remain
+  provisional until it settles; a resolved missing session keeps the shell visible while opening
+  the existing sign-in interlock.
+- **Validation**: The new shell and existing sign-in regression tests pass 7/7, including the
+  session-present and organizations-pending boundary; the complete UI
+  package passes 256/256 tests. Root `pnpm typecheck`, `pnpm lint`, and `pnpm build` pass, including
+  API, admin, and web production targets. Desktop (1440x900) and mobile (390x844) browser checks
+  confirm the shell remains visible during delayed session resolution and behind the signed-out
+  interlock, with no browser console errors. Root `pnpm test` remains blocked by independently
+  reproduced baseline drift: retired Slack expectations, unrelated documentation and UI-error
+  policy violations, and existing web test failures outside this slice. Focused shell tests and all
+  changed-package UI tests are green.
+- **Retrospective**: Mounting stable chrome before the authentication-dependent subtree prevents a
+  blank post-sign-in transition without exposing private content or starting protected requests.
+  A query-free shell fallback also gives Suspense and session settlement one consistent visual
+  contract across desktop and mobile.
 
 ### [BUILD-REPAIR-001] Restore clean repository build contracts
 

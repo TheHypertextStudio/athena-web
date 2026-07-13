@@ -42,6 +42,8 @@ export interface SidebarNavItemProps {
   asChild?: boolean;
   /** Click handler used when not rendering `asChild`. */
   onSelect?: () => void;
+  /** Disable a button-backed row while its action is unavailable. */
+  disabled?: boolean;
   /** The child element to style when `asChild` is set. */
   children?: React.ReactNode;
 }
@@ -78,6 +80,7 @@ export function SidebarNavItem({
   badgeLabel = 'unread',
   asChild = false,
   onSelect,
+  disabled = false,
   children,
 }: SidebarNavItemProps): React.JSX.Element {
   const count = badge && badge > 0 ? badge : 0;
@@ -118,6 +121,7 @@ export function SidebarNavItem({
       aria-current={active ? 'page' : undefined}
       aria-label={count > 0 ? accessibleName : undefined}
       onClick={onSelect}
+      disabled={disabled}
       className={className}
     >
       {Icon ? <Icon aria-hidden="true" className="size-3.5 shrink-0" /> : null}

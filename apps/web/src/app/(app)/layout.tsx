@@ -1,6 +1,6 @@
 import { Suspense, type JSX, type ReactNode } from 'react';
 
-import { AppShellFrame } from '@/components/app-shell-frame';
+import { AppShellFrame, AppShellLoadingFrame } from '@/components/app-shell-frame';
 
 /**
  * Layout for the authenticated `(app)` route group.
@@ -15,13 +15,7 @@ import { AppShellFrame } from '@/components/app-shell-frame';
  */
 export default function AppGroupLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <Suspense
-      fallback={
-        <main className="bg-surface text-on-surface-variant text-body flex min-h-screen items-center justify-center">
-          Loading your workspace…
-        </main>
-      }
-    >
+    <Suspense fallback={<AppShellLoadingFrame />}>
       <AppShellFrame>{children}</AppShellFrame>
     </Suspense>
   );

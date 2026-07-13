@@ -50,6 +50,7 @@ import {
   Workflow,
 } from '../../icons';
 import { useVocabulary } from '../../hooks/useVocabulary';
+import { Skeleton } from '../../primitives';
 import { useContextState } from './ContextProvider';
 import { useShellDrawer } from './ShellDrawerContext';
 import { SidebarNavItem } from './SidebarNavItem';
@@ -78,6 +79,8 @@ export interface SidebarProps {
   readonly onCreateWorkspace: () => void;
   /** Open the command palette (the Search Home row). */
   readonly onOpenSearch: () => void;
+  /** Keep stable shell navigation visible while workspace-bound controls resolve. */
+  readonly loading?: boolean;
   /**
    * Whether the active workspace is the caller's personal space.
    *
@@ -140,6 +143,7 @@ export function Sidebar({
   onSelectWorkspace,
   onCreateWorkspace,
   onOpenSearch,
+  loading = false,
   personalWorkspace = false,
   footer,
 }: SidebarProps): React.JSX.Element {
@@ -207,6 +211,7 @@ export function Sidebar({
         workspaces={workspaces}
         onSelect={onSelectWorkspace}
         onCreate={onCreateWorkspace}
+        loading={loading}
       />
 
       <nav aria-label="Home" className="flex flex-col space-y-1 pt-2" onClick={handleNavActivate}>
@@ -227,11 +232,13 @@ export function Sidebar({
             </SidebarNavItem>
           );
         })}
-        <SidebarNavItem label="Search" icon={Search} onSelect={onOpenSearch} />
+        <SidebarNavItem label="Search" icon={Search} onSelect={onOpenSearch} disabled={loading} />
       </nav>
 
       <GroupLabel>Workspace</GroupLabel>
-      {activeOrgId ? (
+      {loading ? (
+        <WorkspaceNavigationSkeleton />
+      ) : activeOrgId ? (
         <nav aria-label="Workspace" className="flex flex-col space-y-1" onClick={handleNavActivate}>
           {workspaceRows.map((row) => {
             const href = hrefForWorkspace(activeOrgId, row.key);
@@ -255,6 +262,18 @@ export function Sidebar({
 
       {footer ? <div className="mt-auto pt-2">{footer}</div> : null}
     </aside>
+  );
+}
+
+/** Reserve the workspace navigation rhythm without flashing a false empty state. */
+function WorkspaceNavigationSkeleton(): React.JSX.Element {
+  return (
+    <div className="flex flex-col gap-2 px-3 py-1" aria-hidden="true">
+      <Skeleton className="h-8 w-full rounded-md" />
+      <Skeleton className="h-8 w-5/6 rounded-md" />
+      <Skeleton className="h-8 w-full rounded-md" />
+      <Skeleton className="h-8 w-3/4 rounded-md" />
+    </div>
   );
 }
 

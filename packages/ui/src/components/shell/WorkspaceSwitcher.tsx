@@ -29,6 +29,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Skeleton,
 } from '../../primitives';
 import { useContextState } from './ContextProvider';
 import type { Workspace } from './workspaces';
@@ -46,6 +47,8 @@ export interface WorkspaceSwitcherProps {
   readonly onSelect: (orgId: string) => void;
   /** Open the host application's shared-workspace creation flow. */
   readonly onCreate: () => void;
+  /** Show a stable, disabled trigger while workspace context resolves. */
+  readonly loading?: boolean;
 }
 
 /** Compute up-to-two-letter initials from a workspace name for the avatar fallback. */
@@ -138,6 +141,7 @@ export function WorkspaceSwitcher({
   workspaces,
   onSelect,
   onCreate,
+  loading = false,
 }: WorkspaceSwitcherProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const [open, setOpen] = React.useState(false);
@@ -155,7 +159,7 @@ export function WorkspaceSwitcher({
     [onSelect],
   );
 
-  const triggerLabel = active?.name ?? 'Workspace';
+  const triggerLabel = loading ? 'Loading workspaces' : (active?.name ?? 'Workspace');
 
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -163,10 +167,15 @@ export function WorkspaceSwitcher({
         <Button
           type="button"
           variant="ghost"
-          aria-label={`Workspace: ${triggerLabel}. Switch workspace`}
+          aria-label={
+            loading ? 'Loading workspaces' : `Workspace: ${triggerLabel}. Switch workspace`
+          }
+          disabled={loading}
           className="h-auto w-full justify-start gap-2 px-2 py-1.5"
         >
-          {active ? (
+          {loading ? (
+            <Skeleton className="size-6 shrink-0 rounded-md" aria-hidden="true" />
+          ) : active ? (
             <WorkspaceAvatar workspace={active} />
           ) : (
             <span
@@ -174,10 +183,16 @@ export function WorkspaceSwitcher({
               aria-hidden="true"
             />
           )}
-          <span className="text-body min-w-0 flex-1 truncate text-left font-semibold">
-            {triggerLabel}
-          </span>
-          <ChevronDown aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+          {loading ? (
+            <Skeleton className="h-4 w-24" aria-hidden="true" />
+          ) : (
+            <span className="text-body min-w-0 flex-1 truncate text-left font-semibold">
+              {triggerLabel}
+            </span>
+          )}
+          {loading ? null : (
+            <ChevronDown aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[15rem]">

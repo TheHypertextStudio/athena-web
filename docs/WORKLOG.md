@@ -7,6 +7,67 @@
 
 ## Active Tasks
 
+### [INIT-DETAIL-REV-001] Revise the Initiatives experience
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Priority**: P1
+- **Description**: Rework the Initiatives overview and detail experience so it communicates
+  strategic direction, rolled-up execution, and the relationship between Initiatives, Programs,
+  and Projects more clearly.
+- **Plan**:
+  1. Agree on the overview and detail pages' primary user questions and information hierarchy.
+  2. Compare revision approaches in high-fidelity HTML and validate the design direction.
+  3. Add a context-owned Initiative hierarchy with a workspace-configurable one-to-five-level
+     depth limit (two by default) and access-safe cross-workspace references.
+  4. Make the overview's top band surface actionable Initiative updates, including decisions,
+     major blockers, and stale accountability, with portfolio health as supporting context.
+  5. Write the approved design and implementation plan before changing production UI.
+  6. Implement the revised experience with focused component coverage.
+  7. Run repository validation, complete the retrospective, and commit the finished slice.
+- **Research**: The shipped page leads with derived status/health, a child-health distribution, and
+  a timeline roadmap. Owner and target date plus Program/Project association editing live in the
+  right rail. The current schema has no Initiative parent relationship, while Updates already
+  support Initiative subjects with narrative text, optional health, author, and timestamp. The
+  revision must preserve vocabulary skinning, safe user-facing errors, and the typed TanStack Query
+  layer. Top-level aggregate counts must not double-count work shared across Initiatives.
+- **Design Direction**: Keep the overview above the roster deliberately slim: page title and one
+  rotating "Needs your attention" surface with at most four actionable items. Use a manually owned
+  lifecycle (`proposed | active | completed | canceled`) and preserve independently writable
+  Initiative health; connected-work health remains supporting context. Model hierarchy through
+  workspace-context edges so the same Initiative can appear in an organization or personal plan
+  without crossing access boundaries. The detail is a printable strategic brief: latest update,
+  freeform Markdown document with a generated contents gutter, sub-Initiatives, connected work,
+  labels, resources, and update history. Key Results and metric integrations remain deferred.
+- **Implementation**:
+  - Added the canonical lifecycle, strategic summary, priority, cadence, independently writable
+    health, organization-global labels, and URL resources across the database, REST contracts, and
+    MCP tools.
+  - Added context-owned hierarchy links with configurable one-to-five-level workspace depth,
+    cycle/visibility/depth validation, and access-safe cross-workspace references.
+  - Added aggregate overview and detail reads, deduplicated descendant work rollups, automatic
+    attention ranking, health-bearing updates, and hierarchy-aware timeline reads.
+  - Rebuilt the overview as a dense responsive hierarchy with a single actionable attention band,
+    and rebuilt detail as a printable strategic document with latest update, generated Markdown
+    contents, sub-initiatives, connected work, properties, labels, and resources.
+  - Added Blank, Strategic Initiative, and Objective creation templates plus shared/personal Work
+    Structure settings.
+- **Validation**:
+  - Repository typecheck, lint, and production build pass. Focused Initiative API, DTO, schema,
+    authz, migration, MCP, attention, detail, and Markdown-contents tests pass.
+  - Live review passed the Docket Craft Rubric at 1440×900 and 390×844 in light and dark; the 320px
+    overflow measurement is clean and the browser console has no errors.
+  - The root test command remains red on unrelated active work: guided-provider catalog drift, the
+    existing web error-source cleanup, and missing TSDoc on project-dependency/query-core exports.
+    Concurrency-only DB/UI timeouts pass when rerun sequentially.
+- **Retrospective**: Keeping Initiative health separate from connected-work health preserves an
+  executive or Athena-authored judgment without discarding operational evidence. Context-owned
+  edges solve cross-organization planning without turning hierarchy into a sharing mechanism. The
+  live review caught the fixed-width roster before shipment; responsive column shedding is more
+  useful than horizontally scrolling a nominally dense table.
+- **State**: COMPLETE — implementation, focused validation, documentation, and design review are
+  complete; unrelated root-suite failures are recorded above rather than absorbed into this task.
+
 ### [BUILD-REPAIR-001] Restore clean repository build contracts
 
 - **Status**: COMPLETED

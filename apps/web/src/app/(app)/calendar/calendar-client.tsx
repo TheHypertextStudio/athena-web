@@ -16,6 +16,7 @@ import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm, {
   type CalendarRegionSelection,
 } from '@/components/calendar/create-block-form';
+import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import {
@@ -26,7 +27,6 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { todayISODate } from '@/lib/today';
 
 import { CalendarComparisonControls } from './calendar-comparison-controls';
 import type { CalendarAxis } from './calendar-schedule-model';
@@ -41,11 +41,11 @@ const DEFAULT_PIXELS_PER_HOUR = 72;
 export default function CalendarClient(): JSX.Element {
   const router = useRouter();
   const [axis, setAxis] = useState<CalendarAxis>('dates');
-  const [anchorDate, setAnchorDate] = useState(() => todayISODate());
   const [visibleLaneCount, setVisibleLaneCount] = useState(1);
   const [openItemId, setOpenItemId] = useState<string | null>(null);
   const [selection, setSelection] = useState<CalendarRegionSelection | null>(null);
   const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
+  const [now] = useState(() => new Date().toISOString());
 
   const preferencesQuery = useApiQuery(
     apiQueryOptions(
@@ -55,7 +55,18 @@ export default function CalendarClient(): JSX.Element {
       { staleTime: STALE.standard },
     ),
   );
-  const preferences = preferencesQuery.data?.calendar;
+  const hubPreferences = preferencesQuery.data;
+  const preferences = hubPreferences?.calendar;
+  const displayTimezone = resolveScheduleTimezone(hubPreferences?.timezone);
+  const {
+    date: anchorDate,
+    today,
+    setDate: setAnchorDate,
+  } = useScheduleDisplayDate({
+    displayTimezone,
+    preferencesReady: hubPreferences !== undefined,
+    now,
+  });
   useEffect(() => {
     if (preferences?.pixelsPerHour !== undefined) setPixelsPerHour(preferences.pixelsPerHour);
   }, [preferences?.pixelsPerHour]);
@@ -68,8 +79,8 @@ export default function CalendarClient(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.hubPreferences()],
   });
-  const dateAxis = useCalendarDateAxis(anchorDate, visibleLaneCount);
-  const peopleAxis = useCalendarPeopleAxis(axis, anchorDate);
+  const dateAxis = useCalendarDateAxis(anchorDate, visibleLaneCount, displayTimezone);
+  const peopleAxis = useCalendarPeopleAxis(axis, anchorDate, displayTimezone);
 
   const visibleEnd = shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1));
   const heading =
@@ -88,7 +99,7 @@ export default function CalendarClient(): JSX.Element {
         axis={axis}
         pixelsPerHour={pixelsPerHour}
         onToday={() => {
-          setAnchorDate(todayISODate());
+          setAnchorDate(today);
         }}
         onPrevious={() => {
           navigate('previous');
@@ -98,8 +109,8 @@ export default function CalendarClient(): JSX.Element {
         }}
         onAxisChange={setAxis}
         onZoomChange={setPixelsPerHour}
-        onZoomCommit={() => {
-          savePreferences.mutate({ ...(preferences ?? {}), pixelsPerHour });
+        onZoomCommit={(nextPixelsPerHour) => {
+          savePreferences.mutate({ ...(preferences ?? {}), pixelsPerHour: nextPixelsPerHour });
         }}
         createControl={
           <CreateBlockForm
@@ -130,6 +141,8 @@ export default function CalendarClient(): JSX.Element {
         axis={axis}
         visibleLaneCount={visibleLaneCount}
         pixelsPerHour={pixelsPerHour}
+        displayTimezone={displayTimezone}
+        now={now}
         preferences={preferences}
         dateAxis={dateAxis}
         peopleAxis={peopleAxis}

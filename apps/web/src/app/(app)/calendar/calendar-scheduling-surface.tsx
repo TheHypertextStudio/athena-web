@@ -14,10 +14,11 @@ import {
   type ScheduleItem,
   type ScheduleItemMove,
   type ScheduleItemResize,
+  scheduleInstantAt,
   SchedulingCanvas,
 } from '@/components/scheduling';
 
-import { instantAt, type CalendarAxis } from './calendar-schedule-model';
+import type { CalendarAxis } from './calendar-schedule-model';
 import type { CalendarDateAxisState } from './use-calendar-date-axis';
 import type { CalendarPeopleAxisState } from './use-calendar-people-axis';
 
@@ -26,6 +27,8 @@ export interface CalendarSchedulingSurfaceProps {
   readonly axis: CalendarAxis;
   readonly visibleLaneCount: number;
   readonly pixelsPerHour: number;
+  readonly displayTimezone: string;
+  readonly now?: string;
   readonly preferences?: CalendarPreferences;
   readonly dateAxis: CalendarDateAxisState;
   readonly peopleAxis: CalendarPeopleAxisState;
@@ -46,6 +49,8 @@ export function CalendarSchedulingSurface({
   axis,
   visibleLaneCount,
   pixelsPerHour,
+  displayTimezone,
+  now,
   preferences,
   dateAxis,
   peopleAxis,
@@ -65,11 +70,14 @@ export function CalendarSchedulingSurface({
     startMinutes: number,
     endMinutes: number,
   ): void => {
+    const startsAt = scheduleInstantAt(date, startMinutes, displayTimezone);
+    const endsAt = scheduleInstantAt(date, endMinutes, displayTimezone);
+    if (!startsAt || !endsAt) return;
     updateItem.mutate({
       itemId,
       patch: {
-        startsAt: instantAt(date, startMinutes),
-        endsAt: instantAt(date, endMinutes),
+        startsAt,
+        endsAt,
       },
     });
   };
@@ -94,8 +102,10 @@ export function CalendarSchedulingSurface({
       <div className="grid min-w-0 grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,1fr)_16rem]">
         <div className="min-w-0">
           <SchedulingCanvas
+            displayTimezone={displayTimezone}
             lanes={axis === 'dates' ? dateAxis.lanes : peopleAxis.lanes}
             pixelsPerHour={pixelsPerHour}
+            now={now}
             minimumLaneWidth={minLaneWidth}
             initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
             error={
@@ -123,9 +133,12 @@ export function CalendarSchedulingSurface({
               ? {
                   onReachBoundary,
                   onSelectRegion: ({ lane, startMinutes, endMinutes }) => {
+                    const startsAt = scheduleInstantAt(lane.date, startMinutes, displayTimezone);
+                    const endsAt = scheduleInstantAt(lane.date, endMinutes, displayTimezone);
+                    if (!startsAt || !endsAt) return;
                     onSelectRegion({
-                      startsAt: instantAt(lane.date, startMinutes),
-                      endsAt: instantAt(lane.date, endMinutes),
+                      startsAt,
+                      endsAt,
                     });
                   },
                   onOpenItem: ({ item }: { item: ScheduleItem }) => {

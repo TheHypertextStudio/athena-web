@@ -2,9 +2,7 @@
 
 import {
   type JSX,
-  type DragEvent as ReactDragEvent,
   type PointerEvent as ReactPointerEvent,
-  type ReactNode,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -12,290 +10,22 @@ import {
   useState,
 } from 'react';
 
-import { isScheduleItemEditable, itemBoundsInLane } from './scheduling-date-lanes';
-import { readScheduleDragObject, writeScheduleDragObject } from './scheduling-drag-object';
 import {
   deriveLaneGeometry,
   deriveSnapMinutes,
-  laneIndexAtOffset,
   MINUTES_PER_DAY,
   minutesToPixels,
-  pixelDeltaToMinutes,
   pixelsToMinutes,
 } from './scheduling-geometry';
-import { resolveScheduleTimezone } from './scheduling-time-axis';
-import type {
-  ScheduleItem,
-  ScheduleItemMove,
-  ScheduleObjectDrop,
-  ScheduleItemOpen,
-  ScheduleItemResize,
-  ScheduleLane,
-  ScheduleRegionSelection,
-} from './scheduling-types';
+import { SchedulingItemCard } from './scheduling-item-card';
+import { SchedulingTimeGrid } from './scheduling-time-grid';
+import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
+
+export type { ScheduleItemRenderContext, SchedulingCanvasProps } from './scheduling-types';
 
 const DEFAULT_VIEWPORT_WIDTH = 960;
 const HOUR_GUTTER_WIDTH = 64;
 const MINIMUM_LANE_WIDTH = 220;
-const HOUR_MARKS = Array.from({ length: 25 }, (_, index) => index);
-
-/** Context supplied to a consumer-owned item renderer. */
-export interface ScheduleItemRenderContext {
-  readonly item: ScheduleItem;
-  readonly lane: ScheduleLane;
-  readonly allDay: boolean;
-}
-
-/** Props for the pure, callback-driven {@link SchedulingCanvas}. */
-export interface SchedulingCanvasProps {
-  /** Arbitrary date/resource lanes. No view mode or fixed lane count is assumed. */
-  readonly lanes: readonly ScheduleLane[];
-  /** Continuous vertical zoom. Every positive value is supported. */
-  readonly pixelsPerHour: number;
-  /** Deterministic width override; when omitted the canvas observes its own viewport. */
-  readonly viewportWidth?: number;
-  /** Minimum readable lane width; the visible lane count is derived from this and the viewport. */
-  readonly minimumLaneWidth?: number;
-  /** Lane aligned at the leading edge when a rolling window mounts. */
-  readonly initialLaneIndex?: number;
-  /** Minute-of-day initially brought near the top of the viewport (default: 07:00). */
-  readonly initialScrollMinutes?: number;
-  /** Reports the live viewport-derived geometry to a rolling lane source. */
-  readonly onViewportGeometry?: (geometry: {
-    readonly visibleLaneCount: number;
-    readonly laneWidth: number;
-  }) => void;
-  /** Requests the preceding/following window when horizontal scrolling reaches a boundary. */
-  readonly onReachBoundary?: (direction: 'previous' | 'next') => void;
-  /** Optional application-owned error copy. The grid remains mounted underneath it. */
-  readonly error?: string | null;
-  /** Application-owned empty copy shown when every lane has no items. */
-  readonly emptyMessage?: string;
-  /** Customize item content without transferring gesture or geometry ownership. */
-  readonly renderItem?: (context: ScheduleItemRenderContext) => ReactNode;
-  /** Receive a pointer-created time region. */
-  readonly onSelectRegion?: (selection: ScheduleRegionSelection) => void;
-  /** Receive item activation. */
-  readonly onOpenItem?: (request: ScheduleItemOpen) => void;
-  /** Receive a proposed lane/time move. */
-  readonly onMoveItem?: (request: ScheduleItemMove) => void;
-  /** Receive a proposed start/end resize. */
-  readonly onResizeItem?: (request: ScheduleItemResize) => void;
-  /** Associate a cross-surface task/event with an item target. */
-  readonly onDropObjectOnItem?: (request: ScheduleObjectDrop) => void;
-}
-
-/** Format a grid hour as concise local-independent display copy. */
-function formatHour(hour: number): string {
-  if (hour === 24) return '';
-  if (hour === 0) return '12 AM';
-  if (hour === 12) return '12 PM';
-  return hour < 12 ? `${String(hour)} AM` : `${String(hour - 12)} PM`;
-}
-
-/** Keep a moved interval inside one 24-hour lane without changing its duration. */
-function clampMovedInterval(
-  startMinutes: number,
-  endMinutes: number,
-  deltaMinutes: number,
-): { startMinutes: number; endMinutes: number } {
-  const duration = endMinutes - startMinutes;
-  const nextStart = Math.max(0, Math.min(MINUTES_PER_DAY - duration, startMinutes + deltaMinutes));
-  return { startMinutes: nextStart, endMinutes: nextStart + duration };
-}
-
-/** One timed item placed inside a lane. */
-interface TimedScheduleItemProps {
-  readonly item: ScheduleItem;
-  readonly lane: ScheduleLane;
-  readonly laneIndex: number;
-  readonly lanes: readonly ScheduleLane[];
-  readonly laneWidth: number;
-  readonly pixelsPerHour: number;
-  readonly snapMinutes: number;
-  readonly displayTimezone: string;
-  readonly renderItem?: SchedulingCanvasProps['renderItem'];
-  readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
-  readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
-  readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
-}
-
-/** Render and gesture-wire one timed item without owning any persistence. */
-function TimedScheduleItem({
-  item,
-  lane,
-  laneIndex,
-  lanes,
-  laneWidth,
-  pixelsPerHour,
-  snapMinutes,
-  displayTimezone,
-  renderItem,
-  onOpenItem,
-  onMoveItem,
-  onResizeItem,
-  onDropObjectOnItem,
-}: TimedScheduleItemProps): JSX.Element | null {
-  const bounds = itemBoundsInLane(item, lane, displayTimezone);
-  if (!bounds) return null;
-  const editable = isScheduleItemEditable(item, lane);
-  const top = minutesToPixels(bounds.startMinutes, pixelsPerHour);
-  const height = Math.max(
-    minutesToPixels(bounds.endMinutes - bounds.startMinutes, pixelsPerHour),
-    18,
-  );
-  const [dropActive, setDropActive] = useState(false);
-
-  const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
-    item.dropTarget === true &&
-    event.dataTransfer.types.includes('application/x-docket-schedule-object');
-
-  const beginMove = (event: ReactPointerEvent<HTMLButtonElement>): void => {
-    if (!onMoveItem) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startY = event.clientY;
-    const laneRegion = event.currentTarget.closest<HTMLElement>('[data-schedule-lane-region]');
-    const laneRegionLeft = laneRegion?.getBoundingClientRect().left;
-    const onPointerUp = (upEvent: PointerEvent): void => {
-      window.removeEventListener('pointerup', onPointerUp);
-      const targetIndex =
-        laneRegionLeft !== undefined
-          ? laneIndexAtOffset(upEvent.clientX - laneRegionLeft, lanes.length, laneWidth)
-          : laneIndex;
-      const toLane = targetIndex === null ? lane : (lanes[targetIndex] ?? lane);
-      const deltaMinutes = pixelDeltaToMinutes(
-        upEvent.clientY - startY,
-        pixelsPerHour,
-        snapMinutes,
-      );
-      const moved = clampMovedInterval(bounds.startMinutes, bounds.endMinutes, deltaMinutes);
-      if (toLane.id === lane.id && moved.startMinutes === bounds.startMinutes) return;
-      onMoveItem({ item, fromLane: lane, toLane, ...moved });
-    };
-    window.addEventListener('pointerup', onPointerUp);
-  };
-
-  const beginResize = (
-    edge: ScheduleItemResize['edge'],
-    event: ReactPointerEvent<HTMLButtonElement>,
-  ): void => {
-    if (!onResizeItem) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const startY = event.clientY;
-    const onPointerUp = (upEvent: PointerEvent): void => {
-      window.removeEventListener('pointerup', onPointerUp);
-      const deltaMinutes = pixelDeltaToMinutes(
-        upEvent.clientY - startY,
-        pixelsPerHour,
-        snapMinutes,
-      );
-      const next =
-        edge === 'start'
-          ? {
-              startMinutes: Math.max(
-                0,
-                Math.min(bounds.endMinutes - snapMinutes, bounds.startMinutes + deltaMinutes),
-              ),
-              endMinutes: bounds.endMinutes,
-            }
-          : {
-              startMinutes: bounds.startMinutes,
-              endMinutes: Math.min(
-                MINUTES_PER_DAY,
-                Math.max(bounds.startMinutes + snapMinutes, bounds.endMinutes + deltaMinutes),
-              ),
-            };
-      if (next.startMinutes === bounds.startMinutes && next.endMinutes === bounds.endMinutes) {
-        return;
-      }
-      onResizeItem({ item, lane, edge, ...next });
-    };
-    window.addEventListener('pointerup', onPointerUp);
-  };
-
-  return (
-    <article
-      className={
-        dropActive
-          ? 'border-primary bg-primary-container absolute z-20 overflow-hidden rounded-md border shadow-md'
-          : 'border-outline-variant bg-surface-container-low absolute z-10 overflow-hidden rounded-md border shadow-sm'
-      }
-      data-schedule-item={item.id}
-      draggable={item.dragObject !== undefined}
-      onDragStart={(event) => {
-        if (item.dragObject) writeScheduleDragObject(event.dataTransfer, item.dragObject);
-      }}
-      onDragOver={(event) => {
-        if (!acceptsDrop(event)) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'link';
-        setDropActive(true);
-      }}
-      onDragLeave={() => {
-        setDropActive(false);
-      }}
-      onDrop={(event) => {
-        setDropActive(false);
-        if (!acceptsDrop(event) || !onDropObjectOnItem) return;
-        event.preventDefault();
-        const object = readScheduleDragObject(event.dataTransfer);
-        if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
-        onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
-      }}
-      style={{
-        top,
-        left: 4,
-        right: 4,
-        height,
-        borderLeftWidth: 3,
-        ...(item.color ? { borderLeftColor: item.color } : {}),
-      }}
-    >
-      {editable && onResizeItem ? (
-        <button
-          type="button"
-          aria-label={`Resize ${item.title} from start`}
-          className="absolute inset-x-0 top-0 z-20 h-1.5 cursor-ns-resize"
-          onPointerDown={(event) => {
-            beginResize('start', event);
-          }}
-        />
-      ) : null}
-      <button
-        type="button"
-        className="text-on-surface size-full truncate px-2 py-1 text-left text-xs font-medium"
-        onClick={() => {
-          onOpenItem?.({ item, lane });
-        }}
-      >
-        {renderItem?.({ item, lane, allDay: false }) ?? item.title}
-      </button>
-      {editable && onMoveItem ? (
-        <button
-          type="button"
-          aria-label={`Move ${item.title}`}
-          className="absolute top-1 right-1 z-20 size-4 cursor-move rounded"
-          onPointerDown={beginMove}
-        >
-          <span aria-hidden="true">⋮</span>
-        </button>
-      ) : null}
-      {editable && onResizeItem ? (
-        <button
-          type="button"
-          aria-label={`Resize ${item.title} from end`}
-          className="absolute inset-x-0 bottom-0 z-20 h-1.5 cursor-ns-resize"
-          onPointerDown={(event) => {
-            beginResize('end', event);
-          }}
-        />
-      ) : null}
-    </article>
-  );
-}
 
 /**
  * Render a 24-hour fluid scheduling grid for arbitrary date/resource lanes.
@@ -304,8 +34,10 @@ function TimedScheduleItem({
  * opening behavior, permission policy, and display-state copy remain consumer-owned callbacks.
  */
 export default function SchedulingCanvas({
+  displayTimezone,
   lanes,
   pixelsPerHour,
+  now,
   viewportWidth,
   minimumLaneWidth = MINIMUM_LANE_WIDTH,
   initialLaneIndex = 0,
@@ -327,7 +59,6 @@ export default function SchedulingCanvas({
   const previousPixelsPerHourRef = useRef(pixelsPerHour);
   const [observedWidth, setObservedWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const boundaryLockRef = useRef<'previous' | 'next' | null>(null);
-  const displayTimezone = resolveScheduleTimezone();
 
   useLayoutEffect(() => {
     if (viewportWidth !== undefined) return;
@@ -357,7 +88,6 @@ export default function SchedulingCanvas({
     [lanes.length, minimumLaneWidth, observedWidth, viewportWidth],
   );
   const snapMinutes = deriveSnapMinutes(effectivePixelsPerHour);
-  const gridHeight = 24 * effectivePixelsPerHour;
   const fullWidth = geometry.gutterWidth + geometry.contentWidth;
   const isEmpty = lanes.every((lane) => lane.items.length === 0);
 
@@ -448,7 +178,7 @@ export default function SchedulingCanvas({
       }}
     >
       <div className="min-w-full" style={{ width: fullWidth }}>
-        <header className="bg-surface-container-low sticky top-0 z-30 flex border-b">
+        <header className="bg-surface-container-low sticky top-0 z-40 flex border-b">
           <div
             className="text-on-surface-variant bg-surface-container-low sticky left-0 z-40 shrink-0 self-stretch border-r px-2 py-3 text-[11px] font-medium"
             style={{ width: geometry.gutterWidth }}
@@ -464,7 +194,8 @@ export default function SchedulingCanvas({
               >
                 <p className="text-on-surface truncate text-xs font-semibold">{lane.label}</p>
                 <p className="text-on-surface-variant truncate text-[10px] tabular-nums">
-                  {lane.date}
+                  <span>{lane.date}</span>
+                  {lane.timezone ? <span className="ml-1">{lane.timezone}</span> : null}
                 </p>
                 <div className="mt-1 flex min-h-5 flex-wrap gap-1">
                   {lane.items
@@ -488,36 +219,16 @@ export default function SchedulingCanvas({
           </div>
         </header>
 
-        <div className="relative flex" style={{ height: gridHeight }}>
-          <div
-            className="border-outline-variant bg-surface sticky left-0 z-20 shrink-0 border-r"
-            style={{ width: geometry.gutterWidth }}
+        <div className="relative">
+          <SchedulingTimeGrid
+            lanes={lanes}
+            displayTimezone={displayTimezone}
+            pixelsPerHour={effectivePixelsPerHour}
+            now={now}
+            gutterWidth={geometry.gutterWidth}
+            contentWidth={geometry.contentWidth}
+            laneWidth={geometry.laneWidth}
           >
-            {HOUR_MARKS.map((hour) => (
-              <span
-                key={hour}
-                className="text-on-surface-variant absolute right-2 -translate-y-1/2 text-[10px] tabular-nums"
-                style={{ top: hour * effectivePixelsPerHour }}
-              >
-                {formatHour(hour)}
-              </span>
-            ))}
-          </div>
-
-          <div
-            className="relative shrink-0"
-            data-schedule-lane-region=""
-            style={{ width: geometry.contentWidth, height: gridHeight }}
-          >
-            {HOUR_MARKS.map((hour) => (
-              <div
-                key={hour}
-                aria-hidden="true"
-                className="border-outline-variant pointer-events-none absolute inset-x-0 border-t"
-                data-hour-line={hour}
-                style={{ top: hour * effectivePixelsPerHour }}
-              />
-            ))}
             <div className="absolute inset-0 flex">
               {lanes.map((lane, laneIndex) => (
                 <div
@@ -525,13 +236,13 @@ export default function SchedulingCanvas({
                   aria-label={`${lane.label} time grid`}
                   className="border-outline-variant relative shrink-0 touch-none border-r"
                   data-schedule-lane={lane.id}
-                  style={{ width: geometry.laneWidth, height: gridHeight }}
+                  style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
                   onPointerDown={(event) => {
                     beginSelection(lane, event);
                   }}
                 >
                   {lane.items.map((item) => (
-                    <TimedScheduleItem
+                    <SchedulingItemCard
                       key={item.id}
                       item={item}
                       lane={lane}
@@ -551,7 +262,7 @@ export default function SchedulingCanvas({
                 </div>
               ))}
             </div>
-          </div>
+          </SchedulingTimeGrid>
 
           {error || isEmpty ? (
             <div

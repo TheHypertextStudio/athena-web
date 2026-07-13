@@ -43,12 +43,13 @@ export interface CalendarDateAxisState {
 export function useCalendarDateAxis(
   anchorDate: string,
   visibleLaneCount: number,
+  displayTimezone: string,
   policy?: RollingDateWindowPolicy,
 ): CalendarDateAxisState {
   const window = deriveRollingDateWindow(anchorDate, visibleLaneCount, policy);
   const windowStartDate = window.startDate;
   const windowLaneCount = window.laneCount;
-  const { startISO, endISO } = dateRange(windowStartDate, windowLaneCount);
+  const { startISO, endISO } = dateRange(windowStartDate, windowLaneCount, displayTimezone);
   const itemsQuery = useApiListQuery(calendarItemsDef(startISO, endISO));
   const layersQuery = useApiListQuery(calendarLayersDef());
   const items = useMemo(() => itemsQuery.data?.items ?? [], [itemsQuery.data]);
@@ -60,9 +61,9 @@ export function useCalendarDateAxis(
   const lanes = useMemo(
     () =>
       Array.from({ length: windowLaneCount }, (_, index) =>
-        buildDateLane(shiftISODate(windowStartDate, index), items, colorByLayer),
+        buildDateLane(shiftISODate(windowStartDate, index), items, colorByLayer, displayTimezone),
       ),
-    [colorByLayer, items, windowLaneCount, windowStartDate],
+    [colorByLayer, displayTimezone, items, windowLaneCount, windowStartDate],
   );
   const itemById = useMemo(
     () => new Map<string, CalendarItemOut>(items.map((item) => [item.id, item])),

@@ -34,6 +34,7 @@ export interface CalendarPeopleAxisState {
 export function useCalendarPeopleAxis(
   axis: CalendarAxis,
   anchorDate: string,
+  displayTimezone: string,
 ): CalendarPeopleAxisState {
   const { orgs } = useActiveOrg();
   const sharedWorkspaces = useMemo(() => orgs.filter((org) => !org.isPersonal), [orgs]);
@@ -68,7 +69,7 @@ export function useCalendarPeopleAxis(
     setSelectedActorIds(activeMembers.map((member) => member.actorId));
   }, [activeMembers, axis, selectedActorIds.length]);
 
-  const range = dateRange(anchorDate, 1);
+  const range = dateRange(anchorDate, 1, displayTimezone);
   const actorIdsKey = [...selectedActorIds].sort().join(',');
   const comparisonQuery = useApiListQuery(
     apiQueryOptions(
@@ -96,8 +97,10 @@ export function useCalendarPeopleAxis(
   );
   const lanes = useMemo(
     () =>
-      (comparisonQuery.data?.people ?? []).map((person) => buildComparisonLane(person, anchorDate)),
-    [anchorDate, comparisonQuery.data],
+      (comparisonQuery.data?.people ?? []).map((person) =>
+        buildComparisonLane(person, anchorDate, displayTimezone),
+      ),
+    [anchorDate, comparisonQuery.data, displayTimezone],
   );
 
   return {

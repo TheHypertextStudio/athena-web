@@ -11,7 +11,12 @@ import {
   useRelateCalendarItems,
   useUpdateCalendarItemById,
 } from '@/components/calendar/calendar-mutations';
-import { type ScheduleItem, type ScheduleLane, SchedulingCanvas } from '@/components/scheduling';
+import {
+  scheduleInstantAt,
+  type ScheduleItem,
+  type ScheduleLane,
+  SchedulingCanvas,
+} from '@/components/scheduling';
 
 import { type AgendaEntry, isTimeboxed, useAgenda } from './agenda-context';
 import AgendaEntryCard from './agenda-entry-card';
@@ -31,13 +36,6 @@ function chronological(entries: readonly AgendaEntry[]): AgendaEntry[] {
     if (rightStart !== null) return 1;
     return left.sort - right.sort;
   });
-}
-
-/** Convert one local lane date/minute pair to an ISO instant. */
-function instantAt(date: string, minutes: number): string {
-  const value = new Date(`${date}T00:00:00`);
-  value.setMinutes(minutes, 0, 0);
-  return value.toISOString();
 }
 
 /** Arranges the agenda for the active list/timeline view. */
@@ -94,7 +92,8 @@ function TimelineArrangement({
   readonly onOpenCalendarItem: (itemId: string) => void;
 }): JSX.Element {
   const router = useRouter();
-  const { date, setTimebox } = useAgenda();
+  const { date, displayTimezone, pixelsPerHour, setTimebox } = useAgenda();
+  const [now] = useState(() => new Date().toISOString());
   const updateCalendarItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
@@ -150,8 +149,9 @@ function TimelineArrangement({
   ): void => {
     const entry = entryById.get(item.id);
     if (!entry) return;
-    const startsAt = instantAt(targetLane.date, startMinutes);
-    const endsAt = instantAt(targetLane.date, endMinutes);
+    const startsAt = scheduleInstantAt(targetLane.date, startMinutes, displayTimezone);
+    const endsAt = scheduleInstantAt(targetLane.date, endMinutes, displayTimezone);
+    if (!startsAt || !endsAt) return;
     if (entry.planItemId) {
       setTimebox(entry, startsAt, endsAt);
     } else if (entry.calendarItem) {
@@ -165,8 +165,10 @@ function TimelineArrangement({
   return (
     <>
       <SchedulingCanvas
+        displayTimezone={displayTimezone}
         lanes={[lane]}
-        pixelsPerHour={56}
+        pixelsPerHour={pixelsPerHour}
+        now={now}
         minimumLaneWidth={180}
         emptyMessage="Nothing scheduled."
         onOpenItem={({ item }) => {

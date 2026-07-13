@@ -4,7 +4,6 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  resolveScheduleTimezone,
   SCHEDULE_DRAG_MIME,
   scheduleWallPositionForInstant,
   SchedulingCanvas,
@@ -54,6 +53,7 @@ describe('SchedulingCanvas', () => {
   it('renders arbitrary lanes, a 24-hour grid, and all-day/timed items without view modes', () => {
     render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[
           lane('ada', 'Ada', [TIMED_ITEM, ALL_DAY_ITEM]),
           lane('grace', 'Grace'),
@@ -77,6 +77,7 @@ describe('SchedulingCanvas', () => {
   it('keeps the lane and hour grid mounted under empty and error states', () => {
     const { rerender } = render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('ada', 'Ada'), lane('grace', 'Grace')]}
         pixelsPerHour={60}
         viewportWidth={700}
@@ -90,6 +91,7 @@ describe('SchedulingCanvas', () => {
 
     rerender(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('ada', 'Ada'), lane('grace', 'Grace')]}
         pixelsPerHour={60}
         viewportWidth={700}
@@ -105,6 +107,7 @@ describe('SchedulingCanvas', () => {
     const onSelectRegion = vi.fn();
     render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('ada', 'Ada')]}
         pixelsPerHour={60}
         viewportWidth={500}
@@ -131,11 +134,12 @@ describe('SchedulingCanvas', () => {
     const onOpenItem = vi.fn();
     const onMoveItem = vi.fn();
     const onResizeItem = vi.fn();
-    const displayTimezone = resolveScheduleTimezone();
+    const displayTimezone = 'UTC';
     const initialStart = scheduleWallPositionForInstant(TIMED_ITEM.startsAt, displayTimezone);
     const initialEnd = scheduleWallPositionForInstant(TIMED_ITEM.endsAt, displayTimezone);
     render(
       <SchedulingCanvas
+        displayTimezone={displayTimezone}
         lanes={[lane('ada', 'Ada', [TIMED_ITEM]), lane('grace', 'Grace')]}
         pixelsPerHour={60}
         viewportWidth={800}
@@ -184,6 +188,7 @@ describe('SchedulingCanvas', () => {
     const onOpenItem = vi.fn();
     render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('ada', 'Ada', [{ ...TIMED_ITEM, editable: true }], false)]}
         pixelsPerHour={60}
         viewportWidth={500}
@@ -218,6 +223,7 @@ describe('SchedulingCanvas', () => {
 
     render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('ada', 'Ada', [target])]}
         pixelsPerHour={60}
         viewportWidth={500}
@@ -242,6 +248,7 @@ describe('SchedulingCanvas', () => {
   it('preserves vertical time position while a rolling host replaces its lane window', () => {
     const { rerender } = render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('window-a', 'Window A')]}
         pixelsPerHour={60}
         viewportWidth={500}
@@ -252,6 +259,7 @@ describe('SchedulingCanvas', () => {
 
     rerender(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('window-b', 'Window B')]}
         pixelsPerHour={60}
         viewportWidth={500}
@@ -265,6 +273,7 @@ describe('SchedulingCanvas', () => {
     const onReachBoundary = vi.fn();
     render(
       <SchedulingCanvas
+        displayTimezone="UTC"
         lanes={[lane('one', 'One'), lane('two', 'Two'), lane('three', 'Three')]}
         pixelsPerHour={60}
         viewportWidth={500}
@@ -288,5 +297,130 @@ describe('SchedulingCanvas', () => {
     canvas.scrollLeft = 500;
     fireEvent.scroll(canvas);
     expect(onReachBoundary).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders adaptive major labels and minor lines at exact wall-minute positions', () => {
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('date', 'Date')]}
+        pixelsPerHour={24}
+        viewportWidth={500}
+      />,
+    );
+
+    const overviewMajor = document.querySelectorAll('[data-schedule-tick="major"]');
+    const overviewMinor = document.querySelectorAll('[data-schedule-tick="minor"]');
+    expect(overviewMajor).toHaveLength(13);
+    expect(overviewMinor).toHaveLength(36);
+    expect(document.querySelector('[data-schedule-label="120"]')).toHaveStyle({ top: '48px' });
+    expect(document.querySelector('[data-schedule-tick-minutes="30"]')).toHaveStyle({
+      top: '12px',
+    });
+
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('date', 'Date')]}
+        pixelsPerHour={144}
+        viewportWidth={500}
+      />,
+    );
+    expect(document.querySelectorAll('[data-schedule-tick="major"]')).toHaveLength(49);
+    expect(document.querySelectorAll('[data-schedule-tick="minor"]')).toHaveLength(240);
+    expect(document.querySelector('[data-schedule-label="30"]')).toHaveStyle({ top: '72px' });
+    expect(document.querySelector('[data-schedule-tick-minutes="5"]')).toHaveStyle({ top: '12px' });
+  });
+
+  it('renders a deterministic current-time line only in lanes for its display-zone date', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="America/Los_Angeles"
+        lanes={[
+          { ...lane('yesterday', 'Yesterday'), date: '2026-06-30' },
+          { ...lane('today-a', 'Today A'), date: '2026-07-01' },
+          { ...lane('today-b', 'Today B'), date: '2026-07-01' },
+        ]}
+        now="2026-07-01T16:30:00Z"
+        pixelsPerHour={60}
+        viewportWidth={800}
+      />,
+    );
+
+    const lines = document.querySelectorAll('[data-current-time-line]');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toHaveAttribute('data-current-time-line', 'today-a');
+    expect(lines[1]).toHaveAttribute('data-current-time-line', 'today-b');
+    expect(lines[0]).toHaveStyle({ top: '570px' });
+    expect(lines[0]?.closest('[data-schedule-current-layer]')).toHaveClass('z-30');
+  });
+
+  it('annotates skipped and repeated wall-clock positions in their relevant date lanes', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="America/Los_Angeles"
+        lanes={[
+          { ...lane('spring', 'Spring'), date: '2026-03-08' },
+          { ...lane('fall', 'Fall'), date: '2026-11-01' },
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+      />,
+    );
+
+    const skipped = document.querySelectorAll(
+      '[data-schedule-transition-lane="spring"][data-schedule-transition="skipped"]',
+    );
+    const repeated = document.querySelectorAll(
+      '[data-schedule-transition-lane="fall"][data-schedule-transition="repeated"]',
+    );
+    expect(skipped).toHaveLength(1);
+    expect(repeated).toHaveLength(1);
+    expect(skipped[0]).toHaveStyle({ top: '120px', height: '60px' });
+    expect(repeated[0]).toHaveStyle({ top: '60px', height: '60px' });
+    expect(skipped[0]).toHaveTextContent('Skipped hour · DST');
+    expect(repeated[0]).toHaveTextContent('Repeated hour · DST');
+    expect(skipped[0]?.closest('[data-schedule-transition-layer]')).toHaveClass('z-0');
+  });
+
+  it('keeps one display-zone geometry while showing resource timezones as header metadata', () => {
+    const instantA = { ...TIMED_ITEM, id: 'same-a', title: 'Same A' };
+    const instantB = { ...TIMED_ITEM, id: 'same-b', title: 'Same B' };
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          { ...lane('los-angeles', 'Los Angeles', [instantA]), timezone: 'America/Los_Angeles' },
+          { ...lane('london', 'London', [instantB]), timezone: 'Europe/London' },
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={800}
+      />,
+    );
+
+    expect(screen.getByText('America/Los_Angeles')).toBeInTheDocument();
+    expect(screen.getByText('Europe/London')).toBeInTheDocument();
+    expect(document.querySelector('[data-schedule-item="same-a"]')).toHaveStyle({ top: '540px' });
+    expect(document.querySelector('[data-schedule-item="same-b"]')).toHaveStyle({ top: '540px' });
+  });
+
+  it('keeps the grid mounted when the deterministic clock is absent or invalid', () => {
+    const { rerender } = render(
+      <SchedulingCanvas displayTimezone="UTC" lanes={[]} pixelsPerHour={24} viewportWidth={500} />,
+    );
+    expect(document.querySelectorAll('[data-schedule-tick]')).toHaveLength(49);
+    expect(document.querySelector('[data-current-time-line]')).not.toBeInTheDocument();
+
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[]}
+        now="not-an-instant"
+        pixelsPerHour={24}
+        viewportWidth={500}
+      />,
+    );
+    expect(document.querySelectorAll('[data-schedule-tick]')).toHaveLength(49);
+    expect(document.querySelector('[data-current-time-line]')).not.toBeInTheDocument();
   });
 });

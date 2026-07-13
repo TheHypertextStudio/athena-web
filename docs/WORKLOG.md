@@ -38,8 +38,10 @@
 - **Design**: `docs/superpowers/specs/2026-07-13-scheduling-interaction-parity-design.md`
 - **Implementation Plan**:
   `docs/superpowers/plans/2026-07-13-scheduling-interaction-parity.md`
-- **Validation Progress**: Baseline focused scheduling/calendar tests pass 28/28. Browser discovery
-  still reports no available binding in this thread, so interactive visual proof remains pending.
+- **Validation Progress**: The Temporal wall-clock and adaptive-axis slices are implemented. The
+  Task 2 focused suite passes 30/30, affected Agenda and Calendar tests pass 63/63, and the web
+  typecheck plus focused lint pass. Collision, gesture, polish, and browser-proof work remains in
+  the later plan tasks; this thread still has no available browser binding.
 
 ---
 

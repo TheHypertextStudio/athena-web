@@ -30,11 +30,25 @@ import {
 
 import { api } from '@/lib/api';
 import { calendarItemsDef } from '@/components/calendar/calendar-data';
-import { apiQueryOptions, queryKeys, useApiListQuery, usePrefetchApi } from '@/lib/query';
+import {
+  resolveScheduleTimezone,
+  scheduleDateRange,
+  useScheduleDisplayDate,
+} from '@/components/scheduling';
+import {
+  apiQueryOptions,
+  queryKeys,
+  STALE,
+  useApiListQuery,
+  useApiQuery,
+  usePrefetchApi,
+} from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { startViewTransition } from '@/lib/view-transition';
 
 import { type AgendaPlanMutations, useAgendaPlanMutations } from './agenda-mutations';
+
+const DEFAULT_PIXELS_PER_HOUR = 72;
 
 /** Stable `view-transition-name` for an agenda entry, so it morphs across views (list ↔ timeline). */
 export function agendaEntryTransitionName(entryId: string): string {
@@ -248,6 +262,10 @@ interface AgendaContextValue extends AgendaPlanMutations {
   loading: boolean;
   /** A load error message, or `null`. */
   error: string | null;
+  /** Resolved Hub timezone shared by agenda range reads, geometry, and persistence. */
+  displayTimezone: string;
+  /** Persisted continuous calendar zoom, falling back to the shared default. */
+  pixelsPerHour: number;
   /** The active view mode. */
   view: AgendaView;
   /** Switch the active view. */
@@ -292,12 +310,12 @@ function planDef(date: string) {
   );
 }
 
-/** The local-day instant range used by the layered calendar read. */
-function calendarDayRange(date: string): { startISO: string; endISO: string } {
-  return {
-    startISO: new Date(`${date}T00:00:00`).toISOString(),
-    endISO: new Date(`${shiftISODate(date, 1)}T00:00:00`).toISOString(),
-  };
+/** The display-timezone day range used by the layered calendar read. */
+function calendarDayRange(
+  date: string,
+  displayTimezone: string,
+): { startISO: string; endISO: string } {
+  return scheduleDateRange(date, 1, displayTimezone);
 }
 
 /**
@@ -309,15 +327,31 @@ function calendarDayRange(date: string): { startISO: string; endISO: string } {
  * `today` query (keyed by date), so today's view shares cache with the Today page's "Next up".
  */
 export function AgendaProvider({ initialDate, children }: AgendaProviderProps): JSX.Element {
-  const [date, setDate] = useState(() => initialDate ?? todayISODate());
   const [view, setViewState] = useState<AgendaView>('timeline');
+  const [now] = useState(() => new Date().toISOString());
+  const preferencesQuery = useApiQuery(
+    apiQueryOptions(
+      queryKeys.hubPreferences(),
+      () => api.v1.hub.preferences.$get(),
+      'Could not load agenda preferences.',
+      { staleTime: STALE.standard },
+    ),
+  );
+  const displayTimezone = resolveScheduleTimezone(preferencesQuery.data?.timezone);
+  const pixelsPerHour = preferencesQuery.data?.calendar?.pixelsPerHour ?? DEFAULT_PIXELS_PER_HOUR;
+  const { date, isToday, today, setDate } = useScheduleDisplayDate({
+    initialDate,
+    displayTimezone,
+    preferencesReady: preferencesQuery.data !== undefined,
+    now,
+  });
 
   // `useApiListQuery` keeps the current day on screen while the next day loads (it bundles
   // `placeholderData: keepPreviousData`), so stepping days never blanks the grid to a skeleton —
   // only the very first load (no data at all) shows one.
   const query = useApiListQuery(agendaDef(date));
   const data: AgendaOut | null = query.data ?? null;
-  const calendarRange = calendarDayRange(date);
+  const calendarRange = calendarDayRange(date, displayTimezone);
   const calendarQuery = useApiListQuery(
     calendarItemsDef(calendarRange.startISO, calendarRange.endISO),
   );
@@ -338,10 +372,10 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     for (const neighbour of [shiftISODate(date, -1), shiftISODate(date, 1)]) {
       prefetch(agendaDef(neighbour));
       prefetch(planDef(neighbour));
-      const range = calendarDayRange(neighbour);
+      const range = calendarDayRange(neighbour, displayTimezone);
       prefetch(calendarItemsDef(range.startISO, range.endISO));
     }
-  }, [date, prefetch]);
+  }, [date, displayTimezone, prefetch]);
 
   const entries = useMemo(() => {
     const legacyEntries = toAgendaEntries(data).map((entry) => {
@@ -380,24 +414,26 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   // structure and reconciles in place, so the click lands instantly and only the cards swap.
   const goToPreviousDay = useCallback(() => {
     setDate((d) => shiftISODate(d, -1));
-  }, []);
+  }, [setDate]);
   const goToNextDay = useCallback(() => {
     setDate((d) => shiftISODate(d, 1));
-  }, []);
+  }, [setDate]);
   const goToToday = useCallback(() => {
-    setDate(todayISODate());
-  }, []);
+    setDate(today);
+  }, [setDate, today]);
 
   const value = useMemo<AgendaContextValue>(
     () => ({
       date,
-      isToday: date === todayISODate(),
+      isToday,
       entries,
       loading: query.isPending && calendarQuery.isPending,
       error:
         query.isError || calendarQuery.isError
           ? 'Calendar updates are temporarily unavailable.'
           : null,
+      displayTimezone,
+      pixelsPerHour,
       view,
       setView,
       goToPreviousDay,
@@ -407,11 +443,14 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     }),
     [
       date,
+      isToday,
       entries,
       query.isPending,
       query.isError,
       calendarQuery.isPending,
       calendarQuery.isError,
+      displayTimezone,
+      pixelsPerHour,
       view,
       setView,
       goToPreviousDay,

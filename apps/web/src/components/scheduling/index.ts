@@ -37,6 +37,11 @@ export {
   type ScheduleTick,
   type ScheduleTimeDisambiguation,
 } from './scheduling-time-axis';
+export {
+  useScheduleDisplayDate,
+  type ScheduleDisplayDateState,
+  type UseScheduleDisplayDateOptions,
+} from './use-schedule-display-date';
 export type {
   ScheduleItem,
   ScheduleItemMove,

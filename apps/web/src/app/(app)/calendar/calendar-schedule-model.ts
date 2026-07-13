@@ -1,8 +1,13 @@
 import type { CalendarItemOut, ScheduleComparisonOut } from '@docket/types';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
-import type { ScheduleItem, ScheduleLane } from '@/components/scheduling';
-import { todayISODate } from '@/lib/today';
+import {
+  scheduleDateRange,
+  scheduleInstantAt,
+  scheduleWallPositionForInstant,
+  type ScheduleItem,
+  type ScheduleLane,
+} from '@/components/scheduling';
 
 /** The resource dimension rendered by the calendar canvas. */
 export type CalendarAxis = 'dates' | 'people';
@@ -25,22 +30,20 @@ export const DEFAULT_ROLLING_DATE_WINDOW_POLICY: RollingDateWindowPolicy = {
   overscanViewports: 1,
 };
 
-/** Convert one local date and minute-of-day into an ISO instant. */
-export function instantAt(date: string, minutes: number): string {
-  const value = new Date(`${date}T00:00:00`);
-  value.setMinutes(minutes, 0, 0);
-  return value.toISOString();
+/** Convert one validated schedule wall-clock position to its exact instant. */
+function requiredScheduleInstant(date: string, minutes: number, displayTimezone: string): string {
+  const instant = scheduleInstantAt(date, minutes, displayTimezone);
+  if (!instant) throw new RangeError('Invalid scheduling wall-clock position.');
+  return instant;
 }
 
-/** Return the instant range covering any positive number of local date lanes. */
+/** Return the exact instant range covering local date lanes in the required display timezone. */
 export function dateRange(
   startDate: string,
   laneCount: number,
+  displayTimezone: string,
 ): { startISO: string; endISO: string } {
-  return {
-    startISO: instantAt(startDate, 0),
-    endISO: instantAt(shiftISODate(startDate, laneCount), 0),
-  };
+  return scheduleDateRange(startDate, laneCount, displayTimezone);
 }
 
 /**
@@ -66,13 +69,18 @@ export function deriveRollingDateWindow(
 }
 
 /** Return whether a normalized calendar item overlaps a local date lane. */
-export function overlapsDate(item: CalendarItemOut, date: string): boolean {
+export function overlapsDate(
+  item: CalendarItemOut,
+  date: string,
+  displayTimezone: string,
+): boolean {
   if (item.allDayStartDate && item.allDayEndDate) {
     return item.allDayStartDate <= date && date < item.allDayEndDate;
   }
   if (!item.startsAt || !item.endsAt) return false;
-  const laneStart = new Date(`${date}T00:00:00`).getTime();
-  const laneEnd = new Date(`${shiftISODate(date, 1)}T00:00:00`).getTime();
+  const range = scheduleDateRange(date, 1, displayTimezone);
+  const laneStart = Date.parse(range.startISO);
+  const laneEnd = Date.parse(range.endISO);
   return new Date(item.startsAt).getTime() < laneEnd && new Date(item.endsAt).getTime() > laneStart;
 }
 
@@ -81,14 +89,22 @@ export function toScheduleItem(
   item: CalendarItemOut,
   date: string,
   color: string | null | undefined,
+  displayTimezone: string,
 ): ScheduleItem {
   const allDay = item.allDayStartDate !== null && item.allDayEndDate !== null;
-  const startsAt = item.startsAt ?? instantAt(item.allDayStartDate ?? date, 0);
-  const endsAt = item.endsAt ?? instantAt(item.allDayEndDate ?? shiftISODate(date, 1), 0);
+  const startsAt =
+    item.startsAt ?? requiredScheduleInstant(item.allDayStartDate ?? date, 0, displayTimezone);
+  const endsAt =
+    item.endsAt ??
+    requiredScheduleInstant(item.allDayEndDate ?? shiftISODate(date, 1), 0, displayTimezone);
+  const startPosition = item.startsAt
+    ? scheduleWallPositionForInstant(item.startsAt, displayTimezone)
+    : null;
+  const endPosition = item.endsAt
+    ? scheduleWallPositionForInstant(item.endsAt, displayTimezone)
+    : null;
   const singleDay =
-    item.startsAt !== null &&
-    item.endsAt !== null &&
-    todayISODate(new Date(item.startsAt)) === todayISODate(new Date(item.endsAt));
+    startPosition !== null && endPosition !== null && startPosition.date === endPosition.date;
   return {
     id: item.id,
     title: item.title,
@@ -110,6 +126,7 @@ export function buildDateLane(
   date: string,
   items: readonly CalendarItemOut[],
   colorByLayer: ReadonlyMap<string, string | null>,
+  displayTimezone: string,
 ): ScheduleLane {
   return {
     id: `date:${date}`,
@@ -121,8 +138,8 @@ export function buildDateLane(
         day: 'numeric',
       }) || date,
     items: items
-      .filter((item) => overlapsDate(item, date))
-      .map((item) => toScheduleItem(item, date, colorByLayer.get(item.layerId))),
+      .filter((item) => overlapsDate(item, date, displayTimezone))
+      .map((item) => toScheduleItem(item, date, colorByLayer.get(item.layerId), displayTimezone)),
   };
 }
 
@@ -130,6 +147,7 @@ export function buildDateLane(
 export function buildComparisonLane(
   person: ScheduleComparisonOut['people'][number],
   date: string,
+  displayTimezone: string,
 ): ScheduleLane {
   return {
     id: `person:${person.actorId}`,
@@ -146,8 +164,12 @@ export function buildComparisonLane(
             ? item.itemId
             : `busy:${person.actorId}:${item.startsAt ?? item.allDayStartDate ?? String(index)}`,
         title: item.access === 'details' ? item.title : 'Busy',
-        startsAt: item.startsAt ?? instantAt(item.allDayStartDate ?? date, 0),
-        endsAt: item.endsAt ?? instantAt(item.allDayEndDate ?? shiftISODate(date, 1), 0),
+        startsAt:
+          item.startsAt ??
+          requiredScheduleInstant(item.allDayStartDate ?? date, 0, displayTimezone),
+        endsAt:
+          item.endsAt ??
+          requiredScheduleInstant(item.allDayEndDate ?? shiftISODate(date, 1), 0, displayTimezone),
         allDay,
         editable: false,
       };

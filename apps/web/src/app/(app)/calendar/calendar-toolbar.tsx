@@ -8,6 +8,11 @@ import type { CalendarAxis } from './calendar-schedule-model';
 
 const MIN_PIXELS_PER_HOUR = 24;
 const MAX_PIXELS_PER_HOUR = 240;
+const ZOOM_SHORTCUTS = [
+  { label: 'Overview', value: 24 },
+  { label: 'Standard', value: 72 },
+  { label: 'Detail', value: 144 },
+] as const;
 
 /** Props for the fluid calendar's navigation, axis, zoom, and create controls. */
 export interface CalendarToolbarProps {
@@ -20,7 +25,7 @@ export interface CalendarToolbarProps {
   readonly onNext: () => void;
   readonly onAxisChange: (axis: CalendarAxis) => void;
   readonly onZoomChange: (pixelsPerHour: number) => void;
-  readonly onZoomCommit: () => void;
+  readonly onZoomCommit: (pixelsPerHour: number) => void;
 }
 
 /** Render calendar controls without owning a named date view or lane count. */
@@ -75,6 +80,30 @@ export function CalendarToolbar({
             </button>
           ))}
         </div>
+        <div
+          role="group"
+          aria-label="Calendar zoom shortcuts"
+          className="border-outline-variant flex rounded-md border p-0.5"
+        >
+          {ZOOM_SHORTCUTS.map(({ label, value }) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={pixelsPerHour === value}
+              className={
+                pixelsPerHour === value
+                  ? 'bg-surface-container-high text-on-surface rounded px-2 py-1 text-[11px] font-medium'
+                  : 'text-on-surface-variant rounded px-2 py-1 text-[11px] font-medium'
+              }
+              onClick={() => {
+                onZoomChange(value);
+                onZoomCommit(value);
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <label className="text-on-surface-variant flex items-center gap-2 text-xs">
           <span>Zoom</span>
           <input
@@ -82,13 +111,17 @@ export function CalendarToolbar({
             type="range"
             min={MIN_PIXELS_PER_HOUR}
             max={MAX_PIXELS_PER_HOUR}
-            step={4}
+            step={1}
             value={pixelsPerHour}
             onChange={(event) => {
               onZoomChange(Number(event.target.value));
             }}
-            onPointerUp={onZoomCommit}
-            onBlur={onZoomCommit}
+            onPointerUp={(event) => {
+              onZoomCommit(Number(event.currentTarget.value));
+            }}
+            onBlur={(event) => {
+              onZoomCommit(Number(event.currentTarget.value));
+            }}
           />
         </label>
         {axis === 'dates' ? createControl : null}

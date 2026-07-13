@@ -7,54 +7,6 @@
 
 ## Active Tasks
 
-### [CAL-UX-003] Harden scheduling interactions to calendar-product parity
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-07-13
-- **Priority**: P0
-- **Description**: Bring the shared Agenda/Calendar canvas's time-axis accuracy, collision layout,
-  direct manipulation, visual hierarchy, and edge-case behavior to the interaction bar established
-  by Google Calendar and Sunsama without introducing fixed date views.
-- **Observed Gaps**:
-  - The live canvas gives every timed item full lane width, so concurrent events can hide one
-    another even though a legacy, unused collision helper has tests.
-  - Hour labels remain fixed at one English 12-hour label per hour across the entire zoom range;
-    minor ticks do not communicate active snap precision, and mixed-timezone people lanes do not
-    align by instant.
-  - Drag/resize emits valid basic callbacks but lacks live preview, pointer cancellation, target-lane
-    permission checks, stable native-drag arbitration, and coverage for both resize edges.
-  - Short events can mutate after a zero-distance resize, and Agenda can collapse an editable
-    multi-day item to one clipped day.
-  - The prior implementation has no browser recording or interactive visual proof.
-- **Plan**:
-  1. Introduce a shared DST-aware display-time axis, adaptive tick policy, and zoom shortcuts.
-  2. Integrate deterministic collision columns into the production SchedulingCanvas.
-  3. Replace pointer-up-only gestures with live, cancellable move and start/end resize previews.
-  4. Unify source/target permission and multi-day editability across Calendar and Agenda.
-  5. Polish event density, hover/focus/read-only states, current-time presentation, and responsive
-     controls.
-  6. Verify pure geometry, component gestures, consumer mutation payloads, repository gates, and a
-     recorded real-browser interaction pass when a browser binding is available.
-- **Design**: `docs/superpowers/specs/2026-07-13-scheduling-interaction-parity-design.md`
-- **Implementation Plan**:
-  `docs/superpowers/plans/2026-07-13-scheduling-interaction-parity.md`
-- **Validation Progress**: The Temporal wall-clock and adaptive-axis slices are implemented. The
-  Task 2 focused suite passes 30/30, affected Agenda and Calendar tests pass 63/63, and the web
-  typecheck plus focused lint pass. Collision, gesture, polish, and browser-proof work remains in
-  the later plan tasks; this thread still has no available browser binding.
-  Review follow-up now pins display-timezone-safe datetime inputs and DST fold/gap handling; the
-  expanded affected suite passes 68/68. The Agenda provider/model split keeps both production
-  modules below 300 lines without changing the public context exports.
-  Re-review coverage also pins same-item timezone hydration and selected-zone default rounding:
-  untouched drawer fields rebase without shifting exact instants, edited fields remain user-owned,
-  and Kathmandu toolbar defaults land on the next wall-clock half hour. A fall-back-hour regression
-  also ensures rounding chooses the earliest boundary still in the future. Agenda/Calendar now
-  passes 72/72 with web typecheck and focused lint green. The final quick-create synchronization
-  pass now gives toolbar and selected-region drafts the same exact-seed/per-field ownership rule;
-  timezone hydration rebases only untouched fields and the expanded suite passes 74/74.
-
----
-
 ### [BUILD-REPAIR-001] Restore clean repository build contracts
 
 - **Status**: COMPLETED
@@ -1126,6 +1078,66 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [CAL-UX-003] Harden scheduling interactions to calendar-product parity
+
+- **Completed**: 2026-07-13
+- **Priority**: P0
+- **Summary**:
+  - Rebuilt the time axis around one viewer-timezone wall clock with adaptive labels, minor ticks,
+    a current-time line refreshed every 30 seconds, explicit DST gap/fold bands, disambiguated
+    repeated-hour labels, and rejection of ambiguous edits as well as invalid selections.
+    Continuous zoom remains one 24–240 pixels-per-hour scalar; Overview, Standard, and Detail are
+    shortcuts rather than separate views, and zoom preserves the centered wall time.
+  - Integrated deterministic side-by-side collision columns into the production canvas, including
+    minimum interactive height for short low-zoom items and stable four-pixel gutters.
+  - Added live, cancellable pointer and keyboard move plus start/end resize interactions with exact
+    previews, activation thresholds, edge autoscroll, announcements, and permission/source-model
+    checks before persistence. Read-only, conflicted, derived, all-day, and multi-day items remain
+    openable without false timed-edit affordances.
+  - Made region selection obey the same interaction lifecycle: the initiating pointer owns a
+    captured live preview, while Escape, pointer cancel, lost capture, and unmount all clear it
+    without creating an item.
+  - Kept date and arbitrary people/resource lanes on the same bounded, responsive component. Fixed
+    sticky-gutter alignment, resize-induced false boundary navigation, narrow degraded-state copy,
+    and stale range caches after creation or a cross-range update. Workspace changes immediately
+    clear prior comparison members, lanes, selection, and shared details before loading the next
+    workspace. Details-shared cards open immutable comparison-backed details without an owner-only
+    item request; busy-only cards remain opaque, static, and non-openable.
+  - Added native task-to-timebox and calendar-item-to-event drops while keeping relation drag
+    arbitration separate from timed move/resize. Calendar and Agenda continue rendering their grids
+    beneath loading, empty, stale, and hostile server failures with fixed application-owned copy.
+    Stored per-layer diagnostics likewise surface only the fixed `Calendar sync issue` indicator.
+- **Files Changed**: Shared scheduling time-axis, collision, gesture, viewport, card, notice, and
+  type modules; Calendar and Agenda consumers/mutation policies; focused unit/component tests;
+  recorded Chromium e2e contracts and helpers; layered-calendar product and engineering specs.
+- **Design**: `docs/superpowers/specs/2026-07-13-scheduling-interaction-parity-design.md`
+- **Implementation Plan**:
+  `docs/superpowers/plans/2026-07-13-scheduling-interaction-parity.md`
+- **Validation**:
+  - Focused Scheduling, Calendar, and Agenda suites pass 30/30 files and 246/246 tests.
+  - The isolated real Chromium contract passes 13/13 scenarios, covering arbitrary rolling windows,
+    every zoom form, region creation, responsive cache changes, cross-date move, both resize edges,
+    three simultaneous collisions, object drops, provider read-only behavior, safe server failures,
+    comparison-backed shared details, and spring/fall DST behavior. Videos, screenshots, and
+    inspected contact sheets are retained under `apps/web/.data/calendar-e2e-evidence/` as ignored
+    local artifacts.
+  - Repository typecheck and lint pass 17/17 tasks each. The full test gate passes 17/17 package
+    tasks (web 517/517; API 1,212/1,212; tooling 36/36), and the production build passes API, web,
+    and admin 3/3.
+- **Retrospective**:
+  - **Went well**: keeping geometry and gestures consumer-neutral let Calendar, Agenda, dates, and
+    people/resource comparison share one interaction engine without hardcoded day/week branches.
+  - **Improved during validation**: the recorded browser pass caught three product bugs that the
+    component suite did not expose—header/gutter clipping, resize-driven boundary navigation, and a
+    stale compact query window after creation—and each now has focused regression coverage. An
+    independent review then closed destination-range update invalidation, DST edit ambiguity,
+    pointer cancellation, shared-detail privacy, opaque-item semantics, and live-clock edge cases.
+  - **Learned**: a responsive rolling calendar must invalidate the whole item-range cache family
+    after creation and updates; invalidating only the active range is observably wrong when lane
+    geometry changes or an item moves into a previously empty destination range.
+
+---
 
 ### [CAL-UX-002] Build the fluid unified scheduling canvas
 

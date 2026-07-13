@@ -3,7 +3,7 @@
 > **Status**: Shipped (V1) — see "Shipped State And Known Follow-Ups" below for what landed
 > differently than originally described here.
 > **Area**: Calendar, agenda, tasks, connected accounts
-> **Last Updated**: 2026-07-12
+> **Last Updated**: 2026-07-13
 
 ## Objective
 
@@ -26,6 +26,8 @@ contract later.
   task can be related to multiple meetings or time blocks.
 - Calendar views render layers. External provider calendars, Docket focus blocks, travel buffers,
   do-not-schedule blocks, and task timeboxes are different layers over the same day.
+- Calendar and Agenda keep their time grid mounted through empty, loading, stale, and failure
+  states; server availability must not determine whether basic date and time structure renders.
 - Docket should never promise an edit that the provider or user's permission cannot honor. Read-only
   items remain useful, visible, and linkable.
 - Provider events stay provider-owned unless the user creates a Docket-native block or task.
@@ -43,13 +45,17 @@ contract later.
 
 ### Inline Editing
 
-- As a user, I can drag or resize editable calendar items in calendar views when inline editing is
-  enabled.
+- As a user, I can drag an editable timed item to move it and drag either its start or end edge to
+  resize it directly in the calendar.
+- As a keyboard user, I can move or resize an editable timed item by the active snap interval and
+  receive an announcement of the proposed lane and time.
 - As a user, I can edit core event fields from Docket: title, start/end/all-day, location, and
   description.
 - As a user, I can edit Docket-native blocks immediately because Docket is the source of truth.
 - As a user, I see read-only controls when an external item is not editable because of OAuth scope,
   calendar access role, attendee permissions, or provider limitations.
+- As a user, I can still open or create relationships with all-day and multi-day items, but Docket
+  does not pretend they support single-day timed drag or resize.
 - As a user, if an external write conflicts with a provider change, Docket preserves my local intent,
   marks the item as conflicted, and gives me a way to review it.
 
@@ -75,14 +81,27 @@ contract later.
 ### Unified Scheduling
 
 - As a user, I can drag over any date lane to create either an event or a timebox, using my saved
-  default while retaining an explicit choice before persistence.
+  default while retaining an explicit choice before persistence. The live preview is owned by the
+  initiating pointer and cancels without creation on Escape, pointer cancel, or lost capture.
 - As a user, I can move and resize editable items across arbitrary date lanes at a continuously
-  adjustable time scale.
+  adjustable 24–240 pixels-per-hour scale. Overview (24), Standard (72), and Detail (144) are
+  shortcuts, not separate calendar modes.
 - As a user, I can drag tasks or calendar items onto a timebox or event to create a contained or
   related relationship.
+- As a user, simultaneous items remain individually visible in stable side-by-side columns instead
+  of blindly overlapping.
+- As a user, labels, snapping, previews, and saved bounds agree in my selected timezone. Docket
+  rejects wall times that fall in a daylight-saving gap or ambiguous fold rather than shifting my
+  selection without telling me, while exact repeated-hour instants are labeled with their
+  disambiguating short zone name.
+- As a user, a failed calendar read or write leaves the grid and locally available items visible and
+  shows fixed Docket-owned copy rather than server or provider exception text.
 - As a workspace member, I can compare any selected set of people as schedule lanes. Only layers
   explicitly shared to that workspace participate, and busy-only/private data is structurally
   redacted by the API.
+- As a workspace member, a details-shared item opens immutable comparison-backed details, while a
+  busy-only item remains an opaque non-openable block. Switching workspaces clears the prior people
+  schedule immediately.
 
 ## Core Objects
 
@@ -143,8 +162,10 @@ shell even if some sections start compact.
 ## UI Surfaces
 
 - Global agenda rail: continues to show the current day but renders layer-aware items.
-- Calendar view: a viewport-driven rolling date canvas with layer controls, continuous zoom,
-  region creation, drag/resize, object drop targets, people comparison, and item workspace.
+- Calendar view: one bounded, scrollable scheduling canvas with viewport-driven rolling date lanes
+  or a consumer-selected people/resource lane set, a sticky all-day header, layer controls,
+  continuous zoom, region creation, drag/resize, object drop targets, and item workspace. It has no
+  named day/week mode or fixed visible lane count.
 - Today page: can show "next up" from layered calendar items and task timeboxes.
 - Task detail: shows linked calendar items as structured context, not only attachments.
 - Google Calendar settings: expands from calendar visibility to account/layer/write-scope/sync health.
@@ -185,8 +206,34 @@ Out of scope for V1:
 - Calendar views can filter/toggle layers without blanking or fetching through ad-hoc client code.
 - The visible lane count and rolling query window derive from live viewport geometry; no product
   mode or fixed date count is embedded in the scheduling component.
+- The same fluid component renders arbitrary people/resource comparison lanes without a fixed
+  participant count; resource timezones are metadata and do not alter viewer-timezone geometry.
+- Zoom remains one 24–240 scalar with shortcuts at 24, 72, and 144, preserves the centered wall time
+  below the all-day header, and adapts labels and snap intervals to the active scale.
+- Concurrent timed items receive deterministic side-by-side placement so no item is fully hidden.
+- Region selection uses the saved event/timebox default while retaining an explicit choice before
+  persistence, shows a live snapped preview, and cancels without creation on Escape, pointer
+  cancellation, lost capture, or unmount.
+- Editable single-day timed items can move across eligible lanes and resize from either edge by
+  pointer or keyboard. Item, source, target, provider, conflict, and source-model policy are checked
+  before persistence.
+- Tasks and calendar items can be dropped on eligible events and timeboxes to create related and
+  contained relationships; malformed, derived-target, and self-drop payloads are ignored.
+- All-day and multi-day items remain openable and relationship-capable but never issue timed inline
+  writes.
+- Read-only items show an explicit indicator and remain openable and linkable without false
+  move/resize affordances.
+- Details-shared comparison items open immutable details from the authorized comparison response
+  without requesting the owner's item endpoint. Busy-only items remain opaque and non-openable,
+  and workspace changes clear the prior people schedule before loading the next one.
+- Labels, snapping, selection, previews, and writes share the viewer timezone; invalid DST gap/fold
+  wall times are rejected, and exact repeated-hour labels distinguish the applicable short zone.
+- Calendar and Agenda refresh the current-time line every 30 seconds rather than freezing it at
+  mount time.
 - Empty, loading, and server-error states leave the 24-hour grid mounted and usable for local
   interaction.
+- Read and mutation failures use fixed application-owned copy and never display exception,
+  provider, or Problem `title`/`detail` text.
 - Busy-only comparison responses contain no title, item id, layer id, or provider metadata.
 - Task links never expose tasks the viewer cannot otherwise access.
 
@@ -197,6 +244,11 @@ services with agenda compatibility, native blocks, task links, a Google sync eng
 write-back and conflict handling, push hints + scheduled sync, the web data layer, the full
 calendar view + item workspace, incremental OAuth consent, primary navigation, and this e2e/docs
 pass. One item from this spec's original V1 scope remains an explicit, tracked follow-up:
+
+The shared Calendar/Agenda canvas subsequently gained the fluid viewport, timezone-safe adaptive
+axis, collision layout, direct manipulation, relationship-drop, permission gating, and fail-soft
+behavior described above. These interaction contracts are covered by automated behavior tests and
+a recorded 13-scenario Playwright Chromium visual pass.
 
 - **Task detail does not show linked calendar items.** "Task detail: shows linked calendar items
   as structured context, not only attachments" (UI Surfaces, above) needs a backend read for

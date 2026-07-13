@@ -1391,7 +1391,7 @@ test` fails one doc-coverage assertion on `portfolio-client.tsx`, and `next buil
 
 ### [PM-WORKBENCH-001] Build the cross-workspace project management workbench
 
-- **Status**: IN_PROGRESS
+- **Status**: IN_PROGRESS (parked; step 1 partially shipped)
 - **Started**: 2026-07-13
 - **Priority**: P0
 - **Description**: Close the project-management audit's trust and operating-surface gaps for a
@@ -1418,8 +1418,31 @@ test` fails one doc-coverage assertion on `portfolio-client.tsx`, and `next buil
     when an unfinished blocker's target falls after the dependent Project starts.
   - Organization and Hub saved views share a definition but remain in separate tenant-owned and
     personal tables.
+- **Update (2026-08-01)**: This branch sat unopened for ~3 weeks and `main` moved on without it.
+  The dependency/editor foundation step 1 was waiting on shipped independently as
+  `PROJECT-DETAIL-001` (below), so that half of this branch's work was dropped as redundant during
+  rebase rather than reapplied. The other half of step 1 — extracting a shared, grant-aware
+  resource-visibility resolver — was real and not duplicated anywhere, so it was rescued: rebased
+  onto current `main` and reconciled against Search's independently-added agent-caller support
+  (`apps/api/src/permissions/resource-access.ts`, wired into `apps/api/src/search/query.ts`).
+  Step 1 is still only partially done — the resolver is not yet adopted by Project/Task reads, Hub
+  Today/Portfolio, dependency neighbors, or activity, as the original plan called for. Steps 2-5
+  were never started. Opened as a PR for review rather than merged directly, given how much of the
+  surrounding codebase moved underneath this branch.
 - **Dependencies**: Imports the completed `PROJECT-DETAIL-001` dependency/editor foundation from
   `feat/project-detail-revision` before new work.
+- **Progress**:
+  - Phase 0 Task 1A extracted Search's grant-aware resource checks into a shared batched permission
+    service. The resolver returns both view access and the strongest effective capability for every
+    supported resource kind, while preserving guest, membership, cascade, expiry, deny, and
+    cross-organization boundaries. Search now consumes that service without changing its result
+    contract.
+- **Validation**:
+  - The focused resource-access suite passes 8/8, and the combined permission/Search regression
+    slice passes 21/21. Scoped lint passes for the resolver, Search consumer, and focused tests.
+  - Full API typecheck and lint remain blocked by the imported branch foundation's unrelated
+    account-export, retired Slack provider, provider-union, and container return errors; neither
+    command reports an error in the Phase 0 Task 1A files.
 - **Baseline**: `origin/main` has one unrelated tooling failure because the provider catalog test
   still expects retired Slack configuration. The shared main checkout already contains the
   one-line pending correction; feature validation will keep that unrelated edit out of this branch.

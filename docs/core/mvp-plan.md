@@ -109,7 +109,10 @@ The Hub **gathers** the organizations you're a member of — it does **not** pri
 
 - **Project is optional on a Task.** A Task always belongs to an Organization (and a Team); it can live in a Project, directly in a Program (ongoing work), or unsorted in **Triage**. This keeps "for Everything" honest — it has to hold messy ad‑hoc work, not just neat plans.
 - **Milestones are an attribute of a Project** — dated checkpoints that group some of the Project's Tasks toward a deliverable. Not a top‑level thing.
-- **Initiatives are many‑to‑many** with Programs and Projects (themes cut across).
+- **Initiatives are many‑to‑many** with Programs and Projects (themes cut across). Workspaces may
+  also arrange Initiatives into a shallow hierarchy whose maximum depth defaults to two total
+  levels and is configurable. Hierarchy links are contextual references: they may point at an
+  Initiative in another workspace, but never grant access to it.
 - **Cycles are team‑scoped.** Each Team runs its own cadence.
 - **Dependencies are org‑wide and cross‑project.** A Task can be "blocked by" / "blocking" any other Task in the organization, even in a different Project. The graph is kept acyclic.
 - **Teams are first‑class** within an Organization. A Team owns its workflow states, its Cycles, and its Triage queue.
@@ -291,7 +294,11 @@ This is the page you open when you want to understand one effort deeply, and Doc
 
 - **Project:** overview‑first; a **weighted‑progress bar** (fills as tasks complete, with bigger tasks counting for more) + a **health pill**; tasks grouped into **Milestone sections**; **Updates get their own tab**; **comments + agent activity live in the properties panel**; a **dedicated "agents here" strip**.
 - **Program** (ongoing, no % bar): headline is a **health + flow snapshot**; its work list is **grouped by Cycle, segmented by Project** so it stays usable as it accumulates for years.
-- **Initiative:** **timeline‑first** rollup (a roadmap of its Projects; Programs as always‑on lanes); status is **auto‑derived** rolled‑up health + a child distribution bar (no manual upkeep).
+- **Initiative:** a **document-first strategic brief** with a manual lifecycle, independently
+  writable health, latest narrative update, generated document contents, sub-Initiatives, and
+  deduplicated connected Programs/Projects. Connected-work health is a supporting rollup rather
+  than the Initiative's status or health. The overview surfaces off-track, at-risk, and stale
+  Initiatives before the dense hierarchy roster.
 
 ### 8.5 Cycle detail + Task detail
 

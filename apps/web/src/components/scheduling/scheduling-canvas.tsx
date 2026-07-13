@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import { SchedulingAllDayItem } from './scheduling-all-day-item';
+import { SchedulingCanvasNotice } from './scheduling-canvas-notice';
 import {
   deriveLaneGeometry,
   deriveSnapMinutes,
@@ -17,12 +18,12 @@ import {
   minutesToPixels,
   pixelsToMinutes,
 } from './scheduling-geometry';
+import { SchedulingHorizontalBoundary } from './scheduling-horizontal-boundary';
 import { SchedulingItemCard } from './scheduling-item-card';
 import { positionScheduleLaneItems } from './scheduling-overlap-layout';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 export type { ScheduleItemRenderContext, SchedulingCanvasProps } from './scheduling-types';
-
 const DEFAULT_VIEWPORT_WIDTH = 960;
 const HOUR_GUTTER_WIDTH = 64;
 const MINIMUM_LANE_WIDTH = 220;
@@ -56,12 +57,13 @@ export default function SchedulingCanvas({
   const timedGridRef = useRef<HTMLDivElement>(null);
   const [observedWidth, setObservedWidth] = useState(DEFAULT_VIEWPORT_WIDTH);
   const [gestureAnnouncement, setGestureAnnouncement] = useState('');
-  const boundaryLockRef = useRef<'previous' | 'next' | null>(null);
+  const horizontalBoundaryRef = useRef(new SchedulingHorizontalBoundary());
   useLayoutEffect(() => {
     if (viewportWidth !== undefined) return;
     const element = viewportRef.current;
     if (!element) return;
     const update = (): void => {
+      horizontalBoundaryRef.current.synchronize(element);
       if (element.clientWidth > 0) setObservedWidth(element.clientWidth);
     };
     update();
@@ -83,7 +85,6 @@ export default function SchedulingCanvas({
   );
   const snapMinutes = deriveSnapMinutes(effectivePixelsPerHour);
   const fullWidth = geometry.gutterWidth + geometry.contentWidth;
-  const isEmpty = lanes.every((lane) => lane.items.length === 0);
   const positionedLaneItems = useMemo(
     () =>
       lanes.map((lane) =>
@@ -108,8 +109,7 @@ export default function SchedulingCanvas({
     const timedGridOffset = timedGridRef.current?.offsetTop ?? 0;
     const windowKey = lanes[0]?.id;
     if (initializedWindowRef.current !== windowKey) {
-      viewport.scrollLeft =
-        initialLaneIndex > 0 ? geometry.gutterWidth + initialLaneIndex * geometry.laneWidth : 0;
+      viewport.scrollLeft = initialLaneIndex > 0 ? initialLaneIndex * geometry.laneWidth : 0;
       initializedWindowRef.current = windowKey;
     }
     if (!initializedVerticalScrollRef.current) {
@@ -135,9 +135,9 @@ export default function SchedulingCanvas({
         effectivePixelsPerHour) *
       60;
     previousPixelsPerHourRef.current = effectivePixelsPerHour;
+    horizontalBoundaryRef.current.synchronize(viewport);
   }, [
     effectivePixelsPerHour,
-    geometry.gutterWidth,
     geometry.laneWidth,
     initialLaneIndex,
     initialScrollMinutes,
@@ -179,17 +179,8 @@ export default function SchedulingCanvas({
         viewportCenterMinutesRef.current =
           ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) * 60) /
           effectivePixelsPerHour;
-        if (!onReachBoundary) return;
-        const atPrevious = viewport.scrollLeft <= geometry.gutterWidth + 2;
-        const atNext = viewport.scrollLeft + viewport.clientWidth >= viewport.scrollWidth - 2;
-        const direction = atPrevious ? 'previous' : atNext ? 'next' : null;
-        if (direction === null) {
-          boundaryLockRef.current = null;
-          return;
-        }
-        if (boundaryLockRef.current === direction) return;
-        boundaryLockRef.current = direction;
-        onReachBoundary(direction);
+        const direction = horizontalBoundaryRef.current.observe(viewport);
+        if (direction && onReachBoundary) onReachBoundary(direction);
       }}
     >
       <p className="sr-only" aria-live="polite" aria-atomic="true">
@@ -232,6 +223,13 @@ export default function SchedulingCanvas({
               </div>
             ))}
           </div>
+          <SchedulingCanvasNotice
+            emptyMessage={emptyMessage}
+            error={error}
+            gutterWidth={geometry.gutterWidth}
+            isEmpty={lanes.every((lane) => lane.items.length === 0)}
+            viewportWidth={viewportWidth ?? observedWidth}
+          />
         </header>
         <div ref={timedGridRef} className="relative">
           <SchedulingTimeGrid
@@ -283,15 +281,6 @@ export default function SchedulingCanvas({
               ))}
             </div>
           </SchedulingTimeGrid>
-          {error || isEmpty ? (
-            <div
-              role={error ? 'alert' : 'status'}
-              className="bg-surface/90 text-on-surface-variant pointer-events-none absolute top-4 right-4 z-20 h-fit rounded-lg border px-3 py-2 text-xs shadow-sm"
-              style={{ left: geometry.gutterWidth + 16 }}
-            >
-              {error ?? emptyMessage}
-            </div>
-          ) : null}
         </div>
       </div>
     </section>

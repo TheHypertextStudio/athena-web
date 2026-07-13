@@ -1433,9 +1433,11 @@ describe('SchedulingCanvas', () => {
     Object.defineProperties(canvas, {
       clientWidth: { configurable: true, value: 500 },
       scrollWidth: { configurable: true, value: 1_000 },
-      scrollLeft: { configurable: true, writable: true, value: 500 },
+      scrollLeft: { configurable: true, writable: true, value: 200 },
     });
 
+    fireEvent.scroll(canvas);
+    canvas.scrollLeft = 500;
     fireEvent.scroll(canvas);
     fireEvent.scroll(canvas);
     expect(onReachBoundary).toHaveBeenCalledTimes(1);

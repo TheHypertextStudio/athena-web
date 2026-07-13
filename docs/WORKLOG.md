@@ -1113,6 +1113,11 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     rendering their grids beneath loading, empty, stale, and hostile server failures with fixed
     application-owned copy and retry actions. Stored per-layer diagnostics likewise surface only
     the fixed `Calendar sync issue` indicator.
+  - Rebased onto current `origin/main` and repaired its adjacent public contracts without weakening
+    error boundaries: restored the omitted selective-export UI as five focused modules, proved a
+    hostile `AGENT_MAX_TURNS` server detail cannot render there, aligned auth recovery tests with
+    RFC 9457 problems, and removed route tests for deliberately retired Slack/Discord ingestion
+    while preserving provider-neutral identity attribution through active Linear.
   - Kept continuous zoom as one scalar with three shortcuts, compacted those shortcuts to a preset
     selector on narrow screens, made the 1440px surface retain two fluid date lanes beside Agenda,
     and moved secondary layer controls below the grid whenever they would consume scheduling width.
@@ -1136,9 +1141,14 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     near the 168–172MB process baseline. A 10,000-item lane with one exact-only conflict completes
     in 13–14ms and recolors only that pair; deterministic randomized parity, mixed exact/wall input
     permutations, and a two-colorable adversarial graph protect the optimized paths.
-  - Repository formatting passes; typecheck and lint pass 17/17 tasks each. The full test gate
-    passes 17/17 package tasks (web 698/698; UI 257/257; tooling 36/36), and the production build
-    passes API, web, and admin 3/3.
+  - Repository formatting passes; typecheck and lint pass 17/17 tasks each. Web passes 104/104
+    files and 701/701 tests; UI passes 257/257; tooling passes 32/32; DB and migration coverage
+    passes 54/54. API passes 132/134 files and 1,204/1,216 tests. Its only 12 failures are the two
+    time-ledger suites inherited from `origin/main` commit `d8e08c4`, whose commit explicitly
+    deferred the required migration. The concurrent dirty-main worktree owns the intended
+    untracked `0031`–`0036` migration chain; generating another migration here would collide with
+    it and omit five cyclic/self foreign keys plus six database checks. The production build passes
+    API, web, and admin 3/3 with the required agent turn budget declared.
 - **Retrospective**:
   - **Went well**: keeping geometry and gestures consumer-neutral let Calendar, Agenda, dates, and
     people/resource comparison share one interaction engine without hardcoded day/week branches.
@@ -1176,7 +1186,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     and drawer public entry points are now 158 and 123 lines respectively; their extracted UI
     collaborators remain at or below 219 lines.
 - **Files Changed**: Calendar type contracts and tests; calendar DB schema, relations, migration
-  `0031`, and migration tests; provider sync/write services and API routes/tests; scheduling,
+  `0032`, and migration tests; provider sync/write services and API routes/tests; scheduling,
   calendar, agenda, settings, and task-list web components/tests; layered-calendar product/UI specs;
   this worklog.
 - **Validation**:

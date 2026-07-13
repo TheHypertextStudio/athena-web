@@ -10,6 +10,7 @@ Screenshots:
 - `screenshots/2026-07-13-initiative-detail-desktop-dark.png` — 1440×900, dark
 - `screenshots/2026-07-13-initiative-detail-mobile-light.png` — 390×844, light
 - `screenshots/2026-07-13-initiative-detail-mobile-dark.png` — 390×844, dark
+- `screenshots/2026-07-13-initiative-detail-print-from-updates.png` — print media from Updates tab
 
 Register: app — calm, dense, keyboard-first Plex/MD3.
 
@@ -31,6 +32,7 @@ Gates: A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · S
 - **Theme parity**: both surfaces were captured in light and dark with seeded content.
 - **No placeholder**: all visible copy and controls are backed by working Initiative data or explicit empty/loading states.
 - **Screenshot-verified**: the eight standard screenshots above cover both routes, widths, and themes; browser console errors were empty.
+- **Print state**: print-media emulation from the Updates tab still renders the permanent document, latest update, hierarchy, connected work, and a static property summary while removing editors and app chrome.
 
 ## Findings resolved during review
 

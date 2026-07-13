@@ -13,6 +13,7 @@ import {
   initiativeLabel,
   initiativeProgram,
   initiativeProject,
+  organization,
   program,
   project,
 } from '@docket/db';
@@ -312,11 +313,73 @@ const initiatives = new Hono<AppEnv>()
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const deleted = await db
-        .delete(initiative)
-        .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
-        .returning();
-      const row = deleted[0];
+      const row = await db.transaction(async (tx) => {
+        const candidates = await tx
+          .select()
+          .from(initiative)
+          .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
+          .limit(1)
+          .for('update');
+        const candidate = candidates[0];
+        if (!candidate) return undefined;
+
+        const outgoing = await tx
+          .select()
+          .from(initiativeHierarchyLink)
+          .where(eq(initiativeHierarchyLink.parentInitiativeId, id));
+        const contextIds = [...new Set(outgoing.map((edge) => edge.contextOrganizationId))].sort();
+        for (const contextId of contextIds) {
+          await tx
+            .select({ id: organization.id })
+            .from(organization)
+            .where(eq(organization.id, contextId))
+            .for('update');
+          const edges = await tx
+            .select()
+            .from(initiativeHierarchyLink)
+            .where(eq(initiativeHierarchyLink.contextOrganizationId, contextId));
+          const directChildren = edges.filter((edge) => edge.parentInitiativeId === id);
+          if (directChildren.length === 0) continue;
+          const childIds = directChildren.map((edge) => edge.childInitiativeId);
+          const childRows = await tx
+            .select({ id: initiative.id, organizationId: initiative.organizationId })
+            .from(initiative)
+            .where(inArray(initiative.id, childIds));
+          const childOrganizations = new Map(
+            childRows.map((child) => [child.id, child.organizationId]),
+          );
+          const removedIds = new Set<string>();
+          for (const directChild of directChildren) {
+            if (childOrganizations.get(directChild.childInitiativeId) === contextId) continue;
+            const descendants = new Set([directChild.childInitiativeId]);
+            let changed = true;
+            while (changed) {
+              changed = false;
+              for (const edge of edges) {
+                if (
+                  descendants.has(edge.parentInitiativeId) &&
+                  !descendants.has(edge.childInitiativeId)
+                ) {
+                  descendants.add(edge.childInitiativeId);
+                  changed = true;
+                }
+              }
+            }
+            removedIds.add(directChild.id);
+            for (const edge of edges) {
+              if (descendants.has(edge.parentInitiativeId)) removedIds.add(edge.id);
+            }
+          }
+          if (removedIds.size > 0) {
+            await tx
+              .delete(initiativeHierarchyLink)
+              .where(inArray(initiativeHierarchyLink.id, [...removedIds]));
+          }
+        }
+
+        const deleted = await tx.delete(initiative).where(eq(initiative.id, id)).returning();
+        return deleted[0];
+      });
       if (!row) throw new NotFoundError('Initiative not found');
       await enqueueSearchDelete(orgId, 'initiative', row.id);
       return ok(c, InitiativeOut, toOut(row));
@@ -487,8 +550,70 @@ const initiatives = new Hono<AppEnv>()
       const { from, to } = c.req.valid('query');
       await loadInitiative(orgId, id);
 
-      const projects = await associatedProjects(orgId, id);
-      const programs = await associatedPrograms(orgId, id);
+      const [links, accessibleOrganizationIds] = await Promise.all([
+        db
+          .select()
+          .from(initiativeHierarchyLink)
+          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
+        accessibleInitiativeOrganizationIds(orgId, c.get('session')),
+      ]);
+      const linkedIds = [
+        ...new Set(links.flatMap((link) => [link.parentInitiativeId, link.childInitiativeId])),
+      ];
+      const linkedInitiatives =
+        linkedIds.length === 0
+          ? []
+          : await db
+              .select({ id: initiative.id, organizationId: initiative.organizationId })
+              .from(initiative)
+              .where(inArray(initiative.id, linkedIds));
+      const visibleIds = new Set(
+        linkedInitiatives
+          .filter((row) => accessibleOrganizationIds.has(row.organizationId))
+          .map((row) => row.id),
+      );
+      visibleIds.add(id);
+      const childrenByParent = new Map<string, string[]>();
+      for (const link of links) {
+        if (!visibleIds.has(link.parentInitiativeId) || !visibleIds.has(link.childInitiativeId)) {
+          continue;
+        }
+        const children = childrenByParent.get(link.parentInitiativeId) ?? [];
+        children.push(link.childInitiativeId);
+        childrenByParent.set(link.parentInitiativeId, children);
+      }
+      const rollupIds = [id];
+      for (const parentId of rollupIds) {
+        for (const childId of childrenByParent.get(parentId) ?? []) {
+          if (!rollupIds.includes(childId)) rollupIds.push(childId);
+        }
+      }
+      const [projectRows, programRows] = await Promise.all([
+        db
+          .select({ row: project })
+          .from(initiativeProject)
+          .innerJoin(project, eq(project.id, initiativeProject.projectId))
+          .where(inArray(initiativeProject.initiativeId, rollupIds)),
+        db
+          .select({ row: program })
+          .from(initiativeProgram)
+          .innerJoin(program, eq(program.id, initiativeProgram.programId))
+          .where(inArray(initiativeProgram.initiativeId, rollupIds)),
+      ]);
+      const projects = [
+        ...new Map(
+          projectRows
+            .filter(({ row }) => accessibleOrganizationIds.has(row.organizationId))
+            .map(({ row }) => [row.id, row]),
+        ).values(),
+      ];
+      const programs = [
+        ...new Map(
+          programRows
+            .filter(({ row }) => accessibleOrganizationIds.has(row.organizationId))
+            .map(({ row }) => [row.id, row]),
+        ).values(),
+      ];
 
       const payload: z.input<typeof InitiativeTimelineOut> = {
         programs: programs.map((p) => ({

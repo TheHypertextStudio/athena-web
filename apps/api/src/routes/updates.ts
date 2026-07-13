@@ -37,6 +37,22 @@ const subjectTable = { project, program, initiative } as const;
 
 const idParam = z.object({ id: z.string() });
 
+/** Assert an Update subject belongs to the caller's organization. */
+async function assertSubjectInOrg(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  orgId: string,
+  subjectType: UpdateRow['subjectType'],
+  subjectId: string,
+): Promise<void> {
+  const table = subjectTable[subjectType];
+  const rows = await tx
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, subjectId), eq(table.organizationId, orgId)))
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError('Update subject not found');
+}
+
 /**
  * Load a single Update scoped to the org, or throw {@link NotFoundError}.
  *
@@ -175,6 +191,7 @@ Key side effect: when the post includes a \`health\`, the same transaction write
       const body = c.req.valid('json');
 
       const row = await db.transaction(async (tx) => {
+        await assertSubjectInOrg(tx, orgId, body.subjectType, body.subjectId);
         const inserted = await tx
           .insert(update)
           .values({

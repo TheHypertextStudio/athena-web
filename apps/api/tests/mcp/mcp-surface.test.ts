@@ -747,6 +747,13 @@ describe('create_initiative tool', () => {
       priority: 'medium',
       updateCadence: 'none',
     });
+
+    const noOp = (await client.callTool({
+      name: 'update_initiative',
+      arguments: { orgId: s.orgId, initiativeId: s.initiativeId },
+    })) as CallToolResult;
+    expect(noOp.isError).toBeFalsy();
+    expect(payload(noOp)).toMatchObject({ id: s.initiativeId });
   });
 });
 

@@ -52,11 +52,16 @@
     contents, sub-initiatives, connected work, properties, labels, and resources.
   - Added Blank, Strategic Initiative, and Objective creation templates plus shared/personal Work
     Structure settings.
+  - Independent review hardened tenant ownership for Initiative updates, serialized hierarchy
+    mutations, removed orphaned foreign subtrees, made descendant timelines and direct-work
+    precedence deterministic, and kept the printable document available from every tab.
 - **Validation**:
   - Repository typecheck, lint, and production build pass. Focused Initiative API, DTO, schema,
     authz, migration, MCP, attention, detail, and Markdown-contents tests pass.
   - Live review passed the Docket Craft Rubric at 1440×900 and 390×844 in light and dark; the 320px
     overflow measurement is clean and the browser console has no errors.
+  - Review regressions pass 116/116, and print-from-Updates verification retains the Initiative
+    document and static properties while removing application chrome and horizontal overflow.
   - The root test command remains red on unrelated active work: guided-provider catalog drift, the
     existing web error-source cleanup, and missing TSDoc on project-dependency/query-core exports.
     Concurrency-only DB/UI timeouts pass when rerun sequentially.

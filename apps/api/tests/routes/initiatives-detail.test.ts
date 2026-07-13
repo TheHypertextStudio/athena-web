@@ -299,6 +299,114 @@ describe('initiatives context hierarchy', () => {
     ).toBe(false);
   });
 
+  it('removes a detached foreign subtree instead of leaving foreign roots in the context', async () => {
+    const userId = await seedUserWithHub(db, schema, 'Hierarchy manager');
+    const contextOrgId = await seedOrg(db, schema);
+    const foreignOrgId = await seedOrg(db, schema);
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+    await db
+      .update(schema.organization)
+      .set({ initiativeMaxDepth: 3 })
+      .where(eq(schema.organization.id, contextOrgId));
+    const root = await seedInitiative(contextOrgId, contextActorId);
+    const foreignChild = await seedInitiative(foreignOrgId, foreignActorId);
+    const foreignGrandchild = await seedInitiative(foreignOrgId, foreignActorId);
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      contextActorId,
+      fakeSession(userId),
+    );
+    const rootLink = await json<{ id: string }>(
+      await writer.request('/hierarchy-links', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
+      }),
+    );
+    expect(
+      (
+        await writer.request('/hierarchy-links', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            parentInitiativeId: foreignChild,
+            childInitiativeId: foreignGrandchild,
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    expect(
+      (await writer.request(`/hierarchy-links/${rootLink.id}`, { method: 'DELETE' })).status,
+    ).toBe(200);
+    expect(
+      await db
+        .select()
+        .from(schema.initiativeHierarchyLink)
+        .where(eq(schema.initiativeHierarchyLink.contextOrganizationId, contextOrgId)),
+    ).toHaveLength(0);
+  });
+
+  it('removes foreign descendant edges when deleting their context root', async () => {
+    const userId = await seedUserWithHub(db, schema, 'Initiative deleter');
+    const contextOrgId = await seedOrg(db, schema);
+    const foreignOrgId = await seedOrg(db, schema);
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+    await db
+      .update(schema.organization)
+      .set({ initiativeMaxDepth: 3 })
+      .where(eq(schema.organization.id, contextOrgId));
+    const root = await seedInitiative(contextOrgId, contextActorId);
+    const foreignChild = await seedInitiative(foreignOrgId, foreignActorId);
+    const foreignGrandchild = await seedInitiative(foreignOrgId, foreignActorId);
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute', 'manage'],
+      contextActorId,
+      fakeSession(userId),
+    );
+    expect(
+      (
+        await writer.request('/hierarchy-links', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await writer.request('/hierarchy-links', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            parentInitiativeId: foreignChild,
+            childInitiativeId: foreignGrandchild,
+          }),
+        })
+      ).status,
+    ).toBe(200);
+
+    expect((await writer.request(`/${root}`, { method: 'DELETE' })).status).toBe(200);
+    expect(
+      await db
+        .select()
+        .from(schema.initiativeHierarchyLink)
+        .where(eq(schema.initiativeHierarchyLink.contextOrganizationId, contextOrgId)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: schema.initiative.id })
+        .from(schema.initiative)
+        .where(eq(schema.initiative.id, foreignChild)),
+    ).toHaveLength(1);
+  });
+
   it('returns labels, URL resources, updates, and deduplicated descendant work in aggregate detail', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
@@ -358,6 +466,61 @@ describe('initiatives context hierarchy', () => {
     expect(body.labels).toMatchObject([{ id: label!.id }]);
     expect(body.resources).toMatchObject([{ title: 'Board packet' }]);
     expect(body.rolledUpHealth).toBe('at_risk');
+  });
+
+  it('prefers a direct work link over a duplicate inherited link', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const root = await seedInitiative(orgId, humanActorId);
+    const child = await seedInitiative(orgId, humanActorId);
+    const projectId = await seedProject(orgId, humanActorId);
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: child }),
+    });
+    for (const initiativeId of [child, root]) {
+      expect(
+        (
+          await writer.request(`/${initiativeId}/projects`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ projectId }),
+          })
+        ).status,
+      ).toBe(200);
+    }
+    const aggregate = await json<{
+      connectedWork: { id: string; direct: boolean; inheritedThroughInitiativeId: string | null }[];
+    }>(await writer.request(`/${root}/aggregate`));
+    expect(aggregate.connectedWork).toContainEqual(
+      expect.objectContaining({ id: projectId, direct: true, inheritedThroughInitiativeId: null }),
+    );
+  });
+
+  it('ignores a cross-organization update row that reuses the Initiative subject id', async () => {
+    const owner = await seedBaseOrg(db, schema);
+    const attacker = await seedBaseOrg(db, schema);
+    const root = await seedInitiative(owner.orgId, owner.humanActorId);
+    await db.insert(schema.update).values({
+      organizationId: attacker.orgId,
+      subjectType: 'initiative',
+      subjectId: root,
+      authorId: attacker.humanActorId,
+      createdBy: attacker.humanActorId,
+      body: 'Cross-tenant blocker',
+      health: 'off_track',
+    });
+    const viewer = appWithActor(initiatives, owner.orgId, ['view'], owner.humanActorId);
+    const aggregate = await json<{ latestUpdate: unknown; updateCount: number }>(
+      await viewer.request(`/${root}/aggregate`),
+    );
+    expect(aggregate.latestUpdate).toBeNull();
+    expect(aggregate.updateCount).toBe(0);
+    const overview = await json<{ items: { id: string; lastUpdateAt: string | null }[] }>(
+      await viewer.request('/overview'),
+    );
+    expect(overview.items.find((item) => item.id === root)?.lastUpdateAt).toBeNull();
   });
 });
 
@@ -571,6 +734,39 @@ describe('initiatives program associations', () => {
 });
 
 describe('initiatives timeline roll-up', () => {
+  it('includes and deduplicates work connected through visible descendants', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const root = await seedInitiative(orgId, humanActorId);
+    const child = await seedInitiative(orgId, humanActorId);
+    const projectId = await seedProject(orgId, humanActorId, { name: 'Descendant project' });
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: child }),
+    });
+    for (const initiativeId of [child, root]) {
+      await writer.request(`/${initiativeId}/projects`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      });
+    }
+    const timeline = await json<{ projects: { id: string }[] }>(
+      await writer.request(`/${root}/timeline`),
+    );
+    expect(timeline.projects).toEqual([
+      {
+        id: projectId,
+        name: 'Descendant project',
+        status: 'planned',
+        health: null,
+        startDate: null,
+        targetDate: null,
+      },
+    ]);
+  });
+
   it('returns program lanes + project bars with their dates', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);

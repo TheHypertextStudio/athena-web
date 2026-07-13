@@ -50,6 +50,9 @@ function AttentionSurface({ item, orgId }: { item: InitiativeAttentionItem; orgI
         {item.excerpt ? (
           <p className="text-on-surface-variant mt-1 line-clamp-2 text-sm">{item.excerpt}</p>
         ) : null}
+        {item.organizationId !== orgId && item.parentInitiativeName ? (
+          <p className="text-on-surface-variant mt-1 text-xs">In {item.parentInitiativeName}</p>
+        ) : null}
       </div>
       <Button asChild size="sm" variant="outline" className="min-h-10 self-start @2xl:min-h-0">
         <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>

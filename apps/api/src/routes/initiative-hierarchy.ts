@@ -13,15 +13,18 @@ import type { AuthSession } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 
 type HierarchyLinkRow = typeof initiativeHierarchyLink.$inferSelect;
+type HierarchyTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type HierarchyDatabase = typeof db | HierarchyTransaction;
 
 /** Return every organization the current session can independently view. */
 export async function accessibleInitiativeOrganizationIds(
   contextOrganizationId: string,
   session: AuthSession,
+  database: HierarchyDatabase = db,
 ): Promise<Set<string>> {
   const ids = new Set([contextOrganizationId]);
   if (!session?.user) return ids;
-  const memberships = await db
+  const memberships = await database
     .select({ organizationId: actor.organizationId })
     .from(actor)
     .where(
@@ -58,32 +61,35 @@ export function initiativeHierarchyDepth(
 }
 
 /** Validate a hierarchy create or move and return the current context edges. */
-export async function validateInitiativeHierarchyChange(input: {
-  readonly contextOrganizationId: string;
-  readonly parentInitiativeId: string;
-  readonly childInitiativeId: string;
-  readonly session: AuthSession;
-  readonly excludeLinkId?: string;
-}): Promise<HierarchyLinkRow[]> {
+export async function validateInitiativeHierarchyChange(
+  input: {
+    readonly contextOrganizationId: string;
+    readonly parentInitiativeId: string;
+    readonly childInitiativeId: string;
+    readonly session: AuthSession;
+    readonly excludeLinkId?: string;
+  },
+  database: HierarchyDatabase = db,
+): Promise<HierarchyLinkRow[]> {
   if (input.parentInitiativeId === input.childInitiativeId) {
     throw new ConflictError('An Initiative cannot be its own parent');
   }
 
   const [settingsRows, nodeRows, currentEdges, accessibleIds] = await Promise.all([
-    db
+    database
       .select({ initiativeMaxDepth: organization.initiativeMaxDepth })
       .from(organization)
       .where(eq(organization.id, input.contextOrganizationId))
       .limit(1),
-    db
+    database
       .select({ id: initiative.id, organizationId: initiative.organizationId })
       .from(initiative)
       .where(inArray(initiative.id, [input.parentInitiativeId, input.childInitiativeId])),
-    db
+    database
       .select()
       .from(initiativeHierarchyLink)
       .where(eq(initiativeHierarchyLink.contextOrganizationId, input.contextOrganizationId)),
-    accessibleInitiativeOrganizationIds(input.contextOrganizationId, input.session),
+    accessibleInitiativeOrganizationIds(input.contextOrganizationId, input.session, database),
   ]);
 
   const settings = settingsRows[0];

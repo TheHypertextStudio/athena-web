@@ -80,7 +80,7 @@ export function TabBar({
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div className="bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-1.5">
+      <div className="no-print bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-1.5">
         <div
           role="tablist"
           aria-label="Open documents"

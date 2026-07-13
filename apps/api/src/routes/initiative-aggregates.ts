@@ -95,13 +95,17 @@ const initiativeAggregates = new Hono<AppEnv>()
               visibleRows.flatMap((row) => (row.ownerId ? [row.ownerId] : [])),
             ),
           ),
-        visibleIds.length === 0
+        visibleIds.length === 0 || organizationIds.length === 0
           ? []
           : db
               .select()
               .from(update)
               .where(
-                and(eq(update.subjectType, 'initiative'), inArray(update.subjectId, visibleIds)),
+                and(
+                  eq(update.subjectType, 'initiative'),
+                  inArray(update.subjectId, visibleIds),
+                  inArray(update.organizationId, organizationIds),
+                ),
               )
               .orderBy(desc(update.createdAt), desc(update.id)),
       ]);
@@ -109,6 +113,7 @@ const initiativeAggregates = new Hono<AppEnv>()
       const ownerNameById = new Map(ownerRows.map((row) => [row.id, row.displayName]));
       const latestUpdateByInitiative = new Map<string, (typeof updateRows)[number]>();
       for (const row of updateRows) {
+        if (rowsById.get(row.subjectId)?.organizationId !== row.organizationId) continue;
         if (!latestUpdateByInitiative.has(row.subjectId)) {
           latestUpdateByInitiative.set(row.subjectId, row);
         }
@@ -274,6 +279,7 @@ const initiativeAggregates = new Hono<AppEnv>()
             .from(attachment)
             .where(
               and(
+                eq(attachment.organizationId, target.organizationId),
                 eq(attachment.subjectType, 'initiative'),
                 eq(attachment.subjectId, id),
                 eq(attachment.kind, 'url'),
@@ -282,7 +288,13 @@ const initiativeAggregates = new Hono<AppEnv>()
           db
             .select()
             .from(update)
-            .where(and(eq(update.subjectType, 'initiative'), eq(update.subjectId, id)))
+            .where(
+              and(
+                eq(update.organizationId, target.organizationId),
+                eq(update.subjectType, 'initiative'),
+                eq(update.subjectId, id),
+              ),
+            )
             .orderBy(desc(update.createdAt), desc(update.id)),
           db
             .select({ id: organization.id, name: organization.name })
@@ -297,7 +309,9 @@ const initiativeAggregates = new Hono<AppEnv>()
       for (const item of programLinks) {
         if (!accessibleIds.has(item.row.organizationId)) continue;
         const key = `program:${item.row.id}`;
-        if (connectedByKey.has(key)) continue;
+        const direct = item.initiativeId === id;
+        const existing = connectedByKey.get(key);
+        if (existing?.direct || (existing && !direct)) continue;
         connectedByKey.set(key, {
           kind: 'program',
           id: item.row.id,
@@ -305,7 +319,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           name: item.row.name,
           status: item.row.status,
           health: item.row.health,
-          direct: item.initiativeId === id,
+          direct,
           inheritedThroughInitiativeId:
             item.initiativeId === id ? null : (inheritedThrough.get(item.initiativeId) ?? null),
         });
@@ -313,7 +327,9 @@ const initiativeAggregates = new Hono<AppEnv>()
       for (const item of projectLinks) {
         if (!accessibleIds.has(item.row.organizationId)) continue;
         const key = `project:${item.row.id}`;
-        if (connectedByKey.has(key)) continue;
+        const direct = item.initiativeId === id;
+        const existing = connectedByKey.get(key);
+        if (existing?.direct || (existing && !direct)) continue;
         connectedByKey.set(key, {
           kind: 'project',
           id: item.row.id,
@@ -321,7 +337,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           name: item.row.name,
           status: item.row.status,
           health: item.row.health,
-          direct: item.initiativeId === id,
+          direct,
           inheritedThroughInitiativeId:
             item.initiativeId === id ? null : (inheritedThrough.get(item.initiativeId) ?? null),
         });

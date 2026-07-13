@@ -317,24 +317,31 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const body = c.req.valid('json');
-      if (body.initiativeMaxDepth !== undefined) {
-        const edges = await db
-          .select({
-            parentInitiativeId: initiativeHierarchyLink.parentInitiativeId,
-            childInitiativeId: initiativeHierarchyLink.childInitiativeId,
-          })
-          .from(initiativeHierarchyLink)
-          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId));
-        if (initiativeHierarchyDepth(edges) > body.initiativeMaxDepth) {
-          throw new ConflictError('Existing Initiative hierarchy exceeds the requested depth');
+      const settings = await db.transaction(async (tx) => {
+        await tx
+          .select({ id: organization.id })
+          .from(organization)
+          .where(eq(organization.id, orgId))
+          .for('update');
+        if (body.initiativeMaxDepth !== undefined) {
+          const edges = await tx
+            .select({
+              parentInitiativeId: initiativeHierarchyLink.parentInitiativeId,
+              childInitiativeId: initiativeHierarchyLink.childInitiativeId,
+            })
+            .from(initiativeHierarchyLink)
+            .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId));
+          if (initiativeHierarchyDepth(edges) > body.initiativeMaxDepth) {
+            throw new ConflictError('Existing Initiative hierarchy exceeds the requested depth');
+          }
         }
-      }
-      const rows = await db
-        .update(organization)
-        .set(body)
-        .where(eq(organization.id, orgId))
-        .returning({ initiativeMaxDepth: organization.initiativeMaxDepth });
-      const settings = rows[0];
+        const rows = await tx
+          .update(organization)
+          .set(body)
+          .where(eq(organization.id, orgId))
+          .returning({ initiativeMaxDepth: organization.initiativeMaxDepth });
+        return rows[0];
+      });
       /* v8 ignore next -- @preserve org context middleware proved the workspace exists */
       if (!settings) throw new AuthError();
       return ok(c, WorkspaceSettingsOut, settings);

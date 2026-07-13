@@ -27,7 +27,10 @@ export function InitiativeDocument({
     const rendered = [...root.querySelectorAll<HTMLElement>('h1, h2, h3')];
     rendered.forEach((element, index) => {
       const heading = headings[index];
-      if (heading) element.id = heading.id;
+      if (heading) {
+        element.id = heading.id;
+        element.tabIndex = -1;
+      }
     });
     const observer = new IntersectionObserver(
       (entries) => {
@@ -53,6 +56,14 @@ export function InitiativeDocument({
             <li key={heading.id} style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}>
               <a
                 href={`#${heading.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  const target = document.getElementById(heading.id);
+                  if (!target) return;
+                  target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  target.focus({ preventScroll: true });
+                  window.history.replaceState(null, '', `#${heading.id}`);
+                }}
                 className={
                   activeId === heading.id
                     ? 'text-on-surface flex min-h-10 items-center text-xs font-medium @4xl:min-h-0'
@@ -69,10 +80,12 @@ export function InitiativeDocument({
 
   return (
     <div className="grid min-w-0 gap-6 @4xl:grid-cols-[9rem_minmax(0,1fr)]">
-      {contents ? <div className="hidden @4xl:block">{contents}</div> : null}
+      {contents ? (
+        <div className="initiative-contents-desktop hidden @4xl:block">{contents}</div>
+      ) : null}
       <div className="min-w-0">
         {contents ? (
-          <details className="border-outline-variant mb-5 border-y @4xl:hidden">
+          <details className="initiative-contents-mobile border-outline-variant mb-5 border-y @4xl:hidden">
             <summary className="text-on-surface flex min-h-10 items-center text-sm font-medium">
               Contents
             </summary>

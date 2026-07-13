@@ -191,6 +191,7 @@ export default function InitiativeDetailPage(): JSX.Element {
     const member = members.find((item) => item.actorId === actorId);
     return { name: member?.displayName ?? 'Unknown', kind: 'human' as const };
   };
+  const ownerName = members.find((member) => member.actorId === detail.ownerId)?.displayName ?? '—';
 
   return (
     <main className="initiative-print mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
@@ -308,6 +309,44 @@ export default function InitiativeDetailPage(): JSX.Element {
         ) : null}
       </header>
 
+      <section className="print-only border-outline-variant border-y py-4">
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+          <PrintProperty label="Status" value={STATUS_LABEL[detail.status]} />
+          <PrintProperty
+            label="Initiative health"
+            value={detail.health ? detail.health.replace('_', ' ') : '—'}
+          />
+          <PrintProperty
+            label="Connected-work health"
+            value={detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—'}
+          />
+          <PrintProperty label="Priority" value={PRIORITY_LABEL[detail.priority]} />
+          <PrintProperty label="Owner" value={ownerName} />
+          <PrintProperty
+            label="Target"
+            value={detail.targetDate ? detail.targetDate.slice(0, 10) : '—'}
+          />
+          <PrintProperty label="Update cadence" value={CADENCE_LABEL[detail.updateCadence]} />
+          <PrintProperty
+            label="Labels"
+            value={detail.labels.map((label) => label.name).join(', ') || '—'}
+          />
+        </dl>
+        {detail.resources.length ? (
+          <div className="mt-4 text-sm">
+            <p className="font-medium">Resources</p>
+            <ul className="mt-1 list-disc pl-5">
+              {detail.resources.map((resource) => (
+                <li key={resource.id}>
+                  {resource.title}
+                  {resource.url ? ` — ${resource.url}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
       <div
         className="no-print border-outline-variant flex gap-5 border-b"
         role="tablist"
@@ -335,283 +374,286 @@ export default function InitiativeDetailPage(): JSX.Element {
       </div>
 
       {tab === 'updates' ? (
-        <UpdatesPanel
-          updates={updates}
-          loading={updatesQ.isPending}
-          error={
-            updatesQ.isError ? userErrorMessage(updatesQ.error, 'Could not load updates.') : null
-          }
-          resolveActor={resolveActor}
-          posting={postUpdate.isPending}
-          postError={
-            postUpdate.error
-              ? userErrorMessage(postUpdate.error, 'Could not post the update.')
-              : null
-          }
-          onPost={(body, health) => {
-            postUpdate.mutate({ body, ...(health ? { health } : {}) });
-          }}
-        />
-      ) : (
-        <div className="grid min-w-0 gap-10 @5xl:grid-cols-[minmax(0,1fr)_18rem]">
-          <div className="min-w-0 space-y-10">
-            {detail.latestUpdate ? (
-              <section className="border-outline-variant bg-surface-container-low rounded-lg border px-5 py-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <h2 className="text-on-surface text-sm font-medium">Latest update</h2>
-                  <span className="text-on-surface-variant text-xs">
-                    {detail.latestUpdate.createdAt.slice(0, 10)}
+        <div className="no-print">
+          <UpdatesPanel
+            updates={updates}
+            loading={updatesQ.isPending}
+            error={
+              updatesQ.isError ? userErrorMessage(updatesQ.error, 'Could not load updates.') : null
+            }
+            resolveActor={resolveActor}
+            posting={postUpdate.isPending}
+            postError={
+              postUpdate.error
+                ? userErrorMessage(postUpdate.error, 'Could not post the update.')
+                : null
+            }
+            onPost={(body, health) => {
+              postUpdate.mutate({ body, ...(health ? { health } : {}) });
+            }}
+          />
+        </div>
+      ) : null}
+      <div
+        className={`${tab === 'overview' ? 'grid' : 'hidden'} initiative-overview min-w-0 gap-10 @5xl:grid-cols-[minmax(0,1fr)_18rem]`}
+      >
+        <div className="min-w-0 space-y-10">
+          {detail.latestUpdate ? (
+            <section className="border-outline-variant bg-surface-container-low rounded-lg border px-5 py-4">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h2 className="text-on-surface text-sm font-medium">Latest update</h2>
+                <span className="text-on-surface-variant text-xs">
+                  {detail.latestUpdate.createdAt.slice(0, 10)}
+                </span>
+              </div>
+              <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
+                {detail.latestUpdate.body}
+              </p>
+            </section>
+          ) : null}
+          <InitiativeDocument
+            value={detail.description}
+            canEdit={canEdit}
+            saving={mutations.propsPending}
+            onSave={(description) => {
+              mutations.patchInitiative({ description });
+            }}
+          />
+          <section>
+            <h2 className="text-on-surface mb-3 text-lg font-semibold">Sub-initiatives</h2>
+            {children.length ? (
+              <div className="divide-outline-variant divide-y border-y">
+                {children.map((child) => (
+                  <Link
+                    key={child.id}
+                    href={`/orgs/${child.organizationId}/initiatives/${child.id}`}
+                    className="flex items-center justify-between py-3 text-sm hover:underline"
+                  >
+                    <span>{child.name}</span>
+                    <span className="text-on-surface-variant">{STATUS_LABEL[child.status]}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="text-on-surface-variant text-sm">
+                No sub-initiatives in this workspace context.
+              </p>
+            )}
+          </section>
+          <section>
+            <h2 className="text-on-surface mb-3 text-lg font-semibold">Connected work</h2>
+            <div className="divide-outline-variant divide-y border-y">
+              {detail.connectedWork.map((item) => (
+                <div
+                  key={`${item.kind}-${item.id}`}
+                  className="flex items-center justify-between py-3 text-sm"
+                >
+                  <span className="min-w-0 truncate">{item.name}</span>
+                  <span className="text-on-surface-variant ml-3 shrink-0">
+                    {item.kind === 'program' ? programNoun : projectNoun}
+                    {!item.direct ? ' · inherited' : ''}
                   </span>
                 </div>
-                <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
-                  {detail.latestUpdate.body}
-                </p>
-              </section>
-            ) : null}
-            <InitiativeDocument
-              value={detail.description}
-              canEdit={canEdit}
-              saving={mutations.propsPending}
-              onSave={(description) => {
-                mutations.patchInitiative({ description });
-              }}
-            />
-            <section>
-              <h2 className="text-on-surface mb-3 text-lg font-semibold">Sub-initiatives</h2>
-              {children.length ? (
-                <div className="divide-outline-variant divide-y border-y">
-                  {children.map((child) => (
-                    <Link
-                      key={child.id}
-                      href={`/orgs/${child.organizationId}/initiatives/${child.id}`}
-                      className="flex items-center justify-between py-3 text-sm hover:underline"
-                    >
-                      <span>{child.name}</span>
-                      <span className="text-on-surface-variant">{STATUS_LABEL[child.status]}</span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-on-surface-variant text-sm">
-                  No sub-initiatives in this workspace context.
-                </p>
-              )}
-            </section>
-            <section>
-              <h2 className="text-on-surface mb-3 text-lg font-semibold">Connected work</h2>
-              <div className="divide-outline-variant divide-y border-y">
-                {detail.connectedWork.map((item) => (
-                  <div
-                    key={`${item.kind}-${item.id}`}
-                    className="flex items-center justify-between py-3 text-sm"
-                  >
-                    <span className="min-w-0 truncate">{item.name}</span>
-                    <span className="text-on-surface-variant ml-3 shrink-0">
-                      {item.kind === 'program' ? programNoun : projectNoun}
-                      {!item.direct ? ' · inherited' : ''}
-                    </span>
-                  </div>
-                ))}
-                {detail.connectedWork.length === 0 ? (
-                  <p className="text-on-surface-variant py-3 text-sm">No connected work yet.</p>
-                ) : null}
-              </div>
-            </section>
-          </div>
-          <aside className="initiative-properties space-y-4">
-            <InitiativePropertiesPanel
-              ownerId={detail.ownerId ?? null}
-              memberOptions={memberOptions}
-              targetDate={detail.targetDate ? detail.targetDate.slice(0, 10) : null}
-              canEdit={canEdit}
-              pending={mutations.propsPending}
-              onOwnerChange={(ownerId) => {
-                mutations.patchInitiative({ ownerId });
-              }}
-              onTargetDateChange={(targetDate) => {
-                mutations.patchInitiative({ targetDate });
-              }}
-            />
-            <div className="border-outline-variant divide-outline-variant divide-y border-y text-sm">
-              <Property label="Status">
-                <EnumPicker
-                  options={enumOptions(STATUS_ORDER, STATUS_LABEL)}
-                  value={detail.status}
-                  onChange={(status) => {
-                    if (status) mutations.patchInitiative({ status });
-                  }}
-                  ariaLabel="Status"
-                  placeholder="Choose status"
-                  readOnly={!canEdit}
-                />
-              </Property>
-              <Property label={`${initiativeNoun} health`}>
-                <EnumPicker
-                  options={HEALTH_OPTIONS}
-                  value={detail.health ?? null}
-                  onChange={(health) => {
-                    mutations.patchInitiative({ health });
-                  }}
-                  ariaLabel="Initiative health"
-                  placeholder="No health"
-                  readOnly={!canEdit}
-                  clearLabel="No health"
-                />
-              </Property>
-              <Property label="Connected-work health">
-                <span>{detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—'}</span>
-              </Property>
-              <Property label="Priority">
-                <EnumPicker
-                  options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
-                  value={detail.priority}
-                  onChange={(priority) => {
-                    if (priority) mutations.patchInitiative({ priority });
-                  }}
-                  ariaLabel="Priority"
-                  placeholder="Choose priority"
-                  readOnly={!canEdit}
-                />
-              </Property>
-              <Property label="Update cadence">
-                <EnumPicker
-                  options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
-                  value={detail.updateCadence}
-                  onChange={(updateCadence) => {
-                    if (updateCadence) mutations.patchInitiative({ updateCadence });
-                  }}
-                  ariaLabel="Update cadence"
-                  placeholder="Choose cadence"
-                  readOnly={!canEdit}
-                />
-              </Property>
+              ))}
+              {detail.connectedWork.length === 0 ? (
+                <p className="text-on-surface-variant py-3 text-sm">No connected work yet.</p>
+              ) : null}
             </div>
-            <section className="space-y-3">
-              <h3 className="text-on-surface text-xs font-semibold tracking-wide uppercase">
-                Labels
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {data.labels
-                  .filter((label) => label.teamId === null || label.teamId === undefined)
-                  .map((label) => {
-                    const selected = detail.labels.some((attached) => attached.id === label.id);
-                    return (
-                      <button
-                        key={label.id}
-                        type="button"
-                        disabled={!canEdit || mutations.propsPending}
-                        aria-pressed={selected}
-                        onClick={() => {
-                          mutations.patchInitiative({
-                            labelIds: selected
-                              ? detail.labels
-                                  .filter((attached) => attached.id !== label.id)
-                                  .map((attached) => attached.id)
-                              : [...detail.labels.map((attached) => attached.id), label.id],
-                          });
-                        }}
-                        className={`min-h-10 rounded-full border px-3 py-1 text-xs ${
-                          selected
-                            ? 'border-primary text-on-surface'
-                            : 'border-outline-variant text-on-surface-variant'
-                        }`}
-                      >
-                        {label.name}
-                      </button>
-                    );
-                  })}
-                {data.labels.filter((label) => label.teamId === null || label.teamId === undefined)
-                  .length === 0 ? (
-                  <span className="text-on-surface-variant text-xs">No workspace labels.</span>
-                ) : null}
-              </div>
-            </section>
-            <section className="space-y-3">
-              <h3 className="text-on-surface text-xs font-semibold tracking-wide uppercase">
-                Resources
-              </h3>
-              <div className="divide-outline-variant divide-y border-y">
-                {detail.resources.map((resource) => (
-                  <div key={resource.id} className="flex items-center gap-2 py-2 text-sm">
-                    <a
-                      href={resource.url ?? '#'}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="min-w-0 flex-1 truncate hover:underline"
+          </section>
+        </div>
+        <aside className="initiative-properties space-y-4">
+          <InitiativePropertiesPanel
+            ownerId={detail.ownerId ?? null}
+            memberOptions={memberOptions}
+            targetDate={detail.targetDate ? detail.targetDate.slice(0, 10) : null}
+            canEdit={canEdit}
+            pending={mutations.propsPending}
+            onOwnerChange={(ownerId) => {
+              mutations.patchInitiative({ ownerId });
+            }}
+            onTargetDateChange={(targetDate) => {
+              mutations.patchInitiative({ targetDate });
+            }}
+          />
+          <div className="border-outline-variant divide-outline-variant divide-y border-y text-sm">
+            <Property label="Status">
+              <EnumPicker
+                options={enumOptions(STATUS_ORDER, STATUS_LABEL)}
+                value={detail.status}
+                onChange={(status) => {
+                  if (status) mutations.patchInitiative({ status });
+                }}
+                ariaLabel="Status"
+                placeholder="Choose status"
+                readOnly={!canEdit}
+              />
+            </Property>
+            <Property label={`${initiativeNoun} health`}>
+              <EnumPicker
+                options={HEALTH_OPTIONS}
+                value={detail.health ?? null}
+                onChange={(health) => {
+                  mutations.patchInitiative({ health });
+                }}
+                ariaLabel="Initiative health"
+                placeholder="No health"
+                readOnly={!canEdit}
+                clearLabel="No health"
+              />
+            </Property>
+            <Property label="Connected-work health">
+              <span>{detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—'}</span>
+            </Property>
+            <Property label="Priority">
+              <EnumPicker
+                options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
+                value={detail.priority}
+                onChange={(priority) => {
+                  if (priority) mutations.patchInitiative({ priority });
+                }}
+                ariaLabel="Priority"
+                placeholder="Choose priority"
+                readOnly={!canEdit}
+              />
+            </Property>
+            <Property label="Update cadence">
+              <EnumPicker
+                options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
+                value={detail.updateCadence}
+                onChange={(updateCadence) => {
+                  if (updateCadence) mutations.patchInitiative({ updateCadence });
+                }}
+                ariaLabel="Update cadence"
+                placeholder="Choose cadence"
+                readOnly={!canEdit}
+              />
+            </Property>
+          </div>
+          <section className="space-y-3">
+            <h3 className="text-on-surface text-xs font-semibold tracking-wide uppercase">
+              Labels
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {data.labels
+                .filter((label) => label.teamId === null || label.teamId === undefined)
+                .map((label) => {
+                  const selected = detail.labels.some((attached) => attached.id === label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      type="button"
+                      disabled={!canEdit || mutations.propsPending}
+                      aria-pressed={selected}
+                      onClick={() => {
+                        mutations.patchInitiative({
+                          labelIds: selected
+                            ? detail.labels
+                                .filter((attached) => attached.id !== label.id)
+                                .map((attached) => attached.id)
+                            : [...detail.labels.map((attached) => attached.id), label.id],
+                        });
+                      }}
+                      className={`min-h-10 rounded-full border px-3 py-1 text-xs ${
+                        selected
+                          ? 'border-primary text-on-surface'
+                          : 'border-outline-variant text-on-surface-variant'
+                      }`}
                     >
-                      {resource.title}
-                    </a>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        className="text-on-surface-variant hover:text-destructive min-h-10 text-xs"
-                        onClick={() => {
-                          removeResource.mutate(resource.id);
-                        }}
-                      >
-                        Remove
-                      </button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-              {canEdit ? (
-                <form
-                  className="no-print space-y-2"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    if (resourceTitle.trim() && resourceUrl.trim()) {
-                      addResource.mutate({
-                        title: resourceTitle.trim(),
-                        url: resourceUrl.trim(),
-                      });
-                    }
-                  }}
-                >
-                  <input
-                    value={resourceTitle}
-                    onChange={(event) => {
-                      setResourceTitle(event.target.value);
-                    }}
-                    placeholder="Resource title"
-                    className="border-input bg-background h-10 w-full rounded-md border px-2 text-xs"
-                  />
-                  <input
-                    value={resourceUrl}
-                    onChange={(event) => {
-                      setResourceUrl(event.target.value);
-                    }}
-                    placeholder="https://…"
-                    type="url"
-                    className="border-input bg-background h-10 w-full rounded-md border px-2 text-xs"
-                  />
-                  <Button
-                    className="min-h-10"
-                    size="sm"
-                    variant="outline"
-                    disabled={addResource.isPending}
+                      {label.name}
+                    </button>
+                  );
+                })}
+              {data.labels.filter((label) => label.teamId === null || label.teamId === undefined)
+                .length === 0 ? (
+                <span className="text-on-surface-variant text-xs">No workspace labels.</span>
+              ) : null}
+            </div>
+          </section>
+          <section className="space-y-3">
+            <h3 className="text-on-surface text-xs font-semibold tracking-wide uppercase">
+              Resources
+            </h3>
+            <div className="divide-outline-variant divide-y border-y">
+              {detail.resources.map((resource) => (
+                <div key={resource.id} className="flex items-center gap-2 py-2 text-sm">
+                  <a
+                    href={resource.url ?? '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="min-w-0 flex-1 truncate hover:underline"
                   >
-                    Add resource
-                  </Button>
-                </form>
-              ) : null}
-              {addResource.error || removeResource.error ? (
-                <p role="alert" className="text-destructive text-xs">
-                  {userErrorMessage(
-                    addResource.error ?? removeResource.error,
-                    'Could not change resources.',
-                  )}
-                </p>
-              ) : null}
-            </section>
-            {mutations.propsError ? (
-              <p role="alert" className="text-destructive text-sm">
-                {mutations.propsError}
+                    {resource.title}
+                  </a>
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      className="text-on-surface-variant hover:text-destructive min-h-10 text-xs"
+                      onClick={() => {
+                        removeResource.mutate(resource.id);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            {canEdit ? (
+              <form
+                className="no-print space-y-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (resourceTitle.trim() && resourceUrl.trim()) {
+                    addResource.mutate({
+                      title: resourceTitle.trim(),
+                      url: resourceUrl.trim(),
+                    });
+                  }
+                }}
+              >
+                <input
+                  value={resourceTitle}
+                  onChange={(event) => {
+                    setResourceTitle(event.target.value);
+                  }}
+                  placeholder="Resource title"
+                  className="border-input bg-background h-10 w-full rounded-md border px-2 text-xs"
+                />
+                <input
+                  value={resourceUrl}
+                  onChange={(event) => {
+                    setResourceUrl(event.target.value);
+                  }}
+                  placeholder="https://…"
+                  type="url"
+                  className="border-input bg-background h-10 w-full rounded-md border px-2 text-xs"
+                />
+                <Button
+                  className="min-h-10"
+                  size="sm"
+                  variant="outline"
+                  disabled={addResource.isPending}
+                >
+                  Add resource
+                </Button>
+              </form>
+            ) : null}
+            {addResource.error || removeResource.error ? (
+              <p role="alert" className="text-destructive text-xs">
+                {userErrorMessage(
+                  addResource.error ?? removeResource.error,
+                  'Could not change resources.',
+                )}
               </p>
             ) : null}
-          </aside>
-        </div>
-      )}
+          </section>
+          {mutations.propsError ? (
+            <p role="alert" className="text-destructive text-sm">
+              {mutations.propsError}
+            </p>
+          ) : null}
+        </aside>
+      </div>
       <style jsx global>{`
         .print-only {
           display: none;
@@ -621,19 +663,22 @@ export default function InitiativeDetailPage(): JSX.Element {
             display: block !important;
           }
           .no-print,
-          nav,
-          aside:not(.initiative-properties) {
+          nav:not(.initiative-contents),
+          aside {
+            display: none !important;
+          }
+          .initiative-contents-desktop {
+            display: block !important;
+          }
+          .initiative-contents-mobile {
             display: none !important;
           }
           .initiative-print {
             max-width: none !important;
             padding: 0 !important;
           }
-          .initiative-print [role='tabpanel'] {
-            display: block !important;
-          }
-          .initiative-properties {
-            break-inside: avoid;
+          .initiative-overview {
+            display: grid !important;
           }
           .initiative-document button {
             border: 0 !important;
@@ -642,6 +687,15 @@ export default function InitiativeDetailPage(): JSX.Element {
         }
       `}</style>
     </main>
+  );
+}
+
+function PrintProperty({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="flex justify-between gap-4 border-b py-1">
+      <dt className="text-on-surface-variant">{label}</dt>
+      <dd className="text-right capitalize">{value}</dd>
+    </div>
   );
 }
 

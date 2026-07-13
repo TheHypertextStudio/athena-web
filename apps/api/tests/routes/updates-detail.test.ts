@@ -245,21 +245,24 @@ describe('updates post -> latest health propagates to the subject', () => {
     expect(proj[0]?.health).toBe('at_risk');
   });
 
-  it('the health write is org-scoped (cannot touch another org’s subject)', async () => {
+  it('rejects a subject owned by another organization without creating an update', async () => {
     const a = await seedBaseOrg(db, schema);
     const b = await seedBaseOrg(db, schema);
     // A project owned by org B.
     const bSubjectId = await seedProject(b.orgId, b.teamId, b.humanActorId);
 
-    // Org A posts an update naming org B's project id. The update row is created in A,
-    // but the subject health UPDATE is scoped to A and must not modify B's project.
     const writerA = appWithActor(updates, a.orgId, ['contribute'], a.humanActorId);
-    await postUpdate(writerA, {
-      subjectType: 'project',
-      subjectId: bSubjectId,
-      health: 'off_track',
-      body: 'cross',
+    const response = await writerA.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        subjectType: 'project',
+        subjectId: bSubjectId,
+        health: 'off_track',
+        body: 'cross',
+      }),
     });
+    expect(response.status).toBe(404);
 
     const bProj = await db
       .select({ health: schema.project.health })
@@ -267,6 +270,14 @@ describe('updates post -> latest health propagates to the subject', () => {
       .where(and(eq(schema.project.id, bSubjectId), eq(schema.project.organizationId, b.orgId)))
       .limit(1);
     expect(bProj[0]?.health).toBeNull();
+    expect(
+      await db
+        .select()
+        .from(schema.update)
+        .where(
+          and(eq(schema.update.organizationId, a.orgId), eq(schema.update.subjectId, bSubjectId)),
+        ),
+    ).toHaveLength(0);
   });
 });
 

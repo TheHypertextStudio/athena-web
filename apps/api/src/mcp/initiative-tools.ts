@@ -173,25 +173,41 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
           orgId: input.orgId,
         });
         await assertRefInOrg(actor, input.orgId, input.ownerId ?? undefined, 'Owner not found');
-        const rows = await db
-          .update(initiative)
-          .set({
-            ...(input.name !== undefined ? { name: input.name } : {}),
-            ...(input.summary !== undefined ? { summary: input.summary } : {}),
-            ...(input.description !== undefined ? { description: input.description } : {}),
-            ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
-            ...(input.status !== undefined ? { status: input.status } : {}),
-            ...(input.health !== undefined ? { health: input.health } : {}),
-            ...(input.priority !== undefined ? { priority: input.priority } : {}),
-            ...(input.updateCadence !== undefined ? { updateCadence: input.updateCadence } : {}),
-            ...(input.targetDate !== undefined
-              ? { targetDate: input.targetDate ? new Date(input.targetDate) : null }
-              : {}),
-          })
-          .where(
-            and(eq(initiative.id, input.initiativeId), eq(initiative.organizationId, input.orgId)),
-          )
-          .returning();
+        const patch: Partial<typeof initiative.$inferInsert> = {
+          ...(input.name !== undefined ? { name: input.name } : {}),
+          ...(input.summary !== undefined ? { summary: input.summary } : {}),
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.health !== undefined ? { health: input.health } : {}),
+          ...(input.priority !== undefined ? { priority: input.priority } : {}),
+          ...(input.updateCadence !== undefined ? { updateCadence: input.updateCadence } : {}),
+          ...(input.targetDate !== undefined
+            ? { targetDate: input.targetDate ? new Date(input.targetDate) : null }
+            : {}),
+        };
+        const rows =
+          Object.keys(patch).length === 0
+            ? await db
+                .select()
+                .from(initiative)
+                .where(
+                  and(
+                    eq(initiative.id, input.initiativeId),
+                    eq(initiative.organizationId, input.orgId),
+                  ),
+                )
+                .limit(1)
+            : await db
+                .update(initiative)
+                .set(patch)
+                .where(
+                  and(
+                    eq(initiative.id, input.initiativeId),
+                    eq(initiative.organizationId, input.orgId),
+                  ),
+                )
+                .returning();
         const row = rows[0];
         if (!row) throw new NotFoundError('Initiative not found');
         if (input.health !== undefined || input.status !== undefined) {

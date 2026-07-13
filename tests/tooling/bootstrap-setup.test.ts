@@ -158,6 +158,24 @@ describe('mandatory production provider catalog', () => {
     expect(connectorCopy.join('\n')).toContain('Repository permissions');
   });
 
+  it('makes the Linear OAuth form choices explicit', () => {
+    const linear = PROVIDER_GROUPS.find((group) => group.id === 'linear');
+    if (!linear?.instructions) throw new Error('Linear provider guide is missing');
+    const guide = linear
+      .instructions('staging', {
+        apiBase: 'https://docket-api.hypertext.studio',
+        webBases: ['https://docket.hypertext.studio'],
+      })
+      .join('\n');
+
+    expect(guide).toContain('Authorization Code grant');
+    expect(guide).toContain('Client credentials OFF');
+    expect(guide).toContain('select only read');
+    expect(guide).toContain('Select only Issues and Comments');
+    expect(guide).toContain('Public OFF for this non-production app');
+    expect(guide).not.toContain('Copy the Client ID, Client secret, and webhook signing secret');
+  });
+
   it('accepts focused standalone environment and provider flags', () => {
     expect(parseIntegrationArgs(['--env', 'staging,production', '--provider=github'])).toEqual({
       environments: ['staging', 'production'],
@@ -191,6 +209,7 @@ describe('mandatory production provider catalog', () => {
     );
     expect(setupSource).toContain('splitInstructionSteps(group.instructions(env, urls))');
     expect(setupSource).not.toContain('runInstructionChecklist');
+    expect(setupSource).toContain('if (current.var && shouldCollect && !generated)');
   });
 });
 

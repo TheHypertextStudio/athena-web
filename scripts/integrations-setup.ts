@@ -967,10 +967,12 @@ async function runGuidedSteps(
   while (index < steps.length) {
     const current = steps[index];
     if (!current) break;
-    note(
-      wrapLines(current.note).join('\n'),
-      `${group.label} — step ${String(index + 1)} of ${String(steps.length)}`,
-    );
+    if (current.note.length > 0) {
+      note(
+        wrapLines(current.note).join('\n'),
+        `${group.label} — step ${String(index + 1)} of ${String(steps.length)}`,
+      );
+    }
     const url = current.openUrl ?? (index === 0 ? setupUrl : undefined);
     if (url) {
       const shouldOpen = unwrap(
@@ -986,6 +988,23 @@ async function runGuidedSteps(
     const status = current.var ? (fieldStatuses.get(current.var) ?? 'missing') : 'missing';
     const alreadyReady = status === 'ready';
     const shouldCollect = current.var !== undefined && (!alreadyReady || replaceAll);
+    const generated = current.var ? generatedValues[current.var] : undefined;
+    if (current.var && shouldCollect && !generated) {
+      const spec = findVar(current.var);
+      if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
+      const value = await promptVar(spec, {
+        env,
+        current:
+          spec.sensitive || replaceAll || status !== 'ready'
+            ? undefined
+            : currentValues.get(current.var),
+      });
+      if (value !== undefined) {
+        collected[current.var] = group.transform?.[current.var]?.(value) ?? value;
+      }
+      index += 1;
+      continue;
+    }
     const action = unwrap(
       await select<'continue' | 'replace' | 'back' | 'retry' | 'skip' | 'exit'>({
         message: current.var
@@ -1024,7 +1043,6 @@ async function runGuidedSteps(
     if (current.var && (shouldCollect || action === 'replace')) {
       const spec = findVar(current.var);
       if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
-      const generated = generatedValues[current.var];
       if (generated) {
         if (!copyToClipboard(generated)) {
           warn('No supported clipboard utility is available; install one and retry this step.');
@@ -1392,11 +1410,14 @@ async function setupEnvironment(
     if (captureVars.length > 0) {
       guidedResult = await runGuidedSteps(
         group,
-        captureVars.map((varName) => ({ note: providerFieldNote(group, varName), var: varName })),
+        captureVars.map((varName) => ({
+          note: policyVars.includes(varName) ? providerFieldNote(group, varName) : [],
+          var: varName,
+        })),
         env,
         state.variableValues,
         state.fieldStatuses,
-        false,
+        editPolicy,
         collected,
         generatedValues,
       );

@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthenticationInterlockProvider } from '../../../src/components/authentication-interlock';
+import { AuthenticationRequiredError } from '../../../src/lib/query-core';
+
 const { back, replace, createWorkspace } = vi.hoisted(() => ({
   back: vi.fn(),
   replace: vi.fn(),
@@ -29,11 +32,13 @@ import NewWorkspacePage from '../../../src/app/(app)/workspaces/new/page';
 function renderPage(): QueryClient {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <QueryClientProvider client={queryClient}>
-      <ContextProvider initialContext="old_org">
-        <NewWorkspacePage />
-      </ContextProvider>
-    </QueryClientProvider>,
+    <AuthenticationInterlockProvider>
+      <QueryClientProvider client={queryClient}>
+        <ContextProvider initialContext="old_org">
+          <NewWorkspacePage />
+        </ContextProvider>
+      </QueryClientProvider>
+    </AuthenticationInterlockProvider>,
   );
   return queryClient;
 }
@@ -87,6 +92,22 @@ describe('NewWorkspacePage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Workspace limit reached.');
     expect(input).toHaveValue('Acme');
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('opens the blocking sign-in interlock when workspace creation loses its session', async () => {
+    createWorkspace.mockRejectedValue(
+      new AuthenticationRequiredError({
+        message: 'Authentication required',
+        status: 401,
+        code: 'unauthorized',
+      }),
+    );
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText('Workspace name'), { target: { value: 'Acme' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    expect(await screen.findByRole('dialog')).toBeVisible();
   });
 
   it('keeps blank names disabled and cancels back to the prior surface', () => {

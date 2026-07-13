@@ -50,8 +50,8 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { useOptionalAuthenticationInterlock } from '@/components/authentication-interlock';
-import { AuthenticationRequiredError, type ApiInfiniteDef } from './query-core';
+import { useOptionalAuthenticationRecovery } from '@/components/authentication-interlock';
+import type { ApiInfiniteDef } from './query-core';
 
 export * from './query-core';
 export { queryKeys } from './query-keys';
@@ -206,20 +206,11 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
   },
 ): UseMutationResult<TData, DefaultError, TVariables, TContext> {
   const queryClient = useQueryClient();
-  const authenticationInterlock = useOptionalAuthenticationInterlock();
+  const recoverAuthentication = useOptionalAuthenticationRecovery();
   const { invalidateKeys, mutationFn, onSettled, ...rest } = options;
   return useMutation<TData, DefaultError, TVariables, TContext>({
     ...rest,
-    mutationFn: async (variables) => {
-      try {
-        return await mutationFn(variables);
-      } catch (error) {
-        if (error instanceof AuthenticationRequiredError) {
-          authenticationInterlock?.requireAuthentication();
-        }
-        throw error;
-      }
-    },
+    mutationFn: (variables) => recoverAuthentication(() => mutationFn(variables)),
     onSettled: async (data, error, variables, onMutateResult, context) => {
       await onSettled?.(data, error, variables, onMutateResult, context);
       if (invalidateKeys && invalidateKeys.length > 0) {

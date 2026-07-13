@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { JSX } from 'react';
 
+import { PUBLIC_PROBLEM_RECOVERY } from '@/lib/problem-recovery';
+
 interface ProblemPageProps {
   /** The stable, public problem code supplied by the route. */
   params: Promise<{ code: string }>;
@@ -29,12 +31,7 @@ export default async function ProblemPage({ params }: ProblemPageProps): Promise
   const problem = problemDefinition(code);
   if (!problem) notFound();
 
-  const action =
-    problem.recovery === 'sign_in'
-      ? { href: '/sign-in', label: 'Sign in' }
-      : problem.recovery === 'billing'
-        ? { href: '/pricing', label: 'View plans' }
-        : { href: '/problems', label: 'View problem types' };
+  const action = PUBLIC_PROBLEM_RECOVERY[problem.recovery];
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-20 pb-24">
@@ -51,9 +48,7 @@ export default async function ProblemPage({ params }: ProblemPageProps): Promise
 
       <section className="border-border flex flex-col gap-4 border-t pt-7">
         <h2 className="font-display text-ink text-2xl tracking-tight">What you can do</h2>
-        <p className="text-ink-muted leading-relaxed">
-          Return to Docket and continue when the required access or information is available.
-        </p>
+        <p className="text-ink-muted leading-relaxed">{action.instruction}</p>
         <div>
           <Link
             href={action.href}

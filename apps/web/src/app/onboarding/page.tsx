@@ -14,6 +14,7 @@ import { StepPersonalWelcome } from '@/components/onboarding/step-personal-welco
 import type { OnboardingIntent, OnboardingStep } from '@/components/onboarding/types';
 import { WizardShell } from '@/components/onboarding/wizard-shell';
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
+import { useAuthenticationRecovery } from '@/components/authentication-interlock';
 import { passkey, useSession } from '@/lib/auth-client';
 <<<<<<< HEAD
 import { userErrorMessage } from '@/lib/problem';
@@ -58,6 +59,7 @@ function firstNameOf(name: string | undefined): string | undefined {
 export default function OnboardingPage(): JSX.Element {
   const router = useRouter();
   const { data: session } = useSession();
+  const recoverAuthentication = useAuthenticationRecovery();
   const firstName = firstNameOf(session?.user.name);
 
   const [step, setStep] = useState<OnboardingStep>('intent');
@@ -156,7 +158,7 @@ export default function OnboardingPage(): JSX.Element {
     setError(null);
     setPending(true);
     try {
-      const { organization } = await createWorkspace(orgBody());
+      const { organization } = await recoverAuthentication(() => createWorkspace(orgBody()));
       setOrgId(organization.id);
       setStep('connect');
     } catch (caught) {
@@ -169,7 +171,7 @@ export default function OnboardingPage(): JSX.Element {
     } finally {
       setPending(false);
     }
-  }, [intent, pending, orgId, orgBody]);
+  }, [intent, pending, orgId, orgBody, recoverAuthentication]);
 
   /** Route into Home (the cross-org cockpit) — matches sign-in's landing; used by both Skip and Enter. */
   const enterWorkspace = useCallback((): void => {

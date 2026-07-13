@@ -8,6 +8,7 @@ import { type JSX, type SyntheticEvent, useCallback, useState } from 'react';
 
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';
 import { writeLastOrg } from '@/components/app-shell-utils';
+import { useAuthenticationRecovery } from '@/components/authentication-interlock';
 import { authClient } from '@/lib/auth-client';
 import { queryKeys } from '@/lib/query';
 import { createWorkspace } from '@/lib/workspace-creation';
@@ -27,6 +28,7 @@ export default function NewWorkspacePage(): JSX.Element {
   const queryClient = useQueryClient();
   const { setContext } = useContextState();
   const { data: session } = authClient.useSession();
+  const recoverAuthentication = useAuthenticationRecovery();
   const [name, setName] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,11 +39,13 @@ export default function NewWorkspacePage(): JSX.Element {
     setError(null);
     setPending(true);
     try {
-      const result = await createWorkspace({
-        name: name.trim(),
-        isPersonal: false,
-        vocabulary: 'startup',
-      });
+      const result = await recoverAuthentication(() =>
+        createWorkspace({
+          name: name.trim(),
+          isPersonal: false,
+          vocabulary: 'startup',
+        }),
+      );
       await queryClient.invalidateQueries({ queryKey: queryKeys.orgs() });
       setContext(result.organization.id);
       writeLastOrg(session?.user.id ?? null, result.organization.id);
@@ -51,7 +55,16 @@ export default function NewWorkspacePage(): JSX.Element {
     } finally {
       setPending(false);
     }
-  }, [nameReady, pending, name, queryClient, setContext, session?.user.id, router]);
+  }, [
+    nameReady,
+    pending,
+    name,
+    queryClient,
+    setContext,
+    session?.user.id,
+    router,
+    recoverAuthentication,
+  ]);
 
   const onSubmit = (event: SyntheticEvent<HTMLFormElement>): void => {
     event.preventDefault();

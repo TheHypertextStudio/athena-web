@@ -24,6 +24,7 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '../../../src/lib/query-keys';
+import { AuthenticationInterlockProvider } from '../../../src/components/authentication-interlock';
 
 // Hoisted so the mock factories (which Vitest lifts above imports) can reference them.
 const { push, orgPost, listUserPasskeys, addPasskey } = vi.hoisted(() => ({
@@ -62,7 +63,11 @@ function renderPage(ui: ReactElement): ReturnType<typeof render> {
   };
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.publicConfig(), config);
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <AuthenticationInterlockProvider>
+      <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+    </AuthenticationInterlockProvider>,
+  );
 }
 
 beforeEach(() => {

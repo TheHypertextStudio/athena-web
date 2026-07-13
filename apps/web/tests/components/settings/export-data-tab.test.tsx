@@ -34,7 +34,10 @@ vi.mock('../../../src/lib/api', () => ({
 vi.mock('../../../src/components/settings/use-reauth', () => ({ useReauth: () => reauth }));
 vi.mock('../../../src/components/authentication-interlock', () => ({
   useAuthenticationInterlock: () => ({ requireAuthentication }),
-  useOptionalAuthenticationInterlock: () => ({ requireAuthentication }),
+  useOptionalAuthenticationRecovery:
+    () =>
+    async <T,>(action: () => Promise<T>) =>
+      action(),
 }));
 
 import { ExportDataTab } from '../../../src/components/settings/export-data-tab';

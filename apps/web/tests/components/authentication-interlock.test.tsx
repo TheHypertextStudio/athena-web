@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   AuthenticationInterlockProvider,
+  useAuthenticationRecovery,
   useAuthenticationInterlock,
 } from '../../src/components/authentication-interlock';
 import { unwrap, useApiMutation } from '../../src/lib/query';
@@ -52,6 +53,40 @@ function ProtectedMutation(): JSX.Element {
   );
 }
 
+/** A direct user action outside TanStack Mutation that still receives the auth recovery contract. */
+function DirectProtectedAction(): JSX.Element {
+  const recoverAuthentication = useAuthenticationRecovery();
+
+  async function run(): Promise<void> {
+    try {
+      await recoverAuthentication(() =>
+        unwrap(
+          () =>
+            Promise.resolve({
+              ok: false,
+              status: 401,
+              json: () => Promise.resolve({ code: 'unauthorized' }),
+            }),
+          'Could not connect.',
+        ),
+      );
+    } catch {
+      // The original error is intentionally rethrown for local cleanup after opening the interlock.
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void run();
+      }}
+    >
+      Connect account
+    </button>
+  );
+}
+
 afterEach(cleanup);
 
 describe('AuthenticationInterlockProvider', () => {
@@ -89,5 +124,19 @@ describe('AuthenticationInterlockProvider', () => {
       expect(screen.getByRole('dialog')).toBeVisible();
     });
     client.clear();
+  });
+
+  it('opens for an imperative user action that is not a TanStack mutation', async () => {
+    render(
+      <AuthenticationInterlockProvider>
+        <DirectProtectedAction />
+      </AuthenticationInterlockProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Connect account' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeVisible();
+    });
   });
 });

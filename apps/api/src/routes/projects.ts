@@ -1,7 +1,17 @@
 /**
  * `@docket/api` — projects router (mounted at `/v1/orgs/:orgId/projects`).
  */
-import { actor, db, initiative, initiativeProject, program, project, task, team } from '@docket/db';
+import {
+  actor,
+  db,
+  entityDisplay,
+  initiative,
+  initiativeProject,
+  program,
+  project,
+  task,
+  team,
+} from '@docket/db';
 import {
   CursorQuery,
   pageOf,
@@ -355,11 +365,26 @@ const projects = new Hono<AppEnv>()
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const deleted = await db
-        .delete(project)
-        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
-        .returning();
-      const row = deleted[0];
+      const row = await db.transaction(async (tx) => {
+        const candidates = await tx
+          .select()
+          .from(project)
+          .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+          .limit(1);
+        const candidate = candidates[0];
+        if (!candidate) return undefined;
+        await tx
+          .delete(entityDisplay)
+          .where(
+            and(
+              eq(entityDisplay.organizationId, orgId),
+              eq(entityDisplay.subjectType, 'project'),
+              eq(entityDisplay.subjectId, id),
+            ),
+          );
+        const deleted = await tx.delete(project).where(eq(project.id, id)).returning();
+        return deleted[0];
+      });
       if (!row) throw new NotFoundError('Project not found');
       await enqueueSearchDelete(orgId, 'project', row.id);
       return ok(c, ProjectOut, toOut(row));

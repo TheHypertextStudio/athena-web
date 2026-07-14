@@ -1,9 +1,15 @@
 'use client';
 
-import type { InitiativeAttentionItem, InitiativeOverviewOut } from '@docket/types';
+import type {
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+  EntityDisplayOut,
+  InitiativeAttentionItem,
+  InitiativeOverviewOut,
+} from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Plus, Target } from '@docket/ui/icons';
+import { ChevronDown, ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -11,8 +17,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
+import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
-import { queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
+import { queryKeys, unwrap, useApiMutation, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -82,13 +90,13 @@ function AttentionSurface({
                 aria-label="Previous attention item"
                 onClick={onPrevious}
               >
-                ←
+                <ChevronLeft aria-hidden className="size-5" />
               </Button>
               <span className="text-on-surface-variant min-w-8 text-center text-xs tabular-nums">
                 {index + 1}/{count}
               </span>
               <Button variant="ghost" size="icon" aria-label="Next attention item" onClick={onNext}>
-                →
+                <ChevronRight aria-hidden className="size-5" />
               </Button>
             </div>
           ) : null}
@@ -114,6 +122,64 @@ export default function InitiativesListClient(): JSX.Element {
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const overview = useApiQuery(initiativeOverviewDef(orgId));
   const data: InitiativeOverviewOut | undefined = overview.data;
+  const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
+  const displayMutation = useApiMutation<
+    EntityDisplayOut,
+    { initiativeId: string; iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey },
+    { previous?: InitiativeOverviewOut }
+  >({
+    mutationFn: ({ initiativeId, iconKey, colorKey }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
+            param: { orgId, subjectType: 'initiative', subjectId: initiativeId },
+            json: { iconKey, colorKey },
+          }),
+        'Could not customize this initiative.',
+      ),
+    onMutate: async ({ initiativeId, iconKey, colorKey }) => {
+      await queryClient.cancelQueries({ queryKey: overviewKey });
+      const previous = queryClient.getQueryData<InitiativeOverviewOut>(overviewKey);
+      queryClient.setQueryData<InitiativeOverviewOut>(overviewKey, (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === initiativeId
+                  ? {
+                      ...item,
+                      display: {
+                        subjectType: 'initiative',
+                        subjectId: initiativeId,
+                        iconKey,
+                        colorKey,
+                        customized: true,
+                      },
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(overviewKey, context.previous);
+    },
+    onSuccess: (display) => {
+      queryClient.setQueryData<InitiativeOverviewOut>(overviewKey, (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === display.subjectId ? { ...item, display } : item,
+              ),
+            }
+          : current,
+      );
+    },
+    invalidateKeys: [overviewKey],
+  });
   const attention = data?.attention ?? [];
   const currentAttention = attention[attentionIndex % Math.max(attention.length, 1)];
   const visibleItems = useMemo(() => {
@@ -275,10 +341,10 @@ export default function InitiativesListClient(): JSX.Element {
         </p>
       ) : data && data.items.length > 0 ? (
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm @2xl:min-w-[56rem]">
-            <thead className="hidden @2xl:table-header-group">
+          <table className="w-full border-collapse text-sm md:min-w-[56rem]">
+            <thead className="hidden md:table-header-group">
               <tr className="border-outline-variant text-on-surface-variant border-b text-left text-xs">
-                <th className="py-2 font-medium">Initiative</th>
+                <th className="py-2 pl-20 font-medium">Initiative</th>
                 <th className="py-2 pr-4 font-medium whitespace-nowrap">Status</th>
                 <th className="py-2 pr-4 font-medium whitespace-nowrap">Health</th>
                 <th className="py-2 pr-4 font-medium whitespace-nowrap">Owner</th>
@@ -286,16 +352,16 @@ export default function InitiativesListClient(): JSX.Element {
                 <th className="py-2 font-medium whitespace-nowrap">Last update</th>
               </tr>
             </thead>
-            <tbody className="block @2xl:table-row-group">
+            <tbody className="block md:table-row-group">
               {visibleItems.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b @2xl:table-row"
+                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b md:table-row"
                   onMouseEnter={() => {
                     prefetch(initiativeDetailDef(item.organizationId, item.id));
                   }}
                 >
-                  <td className="block min-w-0 py-3 @2xl:table-cell @2xl:pr-4">
+                  <td className="block min-w-0 py-3 md:table-cell md:pr-4">
                     <div
                       className="flex items-center"
                       style={{ paddingLeft: `${(item.depth - 1) * 24}px` }}
@@ -303,7 +369,7 @@ export default function InitiativesListClient(): JSX.Element {
                       {item.childCount > 0 ? (
                         <button
                           type="button"
-                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @2xl:mr-0"
+                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center md:mr-0"
                           aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`}
                           aria-expanded={!collapsed.has(item.id)}
                           onClick={() => {
@@ -315,11 +381,24 @@ export default function InitiativesListClient(): JSX.Element {
                             });
                           }}
                         >
-                          {collapsed.has(item.id) ? '›' : '⌄'}
+                          {collapsed.has(item.id) ? (
+                            <ChevronRight aria-hidden className="size-5" />
+                          ) : (
+                            <ChevronDown aria-hidden className="size-5" />
+                          )}
                         </button>
                       ) : (
-                        <span className="mr-1 w-10 shrink-0 @2xl:mr-0" />
+                        <span className="mr-1 size-10 shrink-0 md:mr-0" />
                       )}
+                      <InitiativeIconPicker
+                        display={item.display}
+                        initiativeName={item.name}
+                        editable={item.organizationId === orgId}
+                        pending={displayMutation.isPending}
+                        onChange={(iconKey, colorKey) => {
+                          displayMutation.mutate({ initiativeId: item.id, iconKey, colorKey });
+                        }}
+                      />
                       <Link
                         href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
                         className="text-on-surface line-clamp-1 min-w-0 font-medium hover:underline"
@@ -333,12 +412,12 @@ export default function InitiativesListClient(): JSX.Element {
                       ) : null}
                     </div>
                     <p
-                      className="text-on-surface-variant mt-1 line-clamp-2 min-h-8 max-w-[45ch] pl-10 text-xs @2xl:mt-0.5"
+                      className="text-on-surface-variant mt-1 line-clamp-2 min-h-8 max-w-[45ch] pl-20 text-xs md:mt-0.5"
                       style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
                     >
                       {item.summary ?? ''}
                     </p>
-                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs @2xl:hidden">
+                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs md:hidden">
                       <span>{STATUS_LABEL[item.status]}</span>
                       <span>{item.health ? HEALTH_LABEL[item.health] : 'No health'}</span>
                       <span>{`Owner ${item.ownerName ?? 'Unassigned'}`}</span>
@@ -350,19 +429,19 @@ export default function InitiativesListClient(): JSX.Element {
                       </span>
                     </p>
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap @2xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap md:table-cell">
                     {STATUS_LABEL[item.status]}
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap @2xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap md:table-cell">
                     {item.health ? HEALTH_LABEL[item.health] : '—'}
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap @2xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap md:table-cell">
                     {item.ownerName ?? '—'}
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap tabular-nums @2xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap tabular-nums md:table-cell">
                     {item.targetDate ? item.targetDate.slice(0, 10) : '—'}
                   </td>
-                  <td className="hidden py-3 whitespace-nowrap tabular-nums @2xl:table-cell">
+                  <td className="hidden py-3 whitespace-nowrap tabular-nums md:table-cell">
                     {item.lastUpdateAt ? item.lastUpdateAt.slice(0, 10) : 'Never'}
                   </td>
                 </tr>
@@ -383,6 +462,11 @@ export default function InitiativesListClient(): JSX.Element {
           }}
         />
       )}
+      {displayMutation.error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {userErrorMessage(displayMutation.error, 'Could not customize this initiative.')}
+        </p>
+      ) : null}
     </main>
   );
 }

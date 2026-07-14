@@ -95,6 +95,32 @@ interface Detail {
 }
 
 describe('initiatives detail roll-up', () => {
+  it('composes separately stored display metadata into overview rows', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedInitiative(orgId, humanActorId);
+    await db.insert(schema.entityDisplay).values({
+      organizationId: orgId,
+      subjectType: 'initiative',
+      subjectId: id,
+      iconKey: 'flag',
+      colorKey: 'primary',
+      createdBy: humanActorId,
+    });
+    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const response = await viewer.request('/overview');
+    expect(response.status).toBe(200);
+    const body = await json<{
+      items: { id: string; display: { iconKey: string; colorKey: string; customized: boolean } }[];
+    }>(response);
+    expect(body.items.find((item) => item.id === id)?.display).toEqual({
+      subjectType: 'initiative',
+      subjectId: id,
+      iconKey: 'flag',
+      colorKey: 'primary',
+      customized: true,
+    });
+  });
+
   it('returns zeroed roll-up + null health + active status for an initiative with no children', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);

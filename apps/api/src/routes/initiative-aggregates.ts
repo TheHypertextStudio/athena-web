@@ -3,6 +3,7 @@ import {
   actor,
   attachment,
   db,
+  entityDisplay,
   initiative,
   initiativeHierarchyLink,
   initiativeLabel,
@@ -14,7 +15,11 @@ import {
   project,
   update,
 } from '@docket/db';
-import { InitiativeAggregateDetail, InitiativeOverviewOut } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  InitiativeAggregateDetail,
+  InitiativeOverviewOut,
+} from '@docket/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
@@ -79,7 +84,7 @@ const initiativeAggregates = new Hono<AppEnv>()
       const visibleRows = [...rowsById.values()];
       const visibleIds = visibleRows.map((row) => row.id);
       const organizationIds = [...new Set(visibleRows.map((row) => row.organizationId))];
-      const [orgRows, ownerRows, updateRows] = await Promise.all([
+      const [orgRows, ownerRows, updateRows, displayRows] = await Promise.all([
         organizationIds.length === 0
           ? []
           : db
@@ -108,10 +113,27 @@ const initiativeAggregates = new Hono<AppEnv>()
                 ),
               )
               .orderBy(desc(update.createdAt), desc(update.id)),
+        visibleIds.length === 0 || organizationIds.length === 0
+          ? []
+          : db
+              .select()
+              .from(entityDisplay)
+              .where(
+                and(
+                  eq(entityDisplay.subjectType, 'initiative'),
+                  inArray(entityDisplay.subjectId, visibleIds),
+                  inArray(entityDisplay.organizationId, organizationIds),
+                ),
+              ),
       ]);
       const orgNameById = new Map(orgRows.map((row) => [row.id, row.name]));
       const ownerNameById = new Map(ownerRows.map((row) => [row.id, row.displayName]));
       const latestUpdateByInitiative = new Map<string, (typeof updateRows)[number]>();
+      const displayByInitiative = new Map(
+        displayRows
+          .filter((row) => rowsById.get(row.subjectId)?.organizationId === row.organizationId)
+          .map((row) => [row.subjectId, row]),
+      );
       for (const row of updateRows) {
         if (rowsById.get(row.subjectId)?.organizationId !== row.organizationId) continue;
         if (!latestUpdateByInitiative.has(row.subjectId)) {
@@ -180,15 +202,27 @@ const initiativeAggregates = new Hono<AppEnv>()
         };
       });
       return ok(c, InitiativeOverviewOut, {
-        items: overviewItems.map(({ row, parentInitiativeId, depth }) => ({
-          ...toOut(row),
-          organizationName: orgNameById.get(row.organizationId) ?? '',
-          parentInitiativeId,
-          depth,
-          childCount: childrenByParent.get(row.id)?.length ?? 0,
-          ownerName: row.ownerId ? (ownerNameById.get(row.ownerId) ?? null) : null,
-          lastUpdateAt: latestUpdateByInitiative.get(row.id)?.createdAt.toISOString() ?? null,
-        })),
+        items: overviewItems.map(({ row, parentInitiativeId, depth }) => {
+          const display = displayByInitiative.get(row.id);
+          return {
+            ...toOut(row),
+            display: display
+              ? {
+                  subjectType: 'initiative' as const,
+                  subjectId: row.id,
+                  iconKey: display.iconKey,
+                  colorKey: display.colorKey,
+                  customized: true,
+                }
+              : defaultEntityDisplay('initiative', row.id),
+            organizationName: orgNameById.get(row.organizationId) ?? '',
+            parentInitiativeId,
+            depth,
+            childCount: childrenByParent.get(row.id)?.length ?? 0,
+            ownerName: row.ownerId ? (ownerNameById.get(row.ownerId) ?? null) : null,
+            lastUpdateAt: latestUpdateByInitiative.get(row.id)?.createdAt.toISOString() ?? null,
+          };
+        }),
         attention,
       });
     },

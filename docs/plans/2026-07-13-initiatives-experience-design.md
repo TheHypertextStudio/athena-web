@@ -28,7 +28,17 @@ The overview keeps its top band deliberately slim: the page title, creation acti
 horizontal "Needs your attention" surface with at most four items. Off-track and at-risk
 Initiatives rank before active Initiatives whose latest update is overdue for their cadence. The
 roster below is a dense hierarchy with status, health, owner, target, and update freshness rather
-than decorative cards or aggregate vanity counts.
+than decorative cards or aggregate vanity counts. Every Initiative has a Material icon in a fixed
+alignment column. Workspace contributors can change its curated icon and semantic color from an
+anchored picker. This presentation metadata is stored in the generic `entity_display` relation,
+not on the Initiative or Project domain record, so visual identity remains an optional layer over
+strategic work rather than part of its business meaning. Projects use the same display contract
+and receive a folder default; Initiative overview reads compose display metadata server-side.
+
+At medium and larger viewport widths, the full column roster retains a minimum readable width and
+scrolls horizontally inside the content region. Only narrow viewports switch to the compact row.
+Descriptions reserve two lines and use a bounded measure so Initiative rows remain consistently
+sized.
 
 ## Detail
 

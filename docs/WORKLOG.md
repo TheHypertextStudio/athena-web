@@ -7,6 +7,51 @@
 
 ## Active Tasks
 
+### [INIT-ICONS-001] Add customizable Material icons to strategic work
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P2
+- **Description**: Use the repository's MUI-backed `@docket/ui/icons` components for every
+  Initiative control, give every Initiative a customizable icon and color, and store the same
+  optional presentation metadata for Projects without coupling it to either work entity's core
+  planning record.
+- **Plan**:
+  1. Add a visual-contract regression that rejects Unicode control glyphs.
+  2. Add a generic workspace-scoped entity-display record for Initiative and Project icon data.
+  3. Add typed, capability-guarded display reads and mutations with tenant validation.
+  4. Compose Initiative display metadata into the overview aggregate.
+  5. Replace attention paging and hierarchy disclosure glyphs with Material icon components.
+  6. Add a 40-pixel anchored icon/color popover and align the roster header, icons, titles, and
+     two-line summaries on fixed leading slots.
+  7. Verify icon targets remain 40 pixels and run the repository validation gates.
+- **Validation**: Run the focused Initiative visual contract and shared primitive suites, then
+  `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build`; inspect rendered Initiative controls.
+- **Implementation**: Added a generic `entity_display` record and typed API for optional Initiative
+  and Project icon/color metadata, keeping display choices outside both domain tables. Initiative
+  overview aggregates now compose that metadata with stable defaults. The hierarchy roster uses
+  fixed disclosure and Material-icon slots, an anchored icon/color picker, Material paging and
+  disclosure controls, two-line descriptions, and a viewport-based medium-width table scroller.
+  Entity deletion clears its corresponding display record.
+- **Files Changed**: Shared display DTOs; cross-cutting schema and migration; display and Initiative
+  API routes; Initiative overview UI and picker; focused type, schema, API, component, and visual
+  contract tests; Initiative experience design and this work log.
+- **Validation Results**: Focused types pass 142/142, database migration/schema pass 11/11, API
+  pass 33/33, and web component/visual contracts pass 8/8. Root typecheck and lint pass 17/17;
+  production build passes 3/3. The live 1280-pixel viewport keeps the 896-pixel table inside a
+  622-pixel local scroller with no page overflow; every relevant control and picker option measures
+  40 by 40 pixels; summaries reserve 32 pixels; the popover is left-aligned four pixels below its
+  trigger; and no Unicode control glyphs remain. Root `pnpm test` still reports the same four
+  unrelated repository-policy failures in provider catalog expectations, TSDoc coverage, and safe
+  UI error-source enforcement; none is in this task's changed surface.
+- **Retrospective**: Treat icon and color as a reusable presentation concern, then compose it at
+  aggregate boundaries. This kept strategic records semantic, enabled Initiative and Project use
+  without nullable display columns, and made cross-workspace reads easier to constrain. Drizzle
+  generation also revealed an unrelated pending Time Ledger migration; generating against a
+  display-only schema view kept this migration atomic while leaving that existing drift visible to
+  its owning work.
+
 ### [INIT-INTERACTION-001] Normalize Initiative icon targets and roster measure
 
 - **Status**: COMPLETED

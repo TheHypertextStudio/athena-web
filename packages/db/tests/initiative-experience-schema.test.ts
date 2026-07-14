@@ -64,6 +64,21 @@ describe('Initiative experience schema', () => {
     }
   });
 
+  it('stores Initiative and Project presentation metadata outside their work tables', async () => {
+    const table = (await db.execute(
+      sql`select to_regclass('public.entity_display') as reg`,
+    )) as unknown as { rows: { reg: string | null }[] };
+    expect(table.rows[0]?.reg).not.toBeNull();
+
+    const coreColumns = (await db.execute(sql`
+      select table_name, column_name
+      from information_schema.columns
+      where table_name in ('initiative', 'project')
+        and column_name in ('icon_key', 'color_key')
+    `)) as unknown as { rows: { table_name: string; column_name: string }[] };
+    expect(coreColumns.rows).toEqual([]);
+  });
+
   it('allows URL resources to name an Initiative as their subject', async () => {
     const result = (await db.execute(sql`
       select e.enumlabel as value

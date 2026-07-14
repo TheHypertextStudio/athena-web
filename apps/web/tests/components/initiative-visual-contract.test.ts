@@ -15,6 +15,7 @@ const detailPath = join(
 const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
 const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
+const iconPickerPath = join(root, 'apps/web/src/components/initiatives/initiative-icon-picker.tsx');
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -52,10 +53,10 @@ describe('Initiative visual contract', () => {
   it('keeps medium table columns scrollable and reserves two description lines', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('overflow-x-auto');
-    expect(overview).toContain('@2xl:min-w-[56rem]');
-    expect(overview).toContain('@2xl:table-header-group');
-    expect(overview).toContain('@2xl:table-row-group');
-    expect(overview).toContain('@2xl:table-cell');
+    expect(overview).toContain('md:min-w-[56rem]');
+    expect(overview).toContain('md:table-header-group');
+    expect(overview).toContain('md:table-row-group');
+    expect(overview).toContain('md:table-cell');
     expect(overview).toContain('line-clamp-1 min-w-0');
     expect(overview).toContain('line-clamp-2 min-h-8');
     expect(overview).toContain('max-w-[45ch]');
@@ -73,6 +74,19 @@ describe('Initiative visual contract', () => {
     expect(overview).toContain('size="icon"');
     expect(overview).toContain('flex size-10 shrink-0 items-center justify-center');
     expect(overview).not.toContain('@2xl:size-6');
+  });
+
+  it('uses Material icon components instead of Unicode control glyphs', () => {
+    const overview = source(overviewPath);
+    const picker = source(iconPickerPath);
+    expect(overview).toContain('<ChevronLeft');
+    expect(overview).toContain('<ChevronRight');
+    expect(overview).toContain('<ChevronDown');
+    expect(overview).toContain('<InitiativeIconPicker');
+    expect(picker).toContain('<PopoverContent');
+    expect(picker).toContain('aria-label="Initiative icon"');
+    expect(picker).toContain('aria-label="Initiative color"');
+    expect(overview).not.toMatch(/[←→›⌄]/u);
   });
 
   it('does not style semantic labels as uppercase overlines', () => {

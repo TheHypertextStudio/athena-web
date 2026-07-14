@@ -49,6 +49,13 @@ import {
 } from '../src/daily-plan';
 import { GrantOut, GrantResourceKind, GrantSubjectKind, GrantUpsert } from '../src/grant';
 import {
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+  EntityDisplayOut,
+  EntityDisplaySubjectType,
+  EntityDisplayUpdate,
+} from '../src/entity-display';
+import {
   HubActivityOut,
   HubInboxOut,
   HubPortfolioOut,
@@ -530,6 +537,33 @@ describe('initiative DTOs', () => {
         status: 'nope',
         createdAt: 'x',
       }).success,
+    ).toBe(false);
+  });
+});
+
+describe('entity display DTOs', () => {
+  it('accepts the curated strategic-work icon and semantic color keys', () => {
+    expect(EntityDisplaySubjectType.parse('initiative')).toBe('initiative');
+    expect(EntityDisplaySubjectType.parse('project')).toBe('project');
+    expect(EntityDisplayIconKey.parse('target')).toBe('target');
+    expect(EntityDisplayColorKey.parse('primary')).toBe('primary');
+    expect(EntityDisplayUpdate.parse({ iconKey: 'flag', colorKey: 'warning' })).toEqual({
+      iconKey: 'flag',
+      colorKey: 'warning',
+    });
+  });
+
+  it('rejects uncurated display values and parses a composed display record', () => {
+    expect(EntityDisplayIconKey.safeParse('emoji-rocket').success).toBe(false);
+    expect(EntityDisplayColorKey.safeParse('#ff00ff').success).toBe(false);
+    expect(
+      EntityDisplayOut.parse({
+        subjectType: 'initiative',
+        subjectId: ID,
+        iconKey: 'target',
+        colorKey: 'neutral',
+        customized: false,
+      }).customized,
     ).toBe(false);
   });
 });

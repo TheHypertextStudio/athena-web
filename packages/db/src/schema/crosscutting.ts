@@ -8,8 +8,14 @@
  * the universal audit feed, and saved views.
  */
 import { sql } from 'drizzle-orm';
+import type {
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+  EntityDisplaySubjectType,
+} from '@docket/types';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -136,6 +142,39 @@ export const grant = pgTable(
       t.resourceKind,
       t.resourceId,
       t.effect,
+    ),
+  ],
+);
+
+/** Optional presentation metadata for supported work entities, kept outside core work records. */
+export const entityDisplay = pgTable(
+  'entity_display',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    subjectType: text('subject_type').$type<EntityDisplaySubjectType>().notNull(),
+    subjectId: text('subject_id').notNull(),
+    iconKey: text('icon_key').$type<EntityDisplayIconKey>().notNull(),
+    colorKey: text('color_key').$type<EntityDisplayColorKey>().notNull(),
+    createdBy: text('created_by').references(() => actor.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('entity_display_subject_uq').on(t.organizationId, t.subjectType, t.subjectId),
+    check('entity_display_subject_type_check', sql`${t.subjectType} in ('initiative', 'project')`),
+    check(
+      'entity_display_icon_key_check',
+      sql`${t.iconKey} in ('target', 'flag', 'layers', 'folder', 'workflow', 'globe', 'users', 'sparkles')`,
+    ),
+    check(
+      'entity_display_color_key_check',
+      sql`${t.colorKey} in ('neutral', 'primary', 'success', 'warning', 'danger')`,
     ),
   ],
 );

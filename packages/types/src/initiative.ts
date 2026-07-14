@@ -16,6 +16,7 @@ import {
   ProjectId,
 } from './primitives';
 import { UpdateOut } from './update';
+import { EntityDisplayOut } from './entity-display';
 
 /** Initiative (theme) status. */
 export const InitiativeStatus = z
@@ -321,6 +322,7 @@ export type InitiativeReference = z.infer<typeof InitiativeReference>;
 
 /** One visible row in the context hierarchy overview. */
 export const InitiativeOverviewItem = InitiativeOut.extend({
+  display: EntityDisplayOut,
   organizationName: z.string(),
   parentInitiativeId: InitiativeId.nullable(),
   depth: z.number().int().min(1).max(5),

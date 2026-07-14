@@ -8,6 +8,7 @@
  */
 import {
   db,
+  entityDisplay,
   initiative,
   initiativeHierarchyLink,
   initiativeLabel,
@@ -377,6 +378,15 @@ const initiatives = new Hono<AppEnv>()
           }
         }
 
+        await tx
+          .delete(entityDisplay)
+          .where(
+            and(
+              eq(entityDisplay.organizationId, orgId),
+              eq(entityDisplay.subjectType, 'initiative'),
+              eq(entityDisplay.subjectId, id),
+            ),
+          );
         const deleted = await tx.delete(initiative).where(eq(initiative.id, id)).returning();
         return deleted[0];
       });

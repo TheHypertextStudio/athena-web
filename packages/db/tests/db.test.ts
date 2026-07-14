@@ -67,6 +67,7 @@ import {
   taskLabel,
   team,
   teamMember,
+  timeCategory,
   update,
   user,
   verification,
@@ -276,6 +277,23 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
       }
     }
     expect(resolved).toBeGreaterThan(0);
+  });
+
+  it('models the Time Ledger category hierarchy in Drizzle metadata', () => {
+    const parentForeignKeys = getTableConfig(timeCategory).foreignKeys.filter(
+      (foreignKey) => foreignKey.getName() === 'time_category_parent_id_time_category_id_fk',
+    );
+
+    expect(parentForeignKeys).toHaveLength(1);
+    const parentForeignKey = parentForeignKeys[0];
+    expect(parentForeignKey).toBeDefined();
+    expect(parentForeignKey?.reference().columns.map((column) => column.name)).toEqual([
+      timeCategory.parentId.name,
+    ]);
+    expect(parentForeignKey?.reference().foreignColumns.map((column) => column.name)).toEqual([
+      timeCategory.id.name,
+    ]);
+    expect(parentForeignKey?.onDelete).toBe('set null');
   });
 });
 

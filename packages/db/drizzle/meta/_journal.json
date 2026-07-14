@@ -260,6 +260,13 @@
       "when": 1784008407790,
       "tag": "0036_stale_magus",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784040245916,
+      "tag": "0037_broken_shadow_king",
+      "breakpoints": true
     }
   ]
 }

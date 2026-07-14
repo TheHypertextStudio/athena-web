@@ -7,7 +7,15 @@
  * task workflow never become a competing duration source.
  */
 import { sql } from 'drizzle-orm';
-import { index, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  foreignKey,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import {
   agentExecutionStatus,
@@ -33,8 +41,7 @@ export const timeCategory = pgTable(
     hubId: text('hub_id')
       .notNull()
       .references(() => hub.id, { onDelete: 'cascade' }),
-    // Self FKs are declared in the generated migration. Keeping the column scalar avoids a
-    // TypeScript circular table-initializer while preserving the database constraint.
+    // The table callback declares the self-reference without recursing through the initializer.
     parentId: text('parent_id'),
     name: text('name').notNull(),
     color: text('color'),
@@ -49,6 +56,11 @@ export const timeCategory = pgTable(
   (t) => [
     index('time_category_hub_idx').on(t.hubId),
     uniqueIndex('time_category_hub_name_uq').on(t.hubId, t.name),
+    foreignKey({
+      columns: [t.parentId],
+      foreignColumns: [t.id],
+      name: 'time_category_parent_id_time_category_id_fk',
+    }).onDelete('set null'),
   ],
 );
 

@@ -1,0 +1,1 @@
+ALTER TABLE "time_category" ADD CONSTRAINT "time_category_parent_id_time_category_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."time_category"("id") ON DELETE set null ON UPDATE no action;

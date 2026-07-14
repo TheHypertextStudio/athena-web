@@ -1,11 +1,36 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-13
+> **Last Updated**: 2026-07-14
 
 ---
 
 ## Active Tasks
+
+### [PROD-BUILD-001] Restore production build and integration contracts
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-14
+- **Priority**: P0
+- **Description**: Repair the failures exposed by the latest production workflow and restore the
+  repository contracts that had drifted behind the shipped product.
+- **Implementation**: Corrected nested modal layering and release browser contracts; restored
+  provider diagnostic source-policy coverage; serialized migration-heavy database tests; modeled
+  the Time Ledger category hierarchy in Drizzle metadata and generated its additive constraint;
+  restored optional-only provider setup semantics; and retired remaining active Slack claims from
+  product, API, and engineering surfaces.
+- **Files Changed**: Shared dialog primitives and browser journeys; provider diagnostics and setup
+  tooling; database test configuration, Time Ledger schema metadata, and migration; OpenAPI,
+  marketing, engineering documentation, fixtures, and focused regression tests.
+- **Validation**: Focused database, provider-bootstrap, source-policy, OpenAPI, and documentation
+  tests, followed by the root typecheck, lint, test, build, formatting, and diff-integrity gates.
+- **Retrospective**: Production recovery was safest after rebasing onto the newly advanced local
+  main and dropping overlapping repairs. Capability-level readiness prevents optional credential
+  pairs from being mistaken for complete integrations, while schema metadata must remain the source
+  of truth for generated constraints even when a migration already enforces the relationship.
+
+---
 
 ### [INIT-ROSTER-FINAL-001] Ship the polished Initiative roster
 

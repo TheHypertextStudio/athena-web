@@ -184,7 +184,7 @@ export function ComposerShell({
         <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
           <PropertyStrip>{children}</PropertyStrip>
           {error ? (
-            <p role="alert" className="text-destructive text-body">
+            <p role="alert" className="text-destructive text-body-medium">
               {error}
             </p>
           ) : null}
@@ -194,7 +194,7 @@ export function ComposerShell({
         <div className="flex items-center gap-2 px-6 py-3">
           {confirmingDiscard ? (
             <>
-              <span className="text-on-surface-variant text-body mr-auto">Discard this draft?</span>
+              <span className="text-on-surface-variant text-body-medium mr-auto">Discard this draft?</span>
               <Button
                 type="button"
                 variant="ghost"

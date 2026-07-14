@@ -9,7 +9,7 @@ import { usePersonalWorkspaceId } from '@/components/settings/use-personal-works
 export default function GlobalNotificationsSettingsPage(): JSX.Element {
   const orgId = usePersonalWorkspaceId();
   if (!orgId) {
-    return <p className="text-on-surface-variant text-body">Loading notification settings…</p>;
+    return <p className="text-on-surface-variant text-body-medium">Loading notification settings…</p>;
   }
   const params = useMemo(() => Promise.resolve({ orgId }), [orgId]);
   return <NotificationsSettingsPage params={params} />;

@@ -72,15 +72,15 @@ export function ProviderRow<Provider extends string = string>({
       </span>
 
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-on-surface text-body leading-tight font-semibold">{card.name}</span>
+        <span className="text-on-surface text-body-medium leading-tight font-semibold">{card.name}</span>
         {connected ? (
-          <span className="text-primary text-body leading-snug">{mirroredLabel}</span>
+          <span className="text-primary text-body-medium leading-snug">{mirroredLabel}</span>
         ) : phase === 'error' ? (
-          <span role="alert" className="text-destructive text-body leading-snug">
+          <span role="alert" className="text-destructive text-body-medium leading-snug">
             {state.error}
           </span>
         ) : (
-          <span className="text-on-surface-variant text-body leading-snug">{card.blurb}</span>
+          <span className="text-on-surface-variant text-body-medium leading-snug">{card.blurb}</span>
         )}
       </div>
 
@@ -90,7 +90,7 @@ export function ProviderRow<Provider extends string = string>({
             Available soon
           </span>
         ) : connected ? (
-          <span className="text-primary text-body inline-flex items-center gap-1.5 font-medium">
+          <span className="text-primary text-body-medium inline-flex items-center gap-1.5 font-medium">
             <CheckCircle2 className="size-4" />
             Connected
           </span>

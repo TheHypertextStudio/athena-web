@@ -137,7 +137,7 @@ export default function TeamsListClient(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-h1">Teams</h1>
+          <h1 className="text-on-surface text-title-large">Teams</h1>
           <p className="text-on-surface-variant text-xs">
             The units that own your work — each with its own workflow, cycles, and triage queue.
           </p>
@@ -176,7 +176,7 @@ export default function TeamsListClient(): JSX.Element {
       ) : loadError ? (
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
         >
           {loadError}
         </p>

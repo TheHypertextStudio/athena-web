@@ -109,7 +109,7 @@ export function Roadmap({
           </h2>
         </div>
         {lanes.length === 0 ? (
-          <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-4 text-center">
+          <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-4 text-center">
             No {programNoun.toLowerCase()} lanes — link a {programNoun.toLowerCase()} to this theme
             to track it as an ongoing lane.
           </p>
@@ -124,7 +124,7 @@ export function Roadmap({
                   aria-hidden="true"
                   className={cn('size-2.5 shrink-0 rounded-full', fillFor(lane.health))}
                 />
-                <span className="text-on-surface text-body min-w-0 flex-1 truncate font-medium">
+                <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate font-medium">
                   {lane.name}
                 </span>
                 <span className="text-on-surface-variant shrink-0 text-xs">
@@ -151,7 +151,7 @@ export function Roadmap({
         </div>
 
         {placed.length === 0 ? (
-          <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-4 text-center">
+          <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-4 text-center">
             No scheduled {projectNounPlural.toLowerCase()} on the roadmap yet.
           </p>
         ) : window ? (

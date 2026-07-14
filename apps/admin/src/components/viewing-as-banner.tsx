@@ -47,7 +47,7 @@ export function ViewingAsBanner(): JSX.Element | null {
   return (
     <div
       role="status"
-      className="border-state-started/30 bg-state-started/10 text-body flex flex-wrap items-center justify-between gap-3 border-b px-6 py-2.5"
+      className="border-state-started/30 bg-state-started/10 text-body-medium flex flex-wrap items-center justify-between gap-3 border-b px-6 py-2.5"
     >
       <p className="text-state-started">
         <span className="font-semibold">Viewing as {active.targetLabel}</span>

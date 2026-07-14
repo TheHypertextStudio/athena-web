@@ -15,7 +15,7 @@ export default function GlobalConnectionsSettingsPage(): JSX.Element {
   const { canManage } = useCanManageOrg(orgId ?? '');
 
   if (!orgId) {
-    return <p className="text-on-surface-variant text-body">Loading your connections…</p>;
+    return <p className="text-on-surface-variant text-body-medium">Loading your connections…</p>;
   }
 
   return (

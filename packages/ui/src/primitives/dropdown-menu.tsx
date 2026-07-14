@@ -48,7 +48,7 @@ export function DropdownMenuSubTrigger({
   return (
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
-        'focus:bg-surface-container-highest data-[state=open]:bg-surface-container-highest text-body flex cursor-default items-center rounded-sm px-2 py-1.5 outline-none select-none',
+        'focus:bg-surface-container-highest data-[state=open]:bg-surface-container-highest text-body-medium flex cursor-default items-center rounded-sm px-2 py-1.5 outline-none select-none',
         focusRingInset,
         inset && 'pl-8',
         className,
@@ -109,7 +109,7 @@ export function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        'focus:bg-surface-container-highest focus:text-on-surface text-body relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+        'focus:bg-surface-container-highest focus:text-on-surface text-body-medium relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
         focusRingInset,
         inset && 'pl-8',
         className,
@@ -129,7 +129,7 @@ export function DropdownMenuCheckboxItem({
   return (
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
-        'focus:bg-surface-container-highest focus:text-on-surface text-body relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'focus:bg-surface-container-highest focus:text-on-surface text-body-medium relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         focusRingInset,
         className,
       )}
@@ -155,7 +155,7 @@ export function DropdownMenuRadioItem({
   return (
     <DropdownMenuPrimitive.RadioItem
       className={cn(
-        'focus:bg-surface-container-highest focus:text-on-surface text-body relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'focus:bg-surface-container-highest focus:text-on-surface text-body-medium relative flex cursor-default items-center rounded-sm py-1.5 pr-2 pl-8 transition-colors outline-none select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         focusRingInset,
         className,
       )}
@@ -182,7 +182,7 @@ export function DropdownMenuLabel({
 }): React.JSX.Element {
   return (
     <DropdownMenuPrimitive.Label
-      className={cn('text-body px-2 py-1.5 font-semibold', inset && 'pl-8', className)}
+      className={cn('text-body-medium px-2 py-1.5 font-semibold', inset && 'pl-8', className)}
       {...props}
     />
   );

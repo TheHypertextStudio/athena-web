@@ -152,7 +152,7 @@ function ConsentPage(): JSX.Element {
   if (sessionPending) {
     return (
       <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
-        <div className="text-on-surface-variant text-body">Loading…</div>
+        <div className="text-on-surface-variant text-body-medium">Loading…</div>
       </main>
     );
   }
@@ -184,7 +184,7 @@ function ConsentPage(): JSX.Element {
     <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <CardTitle className="text-h1">Authorize access</CardTitle>
+          <CardTitle className="text-title-large">Authorize access</CardTitle>
           <CardDescription>
             <span className="text-on-surface font-medium">{displayName}</span> wants permission to
             access your Docket account as{' '}
@@ -203,7 +203,7 @@ function ConsentPage(): JSX.Element {
                   const info = SCOPE_LABELS[scope];
                   return (
                     <li key={scope} className="flex flex-col gap-0.5">
-                      <span className="text-on-surface text-body font-medium">
+                      <span className="text-on-surface text-body-medium font-medium">
                         {info?.label ?? scope}
                       </span>
                       {info?.detail ? (
@@ -217,7 +217,7 @@ function ConsentPage(): JSX.Element {
           ) : null}
 
           {error ? (
-            <p role="alert" className="text-destructive text-body">
+            <p role="alert" className="text-destructive text-body-medium">
               {error}
             </p>
           ) : null}

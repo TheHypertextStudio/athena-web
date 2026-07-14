@@ -69,7 +69,7 @@ export function StepPersonalWelcome({ firstName }: StepPersonalWelcomeProps): JS
             <span className="text-on-surface text-base leading-tight font-semibold">
               {highlight.title}
             </span>
-            <span className="text-on-surface-variant text-body leading-relaxed">
+            <span className="text-on-surface-variant text-body-medium leading-relaxed">
               {highlight.body}
             </span>
           </div>
@@ -77,7 +77,7 @@ export function StepPersonalWelcome({ firstName }: StepPersonalWelcomeProps): JS
       ))}
 
       {firstName ? (
-        <p className="text-on-surface-variant text-body mt-2">
+        <p className="text-on-surface-variant text-body-medium mt-2">
           Ready when you are, {firstName}
           {' — '}we&apos;ll set up your space in a moment.
         </p>

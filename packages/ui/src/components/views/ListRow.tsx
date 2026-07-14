@@ -100,7 +100,7 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
       }}
       {...rest}
       className={cn(
-        'border-outline-variant text-body flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
+        'border-outline-variant text-body-medium flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
         'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
         focusRingInset,
         // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral.

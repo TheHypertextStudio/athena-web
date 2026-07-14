@@ -41,7 +41,7 @@ export default function TodayPage(): JSX.Element {
         className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-700 motion-safe:ease-out"
       >
         {/* "Today" at display size over the date at headline size. The in-app type scale tops out at
-            text-h1, so these editorial sizes are a deliberate, surface-specific choice for the daily
+            text-title-large, so these editorial sizes are a deliberate, surface-specific choice for the daily
             landing (a fixed display size, not the marketing clamp which grows much larger). */}
         <Stack gap={1}>
           <span className="text-on-surface-variant text-sm font-medium tracking-wide">
@@ -65,7 +65,7 @@ export default function TodayPage(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={refetch}>

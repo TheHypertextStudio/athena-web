@@ -111,7 +111,7 @@ export function StreamView(props: StreamViewProps): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header>
-        <h1 className="text-h1">Stream</h1>
+        <h1 className="text-title-large">Stream</h1>
         <p className="text-on-surface-variant text-xs">
           {scope === 'me'
             ? 'Everything across your workspaces, as it happens.'

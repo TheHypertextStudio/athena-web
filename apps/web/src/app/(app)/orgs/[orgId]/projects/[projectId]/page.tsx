@@ -8,7 +8,7 @@ import type {
 } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Calendar, MoreHorizontal, Target } from '@docket/ui/icons';
+import { Calendar, Target, TuneRounded } from '@docket/ui/icons';
 import { Button, Popover, PopoverContent, PopoverTrigger, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
@@ -59,6 +59,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const taskNoun = useVocabulary('task').toLowerCase();
   const [tab, setTab] = useState<TabId>('overview');
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
 
   const {
     detailKey,
@@ -205,24 +206,28 @@ export default function ProjectDetailPage(): JSX.Element {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-4">
-          <p className="text-on-surface-variant min-w-0 truncate text-sm">
-            {program ? program.name : projectNoun}
-          </p>
-          <Popover>
+          {program ? (
+            <p className="text-on-surface-variant text-body-medium min-w-0 truncate">
+              {program.name}
+            </p>
+          ) : (
+            <span />
+          )}
+          <Popover open={propertiesOpen} onOpenChange={setPropertiesOpen}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 className="min-h-10 gap-1.5"
-                aria-label="Project information"
+                aria-label="Open project properties"
               >
-                <MoreHorizontal aria-hidden className="size-5" />
-                <span className="hidden @2xl:inline">Project info</span>
+                <TuneRounded aria-hidden className="size-4" />
+                <span className="hidden @2xl:inline">Properties</span>
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-[min(21rem,calc(100vw-2rem))] p-4">
-              <h2 className="text-on-surface mb-2 text-sm font-semibold">Project info</h2>
+              <h2 className="text-on-surface text-title-medium mb-2">Properties</h2>
               <PropertiesPanel
                 health={health}
                 status={projectStatusOf(project.status)}
@@ -262,29 +267,27 @@ export default function ProjectDetailPage(): JSX.Element {
           </Popover>
         </div>
 
-        <div className="flex items-start gap-3">
-          <div className="mt-1">
-            <InitiativeIconPicker
-              display={
-                detail?.display ?? {
-                  subjectType: 'project',
-                  subjectId: projectId,
-                  iconKey: 'folder',
-                  colorKey: 'neutral',
-                  customized: false,
-                }
+        <div className="flex flex-col items-start gap-2">
+          <InitiativeIconPicker
+            display={
+              detail?.display ?? {
+                subjectType: 'project',
+                subjectId: projectId,
+                iconKey: 'folder',
+                colorKey: 'neutral',
+                customized: false,
               }
-              initiativeName={project.name}
-              editable={canEdit}
-              pending={displayMutation.isPending}
-              onChange={(iconKey, colorKey) => {
-                displayMutation.mutate({ iconKey, colorKey });
-              }}
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h1 className="text-document-title text-on-surface max-w-[24ch]">{project.name}</h1>
-          </div>
+            }
+            initiativeName={project.name}
+            editable={canEdit}
+            pending={displayMutation.isPending}
+            onChange={(iconKey, colorKey) => {
+              displayMutation.mutate({ iconKey, colorKey });
+            }}
+          />
+          <h1 className="text-headline-large text-on-surface max-w-[32ch] font-medium">
+            {project.name}
+          </h1>
         </div>
 
         <EditableFreeformText
@@ -295,36 +298,43 @@ export default function ProjectDetailPage(): JSX.Element {
           onSave={(summary) => {
             patchProject({ summary });
           }}
-          className="text-on-surface-variant max-w-4xl text-lg leading-relaxed"
+          className="text-on-surface-variant text-body-large max-w-4xl font-normal"
         />
 
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
           {participants.length > 0 ? (
             <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
               {participants.map((participant) => (
-                <span
-                  key={participant.actorId}
-                  className="bg-surface-container-low flex h-8 items-center gap-1.5 rounded-full pr-3 pl-1"
-                >
+                <span key={participant.actorId} className="flex h-8 items-center gap-1.5 pr-2">
                   <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
-                  <span className="text-on-surface text-xs font-medium">{participant.name}</span>
+                  <span className="text-on-surface text-label-medium">{participant.name}</span>
                 </span>
               ))}
             </div>
-          ) : (
-            <span className="text-on-surface-variant text-sm">No people yet</span>
-          )}
+          ) : null}
           {health ? (
-            <span
-              className={`${HEALTH_CLASS[health]} flex items-center gap-1.5 text-sm font-medium`}
+            <button
+              type="button"
+              aria-label="Edit project health"
+              onClick={() => {
+                setPropertiesOpen(true);
+              }}
+              className={`${HEALTH_CLASS[health]} bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
             >
               <Target aria-hidden className="size-4" /> {HEALTH_LABEL[health]}
-            </span>
+            </button>
           ) : null}
           {project.targetDate ? (
-            <span className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums">
+            <button
+              type="button"
+              aria-label="Edit project target date"
+              onClick={() => {
+                setPropertiesOpen(true);
+              }}
+              className="text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
               <Calendar aria-hidden className="size-4" /> {formatCalendarDate(project.targetDate)}
-            </span>
+            </button>
           ) : null}
         </div>
       </header>
@@ -401,7 +411,7 @@ export default function ProjectDetailPage(): JSX.Element {
           className="flex flex-col gap-6"
         >
           <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-h3 font-medium">Task dependencies</h2>
+            <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>
             <div className="bg-surface-container-low h-96 overflow-hidden rounded-xl">
               <TaskGraphPanel
                 scope={{ orgId, projectId }}

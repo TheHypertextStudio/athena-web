@@ -31,7 +31,7 @@ export function CommandPaletteTrigger({ className }: CommandPaletteTriggerProps)
       aria-keyshortcuts="Meta+K Control+K"
       aria-label="Open command palette"
       className={cn(
-        'border-outline-variant text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring text-body flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 shadow-sm transition-colors focus-visible:ring-1 focus-visible:outline-none',
+        'border-outline-variant text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring text-body-medium flex h-9 items-center gap-2 rounded-md border bg-transparent px-3 shadow-sm transition-colors focus-visible:ring-1 focus-visible:outline-none',
         className,
       )}
     >

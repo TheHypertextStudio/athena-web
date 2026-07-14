@@ -118,7 +118,7 @@ export function GhostProposals({ orgId, onApplied }: GhostProposalsProps): JSX.E
       </div>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : null}
@@ -134,7 +134,7 @@ export function GhostProposals({ orgId, onApplied }: GhostProposalsProps): JSX.E
                 <li
                   key={item.activityId}
                   style={{ viewTransitionName: `proposal-${item.activityId}` }}
-                  className="text-on-surface/80 text-body flex items-center gap-2 truncate px-1 py-0.5"
+                  className="text-on-surface/80 text-body-medium flex items-center gap-2 truncate px-1 py-0.5"
                 >
                   <span className="bg-primary/50 h-1.5 w-1.5 shrink-0 rounded-full" />
                   <span className="min-w-0 truncate">{item.ghost?.title ?? item.summary}</span>

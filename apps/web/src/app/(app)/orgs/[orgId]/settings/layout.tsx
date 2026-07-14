@@ -33,7 +33,7 @@ export default async function SettingsLayout({
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-h1">Settings</h1>
+        <h1 className="text-on-surface text-title-large">Settings</h1>
         <SettingsHeaderSubtitle />
       </header>
 

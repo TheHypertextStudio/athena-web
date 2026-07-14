@@ -93,7 +93,7 @@ export function SessionsSection(): JSX.Element {
   }
   if (listQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body">
+      <p role="alert" className="text-destructive text-body-medium">
         {userErrorMessage(listQ.error, 'Could not update your sessions.')}
       </p>
     );
@@ -107,8 +107,8 @@ export function SessionsSection(): JSX.Element {
       <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body font-medium">Active sessions</h3>
-            <p className="text-on-surface-variant text-body max-w-prose">
+            <h3 className="text-on-surface text-body-medium font-medium">Active sessions</h3>
+            <p className="text-on-surface-variant text-body-medium max-w-prose">
               Every device currently signed in to your account. If you don&apos;t recognize one,
               revoke it.
             </p>
@@ -129,12 +129,12 @@ export function SessionsSection(): JSX.Element {
         </div>
 
         {revokeOne.isError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
           </p>
         ) : null}
         {revokeOthers.isError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {userErrorMessage(revokeOthers.error, 'Could not update your sessions.')}
           </p>
         ) : null}
@@ -148,7 +148,7 @@ export function SessionsSection(): JSX.Element {
                 className="border-outline-variant bg-surface flex items-center gap-3 rounded-lg border p-3"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-on-surface text-body truncate font-medium">
+                  <p className="text-on-surface text-body-medium truncate font-medium">
                     {deviceLabel(s.userAgent)}
                     {s.current ? (
                       <span className="text-primary ml-2 text-xs font-normal">This device</span>

@@ -77,7 +77,7 @@ export function RoleControl({
   if (!canEdit) {
     return (
       <span
-        className="text-on-surface-variant text-body inline-flex h-8 items-center px-2"
+        className="text-on-surface-variant text-body-medium inline-flex h-8 items-center px-2"
         aria-label={ariaLabel}
       >
         {currentLabel}

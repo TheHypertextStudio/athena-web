@@ -447,8 +447,8 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         role="alert"
         className="border-outline-variant bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-lg border p-4"
       >
-        <p className="text-on-surface text-body font-medium">Connections are still loading.</p>
-        <p className="text-body">
+        <p className="text-on-surface text-body-medium font-medium">Connections are still loading.</p>
+        <p className="text-body-medium">
           We&apos;ll keep checking for the available services automatically.
         </p>
       </div>
@@ -458,10 +458,10 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <p className="text-on-surface-variant text-body leading-relaxed">{cfg.intro}</p>
+        <p className="text-on-surface-variant text-body-medium leading-relaxed">{cfg.intro}</p>
         <NextLink
           href={`/orgs/${orgId}/settings/${cfg.crossHref}`}
-          className="text-primary text-body w-fit font-medium hover:underline"
+          className="text-primary text-body-medium w-fit font-medium hover:underline"
         >
           {cfg.crossText}
         </NextLink>

@@ -120,7 +120,7 @@ export default function SignInPage(): JSX.Element {
     <main className="bg-surface-container text-on-surface flex min-h-screen items-center justify-center px-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-h1">Docket service admin</CardTitle>
+          <CardTitle className="text-title-large">Docket service admin</CardTitle>
           <CardDescription>Sign in with your operator passkey.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -138,13 +138,13 @@ export default function SignInPage(): JSX.Element {
           />
 
           {error ? (
-            <p role="alert" className="text-destructive text-body">
+            <p role="alert" className="text-destructive text-body-medium">
               {error}
             </p>
           ) : null}
 
           {!passkeySupported && hydrated ? (
-            <p className="text-on-surface-variant text-body" role="status">
+            <p className="text-on-surface-variant text-body-medium" role="status">
               This browser does not support passkeys, so operator sign-in is unavailable here. Use a
               device with Face ID / Touch ID or a security key.
             </p>

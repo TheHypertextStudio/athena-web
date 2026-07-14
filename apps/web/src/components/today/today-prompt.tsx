@@ -176,7 +176,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       {emptyWorkspace ? (
         <div className="flex flex-col gap-1 px-1 pb-2">
           <h2 className="text-on-surface text-2xl font-semibold">What&apos;s on your plate?</h2>
-          <p className="text-on-surface-variant text-body">
+          <p className="text-on-surface-variant text-body-medium">
             Paste anything — a braindump, meeting notes, a whole backlog — or ask Athena to import
             from a connected app. She&apos;ll propose your workspace; nothing lands until you
             approve it.

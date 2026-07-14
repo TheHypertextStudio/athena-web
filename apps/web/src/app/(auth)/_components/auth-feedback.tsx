@@ -33,7 +33,7 @@ export function AuthError({ message }: AuthErrorProps): JSX.Element | null {
   return (
     <p
       role="alert"
-      className="border-destructive/30 bg-destructive/5 text-destructive text-body rounded-md border px-3 py-2"
+      className="border-destructive/30 bg-destructive/5 text-destructive text-body-medium rounded-md border px-3 py-2"
     >
       {message}
     </p>

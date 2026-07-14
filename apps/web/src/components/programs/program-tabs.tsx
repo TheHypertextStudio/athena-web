@@ -107,7 +107,7 @@ export function ProgramTabs({ tabs, value, onValueChange, label }: ProgramTabsPr
               onKeyDown(event, index);
             }}
             className={cn(
-              'focus-visible:ring-ring text-body relative -mb-px flex items-center gap-2 rounded-t-md px-3 py-2 font-medium transition-colors outline-none focus-visible:ring-1',
+              'focus-visible:ring-ring text-body-medium relative -mb-px flex items-center gap-2 rounded-t-md px-3 py-2 font-medium transition-colors outline-none focus-visible:ring-1',
               selected
                 ? 'text-on-surface'
                 : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high',

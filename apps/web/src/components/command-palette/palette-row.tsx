@@ -49,7 +49,7 @@ export function PaletteRow({
       onClick={onSelect}
       onMouseMove={onHover}
       className={cn(
-        'text-body flex cursor-pointer items-center gap-3 rounded-md px-3 py-2',
+        'text-body-medium flex cursor-pointer items-center gap-3 rounded-md px-3 py-2',
         active ? 'bg-surface-container-highest text-on-surface' : 'text-on-surface',
       )}
     >

@@ -69,8 +69,8 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
     <section className="flex flex-col gap-3" aria-label="MCP connectors">
       <div className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-h3">Tools for Athena</h3>
-          <p className="text-on-surface-variant text-body">
+          <h3 className="text-on-surface text-title-small">Tools for Athena</h3>
+          <p className="text-on-surface-variant text-body-medium">
             Connect services you use. Athena works through them under rules you set.
           </p>
         </div>
@@ -88,11 +88,11 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
       </div>
 
       {mcpReturn === 'connected' ? (
-        <p role="status" className="text-success text-body">
+        <p role="status" className="text-success text-body-medium">
           Tool connected.
         </p>
       ) : mcpReturn === 'error' ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           Connection was not approved.
         </p>
       ) : null}
@@ -111,7 +111,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ))}
         </ul>
       ) : (
-        <p className="text-on-surface-variant text-body">No tools yet.</p>
+        <p className="text-on-surface-variant text-body-medium">No tools yet.</p>
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

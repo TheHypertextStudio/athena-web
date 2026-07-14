@@ -256,7 +256,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
       <header className="flex flex-col gap-3">
         <Row justify="between" align="center" className="gap-3">
           <div>
-            <h1 className="text-on-surface text-h1">Search</h1>
+            <h1 className="text-on-surface text-title-large">Search</h1>
             <p className="text-on-surface-variant text-xs">
               {scope === 'org' && orgId ? 'Workspace scope' : 'All workspaces'}
             </p>
@@ -439,7 +439,7 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
           {error ? (
             <div
               role="alert"
-              className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
+              className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
             >
               <span>{error}</span>
               <Button

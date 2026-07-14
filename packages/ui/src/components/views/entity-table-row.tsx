@@ -10,7 +10,7 @@ import { columnClassName, columnStyle } from './entity-table-columns';
 
 /** The shared row chrome (density + dividers + the named container) — matches {@link ListRow}. */
 const TABLE_ROW_BASE =
-  'border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-body last:border-b-0';
+  'border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-body-medium last:border-b-0';
 
 /** The interactive affordances for a data row — matches {@link ListRow}/{@link EntityListRow}. */
 const TABLE_ROW_INTERACTIVE = cn(

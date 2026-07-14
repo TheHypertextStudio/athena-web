@@ -54,7 +54,7 @@ export function StreamRow({
         seed={row.actorName ?? row.id}
       />
       <button type="button" onClick={() => onSelect?.(row)} className="min-w-0 flex-1 text-left">
-        <p className="text-on-surface/90 text-body leading-snug">{streamDescription(row)}</p>
+        <p className="text-on-surface/90 text-body-medium leading-snug">{streamDescription(row)}</p>
         <StreamEventDetail row={row} />
         <div className="text-on-surface-variant mt-1.5 flex flex-wrap items-center gap-2 text-xs">
           {relevance ? (

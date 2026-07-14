@@ -78,7 +78,7 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
     >
       <div className="flex items-center gap-2">
         <Sparkles aria-hidden="true" className="text-primary size-4" />
-        <h2 className="text-on-surface text-body font-semibold">Agents working here</h2>
+        <h2 className="text-on-surface text-body-medium font-semibold">Agents working here</h2>
         <span className="text-on-surface-variant text-xs tabular-nums">{agents.length}</span>
       </div>
       <ul className="flex flex-col gap-2">
@@ -89,7 +89,7 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
           >
             <ActorAvatar kind="agent" name={agent.agentName} size={28} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-on-surface text-body truncate font-medium">
+              <span className="text-on-surface text-body-medium truncate font-medium">
                 {agent.agentName}
               </span>
               <span className="text-on-surface-variant truncate text-xs">

@@ -70,7 +70,7 @@ export function UpdatesTab({
         onSubmit={submit}
         className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       >
-        <label htmlFor="update-body" className="text-on-surface text-body font-medium">
+        <label htmlFor="update-body" className="text-on-surface text-body-medium font-medium">
           Post an update
         </label>
         <FreeformTextEditor
@@ -89,7 +89,7 @@ export function UpdatesTab({
           </Button>
         </div>
         {postError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {postError}
           </p>
         ) : null}
@@ -110,12 +110,12 @@ export function UpdatesTab({
       ) : error ? (
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
         >
           {error}
         </p>
       ) : updates.length === 0 ? (
-        <div className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
+        <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
           No updates yet. Post the first one to keep stakeholders in the loop.
         </div>
       ) : (
@@ -127,7 +127,7 @@ export function UpdatesTab({
                 <ActorAvatar kind={author.kind} name={author.name} size={32} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-on-surface text-body font-medium">{author.name}</span>
+                    <span className="text-on-surface text-body-medium font-medium">{author.name}</span>
                     <span className="text-on-surface-variant text-xs">
                       {relativeTime(update.createdAt)}
                     </span>
@@ -135,7 +135,7 @@ export function UpdatesTab({
                   <FreeformText
                     value={update.body}
                     emptyText=""
-                    className="text-on-surface text-body leading-relaxed"
+                    className="text-on-surface text-body-medium leading-relaxed"
                   />
                 </div>
               </li>

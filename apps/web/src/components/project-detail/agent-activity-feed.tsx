@@ -36,7 +36,7 @@ export function AgentActivityFeed({
     <section aria-labelledby="agent-activity-heading" className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <Sparkles aria-hidden="true" className="text-primary size-4" />
-        <h2 id="agent-activity-heading" className="text-on-surface text-body font-semibold">
+        <h2 id="agent-activity-heading" className="text-on-surface text-body-medium font-semibold">
           Agent activity
         </h2>
       </div>
@@ -48,7 +48,7 @@ export function AgentActivityFeed({
           >
             <ActorAvatar kind="agent" name={entry.agentName} size={24} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-on-surface text-body">
+              <span className="text-on-surface text-body-medium">
                 <span className="font-medium">{entry.agentName}</span>{' '}
                 <span className="text-on-surface-variant">{ACTIVITY_VERB[entry.type]}</span>
               </span>

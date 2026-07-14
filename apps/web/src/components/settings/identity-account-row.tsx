@@ -53,10 +53,10 @@ export function IdentityAccountRow({
     <li className="flex items-center gap-3 px-4 py-3">
       <Avatar className="size-9">
         {identity.picture ? <AvatarImage src={identity.picture} alt="" /> : null}
-        <AvatarFallback className="text-body font-medium">{initials(label)}</AvatarFallback>
+        <AvatarFallback className="text-body-medium font-medium">{initials(label)}</AvatarFallback>
       </Avatar>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="text-on-surface text-body truncate font-medium">{label}</span>
+        <span className="text-on-surface text-body-medium truncate font-medium">{label}</span>
         {identity.connectionCount > 0 ? (
           <span className="text-on-surface-variant text-xs">
             Used by {identity.connectionCount} Docket connection

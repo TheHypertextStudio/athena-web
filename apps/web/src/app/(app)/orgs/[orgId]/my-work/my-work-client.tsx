@@ -66,7 +66,7 @@ export default function MyWorkClient(): JSX.Element {
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-h1">My Work</h1>
+          <h1 className="text-on-surface text-title-large">My Work</h1>
           <p className="text-on-surface-variant text-xs">
             Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
           </p>
@@ -128,7 +128,7 @@ export default function MyWorkClient(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-body p-4">
+          <p role="alert" className="text-destructive text-body-medium p-4">
             {loadError}
           </p>
         ) : visible.length === 0 ? (
@@ -139,8 +139,8 @@ export default function MyWorkClient(): JSX.Element {
             >
               <ListChecks className="size-5" />
             </span>
-            <p className="text-on-surface text-body font-medium">{empty.title}</p>
-            <p className="text-on-surface-variant text-body max-w-xs leading-relaxed">
+            <p className="text-on-surface text-body-medium font-medium">{empty.title}</p>
+            <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">
               {empty.body}
             </p>
             {tab === 'mine' ? (

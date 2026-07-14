@@ -102,7 +102,7 @@ export function DeleteAccountDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-2 py-1">
-          <label htmlFor={inputId} className="text-on-surface-variant text-body">
+          <label htmlFor={inputId} className="text-on-surface-variant text-body-medium">
             Type <span className="text-on-surface font-medium">{email}</span> to confirm.
           </label>
           <Input
@@ -118,13 +118,13 @@ export function DeleteAccountDialog({
         </div>
 
         {error ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {error}
           </p>
         ) : null}
 
         <DialogFooter>
-          <DialogClose className="focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1">
+          <DialogClose className="focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-high text-body-medium rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1">
             Cancel
           </DialogClose>
           <Button

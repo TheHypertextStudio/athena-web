@@ -15,7 +15,7 @@ describe('Recovery nudge visual contract', () => {
     const banner = source();
     expect(banner).toContain('grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]');
     expect(banner).toContain('className="min-w-0 py-2"');
-    expect(banner).toContain('className="text-body"');
+    expect(banner).toContain('className="text-body-medium"');
     expect(banner).toContain('mt-1 inline-flex min-h-10 items-center pr-3');
     expect(banner).not.toContain('flex items-center gap-3 rounded-xl');
   });

@@ -34,7 +34,7 @@ export function ProjectResourcesTab({
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-on-surface text-h3 font-semibold">Resources</h2>
+          <h2 className="text-on-surface text-title-small font-semibold">Resources</h2>
           <p className="text-on-surface-variant mt-1 text-sm">
             Plans, briefs, folders, and external references.
           </p>

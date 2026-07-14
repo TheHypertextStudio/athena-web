@@ -65,13 +65,13 @@ export function StepPasskey(): JSX.Element {
             <span className="text-on-surface text-base leading-tight font-semibold">
               {highlight.title}
             </span>
-            <span className="text-on-surface-variant text-body leading-relaxed">
+            <span className="text-on-surface-variant text-body-medium leading-relaxed">
               {highlight.body}
             </span>
           </div>
         </div>
       ))}
-      <p className="text-on-surface-variant text-body mt-2">
+      <p className="text-on-surface-variant text-body-medium mt-2">
         Your device will ask you to confirm. You can always add a passkey later in Settings →
         Security.
       </p>

@@ -144,7 +144,7 @@ export default function RecoverPage(): JSX.Element {
           <AuthError message={error} />
 
           {!passkeySupported && hydrated ? (
-            <p className="text-on-surface-variant text-body" role="status">
+            <p className="text-on-surface-variant text-body-medium" role="status">
               This browser does not support passkeys. You&apos;re signed in — add a passkey later
               from a supported device.
             </p>
@@ -197,7 +197,7 @@ export default function RecoverPage(): JSX.Element {
         }}
       >
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-body font-medium">
+          <label htmlFor="email" className="text-body-medium font-medium">
             Email
           </label>
           <Input
@@ -213,7 +213,7 @@ export default function RecoverPage(): JSX.Element {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="code" className="text-body font-medium">
+          <label htmlFor="code" className="text-body-medium font-medium">
             Recovery code
           </label>
           <Input

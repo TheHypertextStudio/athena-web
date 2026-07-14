@@ -224,7 +224,7 @@ export default function SignInPage(): JSX.Element {
         <AuthError message={error} />
 
         {!passkeySupported && hydrated ? (
-          <p className="text-on-surface-variant text-body" role="status">
+          <p className="text-on-surface-variant text-body-medium" role="status">
             This browser does not support passkeys. You can still continue with one of the options
             below if available.
           </p>
@@ -250,7 +250,7 @@ export default function SignInPage(): JSX.Element {
 
       <OAuthButtons callbackURL={HOME_DESTINATION} disabled={pending} onError={setError} />
 
-      <p className="text-on-surface-variant text-body text-center">
+      <p className="text-on-surface-variant text-body-medium text-center">
         Can&apos;t sign in?{' '}
         <Link
           href="/recover"

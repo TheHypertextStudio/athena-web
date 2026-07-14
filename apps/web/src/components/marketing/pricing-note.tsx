@@ -10,7 +10,7 @@ export function PricingNote(): JSX.Element {
     <section className="border-border border-t">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-20">
         <p className="text-ink-muted text-sm font-medium">Pricing</p>
-        <p className="font-display text-title text-ink max-w-3xl tracking-tight text-balance">
+        <p className="font-display text-display-large-small text-ink max-w-3xl tracking-tight text-balance">
           Free for your personal command center. $8 a month when you run more.
         </p>
         <p className="text-ink-muted text-base">

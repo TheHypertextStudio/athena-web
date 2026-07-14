@@ -29,23 +29,79 @@ function productionTsxFiles(directory: string): string[] {
   });
 }
 
+function productionTypeSources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    if (
+      entry.isDirectory() &&
+      (entry.name === 'tests' || entry.name === 'node_modules' || entry.name.startsWith('.'))
+    ) {
+      return [];
+    }
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) return productionTypeSources(path);
+    return entry.isFile() && /\.(?:css|ts|tsx)$/.test(path) ? [path] : [];
+  });
+}
+
 describe('Initiative visual contract', () => {
-  it('uses the named 32–56px document title with status before the title', () => {
+  it('uses canonical MD3 headline-large for detail titles with status before the title', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
-    expect(typography).toContain('--text-document-title: clamp(2rem, 1.35rem + 2.4vw, 3.5rem);');
-    expect(detail).toContain('text-document-title');
+    expect(typography).toContain('--text-headline-large: 2rem;');
+    expect(detail).toContain('text-headline-large');
     expect(detail.indexOf('STATUS_LABEL[detail.status]')).toBeLessThan(
-      detail.indexOf('text-document-title'),
+      detail.indexOf('text-headline-large'),
     );
-    expect(detail).not.toContain('clamp(2.25rem,5vw,4.5rem)');
   });
 
-  it('gives the Initiative overview a named branded page-title scale', () => {
+  it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {
     const typography = source(typographyPath);
     const overview = source(overviewPath);
-    expect(typography).toContain('--text-page-title: clamp(2rem, 1.8rem + 0.8vw, 2.5rem);');
-    expect(overview).toContain('text-page-title');
+    expect(typography).toContain('--text-headline-medium: 1.75rem;');
+    expect(overview).toContain('text-headline-medium');
+  });
+
+  it('defines the complete MD3 type scale and removes the ad hoc application scale', () => {
+    const typography = source(typographyPath);
+    const required = [
+      'display-large',
+      'display-medium',
+      'display-small',
+      'headline-large',
+      'headline-medium',
+      'headline-small',
+      'title-large',
+      'title-medium',
+      'title-small',
+      'body-large',
+      'body-medium',
+      'body-small',
+      'label-large',
+      'label-medium',
+      'label-small',
+    ];
+    for (const token of required) expect(typography).toContain(`--text-${token}:`);
+
+    const removed = [
+      'text-document-title',
+      'text-page-title',
+      'text-h1',
+      'text-h2',
+      'text-h3',
+      'text-body',
+      'text-mono',
+      'text-display',
+      'text-title',
+    ];
+    const production = productionTypeSources(join(root, 'apps'))
+      .concat(productionTypeSources(join(root, 'packages')))
+      .map((path) => `${relative(root, path)}\n${source(path)}`)
+      .join('\n');
+    for (const token of removed) {
+      expect(production).not.toMatch(
+        new RegExp(`(?<![A-Za-z0-9_-])${token}(?![A-Za-z0-9_-])`),
+      );
+    }
   });
 
   it('keeps attention content and controls in one borderless tonal surface', () => {

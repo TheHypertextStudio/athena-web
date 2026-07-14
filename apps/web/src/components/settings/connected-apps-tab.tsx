@@ -103,8 +103,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Setup guide ── */}
       <section className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-body font-medium">Connect an MCP client</h2>
-          <p className="text-on-surface-variant text-body leading-relaxed">
+          <h2 className="text-on-surface text-body-medium font-medium">Connect an MCP client</h2>
+          <p className="text-on-surface-variant text-body-medium leading-relaxed">
             Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account.
           </p>
         </div>
@@ -117,8 +117,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Authorized clients roster ── */}
       <section className="flex flex-col gap-4" aria-label="Authorized MCP clients">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-body font-medium">Apps with access to your Docket</h2>
-          <p className="text-on-surface-variant text-body">
+          <h2 className="text-on-surface text-body-medium font-medium">Apps with access to your Docket</h2>
+          <p className="text-on-surface-variant text-body-medium">
             Each app below can read or act on your work using the scopes you approved. Revoking
             removes all their access tokens immediately — they will need to re-authorize.
           </p>
@@ -138,7 +138,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             ))}
           </div>
         ) : loadError ? (
-          <p role="status" className="text-on-surface-variant text-body">
+          <p role="status" className="text-on-surface-variant text-body-medium">
             Connected apps are temporarily unavailable. We&apos;ll keep checking automatically.
           </p>
         ) : apps.length === 0 ? (
@@ -152,11 +152,11 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
           <ul className="border-outline-variant divide-outline-variant flex flex-col divide-y rounded-lg border">
             {apps.map((app) => (
               <li key={app.clientId} className="flex items-center gap-4 px-4 py-3">
-                <span className="bg-surface-container text-on-surface-variant text-body flex size-9 shrink-0 items-center justify-center rounded-lg font-medium">
+                <span className="bg-surface-container text-on-surface-variant text-body-medium flex size-9 shrink-0 items-center justify-center rounded-lg font-medium">
                   {app.name.charAt(0).toUpperCase()}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-on-surface text-body truncate font-medium">{app.name}</span>
+                  <span className="text-on-surface text-body-medium truncate font-medium">{app.name}</span>
                   <div className="flex flex-wrap gap-1">
                     {app.scopes.map((scope) => (
                       <Badge key={scope} variant="secondary" className="text-xs font-normal">
@@ -182,7 +182,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
         )}
 
         {revoke.isError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {userErrorMessage(revoke.error, 'Could not update connected apps.')}
           </p>
         ) : null}

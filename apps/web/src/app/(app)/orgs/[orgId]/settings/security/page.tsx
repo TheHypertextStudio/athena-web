@@ -29,7 +29,7 @@ function EmailChangedBanner(): JSX.Element | null {
   const params = useSearchParams();
   if (params.get('email-changed') !== '1') return null;
   return (
-    <p role="status" className="bg-primary/10 text-on-surface text-body rounded-lg px-4 py-3">
+    <p role="status" className="bg-primary/10 text-on-surface text-body-medium rounded-lg px-4 py-3">
       Your email address has been updated.
     </p>
   );
@@ -55,7 +55,7 @@ export default function SecuritySettingsPage({
 
   if (activeOrg && !isPersonal) {
     return (
-      <p className="text-on-surface-variant text-body" role="status">
+      <p className="text-on-surface-variant text-body-medium" role="status">
         Opening settings&hellip;
       </p>
     );

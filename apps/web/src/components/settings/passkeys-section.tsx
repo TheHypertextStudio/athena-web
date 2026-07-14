@@ -86,7 +86,7 @@ export function PasskeysSection(): JSX.Element {
   }
   if (listQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body">
+      <p role="alert" className="text-destructive text-body-medium">
         {userErrorMessage(listQ.error, 'Could not update your passkeys.')}
       </p>
     );
@@ -99,8 +99,8 @@ export function PasskeysSection(): JSX.Element {
       <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body font-medium">Passkeys</h3>
-            <p className="text-on-surface-variant text-body max-w-prose">
+            <h3 className="text-on-surface text-body-medium font-medium">Passkeys</h3>
+            <p className="text-on-surface-variant text-body-medium max-w-prose">
               Passkeys are how you sign in — Face ID, Touch ID, or a security key, with no password.
               Add one for each device you use so you&apos;re never locked out if you lose another.
             </p>
@@ -119,7 +119,7 @@ export function PasskeysSection(): JSX.Element {
         </div>
 
         {passkeys.length === 0 ? (
-          <p className="text-on-surface-variant text-body">
+          <p className="text-on-surface-variant text-body-medium">
             No passkeys yet. Add one to sign in from this device.
           </p>
         ) : (
@@ -131,7 +131,7 @@ export function PasskeysSection(): JSX.Element {
               >
                 <Shield aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-on-surface text-body truncate font-medium">
+                  <p className="text-on-surface text-body-medium truncate font-medium">
                     {passkeyLabel(record)}
                   </p>
                   <p className="text-on-surface-variant truncate text-xs">
@@ -245,7 +245,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2">
-          <label htmlFor={nameId} className="text-on-surface text-body font-medium">
+          <label htmlFor={nameId} className="text-on-surface text-body-medium font-medium">
             Name
           </label>
           <Input
@@ -259,7 +259,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
           />
         </div>
         {add.isError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {userErrorMessage(add.error, 'Could not update your passkeys.')}
           </p>
         ) : null}
@@ -352,7 +352,7 @@ function RenamePasskeyForm({
         <DialogDescription>Give this passkey a name you&apos;ll recognize.</DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-2">
-        <label htmlFor={nameId} className="text-on-surface text-body font-medium">
+        <label htmlFor={nameId} className="text-on-surface text-body-medium font-medium">
           Name
         </label>
         <Input
@@ -365,7 +365,7 @@ function RenamePasskeyForm({
         />
       </div>
       {rename.isError ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {userErrorMessage(rename.error, 'Could not update your passkeys.')}
         </p>
       ) : null}
@@ -433,7 +433,7 @@ function RemovePasskeyDialog({
           </DialogDescription>
         </DialogHeader>
         {remove.isError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {userErrorMessage(remove.error, 'Could not update your passkeys.')}
           </p>
         ) : null}

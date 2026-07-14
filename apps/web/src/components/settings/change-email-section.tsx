@@ -54,8 +54,8 @@ export function ChangeEmailSection(): JSX.Element {
     <section className="flex flex-col gap-3" aria-label="Change email">
       <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
         <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-body font-medium">Email address</h3>
-          <p className="text-on-surface-variant text-body max-w-prose">
+          <h3 className="text-on-surface text-body-medium font-medium">Email address</h3>
+          <p className="text-on-surface-variant text-body-medium max-w-prose">
             Your current email is{' '}
             <span className="text-on-surface font-medium">{currentEmail}</span>. Changing it sends a
             confirmation link to this address — click it to finish the change.
@@ -63,7 +63,7 @@ export function ChangeEmailSection(): JSX.Element {
         </div>
 
         {sent ? (
-          <p className="text-body text-on-surface">
+          <p className="text-body-medium text-on-surface">
             Check <span className="font-medium">{currentEmail}</span> for a confirmation link to
             finish the change.
           </p>
@@ -78,7 +78,7 @@ export function ChangeEmailSection(): JSX.Element {
             }}
           >
             <div className="flex flex-1 flex-col gap-2">
-              <label htmlFor={inputId} className="text-on-surface text-body font-medium">
+              <label htmlFor={inputId} className="text-on-surface text-body-medium font-medium">
                 New email
               </label>
               <Input
@@ -100,7 +100,7 @@ export function ChangeEmailSection(): JSX.Element {
         )}
 
         {error ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {error}
           </p>
         ) : null}

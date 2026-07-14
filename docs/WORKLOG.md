@@ -7,6 +7,38 @@
 
 ## Active Tasks
 
+### [PROJECTS-CRAFT-002] Correct Project detail hierarchy and standardize MD3 typography
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-14
+- **Completed**: 2026-07-14
+- **Priority**: P0
+- **Description**: Make the first Project-detail viewport belong to the Project, replace ad hoc
+  application typography with the canonical MD3 scale, and repair misleading or broken detail
+  affordances without shrinking their accessible targets.
+- **Plan**:
+  1. Replace the old application-specific typography tokens with canonical MD3 semantic names.
+  2. Rebuild the Project identity block and anchored Properties controls.
+  3. Fix heading-free document width, table-of-contents behavior, and Markdown hierarchy.
+  4. Suppress the recovery nudge on object-detail routes while retaining it on overview surfaces.
+  5. Validate focused behavior, full repository gates, and responsive light/dark output.
+- **Risks**: Typography is application-wide and can create subtle regressions if old names remain;
+  object-detail route detection must not suppress the nudge on overview pages.
+- **Blockers**: None.
+- **Files Changed**: Shared MD3 typography tokens and their application/admin consumers; Project
+  and Initiative overview/detail surfaces; freeform document rendering and contents disclosure;
+  object-detail shell routing; focused visual contracts; design specification and plan.
+- **Validation**: Focused Project/Initiative contracts pass 24/24. Root `pnpm typecheck`,
+  `pnpm lint`, `pnpm test`, and `pnpm build` pass. The full test run reports 17/17 successful
+  packages, including web 740/740 and API 1,247/1,247. Authenticated desktop/mobile light/dark
+  renders have no horizontal overflow and show no recovery banner on the Project detail route.
+- **Retrospective**: A control is not visually interactive merely because its HTML is a button.
+  Giving health and target a quiet resting state layer made their affordance legible without
+  recreating a metadata wall. Replacing aliases globally was safer than preserving compatibility
+  names because the contract test can now prevent another parallel type scale from emerging.
+
+---
+
 ### [SETTINGS-CRAFT-002] Repair Settings loaded states and visual craft
 
 - **Status**: COMPLETED

@@ -30,7 +30,7 @@ export function PrinciplesStrip(): JSX.Element {
             key={principle.quote}
             className="flex max-w-3xl flex-col gap-4 even:self-end even:text-right"
           >
-            <p className="font-display text-title text-ink tracking-tight italic">
+            <p className="font-display text-display-large-small text-ink tracking-tight italic">
               {principle.quote}
             </p>
             <footer className="text-ink-muted text-base">{principle.gloss}</footer>

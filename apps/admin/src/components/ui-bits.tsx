@@ -39,8 +39,8 @@ export function PageHeader({ title, description, actions }: PageHeaderProps): JS
   return (
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-h1">{title}</h1>
-        {description ? <p className="text-on-surface-variant text-body">{description}</p> : null}
+        <h1 className="text-on-surface text-title-large">{title}</h1>
+        {description ? <p className="text-on-surface-variant text-body-medium">{description}</p> : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </header>
@@ -74,7 +74,7 @@ export function ErrorBanner({ message, action }: ErrorBannerProps): JSX.Element 
   return (
     <div
       role="alert"
-      className="border-destructive/40 bg-destructive/5 text-destructive text-body flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+      className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
     >
       <p>{message}</p>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
@@ -121,7 +121,7 @@ export interface EmptyStateProps {
  */
 export function EmptyState({ message }: EmptyStateProps): JSX.Element {
   return (
-    <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-6 text-center">
+    <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-6 text-center">
       {message}
     </p>
   );

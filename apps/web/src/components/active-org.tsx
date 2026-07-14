@@ -88,7 +88,7 @@ export function ActiveOrgContext({
   // app under the standard query keys.
   const orgDetailQ = useApiQuery(
     apiQueryOptions(
-      ['org', activeOrgId ?? '', 'detail'],
+      queryKeys.organization(activeOrgId ?? ''),
       () => api.v1.orgs[':orgId'].$get({ param: { orgId: activeOrgId ?? '' } }),
       'Could not load the workspace.',
       { enabled: Boolean(activeOrgId), staleTime: STALE.static },

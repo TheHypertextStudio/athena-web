@@ -42,7 +42,7 @@ export function SiteFooter(): JSX.Element {
           <span className="font-display text-ink wonk text-2xl leading-none font-semibold tracking-tight">
             Docket
           </span>
-          <p className="text-muted-foreground text-body max-w-sm">{TAGLINE}</p>
+          <p className="text-muted-foreground text-body-medium max-w-sm">{TAGLINE}</p>
         </div>
         {COLUMNS.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">
@@ -52,7 +52,7 @@ export function SiteFooter(): JSX.Element {
                 <li key={link.label}>
                   <Link
                     href={link.href}
-                    className="text-muted-foreground hover:text-foreground text-body transition-colors"
+                    className="text-muted-foreground hover:text-foreground text-body-medium transition-colors"
                   >
                     {link.label}
                   </Link>

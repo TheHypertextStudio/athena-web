@@ -67,7 +67,7 @@ export function Swimlane({ row, scale, todayLeft, dimmed }: SwimlaneProps): JSX.
             className="size-2.5 shrink-0 rounded-full"
             style={{ backgroundColor: orgAccent }}
           />
-          <span className="text-on-surface group-hover:text-on-surface/80 text-body min-w-0 truncate font-semibold">
+          <span className="text-on-surface group-hover:text-on-surface/80 text-body-medium min-w-0 truncate font-semibold">
             {row.organization.name}
           </span>
         </Link>

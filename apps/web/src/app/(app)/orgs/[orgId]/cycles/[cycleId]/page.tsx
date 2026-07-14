@@ -147,7 +147,7 @@ export default function CycleDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
         >
           {userErrorMessage(detailQ.error, 'Could not load this cycle.')}
         </p>
@@ -158,7 +158,7 @@ export default function CycleDetailPage(): JSX.Element {
   if (!cycle) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
+        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
           This {cycleNounLower} could not be found.
         </p>
       </div>
@@ -174,7 +174,7 @@ export default function CycleDetailPage(): JSX.Element {
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-on-surface text-h1">{title}</h1>
+            <h1 className="text-on-surface text-title-large">{title}</h1>
             {cycle.name ? (
               <span className="text-on-surface-variant text-xs tabular-nums">
                 {cycleNoun} {cycle.number}
@@ -211,7 +211,7 @@ export default function CycleDetailPage(): JSX.Element {
           }}
         />
         {propsError ? (
-          <p role="alert" className="text-destructive text-body px-1">
+          <p role="alert" className="text-destructive text-body-medium px-1">
             {propsError}
           </p>
         ) : null}
@@ -244,7 +244,7 @@ export default function CycleDetailPage(): JSX.Element {
       {orderedTasks.length === 0 ? (
         <section
           aria-label={`${cycleNounLower} tasks`}
-          className="border-outline-variant text-on-surface-variant text-body min-h-[16rem] flex-1 rounded-xl border p-8 text-center"
+          className="border-outline-variant text-on-surface-variant text-body-medium min-h-[16rem] flex-1 rounded-xl border p-8 text-center"
         >
           Nothing is committed to this {cycleNounLower} yet.
         </section>

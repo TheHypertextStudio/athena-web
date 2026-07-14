@@ -255,55 +255,68 @@
   --font-mono:
     var(--font-ibm-plex-mono), ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
 
-  /*
-   * Named type scale. App text uses these named steps — never raw Tailwind sizes — so
-   * hierarchy stays a system decision, not a per-callsite one. The heading sizes encode
-   * the app's REAL hierarchy (calm and dense, Linear-grade). Weight 600 and tight tracking
-   * are baked into the heading steps.
-   *
-   *   text-document-title printable object titles that need document-scale emphasis
-   *   text-page-title     strategic portfolio titles that need stronger brand presence
-   *   text-h1            page titles (the app's largest standard in-product heading)
-   *   text-h2            section headers within a page
-   *   text-h3            group headers, card titles
-   *   text-body          default app text (== Tailwind's stock text-sm; the app-wide
-   *                      `text-sm` → `text-body` rename was a zero-visual-diff move)
-   *   text-sm            REDEFINED below stock Tailwind: 13px secondary/list text
-   *   text-xs            chips, badges, counts, meta — weight 500 baked in for legibility
-   *   text-mono          IDs, timestamps, scopes (pair with `font-mono`)
-   *
-   * `text-document-title` is reserved for printable strategic objects and caps at 56px.
-   * `text-page-title` is the restrained 32–40px bridge used by portfolio-level surfaces.
-   */
-  --text-document-title: clamp(2rem, 1.35rem + 2.4vw, 3.5rem);
-  --text-document-title--line-height: 1.06;
-  --text-document-title--font-weight: 600;
-  --text-document-title--letter-spacing: -0.035em;
-  --text-page-title: clamp(2rem, 1.8rem + 0.8vw, 2.5rem);
-  --text-page-title--line-height: 1.08;
-  --text-page-title--font-weight: 600;
-  --text-page-title--letter-spacing: -0.035em;
-  --text-h1: 1.25rem;
-  --text-h1--line-height: 1.75rem;
-  --text-h1--font-weight: 600;
-  --text-h1--letter-spacing: -0.02em;
-  --text-h2: 1.0625rem;
-  --text-h2--line-height: 1.5rem;
-  --text-h2--font-weight: 600;
-  --text-h2--letter-spacing: -0.01em;
-  --text-h3: 0.9375rem;
-  --text-h3--line-height: 1.375rem;
-  --text-h3--font-weight: 600;
-  --text-body: 0.875rem;
-  --text-body--line-height: 1.25rem;
-  --text-sm: 0.8125rem;
-  --text-sm--line-height: 1.125rem;
-  --text-xs: 0.75rem;
-  --text-xs--line-height: 1rem;
-  --text-xs--font-weight: 500;
-  --text-mono: 0.8125rem;
-  --text-mono--line-height: 1.125rem;
-  --text-mono--font-weight: 500;
+  /* Material Design 3 type scale. Semantic roles, sizes, line heights, weights, and tracking
+   * follow the canonical MD3 tokens so product surfaces share one vocabulary. */
+  --text-display-large: 3.5625rem;
+  --text-display-large--line-height: 4rem;
+  --text-display-large--font-weight: 400;
+  --text-display-large--letter-spacing: -0.015625rem;
+  --text-display-medium: 2.8125rem;
+  --text-display-medium--line-height: 3.25rem;
+  --text-display-medium--font-weight: 400;
+  --text-display-medium--letter-spacing: 0;
+  --text-display-small: 2.25rem;
+  --text-display-small--line-height: 2.75rem;
+  --text-display-small--font-weight: 400;
+  --text-display-small--letter-spacing: 0;
+  --text-headline-large: 2rem;
+  --text-headline-large--line-height: 2.5rem;
+  --text-headline-large--font-weight: 400;
+  --text-headline-large--letter-spacing: 0;
+  --text-headline-medium: 1.75rem;
+  --text-headline-medium--line-height: 2.25rem;
+  --text-headline-medium--font-weight: 400;
+  --text-headline-medium--letter-spacing: 0;
+  --text-headline-small: 1.5rem;
+  --text-headline-small--line-height: 2rem;
+  --text-headline-small--font-weight: 400;
+  --text-headline-small--letter-spacing: 0;
+  --text-title-large: 1.375rem;
+  --text-title-large--line-height: 1.75rem;
+  --text-title-large--font-weight: 400;
+  --text-title-large--letter-spacing: 0;
+  --text-title-medium: 1rem;
+  --text-title-medium--line-height: 1.5rem;
+  --text-title-medium--font-weight: 500;
+  --text-title-medium--letter-spacing: 0.009375rem;
+  --text-title-small: 0.875rem;
+  --text-title-small--line-height: 1.25rem;
+  --text-title-small--font-weight: 500;
+  --text-title-small--letter-spacing: 0.00625rem;
+  --text-body-large: 1rem;
+  --text-body-large--line-height: 1.5rem;
+  --text-body-large--font-weight: 400;
+  --text-body-large--letter-spacing: 0.03125rem;
+  --text-body-medium: 0.875rem;
+  --text-body-medium--line-height: 1.25rem;
+  --text-body-medium--font-weight: 400;
+  --text-body-medium--letter-spacing: 0.015625rem;
+  --text-body-small: 0.75rem;
+  --text-body-small--line-height: 1rem;
+  --text-body-small--font-weight: 400;
+  --text-body-small--letter-spacing: 0.025rem;
+  --text-label-large: 0.875rem;
+  --text-label-large--line-height: 1.25rem;
+  --text-label-large--font-weight: 500;
+  --text-label-large--letter-spacing: 0.00625rem;
+  --text-label-medium: 0.75rem;
+  --text-label-medium--line-height: 1rem;
+  --text-label-medium--font-weight: 500;
+  --text-label-medium--letter-spacing: 0.03125rem;
+  --text-label-small: 0.6875rem;
+  --text-label-small--line-height: 1rem;
+  --text-label-small--font-weight: 500;
+  --text-label-small--letter-spacing: 0.03125rem;
 
   /*
    * Motion defaults. Every bare `transition-*` utility runs at --dur-fast with the

@@ -19,13 +19,6 @@
 
   --shadow-plate: var(--mk-shadow-plate);
 
-  /* Editorial display sizes (marketing only — the app type scale tops out at text-h1). */
-  --text-display: clamp(2.75rem, 1.2rem + 5.5vw, 5rem);
-  --text-display--line-height: 1.05;
-  --text-display--font-weight: 560;
-  --text-title: clamp(1.875rem, 1.1rem + 2.6vw, 3rem);
-  --text-title--line-height: 1.12;
-  --text-title--font-weight: 560;
 }
 
 /*

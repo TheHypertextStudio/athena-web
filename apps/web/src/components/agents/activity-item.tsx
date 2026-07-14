@@ -93,7 +93,7 @@ export function ActivityItem({
     <li className="flex gap-3">
       <span
         aria-hidden="true"
-        className="bg-surface-container text-on-surface-variant text-body flex h-7 w-7 shrink-0 items-center justify-center rounded-full leading-none"
+        className="bg-surface-container text-on-surface-variant text-body-medium flex h-7 w-7 shrink-0 items-center justify-center rounded-full leading-none"
       >
         {badge.emoji}
       </span>
@@ -108,7 +108,7 @@ export function ActivityItem({
 
         {/* Body. */}
         {activity.type === 'error' ? (
-          <p role="alert" className="text-destructive text-body leading-relaxed">
+          <p role="alert" className="text-destructive text-body-medium leading-relaxed">
             {text}
           </p>
         ) : activity.type === 'thought' ? (
@@ -126,7 +126,7 @@ export function ActivityItem({
             onReject={onReject}
           />
         ) : (
-          <p className="text-on-surface text-body leading-relaxed whitespace-pre-wrap">{text}</p>
+          <p className="text-on-surface text-body-medium leading-relaxed whitespace-pre-wrap">{text}</p>
         )}
 
         {/* Elicitation reply affordance. */}
@@ -197,7 +197,7 @@ function ActionBody({
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <code className="text-on-surface-variant text-xs">{kind}</code>
-          <p className="text-on-surface text-body leading-relaxed">{summary}</p>
+          <p className="text-on-surface text-body-medium leading-relaxed">{summary}</p>
         </div>
         <ApprovalStatusBadge status={approvalStatus} />
       </div>
@@ -286,7 +286,7 @@ function ReplyBox({
           setValue(event.target.value);
         }}
         className={cn(
-          'border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body w-full resize-y rounded-md border px-3 py-2',
+          'border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium w-full resize-y rounded-md border px-3 py-2',
           'transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
         )}
       />
@@ -304,7 +304,7 @@ function ThoughtBody({ text }: { text: string }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 160;
   if (!long) {
-    return <p className="text-on-surface-variant text-body leading-relaxed italic">{text}</p>;
+    return <p className="text-on-surface-variant text-body-medium leading-relaxed italic">{text}</p>;
   }
   return (
     <button
@@ -314,7 +314,7 @@ function ThoughtBody({ text }: { text: string }): JSX.Element {
       }}
       aria-expanded={expanded}
       className={cn(
-        'text-on-surface-variant text-body min-w-0 text-left leading-relaxed italic',
+        'text-on-surface-variant text-body-medium min-w-0 text-left leading-relaxed italic',
         'focus-visible:ring-ring rounded outline-none focus-visible:ring-1',
         expanded ? '' : 'truncate',
       )}

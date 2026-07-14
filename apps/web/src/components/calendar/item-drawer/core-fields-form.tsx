@@ -139,7 +139,7 @@ export function CoreFieldsForm({
             setDescription(event.target.value);
           }}
           rows={3}
-          className="border-outline-variant text-body flex w-full resize-none rounded-md border bg-transparent px-3 py-2 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="border-outline-variant text-body-medium flex w-full resize-none rounded-md border bg-transparent px-3 py-2 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium">

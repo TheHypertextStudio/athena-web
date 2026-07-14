@@ -512,7 +512,7 @@ export default function ProjectsListClient(): JSX.Element {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-on-surface text-page-title">{projectsNoun}</h1>
+          <h1 className="text-on-surface text-headline-medium font-medium">{projectsNoun}</h1>
           <p className="text-on-surface-variant mt-1 text-sm">
             Plan, sequence, and operate bounded work.
           </p>

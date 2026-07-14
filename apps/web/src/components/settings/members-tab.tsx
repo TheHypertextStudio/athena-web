@@ -171,7 +171,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
     return (
       <p
         role="status"
-        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body rounded-lg border p-4"
+        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium rounded-lg border p-4"
       >
         Workspace members are temporarily unavailable. We&apos;ll keep checking automatically.
       </p>
@@ -203,7 +203,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
       {actionError ? (
         <p
           role="alert"
-          className="border-destructive/40 text-destructive bg-destructive/5 text-body rounded-lg border p-3"
+          className="border-destructive/40 text-destructive bg-destructive/5 text-body-medium rounded-lg border p-3"
         >
           {actionError}
         </p>
@@ -221,7 +221,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         </div>
         <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
           {members.length === 0 ? (
-            <p className="text-on-surface-variant text-body p-6 text-center">
+            <p className="text-on-surface-variant text-body-medium p-6 text-center">
               No members yet — invite someone above to get started.
             </p>
           ) : (

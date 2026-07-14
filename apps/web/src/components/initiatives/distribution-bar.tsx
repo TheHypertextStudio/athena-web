@@ -90,7 +90,7 @@ export function DistributionBar({
 
   if (total === 0) {
     return (
-      <p className="text-on-surface-variant text-body">
+      <p className="text-on-surface-variant text-body-medium">
         No {childNounPlural} are associated yet — link some below to roll up their health here.
       </p>
     );

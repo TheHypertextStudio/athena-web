@@ -64,7 +64,7 @@ export function ProposalGroupCard({
       className="border-primary/40 bg-primary/5 rounded-xl border p-4"
     >
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-on-surface text-h3">
+        <h3 className="text-on-surface text-title-small">
           Athena proposes {count} {count === 1 ? 'change' : 'changes'}
         </h3>
         <span className="text-on-surface-variant text-xs">
@@ -202,7 +202,7 @@ function ProposalRow({
                 setEditing(false);
               }
             }}
-            className="border-outline-variant bg-surface text-body focus-visible:ring-ring w-full rounded border px-2 py-0.5 outline-none focus-visible:ring-1"
+            className="border-outline-variant bg-surface text-body-medium focus-visible:ring-ring w-full rounded border px-2 py-0.5 outline-none focus-visible:ring-1"
           />
         ) : (
           <button
@@ -212,7 +212,7 @@ function ProposalRow({
               setEditing(true);
             }}
             className={cn(
-              'text-on-surface text-body min-w-0 truncate text-left',
+              'text-on-surface text-body-medium min-w-0 truncate text-left',
               canAct && ghost ? 'hover:underline' : 'cursor-default',
             )}
             title={canAct && ghost ? 'Click to edit before approving' : undefined}

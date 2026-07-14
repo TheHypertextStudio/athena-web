@@ -150,7 +150,7 @@ export function NotificationAnnouncementConsole({
       />
       <ErrorBanner message={error} />
       {statusMessage ? (
-        <div className="border-outline-variant bg-surface-container-low text-on-surface text-body rounded-lg border px-3 py-2">
+        <div className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium rounded-lg border px-3 py-2">
           {statusMessage}
         </div>
       ) : null}
@@ -158,7 +158,7 @@ export function NotificationAnnouncementConsole({
       <div className="grid min-h-[42rem] gap-6 xl:grid-cols-[20rem_minmax(0,1fr)]">
         <section className="flex flex-col gap-3" aria-labelledby="notification-list-heading">
           <div className="flex items-center justify-between gap-3">
-            <h2 id="notification-list-heading" className="text-body font-medium">
+            <h2 id="notification-list-heading" className="text-body-medium font-medium">
               Recent intents
             </h2>
             <Badge>{intents.length}</Badge>
@@ -176,7 +176,7 @@ export function NotificationAnnouncementConsole({
                       onSelectIntent(intent.id);
                     }}
                   >
-                    <span className="text-body line-clamp-2 font-medium">{intent.subject}</span>
+                    <span className="text-body-medium line-clamp-2 font-medium">{intent.subject}</span>
                     <span className="text-on-surface-variant text-xs">
                       {intent.status} · {intent.priority}
                     </span>
@@ -234,7 +234,7 @@ function ComposeCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-body">Compose</CardTitle>
+        <CardTitle className="text-body-medium">Compose</CardTitle>
       </CardHeader>
       <CardContent>
         <form className="flex flex-col gap-4" onSubmit={onSubmit}>
@@ -398,7 +398,7 @@ function AudienceCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-body">Audience</CardTitle>
+        <CardTitle className="text-body-medium">Audience</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-3xl font-semibold tabular-nums">{recipientLabel}</p>
@@ -435,7 +435,7 @@ function ChannelsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-body">Channels</CardTitle>
+        <CardTitle className="text-body-medium">Channels</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-4 gap-2 text-center text-xs">
@@ -464,7 +464,7 @@ function PreviewCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-body">Preview</CardTitle>
+        <CardTitle className="text-body-medium">Preview</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2">
         {preview ? (
@@ -504,7 +504,7 @@ function ReviewCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-body">Review</CardTitle>
+        <CardTitle className="text-body-medium">Review</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="grid gap-2 text-sm">
@@ -546,7 +546,7 @@ function MonitorCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-body">Monitor</CardTitle>
+        <CardTitle className="text-body-medium">Monitor</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-3">
         <MiniList title="Deliveries" items={deliveries.map((d) => `${d.channel} · ${d.status}`)} />

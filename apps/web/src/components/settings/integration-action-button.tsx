@@ -38,7 +38,7 @@ export function IntegrationActionButton({
     <button
       type={type}
       className={cn(
-        'focus-visible:ring-ring text-body inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
+        'focus-visible:ring-ring text-body-medium inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
         TONE[tone],
         className,
       )}

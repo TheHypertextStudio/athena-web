@@ -28,8 +28,8 @@ export default function OrgNotFoundPage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-2xl flex-col items-center justify-center gap-4 p-8 text-center">
       <p className="text-on-surface-variant text-xs font-semibold">404</p>
-      <h1 className="text-h1">This page doesn&apos;t exist</h1>
-      <p className="text-on-surface-variant text-body max-w-sm leading-relaxed">
+      <h1 className="text-title-large">This page doesn&apos;t exist</h1>
+      <p className="text-on-surface-variant text-body-medium max-w-sm leading-relaxed">
         The page you were looking for couldn&apos;t be found. It may have moved, or the link may be
         out of date.
       </p>

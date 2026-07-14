@@ -73,7 +73,7 @@ export function DangerZoneTab(): JSX.Element {
   }
   if (statusQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body">
+      <p role="alert" className="text-destructive text-body-medium">
         {userErrorMessage(statusQ.error, 'Could not update account settings.')}
       </p>
     );
@@ -89,10 +89,10 @@ export function DangerZoneTab(): JSX.Element {
       {pending && status.deleteAfterAt ? (
         <div className="border-destructive/40 bg-destructive/5 flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body font-medium">
+            <h3 className="text-on-surface text-body-medium font-medium">
               Your account is scheduled for deletion
             </h3>
-            <p className="text-on-surface-variant text-body">
+            <p className="text-on-surface-variant text-body-medium">
               It will be permanently deleted on{' '}
               <span className="text-on-surface font-medium">
                 {formatCalendarDate(status.deleteAfterAt)}
@@ -102,7 +102,7 @@ export function DangerZoneTab(): JSX.Element {
             </p>
           </div>
           {cancelDeletion.isError ? (
-            <p role="alert" className="text-destructive text-body">
+            <p role="alert" className="text-destructive text-body-medium">
               {userErrorMessage(cancelDeletion.error, 'Could not update account settings.')}
             </p>
           ) : null}
@@ -124,10 +124,10 @@ export function DangerZoneTab(): JSX.Element {
       {!pending && blockers.length > 0 ? (
         <div className="border-outline-variant flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body font-medium">
+            <h3 className="text-on-surface text-body-medium font-medium">
               Resolve these workspaces first
             </h3>
-            <p className="text-on-surface-variant text-body max-w-prose">
+            <p className="text-on-surface-variant text-body-medium max-w-prose">
               You&apos;re the only owner of{' '}
               {blockers.length === 1 ? 'a shared workspace' : 'some shared workspaces'} with other
               members. Transfer ownership (or delete the workspace) so it isn&apos;t left without an
@@ -141,7 +141,7 @@ export function DangerZoneTab(): JSX.Element {
                 className="flex items-center justify-between gap-3 px-4 py-3"
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-on-surface text-body truncate font-medium">{b.name}</span>
+                  <span className="text-on-surface text-body-medium truncate font-medium">{b.name}</span>
                   <span className="text-on-surface-variant text-xs">
                     {b.memberCount} members · you&apos;re the only owner
                   </span>
@@ -159,8 +159,8 @@ export function DangerZoneTab(): JSX.Element {
       {!pending ? (
         <div className="border-destructive/40 flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-1">
-            <h3 className="text-on-surface text-body font-medium">Delete account</h3>
-            <p className="text-on-surface-variant text-body max-w-prose">
+            <h3 className="text-on-surface text-body-medium font-medium">Delete account</h3>
+            <p className="text-on-surface-variant text-body-medium max-w-prose">
               Permanently delete your Docket account, your personal workspace, and any workspace
               only you belong to. You&apos;ll have 14 days to change your mind. Want a copy first?
               Use <span className="text-on-surface font-medium">Export data</span> before you

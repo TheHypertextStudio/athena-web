@@ -24,7 +24,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
       role="tab"
       aria-selected={active}
       className={cn(
-        'group text-body relative flex h-8 w-40 shrink-0 items-center rounded-lg transition-colors',
+        'group text-body-medium relative flex h-8 w-40 shrink-0 items-center rounded-lg transition-colors',
         active
           ? 'text-on-secondary-container bg-secondary-container shadow-sm'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',

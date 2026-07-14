@@ -73,7 +73,7 @@ export default function ViewsPage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-h1">Views</h1>
+        <h1 className="text-on-surface text-title-large">Views</h1>
         <p className="text-on-surface-variant text-xs">
           Saved filters over your {viewsLabel.toLowerCase()} — open one, tweak it, or save the
           current filter as a new view. Shared views show each person only the work they can see.
@@ -87,7 +87,7 @@ export default function ViewsPage(): JSX.Element {
           <Skeleton className="h-16 w-full rounded-lg" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {loadError}
         </p>
       ) : (
@@ -99,7 +99,7 @@ export default function ViewsPage(): JSX.Element {
               </h2>
             </div>
             {views.length === 0 ? (
-              <div className="border-outline-variant text-on-surface-variant text-body flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
+              <div className="border-outline-variant text-on-surface-variant text-body-medium flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
                 <LayoutGrid className="size-6 opacity-60" aria-hidden="true" />
                 <p>
                   Build a filter below and save it to create your first view. Views can stay
@@ -120,7 +120,7 @@ export default function ViewsPage(): JSX.Element {
 
           <section aria-label="Working view" className="flex min-h-0 flex-1 flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-on-surface text-body font-semibold">
+              <h2 className="text-on-surface text-body-medium font-semibold">
                 {openViewName ?? 'New view'}
               </h2>
             </div>

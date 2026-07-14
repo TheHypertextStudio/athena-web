@@ -45,7 +45,7 @@ export default function AboutPage(): JSX.Element {
     <>
       <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-16">
         <p className="text-ink-muted text-sm font-medium">About Docket</p>
-        <h1 className="font-display text-title text-ink mt-4 tracking-tight text-balance">
+        <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight text-balance">
           Most people run more than one thing.
         </h1>
         <div className="text-ink-muted mt-8 flex flex-col gap-5 text-lg leading-relaxed">

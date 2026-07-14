@@ -143,7 +143,7 @@ export default function CyclesClient(): JSX.Element {
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-h1">{cycleNounPlural}</h1>
+          <h1 className="text-on-surface text-title-large">{cycleNounPlural}</h1>
           <p className="text-on-surface-variant text-xs">
             {`${cycleNounPlural} roll automatically on your cadence — what's live now, what's coming up, and what's wrapped.`}
           </p>
@@ -165,7 +165,7 @@ export default function CyclesClient(): JSX.Element {
       ) : loadError ? (
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
         >
           {loadError}
         </p>

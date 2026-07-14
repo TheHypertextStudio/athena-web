@@ -16,7 +16,7 @@ export function Field({
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
-      <span className={`text-body ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
+      <span className={`text-body-medium ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
         {value}
       </span>
     </div>

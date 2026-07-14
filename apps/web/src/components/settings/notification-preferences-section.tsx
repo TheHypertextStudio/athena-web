@@ -123,7 +123,7 @@ export function NotificationPreferencesSection({
   return (
     <section aria-label="Notification preferences" className="flex flex-col gap-6">
       <section className="border-outline-variant rounded-lg border p-4">
-        <h3 className="text-on-surface text-body font-semibold">
+        <h3 className="text-on-surface text-body-medium font-semibold">
           How should Docket reach me for announcements?
         </h3>
         <div className="mt-3 grid gap-2 @2xl:grid-cols-2">
@@ -135,7 +135,7 @@ export function NotificationPreferencesSection({
               disabled
               aria-label="Announcement web inbox"
             />
-            <span className="text-body text-on-surface">Web inbox</span>
+            <span className="text-body-medium text-on-surface">Web inbox</span>
           </label>
           {CHANNELS.filter((channel) => channel.key !== 'web').map((channel) => (
             <label
@@ -152,7 +152,7 @@ export function NotificationPreferencesSection({
                   patchChannel('service_announcement', channel.key, event.target.checked);
                 }}
               />
-              <span className="text-body text-on-surface">
+              <span className="text-body-medium text-on-surface">
                 {channel.key === 'sms' ? 'Text message' : channel.label}
               </span>
             </label>
@@ -163,10 +163,10 @@ export function NotificationPreferencesSection({
       <section className="border-outline-variant bg-surface-container-low rounded-lg border">
         <div className="border-outline-variant flex items-center gap-2 border-b px-4 py-3">
           <Schedule aria-hidden="true" className="text-on-surface-variant size-4" />
-          <h3 className="text-on-surface text-body font-semibold">Quiet hours</h3>
+          <h3 className="text-on-surface text-body-medium font-semibold">Quiet hours</h3>
         </div>
         <div className="grid gap-3 p-4 @2xl:grid-cols-2 @2xl:items-end @4xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]">
-          <label className="text-on-surface text-body flex items-center gap-2 font-medium">
+          <label className="text-on-surface text-body-medium flex items-center gap-2 font-medium">
             <input
               type="checkbox"
               className="accent-primary size-4"
@@ -219,7 +219,7 @@ export function NotificationPreferencesSection({
             {QUIET_DAYS.map((day) => (
               <label
                 key={day.key}
-                className="border-outline-variant text-body flex items-center gap-2 rounded-md border px-3 py-2"
+                className="border-outline-variant text-body-medium flex items-center gap-2 rounded-md border px-3 py-2"
               >
                 <input
                   type="checkbox"
@@ -235,7 +235,7 @@ export function NotificationPreferencesSection({
               </label>
             ))}
           </div>
-          <label className="text-on-surface text-body flex items-center gap-2">
+          <label className="text-on-surface text-body-medium flex items-center gap-2">
             <input
               type="checkbox"
               className="accent-primary size-4"
@@ -252,7 +252,7 @@ export function NotificationPreferencesSection({
       </section>
 
       <section aria-label="Channel preferences" className="flex flex-col gap-3">
-        <h3 className="text-on-surface text-body font-semibold">Advanced channel rules</h3>
+        <h3 className="text-on-surface text-body-medium font-semibold">Advanced channel rules</h3>
         <div className="border-outline-variant overflow-x-auto rounded-lg border">
           <table className="min-w-full border-separate border-spacing-0 text-left">
             <thead>
@@ -279,7 +279,7 @@ export function NotificationPreferencesSection({
                   <tr key={category} className="border-outline-variant border-t">
                     <th className="border-outline-variant border-t px-4 py-3">
                       <span className="flex min-w-48 items-center gap-2">
-                        <span className="text-on-surface text-body font-medium">
+                        <span className="text-on-surface text-body-medium font-medium">
                           {CATEGORY_LABELS[category]}
                         </span>
                         {locked ? (
@@ -318,7 +318,7 @@ export function NotificationPreferencesSection({
       </section>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : null}

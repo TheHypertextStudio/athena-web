@@ -49,7 +49,7 @@ export function PricingTiers(): JSX.Element {
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-3">
         <p className="text-ink-muted text-sm font-medium">Pricing</p>
-        <h1 className="font-display text-title text-ink tracking-tight text-balance">
+        <h1 className="font-display text-display-large-small text-ink tracking-tight text-balance">
           Free until you need more than one workspace
         </h1>
         <p className="text-ink-muted text-balance">
@@ -71,11 +71,11 @@ export function PricingTiers(): JSX.Element {
                 <span className="font-display text-ink text-4xl tracking-tight">{tier.price}</span>
                 <span className="text-ink-muted font-mono text-xs">{tier.cadence}</span>
               </div>
-              <p className="text-ink-muted text-body">{tier.description}</p>
+              <p className="text-ink-muted text-body-medium">{tier.description}</p>
             </div>
             <ul className="border-border flex flex-col gap-2.5 border-t pt-5">
               {tier.features.map((feature) => (
-                <li key={feature} className="text-body text-ink flex items-start gap-2">
+                <li key={feature} className="text-body-medium text-ink flex items-start gap-2">
                   <Check className="text-sienna mt-0.5 size-4 shrink-0" aria-hidden />
                   <span>{feature}</span>
                 </li>

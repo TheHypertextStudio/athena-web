@@ -115,7 +115,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
 
   return (
     <section className="flex flex-col gap-4" aria-label="Connected accounts">
-      <p className="text-on-surface-variant text-body max-w-prose">
+      <p className="text-on-surface-variant text-body-medium max-w-prose">
         Link the external accounts you work in — Docket can then sync their work. Choose what
         actually syncs, and into which workspace, in{' '}
         <NextLink
@@ -128,7 +128,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
       </p>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : null}
@@ -148,7 +148,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
           ))}
         </ul>
       ) : loadError ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {loadError}
         </p>
       ) : (

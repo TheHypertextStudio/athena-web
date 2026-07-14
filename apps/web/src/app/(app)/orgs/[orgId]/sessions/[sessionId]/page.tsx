@@ -66,7 +66,7 @@ export default function SessionViewPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
         >
           {loadError}
         </p>
@@ -77,7 +77,7 @@ export default function SessionViewPage(): JSX.Element {
   if (!session) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-6 text-center">
+        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-6 text-center">
           This session could not be found.
         </p>
       </div>
@@ -93,26 +93,26 @@ export default function SessionViewPage(): JSX.Element {
           {session.taskId ? (
             <Link
               href={`/orgs/${orgId}/tasks/${session.taskId}`}
-              className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body -ml-1 inline-flex items-center gap-1 rounded px-1 transition-colors outline-none focus-visible:ring-1"
+              className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body-medium -ml-1 inline-flex items-center gap-1 rounded px-1 transition-colors outline-none focus-visible:ring-1"
             >
               <ChevronLeft className="h-4 w-4" />
               Back to {taskTitle ?? taskLabel.toLowerCase()}
             </Link>
           ) : (
-            <span className="text-on-surface-variant text-body">Ad-hoc session</span>
+            <span className="text-on-surface-variant text-body-medium">Ad-hoc session</span>
           )}
           {orgName ? <OrgChip orgId={orgId} name={orgName} /> : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-h1 leading-tight">
+          <h1 className="text-on-surface text-title-large leading-tight">
             {taskTitle ?? `${agentActor.name}'s session`}
           </h1>
           <SessionStatusPill status={session.status} />
         </div>
 
         {actionError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {actionError}
           </p>
         ) : null}

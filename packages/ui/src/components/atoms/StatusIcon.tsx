@@ -13,7 +13,7 @@
  * never hardcoded.
  *
  * The glyph renders at the inline-row size (`size-3.5`, 14px) so it reads as optically congruent
- * beside the ~13px (`text-xs`/`text-body`) labels in list rows, group headers, and pickers — never
+ * beside the ~13px (`text-xs`/`text-body-medium`) labels in list rows, group headers, and pickers — never
  * the oversized 16px the design-system review flagged. Callers may override the glyph size with a
  * `[&>svg]:size-*` utility in `className` when a larger accent is warranted.
  */

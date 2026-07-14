@@ -42,7 +42,7 @@ export function ProjectDependenciesPanel({
     >
       <div className="flex items-center gap-2">
         <LinkIcon aria-hidden="true" className="text-on-surface-variant size-4" />
-        <h2 className="text-on-surface text-body font-semibold">Dependencies</h2>
+        <h2 className="text-on-surface text-body-medium font-semibold">Dependencies</h2>
       </div>
       {loading ? (
         <div className="flex flex-col gap-2">
@@ -50,7 +50,7 @@ export function ProjectDependenciesPanel({
           <Skeleton className="h-6 w-48" />
         </div>
       ) : error ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : (
@@ -86,7 +86,7 @@ export function ProjectDependenciesPanel({
         </div>
       )}
       {mutationError ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {mutationError}
         </p>
       ) : null}

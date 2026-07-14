@@ -173,7 +173,7 @@ export default function AthenaConversation({
           />
         )}
         {sending ? (
-          <p className="text-on-surface-variant text-body italic" aria-live="polite">
+          <p className="text-on-surface-variant text-body-medium italic" aria-live="polite">
             Athena is working…
           </p>
         ) : null}
@@ -181,7 +181,7 @@ export default function AthenaConversation({
       </div>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body pb-2">
+        <p role="alert" className="text-destructive text-body-medium pb-2">
           {error}
         </p>
       ) : null}
@@ -209,7 +209,7 @@ export default function AthenaConversation({
             }
           }}
           className={cn(
-            'border-outline-variant bg-surface-container placeholder:text-on-surface-variant text-body w-full resize-none rounded-xl border px-4 py-3',
+            'border-outline-variant bg-surface-container placeholder:text-on-surface-variant text-body-medium w-full resize-none rounded-xl border px-4 py-3',
             'focus-visible:ring-ring transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
           )}
         />
@@ -278,21 +278,21 @@ function ChatEntry({ activity }: ChatEntryProps): JSX.Element | null {
 
   if (activity.type === 'response' && fromUser) {
     return (
-      <div className="bg-primary text-on-primary text-body ml-auto max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 whitespace-pre-wrap">
+      <div className="bg-primary text-on-primary text-body-medium ml-auto max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 whitespace-pre-wrap">
         {text}
       </div>
     );
   }
   if (activity.type === 'response' || activity.type === 'elicitation') {
     return (
-      <div className="bg-surface-container text-on-surface text-body mr-auto max-w-[85%] rounded-2xl rounded-bl-sm px-4 py-2.5 whitespace-pre-wrap">
+      <div className="bg-surface-container text-on-surface text-body-medium mr-auto max-w-[85%] rounded-2xl rounded-bl-sm px-4 py-2.5 whitespace-pre-wrap">
         {text}
       </div>
     );
   }
   if (activity.type === 'error') {
     return (
-      <p role="alert" className="text-destructive text-body mr-auto">
+      <p role="alert" className="text-destructive text-body-medium mr-auto">
         {text || 'Athena hit an error.'}
       </p>
     );

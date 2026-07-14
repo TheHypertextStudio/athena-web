@@ -6,22 +6,29 @@ import { extendTailwindMerge } from 'tailwind-merge';
 
 /*
  * tailwind-merge only knows Tailwind's stock font-size names (text-sm, text-lg, …). Docket's
- * named type scale (design-system.md §"Type scale") and the marketing display sizes would
+ * MD3 type scale (design-system.md §"Type scale") would
  * otherwise be classified as text COLORS, making merges like
- * `cn('text-on-surface-variant text-body')` silently drop the color class.
+ * `cn('text-on-surface-variant text-body-medium')` silently drop the color class.
  */
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {
       'font-size': [
-        'text-document-title',
-        'text-h1',
-        'text-h2',
-        'text-h3',
-        'text-body',
-        'text-mono',
-        'text-display',
-        'text-title',
+        'text-display-large',
+        'text-display-medium',
+        'text-display-small',
+        'text-headline-large',
+        'text-headline-medium',
+        'text-headline-small',
+        'text-title-large',
+        'text-title-medium',
+        'text-title-small',
+        'text-body-large',
+        'text-body-medium',
+        'text-body-small',
+        'text-label-large',
+        'text-label-medium',
+        'text-label-small',
       ],
     },
   },

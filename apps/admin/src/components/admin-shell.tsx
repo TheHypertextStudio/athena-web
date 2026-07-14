@@ -80,7 +80,7 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
     <div className="bg-surface-container text-on-surface flex min-h-screen gap-2 p-2">
       <aside className="flex w-60 shrink-0 flex-col gap-6 px-2 py-4">
         <div className="px-2">
-          <p className="text-on-surface text-body font-semibold tracking-tight">Docket</p>
+          <p className="text-on-surface text-body-medium font-semibold tracking-tight">Docket</p>
           <p className="text-on-surface-variant text-xs">Service admin</p>
         </div>
         <nav className="flex flex-col gap-1" aria-label="Primary">
@@ -89,7 +89,7 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
               key={item.href}
               href={item.href}
               aria-current={isActive(pathname, item.href) ? 'page' : undefined}
-              className={`focus-visible:ring-ring text-body rounded-lg px-3 py-2 transition-colors focus-visible:ring-1 focus-visible:outline-none ${
+              className={`focus-visible:ring-ring text-body-medium rounded-lg px-3 py-2 transition-colors focus-visible:ring-1 focus-visible:outline-none ${
                 isActive(pathname, item.href)
                   ? 'bg-surface-container-highest text-on-surface font-medium'
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'

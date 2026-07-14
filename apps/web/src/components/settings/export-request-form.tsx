@@ -69,8 +69,8 @@ export function ExportRequestForm({
   return (
     <div className="border-outline-variant flex flex-col gap-6 rounded-lg border p-4 sm:p-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-on-surface text-h3 font-semibold">Choose data to include</h2>
-        <p className="text-on-surface-variant text-body">
+        <h2 className="text-on-surface text-title-small font-semibold">Choose data to include</h2>
+        <p className="text-on-surface-variant text-body-medium">
           Start with everything selected, then remove anything you do not need.
         </p>
       </div>
@@ -96,8 +96,8 @@ export function ExportRequestForm({
                 }}
               />
               <span className="flex min-w-0 flex-col gap-1">
-                <span className="text-on-surface text-body font-medium">{copy.title}</span>
-                <span className="text-on-surface-variant text-body">{copy.description}</span>
+                <span className="text-on-surface text-body-medium font-medium">{copy.title}</span>
+                <span className="text-on-surface-variant text-body-medium">{copy.description}</span>
               </span>
             </label>
           );
@@ -107,7 +107,7 @@ export function ExportRequestForm({
       {includesWorkspaces ? (
         <fieldset className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <legend className="text-on-surface text-body font-medium">Workspaces</legend>
+            <legend className="text-on-surface text-body-medium font-medium">Workspaces</legend>
             <button
               type="button"
               className="text-primary focus-visible:ring-ring rounded text-sm font-medium hover:underline focus-visible:ring-2"
@@ -118,7 +118,7 @@ export function ExportRequestForm({
               Select all
             </button>
           </div>
-          <p className="text-on-surface-variant text-body">
+          <p className="text-on-surface-variant text-body-medium">
             Select the workspaces whose Docket work you want in this export.
           </p>
           <div className="border-outline-variant flex max-h-72 flex-col overflow-y-auto rounded-lg border">
@@ -139,13 +139,13 @@ export function ExportRequestForm({
                       toggleWorkspace(workspace.id, event.target.checked);
                     }}
                   />
-                  <span className="text-on-surface text-body break-words">{workspace.name}</span>
+                  <span className="text-on-surface text-body-medium break-words">{workspace.name}</span>
                 </label>
               );
             })}
           </div>
           {workspaceIds.length === 0 ? (
-            <p role="alert" className="text-destructive text-body">
+            <p role="alert" className="text-destructive text-body-medium">
               Select at least one workspace or remove Workspace data from this export.
             </p>
           ) : null}
@@ -153,13 +153,13 @@ export function ExportRequestForm({
       ) : null}
 
       <div className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border p-4">
-        <h2 className="text-on-surface text-body font-semibold">Review &amp; create</h2>
-        <p className="text-on-surface-variant text-body">
+        <h2 className="text-on-surface text-body-medium font-semibold">Review &amp; create</h2>
+        <p className="text-on-surface-variant text-body-medium">
           Your export will be a ZIP file. Docket will email you at{' '}
           <span className="text-on-surface font-medium">{options.deliveryEmail}</span> when your
           data is ready. Your download stays available for 14 days.
         </p>
-        <p className="text-on-surface-variant text-body">
+        <p className="text-on-surface-variant text-body-medium">
           Includes:{' '}
           <span className="text-on-surface">
             {categories.map((category) => EXPORT_CATEGORY_COPY[category].title).join(', ')}
@@ -169,12 +169,12 @@ export function ExportRequestForm({
           </span>
         </p>
         {error ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {error}
           </p>
         ) : null}
         {hasPendingExport ? (
-          <p role="status" aria-live="polite" className="text-on-surface-variant text-body">
+          <p role="status" aria-live="polite" className="text-on-surface-variant text-body-medium">
             An export is already being prepared. You can leave this page and download it here when
             it is ready.
           </p>

@@ -51,12 +51,12 @@ export function AuthShell({ title, description, children, footer }: AuthShellPro
           >
             <PasskeyMark className="size-6" />
           </span>
-          <CardTitle className="text-h1">{title}</CardTitle>
+          <CardTitle className="text-title-large">{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           {children}
-          <div className="text-on-surface-variant text-body text-center">{footer}</div>
+          <div className="text-on-surface-variant text-body-medium text-center">{footer}</div>
         </CardContent>
       </Card>
     </main>

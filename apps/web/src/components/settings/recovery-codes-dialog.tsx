@@ -151,7 +151,7 @@ export function RecoveryCodesDialog({
 
         {revealed ? (
           <div className="flex flex-col gap-2">
-            <ol className="bg-surface-container text-body grid grid-cols-2 gap-x-6 gap-y-1 rounded-md p-4 font-mono">
+            <ol className="bg-surface-container text-body-medium grid grid-cols-2 gap-x-6 gap-y-1 rounded-md p-4 font-mono">
               {codes.map((code, i) => (
                 <li key={code} className="text-on-surface flex gap-2 tabular-nums">
                   <span className="text-on-surface-variant w-5 shrink-0 text-right select-none">
@@ -168,7 +168,7 @@ export function RecoveryCodesDialog({
         ) : null}
 
         {error ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {error}
           </p>
         ) : null}

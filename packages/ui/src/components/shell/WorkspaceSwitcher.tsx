@@ -186,7 +186,7 @@ export function WorkspaceSwitcher({
           {loading ? (
             <Skeleton className="h-4 w-24" aria-hidden="true" />
           ) : (
-            <span className="text-body min-w-0 flex-1 truncate text-left font-semibold">
+            <span className="text-body-medium min-w-0 flex-1 truncate text-left font-semibold">
               {triggerLabel}
             </span>
           )}
@@ -196,7 +196,7 @@ export function WorkspaceSwitcher({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-[15rem]">
-        {/* A calm, real section heading at the menu's default `text-body font-semibold` — not a
+        {/* A calm, real section heading at the menu's default `text-body-medium font-semibold` — not a
             shrunken `text-xs` eyebrow. */}
         <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
         {workspaces.map((w) => (

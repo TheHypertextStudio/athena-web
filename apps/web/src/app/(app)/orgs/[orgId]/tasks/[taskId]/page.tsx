@@ -154,7 +154,7 @@ export default function TaskDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
         >
           {error}
         </p>
@@ -165,7 +165,7 @@ export default function TaskDetailPage(): JSX.Element {
   if (!task) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body rounded-lg border border-dashed p-6 text-center">
+        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-lg border border-dashed p-6 text-center">
           This task could not be found.
         </p>
       </div>
@@ -175,7 +175,7 @@ export default function TaskDetailPage(): JSX.Element {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
-        <h1 className="text-on-surface text-h1 leading-tight">{task.title}</h1>
+        <h1 className="text-on-surface text-title-large leading-tight">{task.title}</h1>
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusPicker
@@ -209,7 +209,7 @@ export default function TaskDetailPage(): JSX.Element {
             disabled={propsPending}
           />
           {delegate ? (
-            <span className="text-body flex items-center gap-1.5">
+            <span className="text-body-medium flex items-center gap-1.5">
               <span className="text-on-surface-variant text-xs">delegate</span>
               <ActorAvatar
                 kind={delegate.kind}
@@ -235,7 +235,7 @@ export default function TaskDetailPage(): JSX.Element {
         </div>
 
         {actionError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {actionError}
           </p>
         ) : null}
@@ -248,11 +248,11 @@ export default function TaskDetailPage(): JSX.Element {
               Description
             </h2>
             {task.description ? (
-              <p className="text-on-surface text-body leading-relaxed whitespace-pre-wrap">
+              <p className="text-on-surface text-body-medium leading-relaxed whitespace-pre-wrap">
                 {task.description}
               </p>
             ) : (
-              <p className="text-on-surface-variant text-body">No description.</p>
+              <p className="text-on-surface-variant text-body-medium">No description.</p>
             )}
           </section>
 
@@ -275,7 +275,7 @@ export default function TaskDetailPage(): JSX.Element {
           />
 
           <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-h3 font-medium">Dependency map</h2>
+            <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
             <div className="border-outline-variant h-80 overflow-hidden rounded-lg border">
               <TaskGraphPanel
                 scope={{ orgId, rootTaskId: taskId, depth: 2 }}

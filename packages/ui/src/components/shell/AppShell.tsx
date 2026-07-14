@@ -171,7 +171,7 @@ export function AppShell({
           to the page content (the `<main>` region below is a focus target via `tabIndex={-1}`). */}
       <a
         href="#main-content"
-        className="bg-surface text-on-surface border-outline-variant focus-visible:ring-ring text-body sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none"
+        className="bg-surface text-on-surface border-outline-variant focus-visible:ring-ring text-body-medium sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none"
       >
         Skip to content
       </a>
@@ -190,7 +190,7 @@ export function AppShell({
           <Menu aria-hidden="true" className="size-5" />
         </button>
         <div className="flex min-w-0 flex-1 items-center">
-          {mobileBrand ?? <span className="text-body truncate font-semibold">Docket</span>}
+          {mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>}
         </div>
         {mobileActions}
         {/* Mobile rail trigger — opens the rail slot as a right sheet. Uses the slot's glyph

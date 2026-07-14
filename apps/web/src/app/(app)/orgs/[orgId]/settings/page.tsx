@@ -45,7 +45,7 @@ export default function SettingsRootPage({
   }, [activeOrg, orgId, router]);
 
   return (
-    <p className="text-on-surface-variant text-body" role="status">
+    <p className="text-on-surface-variant text-body-medium" role="status">
       Opening settings&hellip;
     </p>
   );

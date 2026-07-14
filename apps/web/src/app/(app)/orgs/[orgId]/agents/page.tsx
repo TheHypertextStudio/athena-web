@@ -196,8 +196,8 @@ export default function AgentsFeedPage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-h1">Agents</h1>
-        <p className="text-on-surface-variant text-body">
+        <h1 className="text-on-surface text-title-large">Agents</h1>
+        <p className="text-on-surface-variant text-body-medium">
           A live feed of what your agents are working on — watch the work happen.
         </p>
       </header>
@@ -208,7 +208,7 @@ export default function AgentsFeedPage(): JSX.Element {
           className="border-outline-variant flex flex-col gap-4 rounded-lg border p-4"
         >
           {dialError ? (
-            <p role="alert" className="text-destructive text-body">
+            <p role="alert" className="text-destructive text-body-medium">
               {dialError}
             </p>
           ) : null}
@@ -217,7 +217,7 @@ export default function AgentsFeedPage(): JSX.Element {
             return (
               <div key={agent.id} className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-on-surface text-body font-medium">{actor.name}</span>
+                  <span className="text-on-surface text-body-medium font-medium">{actor.name}</span>
                   <span className="text-on-surface-variant text-xs">
                     Acts as its own teammate; every change is attributed and audited.
                   </span>
@@ -268,7 +268,7 @@ export default function AgentsFeedPage(): JSX.Element {
             ))}
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-body p-4">
+          <p role="alert" className="text-destructive text-body-medium p-4">
             {loadError}
           </p>
         ) : visible.length === 0 ? (

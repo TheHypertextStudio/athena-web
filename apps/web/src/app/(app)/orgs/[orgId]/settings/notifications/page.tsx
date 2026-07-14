@@ -141,7 +141,7 @@ export default function NotificationsSettingsPage({
           <Skeleton className="h-64 w-full rounded-lg" />
         </div>
       ) : loadError || !preferencesQ.data || !contactPointsQ.data ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {loadError ?? 'Could not load notification settings.'}
         </p>
       ) : (

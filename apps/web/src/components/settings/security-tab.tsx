@@ -56,7 +56,7 @@ function RecoveryCodesSection(): JSX.Element {
   }
   if (statusQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body">
+      <p role="alert" className="text-destructive text-body-medium">
         {userErrorMessage(statusQ.error, 'Could not load security settings.')}
       </p>
     );
@@ -71,8 +71,8 @@ function RecoveryCodesSection(): JSX.Element {
     <section className="flex flex-col gap-6" aria-label="Recovery codes">
       <div className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4">
         <div className="flex flex-col gap-1">
-          <h3 className="text-on-surface text-body font-medium">Recovery codes</h3>
-          <p className="text-on-surface-variant text-body max-w-prose">
+          <h3 className="text-on-surface text-body-medium font-medium">Recovery codes</h3>
+          <p className="text-on-surface-variant text-body-medium max-w-prose">
             Docket signs you in with a passkey — no password. Recovery codes are your backup: if you
             lose the device with your passkey, a code gets you back in so you can set up a new one.
             Keep them somewhere safe, like a password manager.
@@ -83,7 +83,7 @@ function RecoveryCodesSection(): JSX.Element {
           <div className="flex flex-col gap-1">
             <p
               className={
-                lowOnCodes ? 'text-destructive text-body' : 'text-on-surface-variant text-body'
+                lowOnCodes ? 'text-destructive text-body-medium' : 'text-on-surface-variant text-body-medium'
               }
             >
               {status.remaining === 0
@@ -95,7 +95,7 @@ function RecoveryCodesSection(): JSX.Element {
             ) : null}
           </div>
         ) : (
-          <p className="text-destructive text-body">
+          <p className="text-destructive text-body-medium">
             You haven&apos;t set up recovery codes. Without them, losing your passkey means losing
             access to your account for good.
           </p>

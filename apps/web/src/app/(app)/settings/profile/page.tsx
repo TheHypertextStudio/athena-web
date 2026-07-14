@@ -33,7 +33,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
         description="Manage your name, email, and personal identity."
       />
       {isPending ? (
-        <p className="text-on-surface-variant text-body" role="status">
+        <p className="text-on-surface-variant text-body-medium" role="status">
           Loading your profile…
         </p>
       ) : session ? (

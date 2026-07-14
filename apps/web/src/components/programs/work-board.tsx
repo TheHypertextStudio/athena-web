@@ -72,7 +72,7 @@ export function WorkBoard({
     return (
       <p
         role="alert"
-        className="border-outline-variant text-destructive text-body rounded-xl border p-4"
+        className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
       >
         {error}
       </p>
@@ -87,7 +87,7 @@ export function WorkBoard({
 
   if (totalTasks === 0) {
     return (
-      <div className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
+      <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
         No {taskNounPlural} under this program yet. Attach work to a {projectNoun} or a{' '}
         {cycleLabel.toLowerCase()} to see it flow here.
       </div>
@@ -170,7 +170,7 @@ function TaskLine({
       className="group border-outline-variant hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring flex min-h-10 w-full items-center gap-2 border-b px-3 text-left transition-colors outline-none last:border-b-0 focus-visible:ring-1 focus-visible:ring-inset"
     >
       <StatusIcon type={stateType} className="size-4 shrink-0" />
-      <span className="text-on-surface text-body min-w-0 flex-1 truncate">{title}</span>
+      <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{title}</span>
     </button>
   );
 }

@@ -259,7 +259,7 @@ export default function OnboardingPage(): JSX.Element {
       footer={
         <>
           {error ? (
-            <p role="alert" className="text-destructive text-body mr-1">
+            <p role="alert" className="text-destructive text-body-medium mr-1">
               {error}
             </p>
           ) : null}

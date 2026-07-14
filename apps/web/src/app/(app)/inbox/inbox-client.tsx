@@ -44,7 +44,7 @@ export default function InboxClient(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-h1">Inbox</h1>
+        <h1 className="text-on-surface text-title-large">Inbox</h1>
         <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
       </header>
 
@@ -74,7 +74,7 @@ export default function InboxClient(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={refetch}>
@@ -84,7 +84,7 @@ export default function InboxClient(): JSX.Element {
       ) : null}
 
       {actionError && !error ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {actionError}
         </p>
       ) : null}
@@ -241,7 +241,7 @@ function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
       >
         <InboxIcon className="h-5 w-5" />
       </span>
-      <p className="text-on-surface text-body font-medium">{title}</p>
+      <p className="text-on-surface text-body-medium font-medium">{title}</p>
       <p className="text-on-surface-variant max-w-xs text-xs">{body}</p>
     </div>
   );

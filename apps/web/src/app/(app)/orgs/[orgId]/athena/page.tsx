@@ -18,8 +18,8 @@ export default function AthenaChatPage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col p-4 @2xl:p-6">
       <header className="flex flex-col gap-1 pb-4">
-        <h1 className="text-on-surface text-h1">Athena</h1>
-        <p className="text-on-surface-variant text-body">
+        <h1 className="text-on-surface text-title-large">Athena</h1>
+        <p className="text-on-surface-variant text-body-medium">
           Ask anything about your work, or hand her a job — she does the busywork, you keep the
           decisions.
         </p>

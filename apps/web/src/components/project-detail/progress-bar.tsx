@@ -35,9 +35,9 @@ export function WeightedProgress({ progress }: WeightedProgressProps): JSX.Eleme
       <div className="flex items-baseline justify-between">
         <div className="flex items-center gap-2">
           <CheckCircle2 aria-hidden="true" className="text-on-surface-variant size-4" />
-          <span className="text-on-surface text-body font-medium">Progress</span>
+          <span className="text-on-surface text-body-medium font-medium">Progress</span>
         </div>
-        <span className="text-on-surface text-body font-semibold tabular-nums">{pct}%</span>
+        <span className="text-on-surface text-body-medium font-semibold tabular-nums">{pct}%</span>
       </div>
       <div
         role="progressbar"

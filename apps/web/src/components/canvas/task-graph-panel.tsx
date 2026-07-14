@@ -401,7 +401,7 @@ export default function TaskGraphPanel({
           ) : null}
           {mutations.error !== null ? (
             <Panel position="bottom-center">
-              <div className="border-state-canceled/40 bg-surface-container text-state-canceled text-body flex items-center gap-2 rounded-lg border px-3 py-1.5 shadow-lg">
+              <div className="border-state-canceled/40 bg-surface-container text-state-canceled text-body-medium flex items-center gap-2 rounded-lg border px-3 py-1.5 shadow-lg">
                 {mutations.error}
                 <button type="button" onClick={mutations.clearError} aria-label="Dismiss">
                   <X className="size-4" />

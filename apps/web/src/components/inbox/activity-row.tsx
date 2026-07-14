@@ -61,7 +61,7 @@ export function ActivityRow({ event, orgName }: ActivityRowProps): JSX.Element {
       </span>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <p className="text-on-surface/90 text-body leading-snug">{description}</p>
+        <p className="text-on-surface/90 text-body-medium leading-snug">{description}</p>
         <div className="flex flex-wrap items-center gap-2">
           <OrgChip orgId={event.organizationId} name={orgName} />
           <span aria-hidden="true" className="text-on-surface-variant/50 text-xs">

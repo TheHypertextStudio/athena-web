@@ -156,7 +156,7 @@ export default function ProgramDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body rounded-lg border p-4"
+          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
         >
           {userErrorMessage(detailQ.error, 'Could not load this program.')}
         </p>
@@ -167,7 +167,7 @@ export default function ProgramDetailPage(): JSX.Element {
   if (!program) {
     return (
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
+        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
           This {programLabel.toLowerCase()} could not be found.
         </p>
       </div>
@@ -180,12 +180,12 @@ export default function ProgramDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-h1">{program.name}</h1>
+          <h1 className="text-on-surface text-title-large">{program.name}</h1>
           <ProgramStatusBadge status={program.status} />
           <HealthPill health={health} />
         </div>
         {program.description ? (
-          <p className="text-on-surface-variant text-body max-w-2xl leading-relaxed">
+          <p className="text-on-surface-variant text-body-medium max-w-2xl leading-relaxed">
             {program.description}
           </p>
         ) : null}
@@ -274,7 +274,7 @@ export default function ProgramDetailPage(): JSX.Element {
             }}
           />
           {propsError ? (
-            <p role="alert" className="text-destructive text-body px-1">
+            <p role="alert" className="text-destructive text-body-medium px-1">
               {propsError}
             </p>
           ) : null}

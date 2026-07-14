@@ -85,7 +85,7 @@ export function ContactPointsSection({
           <select
             value={contactType}
             disabled={creating}
-            className="border-outline-variant text-body focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 shadow-sm focus-visible:ring-2 focus-visible:outline-none"
+            className="border-outline-variant text-body-medium focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 shadow-sm focus-visible:ring-2 focus-visible:outline-none"
             onChange={(event) => {
               setContactType(event.target.value as AddableContactPointType);
               setDestination('');
@@ -137,7 +137,7 @@ export function ContactPointsSection({
                   )}
                 </span>
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-on-surface text-body truncate font-medium">
+                  <span className="text-on-surface text-body-medium truncate font-medium">
                     {point.valueMasked}
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
@@ -247,7 +247,7 @@ export function ContactPointsSection({
       </div>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : null}

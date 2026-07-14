@@ -40,7 +40,7 @@ export default function TriagePage(): JSX.Element {
   return (
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-h1">Triage</h1>
+        <h1 className="text-on-surface text-title-large">Triage</h1>
         <p className="text-on-surface-variant text-xs">
           Unsorted incoming work — {taskNounPlural.toLowerCase()} that have no home yet. Sort each
           one onward into a {projectNoun.toLowerCase()} or {programNoun.toLowerCase()}, or dismiss
@@ -57,7 +57,7 @@ export default function TriagePage(): JSX.Element {
       ) : null}
 
       {actionError ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {actionError}
         </p>
       ) : null}
@@ -74,15 +74,15 @@ export default function TriagePage(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-body p-4">
+          <p role="alert" className="text-destructive text-body-medium p-4">
             {loadError}
           </p>
         ) : queue.length === 0 ? (
           <div className="text-on-surface-variant flex flex-col items-center gap-3 p-12 text-center">
             <Inbox className="h-8 w-8 opacity-50" aria-hidden="true" />
             <div className="flex flex-col gap-1">
-              <p className="text-on-surface text-body font-medium">Triage is clear</p>
-              <p className="text-body">
+              <p className="text-on-surface text-body-medium font-medium">Triage is clear</p>
+              <p className="text-body-medium">
                 Nothing unsorted right now. New incoming work shows up here for you to sort.
               </p>
             </div>

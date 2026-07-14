@@ -91,7 +91,7 @@ export default function UsersPage(): JSX.Element {
                 className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
               >
                 <div className="min-w-0">
-                  <p className="text-body truncate font-medium">{u.name || u.email}</p>
+                  <p className="text-body-medium truncate font-medium">{u.name || u.email}</p>
                   <p className="text-on-surface-variant truncate text-xs">{u.email}</p>
                 </div>
                 <span className="text-on-surface-variant shrink-0 text-xs">

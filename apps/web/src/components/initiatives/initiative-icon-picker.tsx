@@ -93,7 +93,7 @@ export function InitiativeIconPicker({
         color.circleClass,
       )}
     >
-      <Icon aria-hidden data-testid="initiative-icon" className={cn('size-5', color.iconClass)} />
+      <Icon aria-hidden data-testid="initiative-icon" className={cn('size-4', color.iconClass)} />
     </span>
   );
 

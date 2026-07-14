@@ -111,7 +111,7 @@ export interface EntityRowRenderProps {
 }
 
 const ROW_BASE =
-  '@container/row group/row border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-left text-body last:border-b-0';
+  '@container/row group/row border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-left text-body-medium last:border-b-0';
 
 const ROW_INTERACTIVE = cn(
   'cursor-pointer transition-colors outline-none hover:bg-surface-container-high focus-visible:bg-surface-container-high',

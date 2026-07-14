@@ -25,8 +25,8 @@
  *     <a href="/issues/DKT-12">DKT-12</a>
  *   </HoverCardTrigger>
  *   <HoverCardContent>
- *     <p className="text-body font-medium">Fix timezone drift</p>
- *     <p className="text-on-surface-variant text-body">In Progress · Due Fri</p>
+ *     <p className="text-body-medium font-medium">Fix timezone drift</p>
+ *     <p className="text-on-surface-variant text-body-medium">In Progress · Due Fri</p>
  *   </HoverCardContent>
  * </HoverCard>
  * ```

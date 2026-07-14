@@ -106,7 +106,7 @@ function GtasksAccountRow(props: {
           <TaskAlt aria-hidden="true" className="size-4" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface text-body truncate font-medium">
+          <span className="text-on-surface text-body-medium truncate font-medium">
             {accountLabel(account)}
           </span>
           <span className="text-on-surface-variant text-xs">{resourceSummary(account)}</span>
@@ -209,7 +209,7 @@ function IdentityPicker(props: {
   }
   if (props.available.length === 0) {
     return (
-      <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body rounded-xl border border-dashed p-4">
+      <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl border border-dashed p-4">
         {props.hasAnyIdentity ? (
           'Every linked Google account is already connected here.'
         ) : (
@@ -235,7 +235,7 @@ function IdentityPicker(props: {
         return (
           <li key={identity.accountId} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
             <TaskAlt aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
-            <span className="text-on-surface text-body min-w-0 flex-1 truncate">{label}</span>
+            <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{label}</span>
             <IntegrationActionButton
               tone="primary"
               disabled={busy}
@@ -435,7 +435,7 @@ export function GtasksAccountsSection({
       ) : null}
 
       {addError ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {addError}
         </p>
       ) : null}
@@ -443,7 +443,7 @@ export function GtasksAccountsSection({
       {loading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
       ) : accounts.length === 0 ? (
-        <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body flex items-center gap-3 rounded-xl border border-dashed p-4">
+        <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl border border-dashed p-4">
           <TaskAlt aria-hidden="true" className="size-4 shrink-0" />
           <span>
             {canManage

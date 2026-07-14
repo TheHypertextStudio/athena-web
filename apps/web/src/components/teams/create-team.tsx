@@ -192,7 +192,7 @@ export function CreateTeamDialog({
           onClick={() => {
             setTriageEnabled((current) => !current);
           }}
-          className="text-body flex h-8 items-center gap-2 disabled:opacity-50"
+          className="text-body-medium flex h-8 items-center gap-2 disabled:opacity-50"
         >
           <span
             aria-hidden="true"

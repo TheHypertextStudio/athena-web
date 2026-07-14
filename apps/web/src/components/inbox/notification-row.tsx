@@ -106,7 +106,7 @@ export function NotificationRow({
         <TitleLine href={href}>
           <span
             className={cn(
-              'text-body',
+              'text-body-medium',
               unread ? 'text-on-surface font-medium' : 'text-on-surface/80',
             )}
           >
@@ -115,7 +115,7 @@ export function NotificationRow({
         </TitleLine>
 
         {summary ? (
-          <p className="text-on-surface-variant text-body line-clamp-2">{summary}</p>
+          <p className="text-on-surface-variant text-body-medium line-clamp-2">{summary}</p>
         ) : null}
 
         {externalDeliveryHints.length > 0 ? (

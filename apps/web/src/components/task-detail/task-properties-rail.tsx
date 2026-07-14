@@ -153,7 +153,7 @@ export function TaskPropertiesRail({
               href={provenance.externalUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-primary focus-visible:ring-ring text-body inline-flex items-center gap-1 rounded underline-offset-4 hover:underline focus-visible:ring-1 focus-visible:outline-none"
+              className="text-primary focus-visible:ring-ring text-body-medium inline-flex items-center gap-1 rounded underline-offset-4 hover:underline focus-visible:ring-1 focus-visible:outline-none"
             >
               External link
             </a>

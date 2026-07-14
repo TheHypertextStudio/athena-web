@@ -31,7 +31,7 @@ export function GlobalSettingsSectionNav(): JSX.Element {
             href={globalSettingsSectionHref(section.href)}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'text-body flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+              'text-body-medium flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
               'focus-visible:ring-ring',
               active
                 ? 'bg-surface-container-highest text-on-surface font-medium'

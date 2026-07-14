@@ -34,7 +34,7 @@ export function HowItWorks(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
           <p className="text-ink-muted text-sm font-medium">From zero to in control</p>
-          <h2 className="font-display text-title text-ink tracking-tight text-balance">
+          <h2 className="font-display text-display-large-small text-ink tracking-tight text-balance">
             Up and running in minutes
           </h2>
         </div>
@@ -47,8 +47,8 @@ export function HowItWorks(): JSX.Element {
               <span aria-hidden className="font-display text-sienna text-4xl italic">
                 {step.number}
               </span>
-              <h3 className="text-ink text-h2">{step.title}</h3>
-              <p className="text-ink-muted text-body">{step.body}</p>
+              <h3 className="text-ink text-display-large-small-medium">{step.title}</h3>
+              <p className="text-ink-muted text-body-medium">{step.body}</p>
             </li>
           ))}
         </ol>

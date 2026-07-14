@@ -108,7 +108,7 @@ export default function UserDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
       <Link
         href="/users"
-        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body w-fit rounded-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
+        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body-medium w-fit rounded-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
       >
         ← Back to users
       </Link>
@@ -125,9 +125,9 @@ export default function UserDetailPage(): JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-body">Account</CardTitle>
+              <CardTitle className="text-body-medium">Account</CardTitle>
             </CardHeader>
-            <CardContent className="text-body grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <CardContent className="text-body-medium grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Field label="User ID" value={detail.user.id} mono />
               <Field label="Email verified" value={detail.user.emailVerified ? 'Yes' : 'No'} />
               <Field label="Joined" value={formatTimestamp(detail.user.createdAt)} />
@@ -136,10 +136,10 @@ export default function UserDetailPage(): JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-body">View as user</CardTitle>
+              <CardTitle className="text-body-medium">View as user</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <p className="text-on-surface-variant text-body">
+              <p className="text-on-surface-variant text-body-medium">
                 Start a time-boxed impersonation session. A reason is recorded in the audit log.
               </p>
               <ErrorBanner message={impersonateError} />
@@ -168,7 +168,7 @@ export default function UserDetailPage(): JSX.Element {
           </Card>
 
           <section className="flex flex-col gap-3" aria-labelledby="memberships-heading">
-            <h2 id="memberships-heading" className="text-on-surface-variant text-body font-medium">
+            <h2 id="memberships-heading" className="text-on-surface-variant text-body-medium font-medium">
               Organization memberships ({detail.memberships.length})
             </h2>
             {detail.memberships.length > 0 ? (
@@ -180,7 +180,7 @@ export default function UserDetailPage(): JSX.Element {
                       className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-4 py-3`}
                     >
                       <div className="min-w-0">
-                        <p className="text-body truncate font-medium">{m.organizationName}</p>
+                        <p className="text-body-medium truncate font-medium">{m.organizationName}</p>
                         <p className="text-on-surface-variant truncate text-xs">
                           {m.organizationSlug}
                         </p>
@@ -215,7 +215,7 @@ function Field({
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
-      <span className={`text-body ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
+      <span className={`text-body-medium ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
         {value}
       </span>
     </div>

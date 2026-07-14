@@ -34,7 +34,7 @@ export function ProductFrame(): JSX.Element {
           <div className="app-seam bg-surface-container overflow-hidden rounded-lg font-sans">
             <div className="border-border bg-surface m-1.5 rounded-md border shadow-sm">
               <div className="border-border flex items-baseline justify-between border-b px-4 py-3">
-                <p className="text-on-surface text-body font-semibold">Today</p>
+                <p className="text-on-surface text-body-medium font-semibold">Today</p>
                 <span className="text-on-surface-variant font-mono text-xs">
                   3 tasks · 3 organizations
                 </span>
@@ -52,7 +52,7 @@ export function ProductFrame(): JSX.Element {
                     />
                     <span className="min-w-0 flex-1">
                       <span
-                        className={`text-body block truncate ${task.done ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}
+                        className={`text-body-medium block truncate ${task.done ? 'text-on-surface-variant line-through' : 'text-on-surface'}`}
                       >
                         {task.title}
                       </span>

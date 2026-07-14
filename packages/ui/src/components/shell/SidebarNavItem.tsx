@@ -86,12 +86,12 @@ export function SidebarNavItem({
   const count = badge && badge > 0 ? badge : 0;
   const accessibleName = count > 0 ? `${label}, ${count} ${badgeLabel}` : label;
   // A dense, edge-to-edge sidebar row: `px-3 gap-2` matches the standard row rhythm, the label
-  // reads at `text-body` (overriding Button `size="sm"`'s `text-xs`), and the inline glyph drops to
+  // reads at `text-body-medium` (overriding Button `size="sm"`'s `text-xs`), and the inline glyph drops to
   // `size-3.5` (overriding the Button's baked-in `[&_svg]:size-4`) so it sits optically balanced
   // beside the label. `focusRingInset` swaps the Button's standalone 2px ring for the 1px inset
   // ring so adjacent flush rows never clip an overlapping outline.
   const className = cn(
-    'w-full justify-start gap-2 px-3 text-body font-normal [&_svg]:size-3.5',
+    'w-full justify-start gap-2 px-3 text-body-medium font-normal [&_svg]:size-3.5',
     active
       ? 'bg-secondary-container text-on-secondary-container'
       : 'text-on-surface-variant hover:text-on-surface',

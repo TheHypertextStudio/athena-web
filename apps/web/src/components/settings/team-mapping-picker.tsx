@@ -61,14 +61,14 @@ export default function TeamMappingPicker({
     <ul className="flex flex-col gap-1.5">
       {externalTeams.map((team) => (
         <li key={team.id} className="flex items-center justify-between gap-3 px-2 py-1">
-          <span className="text-on-surface text-body min-w-0 flex-1 truncate">{team.title}</span>
+          <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{team.title}</span>
           <select
             aria-label={`Docket team for ${team.title}`}
             value={mapping[team.id] ?? NOT_SYNCED}
             onChange={(e) => {
               onChange(team.id, e.target.value);
             }}
-            className="border-outline-variant bg-surface-container-low text-on-surface text-body focus-visible:ring-ring shrink-0 rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
+            className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring shrink-0 rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
           >
             <option value={NOT_SYNCED}>Not synced</option>
             {orgTeams.map((t) => (

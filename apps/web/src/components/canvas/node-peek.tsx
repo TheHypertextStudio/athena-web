@@ -69,7 +69,7 @@ function RefList({
           className="hover:bg-surface-container-high flex items-center gap-1.5 rounded px-1 py-0.5 text-left"
         >
           <StatusIcon type={stateTypeOf(r.state)} />
-          <span className="text-on-surface text-body truncate">{r.title}</span>
+          <span className="text-on-surface text-body-medium truncate">{r.title}</span>
         </button>
       ))}
     </div>
@@ -111,7 +111,7 @@ export default function NodePeek({
     <div className="border-outline-variant bg-surface-container flex w-72 flex-col gap-3 rounded-xl border p-3 shadow-lg">
       <div className="flex items-start gap-2">
         <StatusIcon type={stateTypeOf(data.state)} className="mt-0.5" />
-        <span className="text-on-surface text-body flex-1 font-medium">{data.title}</span>
+        <span className="text-on-surface text-body-medium flex-1 font-medium">{data.title}</span>
         <button
           type="button"
           onClick={onClose}

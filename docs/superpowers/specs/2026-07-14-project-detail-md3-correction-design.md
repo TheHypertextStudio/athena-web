@@ -18,7 +18,8 @@ tokens are removed rather than retained as aliases. Application call sites migra
 names, and source contracts reject reintroduction of the old names. Monospaced text keeps the
 appropriate MD3 size token and adds `font-mono` separately.
 
-Project and Initiative overview and detail titles use `headline-large`. Markdown document `h1`,
+Project and Initiative overview titles use `headline-medium`; their detail titles use
+`headline-large`. Markdown document `h1`,
 `h2`, and `h3` use `headline-medium`, `headline-small`, and `title-large`. Project summaries and
 document prose use normal-weight `body-large`; supporting and table text use the smaller MD3 body
 or label tokens appropriate to their role.

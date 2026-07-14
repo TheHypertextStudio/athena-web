@@ -92,7 +92,7 @@ export default function PortfolioClient(): JSX.Element {
     <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-h1">Portfolio</h1>
+          <h1 className="text-on-surface text-title-large">Portfolio</h1>
           <p className="text-on-surface-variant text-xs">Every venture on one timeline.</p>
         </div>
         <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export default function PortfolioClient(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive text-body flex items-center justify-between gap-4 rounded-lg border p-4"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button

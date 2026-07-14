@@ -95,7 +95,7 @@ export default function NewWorkspacePage(): JSX.Element {
         />
 
         {error ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             {error}
           </p>
         ) : null}

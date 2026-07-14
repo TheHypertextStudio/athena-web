@@ -32,6 +32,7 @@ import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
 import {
   homeKeyFromPath,
+  isObjectDetailPath,
   orgIdFromPath,
   readDensity,
   readLastOrg,
@@ -91,6 +92,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     pathname.startsWith('/settings/') ||
     pathname.endsWith('/settings') ||
     pathname.includes('/settings/');
+  const objectDetailSurface = isObjectDetailPath(pathname);
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
 
   return (
@@ -107,6 +109,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
               loading={shellLoading}
+              objectDetailSurface={objectDetailSurface}
               settingsSurface={settingsSurface}
               routeOrgId={routeOrgId}
               userId={userId}
@@ -171,6 +174,7 @@ function AppShellAgendaSkeleton(): JSX.Element {
 
 interface AppShellInnerProps {
   loading: boolean;
+  objectDetailSurface: boolean;
   settingsSurface: boolean;
   routeOrgId: string | null;
   userId: string | null;
@@ -191,6 +195,7 @@ interface AppShellInnerProps {
  */
 function AppShellInner({
   loading,
+  objectDetailSurface,
   settingsSurface,
   routeOrgId,
   userId,
@@ -314,9 +319,9 @@ function AppShellInner({
   );
 
   const mobileBrand = loading ? (
-    <span className="text-body font-semibold">Docket</span>
+    <span className="text-body-medium font-semibold">Docket</span>
   ) : (
-    <span className="text-body truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
+    <span className="text-body-medium truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
   );
 
   const mobileActions = loading ? (
@@ -339,7 +344,7 @@ function AppShellInner({
           sidebar={sidebar}
           tabBar={tabBar}
           banner={
-            loading || settingsSurface ? undefined : (
+            loading || settingsSurface || objectDetailSurface ? undefined : (
               <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
             )
           }

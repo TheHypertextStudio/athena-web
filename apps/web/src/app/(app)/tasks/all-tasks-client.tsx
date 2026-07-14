@@ -92,7 +92,7 @@ export default function AllTasksClient(): JSX.Element {
   return (
     <Stack gap={4} className="mx-auto h-full w-full max-w-4xl p-4 @2xl:p-6">
       <Row as="header" justify="between">
-        <h1 className="text-on-surface text-h1">Tasks</h1>
+        <h1 className="text-on-surface text-title-large">Tasks</h1>
         {sorted.length > 0 ? <SortToggle sort={sort} onSort={setSort} /> : null}
       </Row>
 
@@ -108,7 +108,7 @@ export default function AllTasksClient(): JSX.Element {
           gap={2}
           className="border-outline-variant bg-surface-container-low/60 justify-center rounded-2xl border p-12 text-center"
         >
-          <p className="text-on-surface text-body font-medium">No tasks assigned to you</p>
+          <p className="text-on-surface text-body-medium font-medium">No tasks assigned to you</p>
           <p className="text-on-surface-variant max-w-sm text-xs">
             Tasks assigned to you across every workspace land here.
           </p>

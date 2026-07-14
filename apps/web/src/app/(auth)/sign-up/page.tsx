@@ -219,7 +219,7 @@ export default function SignUpPage(): JSX.Element {
         {step === 'collect' ? (
           <>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="name" className="text-body font-medium">
+              <label htmlFor="name" className="text-body-medium font-medium">
                 Name
               </label>
               <Input
@@ -235,7 +235,7 @@ export default function SignUpPage(): JSX.Element {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="email" className="text-body font-medium">
+              <label htmlFor="email" className="text-body-medium font-medium">
                 Email
               </label>
               <Input
@@ -253,10 +253,10 @@ export default function SignUpPage(): JSX.Element {
           </>
         ) : (
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="code" className="text-body font-medium">
+            <label htmlFor="code" className="text-body-medium font-medium">
               Verification code
             </label>
-            <p className="text-on-surface-variant text-body">
+            <p className="text-on-surface-variant text-body-medium">
               We emailed a 6-digit code to <span className="font-medium">{email.trim()}</span>.
               Enter it to finish creating your account.
             </p>
@@ -289,7 +289,7 @@ export default function SignUpPage(): JSX.Element {
         <AuthError message={error} />
 
         {!passkeySupported && hydrated ? (
-          <p className="text-on-surface-variant text-body" role="status">
+          <p className="text-on-surface-variant text-body-medium" role="status">
             This browser does not support passkeys. You can still continue with one of the options
             below if available.
           </p>

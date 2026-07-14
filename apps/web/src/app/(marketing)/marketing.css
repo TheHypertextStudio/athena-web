@@ -3,7 +3,7 @@
  *
  * VANILLA CSS ONLY. No `@theme`, `@apply`, `@variant`, or `@import 'tailwindcss'` here:
  * any of those would make this file a second Tailwind entry without the shared theme
- * (the Tailwind v4 multi-entry trap). New utility NAMES (text-display, bg-paper, …) are
+ * (the Tailwind v4 multi-entry trap). New utility names such as `bg-paper` are
  * declared in `apps/web/src/app/globals.css` inside the one existing Tailwind entry; this
  * file only assigns the underlying variable VALUES inside the marketing subtree.
  *

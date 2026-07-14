@@ -55,6 +55,19 @@ export function workspaceKeyFromPath(pathname: string): WorkspaceNavKey | undefi
   return undefined;
 }
 
+const OBJECT_DETAIL_SEGMENTS = ['projects', 'initiatives', 'tasks', 'programs', 'cycles'] as const;
+
+/** Return whether a pathname identifies one concrete work object rather than its overview. */
+export function isObjectDetailPath(pathname: string): boolean {
+  const segments = pathname.split('/').filter(Boolean);
+  return (
+    segments.length === 4 &&
+    segments[0] === 'orgs' &&
+    OBJECT_DETAIL_SEGMENTS.includes(segments[2] as (typeof OBJECT_DETAIL_SEGMENTS)[number]) &&
+    Boolean(segments[3])
+  );
+}
+
 /**
  * Build a Docket sign-in URL that returns to the current same-origin app path.
  *

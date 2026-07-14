@@ -89,7 +89,7 @@ export function SelectableCard({
 
       <span className="flex flex-col gap-1 pr-6">
         <span className="text-on-surface text-base leading-tight font-semibold">{title}</span>
-        <span className="text-on-surface-variant text-body leading-relaxed">{description}</span>
+        <span className="text-on-surface-variant text-body-medium leading-relaxed">{description}</span>
       </span>
 
       {children}

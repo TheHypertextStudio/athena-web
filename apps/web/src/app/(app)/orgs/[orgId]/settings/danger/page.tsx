@@ -40,7 +40,7 @@ export default function DangerZoneSettingsPage({
 
   if (activeOrg && !isPersonal) {
     return (
-      <p className="text-on-surface-variant text-body" role="status">
+      <p className="text-on-surface-variant text-body-medium" role="status">
         Opening settings&hellip;
       </p>
     );

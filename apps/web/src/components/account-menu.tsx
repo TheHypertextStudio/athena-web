@@ -52,7 +52,7 @@ export default function AccountMenu({
             <AvatarFallback className="text-xs">{initial}</AvatarFallback>
           </Avatar>
           <span className="min-w-0 flex-1">
-            <span className="text-body block truncate font-medium">{label}</span>
+            <span className="text-body-medium block truncate font-medium">{label}</span>
             {name ? (
               <span className="text-on-surface-variant block truncate text-xs">{email}</span>
             ) : null}

@@ -99,7 +99,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
         // tooltip (from the field's ariaLabel) — otherwise the row reads as an inscrutable dash.
         const dash = (
           <span
-            className={cn('text-on-surface-variant text-body inline-flex items-center', className)}
+            className={cn('text-on-surface-variant text-body-medium inline-flex items-center', className)}
           >
             <span aria-hidden="true">—</span>
           </span>
@@ -115,7 +115,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
                   tabIndex={0}
                   aria-label={ariaLabel}
                   className={cn(
-                    'text-on-surface-variant text-body inline-flex items-center rounded-sm',
+                    'text-on-surface-variant text-body-medium inline-flex items-center rounded-sm',
                     focusRing,
                     className,
                   )}
@@ -131,7 +131,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
       return (
         <span
           className={cn(
-            'text-on-surface text-body inline-flex min-w-0 items-center gap-2',
+            'text-on-surface text-body-medium inline-flex min-w-0 items-center gap-2',
             className,
           )}
         >

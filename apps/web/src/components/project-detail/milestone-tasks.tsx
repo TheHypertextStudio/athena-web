@@ -149,7 +149,7 @@ export function MilestoneTasks({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-on-surface-variant text-body">
+        <p className="text-on-surface-variant text-body-medium">
           Plan work here without leaving this project.
         </p>
         <Button type="button" onClick={onCreate}>
@@ -158,7 +158,7 @@ export function MilestoneTasks({
       </div>
 
       {tasks.length === 0 ? (
-        <div className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
+        <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
           No {taskNoun}s yet — add the first one above.
         </div>
       ) : (

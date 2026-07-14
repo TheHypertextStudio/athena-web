@@ -39,7 +39,7 @@ export default function BulkActionsBar(): React.JSX.Element | null {
   return (
     <Panel position="top-center">
       <div className="border-outline-variant bg-surface-container text-on-surface flex items-center gap-3 rounded-lg border px-3 py-1.5 shadow-lg">
-        <span className="text-body">{selected.length} selected</span>
+        <span className="text-body-medium">{selected.length} selected</span>
         <Button
           type="button"
           size="sm"

@@ -35,7 +35,7 @@ export function SiteHeader(): JSX.Element {
             <Link
               key={item.href}
               href={item.href}
-              className="text-muted-foreground hover:text-foreground text-body transition-colors"
+              className="text-muted-foreground hover:text-foreground text-body-medium transition-colors"
             >
               {item.label}
             </Link>

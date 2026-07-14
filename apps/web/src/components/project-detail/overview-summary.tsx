@@ -126,7 +126,7 @@ export function OverviewSummary({
     return (
       <section
         aria-label="Status breakdown"
-        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body rounded-xl border p-4"
+        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl border p-4"
       >
         No {taskNounPlural} yet — add one from the Tasks tab to see the breakdown here.
       </section>
@@ -196,7 +196,7 @@ export function OverviewSummary({
             return (
               <li key={m.id} className="flex flex-col gap-1.5">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-on-surface text-body truncate">{m.label}</span>
+                  <span className="text-on-surface text-body-medium truncate">{m.label}</span>
                   <span className="text-on-surface-variant shrink-0 text-xs tabular-nums">
                     {m.done}/{m.total}
                   </span>

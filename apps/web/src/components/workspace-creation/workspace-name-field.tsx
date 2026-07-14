@@ -29,7 +29,7 @@ export function WorkspaceNameField({
 }: WorkspaceNameFieldProps): JSX.Element {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor="workspace-name" className="text-on-surface text-body font-medium">
+      <label htmlFor="workspace-name" className="text-on-surface text-body-medium font-medium">
         Workspace name
       </label>
       <Input
@@ -51,7 +51,7 @@ export function WorkspaceNameField({
         placeholder="Acme Inc."
         className="h-11 text-base"
       />
-      <p className="text-on-surface-variant text-body mt-1">
+      <p className="text-on-surface-variant text-body-medium mt-1">
         This is the shared space your team will work in. You can rename it or create more later.
       </p>
     </div>

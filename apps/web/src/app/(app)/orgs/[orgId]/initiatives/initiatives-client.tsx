@@ -208,13 +208,13 @@ function AttentionSurface({
                 aria-label="Previous attention item"
                 onClick={onPrevious}
               >
-                <ChevronLeft aria-hidden className="size-5" />
+                <ChevronLeft aria-hidden className="size-4" />
               </Button>
               <span className="text-on-surface-variant min-w-8 text-center text-xs tabular-nums">
                 {index + 1}/{count}
               </span>
               <Button variant="ghost" size="icon" aria-label="Next attention item" onClick={onNext}>
-                <ChevronRight aria-hidden className="size-5" />
+                <ChevronRight aria-hidden className="size-4" />
               </Button>
             </div>
           ) : null}
@@ -350,7 +350,7 @@ export default function InitiativesListClient(): JSX.Element {
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-on-surface text-page-title">{initiativePlural}</h1>
+          <h1 className="text-on-surface text-headline-medium font-medium">{initiativePlural}</h1>
           <p className="text-on-surface-variant mt-1 text-sm">
             Strategic direction, health, and ownership at a glance.
           </p>

@@ -73,7 +73,7 @@ export function Subtasks({
   return (
     <section aria-labelledby="subtasks-heading" className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <h2 id="subtasks-heading" className="text-body font-medium">
+        <h2 id="subtasks-heading" className="text-body-medium font-medium">
           Subtasks
         </h2>
         {subtasks.length > 0 ? (
@@ -84,7 +84,7 @@ export function Subtasks({
       </div>
 
       {subtasks.length === 0 ? (
-        <p className="text-on-surface-variant text-body">No subtasks yet.</p>
+        <p className="text-on-surface-variant text-body-medium">No subtasks yet.</p>
       ) : (
         <ul className="flex flex-col">
           {subtasks.map((subtask) => {
@@ -114,7 +114,7 @@ export function Subtasks({
                   onClick={() => {
                     onOpen(subtask.id);
                   }}
-                  className="focus-visible:ring-ring text-body min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
+                  className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
                 >
                   <span className={done ? 'text-on-surface-variant line-through' : ''}>
                     {subtask.title}

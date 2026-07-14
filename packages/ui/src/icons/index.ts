@@ -36,6 +36,7 @@ export { default as CornerDownLeft } from '@mui/icons-material/SubdirectoryArrow
 export { default as CreditCard } from '@mui/icons-material/CreditCardOutlined';
 export { default as Download } from '@mui/icons-material/FileDownloadOutlined';
 export { default as Ellipsis } from '@mui/icons-material/MoreHoriz';
+export { default as ExpandMoreRounded } from '@mui/icons-material/ExpandMoreRounded';
 export { default as Filter } from '@mui/icons-material/FilterList';
 export { default as Flag } from '@mui/icons-material/OutlinedFlag';
 export { default as Folder } from '@mui/icons-material/FolderOpen';
@@ -68,6 +69,7 @@ export { default as Settings } from '@mui/icons-material/Settings';
 export { default as Shield } from '@mui/icons-material/ShieldOutlined';
 export { default as Sparkles } from '@mui/icons-material/AutoAwesome';
 export { default as Tag } from '@mui/icons-material/LocalOfferRounded';
+export { default as TuneRounded } from '@mui/icons-material/TuneRounded';
 export { default as Target } from '@mui/icons-material/TrackChanges';
 export { default as TaskAlt } from '@mui/icons-material/TaskAlt';
 export { default as Translate } from '@mui/icons-material/Translate';

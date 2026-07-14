@@ -86,7 +86,7 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
   }
   if (optionsQ.isError || exportsQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body">
+      <p role="alert" className="text-destructive text-body-medium">
         {optionsQ.isError
           ? userErrorMessage(optionsQ.error, 'Could not load export options.')
           : userErrorMessage(exportsQ.error, 'Could not load your export history.')}
@@ -104,12 +104,12 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
   return (
     <section className="flex flex-col gap-8" aria-label="Export data">
       <div className="flex flex-col gap-2">
-        <p className="text-on-surface-variant text-body max-w-prose">
+        <p className="text-on-surface-variant text-body-medium max-w-prose">
           Create a downloadable ZIP file of the Docket data you choose. Exporting does not delete
           anything. Docket captures the selected data when it prepares your export.
         </p>
         {focusedExportQ.isError ? (
-          <p role="alert" className="text-destructive text-body">
+          <p role="alert" className="text-destructive text-body-medium">
             This export is no longer available. You can create a new export below.
           </p>
         ) : null}

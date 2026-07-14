@@ -39,7 +39,7 @@ export function SeparationDiagram(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
           <p className="text-ink-muted text-sm font-medium">How it holds together</p>
-          <h2 className="font-display text-title text-ink tracking-tight text-balance">
+          <h2 className="font-display text-display-large-small text-ink tracking-tight text-balance">
             Separation by default. Unification on top.
           </h2>
           <p className="text-ink-muted text-balance">
@@ -57,12 +57,12 @@ export function SeparationDiagram(): JSX.Element {
                     <span className="bg-ink text-paper font-display grid size-6 place-items-center rounded-[4px] text-sm">
                       {org.glyph}
                     </span>
-                    <span className="text-ink text-body font-semibold">{org.name}</span>
+                    <span className="text-ink text-body-medium font-semibold">{org.name}</span>
                     <span className="text-ink-muted ml-auto font-mono text-xs">{org.kind}</span>
                   </div>
                   <ul className="px-4 py-3">
                     {org.facts.map((fact) => (
-                      <li key={fact} className="text-ink-muted text-body py-0.5">
+                      <li key={fact} className="text-ink-muted text-body-medium py-0.5">
                         {fact}
                       </li>
                     ))}

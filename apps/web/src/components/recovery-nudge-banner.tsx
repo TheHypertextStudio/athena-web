@@ -87,7 +87,7 @@ export function RecoveryNudgeBanner({
           <Shield className={`size-5 ${noCodes ? 'text-destructive' : 'text-primary'}`} />
         </span>
         <div className="min-w-0 py-2">
-          <p className="text-body">{message}</p>
+          <p className="text-body-medium">{message}</p>
           <Link
             href={sectionHref(personalOrgId, 'security')}
             className="text-primary hover:text-primary/80 focus-visible:ring-ring mt-1 inline-flex min-h-10 items-center pr-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"

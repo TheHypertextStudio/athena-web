@@ -97,7 +97,7 @@ export function CarryoverRow({
     <div className="border-outline-variant flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0">
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <StatusIcon type={item.stateType} className="shrink-0" />
-        <span className="text-on-surface text-body truncate">{item.title}</span>
+        <span className="text-on-surface text-body-medium truncate">{item.title}</span>
       </span>
 
       {/* Action picker. */}

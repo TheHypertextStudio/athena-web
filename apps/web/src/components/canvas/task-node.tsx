@@ -174,7 +174,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
       <StatusIcon type={stateTypeOf(state)} />
 
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-on-surface text-body truncate font-medium">{title}</span>
+        <span className="text-on-surface text-body-medium truncate font-medium">{title}</span>
         {showDetail ? (
           <div className="text-on-surface-variant flex min-w-0 items-center gap-1.5 text-xs">
             {projectName !== null ? (

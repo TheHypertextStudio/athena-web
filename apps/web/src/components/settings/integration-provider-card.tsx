@@ -218,7 +218,7 @@ export function IntegrationProviderCard({
           <ProviderIcon aria-hidden="true" className="size-4" />
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface text-body font-medium">{provider.name}</span>
+          <span className="text-on-surface text-body-medium font-medium">{provider.name}</span>
           {identityLabel ? (
             <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
           ) : null}

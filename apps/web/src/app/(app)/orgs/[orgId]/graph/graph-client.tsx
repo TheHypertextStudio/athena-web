@@ -27,7 +27,7 @@ export default function GraphClient({ scope }: GraphClientProps): JSX.Element {
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
       <header className="flex items-center gap-3 px-4 pt-3 @2xl:px-6">
-        <h1 className="text-on-surface text-h2 font-semibold">Dependency graph</h1>
+        <h1 className="text-on-surface text-title-medium font-semibold">Dependency graph</h1>
       </header>
       <div className="min-h-0 flex-1">
         <TaskGraphPanel

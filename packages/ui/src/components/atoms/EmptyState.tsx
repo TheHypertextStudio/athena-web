@@ -129,8 +129,8 @@ export function EmptyState({
       >
         <Icon />
       </span>
-      <p className="text-on-surface text-body font-medium">{title}</p>
-      <p className="text-on-surface-variant text-body max-w-xs leading-relaxed">{body}</p>
+      <p className="text-on-surface text-body-medium font-medium">{title}</p>
+      <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">{body}</p>
       {cta ? (
         <Button size="sm" onClick={cta.onClick}>
           {cta.label}

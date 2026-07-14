@@ -11,7 +11,7 @@ export default function GlobalConnectedAppsSettingsPage(): JSX.Element {
   const orgId = usePersonalWorkspaceId();
 
   if (!orgId) {
-    return <p className="text-on-surface-variant text-body">Loading connected apps…</p>;
+    return <p className="text-on-surface-variant text-body-medium">Loading connected apps…</p>;
   }
 
   return (

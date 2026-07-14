@@ -250,7 +250,7 @@ export function IntegrationConfigPanel({
                 )}
               >
                 <span className="flex items-center justify-between gap-2">
-                  <span className="text-on-surface text-body font-semibold">{d.title}</span>
+                  <span className="text-on-surface text-body-medium font-semibold">{d.title}</span>
                   {isSelected ? <Check aria-hidden="true" className="text-primary size-4" /> : null}
                 </span>
                 <span className="text-on-surface-variant text-xs leading-snug">{d.detail}</span>
@@ -301,7 +301,7 @@ export function IntegrationConfigPanel({
                   setAllMode(e.target.checked);
                 }}
               />
-              <span className="text-on-surface text-body font-medium">
+              <span className="text-on-surface text-body-medium font-medium">
                 Sync all {copy.checklistNounPlural}
               </span>
             </label>
@@ -318,7 +318,7 @@ export function IntegrationConfigPanel({
                           toggleList(l.id);
                         }}
                       />
-                      <span className="text-on-surface text-body">{l.title}</span>
+                      <span className="text-on-surface text-body-medium">{l.title}</span>
                     </label>
                   </li>
                 ))}
@@ -350,7 +350,7 @@ export function IntegrationConfigPanel({
             onChange={(e) => {
               setTeamId(e.target.value);
             }}
-            className="border-outline-variant bg-surface-container-low text-on-surface text-body focus-visible:ring-ring rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
+            className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
           >
             <option value="">First team (default)</option>
             {teams.map((t) => (
@@ -363,7 +363,7 @@ export function IntegrationConfigPanel({
       ) : null}
 
       {error && !reauthNeeded ? (
-        <p role="alert" className="text-destructive text-body">
+        <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : null}
@@ -373,7 +373,7 @@ export function IntegrationConfigPanel({
           role="alert"
           className="border-outline-variant bg-surface-container-low flex flex-col items-start gap-2 rounded-lg border p-3"
         >
-          <p className="text-destructive text-body">
+          <p className="text-destructive text-body-medium">
             {error ?? 'Linear needs to grant Docket write access.'}
           </p>
           <p className="text-on-surface-variant text-xs">

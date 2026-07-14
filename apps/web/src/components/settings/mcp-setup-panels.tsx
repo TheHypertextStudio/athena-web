@@ -27,7 +27,7 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
 
   return (
     <div className="bg-surface-container relative rounded-lg">
-      <pre className="text-on-surface text-body overflow-x-auto p-4 pr-24 font-mono leading-relaxed">
+      <pre className="text-on-surface text-body-medium overflow-x-auto p-4 pr-24 font-mono leading-relaxed">
         <code>{code}</code>
       </pre>
       <Button
@@ -46,7 +46,7 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
 function CliSetup({ client, url }: { client: CliClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-on-surface-variant text-body">Run this command in your terminal:</p>
+      <p className="text-on-surface-variant text-body-medium">Run this command in your terminal:</p>
       <CodeBlock code={client.command(url)} label="Copy command" />
       {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
     </div>
@@ -81,14 +81,14 @@ function DeepLinkSetup({
         onClick={() => {
           setShowManual((v) => !v);
         }}
-        className="text-on-surface-variant hover:text-on-surface text-body w-fit underline-offset-2 transition-colors hover:underline"
+        className="text-on-surface-variant hover:text-on-surface text-body-medium w-fit underline-offset-2 transition-colors hover:underline"
       >
         {showManual ? 'Hide manual setup' : 'Set up manually instead'}
       </button>
 
       {showManual ? (
         <div className="flex flex-col gap-3">
-          <p className="text-on-surface-variant text-body">
+          <p className="text-on-surface-variant text-body-medium">
             Paste this into{' '}
             {filePath ? (
               <code className="bg-surface-container rounded px-1.5 py-0.5 font-mono text-xs">
@@ -120,7 +120,7 @@ function ConfigSetup({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-on-surface-variant text-body">
+      <p className="text-on-surface-variant text-body-medium">
         Paste this into{' '}
         {filePath ? (
           <code className="bg-surface-container rounded px-1.5 py-0.5 font-mono text-xs">
@@ -140,7 +140,7 @@ function ConfigSetup({
 function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <ol className="text-on-surface-variant text-body flex flex-col gap-2">
+      <ol className="text-on-surface-variant text-body-medium flex flex-col gap-2">
         {client.steps.map((step, i) => (
           <li key={step} className="flex gap-2.5">
             <span className="bg-surface-container text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-medium">
@@ -159,7 +159,7 @@ function StepsSetup({ client, url }: { client: StepsClient; url: string }): JSX.
 function UrlSetup({ client, url }: { client: UrlClient; url: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-on-surface-variant text-body">MCP server URL:</p>
+      <p className="text-on-surface-variant text-body-medium">MCP server URL:</p>
       <CodeBlock code={url} label="Copy URL" />
       {client.note ? <p className="text-on-surface-variant text-xs">{client.note}</p> : null}
     </div>
@@ -177,7 +177,7 @@ export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="mcp-client-select" className="text-on-surface text-body font-medium">
+        <label htmlFor="mcp-client-select" className="text-on-surface text-body-medium font-medium">
           Which app are you setting up?
         </label>
         <select
@@ -186,7 +186,7 @@ export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
           onChange={(e) => {
             setSelectedId(e.target.value);
           }}
-          className="border-outline-variant bg-surface-container-low text-on-surface focus:ring-primary text-body w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+          className="border-outline-variant bg-surface-container-low text-on-surface focus:ring-primary text-body-medium w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
         >
           {MCP_CLIENTS.map((c) => (
             <option key={c.id} value={c.id}>

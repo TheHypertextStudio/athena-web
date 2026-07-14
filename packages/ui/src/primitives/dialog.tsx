@@ -248,7 +248,7 @@ export function DialogDescription({
 }: React.ComponentProps<typeof DialogPrimitive.Description>): React.JSX.Element {
   return (
     <DialogPrimitive.Description
-      className={cn('text-on-surface-variant text-body', className)}
+      className={cn('text-on-surface-variant text-body-medium', className)}
       {...props}
     />
   );

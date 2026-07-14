@@ -50,7 +50,7 @@ export default function OrgDetailPage(): JSX.Element {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
       <Link
         href="/orgs"
-        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body w-fit rounded-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
+        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body-medium w-fit rounded-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
       >
         ← Back to organizations
       </Link>
@@ -68,9 +68,9 @@ export default function OrgDetailPage(): JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-body">Overview</CardTitle>
+              <CardTitle className="text-body-medium">Overview</CardTitle>
             </CardHeader>
-            <CardContent className="text-body grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <CardContent className="text-body-medium grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Field label="Organization ID" value={org.id} mono />
               <Field label="Type" value={org.isPersonal ? 'Personal' : 'Team'} />
               <Field label="Created" value={formatTimestamp(org.createdAt)} />
@@ -83,7 +83,7 @@ export default function OrgDetailPage(): JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-body">Billing actions</CardTitle>
+              <CardTitle className="text-body-medium">Billing actions</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
@@ -140,7 +140,7 @@ export default function OrgDetailPage(): JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-body">Lifecycle holds</CardTitle>
+              <CardTitle className="text-body-medium">Lifecycle holds</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <p className="text-on-surface-variant text-xs">
@@ -179,7 +179,7 @@ export default function OrgDetailPage(): JSX.Element {
                       className="border-outline-variant bg-surface-container-low flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
                     >
                       <div className="min-w-0">
-                        <p className="text-body truncate">{hold.reason}</p>
+                        <p className="text-body-medium truncate">{hold.reason}</p>
                         <p className="text-on-surface-variant text-xs">
                           Placed {formatTimestamp(hold.createdAt)}
                         </p>

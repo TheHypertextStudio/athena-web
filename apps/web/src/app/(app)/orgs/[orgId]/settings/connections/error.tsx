@@ -32,7 +32,7 @@ export default function IntegrationsSettingsError({
       className="border-outline-variant flex flex-col items-start gap-3 rounded-lg border p-4"
     >
       <div className="flex flex-col gap-1">
-        <p className="text-on-surface text-body font-medium">Couldn’t load your integrations</p>
+        <p className="text-on-surface text-body-medium font-medium">Couldn’t load your integrations</p>
         <p className="text-on-surface-variant text-xs">
           {userErrorMessage(error, 'Something went wrong while loading this section.')}
         </p>
@@ -40,7 +40,7 @@ export default function IntegrationsSettingsError({
       <button
         type="button"
         onClick={reset}
-        className="focus-visible:ring-ring text-primary hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1"
+        className="focus-visible:ring-ring text-primary hover:bg-surface-container-high text-body-medium rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1"
       >
         Try again
       </button>

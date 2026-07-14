@@ -269,7 +269,7 @@ export default function InitiativeDetailPage(): JSX.Element {
                   setTitleDraft(event.target.value);
                 }}
                 aria-label="Initiative title"
-                className="border-outline-variant text-document-title text-on-surface border-b bg-transparent outline-none"
+                className="border-outline-variant text-headline-large text-on-surface border-b bg-transparent outline-none"
               />
               <textarea
                 value={summaryDraft}
@@ -299,7 +299,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             </form>
           ) : null}
           <h1
-            className={`${editingHeader ? 'print-only' : ''} text-document-title text-on-surface`}
+            className={`${editingHeader ? 'print-only' : ''} text-headline-large text-on-surface`}
           >
             {detail.name}
           </h1>
@@ -532,7 +532,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             </Property>
           </div>
           <section className="space-y-3">
-            <h3 className="text-on-surface text-h3">Labels</h3>
+            <h3 className="text-on-surface text-title-small">Labels</h3>
             <div className="flex flex-wrap gap-2">
               {data.labels
                 .filter((label) => label.teamId === null || label.teamId === undefined)
@@ -570,7 +570,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             </div>
           </section>
           <section className="space-y-3">
-            <h3 className="text-on-surface text-h3">Resources</h3>
+            <h3 className="text-on-surface text-title-small">Resources</h3>
             <div className="divide-outline-variant divide-y border-y">
               {detail.resources.map((resource) => (
                 <div key={resource.id} className="flex items-center gap-2 py-2 text-sm">

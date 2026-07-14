@@ -72,7 +72,7 @@ export function CreateTaskForm({
           onChange={(event) => {
             setRole(event.target.value as CalendarItemTaskRole);
           }}
-          className="border-outline-variant text-body rounded-md border bg-transparent px-2 py-1.5"
+          className="border-outline-variant text-body-medium rounded-md border bg-transparent px-2 py-1.5"
         >
           {TASK_ROLE_ORDER.map((option) => (
             <option key={option} value={option}>
@@ -175,7 +175,7 @@ function OrganizationPicker({
         onChange={(event) => {
           onChange(OrganizationId.parse(event.target.value));
         }}
-        className="border-outline-variant text-body rounded-md border bg-transparent px-2 py-1.5"
+        className="border-outline-variant text-body-medium rounded-md border bg-transparent px-2 py-1.5"
       >
         {organizations.map((org) => (
           <option key={org.id} value={org.id}>

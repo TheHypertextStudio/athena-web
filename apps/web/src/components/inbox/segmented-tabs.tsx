@@ -129,7 +129,7 @@ export function SegmentedTabs<TId extends string>({
               onKeyDown(event, index);
             }}
             className={cn(
-              'focus-visible:ring-ring text-body -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 font-medium transition-colors outline-none focus-visible:ring-1',
+              'focus-visible:ring-ring text-body-medium -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 font-medium transition-colors outline-none focus-visible:ring-1',
               selected
                 ? 'border-primary text-on-surface'
                 : 'text-on-surface-variant hover:text-on-surface border-transparent',

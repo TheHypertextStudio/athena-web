@@ -9,8 +9,9 @@
 
 ### [INIT-MOBILE-RHYTHM-001] Calm the Initiative mobile header stack
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-07-14
+- **Completed**: 2026-07-14
 - **Priority**: P1
 - **Description**: Restore deliberate alignment inside the global recovery reminder and separate
   the Initiative page header, attention surface, and roster controls with a grouped mobile rhythm.
@@ -22,6 +23,20 @@
 - **Risks**: The reminder appears across the entire authenticated app, so its narrow-width behavior
   must remain readable outside the Initiative route; unrelated MCP connector work in the primary
   checkout must remain untouched.
+- **Implementation**: Replaced the reminder's inline flex row with a three-column
+  icon/content/dismiss grid; nested a zero-left-inset 40-pixel text action beneath normal body copy;
+  preserved the existing tonal surface and rounded Material icons; and changed the Initiative page
+  from a uniform 20-pixel stack to a 24-pixel base rhythm with 32 pixels after attention.
+- **Files Changed**: Recovery reminder and Initiative overview components, focused visual-contract
+  tests, four light/dark desktop/mobile screenshots, the Initiative mobile craft audit, design spec,
+  implementation plan, and this work log.
+- **Validation**: Focused visual contracts pass 11/11 and the web suite passes 724/724. Root
+  typecheck and lint pass 17/17, root tests pass 17/17 packages, and the production build passes 3/3.
+  Live measurements at 320px show no horizontal overflow, 14px body copy, exact message/action
+  alignment, 40px action and dismiss targets, a 24px header-to-attention gap, and no console errors.
+- **Retrospective**: Optical alignment must be measured at the visible label edge, not inferred from
+  an aligned button box. Grouped page rhythm is clearer when related content shares one gap and a
+  small additive margin separates the next functional region.
 
 ---
 

@@ -15,7 +15,6 @@
  * self-resets once the account is healthy again so a later low state re-prompts.
  */
 import { Shield, X } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { type JSX, useEffect, useState } from 'react';
 
@@ -82,18 +81,20 @@ export function RecoveryNudgeBanner({
     <div className="px-4 pt-4">
       <div
         role="status"
-        className="bg-surface-container-high text-on-surface flex items-center gap-3 rounded-xl px-4 py-3"
+        className="bg-surface-container-high text-on-surface grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-start gap-x-2 rounded-xl px-3 py-3"
       >
-        <Shield
-          aria-hidden="true"
-          className={`size-5 shrink-0 ${noCodes ? 'text-destructive' : 'text-primary'}`}
-        />
-        <p className="text-body flex-1">{message}</p>
-        <Button asChild size="sm" variant={noCodes ? undefined : 'outline'}>
-          <Link href={sectionHref(personalOrgId, 'security')}>
+        <span aria-hidden="true" className="flex size-10 items-center justify-center">
+          <Shield className={`size-5 ${noCodes ? 'text-destructive' : 'text-primary'}`} />
+        </span>
+        <div className="min-w-0 py-2">
+          <p className="text-body">{message}</p>
+          <Link
+            href={sectionHref(personalOrgId, 'security')}
+            className="text-primary hover:text-primary/80 focus-visible:ring-ring mt-1 inline-flex min-h-10 items-center pr-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          >
             {noCodes ? 'Set up' : 'Regenerate'}
           </Link>
-        </Button>
+        </div>
         <button
           type="button"
           aria-label="Dismiss"

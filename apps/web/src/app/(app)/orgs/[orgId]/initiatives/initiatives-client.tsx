@@ -347,7 +347,7 @@ export default function InitiativesListClient(): JSX.Element {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-on-surface text-page-title">{initiativePlural}</h1>
@@ -375,7 +375,7 @@ export default function InitiativesListClient(): JSX.Element {
 
       {!overview.isPending && !overview.isError ? (
         <section
-          className="bg-surface-container-low flex flex-col rounded-xl p-4"
+          className="bg-surface-container-low mb-2 flex flex-col rounded-xl p-4"
           aria-label="Needs your attention"
         >
           {currentAttention ? (

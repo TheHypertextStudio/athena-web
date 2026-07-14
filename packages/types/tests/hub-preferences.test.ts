@@ -41,11 +41,16 @@ describe('HubPreferences', () => {
         defaultCreateIntent: 'timebox',
         defaultLayerId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
       },
+      athena: {
+        instructions: 'Protect two hours for focused work every morning.',
+        approvalMode: 'routine_autonomy',
+      },
     });
     expect(parsed.density).toBe('compact');
     expect(parsed.theme).toBe('dark');
     expect(parsed.calendar?.pixelsPerHour).toBe(88.5);
     expect(parsed.calendar?.defaultCreateIntent).toBe('timebox');
+    expect(parsed.athena?.approvalMode).toBe('routine_autonomy');
   });
 
   it('keeps calendar preferences continuous and allows clearing the destination layer', () => {
@@ -66,6 +71,15 @@ describe('HubPreferences', () => {
 
   it('rejects an invalid landing', () => {
     expect(HubPreferences.safeParse({ landing: 'nope' }).success).toBe(false);
+  });
+
+  it('rejects invalid Athena approval modes and oversized instructions', () => {
+    expect(HubPreferences.safeParse({ athena: { approvalMode: 'always_act' } }).success).toBe(
+      false,
+    );
+    expect(HubPreferences.safeParse({ athena: { instructions: 'x'.repeat(4001) } }).success).toBe(
+      false,
+    );
   });
 
   it('rejects out-of-range calendar geometry and unknown create intents', () => {

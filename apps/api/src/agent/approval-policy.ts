@@ -15,7 +15,7 @@
  * that is what keeps a session under "Ask first" feeling alive rather than stalling
  * on every lookup.
  */
-import type { ApprovalPolicy } from '@docket/types';
+import type { ApprovalPolicy, AthenaApprovalMode } from '@docket/types';
 
 /** The MCP tool-annotation hints the classifier reads (a subset of `ToolAnnotations`). */
 export interface ToolAnnotationHints {
@@ -84,4 +84,24 @@ export function decideToolExecution(
 ): ToolDecision {
   const row = POLICY_TABLE[policy];
   return classification.readOnly ? row.read : row.write;
+}
+
+/**
+ * Apply the signed-in principal's global Athena policy as a ceiling over workspace agent policy.
+ *
+ * @remarks
+ * A personal preference may make a workspace agent stricter but never more permissive. Routine
+ * autonomy only executes closed-world, non-destructive writes when the workspace agent is already
+ * autonomous; destructive or external writes still require approval.
+ */
+export function decideUserOwnedToolExecution(
+  agentPolicy: ApprovalPolicy,
+  personalMode: AthenaApprovalMode,
+  classification: ToolClassification,
+): ToolDecision {
+  const workspaceDecision = decideToolExecution(agentPolicy, classification);
+  if (classification.readOnly || workspaceDecision !== 'execute') return workspaceDecision;
+  if (personalMode === 'suggest_only') return 'record_only';
+  if (personalMode === 'ask_before_acting') return 'propose';
+  return classification.destructive || classification.openWorld ? 'propose' : 'execute';
 }

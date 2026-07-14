@@ -222,7 +222,7 @@ export default function CalendarSettingsPage({
           </Button>
           {savePreferences.isError ? (
             <p role="alert" className="text-destructive text-xs">
-              Could not save these preferences. Try again.
+              Could not save these preferences.
             </p>
           ) : null}
         </section>

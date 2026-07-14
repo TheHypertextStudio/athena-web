@@ -78,7 +78,7 @@ export function DeleteAccountDialog({
       await reauth();
       const status = AccountStatusOut.parse(await scheduleDeletion.mutateAsync(undefined));
       if (status.deletionState !== 'pending_deletion') {
-        throw new Error('Deletion could not be scheduled. Please try again.');
+        throw new Error('Deletion could not be scheduled.');
       }
       setTyped('');
       onOpenChange(false);

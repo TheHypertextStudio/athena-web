@@ -82,7 +82,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/orgs/:orgId/settings/connections/google-calendar',
-        destination: '/settings/connections',
+        destination: '/settings/connections/google-calendar',
         permanent: false,
       },
       {

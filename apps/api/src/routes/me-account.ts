@@ -10,7 +10,7 @@
  * sole-owner shared orgs. The heavy work (export generation, the final purge) runs in the cron
  * sweeps — these routes only record intent and send the confirming email.
  */
-import { accountExport, actor, db, hub, organization } from '@docket/db';
+import { accountExport, actor, db, hub, organization, user as userTable } from '@docket/db';
 import {
   type AccountExportOrigin,
   AccountExportOptionsOut,
@@ -20,6 +20,8 @@ import {
   AccountExportListOut,
   AccountExportOut,
   AccountStatusOut,
+  ProfileSettingsOut,
+  ProfileSettingsUpdate,
   type OwnershipBlocker,
 } from '@docket/types';
 import { and, desc, eq } from 'drizzle-orm';
@@ -45,6 +47,7 @@ import {
 import { ok } from '../lib/ok';
 import { one } from '../lib/one';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
+import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
 import { zJson } from '../lib/validate';
 import { dispatchSystemUserNotification } from '../services/notifications/system';
 
@@ -221,6 +224,61 @@ async function getExportRow(
 }
 
 const meAccount = new Hono<AppEnv>()
+  .get(
+    '/profile',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Get profile settings',
+      response: ProfileSettingsOut,
+      description: "Return the signed-in person's editable name, email, and profile image.",
+    }),
+    async (c) => {
+      const { user } = requireSession(c);
+      const rows = await db
+        .select({ name: userTable.name, email: userTable.email, image: userTable.image })
+        .from(userTable)
+        .where(eq(userTable.id, user.id))
+        .limit(1);
+      const profile = rows[0];
+      /* v8 ignore next -- @preserve authenticated users always have an identity row */
+      if (!profile) throw new NotFoundError('Profile not found.');
+      return ok(c, ProfileSettingsOut, profile);
+    },
+  )
+  .patch(
+    '/profile',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Update profile settings',
+      response: ProfileSettingsOut,
+      description:
+        "Update the signed-in person's basic profile. Selected images are moved to managed blob storage before the user row is updated; null removes the image.",
+    }),
+    zJson(ProfileSettingsUpdate),
+    async (c) => {
+      const { user } = requireSession(c);
+      const body = c.req.valid('json');
+      let image: string | null | undefined;
+      if (body.image === null) {
+        await deleteSettingsImage(`settings/profile/${user.id}`);
+        image = null;
+      } else if (body.image !== undefined) {
+        image = await storeSettingsImage(`settings/profile/${user.id}`, body.image);
+      }
+      const rows = await db
+        .update(userTable)
+        .set({
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(image !== undefined ? { image } : {}),
+        })
+        .where(eq(userTable.id, user.id))
+        .returning({ name: userTable.name, email: userTable.email, image: userTable.image });
+      const updated = rows[0];
+      /* v8 ignore next -- @preserve the authenticated user row exists */
+      if (!updated) throw new NotFoundError('Profile not found.');
+      return ok(c, ProfileSettingsOut, updated);
+    },
+  )
   // The account resource: read its end-of-life status (deletion state, blockers, latest export).
   .get(
     '/',

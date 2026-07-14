@@ -54,6 +54,7 @@ export const queryKeys = {
   contactPoints: () => ['me', 'contact-points'] as const,
   activeSessions: () => ['me', 'active-sessions'] as const,
   orgs: () => ['me', 'orgs'] as const,
+  organization: (orgId: string) => ['org', orgId, 'detail'] as const,
   portfolio: () => ['me', 'portfolio'] as const,
   search: (scope: 'hub' | 'org', query: string, orgId?: string | null) =>
     ['search', scope, orgId ?? 'all', query] as const,

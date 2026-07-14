@@ -31,7 +31,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Manage your name, email, and personal identity.',
     icon: User,
     href: 'profile',
-    status: 'available',
   },
   {
     key: 'athena',
@@ -39,7 +38,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Set how your chief of staff works with you.',
     icon: Sparkles,
     href: 'athena',
-    status: 'available',
   },
   {
     key: 'connections',
@@ -47,7 +45,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Connect the apps Athena uses as data sources.',
     icon: Cable,
     href: 'connections',
-    status: 'available',
   },
   {
     key: 'notifications',
@@ -55,7 +52,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Decide what Athena tells you, and where.',
     icon: Inbox,
     href: 'notifications',
-    status: 'available',
   },
   {
     key: 'calendar',
@@ -63,7 +59,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Set scheduling defaults and calendar sharing.',
     icon: Calendar,
     href: 'calendar',
-    status: 'available',
   },
   {
     key: 'security',
@@ -71,7 +66,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Protect your account and sign-in methods.',
     icon: Shield,
     href: 'security',
-    status: 'available',
   },
   {
     key: 'connected-apps',
@@ -79,7 +73,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Manage external apps that can access Docket.',
     icon: Link,
     href: 'connected-apps',
-    status: 'available',
   },
   {
     key: 'data-privacy',
@@ -87,7 +80,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Export or delete your Docket data.',
     icon: Download,
     href: 'data-privacy',
-    status: 'available',
   },
   {
     key: 'workspaces',
@@ -95,7 +87,6 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Choose a workspace and manage its settings.',
     icon: FolderKanban,
     href: 'workspaces',
-    status: 'available',
   },
 ];
 

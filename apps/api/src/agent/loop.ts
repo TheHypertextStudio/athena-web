@@ -23,13 +23,15 @@ import {
   auditEvent,
   db,
   genId,
+  hub,
   organization,
   sessionActivity,
   task,
 } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
 import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
-import type { SessionApprovalDecision, TurnContentBlock } from '@docket/types';
+import { HubPreferences } from '@docket/types';
+import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } from '@docket/types';
 import { and, asc, eq, gt } from 'drizzle-orm';
 
 import { assertAgentSessionsEntitled } from '../billing/entitlement';
@@ -38,7 +40,7 @@ import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
 import { decideActivity, decideProposalGroup } from '../routes/agent-session-approval';
 import type { SessionRow } from '../routes/agent-session-helpers';
-import { classifyTool, decideToolExecution } from './approval-policy';
+import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { buildSystemPrompt } from './system-prompt';
 import { ASK_USER_TOOL, DOCKET_CONNECTION, openToolbox, type ToolboxResult } from './toolbox';
 import { loadTranscript, saveTranscript } from './transcript';
@@ -54,6 +56,26 @@ interface ToolUse {
   readonly id: string;
   readonly name: string;
   readonly input: unknown;
+}
+
+/** Resolve the caller-owned Athena preferences for a session initiator. */
+async function principalAthenaPreferences(initiatorId: string | null): Promise<{
+  readonly approvalMode: AthenaApprovalMode;
+  readonly instructions: string | null;
+}> {
+  if (!initiatorId) return { approvalMode: 'ask_before_acting', instructions: null };
+  const rows = await db
+    .select({ preferences: hub.preferences })
+    .from(actor)
+    .innerJoin(hub, eq(actor.userId, hub.userId))
+    .where(eq(actor.id, initiatorId))
+    .limit(1);
+  const preferences = HubPreferences.parse(rows[0]?.preferences ?? {});
+  const instructions = preferences.athena?.instructions?.trim();
+  return {
+    approvalMode: preferences.athena?.approvalMode ?? 'ask_before_acting',
+    instructions: instructions && instructions.length > 0 ? instructions : null,
+  };
 }
 
 /** Extract the tool_use blocks of a message. */
@@ -263,6 +285,7 @@ export async function driveSession(
     .where(eq(organization.id, orgId))
     .limit(1);
   const orgName = orgRows[0]?.name ?? orgId;
+  const principalPreferences = await principalAthenaPreferences(session.initiatorId);
 
   const maxTurns = env.AGENT_MAX_TURNS;
 
@@ -297,6 +320,8 @@ export async function driveSession(
       agentName: agentRow.displayName,
       orgName,
       approvalPolicy: agentRow.approvalPolicy,
+      personalApprovalMode: principalPreferences.approvalMode,
+      personalInstructions: principalPreferences.instructions,
       guidance: agentRow.guidance,
     });
 
@@ -408,8 +433,9 @@ export async function driveSession(
             });
             continue;
           }
-          const decision = decideToolExecution(
+          const decision = decideUserOwnedToolExecution(
             agentRow.approvalPolicy,
+            principalPreferences.approvalMode,
             classifyTool(toolbox.annotations(use.name)),
           );
           if (decision === 'execute') continue; // executed (and recorded) below, post-commit
@@ -441,8 +467,9 @@ export async function driveSession(
       // autonomous), recording each as an applied action with its result + audit row.
       for (const use of uses) {
         if (use.name === ASK_USER_TOOL) continue;
-        const decision = decideToolExecution(
+        const decision = decideUserOwnedToolExecution(
           agentRow.approvalPolicy,
+          principalPreferences.approvalMode,
           classifyTool(toolbox.annotations(use.name)),
         );
         if (decision !== 'execute') continue;

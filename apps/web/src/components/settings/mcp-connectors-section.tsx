@@ -5,7 +5,7 @@
  *
  * @remarks
  * Lists the org's connected remote MCP servers (Streamable HTTP) and lets a manager add,
- * re-verify, or disconnect one. A row only ever reads "Connected" after a live `tools/list`
+ * edit, re-verify, or disconnect one. A row only ever reads "Connected" after a live `tools/list`
  * round trip (`POST /integrations/mcp/:id/verify`) proved it — never assumed from having a
  * stored credential. Once connected, Athena's toolbox unions the server's tools in as
  * `<alias>__<name>`, alongside Docket's own tools — this is the enablement surface for Docket
@@ -141,6 +141,24 @@ interface McpConnectorRowProps {
 
 /** One connected (or errored) MCP server, with verify/disconnect actions. */
 function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.Element {
+  const [editing, setEditing] = useState(false);
+  const [label, setLabel] = useState(mcp.label);
+  const [alias, setAlias] = useState(mcp.alias);
+  const edit = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations.mcp[':id'].$patch({
+            param: { orgId, id: mcp.id },
+            json: { label: label.trim(), alias: alias.trim() },
+          }),
+        'Could not save this connector.',
+      ),
+    invalidateKeys: [queryKeys.mcpIntegrations(orgId)],
+    onSuccess: () => {
+      setEditing(false);
+    },
+  });
   const authorize = useApiMutation({
     mutationFn: () =>
       unwrap(
@@ -178,13 +196,25 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
 
   const badgeVariant =
     mcp.status === 'connected' ? 'default' : mcp.status === 'error' ? 'destructive' : 'outline';
-  const busy = authorize.isPending || verify.isPending || disconnect.isPending;
+  const busy = authorize.isPending || verify.isPending || disconnect.isPending || edit.isPending;
 
   return (
     <li className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-lg border p-4">
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <span className="text-on-surface flex items-center gap-2 text-sm font-medium">
-          {mcp.label}
+          {editing ? (
+            <Input
+              value={label}
+              maxLength={80}
+              aria-label="Connector name"
+              className="h-8 max-w-xs"
+              onChange={(event) => {
+                setLabel(event.target.value);
+              }}
+            />
+          ) : (
+            mcp.label
+          )}
           <Badge variant={badgeVariant} className="shrink-0">
             {connectorReadinessLabel(mcp.status)}
           </Badge>
@@ -198,6 +228,19 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           <span role="alert" className="text-destructive text-xs">
             This server could not be reached.
           </span>
+        ) : null}
+        {editing ? (
+          <label className="text-on-surface flex max-w-xs flex-col gap-1 text-xs font-medium">
+            Tool prefix
+            <Input
+              value={alias}
+              maxLength={21}
+              className="h-8 font-mono"
+              onChange={(event) => {
+                setAlias(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+              }}
+            />
+          </label>
         ) : null}
       </div>
       <details className="text-on-surface-variant text-xs">
@@ -215,6 +258,47 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
       </details>
       {canManage ? (
         <div className="flex flex-wrap gap-2">
+          {editing ? (
+            <>
+              <Button
+                size="sm"
+                disabled={
+                  busy ||
+                  !label.trim() ||
+                  !/^[a-z][a-z0-9_]{1,20}$/.test(alias.trim()) ||
+                  (label.trim() === mcp.label && alias.trim() === mcp.alias)
+                }
+                onClick={() => {
+                  edit.mutate(undefined);
+                }}
+              >
+                {edit.isPending ? 'Saving…' : 'Save details'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  setLabel(mcp.label);
+                  setAlias(mcp.alias);
+                  setEditing(false);
+                }}
+              >
+                Cancel
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                setEditing(true);
+              }}
+            >
+              Edit details
+            </Button>
+          )}
           {mcp.authMode === 'oauth' ? (
             <Button
               variant="outline"
@@ -254,6 +338,11 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
             {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
           </Button>
         </div>
+      ) : null}
+      {edit.error ? (
+        <p role="alert" className="text-destructive text-xs">
+          {userErrorMessage(edit.error, 'Could not save this connector.')}
+        </p>
       ) : null}
     </li>
   );
@@ -347,7 +436,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
       // passed. A failed check keeps the dialog open with safe recovery guidance, not a false
       // "connected".
       if (mcp.status !== 'connected') {
-        setError('Could not verify that server. Check its settings and try again.');
+        setError('Could not verify that server. Check its settings.');
         return;
       }
       setError(null);

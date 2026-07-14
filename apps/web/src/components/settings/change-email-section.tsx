@@ -44,7 +44,7 @@ export function ChangeEmailSection(): JSX.Element {
       setSent(true);
       setNewEmail('');
     } catch {
-      setError('Could not request the email change. Please try again.');
+      setError('Could not request the email change.');
     } finally {
       setPending(false);
     }

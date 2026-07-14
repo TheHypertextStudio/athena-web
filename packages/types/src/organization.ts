@@ -4,7 +4,8 @@
 import { z } from 'zod';
 
 import { ActorId, OrganizationId, TeamId } from './primitives';
-import { VocabularySkin } from './vocabulary';
+import { SettingsImageValue } from './settings-image';
+import { VocabularyPreset, VocabularySkin } from './vocabulary';
 
 /**
  * Body for creating an Organization (the single un-nested create).
@@ -76,6 +77,43 @@ export const OrgCreate = z
   .meta({ id: 'OrgCreate', description: 'Create a new organization.' });
 /** Validated org-create body. */
 export type OrgCreate = z.infer<typeof OrgCreate>;
+
+/** Mutable, user-facing workspace identity attributes. */
+export const OrgUpdate = z
+  .object({
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .optional()
+      .describe("The workspace's editable display name."),
+    purpose: z
+      .string()
+      .trim()
+      .max(500)
+      .nullable()
+      .optional()
+      .describe('A concise workspace purpose; null clears the current purpose.'),
+    slug: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+      .optional()
+      .describe('The editable, globally unique URL-safe workspace identifier.'),
+    avatar: SettingsImageValue.nullable()
+      .optional()
+      .describe('The workspace logo image; null removes the current logo.'),
+    vocabulary: VocabularyPreset.optional().describe(
+      'The terminology preset used for work throughout the workspace.',
+    ),
+  })
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one workspace change.')
+  .meta({ id: 'OrgUpdate', description: 'Editable workspace identity settings.' });
+/** Validated workspace identity update body. */
+export type OrgUpdate = z.infer<typeof OrgUpdate>;
 
 /** Full organization representation returned by reads. */
 export const OrgOut = z

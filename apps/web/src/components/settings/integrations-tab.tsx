@@ -406,6 +406,11 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
     const map = new Map<string, IntegrationDirectoryProvider[]>();
     for (const provider of directory) {
       if (provider.pattern !== cfg.pattern) continue;
+      if (
+        !connectorAvailable(config, provider.provider) &&
+        (byProvider.get(provider.provider)?.length ?? 0) === 0
+      )
+        continue;
       const list = map.get(provider.category);
       if (list) list.push(provider);
       else {
@@ -414,21 +419,31 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       }
     }
     return order.map((category) => ({ category, providers: map.get(category) ?? [] }));
-  }, [directory, cfg.pattern]);
+  }, [byProvider, config, directory, cfg.pattern]);
 
   const gtasksDirectory = useMemo(
     () =>
       surface === 'connections'
-        ? (directory.find((p) => p.provider === MULTI_ACCOUNT_PROVIDER) ?? null)
+        ? (directory.find(
+            (p) =>
+              p.provider === MULTI_ACCOUNT_PROVIDER &&
+              (connectorAvailable(config, p.provider) ||
+                (byProvider.get(p.provider)?.length ?? 0) > 0),
+          ) ?? null)
         : null,
-    [directory, surface],
+    [byProvider, config, directory, surface],
   );
   const calendarDirectory = useMemo(
     () =>
       surface === 'connections'
-        ? (directory.find((p) => p.provider === FIRST_PARTY_CALENDAR_PROVIDER) ?? null)
+        ? (directory.find(
+            (p) =>
+              p.provider === FIRST_PARTY_CALENDAR_PROVIDER &&
+              (connectorAvailable(config, p.provider) ||
+                (byProvider.get(p.provider)?.length ?? 0) > 0),
+          ) ?? null)
         : null,
-    [directory, surface],
+    [byProvider, config, directory, surface],
   );
 
   if (loading) {
@@ -447,10 +462,10 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         role="alert"
         className="border-outline-variant bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-lg border p-4"
       >
-        <p className="text-on-surface text-body-medium font-medium">Connections are still loading.</p>
-        <p className="text-body-medium">
-          We&apos;ll keep checking for the available services automatically.
+        <p className="text-on-surface text-body-medium font-medium">
+          We couldn&apos;t load connections.
         </p>
+        <p className="text-body-medium">We&apos;ll keep trying automatically.</p>
       </div>
     );
   }
@@ -478,17 +493,23 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         />
       ) : null}
 
-      <MailIngestSection
-        orgId={orgId}
-        canManage={canManage}
-        integrations={byProvider.get('gmail') ?? []}
-      />
+      {connectorAvailable(config, 'gmail') || (byProvider.get('gmail')?.length ?? 0) > 0 ? (
+        <MailIngestSection
+          orgId={orgId}
+          canManage={canManage}
+          integrations={byProvider.get('gmail') ?? []}
+        />
+      ) : null}
 
       {calendarDirectory ? (
         <section aria-label="Google Calendar" className="flex flex-col gap-3">
           <h2 className="text-on-surface-variant text-xs font-medium">Calendar</h2>
           <NextLink
-            href={`/orgs/${orgId}/settings/connections/google-calendar`}
+            href={
+              surface === 'connections'
+                ? '/settings/connections/google-calendar'
+                : `/orgs/${orgId}/settings/connections/google-calendar`
+            }
             className="border-outline-variant bg-surface-container-low hover:bg-surface-container flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors"
           >
             <span className="min-w-0">
@@ -532,7 +553,6 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
                         provider={provider}
                         existing={existing}
                         canManage={canManage}
-                        available={connectorAvailable(config, provider.provider)}
                         actionLabel={cfg.actionLabel}
                         connectHint={cfg.connectHint}
                         busy={busyProvider === provider.provider}

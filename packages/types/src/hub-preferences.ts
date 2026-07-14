@@ -43,6 +43,31 @@ export const CalendarPreferences = z
 /** Calendar preferences value. */
 export type CalendarPreferences = z.infer<typeof CalendarPreferences>;
 
+/** How much autonomy Athena has when turning the user's preferences into action. */
+export const AthenaApprovalMode = z
+  .enum(['ask_before_acting', 'routine_autonomy', 'suggest_only'])
+  .describe(
+    'Approval policy for Athena. Ask before acting requires confirmation, routine autonomy permits reversible routine work, and suggest only never acts directly.',
+  );
+/** Athena approval-mode value. */
+export type AthenaApprovalMode = z.infer<typeof AthenaApprovalMode>;
+
+/** User-owned instructions and approval policy for Athena. */
+export const AthenaPreferences = z
+  .object({
+    instructions: z
+      .string()
+      .max(4000)
+      .optional()
+      .describe('Persistent personal instructions Athena follows across every workspace.'),
+    approvalMode: AthenaApprovalMode.optional().describe(
+      'How Athena handles work that could change external or Docket state.',
+    ),
+  })
+  .describe('Personal preferences controlling how Athena works for the signed-in user.');
+/** Athena preferences value. */
+export type AthenaPreferences = z.infer<typeof AthenaPreferences>;
+
 /** Personal Hub preferences. */
 export const HubPreferences = z
   .object({
@@ -62,6 +87,9 @@ export const HubPreferences = z
         "IANA timezone (e.g. `America/Chicago`) anchoring the daily plan — also the digest's day boundary and send time.",
       ),
     calendar: CalendarPreferences.optional().describe('Continuous calendar-canvas preferences.'),
+    athena: AthenaPreferences.optional().describe(
+      'Personal instructions and approval policy that follow the user across workspaces.',
+    ),
     digest: z
       .object({
         enabled: z

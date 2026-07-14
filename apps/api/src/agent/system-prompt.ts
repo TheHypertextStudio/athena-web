@@ -9,7 +9,7 @@
  * it). Org/agent `guidance` is appended verbatim when set (team-over-org layering is a
  * later concern; the column is a single text field today).
  */
-import type { ApprovalPolicy } from '@docket/types';
+import type { ApprovalPolicy, AthenaApprovalMode } from '@docket/types';
 
 /** How each approval dial is explained to the model. */
 const POLICY_LINES: Readonly<Record<ApprovalPolicy, string>> = {
@@ -25,6 +25,21 @@ const POLICY_LINES: Readonly<Record<ApprovalPolicy, string>> = {
     'your narration precise so the audit trail reads clearly.',
 };
 
+/** Explain the combined workspace and personal approval ceiling without contradicting execution. */
+function approvalInstruction(
+  agentPolicy: ApprovalPolicy,
+  personalMode: AthenaApprovalMode,
+): string {
+  if (agentPolicy === 'suggest' || personalMode === 'suggest_only') return POLICY_LINES.suggest;
+  if (agentPolicy === 'act_with_approval' || personalMode === 'ask_before_acting') {
+    return POLICY_LINES.act_with_approval;
+  }
+  return (
+    'Closed-world, non-destructive routine writes may EXECUTE IMMEDIATELY and are fully audited. ' +
+    'Destructive writes and actions in external services are QUEUED FOR HUMAN APPROVAL.'
+  );
+}
+
 /** Input for {@link buildSystemPrompt}. */
 export interface SystemPromptInput {
   /** The agent's display name (e.g. "Athena"). */
@@ -33,6 +48,10 @@ export interface SystemPromptInput {
   readonly orgName: string;
   /** The agent's approval dial. */
   readonly approvalPolicy: ApprovalPolicy;
+  /** Caller-owned approval ceiling that follows the principal across workspaces. */
+  readonly personalApprovalMode: AthenaApprovalMode;
+  /** Caller-owned guidance that follows the principal across workspaces. */
+  readonly personalInstructions: string | null;
   /** Operator guidance from the agent registration, when set. */
   readonly guidance: string | null;
 }
@@ -53,7 +72,7 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
       'projects, and views with your read tools first, then act. Narrate in short, plain ' +
       'sentences — your stream is a work log a human supervises, not a chat.',
     '',
-    POLICY_LINES[input.approvalPolicy],
+    approvalInstruction(input.approvalPolicy, input.personalApprovalMode),
     '',
     'Batch discipline: when one job produces several related creations (e.g. importing a ' +
       'backlog), issue ALL of those tool calls in a single turn — they are reviewed and ' +
@@ -65,8 +84,11 @@ export function buildSystemPrompt(input: SystemPromptInput): string {
     '',
     'Finish with a short summary of what you did (or proposed) and why.',
   ];
+  if (input.personalInstructions) {
+    lines.push('', 'Personal instructions from the human principal:', input.personalInstructions);
+  }
   if (input.guidance) {
-    lines.push('', 'Operator guidance for this agent:', input.guidance);
+    lines.push('', 'Workspace guidance for this agent:', input.guidance);
   }
   return lines.join('\n');
 }

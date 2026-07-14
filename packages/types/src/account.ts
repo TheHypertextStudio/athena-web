@@ -10,6 +10,30 @@
  */
 import { z } from 'zod';
 
+import { SettingsImageData } from './settings-image';
+
+/** Editable caller-owned profile attributes. */
+export const ProfileSettingsUpdate = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    image: SettingsImageData.nullable().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, 'Provide at least one profile change.')
+  .meta({ id: 'ProfileSettingsUpdate', description: 'Editable caller-owned profile settings.' });
+/** Profile-settings update body. */
+export type ProfileSettingsUpdate = z.infer<typeof ProfileSettingsUpdate>;
+
+/** Caller-owned profile returned after a read or update. */
+export const ProfileSettingsOut = z
+  .object({
+    name: z.string(),
+    email: z.email(),
+    image: z.string().nullable(),
+  })
+  .meta({ id: 'ProfileSettingsOut', description: 'The caller-owned profile.' });
+/** Profile-settings response value. */
+export type ProfileSettingsOut = z.infer<typeof ProfileSettingsOut>;
+
 /** Account end-of-life state (the account-level mirror of the org lifecycle). */
 export const AccountDeletionState = z
   .enum(['active', 'pending_deletion'])

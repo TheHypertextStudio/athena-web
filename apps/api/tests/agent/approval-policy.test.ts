@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyTool,
   decideToolExecution,
+  decideUserOwnedToolExecution,
   type ToolAnnotationHints,
   type ToolDecision,
 } from '../../src/agent/approval-policy';
@@ -32,6 +33,49 @@ describe('classifyTool', () => {
   it('treats explicit false hints as false', () => {
     const cls = classifyTool({ readOnlyHint: true, destructiveHint: false, openWorldHint: false });
     expect(cls).toEqual({ readOnly: true, destructive: false, openWorld: false });
+  });
+});
+
+describe('decideUserOwnedToolExecution', () => {
+  const READ = classifyTool({ readOnlyHint: true });
+  const ROUTINE_WRITE = classifyTool({ readOnlyHint: false });
+  const DESTRUCTIVE_WRITE = classifyTool({ readOnlyHint: false, destructiveHint: true });
+  const EXTERNAL_WRITE = classifyTool({ readOnlyHint: false, openWorldHint: true });
+
+  it('lets every personal mode read without an approval interruption', () => {
+    for (const mode of ['suggest_only', 'ask_before_acting', 'routine_autonomy'] as const) {
+      expect(decideUserOwnedToolExecution('autonomous', mode, READ)).toBe('execute');
+    }
+  });
+
+  it('turns autonomous workspace writes into suggestions or proposals when the person requires it', () => {
+    expect(decideUserOwnedToolExecution('autonomous', 'suggest_only', ROUTINE_WRITE)).toBe(
+      'record_only',
+    );
+    expect(decideUserOwnedToolExecution('autonomous', 'ask_before_acting', ROUTINE_WRITE)).toBe(
+      'propose',
+    );
+  });
+
+  it('executes only safe internal writes under routine autonomy', () => {
+    expect(decideUserOwnedToolExecution('autonomous', 'routine_autonomy', ROUTINE_WRITE)).toBe(
+      'execute',
+    );
+    expect(decideUserOwnedToolExecution('autonomous', 'routine_autonomy', DESTRUCTIVE_WRITE)).toBe(
+      'propose',
+    );
+    expect(decideUserOwnedToolExecution('autonomous', 'routine_autonomy', EXTERNAL_WRITE)).toBe(
+      'propose',
+    );
+  });
+
+  it('never lets a personal preference loosen the workspace agent policy', () => {
+    expect(decideUserOwnedToolExecution('suggest', 'routine_autonomy', ROUTINE_WRITE)).toBe(
+      'record_only',
+    );
+    expect(
+      decideUserOwnedToolExecution('act_with_approval', 'routine_autonomy', ROUTINE_WRITE),
+    ).toBe('propose');
   });
 });
 

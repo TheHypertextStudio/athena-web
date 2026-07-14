@@ -66,12 +66,6 @@ function writeScopeStatus(connection: CalendarConnectionOut): WriteScopeStatus {
     : { label: 'Calendar read-only', variant: 'outline' };
 }
 
-/** Props for {@link GoogleCalendarSettings}. */
-export interface GoogleCalendarSettingsProps {
-  /** The active organization id for the surrounding settings route. */
-  orgId: string;
-}
-
 /** Format a Calendar sync result into compact feedback. */
 function syncSummary(data: {
   eventsCreated: number;
@@ -88,9 +82,7 @@ function syncSummary(data: {
 }
 
 /** Render and mutate Google Calendar account/calendar visibility settings. */
-export default function GoogleCalendarSettings({
-  orgId,
-}: GoogleCalendarSettingsProps): JSX.Element {
+export default function GoogleCalendarSettings(): JSX.Element {
   const router = useRouter();
   const handledOAuthReturn = useRef(false);
   const [oauthPending, setOauthPending] = useState(false);
@@ -217,27 +209,24 @@ export default function GoogleCalendarSettings({
             ) : null}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            onClick={() => {
-              void startGoogleLink();
-            }}
-            disabled={!googleAvailable || oauthPending}
-            title={
-              googleAvailable
-                ? undefined
-                : 'Google Calendar is currently limited to production test users.'
-            }
-          >
-            {oauthPending
-              ? 'Opening Google…'
-              : (data?.connections.length ?? 0) > 0
-                ? 'Add Google account'
-                : 'Connect Google account'}
-          </Button>
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+          {googleAvailable ? (
+            <Button
+              size="sm"
+              onClick={() => {
+                void startGoogleLink();
+              }}
+              disabled={oauthPending}
+            >
+              {oauthPending
+                ? 'Opening Google…'
+                : (data?.connections.length ?? 0) > 0
+                  ? 'Add Google account'
+                  : 'Connect Google account'}
+            </Button>
+          ) : null}
           <NextLink
-            href={`/orgs/${orgId}/settings/connections`}
+            href="/settings/connections"
             className="border-outline-variant text-on-surface hover:bg-surface-container-high inline-flex items-center rounded-md border px-3 py-1.5 text-sm font-medium"
           >
             Connected accounts
@@ -248,7 +237,7 @@ export default function GoogleCalendarSettings({
               sync.mutate(undefined);
             }}
             disabled={mutationDisabled || (data?.connections.length ?? 0) === 0}
-            className="border-outline-variant text-on-surface hover:bg-surface-container-high inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50"
+            className="border-outline-variant text-on-surface hover:bg-surface-container-high col-span-2 inline-flex items-center justify-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium disabled:opacity-50 sm:col-span-1"
           >
             <RefreshCw className={`size-4 ${sync.isPending ? 'animate-spin' : ''}`} />
             {sync.isPending ? 'Syncing' : 'Sync'}
@@ -297,18 +286,18 @@ export default function GoogleCalendarSettings({
                 role="alert"
                 className="text-destructive border-outline-variant border-b px-4 py-2 text-xs"
               >
-                Google Calendar could not be synced. Reconnect it and try again.
+                Google Calendar could not be synced. Reconnect it to restore syncing.
               </p>
             ) : null}
             <div className="border-outline-variant flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
               <Badge variant={writeScopeStatus(connection).variant} className="font-normal">
                 {writeScopeStatus(connection).label}
               </Badge>
-              {!connection.scopeState?.calendarWrite ? (
+              {!connection.scopeState?.calendarWrite && googleAvailable ? (
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!googleAvailable || oauthPending}
+                  disabled={oauthPending}
                   onClick={() => {
                     void startGoogleLink();
                   }}

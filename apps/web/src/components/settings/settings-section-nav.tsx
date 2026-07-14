@@ -6,10 +6,8 @@
  * @remarks
  * Replaces the former in-page tab strip with a vertical, routed section list so Settings scales
  * as it grows toward a dozen sections. The list is driven entirely by the typed
- * {@link settingsSectionGroups} registry: each `available` section renders as a Next.js
- * `Link` (so navigation is real routing, prefetched, and works with browser history), and each
- * `coming-soon` section renders as a visibly-disabled row with a "Soon" badge so the
- * information architecture reads as complete without promising routes that do not exist.
+ * {@link settingsSectionGroups} registry. Every visible section is a live Next.js route;
+ * unfinished roadmap destinations are intentionally absent from production navigation.
  *
  * The registry is gated on whether the active workspace is the caller's **personal** space: the
  * nav reads `OrgSummary.isPersonal` from the shell-wide {@link useActiveOrg} context, so a
@@ -22,7 +20,6 @@
  */
 import type { JSX } from 'react';
 import { cn } from '@docket/ui';
-import { Badge } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -36,9 +33,9 @@ export interface SettingsSectionNavProps {
   orgId: string;
 }
 
-/** Shared row layout for both the active link rows and the disabled placeholder rows. */
+/** Shared row layout for each settings link. */
 const ROW_BASE =
-  'flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-body-medium transition-colors';
+  'flex min-h-10 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-body-medium transition-colors';
 
 /**
  * The vertical Settings section list.
@@ -59,35 +56,22 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
   }
 
   return (
-    <nav aria-label="Settings sections" className="flex flex-col gap-6">
+    <nav
+      aria-label="Settings sections"
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-2 @3xl:mx-0 @3xl:flex-col @3xl:gap-6 @3xl:overflow-visible @3xl:px-0 @3xl:pb-0"
+    >
       {groups.map((group) => (
-        <div key={group.label} className="flex flex-col gap-1">
-          <h2 className="text-on-surface-variant px-2.5 text-xs font-medium">{group.label}</h2>
-          <ul className="flex flex-col gap-0.5">
+        <div key={group.label} className="contents @3xl:flex @3xl:flex-col @3xl:gap-1">
+          <h2 className="text-on-surface-variant hidden px-2.5 text-xs font-medium @3xl:block">
+            {group.label}
+          </h2>
+          <ul className="flex gap-0.5 @3xl:flex-col">
             {group.sections.map((section) => {
               const Icon = section.icon;
 
-              if (section.status === 'coming-soon') {
-                return (
-                  <li key={section.key}>
-                    <span
-                      aria-disabled="true"
-                      title="Coming soon"
-                      className={cn(ROW_BASE, 'text-on-surface-variant/60 cursor-not-allowed')}
-                    >
-                      <Icon aria-hidden="true" className="size-4 shrink-0" />
-                      <span className="flex-1 truncate">{section.label}</span>
-                      <Badge variant="secondary" className="font-normal">
-                        Soon
-                      </Badge>
-                    </span>
-                  </li>
-                );
-              }
-
               const active = isActive(section);
               return (
-                <li key={section.key}>
+                <li key={section.key} className="shrink-0">
                   <Link
                     href={sectionHref(orgId, section.href)}
                     aria-current={active ? 'page' : undefined}
@@ -100,7 +84,7 @@ export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Elem
                     )}
                   >
                     <Icon aria-hidden="true" className="size-4 shrink-0" />
-                    <span className="flex-1 truncate">{section.label}</span>
+                    <span className="truncate">{section.label}</span>
                   </Link>
                 </li>
               );

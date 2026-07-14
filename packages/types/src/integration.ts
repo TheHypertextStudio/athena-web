@@ -636,6 +636,16 @@ export const McpIntegrationCreate = z
 /** Validated MCP-integration create body. */
 export type McpIntegrationCreate = z.infer<typeof McpIntegrationCreate>;
 
+/** Editable display attributes for a connected remote MCP server. */
+export const McpIntegrationUpdate = McpIntegrationCreate.pick({
+  label: true,
+  alias: true,
+})
+  .partial()
+  .meta({ id: 'McpIntegrationUpdate', description: 'Edit a remote MCP server connection.' });
+/** Validated MCP-integration update body. */
+export type McpIntegrationUpdate = z.infer<typeof McpIntegrationUpdate>;
+
 /** A connected remote MCP server (never includes the credential). */
 export const McpIntegrationOut = z
   .object({

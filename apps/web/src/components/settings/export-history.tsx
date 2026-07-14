@@ -18,12 +18,16 @@ function ExportHistoryRow({ exportJob }: { exportJob: AccountExportOut }): JSX.E
     <li className="border-outline-variant flex flex-col gap-3 border-t py-4 first:border-t-0 first:pt-0">
       <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-on-surface text-body-medium font-medium">{exportStatusCopy(exportJob)}</p>
+          <p className="text-on-surface text-body-medium font-medium">
+            {exportStatusCopy(exportJob)}
+          </p>
           {exportJob.origin === 'account_deletion' ? (
             <span className="text-on-surface-variant text-xs">Created for account deletion</span>
           ) : null}
         </div>
-        <p className="text-on-surface-variant text-body-medium">{exportScopeSummary(exportJob.scope)}</p>
+        <p className="text-on-surface-variant text-body-medium">
+          {exportScopeSummary(exportJob.scope)}
+        </p>
         <p className="text-on-surface-variant text-xs">
           Requested {requested}
           {downloadUrl && expires ? ` · Available until ${expires}` : ''}
@@ -38,7 +42,7 @@ function ExportHistoryRow({ exportJob }: { exportJob: AccountExportOut }): JSX.E
       ) : null}
       {exportJob.status === 'failed' ? (
         <p className="text-destructive text-body-medium">
-          Create a new export above to try again with the data you need.
+          Create a new export above with the data you need.
         </p>
       ) : null}
       {exportJob.status === 'expired' ? (
@@ -58,7 +62,7 @@ export function ExportHistory({
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-3" aria-live="polite">
-      <h2 className="text-on-surface text-title-large font-medium">Recent exports</h2>
+      <h2 className="text-on-surface text-title-large">Recent exports</h2>
       {exports.length > 0 ? (
         <ol className="border-outline-variant rounded-lg border px-4 sm:px-6">
           {exports.map((exportJob) => (
@@ -66,7 +70,9 @@ export function ExportHistory({
           ))}
         </ol>
       ) : (
-        <p className="text-on-surface-variant text-body-medium">You have not created an export yet.</p>
+        <p className="text-on-surface-variant text-body-medium">
+          You have not created an export yet.
+        </p>
       )}
     </div>
   );

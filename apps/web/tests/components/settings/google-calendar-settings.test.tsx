@@ -171,7 +171,7 @@ describe('GoogleCalendarSettings', () => {
     const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     );
-    render(<GoogleCalendarSettings orgId="org_1" />, { wrapper });
+    render(<GoogleCalendarSettings />, { wrapper });
 
     await waitFor(() => {
       expect(screen.getByText('writer@example.com')).toBeInTheDocument();

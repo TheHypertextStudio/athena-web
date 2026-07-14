@@ -2,6 +2,7 @@
 
 import type { JSX } from 'react';
 import Link from 'next/link';
+import { Button } from '@docket/ui/primitives';
 
 import { useActiveOrg } from '@/components/active-org';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -12,12 +13,20 @@ export default function GlobalWorkspacesSettingsPage(): JSX.Element {
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeader title="Workspaces" description="Choose a workspace and manage its settings." />
+      <div className="flex max-w-2xl items-start justify-between gap-4">
+        <SectionHeader
+          title="Workspaces"
+          description="Choose a workspace and manage its settings."
+        />
+        <Button asChild>
+          <Link href="/workspaces/new">New workspace</Link>
+        </Button>
+      </div>
       <div className="border-outline-variant flex flex-col divide-y rounded-lg border">
         {orgs.map((workspace) => (
           <Link
             key={workspace.id}
-            href={`/orgs/${workspace.id}/settings`}
+            href={`/orgs/${workspace.id}/settings/general`}
             className="hover:bg-surface-container-high focus-visible:ring-ring flex items-center justify-between gap-4 px-4 py-3 outline-none focus-visible:ring-2"
           >
             <span className="flex min-w-0 flex-col">

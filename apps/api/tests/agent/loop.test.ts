@@ -46,6 +46,7 @@ beforeAll(async () => {
 });
 
 interface Seed {
+  userId: string;
   orgId: string;
   teamId: string;
   humanActorId: string;
@@ -66,6 +67,7 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
+  await db.insert(schema.hub).values({ userId: u!.id });
   const [human] = await db
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
@@ -106,6 +108,7 @@ async function seedSession(policy?: 'suggest' | 'act_with_approval' | 'autonomou
   });
 
   return {
+    userId: u!.id,
     orgId,
     teamId: team!.id,
     humanActorId: human!.id,
@@ -314,6 +317,10 @@ describe('driveSession — act_with_approval (the default dial)', () => {
 describe('driveSession — autonomous', () => {
   it('executes writes immediately, fully audited, and completes in one drive', async () => {
     const seed = await seedSession('autonomous');
+    await db
+      .update(schema.hub)
+      .set({ preferences: { athena: { approvalMode: 'routine_autonomy' } } })
+      .where(eq(schema.hub.userId, seed.userId));
     const settled = await driveSession(
       seed.orgId,
       seed.sessionId,

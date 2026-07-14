@@ -61,7 +61,7 @@ async function readHubPreferences(userId: string): Promise<z.infer<typeof HubPre
   return HubPreferences.parse(row.preferences);
 }
 
-/** Deep-merge nested preference groups so a calendar-only patch cannot erase sibling settings. */
+/** Deep-merge nested preference groups so a focused patch cannot erase sibling settings. */
 export function mergeHubPreferences(
   current: z.infer<typeof HubPreferences>,
   patch: z.infer<typeof HubPreferences>,
@@ -72,6 +72,7 @@ export function mergeHubPreferences(
     ...(patch.digest ? { digest: { ...current.digest, ...patch.digest } } : {}),
     ...(patch.proactive ? { proactive: { ...current.proactive, ...patch.proactive } } : {}),
     ...(patch.calendar ? { calendar: { ...current.calendar, ...patch.calendar } } : {}),
+    ...(patch.athena ? { athena: { ...current.athena, ...patch.athena } } : {}),
   };
 }
 /** Hub router: cross-org `today`, `inbox`, `activity`, `portfolio`, and `search` surfaces. */
@@ -98,7 +99,7 @@ const hubRouter = new Hono<AppEnv>()
       summary: 'Update Hub preferences',
       response: HubPreferences,
       description:
-        'Patch the signed-in user personal Hub preferences. Nested groups are deep-merged, so updating one calendar layout field preserves the remaining calendar, digest, and proactive settings.',
+        'Patch the signed-in user personal Hub preferences. Nested groups are deep-merged, so focused updates preserve sibling calendar, digest, Athena, and proactive settings.',
     }),
     zJson(HubPreferences),
     async (c) => {

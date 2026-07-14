@@ -9,7 +9,8 @@
  * - a personal workspace never sees the org/multi-tenant sections (Members & Access, Teams,
  *   Roles & Permissions) nor org-as-company Billing, and its default landing section is an
  *   *available* personal section (not the org-only `members`);
- * - a shared org keeps the full, unchanged org registry.
+ * - both workspace types lead with editable workspace basics;
+ * - unfinished destinations do not appear as disabled roadmap rows in production.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -25,7 +26,7 @@ import {
 } from '../../../src/components/settings/sections';
 
 /** The org/multi-tenant section keys that must never surface in a personal workspace. */
-const ORG_ONLY_SECTION_KEYS = ['members', 'teams', 'roles', 'billing'] as const;
+const ORG_ONLY_SECTION_KEYS = ['members'] as const;
 
 describe('settingsSectionGroups', () => {
   it('returns the full, unchanged org registry for a shared org', () => {
@@ -64,6 +65,7 @@ describe('personal workspace sections', () => {
 
   it('keeps workspace setup sections without the retired Language picker', () => {
     expect(personalKeys).not.toContain('vocabulary');
+    expect(personalKeys[0]).toBe('general');
     expect(personalKeys).toContain('import');
     expect(personalKeys).toContain('work-structure');
   });
@@ -84,24 +86,35 @@ describe('personal workspace sections', () => {
   });
 });
 
-describe('shared org sections (no regression)', () => {
+describe('shared workspace sections', () => {
   const orgSections = settingsSections(false);
 
-  it('still includes Members & Access as an available section', () => {
-    const members = orgSections.find((s) => s.key === 'members');
-    expect(members?.status).toBe('available');
+  it('leads with editable workspace basics', () => {
+    expect(orgSections[0]?.key).toBe('general');
+    expect(orgSections.map((section) => section.key)).toEqual([
+      'general',
+      'members',
+      'work-structure',
+      'import',
+      'automations',
+    ]);
   });
 
-  it('still includes the Organization and Workspace groups', () => {
+  it('frames shared settings as workspace administration', () => {
     const groupLabels = settingsSectionGroups(false).map((g) => g.label);
-    expect(groupLabels).toEqual(['Organization', 'Workspace']);
+    expect(groupLabels).toEqual(['Workspace', 'Workflows']);
+    expect(
+      [...groupLabels, ...orgSections.map((section) => section.description)]
+        .join(' ')
+        .toLowerCase(),
+    ).not.toContain('organization');
   });
 
-  it('still includes every org/multi-tenant section', () => {
-    const keys = orgSections.map((s) => s.key);
-    for (const key of ORG_ONLY_SECTION_KEYS) {
-      expect(keys).toContain(key);
-    }
+  it('does not expose unfinished destinations as disabled roadmap rows', () => {
+    expect(orgSections.map((section) => section.key)).not.toEqual(
+      expect.arrayContaining(['teams', 'roles', 'billing', 'agents']),
+    );
+    expect(orgSections.every((section) => !('status' in section))).toBe(true);
   });
 
   it('matches settingsSections(false) to the flattened group sections', () => {
@@ -122,18 +135,15 @@ describe('shared org sections (no regression)', () => {
 });
 
 describe('defaultSettingsSection', () => {
-  it('routes a shared org to Members & Access', () => {
+  it('routes a shared workspace to General', () => {
     expect(defaultSettingsSection(false)).toBe(DEFAULT_SETTINGS_SECTION);
-    expect(defaultSettingsSection(false)).toBe('members');
+    expect(defaultSettingsSection(false)).toBe('general');
   });
 
-  it('routes a personal workspace to an AVAILABLE personal section (never members)', () => {
+  it('routes a personal workspace to General (never members)', () => {
     const personalDefault = defaultSettingsSection(true);
     expect(personalDefault).not.toBe('members');
-
-    const target = settingsSections(true).find((s) => s.href === personalDefault);
-    expect(target).toBeDefined();
-    expect(target?.status).toBe('available');
+    expect(personalDefault).toBe('general');
   });
 });
 
@@ -141,7 +151,7 @@ describe('sectionHref', () => {
   it('builds the absolute org-scoped settings route for a section suffix', () => {
     expect(sectionHref('org_123', 'members')).toBe('/orgs/org_123/settings/members');
     expect(sectionHref('org_123', defaultSettingsSection(true))).toBe(
-      '/orgs/org_123/settings/work-structure',
+      '/orgs/org_123/settings/general',
     );
   });
 });

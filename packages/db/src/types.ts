@@ -78,6 +78,13 @@ export interface HubPreferences {
     /** Preferred native or writable provider layer for event creation. */
     readonly defaultLayerId?: string | null;
   };
+  /** Persistent instructions and approval policy for the user-owned Athena assistant. */
+  readonly athena?: {
+    /** Personal guidance Athena follows across every workspace. */
+    readonly instructions?: string;
+    /** How much autonomy Athena has for state-changing work. */
+    readonly approvalMode?: 'ask_before_acting' | 'routine_autonomy' | 'suggest_only';
+  };
   /** Daily digest delivery settings (the Sunsama-style end-of-day summary). */
   readonly digest?: {
     /** Whether the daily digest is generated and delivered. */

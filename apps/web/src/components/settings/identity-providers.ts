@@ -3,18 +3,14 @@
  *
  * @remarks
  * The Connected accounts page is a **discover-and-manage** directory: every supported provider is
- * always shown, so the page reads as a catalog rather than a one-button display. Entries are either
- * `live` (a real Better Auth social provider — google/github/linear — whose
- * actual connectability in this deployment is decided by `usePublicConfig().oauthProviders`) or
- * `coming-soon` (a roadmap provider rendered as a disabled entry). Linkable availability is NEVER
- * read from the environment here — that lives in `@/lib/public-config`; this file is the pure
- * display catalog (id, name, icon).
+ * contains only real Better Auth social providers. Runtime availability is resolved by the
+ * consuming surface so unavailable providers remain absent unless the user already linked one.
  */
 import type { IdentityProvider } from '@docket/types';
 import { Github, Google, Layers, type LucideIcon } from '@docket/ui/icons';
 
-/** A real, linkable identity provider (its OAuth may or may not be wired in this deployment). */
-export interface LiveIdentityProvider {
+/** A real identity provider that can be linked when runtime configuration permits it. */
+export interface IdentityProviderEntry {
   readonly kind: 'live';
   /** The Better Auth `socialProviders` key. */
   readonly id: IdentityProvider;
@@ -22,22 +18,7 @@ export interface LiveIdentityProvider {
   readonly icon: LucideIcon;
 }
 
-/** A roadmap provider, shown as a disabled "Coming soon" catalog entry. */
-export interface ComingSoonProvider {
-  readonly kind: 'coming-soon';
-  /** A stable display key (not a Better Auth provider — not yet wired). */
-  readonly id: string;
-  readonly name: string;
-  readonly icon: LucideIcon;
-}
-
-/** One entry in the Connected accounts provider directory. */
-export type IdentityProviderEntry = LiveIdentityProvider | ComingSoonProvider;
-
-/**
- * The Connected accounts directory, in display order: the live providers first, then the roadmap
- * ones as "Coming soon". Extending the directory is a single edit here.
- */
+/** The real Connected accounts directory in display order. */
 export const IDENTITY_PROVIDER_CATALOG: readonly IdentityProviderEntry[] = [
   { kind: 'live', id: 'google', name: 'Google', icon: Google },
   { kind: 'live', id: 'github', name: 'GitHub', icon: Github },

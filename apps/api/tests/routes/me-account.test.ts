@@ -48,6 +48,60 @@ describe('GET /me/account', () => {
   });
 });
 
+describe('GET and PATCH /me/account/profile', () => {
+  it('edits the signed-in person and moves a selected photo into managed storage', async () => {
+    const { db, schema, meAccount } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'ProfileOwner');
+    const app = appWithSession(meAccount, fakeSession(userId));
+    const selected = 'data:image/png;base64,aGVsbG8=';
+
+    const response = await app.request('/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Ada Lovelace', image: selected }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ name: 'Ada Lovelace' });
+    const stored = await (await import('../../src/container'))
+      .getContainer()
+      .blob.get(`settings/profile/${userId}`);
+    expect(new TextDecoder().decode(stored ?? new Uint8Array())).toBe('hello');
+
+    const read = await app.request('/profile');
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({ name: 'Ada Lovelace' });
+
+    const removed = await app.request('/profile', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ image: null }),
+    });
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({ image: null });
+    expect(
+      await (await import('../../src/container'))
+        .getContainer()
+        .blob.get(`settings/profile/${userId}`),
+    ).toBeNull();
+  });
+
+  it('rejects empty profile updates and unauthenticated reads', async () => {
+    const { db, schema, meAccount } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'ProfileValidation');
+    const app = appWithSession(meAccount, fakeSession(userId));
+    expect(
+      (
+        await app.request('/profile', {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      ).status,
+    ).toBe(422);
+    expect((await appWithSession(meAccount, null).request('/profile')).status).toBe(401);
+  });
+});
+
 describe('POST /me/account/exports', () => {
   it('creates a selective pending export (201 + Location) and is idempotent (200)', async () => {
     const { db, schema, meAccount } = await setup();

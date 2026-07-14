@@ -12,8 +12,6 @@ interface IntegrationProviderCardProps {
   provider: IntegrationDirectoryProvider;
   existing: IntegrationOut | undefined;
   canManage: boolean;
-  /** Whether this connector can actually be set up here (OAuth configured or local mock). */
-  available: boolean;
   /** The connect-action label for this surface (e.g. "Connect" or "Import"). */
   actionLabel: string;
   /** A one-line hint shown under a not-yet-connected provider (what connecting does). */
@@ -47,16 +45,10 @@ interface IntegrationProviderCardProps {
 
 /**
  * The status-aware subtitle. Never implies a connection that wasn't validated: an unconfigured
- * provider reads "not yet available", an unconnected one reads the surface hint, and only a
- * `connected` integration reads "Connected".
+ * an unconnected one reads the surface hint, and only a `connected` integration reads "Connected".
  */
-function cardSubtitle(
-  existing: IntegrationOut | undefined,
-  available: boolean,
-  connectHint: string,
-): string {
+function cardSubtitle(existing: IntegrationOut | undefined, connectHint: string): string {
   if (!existing) {
-    if (!available) return 'Not yet available in this workspace';
     return connectHint;
   }
   if (existing.status === 'pending') return 'Setup not finished';
@@ -105,7 +97,7 @@ function ExistingControls(props: {
     existing.status === 'error' ||
     existing.status === 'disconnected';
   return (
-    <div className="flex shrink-0 items-center gap-2">
+    <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
       <Badge variant={STATUS_LABEL[existing.status].variant} className="font-normal">
         {STATUS_LABEL[existing.status].label}
       </Badge>
@@ -143,20 +135,11 @@ function ExistingControls(props: {
 
 /** Right-side affordance for a provider with no integration yet (connect directly — no inline choice). */
 function ConnectAffordance(props: {
-  available: boolean;
   canManage: boolean;
   actionLabel: string;
   busy: boolean;
   onConnect: () => void;
 }): JSX.Element {
-  // Not connectable here (no OAuth configured, not local mock): never offer to set it up.
-  if (!props.available) {
-    return (
-      <span className="text-on-surface-variant border-outline-variant rounded-md border px-3 py-1.5 text-xs font-medium">
-        Available soon
-      </span>
-    );
-  }
   if (!props.canManage) {
     return <span className="text-on-surface-variant text-xs">Ask an admin to configure</span>;
   }
@@ -185,7 +168,6 @@ export function IntegrationProviderCard({
   provider,
   existing,
   canManage,
-  available,
   actionLabel,
   connectHint,
   busy,
@@ -205,7 +187,7 @@ export function IntegrationProviderCard({
   const ProviderIcon = providerIcon(provider.provider);
   const reauthError =
     existing?.status === 'error'
-      ? 'This connection needs attention. Reconnect it and try again.'
+      ? 'This connection needs attention. Reconnect it to restore syncing.'
       : null;
   const showPendingHint = existing?.status === 'pending';
   const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
@@ -213,7 +195,7 @@ export function IntegrationProviderCard({
 
   return (
     <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
-      <div className="flex items-center gap-3 p-4">
+      <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
           <ProviderIcon aria-hidden="true" className="size-4" />
         </span>
@@ -223,7 +205,7 @@ export function IntegrationProviderCard({
             <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
           ) : null}
           <span className="text-on-surface-variant text-xs">
-            {cardSubtitle(existing, available, connectHint)}
+            {cardSubtitle(existing, connectHint)}
           </span>
         </div>
         {existing ? (
@@ -243,7 +225,6 @@ export function IntegrationProviderCard({
           />
         ) : (
           <ConnectAffordance
-            available={available}
             canManage={canManage}
             actionLabel={actionLabel}
             busy={busy}

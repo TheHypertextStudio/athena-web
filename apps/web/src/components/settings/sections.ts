@@ -2,13 +2,13 @@
  * `settings` — the typed registry of Settings sections that drives the sub-navigation.
  *
  * @remarks
- * Each section is a `{ key, label, description, icon, href, status }` record.
+ * Each section is a `{ key, label, description, icon, href }` record.
  * The nav, the layout, and the section-root redirect all derive from this registry.
  * `settingsSectionGroups` picks the correct registry for the active workspace type.
  */
-import { CreditCard, Inbox, ListChecks, Shield, Sparkles, Users, Workflow } from '@docket/ui/icons';
+import { Inbox, Settings, Sparkles, Users, Workflow } from '@docket/ui/icons';
 
-export type { SectionStatus, SettingsSection, SettingsSectionGroup } from './sections-personal';
+export type { SettingsSection, SettingsSectionGroup } from './sections-personal';
 export {
   DEFAULT_PERSONAL_SETTINGS_SECTION,
   PERSONAL_SETTINGS_SECTION_GROUPS,
@@ -19,47 +19,29 @@ import {
 } from './sections-personal';
 import type { SettingsSection, SettingsSectionGroup } from './sections-personal';
 
-/** The Settings sections for a **shared organization**, grouped for the section list. */
+/** The Settings sections for a **shared workspace**, grouped for the section list. */
 export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
   {
-    label: 'Organization',
+    label: 'Workspace',
     sections: [
+      {
+        key: 'general',
+        label: 'General',
+        description: 'Edit the workspace name, purpose, address, logo, and terminology.',
+        icon: Settings,
+        href: 'general',
+      },
       {
         key: 'members',
         label: 'Members & Access',
         description: 'Manage who belongs to this workspace and what they can do.',
         icon: Users,
         href: 'members',
-        status: 'available',
-      },
-      {
-        key: 'teams',
-        label: 'Teams',
-        description: 'Group members into teams that own work together.',
-        icon: ListChecks,
-        href: 'teams',
-        status: 'coming-soon',
-      },
-      {
-        key: 'roles',
-        label: 'Roles & Permissions',
-        description: 'Define what each role can see and change.',
-        icon: Shield,
-        href: 'roles',
-        status: 'coming-soon',
-      },
-      {
-        key: 'billing',
-        label: 'Billing',
-        description: 'Manage your plan, seats, and invoices.',
-        icon: CreditCard,
-        href: 'billing',
-        status: 'coming-soon',
       },
     ],
   },
   {
-    label: 'Workspace',
+    label: 'Workflows',
     sections: [
       {
         key: 'work-structure',
@@ -67,7 +49,6 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Set how deeply strategic initiatives can be nested.',
         icon: Workflow,
         href: 'work-structure',
-        status: 'available',
       },
       {
         key: 'import',
@@ -75,7 +56,6 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Move everything from another tool into Docket, once.',
         icon: Inbox,
         href: 'import',
-        status: 'available',
       },
       {
         key: 'automations',
@@ -83,15 +63,6 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Rules that act on your email suggestions and tasks.',
         icon: Sparkles,
         href: 'automations',
-        status: 'available',
-      },
-      {
-        key: 'agents',
-        label: 'Agents',
-        description: 'Configure the AI teammates that work alongside your team.',
-        icon: Sparkles,
-        href: 'agents',
-        status: 'coming-soon',
       },
     ],
   },
@@ -113,7 +84,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = SETTINGS_SECTION_GR
 );
 
 /** The section the `settings` root redirects to for a **shared org**. */
-export const DEFAULT_SETTINGS_SECTION = 'members';
+export const DEFAULT_SETTINGS_SECTION = 'general';
 
 /** The default section key for the active workspace's settings root redirect. */
 export function defaultSettingsSection(isPersonal: boolean): string {

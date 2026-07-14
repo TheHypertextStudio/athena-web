@@ -39,6 +39,56 @@
 
 ---
 
+### [SETTINGS-PROD-003] Make Settings production-honest and fully editable
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-14
+- **Completed**: 2026-07-14
+- **Priority**: P0
+- **Description**: Remove deployment, API, roadmap, and dead-placeholder language from production
+  Settings. Every safe user-owned basic attribute must have a real editor and persistence path.
+- **Plan**:
+  1. Remove unavailable providers and unfinished destinations instead of advertising internal state.
+  2. Add server-backed user Profile and Athena preference editing.
+  3. Add a General workspace destination for name, purpose, URL slug, logo, and terminology.
+  4. Verify all Settings routes at desktop/mobile in light/dark, including empty and error states.
+  5. Run the complete repository gates, document the audit, and commit only owned files.
+- **Risks**: Workspace metadata changes affect navigation and URLs throughout the app; provider
+  filtering must preserve already-connected accounts even if new authorization is unavailable.
+- **Blockers**: None.
+- **Approach**: Kept the caller-owned Settings hierarchy independent from workspace context, then
+  audited every field and production state. Added real persistence for Profile, Athena preferences,
+  workspace identity, automation names/templates, and MCP connector labels/aliases; removed provider
+  and roadmap advertisements that cannot be acted on; made recoverable reads self-healing; and
+  replaced technical image-URL fields with ordinary choose/replace/remove image controls backed by
+  managed blob storage. Wired the caller-owned Athena instructions and approval ceiling into every
+  initiated session so these settings change prompt and tool-execution behavior, not just stored data.
+- **Files Changed**: Hub, organization, and MCP integration DTOs/routes/tests; global Profile and
+  Athena pages; workspace General route/editor; Settings registries, navigation, provider,
+  automation, connection, calendar, export, and error-state components; the automated screenshot
+  harness; focused Settings tests; `docs/design/audits/2026-07-14-settings-production.md`; and this
+  work log.
+- **Decisions**: Basic identity and preference attributes are editable wherever the caller has
+  permission. Security-sensitive email changes remain in Security so confirmation is preserved.
+  Connections only lists services Athena can use now or accounts already linked; Connected apps
+  remains the opposite authorization direction. Workspace administration consistently says
+  workspace, not organization, and unfinished surfaces are omitted rather than advertised.
+  Proactive assistance is not shown because its observation-to-session workflow has no live caller;
+  Settings only exposes behavior the production application actually enforces. Personal approval
+  behavior may make a workspace agent stricter but can never make it more permissive.
+- **Validation**: Root `pnpm typecheck` and `pnpm lint` pass 17/17 tasks; root `pnpm test` passes
+  17/17 tasks including web 742/742; root `pnpm build` passes 3/3. Focused Settings/API/type tests
+  pass, and the image picker completed a live select/save/remove/save persistence cycle. Captured
+  18 routes at 1440×900 and 390×844 in both themes (72 resolved-state screenshots); all 18 pass the
+  automated 320px overflow check, keyboard focus is visible, and measured Settings controls meet
+  the 40px mobile target.
+- **Retrospective**: “Editable” cannot mean exposing a database-shaped URL field or leaving a
+  technically present control behind permission ambiguity. Auditing the actual loaded screens
+  caught semantic drift, mobile navigation density, provider-row collisions, undersized touch
+  targets, and technical image inputs that code-only review missed. The durable capture harness now
+  creates its own shared test workspace, waits for settled data, and fails on narrow overflow, so
+  future Settings reviews do not require sign-in or manual fixture work.
+
 ### [SETTINGS-CRAFT-002] Repair Settings loaded states and visual craft
 
 - **Status**: COMPLETED

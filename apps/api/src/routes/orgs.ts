@@ -23,6 +23,7 @@ import {
   OrgCreateResult,
   OrgOut,
   OrgSummary,
+  OrgUpdate,
   WorkspaceSettingsOut,
   WorkspaceSettingsUpdate,
   pageOf,
@@ -35,6 +36,7 @@ import type { AppEnv } from '../context';
 import { AuthError, ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
@@ -373,6 +375,58 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
       /* v8 ignore next -- @preserve defensive: orgContextMiddleware already proved membership, so the org exists */
       if (!org) throw new AuthError();
       return ok(c, OrgOut, toOrgOut(org));
+    },
+  )
+  .patch(
+    '/:orgId',
+    orgContextMiddleware,
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Orgs',
+      summary: 'Update workspace identity settings',
+      response: OrgOut,
+      capability: 'manage',
+      description:
+        'Update the editable identity of a workspace: its display name, purpose, URL slug, logo, and terminology preset. Optional purpose and logo values can be cleared with null. Slugs remain globally unique and collisions return 409.',
+    }),
+    zJson(OrgUpdate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+      const rows = await db.select().from(organization).where(eq(organization.id, orgId)).limit(1);
+      const current = rows[0];
+      /* v8 ignore next -- @preserve org context middleware proved the workspace exists */
+      if (!current) throw new AuthError();
+
+      const slug =
+        body.slug === undefined || body.slug === current.slug
+          ? current.slug
+          : await resolveUniqueSlug(body.slug, true);
+      let avatar = body.avatar;
+      if (body.avatar === null) {
+        await deleteSettingsImage(`settings/workspace/${orgId}`);
+      } else if (body.avatar?.startsWith('data:image/')) {
+        avatar = await storeSettingsImage(`settings/workspace/${orgId}`, body.avatar);
+      }
+      const values: Partial<typeof organization.$inferInsert> = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.purpose !== undefined ? { purpose: body.purpose } : {}),
+        ...(body.slug !== undefined ? { slug } : {}),
+        ...(avatar !== undefined ? { avatar } : {}),
+        ...(body.vocabulary !== undefined
+          ? { vocabulary: { ...current.vocabulary, preset: body.vocabulary } }
+          : {}),
+      };
+      const updatedRows = await db
+        .update(organization)
+        .set(values)
+        .where(eq(organization.id, orgId))
+        .returning();
+      const updated = updatedRows[0];
+      /* v8 ignore next -- @preserve org context middleware proved the workspace exists */
+      if (!updated) throw new AuthError();
+      await enqueueSearchUpsert(orgId, 'organization', orgId);
+      return ok(c, OrgOut, toOrgOut(updated));
     },
   )
   .use('/:orgId/*', orgContextMiddleware)

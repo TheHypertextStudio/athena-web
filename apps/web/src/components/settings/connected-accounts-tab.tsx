@@ -5,15 +5,14 @@
  *
  * @remarks
  * This is the place to **discover** which external accounts can be linked AND **manage** the ones
- * you have. Every supported provider is always shown as a {@link ProviderGroup} (driven by
+ * you have. Every currently usable provider is shown as a {@link ProviderGroup} (driven by
  * {@link IDENTITY_PROVIDER_CATALOG}), with its linked accounts grouped beneath it — so the page
  * scales to many accounts across providers instead of being a one-button display. It is the *only*
  * place linking/unlinking happens; org **Connections** then pick one of these accounts to sync
  * resources from. User-scoped: the same directory shows regardless of which org's settings are open.
  *
- * A provider is connectable only when its OAuth is configured in this deployment
- * (`usePublicConfig().oauthProviders`, derived from real server credentials) — otherwise it reads
- * "Available soon" rather than offering a dead button. Only real linked accounts are listed.
+ * A provider appears when it can be linked now or when the user already has a linked account.
+ * Runtime/deployment status is never exposed as roadmap copy in production UI.
  */
 import type { IdentityOut, IdentityProvider } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
@@ -75,6 +74,13 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
     }
     return map;
   }, [identities]);
+  const visibleProviders = useMemo(
+    () =>
+      IDENTITY_PROVIDER_CATALOG.filter(
+        (entry) => configured.has(entry.id) || (byProvider.get(entry.id)?.length ?? 0) > 0,
+      ),
+    [byProvider, configured],
+  );
 
   const onAdd = useCallback((provider: IdentityProvider): void => {
     setError(null);
@@ -153,13 +159,13 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         </p>
       ) : (
         <ul className="flex flex-col gap-2">
-          {IDENTITY_PROVIDER_CATALOG.map((entry) => (
+          {visibleProviders.map((entry) => (
             <ProviderGroup
               key={entry.id}
               entry={entry}
-              accounts={entry.kind === 'live' ? (byProvider.get(entry.id) ?? []) : []}
-              configured={entry.kind === 'live' && configured.has(entry.id)}
-              adding={entry.kind === 'live' && addingProvider === entry.id}
+              accounts={byProvider.get(entry.id) ?? []}
+              configured={configured.has(entry.id)}
+              adding={addingProvider === entry.id}
               busyId={busyId}
               onAdd={onAdd}
               onRemove={onRemove}

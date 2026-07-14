@@ -1,7 +1,7 @@
 /** `@docket/api` — remote-MCP integrations router (`/v1/orgs/:orgId/integrations/mcp`). */
 import { db, integration, integrationCredential } from '@docket/db';
 import { beginMcpOAuthAuthorization, parseMcpOAuthCredential } from '@docket/integrations';
-import { McpIntegrationCreate, McpIntegrationOut } from '@docket/types';
+import { McpIntegrationCreate, McpIntegrationOut, McpIntegrationUpdate } from '@docket/types';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -302,6 +302,49 @@ const router = new Hono<AppEnv>()
           .where(eq(integration.id, row.id));
         throw cause;
       }
+    },
+  )
+  .patch(
+    '/:id',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Update a remote MCP server connection',
+      capability: 'manage',
+      response: McpIntegrationOut,
+      description:
+        'Update the user-facing display name or tool prefix for an org-scoped MCP server. Tool prefixes remain unique within the workspace.',
+    }),
+    zParam(idParam),
+    zJson(McpIntegrationUpdate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const body = c.req.valid('json');
+      const row = await loadMcpIntegration(orgId, id);
+      const config = mcpConfig(row);
+      if (body.alias && body.alias !== config.alias) {
+        const peers = await db
+          .select({ id: integration.id, config: integration.config })
+          .from(integration)
+          .where(and(eq(integration.organizationId, orgId), eq(integration.provider, 'mcp')));
+        if (
+          peers.some(
+            (peer) => peer.id !== id && (peer.config as unknown as McpConfig).alias === body.alias,
+          )
+        ) {
+          throw new ConflictError(`Alias "${body.alias}" is already in use in this workspace`);
+        }
+      }
+      const updatedRows = await db
+        .update(integration)
+        .set({ config: { ...config, ...body } })
+        .where(eq(integration.id, row.id))
+        .returning();
+      const updated = updatedRows[0];
+      /* v8 ignore next -- @preserve loadMcpIntegration proved the row exists */
+      if (!updated) throw new NotFoundError('Integration not found');
+      return ok(c, McpIntegrationOut, toMcpOut(updated));
     },
   )
   .post(

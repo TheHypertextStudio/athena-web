@@ -21,7 +21,10 @@ export function GlobalSettingsSectionNav(): JSX.Element {
   }
 
   return (
-    <nav aria-label="Settings sections" className="flex flex-col gap-1">
+    <nav
+      aria-label="Settings sections"
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-2 @3xl:mx-0 @3xl:flex-col @3xl:overflow-visible @3xl:px-0 @3xl:pb-0"
+    >
       {GLOBAL_SETTINGS_SECTIONS.map((section) => {
         const Icon = section.icon;
         const active = isActive(section);
@@ -31,7 +34,7 @@ export function GlobalSettingsSectionNav(): JSX.Element {
             href={globalSettingsSectionHref(section.href)}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'text-body-medium flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+              'text-body-medium flex min-h-10 w-auto shrink-0 items-center gap-2.5 rounded-md px-2.5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none @3xl:w-full',
               'focus-visible:ring-ring',
               active
                 ? 'bg-surface-container-highest text-on-surface font-medium'

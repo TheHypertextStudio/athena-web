@@ -5,6 +5,7 @@ import { Button, Skeleton } from '@docket/ui/primitives';
 import { use, useEffect, useState, type JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
+import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
@@ -16,6 +17,7 @@ export default function WorkStructureSettingsPage({
   params: Promise<{ orgId: string }>;
 }): JSX.Element {
   const { orgId } = use(params);
+  const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
   const key = queryKeys.settings(orgId, 'work-structure');
   const settingsQ = useLiveApiQuery(
     apiQueryOptions(
@@ -61,6 +63,11 @@ export default function WorkStructureSettingsPage({
         </p>
       ) : (
         <section aria-labelledby="initiative-depth" className="flex max-w-2xl flex-col gap-5">
+          {!permissionLoading && !canManage ? (
+            <p className="bg-surface-container text-on-surface-variant rounded-md px-3 py-2 text-sm">
+              Only workspace owners and admins can change this limit.
+            </p>
+          ) : null}
           <div>
             <h3 id="initiative-depth" className="text-on-surface text-sm font-semibold">
               Initiative hierarchy depth
@@ -77,10 +84,11 @@ export default function WorkStructureSettingsPage({
                 key={value}
                 type="button"
                 aria-pressed={depth === value}
+                disabled={permissionLoading || !canManage}
                 onClick={() => {
                   setDepth(value);
                 }}
-                className={`focus-visible:ring-ring size-10 rounded-md border text-sm font-medium focus-visible:ring-2 focus-visible:outline-none ${
+                className={`focus-visible:ring-ring size-10 rounded-md border text-sm font-medium focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
                   depth === value
                     ? 'border-primary bg-primary text-on-primary'
                     : 'border-outline-variant text-on-surface hover:bg-surface-container'
@@ -93,7 +101,12 @@ export default function WorkStructureSettingsPage({
 
           <div className="flex items-center gap-3">
             <Button
-              disabled={save.isPending || depth === settingsQ.data.initiativeMaxDepth}
+              disabled={
+                permissionLoading ||
+                !canManage ||
+                save.isPending ||
+                depth === settingsQ.data.initiativeMaxDepth
+              }
               onClick={() => {
                 save.mutate(depth);
               }}

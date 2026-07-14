@@ -76,7 +76,7 @@ export function InviteForm({
       <div className="flex flex-col gap-1">
         <h3 className="text-on-surface text-base font-semibold">Invite someone</h3>
         <p className="text-on-surface-variant text-xs">
-          They&rsquo;ll get an email invitation to join this organization.
+          They&rsquo;ll get an email invitation to join this workspace.
         </p>
       </div>
 

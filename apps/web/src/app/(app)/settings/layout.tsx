@@ -5,7 +5,7 @@ import { GlobalSettingsSectionNav } from '@/components/settings/global-settings-
 /** The user-owned Settings shell, independent of the active workspace. */
 export default function GlobalSettingsLayout({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8 [&_a]:inline-flex [&_a]:min-h-10 [&_a]:items-center [&_button]:min-h-10 [&_button]:min-w-10 [&_input]:min-h-10 [&_select]:min-h-10">
       <header className="flex flex-col gap-1">
         <h1 className="text-on-surface text-title-large">Settings</h1>
         <p className="text-on-surface-variant text-body-medium">

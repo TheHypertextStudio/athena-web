@@ -33,6 +33,10 @@ describe('Hub preferences', () => {
             minLaneWidth: 240,
             defaultCreateIntent: 'event',
           },
+          athena: {
+            instructions: 'Keep mornings clear.',
+            approvalMode: 'ask_before_acting',
+          },
         },
       })
       .where(eq(schema.hub.userId, userId));
@@ -66,6 +70,20 @@ describe('Hub preferences', () => {
     });
     expect(clearedResponse.status).toBe(200);
     expect((await body<HubPreferences>(clearedResponse)).calendar?.defaultLayerId).toBeNull();
+
+    const athenaResponse = await app.request('/preferences', {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ athena: { approvalMode: 'routine_autonomy' } }),
+    });
+    expect(athenaResponse.status).toBe(200);
+    expect(await body<HubPreferences>(athenaResponse)).toMatchObject({
+      theme: 'dark',
+      athena: {
+        instructions: 'Keep mornings clear.',
+        approvalMode: 'routine_autonomy',
+      },
+    });
   });
 
   it('requires a session and returns 404 when the caller has no Hub', async () => {

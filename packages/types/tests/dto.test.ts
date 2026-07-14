@@ -112,6 +112,7 @@ import {
   OrgCreateResult,
   OrgOut,
   OrgSummary,
+  OrgUpdate,
   WorkspaceSettingsOut,
   WorkspaceSettingsUpdate,
 } from '../src/organization';
@@ -176,6 +177,39 @@ describe('organization DTOs', () => {
 
   it('OrgCreate (default, no isPersonal) still requires a name', () => {
     expect(OrgCreate.safeParse({}).success).toBe(false);
+  });
+
+  it('OrgUpdate accepts every safe editable workspace attribute', () => {
+    expect(
+      OrgUpdate.parse({
+        name: 'Operations',
+        purpose: 'Run the company with less coordination overhead.',
+        slug: 'operations',
+        avatar: 'https://example.com/logo.png',
+        vocabulary: 'agency',
+      }),
+    ).toEqual({
+      name: 'Operations',
+      purpose: 'Run the company with less coordination overhead.',
+      slug: 'operations',
+      avatar: 'https://example.com/logo.png',
+      vocabulary: 'agency',
+    });
+  });
+
+  it('OrgUpdate supports clearing optional attributes and rejects invalid basics', () => {
+    expect(OrgUpdate.parse({ purpose: null, avatar: null })).toEqual({
+      purpose: null,
+      avatar: null,
+    });
+    expect(OrgUpdate.safeParse({ name: '' }).success).toBe(false);
+    expect(OrgUpdate.safeParse({ slug: 'Not URL Safe' }).success).toBe(false);
+    expect(OrgUpdate.safeParse({ avatar: 'not-a-url' }).success).toBe(false);
+    expect(OrgUpdate.safeParse({}).success).toBe(false);
+    expect(OrgUpdate.safeParse({ avatar: 'data:image/png;base64,aGVsbG8=' }).success).toBe(true);
+    expect(
+      OrgUpdate.safeParse({ avatar: `data:image/png;base64,${'a'.repeat(1_500_000)}` }).success,
+    ).toBe(false);
   });
 
   it('OrgOut parses a full org', () => {

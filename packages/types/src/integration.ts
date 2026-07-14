@@ -625,6 +625,12 @@ export const McpIntegrationCreate = z
       .describe(
         'Bearer credential the org holds for this server; sealed (AES-256-GCM) at rest, never returned, never a caller token (no passthrough).',
       ),
+    authMode: z
+      .enum(['oauth', 'bearer', 'none'])
+      .optional()
+      .describe(
+        'Authentication method. Omit for OAuth unless this legacy request supplies bearerToken; bearer is an advanced org-held credential fallback; none is for public MCP servers.',
+      ),
   })
   .meta({ id: 'McpIntegrationCreate', description: 'Connect a remote MCP server.' });
 /** Validated MCP-integration create body. */
@@ -638,6 +644,9 @@ export const McpIntegrationOut = z
     url: z.string().describe('The remote MCP server URL.'),
     label: z.string().describe('Display name.'),
     alias: z.string().describe('The tool namespace (`<alias>__<name>`).'),
+    authMode: z
+      .enum(['oauth', 'bearer', 'none'])
+      .describe('Authentication method for this server.'),
     status: IntegrationStatus.describe(
       'Connection health: only a live `tools/list` promotes to `connected`.',
     ),

@@ -95,6 +95,31 @@ Add to `~/.codeium/windsurf/mcp_config.json` (note `serverUrl`, not `url`):
 
 Point any MCP-compatible client at the MCP URL. Clients that implement the MCP authorization spec handle registration, consent, and token refresh automatically via the discovery documents above.
 
+## Let Athena use another MCP server
+
+Athena can also be an MCP **client** for an organization. Go to **Settings → Connections → MCP
+connectors**, enter the server URL, choose **Sign in and approve access**, and finish the provider's
+browser approval. Docket then verifies `tools/list` before Athena receives any of the server's
+tools. They are namespaced as `<connector>__<tool>` so external tools cannot collide with Docket
+tools.
+
+For example, Sunsama's MCP endpoint is:
+
+```
+https://api.sunsama.com/mcp
+```
+
+The connection follows the current MCP OAuth flow: protected-resource discovery (RFC 9728),
+authorization-server discovery, PKCE, the RFC 8707 resource indicator, and URL-form client IDs
+(CIMD) when the provider advertises them. Docket uses dynamic client registration only when a
+server does not advertise CIMD. The approved organization credential, registration state, and
+PKCE state are encrypted at rest; Athena receives only the resulting server tools, never a raw
+user token. Short-lived credentials refresh before an agent run uses them.
+
+Public MCP servers and organization-held bearer credentials remain available as explicit advanced
+options. They do not bypass Docket's approval policy: an external tool's declared annotations and
+the normal action policy still decide whether Athena may execute it or must request approval.
+
 ## What's exposed
 
 - **Tools** (~26) — task CRUD and workflow (`create_task`, `update_task`, `move_task`, `assign_task`, `set_task_state`, dependencies, subtasks), projects/programs/initiatives, comments and status updates, daily-plan, `run_view` + `search`, agent-session control (`trigger_agent`, `approve_action`, …), and `link_external`.

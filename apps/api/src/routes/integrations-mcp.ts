@@ -1,5 +1,6 @@
 /** `@docket/api` — remote-MCP integrations router (`/v1/orgs/:orgId/integrations/mcp`). */
 import { db, integration, integrationCredential } from '@docket/db';
+import { beginMcpOAuthAuthorization, parseMcpOAuthCredential } from '@docket/integrations';
 import { McpIntegrationCreate, McpIntegrationOut } from '@docket/types';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -7,8 +8,10 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
+import { env } from '../env';
 import { ConflictError, NotFoundError } from '../error';
 import { sealCredential, unsealCredential } from '../lib/credentials';
+import { signConnectState } from '../lib/oauth-state';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -23,6 +26,7 @@ interface McpConfig {
   readonly label: string;
   readonly alias: string;
   readonly toolCount?: number;
+  readonly authMode?: 'oauth' | 'bearer' | 'none';
 }
 
 /** Read the MCP config off a row (rows this router creates always carry it). */
@@ -39,6 +43,7 @@ function toMcpOut(row: IntegrationRow): z.input<typeof McpIntegrationOut> {
     url: config.url,
     label: config.label,
     alias: config.alias,
+    authMode: config.authMode ?? 'none',
     status: row.status,
     toolCount: typeof config.toolCount === 'number' ? config.toolCount : null,
     lastError: row.lastError,
@@ -68,14 +73,21 @@ async function loadMcpIntegration(orgId: string, id: string): Promise<Integratio
  * `tools/list`. Promotes to `connected` (stamping `toolCount`) or demotes to `error`
  * with the reason — connection state is only ever earned by a real round trip.
  */
-async function verifyIntegration(row: IntegrationRow): Promise<IntegrationRow> {
+export async function verifyIntegration(row: IntegrationRow): Promise<IntegrationRow> {
   const config = mcpConfig(row);
   const credRows = await db
     .select({ ciphertext: integrationCredential.ciphertext })
     .from(integrationCredential)
     .where(eq(integrationCredential.integrationId, row.id))
     .limit(1);
-  const bearerToken = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+  const storedCredential = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+  const oauthCredential = storedCredential ? parseMcpOAuthCredential(storedCredential) : null;
+  const bearerToken =
+    oauthCredential?.kind === 'mcp_oauth'
+      ? oauthCredential.tokens.access_token
+      : oauthCredential
+        ? undefined
+        : storedCredential;
 
   let patch: Partial<typeof integration.$inferInsert>;
   try {
@@ -113,6 +125,19 @@ async function verifyIntegration(row: IntegrationRow): Promise<IntegrationRow> {
 }
 
 const idParam = z.object({ id: z.string() });
+const mcpAuthorizationOut = z.object({ authorizationUrl: z.url() });
+
+/** The public callback endpoint supplied to every third-party MCP authorization server. */
+function mcpOAuthRedirectUrl(): string {
+  return `${env.API_URL}/internal/integrations/mcp/callback`;
+}
+
+/** The public CIMD document URL when the API is deployed behind HTTPS. */
+function mcpOAuthClientMetadataUrl(): string | undefined {
+  return env.API_URL.startsWith('https://')
+    ? `${env.API_URL}/.well-known/mcp-client.json`
+    : undefined;
+}
 
 const router = new Hono<AppEnv>()
   .get(
@@ -147,6 +172,9 @@ const router = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
+      // Preserve the original bearer-token API for programmatic callers while making the web
+      // experience OAuth-first. New callers should always send authMode explicitly.
+      const authMode = body.authMode ?? (body.bearerToken ? 'bearer' : 'oauth');
 
       const existing = await db
         .select({ id: integration.id, config: integration.config })
@@ -156,6 +184,12 @@ const router = new Hono<AppEnv>()
         throw new ConflictError(`Alias "${body.alias}" is already in use in this organization`);
       }
 
+      if (authMode === 'bearer' && !body.bearerToken) {
+        throw new ConflictError('A bearer credential is required for bearer authentication');
+      }
+      if (authMode !== 'bearer' && body.bearerToken) {
+        throw new ConflictError('Bearer credentials are only valid with bearer authentication');
+      }
       // Seal BEFORE the insert so a missing key aborts cleanly with nothing stored.
       const ciphertext = body.bearerToken ? sealCredential(body.bearerToken) : null;
 
@@ -168,7 +202,7 @@ const router = new Hono<AppEnv>()
             pattern: 'connector',
             roles: ['work'],
             status: 'pending',
-            config: { url: body.url, label: body.label, alias: body.alias },
+            config: { url: body.url, label: body.label, alias: body.alias, authMode },
             ...(ciphertext ? { connection: { credentialsRef: 'integration_credential' } } : {}),
             syncCadenceMinutes: null,
             createdBy: actorId,
@@ -186,8 +220,63 @@ const router = new Hono<AppEnv>()
         return row;
       });
 
-      const verified = await verifyIntegration(created);
-      return ok(c, McpIntegrationOut, toMcpOut(verified));
+      // OAuth servers need a browser approval before the first health check. Public and
+      // bearer-backed servers still receive the existing immediate live verification.
+      const output = authMode === 'oauth' ? created : await verifyIntegration(created);
+      return ok(c, McpIntegrationOut, toMcpOut(output));
+    },
+  )
+  .post(
+    '/:id/authorize',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Start remote MCP OAuth approval',
+      capability: 'manage',
+      response: mcpAuthorizationOut,
+      description:
+        'Discover the remote MCP server’s OAuth configuration, persist PKCE state encrypted at rest, and return its browser approval URL. The official MCP client handles RFC 9728 discovery, CIMD, dynamic registration fallback, and resource indicators.',
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadMcpIntegration(orgId, id);
+      const config = mcpConfig(row);
+      if (config.authMode !== 'oauth')
+        throw new ConflictError('This MCP server is not configured for OAuth');
+
+      const state = signConnectState({ integrationId: row.id, orgId, userId: actorId });
+      try {
+        const begun = await beginMcpOAuthAuthorization({
+          serverUrl: config.url,
+          redirectUrl: mcpOAuthRedirectUrl(),
+          ...(mcpOAuthClientMetadataUrl()
+            ? { clientMetadataUrl: mcpOAuthClientMetadataUrl() }
+            : {}),
+          state,
+        });
+        const ciphertext = sealCredential(JSON.stringify(begun.credential));
+        await db
+          .insert(integrationCredential)
+          .values({ organizationId: orgId, integrationId: row.id, ciphertext })
+          .onConflictDoUpdate({
+            target: integrationCredential.integrationId,
+            set: { ciphertext },
+          });
+        return ok(c, mcpAuthorizationOut, { authorizationUrl: begun.authorizationUrl });
+      } catch (cause) {
+        await db
+          .update(integration)
+          .set({
+            status: 'error',
+            lastError:
+              cause instanceof Error ? cause.message : 'MCP OAuth authorization could not start',
+            lastErrorAt: new Date(),
+          })
+          .where(eq(integration.id, row.id));
+        throw cause;
+      }
     },
   )
   .post(

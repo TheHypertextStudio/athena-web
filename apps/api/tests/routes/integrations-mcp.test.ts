@@ -114,6 +114,7 @@ async function connectSunsama(seed: Seed, bearerToken?: string): Promise<McpInte
       url: 'https://mcp.sunsama.com/mcp',
       label: 'Sunsama',
       alias: 'sunsama',
+      authMode: bearerToken ? 'bearer' : 'none',
       ...(bearerToken ? { bearerToken } : {}),
     }),
   });
@@ -122,6 +123,24 @@ async function connectSunsama(seed: Seed, bearerToken?: string): Promise<McpInte
 }
 
 describe('remote MCP integrations', () => {
+  it('creates OAuth servers pending user approval instead of falsely reporting a connection', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        url: 'https://api.sunsama.com/mcp',
+        label: 'Sunsama',
+        alias: 'sunsama',
+        authMode: 'oauth',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as McpIntegrationOut;
+    expect(out).toMatchObject({ status: 'pending', authMode: 'oauth', toolCount: null });
+  });
+
   it('connects with a live tools/list health check and reports the tool count', async () => {
     const seed = await seedOrg();
     const out = await connectSunsama(seed);
@@ -144,6 +163,26 @@ describe('remote MCP integrations', () => {
     expect(unsealCredential(creds[0]!.ciphertext)).toBe('super-secret-token');
   });
 
+  it('keeps the original bearer-token request shape working for programmatic connectors', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+    const response = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        url: 'https://mcp.sunsama.com/mcp',
+        label: 'Sunsama',
+        alias: 'sunsama',
+        bearerToken: 'legacy-org-token',
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()) as McpIntegrationOut).toMatchObject({
+      authMode: 'bearer',
+      status: 'connected',
+    });
+  });
+
   it('rejects a duplicate alias within the org', async () => {
     const seed = await seedOrg();
     await connectSunsama(seed);
@@ -155,6 +194,7 @@ describe('remote MCP integrations', () => {
         url: 'https://mcp.sunsama.com/mcp',
         label: 'Sunsama again',
         alias: 'sunsama',
+        authMode: 'none',
       }),
     });
     expect(res.status).toBe(409);
@@ -170,6 +210,7 @@ describe('remote MCP integrations', () => {
         url: 'https://unknown.example.com/mcp',
         label: 'Ghost town',
         alias: 'ghost',
+        authMode: 'none',
       }),
     });
     expect(res.status).toBe(200);

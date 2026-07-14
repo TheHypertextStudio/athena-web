@@ -17,11 +17,16 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { TurnToolDef } from '@docket/agent-runtime';
 import { db, integration, integrationCredential } from '@docket/db';
-import type { RemoteMcpSession } from '@docket/integrations';
+import {
+  mcpOAuthTokenNeedsRefresh,
+  parseMcpOAuthCredential,
+  refreshMcpOAuthCredential,
+  type RemoteMcpSession,
+} from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 
 import { getContainer } from '../container';
-import { unsealCredential } from '../lib/credentials';
+import { sealCredential, unsealCredential } from '../lib/credentials';
 import { internalAgentContext } from '../mcp/internal-session';
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints } from './approval-policy';
@@ -157,7 +162,22 @@ export async function openToolbox(orgId: string, agentId: string): Promise<Toolb
       .where(eq(integrationCredential.integrationId, row.id))
       .limit(1);
     try {
-      const bearerToken = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+      const storedCredential = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
+      const oauthCredential = storedCredential ? parseMcpOAuthCredential(storedCredential) : null;
+      let bearerToken =
+        oauthCredential?.kind === 'mcp_oauth'
+          ? oauthCredential.tokens.access_token
+          : oauthCredential
+            ? undefined
+            : storedCredential;
+      if (oauthCredential?.kind === 'mcp_oauth' && mcpOAuthTokenNeedsRefresh(oauthCredential)) {
+        const refreshed = await refreshMcpOAuthCredential(oauthCredential);
+        await db
+          .update(integrationCredential)
+          .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
+          .where(eq(integrationCredential.integrationId, row.id));
+        bearerToken = refreshed.tokens.access_token;
+      }
       const session = await getContainer().mcpConnector.open({
         url: config.url,
         ...(bearerToken ? { bearerToken } : {}),

@@ -15,6 +15,7 @@
  */
 import type { McpIntegrationOut } from '@docket/types';
 import { Badge, Button, Input, Skeleton } from '@docket/ui/primitives';
+import { useSearchParams } from 'next/navigation';
 import { type JSX, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -38,6 +39,8 @@ export interface McpConnectorsSectionProps {
 
 /** The MCP connectors settings section: list + add-a-server form. */
 export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionProps): JSX.Element {
+  const searchParams = useSearchParams();
+  const mcpReturn = searchParams.get('mcp');
   const listQ = useApiQuery(
     apiQueryOptions(
       queryKeys.mcpIntegrations(orgId),
@@ -57,6 +60,16 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ), so nothing collides with Docket&apos;s built-in tools.
         </p>
       </div>
+
+      {mcpReturn === 'connected' ? (
+        <p role="status" className="text-success text-body">
+          Access approved. Athena can now use this connector&apos;s available tools.
+        </p>
+      ) : mcpReturn === 'error' ? (
+        <p role="alert" className="text-destructive text-body">
+          Access was not approved. You can continue approval again whenever you&apos;re ready.
+        </p>
+      ) : null}
 
       {listQ.isLoading ? (
         <div className="flex flex-col gap-2" aria-hidden="true">
@@ -89,6 +102,19 @@ interface McpConnectorRowProps {
 
 /** One connected (or errored) MCP server, with verify/disconnect actions. */
 function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.Element {
+  const authorize = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations.mcp[':id'].authorize.$post({
+            param: { orgId, id: mcp.id },
+          }),
+        'Could not start secure approval for this server.',
+      ),
+    onSuccess: (authorization) => {
+      window.location.assign(authorization.authorizationUrl);
+    },
+  });
   const verify = useApiMutation({
     mutationFn: () =>
       unwrap(
@@ -113,7 +139,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
 
   const badgeVariant =
     mcp.status === 'connected' ? 'default' : mcp.status === 'error' ? 'destructive' : 'outline';
-  const busy = verify.isPending || disconnect.isPending;
+  const busy = authorize.isPending || verify.isPending || disconnect.isPending;
 
   return (
     <li className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border px-4 py-3">
@@ -139,16 +165,33 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
         </span>
         {canManage ? (
           <span className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                verify.mutate(undefined);
-              }}
-            >
-              {verify.isPending ? 'Verifying…' : 'Verify'}
-            </Button>
+            {mcp.authMode === 'oauth' ? (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  authorize.mutate(undefined);
+                }}
+              >
+                {authorize.isPending
+                  ? 'Preparing…'
+                  : mcp.status === 'connected'
+                    ? 'Reconnect'
+                    : 'Continue approval'}
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() => {
+                  verify.mutate(undefined);
+                }}
+              >
+                {verify.isPending ? 'Verifying…' : 'Verify'}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -175,7 +218,7 @@ export interface AddMcpConnectorFormProps {
 }
 
 /**
- * The add-a-server form: URL, display label, alias, and an optional bearer token.
+ * The add-a-server form: URL, display label, alias, and browser-first OAuth approval.
  *
  * @remarks
  * Shared by the Settings section above and the Athena chat surface's inline "Connect a tool"
@@ -187,12 +230,14 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
   const urlId = useId();
   const labelId = useId();
   const aliasId = useId();
+  const authId = useId();
   const tokenId = useId();
 
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
   const [alias, setAlias] = useState('');
   const [bearerToken, setBearerToken] = useState('');
+  const [authMode, setAuthMode] = useState<'oauth' | 'bearer' | 'none'>('oauth');
   const [error, setError] = useState<string | null>(null);
 
   const connect = useApiMutation({
@@ -205,13 +250,32 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
               url: url.trim(),
               label: label.trim(),
               alias: alias.trim(),
-              ...(bearerToken.trim() ? { bearerToken: bearerToken.trim() } : {}),
+              authMode,
+              ...(authMode === 'bearer' && bearerToken.trim()
+                ? { bearerToken: bearerToken.trim() }
+                : {}),
             },
           }),
         'Could not connect that server.',
       ),
     invalidateKeys: [queryKeys.mcpIntegrations(orgId)],
-    onSuccess: (mcp) => {
+    onSuccess: async (mcp) => {
+      if (authMode === 'oauth') {
+        try {
+          const authorization = await unwrap(
+            () =>
+              api.v1.orgs[':orgId'].integrations.mcp[':id'].authorize.$post({
+                param: { orgId, id: mcp.id },
+              }),
+            'Could not start secure approval for that server.',
+          );
+          window.location.assign(authorization.authorizationUrl);
+          return;
+        } catch (cause) {
+          setError(userErrorMessage(cause, 'Could not start secure approval for that server.'));
+          return;
+        }
+      }
       // The row is created either way (so it can be retried via "Verify" without re-entering the
       // form) — but the connector only counts as done here when the live health check actually
       // passed. A failed check keeps the dialog open with safe recovery guidance, not a false
@@ -296,19 +360,43 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
-          <label htmlFor={tokenId} className="text-on-surface text-sm font-medium">
-            Bearer token (optional)
+          <label htmlFor={authId} className="text-on-surface text-sm font-medium">
+            Connection method
           </label>
-          <Input
-            id={tokenId}
-            type="password"
-            placeholder="Leave blank if the server needs none"
-            value={bearerToken}
+          <select
+            id={authId}
+            value={authMode}
             onChange={(event) => {
-              setBearerToken(event.target.value);
+              setAuthMode(event.target.value as 'oauth' | 'bearer' | 'none');
             }}
-          />
+            className="border-outline-variant bg-surface text-on-surface h-10 rounded-md border px-3 text-sm"
+          >
+            <option value="oauth">Sign in and approve access (recommended)</option>
+            <option value="bearer">Organization bearer credential</option>
+            <option value="none">No authentication</option>
+          </select>
+          <p className="text-on-surface-variant text-xs">
+            OAuth opens the service&apos;s secure approval page. Docket stores the resulting
+            organization credential encrypted and never exposes it to Athena or individual users.
+          </p>
         </div>
+        {authMode === 'bearer' ? (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={tokenId} className="text-on-surface text-sm font-medium">
+              Bearer token
+            </label>
+            <Input
+              id={tokenId}
+              type="password"
+              required
+              placeholder="Organization-held credential"
+              value={bearerToken}
+              onChange={(event) => {
+                setBearerToken(event.target.value);
+              }}
+            />
+          </div>
+        ) : null}
       </div>
 
       {error ? (
@@ -318,7 +406,11 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
       ) : null}
 
       <Button type="submit" disabled={!canSubmit} className="self-start">
-        {connect.isPending ? 'Connecting…' : 'Connect server'}
+        {connect.isPending
+          ? 'Preparing…'
+          : authMode === 'oauth'
+            ? 'Continue to approval'
+            : 'Connect server'}
       </Button>
     </form>
   );

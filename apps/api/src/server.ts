@@ -32,6 +32,7 @@ import internalNotifications from './routes/internal-notifications';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
+import integrationsMcpOAuth from './routes/integrations-mcp-oauth';
 import webhooks from './routes/webhooks';
 
 const trustedOrigins =
@@ -72,6 +73,19 @@ server.on(['POST', 'GET'], '/mcp', mcpHandler);
 server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
 server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
+// URL-form client identifiers (CIMD) are the current MCP OAuth preference. This document is
+// public and contains no tenant, user, or credential data; authorization servers fetch it while
+// connecting any remote MCP server to Athena.
+server.get('/.well-known/mcp-client.json', (c) =>
+  c.json({
+    client_id: `${env.API_URL}/.well-known/mcp-client.json`,
+    client_name: 'Docket Athena',
+    redirect_uris: [`${env.API_URL}/internal/integrations/mcp/callback`],
+    grant_types: ['authorization_code', 'refresh_token'],
+    response_types: ['code'],
+    token_endpoint_auth_method: 'none',
+  }),
+);
 // Internal machine edges (webhooks, ingestion, cron, OAuth callback) live OUTSIDE the public
 // `/v1` API and outside any typed contract, under a single `/internal/*` umbrella. Each carries
 // its own auth (Stripe/provider signatures, `CRON_SECRET`, signed OAuth state) — they are NOT
@@ -80,6 +94,7 @@ server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
 server.route('/internal/notifications', internalNotifications);
 server.route('/internal/integrations/github', integrationsGithub);
+server.route('/internal/integrations/mcp', integrationsMcpOAuth);
 server.route('/internal/cron', cron);
 // Provider push-notification webhooks: NOT under `/internal` (Docket registers this exact URL
 // directly with each provider, e.g. Google's `channels.watch`, rather than calling it itself),

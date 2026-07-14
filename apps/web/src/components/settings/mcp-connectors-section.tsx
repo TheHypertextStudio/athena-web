@@ -18,6 +18,7 @@ import { Badge, Button, Input, Skeleton } from '@docket/ui/primitives';
 import { useSearchParams } from 'next/navigation';
 import { type JSX, useId, useState } from 'react';
 
+import { deriveMcpConnectorDraft } from '@/components/settings/mcp-connector-draft';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -52,22 +53,15 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
 
   return (
     <section className="flex flex-col gap-3" aria-label="MCP connectors">
-      <div className="flex flex-col gap-1">
-        <h3 className="text-on-surface text-h3">MCP connectors</h3>
-        <p className="text-on-surface-variant text-body max-w-prose">
-          Connect a remote MCP server so Athena can use its tools alongside Docket&apos;s own. Each
-          server gets its own namespace (e.g. <code className="font-mono">sunsama__get_tasks</code>
-          ), so nothing collides with Docket&apos;s built-in tools.
-        </p>
-      </div>
+      <h3 className="text-on-surface text-h3">Tools for Athena</h3>
 
       {mcpReturn === 'connected' ? (
         <p role="status" className="text-success text-body">
-          Access approved. Athena can now use this connector&apos;s available tools.
+          Connected.
         </p>
       ) : mcpReturn === 'error' ? (
         <p role="alert" className="text-destructive text-body">
-          Access was not approved. You can continue approval again whenever you&apos;re ready.
+          Connection was not approved.
         </p>
       ) : null}
 
@@ -83,9 +77,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ))}
         </ul>
       ) : (
-        <p className="text-on-surface-variant text-body">
-          No MCP servers connected yet — Athena is working with Docket&apos;s own tools only.
-        </p>
+        <p className="text-on-surface-variant text-body">No tools connected.</p>
       )}
 
       {canManage ? <AddMcpConnectorForm orgId={orgId} /> : null}
@@ -142,70 +134,80 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
   const busy = authorize.isPending || verify.isPending || disconnect.isPending;
 
   return (
-    <li className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0">
-          <span className="text-on-surface flex items-center gap-2 truncate text-sm font-medium">
-            {mcp.label}
-            <Badge variant={badgeVariant} className="shrink-0">
-              {mcp.status}
-            </Badge>
-          </span>
-          <span className="text-on-surface-variant block truncate text-xs">
-            <code className="font-mono">{mcp.alias}__*</code> · {mcp.url}
-            {mcp.status === 'connected' && mcp.toolCount !== null
-              ? ` · ${String(mcp.toolCount)} tool${mcp.toolCount === 1 ? '' : 's'}`
-              : null}
-          </span>
-          {mcp.status === 'error' ? (
-            <span role="alert" className="text-destructive block text-xs">
-              This server could not be reached. Verify its settings and try again.
-            </span>
-          ) : null}
+    <li className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-lg border p-4">
+      <div className="flex flex-col gap-1">
+        <span className="text-on-surface flex items-center gap-2 text-sm font-medium">
+          {mcp.label}
+          <Badge variant={badgeVariant} className="shrink-0">
+            {mcp.status}
+          </Badge>
         </span>
-        {canManage ? (
-          <span className="flex shrink-0 items-center gap-2">
-            {mcp.authMode === 'oauth' ? (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() => {
-                  authorize.mutate(undefined);
-                }}
-              >
-                {authorize.isPending
-                  ? 'Preparing…'
-                  : mcp.status === 'connected'
-                    ? 'Reconnect'
-                    : 'Continue approval'}
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() => {
-                  verify.mutate(undefined);
-                }}
-              >
-                {verify.isPending ? 'Verifying…' : 'Verify'}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive"
-              disabled={busy}
-              onClick={() => {
-                disconnect.mutate(undefined);
-              }}
-            >
-              {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
-            </Button>
+        {mcp.status === 'connected' && mcp.toolCount !== null ? (
+          <span className="text-on-surface-variant text-xs">
+            {String(mcp.toolCount)} tool{mcp.toolCount === 1 ? '' : 's'} available
+          </span>
+        ) : null}
+        {mcp.status === 'error' ? (
+          <span role="alert" className="text-destructive text-xs">
+            This server could not be reached.
           </span>
         ) : null}
       </div>
+      <details className="text-on-surface-variant text-xs">
+        <summary className="cursor-pointer font-medium">Connection details</summary>
+        <dl className="mt-3 grid gap-2">
+          <div>
+            <dt className="font-medium">Server</dt>
+            <dd className="mt-0.5 font-mono break-all">{mcp.url}</dd>
+          </div>
+          <div>
+            <dt className="font-medium">Tool prefix</dt>
+            <dd className="mt-0.5 font-mono">{mcp.alias}__*</dd>
+          </div>
+        </dl>
+      </details>
+      {canManage ? (
+        <div className="flex flex-wrap gap-2">
+          {mcp.authMode === 'oauth' ? (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                authorize.mutate(undefined);
+              }}
+            >
+              {authorize.isPending
+                ? 'Preparing…'
+                : mcp.status === 'connected'
+                  ? 'Reconnect'
+                  : 'Continue approval'}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                verify.mutate(undefined);
+              }}
+            >
+              {verify.isPending ? 'Verifying…' : 'Verify'}
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive"
+            disabled={busy}
+            onClick={() => {
+              disconnect.mutate(undefined);
+            }}
+          >
+            {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
+          </Button>
+        </div>
+      ) : null}
     </li>
   );
 }
@@ -236,6 +238,8 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
   const [alias, setAlias] = useState('');
+  const [labelEdited, setLabelEdited] = useState(false);
+  const [aliasEdited, setAliasEdited] = useState(false);
   const [bearerToken, setBearerToken] = useState('');
   const [authMode, setAuthMode] = useState<'oauth' | 'bearer' | 'none'>('oauth');
   const [error, setError] = useState<string | null>(null);
@@ -308,9 +312,12 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
         event.preventDefault();
         if (canSubmit) connect.mutate(undefined);
       }}
-      className="bg-surface-container-low flex flex-col gap-3 rounded-xl p-4"
+      className="bg-surface-container-low flex flex-col gap-5 rounded-xl p-5"
     >
-      <div className="grid grid-cols-1 gap-3 @lg:grid-cols-2">
+      <div className="flex flex-col gap-1">
+        <h4 className="text-on-surface text-body font-semibold">Add a tool</h4>
+      </div>
+      <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={urlId} className="text-on-surface text-sm font-medium">
             Server URL
@@ -322,81 +329,96 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             placeholder="https://mcp.example.com"
             value={url}
             onChange={(event) => {
-              setUrl(event.target.value);
+              const nextUrl = event.target.value;
+              const nextDraft = deriveMcpConnectorDraft(nextUrl, {
+                ...(labelEdited ? { label } : {}),
+                ...(aliasEdited ? { alias } : {}),
+              });
+              setUrl(nextUrl);
+              if (!labelEdited) setLabel(nextDraft.label);
+              if (!aliasEdited) setAlias(nextDraft.alias);
             }}
           />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={labelId} className="text-on-surface text-sm font-medium">
-            Display name
-          </label>
-          <Input
-            id={labelId}
-            required
-            placeholder="Sunsama"
-            value={label}
-            onChange={(event) => {
-              setLabel(event.target.value);
-            }}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={aliasId} className="text-on-surface text-sm font-medium">
-            Alias
-          </label>
-          <Input
-            id={aliasId}
-            required
-            placeholder="sunsama"
-            pattern="^[a-z][a-z0-9_]{1,20}$"
-            value={alias}
-            onChange={(event) => {
-              setAlias(event.target.value.toLowerCase());
-            }}
-          />
-          <p className="text-on-surface-variant text-xs">
-            Lowercase, letters/numbers/underscore — Athena will see its tools as{' '}
-            <code className="font-mono">{alias || 'alias'}__*</code>.
-          </p>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor={authId} className="text-on-surface text-sm font-medium">
-            Connection method
-          </label>
-          <select
-            id={authId}
-            value={authMode}
-            onChange={(event) => {
-              setAuthMode(event.target.value as 'oauth' | 'bearer' | 'none');
-            }}
-            className="border-outline-variant bg-surface text-on-surface h-10 rounded-md border px-3 text-sm"
-          >
-            <option value="oauth">Sign in and approve access (recommended)</option>
-            <option value="bearer">Organization bearer credential</option>
-            <option value="none">No authentication</option>
-          </select>
-          <p className="text-on-surface-variant text-xs">
-            OAuth opens the service&apos;s secure approval page. Docket stores the resulting
-            organization credential encrypted and never exposes it to Athena or individual users.
-          </p>
-        </div>
-        {authMode === 'bearer' ? (
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor={tokenId} className="text-on-surface text-sm font-medium">
-              Bearer token
-            </label>
-            <Input
-              id={tokenId}
-              type="password"
-              required
-              placeholder="Organization-held credential"
-              value={bearerToken}
-              onChange={(event) => {
-                setBearerToken(event.target.value);
-              }}
-            />
+        <details className="border-outline-variant rounded-lg border px-3 py-2">
+          <summary className="text-on-surface cursor-pointer text-sm font-medium">
+            Edit details
+          </summary>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={labelId} className="text-on-surface text-sm font-medium">
+                Display name
+              </label>
+              <Input
+                id={labelId}
+                required
+                placeholder="Sunsama"
+                value={label}
+                onChange={(event) => {
+                  setLabelEdited(true);
+                  setLabel(event.target.value);
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={aliasId} className="text-on-surface text-sm font-medium">
+                Tool prefix
+              </label>
+              <Input
+                id={aliasId}
+                required
+                placeholder="sunsama"
+                pattern="^[a-z][a-z0-9_]{1,20}$"
+                value={alias}
+                onChange={(event) => {
+                  setAliasEdited(true);
+                  setAlias(event.target.value.toLowerCase());
+                }}
+              />
+            </div>
           </div>
-        ) : null}
+        </details>
+        <details className="border-outline-variant rounded-lg border px-3 py-2">
+          <summary className="text-on-surface cursor-pointer text-sm font-medium">
+            Other connection methods
+          </summary>
+          <div className="mt-4 flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={authId} className="text-on-surface text-sm font-medium">
+                Connection method
+              </label>
+              <select
+                id={authId}
+                value={authMode}
+                onChange={(event) => {
+                  setAuthMode(event.target.value as 'oauth' | 'bearer' | 'none');
+                }}
+                className="border-outline-variant bg-surface text-on-surface h-10 rounded-md border px-3 text-sm"
+              >
+                <option value="oauth">Sign in and approve access</option>
+                <option value="bearer">Organization bearer credential</option>
+                <option value="none">No authentication</option>
+              </select>
+            </div>
+            {authMode === 'bearer' ? (
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor={tokenId} className="text-on-surface text-sm font-medium">
+                  Bearer token
+                </label>
+                <Input
+                  id={tokenId}
+                  type="password"
+                  required
+                  placeholder="Organization-held credential"
+                  value={bearerToken}
+                  onChange={(event) => {
+                    setBearerToken(event.target.value);
+                  }}
+                />
+              </div>
+            ) : null}
+          </div>
+        </details>
       </div>
 
       {error ? (
@@ -406,11 +428,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
       ) : null}
 
       <Button type="submit" disabled={!canSubmit} className="self-start">
-        {connect.isPending
-          ? 'Preparing…'
-          : authMode === 'oauth'
-            ? 'Continue to approval'
-            : 'Connect server'}
+        {connect.isPending ? 'Preparing…' : authMode === 'oauth' ? 'Continue' : 'Connect'}
       </Button>
     </form>
   );

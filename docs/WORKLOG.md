@@ -1455,6 +1455,20 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-MCP-UX-001] Simplify Athena connector setup
+
+- **Completed**: 2026-07-14
+- **Priority**: P1
+- **Summary**: Replaced the protocol tutorial and dense two-column MCP form with a URL-first
+  OAuth path, generated connector identity defaults, vertical connection records, and disclosures
+  for name overrides, server details, and alternate authentication methods.
+- **Files Changed**: MCP connector settings component and URL-identity helper; focused web test;
+  connector clarity design and implementation plan.
+- **Validation**: Focused web tests, root typecheck, lint, test, and build all pass. The rendered
+  authenticated connector surface also passes its Playwright capture.
+- **Retrospective**: The standard connection path should be visible without protocol terminology;
+  optional configuration belongs behind a deliberate reveal.
+
 ### [INIT-OVERVIEW-SCROLL-001] Restore medium-width Initiative columns
 
 - **Completed**: 2026-07-13

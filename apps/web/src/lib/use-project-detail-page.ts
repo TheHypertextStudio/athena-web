@@ -32,8 +32,19 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
       'Could not load updates.',
     ),
   );
+  const resourcesQ = useApiQuery(
+    apiQueryOptions(
+      [...detailKey, 'resources'] as const,
+      () =>
+        api.v1.orgs[':orgId'].projects[':id'].resources.$get({
+          param: { orgId, id: projectId },
+        }),
+      'Could not load resources.',
+    ),
+  );
 
   const updates = useMemo(() => updatesQ.data?.items ?? [], [updatesQ.data]);
+  const resources = useMemo(() => resourcesQ.data?.items ?? [], [resourcesQ.data]);
 
   const mutations = useProjectMutations(orgId, projectId);
 
@@ -66,15 +77,19 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
   const progress = detail?.progress ?? null;
   const agentsHere = detail?.agentsHere ?? [];
   const agentActivity = detail?.agentActivity ?? [];
-  const currentInitiativeId = detail?.currentInitiativeId ?? null;
+  const initiativeIds = detail?.initiativeIds ?? [];
+  const labels = detail?.labels ?? [];
+  const availableLabels = detail?.availableLabels ?? [];
 
   return {
     detailKey,
     detailQ,
     updatesQ,
+    resourcesQ,
     detail,
     project,
     updates,
+    resources,
     milestones,
     milestoneTasks,
     resolveActor,
@@ -85,7 +100,9 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
     progress,
     agentsHere,
     agentActivity,
-    currentInitiativeId,
+    initiativeIds,
+    labels,
+    availableLabels,
     ...mutations,
   };
 }

@@ -1,29 +1,6 @@
-/**
- * Behavior tests for the interactive project properties panel (directive A).
- *
- * @remarks
- * The directive's core demand: the project detail right-rail must have NO dead read-only "Not
- * set" rows — every property is an interactive picker, an unset value reading as a calm "Set
- * <field>" affordance, and choosing a value reports the change to the host (which owns the
- * optimistic PATCH). These tests pin that contract directly on the presentational panel:
- *
- * - every property row renders a real, clickable affordance — and the literal "Not set" copy
- *   that the old dead panel showed is gone;
- * - an unset property reads as its calm "Set <field>" prompt, while a set property shows its
- *   value (the lead's name, the chosen status);
- * - choosing a value through a picker reports it to the host's `onChange`;
- * - when the actor lacks edit capability, the rows render as plain text with no button.
- *
- * The panel is presentational: it takes pre-resolved options + values and reports changes through
- * typed callbacks, so these assert real behavior without touching the live API.
- *
- * Trigger affordances carry an aria-label of the shape `"<Field> — <value|not set>"` (so assistive
- * tech announces the current value), while the visible copy is the calm "Set <field>" prompt; the
- * tests query the *visible* prompt text via `getByText` and the value via the aria-labelled button.
- * A picker option is a `<li role="option">` wrapping a `<button>`, so a selection clicks that inner
- * button.
- */
+/** Behavior tests for progressive Project property controls. */
 import type { PickerOption } from '@docket/ui/components';
+import { LabelId, OrganizationId } from '@docket/types';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,130 +9,118 @@ import { choosePickerOption } from '../../support/pickers';
 
 afterEach(cleanup);
 
-const MEMBER_OPTIONS: readonly PickerOption[] = [
-  { value: 'actor_ada', label: 'Ada Lovelace' },
-  { value: 'actor_grace', label: 'Grace Hopper' },
-];
 const PROGRAM_OPTIONS: readonly PickerOption[] = [{ value: 'prog_1', label: 'Platform' }];
-const INITIATIVE_OPTIONS: readonly PickerOption[] = [{ value: 'init_1', label: 'North Star' }];
+const INITIATIVE_OPTIONS: readonly PickerOption[] = [
+  { value: 'init_1', label: 'North Star' },
+  { value: 'init_2', label: 'Reliable service' },
+];
+const LABELS = [
+  {
+    id: LabelId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
+    organizationId: OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAW'),
+    name: 'Legislative',
+    color: '#6750a4',
+    teamId: null,
+    createdAt: '2026-07-14T00:00:00.000Z',
+  },
+];
 
-/** Render the panel with sensible defaults, overridable per test. */
-function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPanel>> = {}): {
-  onLeadChange: ReturnType<typeof vi.fn>;
-  onStatusChange: ReturnType<typeof vi.fn>;
-  onProgramChange: ReturnType<typeof vi.fn>;
-} {
-  const onLeadChange = vi.fn();
-  const onStatusChange = vi.fn();
-  const onTimelineChange = vi.fn();
-  const onProgramChange = vi.fn();
-  const onInitiativeChange = vi.fn();
+function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPanel>> = {}) {
+  const callbacks = {
+    onHealthChange: vi.fn(),
+    onStatusChange: vi.fn(),
+    onTimelineChange: vi.fn(),
+    onProgramChange: vi.fn(),
+    onInitiativesChange: vi.fn(),
+    onLabelsChange: vi.fn(),
+  };
   render(
     <PropertiesPanel
-      leadId={null}
-      memberOptions={MEMBER_OPTIONS}
+      health={null}
       status="planned"
       startDate={null}
       targetDate={null}
       programId={null}
       programOptions={PROGRAM_OPTIONS}
-      initiativeId={null}
+      initiativeIds={[]}
       initiativeOptions={INITIATIVE_OPTIONS}
+      labels={[]}
+      availableLabels={LABELS}
       canEdit
       pending={false}
-      onLeadChange={onLeadChange}
-      onStatusChange={onStatusChange}
-      onTimelineChange={onTimelineChange}
-      onProgramChange={onProgramChange}
-      onInitiativeChange={onInitiativeChange}
+      {...callbacks}
       {...overrides}
     />,
   );
-  return { onLeadChange, onStatusChange, onProgramChange };
+  return callbacks;
 }
 
-describe('project PropertiesPanel — interactive rows (directive A)', () => {
-  it('renders no dead "Not set" rows; unset rows are calm "Set <field>" affordances', () => {
+describe('Project PropertiesPanel', () => {
+  it('keeps secondary fields settable without rendering dead metadata', () => {
     renderPanel();
 
-    // The old dead-panel copy must be gone entirely.
     expect(screen.queryByText('Not set')).toBeNull();
-
-    // Each unset property shows a calm "Set <field>" prompt (the visible button text).
-    expect(screen.getByText('Set lead')).toBeTruthy();
+    expect(screen.getByText('Set health')).toBeTruthy();
     expect(screen.getByText('Set timeline')).toBeTruthy();
-    // Status defaults to 'planned' (non-nullable), so it shows the value, not a prompt.
-    expect(screen.getByRole('button', { name: 'Status — Planned' })).toBeTruthy();
+    expect(screen.getByText('Set program')).toBeTruthy();
+    expect(screen.getByText('Add initiatives')).toBeTruthy();
   });
 
-  it('shows a set property as its value (lead name, status)', () => {
-    renderPanel({ leadId: 'actor_ada', status: 'active' });
+  it('changes health and status through controlled enum pickers', () => {
+    const callbacks = renderPanel();
 
-    expect(screen.getByRole('button', { name: 'Lead — Ada Lovelace' })).toBeTruthy();
-    expect(screen.getByText('Ada Lovelace')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Status — Active' })).toBeTruthy();
-  });
-
-  it('assigns a lead through the picker and reports it to the host', () => {
-    const { onLeadChange } = renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Lead — not set' }));
-    choosePickerOption(/Grace Hopper/);
-
-    expect(onLeadChange).toHaveBeenCalledWith('actor_grace');
-  });
-
-  it('changes the project status through the enum picker', () => {
-    const { onStatusChange } = renderPanel({ status: 'planned' });
+    fireEvent.click(screen.getByRole('button', { name: 'Health — not set' }));
+    choosePickerOption(/At risk/);
+    expect(callbacks.onHealthChange).toHaveBeenCalledWith('at_risk');
 
     fireEvent.click(screen.getByRole('button', { name: 'Status — Planned' }));
     choosePickerOption(/Completed/);
-
-    expect(onStatusChange).toHaveBeenCalledWith('completed');
+    expect(callbacks.onStatusChange).toHaveBeenCalledWith('completed');
   });
 
-  it('does not expose a health feature in the project rail', () => {
-    renderPanel();
-
-    expect(screen.queryByText('Health')).toBeNull();
-    expect(screen.queryByText('Set health')).toBeNull();
-  });
-
-  it('attaches a program through the entity picker', () => {
-    const { onProgramChange } = renderPanel();
+  it('attaches a Program through the entity picker', () => {
+    const callbacks = renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'Program — not set' }));
     choosePickerOption(/Platform/);
-
-    expect(onProgramChange).toHaveBeenCalledWith('prog_1');
+    expect(callbacks.onProgramChange).toHaveBeenCalledWith('prog_1');
   });
 
-  it('renders read-only plain text (no buttons) when the actor cannot edit', () => {
-    renderPanel({ leadId: 'actor_ada', canEdit: false });
+  it('supports several Initiative links without manufacturing a primary one', () => {
+    const callbacks = renderPanel({ initiativeIds: ['init_1'] });
 
-    // No interactive affordances at all when read-only.
+    fireEvent.click(screen.getByRole('button', { name: 'Initiatives — North Star' }));
+    choosePickerOption(/Reliable service/);
+    expect(callbacks.onInitiativesChange).toHaveBeenCalledWith(['init_1', 'init_2']);
+  });
+
+  it('treats labels as selectable workspace objects', () => {
+    const callbacks = renderPanel();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Legislative' }));
+    expect(callbacks.onLabelsChange).toHaveBeenCalledWith([LABELS[0]!.id]);
+  });
+
+  it('renders plain values when editing is unavailable', () => {
+    renderPanel({
+      health: 'on_track',
+      programId: 'prog_1',
+      initiativeIds: ['init_1'],
+      canEdit: false,
+    });
+
     expect(screen.queryByRole('button')).toBeNull();
-    // The value still reads (the panel stays complete), and there is no "Not set" filler.
-    expect(screen.getByText('Ada Lovelace')).toBeTruthy();
-    expect(screen.queryByText('Not set')).toBeNull();
+    expect(screen.getByText('On track')).toBeTruthy();
+    expect(screen.getByText('Platform')).toBeTruthy();
+    expect(screen.getByText('North Star')).toBeTruthy();
   });
 
-  it('disables the pickers while a mutation is in flight', () => {
+  it('disables every picker while a mutation is pending', () => {
     renderPanel({ pending: true });
 
-    const leadTrigger = screen.getByRole('button', { name: 'Lead — not set' });
-    expect(leadTrigger.hasAttribute('disabled')).toBe(true);
-    // A disabled trigger does not open the listbox.
-    fireEvent.click(leadTrigger);
+    const trigger = screen.getByRole('button', { name: 'Health — not set' });
+    expect(trigger.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(trigger);
     expect(screen.queryByRole('option')).toBeNull();
-  });
-
-  it('keeps every property settable: each unset row offers a "Set …" prompt', () => {
-    // A panel where everything is unset must offer a "Set …" prompt for every property,
-    // guarding against any future regression that reintroduces a dead row for one of them.
-    renderPanel();
-    for (const field of ['Set lead', 'Set timeline', 'Set program', 'Set initiative']) {
-      expect(screen.getByText(field)).toBeTruthy();
-    }
   });
 });

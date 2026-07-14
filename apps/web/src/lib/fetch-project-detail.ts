@@ -11,7 +11,9 @@
  */
 import type {
   AgentSessionOut,
+  EntityDisplayOut,
   InitiativeOut,
+  LabelOut,
   MemberOut,
   MilestoneOut,
   ProjectOut,
@@ -21,7 +23,7 @@ import type {
   SessionActivityOut,
   TaskOut,
 } from '@docket/types';
-import { ProjectId } from '@docket/types';
+import { defaultEntityDisplay, ProjectId } from '@docket/types';
 
 import type { AgentHere } from '@/components/project-detail/agents-strip';
 import type { AgentActivityEntry } from '@/components/project-detail/agent-activity-feed';
@@ -36,6 +38,7 @@ import { type RpcResponse, apiQueryOptions, queryKeys, rpcErrorResponse } from '
 /** The composite project-detail payload assembled from the typed RPC surface. */
 export interface ProjectDetailData {
   readonly project: ProjectOut | null;
+  readonly display: EntityDisplayOut;
   readonly progress: ProjectProgress | null;
   readonly milestones: readonly MilestoneOut[];
   readonly milestoneTasks: readonly MilestoneTask[];
@@ -46,7 +49,9 @@ export interface ProjectDetailData {
   readonly roles: readonly RoleOut[];
   readonly programs: readonly ProgramOut[];
   readonly initiatives: readonly InitiativeOut[];
-  readonly currentInitiativeId: string | null;
+  readonly initiativeIds: readonly string[];
+  readonly labels: readonly LabelOut[];
+  readonly availableLabels: readonly LabelOut[];
 }
 
 function activitySummary(activity: SessionActivityOut): string {
@@ -104,6 +109,8 @@ export function fetchProjectDetail(
       initiativesRes,
       rolesRes,
       rollupRes,
+      displayRes,
+      labelsRes,
     ] = await Promise.all([
       api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].projects[':id'].progress.$get({ param: { orgId, id: projectId } }),
@@ -119,6 +126,10 @@ export function fetchProjectDetail(
       api.v1.orgs[':orgId'].initiatives.$get({ param: { orgId }, query: {} }),
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].projects[':id'].rollup.$get({ param: { orgId, id: projectId } }),
+      api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
+        param: { orgId, subjectType: 'project', subjectId: projectId },
+      }),
+      api.v1.orgs[':orgId'].labels.$get({ param: { orgId } }),
     ]);
 
     if (!projectsRes.ok) {
@@ -127,6 +138,9 @@ export function fetchProjectDetail(
 
     const { items: projectItems } = await projectsRes.json();
     const found = projectItems.find((p) => p.id === projectId) ?? null;
+    const display = displayRes.ok
+      ? await displayRes.json()
+      : defaultEntityDisplay('project', projectId);
     const progress = progressRes.ok ? await progressRes.json() : null;
 
     const memberItems: MemberOut[] = membersRes.ok ? (await membersRes.json()).items : [];
@@ -146,7 +160,7 @@ export function fetchProjectDetail(
     const allTasks: readonly TaskOut[] = tasksRes.ok ? (await tasksRes.json()).items : [];
     const projectTasks = allTasks.filter((t) => t.projectId === projectId);
 
-    // The project's task→milestone map and its initiative come from one roll-up read
+    // The project's task-to-milestone map and Initiative links come from one roll-up read
     // (`…/projects/:id/rollup`), collapsing what were a per-task `tasks/:id` N+1 (only
     // `TaskDetail` carries `milestoneId`) and a per-initiative `initiatives/:id/timeline` M+1.
     // A failed roll-up degrades to no grouping / no initiative rather than failing the screen.
@@ -158,7 +172,11 @@ export function fetchProjectDetail(
       task: t,
       milestoneId: milestoneByTaskId.get(t.id) ?? null,
     }));
-    const currentInitiativeId = rollup?.currentInitiativeId ?? null;
+    const initiativeIds = rollup?.initiativeIds ?? [];
+    const labels = rollup?.labels ?? [];
+    const availableLabels: readonly LabelOut[] = labelsRes.ok
+      ? (await labelsRes.json()).items.filter((item) => item.teamId == null)
+      : [];
 
     const projectTaskIds = new Set<string>(projectTasks.map((t) => t.id));
     const projectTaskTitle = new Map<string, string>(projectTasks.map((t) => [t.id, t.title]));
@@ -191,6 +209,7 @@ export function fetchProjectDetail(
 
     const data: ProjectDetailData = {
       project: found,
+      display,
       progress,
       milestones,
       milestoneTasks,
@@ -201,7 +220,9 @@ export function fetchProjectDetail(
       roles,
       programs,
       initiatives,
-      currentInitiativeId,
+      initiativeIds,
+      labels,
+      availableLabels,
     };
     return { ok: true, status: projectsRes.status, json: () => Promise.resolve(data) };
   };

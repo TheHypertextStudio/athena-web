@@ -40,6 +40,8 @@ export {
   type DateRangePickerProps,
   EntityPicker,
   type EntityPickerProps,
+  EntityMultiPicker,
+  type EntityMultiPickerProps,
   EnumPicker,
   type EnumPickerProps,
   LabelsPicker,

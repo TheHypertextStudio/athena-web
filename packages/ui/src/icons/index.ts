@@ -67,7 +67,7 @@ export { default as SearchRounded } from '@mui/icons-material/SearchRounded';
 export { default as Settings } from '@mui/icons-material/Settings';
 export { default as Shield } from '@mui/icons-material/ShieldOutlined';
 export { default as Sparkles } from '@mui/icons-material/AutoAwesome';
-export { default as Tag } from '@mui/icons-material/LocalOfferOutlined';
+export { default as Tag } from '@mui/icons-material/LocalOfferRounded';
 export { default as Target } from '@mui/icons-material/TrackChanges';
 export { default as TaskAlt } from '@mui/icons-material/TaskAlt';
 export { default as Translate } from '@mui/icons-material/Translate';

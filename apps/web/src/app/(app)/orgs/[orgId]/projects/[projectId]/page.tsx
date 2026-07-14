@@ -1,52 +1,62 @@
 'use client';
 
+import type {
+  AttachmentOut,
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+  EntityDisplayOut,
+} from '@docket/types';
+import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Badge, Skeleton } from '@docket/ui/primitives';
+import { Calendar, MoreHorizontal, Target } from '@docket/ui/icons';
+import { Button, Popover, PopoverContent, PopoverTrigger, Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { EditableFreeformText } from '@/components/editor/freeform-text';
-import { AgentsStrip } from '@/components/project-detail/agents-strip';
+import { EditableFreeformText, FreeformText } from '@/components/editor/freeform-text';
+import { InitiativeDocument } from '@/components/initiatives/initiative-document';
+import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { AgentActivityFeed } from '@/components/project-detail/agent-activity-feed';
+import { AgentsStrip } from '@/components/project-detail/agents-strip';
 import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
-import { OverviewSummary } from '@/components/project-detail/overview-summary';
-import { WeightedProgress } from '@/components/project-detail/progress-bar';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
-import {
-  statusBadgeVariant,
-  STATUS_LABEL,
-  projectStatusOf,
-} from '@/components/project-detail/project-config';
+import { WeightedProgress } from '@/components/project-detail/progress-bar';
+import { ProjectResourcesTab } from '@/components/project-detail/resources-tab';
+import { projectStatusOf } from '@/components/project-detail/project-config';
 import { type TabItem, ProjectTabs } from '@/components/project-detail/tabs';
 import { UpdatesTab } from '@/components/project-detail/updates-tab';
 import { useActiveOrg } from '@/components/active-org';
 import { CreateTaskDialog } from '@/components/tasks/create-task';
+import { api } from '@/lib/api';
+import { formatCalendarDate } from '@/lib/format-date';
+import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
 import { userErrorMessage } from '@/lib/problem';
 
-type TabId = 'overview' | 'tasks' | 'updates';
+type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
-/**
- * The project detail view — overview, milestone-grouped tasks, and updates.
- *
- * @remarks
- * Data fetching is split across a composite fetcher ({@link fetchProjectDetail}) and two
- * subject-scoped queries (comments, updates). Writes are encapsulated in
- * {@link useProjectMutations}. The page assembles picker options, composes the tab layout,
- * and delegates content to existing sub-components.
- */
+const HEALTH_LABEL = {
+  on_track: 'On track',
+  at_risk: 'At risk',
+  off_track: 'Off track',
+} as const;
+const HEALTH_CLASS = {
+  on_track: 'text-state-completed',
+  at_risk: 'text-state-canceled',
+  off_track: 'text-destructive',
+} as const;
+
+/** Operational Project detail with progressive properties and dedicated working tabs. */
 export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string; projectId: string }>();
-  const { orgId, projectId } = params;
+  const queryClient = useQueryClient();
+  const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
-
-  const projectLabel = useVocabulary('project');
+  const projectNoun = useVocabulary('project');
   const taskNoun = useVocabulary('task').toLowerCase();
-  const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
-
   const [tab, setTab] = useState<TabId>('overview');
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
 
@@ -54,21 +64,25 @@ export default function ProjectDetailPage(): JSX.Element {
     detailKey,
     detailQ,
     updatesQ,
+    resourcesQ,
+    detail,
     project,
     updates,
+    resources,
     milestones,
     milestoneTasks,
     resolveActor,
     canEdit,
-    memberOptions,
     programOptions,
     initiativeOptions,
     progress,
     agentsHere,
     agentActivity,
-    currentInitiativeId,
+    initiativeIds,
+    labels,
+    availableLabels,
     patchProject,
-    setInitiative,
+    setInitiatives,
     postUpdate,
     propsPending,
     propsError,
@@ -76,74 +90,243 @@ export default function ProjectDetailPage(): JSX.Element {
     updateError,
   } = useProjectDetailPage(orgId, projectId);
 
-  const taskCount = milestoneTasks.length;
+  const resourceKey = [...detailKey, 'resources'] as const;
+  const displayMutation = useApiMutation<
+    EntityDisplayOut,
+    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey },
+    { previous?: typeof detail }
+  >({
+    mutationFn: (json) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
+            param: { orgId, subjectType: 'project', subjectId: projectId },
+            json,
+          }),
+        'Could not customize this project.',
+      ),
+    onMutate: async ({ iconKey, colorKey }) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      const previous = queryClient.getQueryData<typeof detail>(detailKey);
+      queryClient.setQueryData(detailKey, (current: typeof detail) =>
+        current
+          ? {
+              ...current,
+              display: {
+                subjectType: 'project',
+                subjectId: projectId,
+                iconKey,
+                colorKey,
+                customized: true,
+              },
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(detailKey, context.previous);
+    },
+    invalidateKeys: [detailKey, [...queryKeys.projects(orgId), 'overview']],
+  });
+  const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
+    mutationFn: (json) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].resources.$post({
+            param: { orgId, id: projectId },
+            json,
+          }),
+        'Could not add the resource.',
+      ),
+    invalidateKeys: [resourceKey],
+  });
+  const removeResource = useApiMutation<{ id: string; removed: true }, string>({
+    mutationFn: (resourceId) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].resources[':resourceId'].$delete({
+            param: { orgId, id: projectId, resourceId },
+          }),
+        'Could not remove the resource.',
+      ),
+    invalidateKeys: [resourceKey],
+  });
+
+  const participantIds = useMemo(() => {
+    if (!project) return [];
+    const ids = new Set<string>();
+    if (project.leadId) ids.add(project.leadId);
+    for (const { task } of milestoneTasks) {
+      if (task.assigneeId) ids.add(task.assigneeId);
+      if (task.delegateId) ids.add(task.delegateId);
+    }
+    return [...ids];
+  }, [milestoneTasks, project]);
+  const participants = useMemo(
+    () => participantIds.map((actorId) => ({ actorId, ...resolveActor(actorId) })),
+    [participantIds, resolveActor],
+  );
+  const latestUpdate = updates[0];
   const tabs: readonly TabItem[] = useMemo(
     () => [
       { id: 'overview', label: 'Overview' },
-      { id: 'tasks', label: 'Tasks', count: taskCount },
+      { id: 'tasks', label: 'Tasks', count: milestoneTasks.length },
       { id: 'updates', label: 'Updates', count: updates.length },
+      { id: 'resources', label: 'Resources', count: resources.length },
     ],
-    [taskCount, updates.length],
+    [milestoneTasks.length, resources.length, updates.length],
   );
 
   if (detailQ.isPending) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-        <Skeleton className="h-9 w-72" />
-        <Skeleton className="h-4 w-full max-w-xl" />
-        <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-          <Skeleton className="h-64 w-full rounded-xl" />
-          <Skeleton className="h-64 w-full rounded-xl" />
-        </div>
-      </div>
+      <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
+        <Skeleton className="h-5 w-72" />
+        <Skeleton className="h-14 w-3/4" />
+        <Skeleton className="h-6 w-2/3" />
+        <Skeleton className="h-96 w-full rounded-xl" />
+      </main>
+    );
+  }
+  if (detailQ.isError || !project) {
+    return (
+      <p role="alert" className="text-destructive mx-auto max-w-7xl p-6">
+        {detailQ.isError
+          ? userErrorMessage(detailQ.error, 'Could not load this project.')
+          : `${projectNoun} not found.`}
+      </p>
     );
   }
 
-  if (detailQ.isError) {
-    return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p
-          role="alert"
-          className="border-outline-variant text-destructive text-body rounded-xl border p-4"
-        >
-          {userErrorMessage(detailQ.error, 'Could not load this project.')}
-        </p>
-      </div>
-    );
-  }
-
-  if (!project) {
-    return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body rounded-xl border border-dashed p-8 text-center">
-          This {projectLabel.toLowerCase()} could not be found.
-        </p>
-      </div>
-    );
-  }
+  const program = detail?.programs.find((item) => item.id === project.programId);
+  const health = project.health ?? null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-[clamp(2.25rem,5vw,4rem)] leading-[0.98] font-semibold tracking-[-0.045em]">
-            {project.name}
-          </h1>
-          <Badge variant={statusBadgeVariant(project.status)}>
-            {STATUS_LABEL[project.status] ?? project.status}
-          </Badge>
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-on-surface-variant min-w-0 truncate text-sm">
+            {program ? program.name : projectNoun}
+          </p>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-10 gap-1.5"
+                aria-label="Project information"
+              >
+                <MoreHorizontal aria-hidden className="size-5" />
+                <span className="hidden @2xl:inline">Project info</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[min(21rem,calc(100vw-2rem))] p-4">
+              <h2 className="text-on-surface mb-2 text-sm font-semibold">Project info</h2>
+              <PropertiesPanel
+                health={health}
+                status={projectStatusOf(project.status)}
+                startDate={project.startDate ?? null}
+                targetDate={project.targetDate ?? null}
+                programId={project.programId ?? null}
+                programOptions={programOptions}
+                initiativeIds={initiativeIds}
+                initiativeOptions={initiativeOptions}
+                labels={labels}
+                availableLabels={availableLabels}
+                canEdit={canEdit}
+                pending={propsPending}
+                onHealthChange={(next) => {
+                  patchProject({ health: next });
+                }}
+                onStatusChange={(status) => {
+                  patchProject({ status });
+                }}
+                onTimelineChange={({ start, end }) => {
+                  patchProject({ startDate: start, targetDate: end });
+                }}
+                onProgramChange={(programId) => {
+                  patchProject({ programId });
+                }}
+                onInitiativesChange={setInitiatives}
+                onLabelsChange={(labelIds) => {
+                  patchProject({ labelIds });
+                }}
+              />
+              {propsError ? (
+                <p role="alert" className="text-destructive mt-2 text-sm">
+                  {propsError}
+                </p>
+              ) : null}
+            </PopoverContent>
+          </Popover>
         </div>
+
+        <div className="flex items-start gap-3">
+          <div className="mt-1">
+            <InitiativeIconPicker
+              display={
+                detail?.display ?? {
+                  subjectType: 'project',
+                  subjectId: projectId,
+                  iconKey: 'folder',
+                  colorKey: 'neutral',
+                  customized: false,
+                }
+              }
+              initiativeName={project.name}
+              editable={canEdit}
+              pending={displayMutation.isPending}
+              onChange={(iconKey, colorKey) => {
+                displayMutation.mutate({ iconKey, colorKey });
+              }}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-document-title text-on-surface max-w-[24ch]">{project.name}</h1>
+          </div>
+        </div>
+
         <EditableFreeformText
-          value={project.description}
-          placeholder="Add a short project description…"
+          value={project.summary}
+          placeholder="Add a concise outcome summary…"
           canEdit={canEdit}
           saving={propsPending}
-          onSave={(description) => {
-            patchProject({ description });
+          onSave={(summary) => {
+            patchProject({ summary });
           }}
-          className="text-on-surface-variant max-w-3xl leading-relaxed"
+          className="text-on-surface-variant max-w-4xl text-lg leading-relaxed"
         />
+
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          {participants.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
+              {participants.map((participant) => (
+                <span
+                  key={participant.actorId}
+                  className="bg-surface-container-low flex h-8 items-center gap-1.5 rounded-full pr-3 pl-1"
+                >
+                  <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
+                  <span className="text-on-surface text-xs font-medium">{participant.name}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="text-on-surface-variant text-sm">No people yet</span>
+          )}
+          {health ? (
+            <span
+              className={`${HEALTH_CLASS[health]} flex items-center gap-1.5 text-sm font-medium`}
+            >
+              <Target aria-hidden className="size-4" /> {HEALTH_LABEL[health]}
+            </span>
+          ) : null}
+          {project.targetDate ? (
+            <span className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums">
+              <Calendar aria-hidden className="size-4" /> {formatCalendarDate(project.targetDate)}
+            </span>
+          ) : null}
+        </div>
       </header>
 
       <ProjectTabs
@@ -160,68 +343,53 @@ export default function ProjectDetailPage(): JSX.Element {
           role="tabpanel"
           id="tabpanel-overview"
           aria-labelledby="tab-overview"
-          className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]"
+          className="flex flex-col gap-8"
         >
-          <div className="flex min-w-0 flex-col gap-6">
-            <section
-              aria-label="Progress"
-              className="border-outline-variant bg-surface-container-low rounded-xl border p-4"
-            >
-              {progress ? (
-                <WeightedProgress progress={progress} />
-              ) : (
-                <p className="text-on-surface-variant text-body">Progress is unavailable.</p>
-              )}
+          {latestUpdate ? (
+            <section className="bg-surface-container-low rounded-xl p-4" aria-label="Latest update">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <h2 className="text-on-surface-variant text-xs font-medium">Latest update</h2>
+                <span className="text-on-surface-variant text-xs">
+                  {new Date(latestUpdate.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <FreeformText
+                value={latestUpdate.body}
+                emptyText=""
+                className="text-on-surface text-sm leading-relaxed"
+              />
             </section>
-            <OverviewSummary
-              tasks={milestoneTasks}
-              milestones={milestones.map((m) => ({ id: m.id, name: m.name }))}
-              taskNounPlural={taskNounPlural}
-            />
-            <AgentsStrip agents={agentsHere} />
-            <AgentActivityFeed activities={agentActivity} />
-          </div>
-          <aside className="flex flex-col gap-4">
-            <PropertiesPanel
-              leadId={project.leadId ?? null}
-              memberOptions={memberOptions}
-              status={projectStatusOf(project.status)}
-              startDate={project.startDate ?? null}
-              targetDate={project.targetDate ?? null}
-              programId={project.programId ?? null}
-              programOptions={programOptions}
-              initiativeId={currentInitiativeId}
-              initiativeOptions={initiativeOptions}
+          ) : null}
+
+          <section aria-label="Project document">
+            <InitiativeDocument
+              value={project.description}
               canEdit={canEdit}
-              pending={propsPending}
-              onLeadChange={(leadId) => {
-                patchProject({ leadId });
+              saving={propsPending}
+              onSave={(description) => {
+                patchProject({ description });
               }}
-              onStatusChange={(status) => {
-                patchProject({ status });
-              }}
-              onTimelineChange={({ start, end }) => {
-                patchProject({ startDate: start, targetDate: end });
-              }}
-              onProgramChange={(programId) => {
-                patchProject({ programId });
-              }}
-              onInitiativeChange={(initiativeId) => {
-                setInitiative(initiativeId);
-              }}
+              placeholder="Add the Project brief…"
             />
+          </section>
+
+          <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="flex min-w-0 flex-col gap-6">
+              {progress ? (
+                <section className="bg-surface-container-low rounded-xl p-4" aria-label="Progress">
+                  <WeightedProgress progress={progress} />
+                </section>
+              ) : null}
+              <AgentsStrip agents={agentsHere} />
+              <AgentActivityFeed activities={agentActivity} />
+            </div>
             <ProjectDependenciesPanel
               orgId={orgId}
               projectId={projectId}
               projectDetailKey={detailKey}
               canEdit={canEdit}
             />
-            {propsError ? (
-              <p role="alert" className="text-destructive text-body px-1">
-                {propsError}
-              </p>
-            ) : null}
-          </aside>
+          </div>
         </div>
       ) : null}
 
@@ -233,8 +401,8 @@ export default function ProjectDetailPage(): JSX.Element {
           className="flex flex-col gap-6"
         >
           <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-h3 font-medium">Dependency map</h2>
-            <div className="border-outline-variant h-96 overflow-hidden rounded-xl border">
+            <h2 className="text-on-surface text-h3 font-medium">Task dependencies</h2>
+            <div className="bg-surface-container-low h-96 overflow-hidden rounded-xl">
               <TaskGraphPanel
                 scope={{ orgId, projectId }}
                 density="compact"
@@ -247,10 +415,10 @@ export default function ProjectDetailPage(): JSX.Element {
           <MilestoneTasks
             orgId={orgId}
             tasks={milestoneTasks}
-            milestones={milestones.map((m) => ({
-              id: m.id,
-              name: m.name,
-              targetDate: m.targetDate,
+            milestones={milestones.map((milestone) => ({
+              id: milestone.id,
+              name: milestone.name,
+              targetDate: milestone.targetDate,
             }))}
             resolveActor={resolveActor}
             taskNoun={taskNoun}
@@ -270,9 +438,7 @@ export default function ProjectDetailPage(): JSX.Element {
             updates={updates}
             loading={updatesQ.isPending}
             error={
-              updatesQ.isError
-                ? userErrorMessage(updatesQ.error, 'Could not load this project.')
-                : null
+              updatesQ.isError ? userErrorMessage(updatesQ.error, 'Could not load updates.') : null
             }
             resolveActor={resolveActor}
             posting={updatePosting}
@@ -281,6 +447,28 @@ export default function ProjectDetailPage(): JSX.Element {
           />
         </div>
       ) : null}
+
+      {tab === 'resources' ? (
+        <div role="tabpanel" id="tabpanel-resources" aria-labelledby="tab-resources">
+          <ProjectResourcesTab
+            resources={resources}
+            canEdit={canEdit}
+            pending={addResource.isPending || removeResource.isPending}
+            error={
+              resourcesQ.isError
+                ? userErrorMessage(resourcesQ.error, 'Could not load resources.')
+                : addResource.error
+                  ? userErrorMessage(addResource.error, 'Could not add the resource.')
+                  : removeResource.error
+                    ? userErrorMessage(removeResource.error, 'Could not remove the resource.')
+                    : null
+            }
+            onAdd={addResource.mutate}
+            onRemove={removeResource.mutate}
+          />
+        </div>
+      ) : null}
+
       <CreateTaskDialog
         orgId={orgId}
         teams={teams}
@@ -293,6 +481,11 @@ export default function ProjectDetailPage(): JSX.Element {
           void detailQ.refetch();
         }}
       />
-    </div>
+      {displayMutation.error ? (
+        <p role="alert" className="text-destructive text-sm">
+          {userErrorMessage(displayMutation.error, 'Could not customize this project.')}
+        </p>
+      ) : null}
+    </main>
   );
 }

@@ -29,6 +29,7 @@ export {
 export { EntityPicker, type EntityPickerProps } from './EntityPicker';
 export { EnumPicker, type EnumPickerProps } from './EnumPicker';
 export { LabelsPicker, type LabelsPickerProps } from './LabelsPicker';
+export { EntityMultiPicker, type EntityMultiPickerProps } from './EntityMultiPicker';
 export { OptionPicker, type OptionPickerProps } from './OptionPicker';
 export { PickerList, type PickerListProps } from './PickerList';
 export { PropertyTrigger, type PropertyTriggerProps } from './PropertyTrigger';

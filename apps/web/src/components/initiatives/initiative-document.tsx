@@ -11,11 +11,13 @@ export function InitiativeDocument({
   canEdit,
   saving,
   onSave,
+  placeholder = 'Add the Initiative brief…',
 }: {
   value: string | null | undefined;
   canEdit: boolean;
   saving: boolean;
   onSave: (value: string | null) => void;
+  placeholder?: string;
 }): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const headings = useMemo(() => extractMarkdownHeadings(value ?? ''), [value]);
@@ -95,7 +97,7 @@ export function InitiativeDocument({
         <div ref={rootRef} className="initiative-document min-h-56">
           <EditableFreeformText
             value={value}
-            placeholder="Add the Initiative brief…"
+            placeholder={placeholder}
             canEdit={canEdit}
             saving={saving}
             onSave={onSave}

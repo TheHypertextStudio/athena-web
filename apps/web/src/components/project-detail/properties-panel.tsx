@@ -1,121 +1,84 @@
 'use client';
 
-/**
- * The project properties panel — lead, status, timeline, program, and initiative.
- *
- * @remarks
- * The right-rail summary of a project's structural metadata, mirroring Linear's project
- * properties. Per directive A every row is *interactive*: clicking a property opens a compact
- * picker that assigns it through the project PATCH RPC (the host page owns the optimistic
- * mutation + rollback), and an unset property reads as a calm "Set <field>" affordance rather
- * than a dead "Not set" row. The lead is an {@link ActorPicker} over the org's members; status
- * is an {@link EnumPicker}; the timeline is a {@link DateRangePicker} over
- * start/target; program and initiative are {@link EntityPicker}s whose nouns are
- * vocabulary-skinned by the host page. When the actor lacks `contribute` the rows render
- * read-only (plain value text / em-dash) so the panel still reads as complete.
- *
- * The panel is presentational + controlled: it takes pre-resolved {@link PickerOption}s and the
- * current values, and reports each change through a typed `onChange` callback. The host page
- * resolves members/programs/initiatives into options and owns the PATCH, exactly as the picker
- * family is designed to be used.
- */
-import type { ProjectStatus } from '@docket/types';
+/** Progressive Project property controls used inside the anchored information disclosure. */
+import type { Health, LabelOut, ProjectStatus } from '@docket/types';
 import {
-  ActorPicker,
   DateRangePicker,
+  EntityMultiPicker,
   EntityPicker,
   EnumPicker,
   type PickerOption,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Activity, FolderKanban, LayoutGrid, RefreshCw, User } from '@docket/ui/icons';
+import { Activity, FolderKanban, LayoutGrid, RefreshCw, Tag, Target } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
+import { HEALTH_OPTIONS } from '@/components/pickers/options';
 import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
 import { projectStatusOptions } from '@/components/property-pickers/options';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Props for {@link PropertiesPanel}. */
 export interface PropertiesPanelProps {
-  /** The current lead actor id, or `null` when unassigned. */
-  leadId: string | null;
-  /** Member options for the lead picker (each carrying an `ActorAvatar`). */
-  memberOptions: readonly PickerOption[];
-  /** The current project status. */
+  health: Health | null;
   status: ProjectStatus;
-  /** ISO start date, when scheduled. */
   startDate: string | null;
-  /** ISO target date, when scheduled. */
   targetDate: string | null;
-  /** The current parent program id, or `null` when none. */
   programId: string | null;
-  /** Program options for the program picker. */
   programOptions: readonly PickerOption[];
-  /** The current associated initiative id, or `null` when none. */
-  initiativeId: string | null;
-  /** Initiative options for the initiative picker. */
+  initiativeIds: readonly string[];
   initiativeOptions: readonly PickerOption[];
-  /** Whether the actor may edit (holds `contribute`); rows are read-only when false. */
+  labels: readonly LabelOut[];
+  availableLabels: readonly LabelOut[];
   canEdit: boolean;
-  /** Whether a mutation is in flight (disables every picker). */
   pending: boolean;
-  /** Assign the lead (or `null` to clear). */
-  onLeadChange: (leadId: string | null) => void;
-  /** Set the project status. */
+  onHealthChange: (health: Health | null) => void;
   onStatusChange: (status: ProjectStatus) => void;
-  /** Set the start/target timeline (either bound may be `null`). */
   onTimelineChange: (range: { start: string | null; end: string | null }) => void;
-  /** Attach to a program (or `null` to detach). */
   onProgramChange: (programId: string | null) => void;
-  /** Associate with an initiative (or `null` to disassociate). */
-  onInitiativeChange: (initiativeId: string | null) => void;
+  onInitiativesChange: (initiativeIds: readonly string[]) => void;
+  onLabelsChange: (labelIds: readonly string[]) => void;
 }
 
-/**
- * The interactive project properties panel.
- *
- * @param props - The {@link PropertiesPanelProps}.
- * @returns the rendered panel.
- */
+/** Render secondary Project metadata without promoting every field into the page header. */
 export function PropertiesPanel({
-  leadId,
-  memberOptions,
+  health,
   status,
   startDate,
   targetDate,
   programId,
   programOptions,
-  initiativeId,
+  initiativeIds,
   initiativeOptions,
+  labels,
+  availableLabels,
   canEdit,
   pending,
-  onLeadChange,
+  onHealthChange,
   onStatusChange,
   onTimelineChange,
   onProgramChange,
-  onInitiativeChange,
+  onInitiativesChange,
+  onLabelsChange,
 }: PropertiesPanelProps): JSX.Element {
   const programLabel = useVocabulary('program');
   const initiativeLabel = useVocabulary('initiative');
-  const programLower = programLabel.toLowerCase();
-  const initiativeLower = initiativeLabel.toLowerCase();
   const readOnly = !canEdit;
 
   return (
-    <PropertyPanel>
-      <PropertyPanelRow icon={<User className="size-4" />} label="Lead">
-        <ActorPicker
-          options={memberOptions}
-          value={leadId}
-          onChange={onLeadChange}
-          placeholder="Set lead"
-          clearLabel="No lead"
-          ariaLabel="Lead"
+    <PropertyPanel className="border-0 bg-transparent px-0 py-0">
+      <PropertyPanelRow icon={<Target className="size-4" />} label="Health">
+        <EnumPicker<Health>
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          clearLabel="No health"
+          ariaLabel="Health"
           readOnly={readOnly}
           disabled={pending}
         />
       </PropertyPanelRow>
-
       <PropertyPanelRow divided icon={<Activity className="size-4" />} label="Status">
         <EnumPicker<ProjectStatus>
           options={projectStatusOptions()}
@@ -129,7 +92,6 @@ export function PropertiesPanel({
           disabled={pending}
         />
       </PropertyPanelRow>
-
       <PropertyPanelRow divided icon={<RefreshCw className="size-4" />} label="Timeline">
         <DateRangePicker
           value={{ start: startDate, end: targetDate }}
@@ -143,33 +105,96 @@ export function PropertiesPanel({
           disabled={pending}
         />
       </PropertyPanelRow>
-
       <PropertyPanelRow divided icon={<FolderKanban className="size-4" />} label={programLabel}>
         <EntityPicker
           options={programOptions}
           value={programId}
           onChange={onProgramChange}
-          placeholder={`Set ${programLower}`}
-          clearLabel={`No ${programLower}`}
+          placeholder={`Set ${programLabel.toLowerCase()}`}
+          clearLabel={`No ${programLabel.toLowerCase()}`}
           searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
           ariaLabel={programLabel}
           readOnly={readOnly}
           disabled={pending}
         />
       </PropertyPanelRow>
-
-      <PropertyPanelRow divided icon={<LayoutGrid className="size-4" />} label={initiativeLabel}>
-        <EntityPicker
+      <PropertyPanelRow
+        divided
+        icon={<LayoutGrid className="size-4" />}
+        label={`${initiativeLabel}s`}
+      >
+        <EntityMultiPicker
           options={initiativeOptions}
-          value={initiativeId}
-          onChange={onInitiativeChange}
-          placeholder={`Set ${initiativeLower}`}
-          clearLabel={`No ${initiativeLower}`}
+          value={initiativeIds}
+          onToggle={(initiativeId) => {
+            const next = initiativeIds.includes(initiativeId)
+              ? initiativeIds.filter((id) => id !== initiativeId)
+              : [...initiativeIds, initiativeId];
+            onInitiativesChange(next);
+          }}
+          placeholder={`Add ${initiativeLabel.toLowerCase()}s`}
+          singularLabel={initiativeLabel.toLowerCase()}
+          pluralLabel={`${initiativeLabel.toLowerCase()}s`}
           searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}
-          ariaLabel={initiativeLabel}
+          emptyText={`No ${initiativeLabel.toLowerCase()}s`}
+          ariaLabel={`${initiativeLabel}s`}
           readOnly={readOnly}
           disabled={pending}
         />
+      </PropertyPanelRow>
+      <PropertyPanelRow divided icon={<Tag className="size-4" />} label="Labels">
+        <div className="flex flex-wrap justify-end gap-1">
+          {(readOnly ? labels : availableLabels).map((label) => {
+            const selected = labels.some((item) => item.id === label.id);
+            if (readOnly) {
+              return (
+                <span
+                  key={label.id}
+                  className="bg-secondary-container text-on-secondary-container flex min-h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium"
+                >
+                  <span
+                    aria-hidden
+                    className="size-2 rounded-full"
+                    style={{ backgroundColor: label.color }}
+                  />
+                  {label.name}
+                </span>
+              );
+            }
+            return (
+              <button
+                key={label.id}
+                type="button"
+                disabled={pending}
+                aria-pressed={selected}
+                onClick={() => {
+                  onLabelsChange(
+                    selected
+                      ? labels.filter((item) => item.id !== label.id).map((item) => item.id)
+                      : [...labels.map((item) => item.id), label.id],
+                  );
+                }}
+                className={`flex min-h-10 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
+                  selected
+                    ? 'bg-secondary-container text-on-secondary-container'
+                    : 'text-on-surface-variant hover:bg-surface-container-high'
+                }`}
+              >
+                <span
+                  aria-hidden
+                  className="size-2 rounded-full"
+                  style={{ backgroundColor: label.color }}
+                />
+                {label.name}
+              </button>
+            );
+          })}
+          {(readOnly ? labels : availableLabels).length === 0 ? (
+            <span className="text-on-surface-variant text-xs">
+              {readOnly ? '—' : 'No workspace labels'}
+            </span>
+          ) : null}
+        </div>
       </PropertyPanelRow>
     </PropertyPanel>
   );

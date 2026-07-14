@@ -44,7 +44,7 @@ export default function AboutPage(): JSX.Element {
   return (
     <>
       <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-16">
-        <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">About Docket</p>
+        <p className="text-ink-muted text-sm font-medium">About Docket</p>
         <h1 className="font-display text-title text-ink mt-4 tracking-tight text-balance">
           Most people run more than one thing.
         </h1>
@@ -68,9 +68,7 @@ export default function AboutPage(): JSX.Element {
       </section>
       <section className="border-border border-t">
         <div className="mx-auto w-full max-w-6xl px-6 py-16">
-          <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
-            What we hold to
-          </p>
+          <p className="text-ink-muted text-sm font-medium">What we hold to</p>
           <dl className="mt-8 grid gap-x-12 gap-y-12 sm:grid-cols-2">
             {PRINCIPLES.map((principle) => (
               <div

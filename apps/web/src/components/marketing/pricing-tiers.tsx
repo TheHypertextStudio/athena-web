@@ -48,7 +48,7 @@ export function PricingTiers(): JSX.Element {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-3">
-        <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">Pricing</p>
+        <p className="text-ink-muted text-sm font-medium">Pricing</p>
         <h1 className="font-display text-title text-ink tracking-tight text-balance">
           Free until you need more than one workspace
         </h1>

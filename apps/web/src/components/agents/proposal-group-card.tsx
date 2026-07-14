@@ -220,7 +220,7 @@ function ProposalRow({
             {ghost?.title ?? item.summary}
           </button>
         )}
-        <span className="border-primary/40 text-primary shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium tracking-wide uppercase">
+        <span className="border-primary/40 text-primary shrink-0 rounded-full border px-1.5 py-px text-[10px] font-medium">
           proposed
         </span>
       </div>

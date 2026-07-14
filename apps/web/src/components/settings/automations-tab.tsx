@@ -40,13 +40,11 @@ function RuleRow({
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{rule.name}</span>
             {rule.isSeed ? (
-              <span className="text-muted-foreground bg-muted rounded px-1 text-[10px] uppercase">
+              <span className="text-muted-foreground bg-muted rounded px-1 text-[10px]">
                 default
               </span>
             ) : null}
-            {!rule.enabled ? (
-              <span className="text-muted-foreground text-[10px] uppercase">off</span>
-            ) : null}
+            {!rule.enabled ? <span className="text-muted-foreground text-[10px]">off</span> : null}
           </div>
           <span className="text-muted-foreground truncate text-xs">{ruleSummary(rule)}</span>
         </div>

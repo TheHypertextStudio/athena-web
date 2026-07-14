@@ -46,9 +46,7 @@ export function SiteFooter(): JSX.Element {
         </div>
         {COLUMNS.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">
-            <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
-              {column.title}
-            </p>
+            <p className="text-ink-muted text-sm font-medium">{column.title}</p>
             <ul className="flex flex-col gap-2">
               {column.links.map((link) => (
                 <li key={link.label}>

@@ -111,9 +111,7 @@ export function GhostProposals({ orgId, onApplied }: GhostProposalsProps): JSX.E
   return (
     <section aria-label="Proposed by Athena" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-          Proposed by Athena
-        </h2>
+        <h2 className="text-on-surface-variant text-sm font-medium">Proposed by Athena</h2>
         <span className="text-on-surface-variant/70 text-xs">
           Nothing is real until you approve it
         </span>

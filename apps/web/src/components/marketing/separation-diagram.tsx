@@ -38,9 +38,7 @@ export function SeparationDiagram(): JSX.Element {
     <section className="border-border border-y">
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
-          <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
-            How it holds together
-          </p>
+          <p className="text-ink-muted text-sm font-medium">How it holds together</p>
           <h2 className="font-display text-title text-ink tracking-tight text-balance">
             Separation by default. Unification on top.
           </h2>

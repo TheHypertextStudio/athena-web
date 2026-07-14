@@ -75,9 +75,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
         <div className="flex flex-col gap-3">
           {grouped.map(({ role, links }) => (
             <div key={role} className="flex flex-col gap-1.5">
-              <p className="text-on-surface-variant text-[11px] font-medium tracking-wide uppercase">
-                {TASK_ROLE_LABEL[role]}
-              </p>
+              <p className="text-on-surface-variant text-xs font-medium">{TASK_ROLE_LABEL[role]}</p>
               <div className="flex flex-col gap-1.5">
                 {links.map((link) => (
                   <LinkedTaskRow

@@ -246,7 +246,10 @@ export default function InitiativeDetailPage(): JSX.Element {
       </div>
 
       <header className="max-w-4xl">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
+        <div className="mb-3">
+          <Badge className="mb-3" variant="secondary">
+            {STATUS_LABEL[detail.status]}
+          </Badge>
           {editingHeader ? (
             <form
               className="no-print flex w-full max-w-3xl flex-col gap-3"
@@ -266,7 +269,7 @@ export default function InitiativeDetailPage(): JSX.Element {
                   setTitleDraft(event.target.value);
                 }}
                 aria-label="Initiative title"
-                className="border-outline-variant text-on-surface border-b bg-transparent text-4xl font-semibold tracking-tight outline-none"
+                className="border-outline-variant text-document-title text-on-surface border-b bg-transparent outline-none"
               />
               <textarea
                 value={summaryDraft}
@@ -296,11 +299,10 @@ export default function InitiativeDetailPage(): JSX.Element {
             </form>
           ) : null}
           <h1
-            className={`${editingHeader ? 'print-only' : ''} text-on-surface text-[clamp(2.25rem,5vw,4.5rem)] leading-[0.96] font-semibold tracking-[-0.05em]`}
+            className={`${editingHeader ? 'print-only' : ''} text-document-title text-on-surface`}
           >
             {detail.name}
           </h1>
-          <Badge variant="secondary">{STATUS_LABEL[detail.status]}</Badge>
         </div>
         {detail.summary ? (
           <p className="text-on-surface-variant max-w-3xl text-lg leading-relaxed">
@@ -530,9 +532,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             </Property>
           </div>
           <section className="space-y-3">
-            <h3 className="text-on-surface text-xs font-semibold tracking-wide uppercase">
-              Labels
-            </h3>
+            <h3 className="text-on-surface text-h3">Labels</h3>
             <div className="flex flex-wrap gap-2">
               {data.labels
                 .filter((label) => label.teamId === null || label.teamId === undefined)
@@ -570,9 +570,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             </div>
           </section>
           <section className="space-y-3">
-            <h3 className="text-on-surface text-xs font-semibold tracking-wide uppercase">
-              Resources
-            </h3>
+            <h3 className="text-on-surface text-h3">Resources</h3>
             <div className="divide-outline-variant divide-y border-y">
               {detail.resources.map((resource) => (
                 <div key={resource.id} className="flex items-center gap-2 py-2 text-sm">

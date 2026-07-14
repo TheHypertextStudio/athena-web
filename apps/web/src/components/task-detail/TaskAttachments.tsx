@@ -62,9 +62,7 @@ function AttachmentCard({
       <CardContent className="flex items-start justify-between gap-3 p-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-xs tracking-wide uppercase">
-              {kindLabel}
-            </span>
+            <span className="text-muted-foreground text-xs font-medium">{kindLabel}</span>
             <span className="truncate text-sm font-medium">{attachment.title}</span>
           </div>
           {isEmail && sender ? (

@@ -122,9 +122,7 @@ function DependencyColumn({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-          {title}
-        </h3>
+        <h3 className="text-on-surface-variant text-sm font-medium">{title}</h3>
         {canEdit ? (
           <EntityPicker
             options={pickerOptions}

@@ -559,9 +559,7 @@ function SearchResultRow({
 function FilterGroup({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
     <section className="min-w-0">
-      <h2 className="text-on-surface-variant mb-2 text-xs font-semibold tracking-normal uppercase">
-        {title}
-      </h2>
+      <h2 className="text-on-surface-variant mb-2 text-sm font-medium">{title}</h2>
       {children}
     </section>
   );

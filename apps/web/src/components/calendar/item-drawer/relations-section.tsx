@@ -77,9 +77,7 @@ function RelationGroup({
   if (relations.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-on-surface-variant text-[11px] font-medium tracking-wide uppercase">
-        {title}
-      </p>
+      <p className="text-on-surface-variant text-xs font-medium">{title}</p>
       {relations.map((relation) => (
         <RelationRow
           key={relation.targetItemId}

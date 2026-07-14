@@ -33,9 +33,7 @@ export function HowItWorks(): JSX.Element {
     <section id="how-it-works" className="border-border bg-paper-deep scroll-mt-20 border-y">
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
-          <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">
-            From zero to in control
-          </p>
+          <p className="text-ink-muted text-sm font-medium">From zero to in control</p>
           <h2 className="font-display text-title text-ink tracking-tight text-balance">
             Up and running in minutes
           </h2>

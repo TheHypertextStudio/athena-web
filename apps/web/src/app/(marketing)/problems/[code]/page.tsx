@@ -39,7 +39,7 @@ export default async function ProblemPage({ params }: ProblemPageProps): Promise
         <Link href="/problems" className="text-ink-muted text-sm underline underline-offset-4">
           Problem types
         </Link>
-        <p className="text-ink-muted mt-8 font-mono text-xs tracking-[0.14em] uppercase">
+        <p className="text-ink-muted mt-8 font-mono text-xs">
           HTTP {problem.status} · {code}
         </p>
         <h1 className="font-display text-title text-ink mt-4 tracking-tight">{problem.title}</h1>

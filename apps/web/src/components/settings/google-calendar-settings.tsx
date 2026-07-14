@@ -349,9 +349,7 @@ export default function GoogleCalendarSettings({
             </ul>
             {(layersByConnection.get(connection.id) ?? []).length > 0 ? (
               <div className="border-outline-variant border-t px-4 py-3">
-                <h3 className="text-on-surface-variant mb-1.5 text-xs font-semibold tracking-wide uppercase">
-                  Layers
-                </h3>
+                <h3 className="text-on-surface-variant mb-1.5 text-sm font-medium">Layers</h3>
                 <CalendarLayerPanel layers={layersByConnection.get(connection.id) ?? []} />
               </div>
             ) : null}

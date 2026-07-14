@@ -23,7 +23,7 @@ export default function PrivacyPage(): JSX.Element {
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-20 pb-24">
       <header>
-        <p className="text-ink-muted font-mono text-xs tracking-[0.14em] uppercase">Legal</p>
+        <p className="text-ink-muted text-sm font-medium">Legal</p>
         <h1 className="font-display text-title text-ink mt-4 tracking-tight">Privacy policy</h1>
         <p className="text-ink-muted mt-4">Effective July 10, 2026</p>
       </header>

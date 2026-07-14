@@ -368,9 +368,7 @@ export default function TaskGraphPanel({
           {showReady && readyNodes.length > 0 ? (
             <Panel position="bottom-left">
               <div className="border-outline-variant bg-surface-container max-h-56 w-56 overflow-auto rounded-lg border p-2 shadow-lg">
-                <p className="text-on-surface-variant mb-1 text-xs font-medium uppercase">
-                  Ready to start
-                </p>
+                <p className="text-on-surface-variant mb-1 text-xs font-medium">Ready to start</p>
                 {readyNodes.map((n) => (
                   <button
                     key={n.id}

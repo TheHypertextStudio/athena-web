@@ -195,7 +195,7 @@ function ConsentPage(): JSX.Element {
         <CardContent className="flex flex-col gap-6">
           {requestedScopes.length > 0 ? (
             <section aria-label="Requested permissions">
-              <p className="text-on-surface-variant mb-3 text-xs font-medium tracking-wide uppercase">
+              <p className="text-on-surface-variant mb-3 text-sm font-medium">
                 This app will be able to
               </p>
               <ul className="flex flex-col gap-3">

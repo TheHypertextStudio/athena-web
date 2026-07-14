@@ -58,9 +58,7 @@ function RefList({
   if (refs.length === 0) return null;
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-on-surface-variant text-xs font-medium tracking-wide uppercase">
-        {label}
-      </span>
+      <span className="text-on-surface-variant text-xs font-medium">{label}</span>
       {refs.map((r) => (
         <button
           key={r.id}

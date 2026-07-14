@@ -28,15 +28,27 @@ const HEALTH_LABEL = {
   off_track: 'Off track',
 } as const;
 
-function AttentionSurface({ item, orgId }: { item: InitiativeAttentionItem; orgId: string }) {
+function AttentionSurface({
+  item,
+  orgId,
+  index,
+  count,
+  onPrevious,
+  onNext,
+}: {
+  item: InitiativeAttentionItem;
+  orgId: string;
+  index: number;
+  count: number;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
   const href = `/orgs/${item.organizationId}/initiatives/${item.initiativeId}${item.action === 'update' ? '?tab=updates&compose=1' : ''}`;
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-stretch gap-3 @2xl:flex-row @2xl:items-center @2xl:justify-between @2xl:gap-4">
+    <div className="flex min-w-0 flex-1 flex-col gap-4 @4xl:flex-row @4xl:items-center @4xl:justify-between">
       <div className="min-w-0">
         <div className="mb-1 flex items-center gap-2 text-xs">
-          <span className="text-on-surface-variant font-medium tracking-wide uppercase">
-            Needs your attention
-          </span>
+          <span className="text-on-surface-variant font-medium">Needs your attention</span>
           <Badge variant={item.severity === 'off_track' ? 'destructive' : 'secondary'}>
             {item.severity === 'stale' ? 'Update due' : HEALTH_LABEL[item.severity]}
           </Badge>
@@ -54,9 +66,32 @@ function AttentionSurface({ item, orgId }: { item: InitiativeAttentionItem; orgI
           <p className="text-on-surface-variant mt-1 text-xs">In {item.parentInitiativeName}</p>
         ) : null}
       </div>
-      <Button asChild size="sm" variant="outline" className="min-h-10 self-start @2xl:min-h-0">
-        <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>
-      </Button>
+      <div
+        data-testid="initiative-attention-controls"
+        className="flex shrink-0 items-center justify-between gap-2 @4xl:justify-end"
+      >
+        <Button asChild size="sm" variant="outline" className="min-h-10 @4xl:min-h-0">
+          <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>
+        </Button>
+        {count > 1 ? (
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Previous attention item"
+              onClick={onPrevious}
+            >
+              ←
+            </Button>
+            <span className="text-on-surface-variant min-w-8 text-center text-xs tabular-nums">
+              {index + 1}/{count}
+            </span>
+            <Button variant="ghost" size="icon" aria-label="Next attention item" onClick={onNext}>
+              →
+            </Button>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -158,11 +193,22 @@ export default function InitiativesListClient(): JSX.Element {
 
       {!overview.isPending && !overview.isError ? (
         <section
-          className="border-outline-variant flex min-h-28 flex-col items-stretch gap-3 border-y px-1 py-4 @2xl:flex-row @2xl:items-center"
+          className="bg-surface-container-low flex min-h-28 flex-col rounded-lg p-4 @2xl:p-5"
           aria-label="Needs your attention"
         >
           {currentAttention ? (
-            <AttentionSurface item={currentAttention} orgId={orgId} />
+            <AttentionSurface
+              item={currentAttention}
+              orgId={orgId}
+              index={attentionIndex % attention.length}
+              count={attention.length}
+              onPrevious={() => {
+                setAttentionIndex((value) => (value - 1 + attention.length) % attention.length);
+              }}
+              onNext={() => {
+                setAttentionIndex((value) => (value + 1) % attention.length);
+              }}
+            />
           ) : (
             <div>
               <p className="text-on-surface text-sm font-medium">Nothing needs attention</p>
@@ -171,33 +217,6 @@ export default function InitiativesListClient(): JSX.Element {
               </p>
             </div>
           )}
-          {attention.length > 1 ? (
-            <div className="flex shrink-0 items-center justify-end gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Previous attention item"
-                onClick={() => {
-                  setAttentionIndex((value) => (value - 1 + attention.length) % attention.length);
-                }}
-              >
-                ←
-              </Button>
-              <span className="text-on-surface-variant text-xs tabular-nums">
-                {(attentionIndex % attention.length) + 1}/{attention.length}
-              </span>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Next attention item"
-                onClick={() => {
-                  setAttentionIndex((value) => (value + 1) % attention.length);
-                }}
-              >
-                →
-              </Button>
-            </div>
-          ) : null}
         </section>
       ) : null}
 
@@ -255,26 +274,26 @@ export default function InitiativesListClient(): JSX.Element {
       ) : data && data.items.length > 0 ? (
         <div>
           <table className="w-full border-collapse text-sm">
-            <thead className="hidden @2xl:table-header-group">
+            <thead className="hidden @5xl:table-header-group">
               <tr className="border-outline-variant text-on-surface-variant border-b text-left text-xs">
                 <th className="py-2 font-medium">Initiative</th>
-                <th className="py-2 font-medium">Status</th>
-                <th className="py-2 font-medium">Health</th>
-                <th className="py-2 font-medium">Owner</th>
-                <th className="py-2 font-medium">Target</th>
-                <th className="py-2 font-medium">Last update</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap">Status</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap">Health</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap">Owner</th>
+                <th className="py-2 pr-4 font-medium whitespace-nowrap">Target</th>
+                <th className="py-2 font-medium whitespace-nowrap">Last update</th>
               </tr>
             </thead>
-            <tbody className="block @2xl:table-row-group">
+            <tbody className="block @5xl:table-row-group">
               {visibleItems.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b @2xl:table-row"
+                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b @5xl:table-row"
                   onMouseEnter={() => {
                     prefetch(initiativeDetailDef(item.organizationId, item.id));
                   }}
                 >
-                  <td className="block min-w-0 py-3 @2xl:table-cell @2xl:pr-4">
+                  <td className="block min-w-0 py-3 @5xl:table-cell @5xl:pr-4">
                     <div
                       className="flex items-center"
                       style={{ paddingLeft: `${(item.depth - 1) * 24}px` }}
@@ -282,7 +301,7 @@ export default function InitiativesListClient(): JSX.Element {
                       {item.childCount > 0 ? (
                         <button
                           type="button"
-                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @2xl:mr-0 @2xl:size-6"
+                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @5xl:mr-0 @5xl:size-6"
                           aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`}
                           aria-expanded={!collapsed.has(item.id)}
                           onClick={() => {
@@ -297,7 +316,7 @@ export default function InitiativesListClient(): JSX.Element {
                           {collapsed.has(item.id) ? '›' : '⌄'}
                         </button>
                       ) : (
-                        <span className="mr-1 w-10 shrink-0 @2xl:mr-0 @2xl:w-6" />
+                        <span className="mr-1 w-10 shrink-0 @5xl:mr-0 @5xl:w-6" />
                       )}
                       <Link
                         href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
@@ -313,15 +332,17 @@ export default function InitiativesListClient(): JSX.Element {
                     </div>
                     {item.summary ? (
                       <p
-                        className="text-on-surface-variant mt-1 line-clamp-2 pl-10 text-xs @2xl:mt-0.5 @2xl:truncate @2xl:pl-6"
+                        className="text-on-surface-variant mt-1 line-clamp-2 pl-10 text-xs @5xl:mt-0.5 @5xl:truncate @5xl:pl-6"
                         style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
                       >
                         {item.summary}
                       </p>
                     ) : null}
-                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs @2xl:hidden">
+                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs @5xl:hidden">
                       <span>{STATUS_LABEL[item.status]}</span>
                       <span>{item.health ? HEALTH_LABEL[item.health] : 'No health'}</span>
+                      <span>{`Owner ${item.ownerName ?? 'Unassigned'}`}</span>
+                      <span>{`Target ${item.targetDate ? item.targetDate.slice(0, 10) : 'No target'}`}</span>
                       <span>
                         {item.lastUpdateAt
                           ? `Updated ${item.lastUpdateAt.slice(0, 10)}`
@@ -329,15 +350,19 @@ export default function InitiativesListClient(): JSX.Element {
                       </span>
                     </p>
                   </td>
-                  <td className="hidden py-3 pr-4 @2xl:table-cell">{STATUS_LABEL[item.status]}</td>
-                  <td className="hidden py-3 pr-4 @2xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap @5xl:table-cell">
+                    {STATUS_LABEL[item.status]}
+                  </td>
+                  <td className="hidden py-3 pr-4 whitespace-nowrap @5xl:table-cell">
                     {item.health ? HEALTH_LABEL[item.health] : '—'}
                   </td>
-                  <td className="hidden py-3 pr-4 @2xl:table-cell">{item.ownerName ?? '—'}</td>
-                  <td className="hidden py-3 pr-4 tabular-nums @2xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap @5xl:table-cell">
+                    {item.ownerName ?? '—'}
+                  </td>
+                  <td className="hidden py-3 pr-4 whitespace-nowrap tabular-nums @5xl:table-cell">
                     {item.targetDate ? item.targetDate.slice(0, 10) : '—'}
                   </td>
-                  <td className="hidden py-3 tabular-nums @2xl:table-cell">
+                  <td className="hidden py-3 whitespace-nowrap tabular-nums @5xl:table-cell">
                     {item.lastUpdateAt ? item.lastUpdateAt.slice(0, 10) : 'Never'}
                   </td>
                 </tr>

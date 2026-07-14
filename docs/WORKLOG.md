@@ -7,25 +7,6 @@
 
 ## Active Tasks
 
-### [INIT-VISUAL-POLISH-001] Remove overlines and repair Initiative layout
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-07-13
-- **Priority**: P1
-- **Description**: Replace all-caps overline labels with plain sentence-case labels across Docket,
-  give Initiative documents a restrained 32–56px title, prevent roster metadata from collapsing
-  into narrow columns, and align attention actions inside one tonal surface.
-- **Plan**:
-  1. Add failing visual-contract coverage for typography, labels, attention layout, and responsive
-     roster behavior.
-  2. Add the named document-title token and apply the approved Initiative header order.
-  3. Convert visible overline labels to ordinary sentence-case type without changing acronyms or
-     user-entered codes.
-  4. Move the six-column roster to a genuinely wide breakpoint and retain all metadata in the
-     compact row.
-  5. Rebuild attention as one borderless tonal surface with a unified action/pager group.
-  6. Run focused tests, repository gates, live responsive review, documentation, and commits.
-
 ### [AGENT-CONFIG-001] Share repository agent tooling
 
 - **Status**: COMPLETED
@@ -1282,6 +1263,27 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [INIT-VISUAL-POLISH-001] Remove overlines and repair Initiative layout
+
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Summary**: Replaced all-caps overline treatments with plain sentence-case labels across Docket,
+  added a named 32–56px document-title scale, placed Initiative status above the title, converted
+  the attention band into one borderless tonal surface with a unified action/pager group, and kept
+  the Initiative roster in readable compact rows until a genuinely wide container is available.
+- **Files Changed**: Initiative overview and detail routes, shared typography tokens and merge
+  configuration, semantic label call sites, visual-contract coverage, design audit screenshots,
+  and the Initiative craft scorecard.
+- **Validation**: Focused visual contract 4/4, `pnpm typecheck`, `pnpm lint`, and `pnpm build` pass.
+  Live review covered 1440px and 390px in both themes plus the reported 1000px intermediate state;
+  320px measured no horizontal overflow and the browser console was clean. `pnpm test` remains
+  blocked by four unrelated baseline policy failures in provider catalog, documentation coverage,
+  and web error-source enforcement.
+- **Retrospective**: Container width, not viewport width, determines whether a dense table is usable.
+  Action and pagination controls that operate on the same attention item should remain one visual
+  group at every breakpoint, and document-scale type deserves a named product token instead of a
+  route-local clamp.
 
 ### [CAL-UX-003] Harden scheduling interactions to calendar-product parity
 

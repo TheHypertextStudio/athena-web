@@ -165,7 +165,7 @@ export function NotificationPreferencesSection({
           <Schedule aria-hidden="true" className="text-on-surface-variant size-4" />
           <h3 className="text-on-surface text-body font-semibold">Quiet hours</h3>
         </div>
-        <div className="grid gap-3 p-4 @2xl:grid-cols-[minmax(0,1fr)_8rem_8rem_auto] @2xl:items-end">
+        <div className="grid gap-3 p-4 @2xl:grid-cols-2 @2xl:items-end @4xl:grid-cols-[minmax(0,1fr)_10rem_10rem_auto]">
           <label className="text-on-surface text-body flex items-center gap-2 font-medium">
             <input
               type="checkbox"

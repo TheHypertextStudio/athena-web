@@ -7,6 +7,38 @@
 
 ## Active Tasks
 
+### [SETTINGS-CRAFT-002] Repair Settings loaded states and visual craft
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-14
+- **Completed**: 2026-07-14
+- **Priority**: P1
+- **Description**: Review every global and workspace Settings capture closely, remove misleading
+  placeholders and manual recovery controls, and make the screenshot workflow wait for a settled
+  loaded state.
+- **Approach**: Keep the user-owned Settings order and workspace administration boundary from
+  SETTINGS-IA-001, then repair the surfaces in place: real Profile editing, user-facing Athena
+  guidance, automatic polling for recoverable reads, clearer empty states, tighter notification
+  and export layouts, and a deterministic capture wait for body paint, fonts, and client data.
+- **Files Changed**: `apps/web/src/components/app-shell-frame.tsx`, global Profile and Athena
+  routes, Settings integration/member/work-structure/connected-apps/automation components,
+  notification and export presentation, `apps/web/e2e/tools/capture-shots.ts`, the export
+  component contract test, and this work log.
+- **Decisions**: Settings errors no longer ask the user to press Retry when the query can recover
+  itself; affected reads refetch automatically and explain that behavior. Connections remains the
+  place where Athena reads from or acts through external services, while Connected apps remains
+  the place where external clients receive access to Docket. The capture tool now waits for real
+  body content and fonts before its settle window, and workspace screenshots use the current test
+  workspace metadata rather than a stale identifier.
+- **Validation**: Focused Settings tests pass 17/17. Root typecheck, lint, test, and build pass;
+  the full test run reports web 733/733, API 1,243/1,243, and all 17 Turbo tasks successful.
+  Captured all 14 Settings routes at 1440x900 and 390x844 in light and dark themes under the
+  Settings visual-review directory.
+- **Retrospective**: The initial screenshot failures mixed two problems: capture timing and a
+  stale workspace fixture. Waiting for paint alone would have hidden the latter. The useful fix
+  is to make the harness deterministic and make the fixture identity explicit, while keeping
+  recoverable UI states calm and self-healing instead of exposing a Retry action.
+
 ### [PROJECTS-EXPERIENCE-001] Build the Project operating experience
 
 - **Status**: COMPLETED

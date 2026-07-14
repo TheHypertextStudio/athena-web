@@ -25,7 +25,7 @@ import {
   queryKeys,
   unwrap,
   useApiMutation,
-  useApiQuery,
+  useLiveApiQuery,
 } from '@/lib/query';
 
 import { ClientSetup } from './mcp-setup-panels';
@@ -61,13 +61,14 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
   const { data: config } = usePublicConfig();
   const mcpServerUrl = mcpUrl(config);
 
-  const appsQ = useApiQuery(
+  const appsQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.connectedApps(),
       () => api.v1.me['connected-apps'].$get(),
       'Could not load connected apps.',
       { staleTime: STALE.static },
     ),
+    15_000,
   );
 
   const apps: readonly ConnectedApp[] = appsQ.data?.items ?? [];
@@ -137,8 +138,8 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
             ))}
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-body">
-            {loadError}
+          <p role="status" className="text-on-surface-variant text-body">
+            Connected apps are temporarily unavailable. We&apos;ll keep checking automatically.
           </p>
         ) : apps.length === 0 ? (
           <EmptyState

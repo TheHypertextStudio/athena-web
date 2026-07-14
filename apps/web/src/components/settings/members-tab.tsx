@@ -29,7 +29,7 @@ import { useCallback, useMemo } from 'react';
 
 import { useSession } from '@/lib/auth-client';
 import { api } from '@/lib/api';
-import { STALE, apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } from '@/lib/query';
 
 import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
@@ -63,13 +63,14 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
 
   // Members + roles rarely change within a session (and their mutations invalidate these keys),
   // so they ride the static tier; invitations likewise reconcile via invalidation on send/revoke.
-  const membersQ = useApiListQuery(
+  const membersQ = useLiveApiQuery(
     apiQueryOptions(
       membersKey,
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
       { staleTime: STALE.static },
     ),
+    15_000,
   );
   const rolesQ = useApiListQuery(
     apiQueryOptions(
@@ -169,10 +170,10 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   if (loadError) {
     return (
       <p
-        role="alert"
-        className="border-outline-variant text-destructive text-body rounded-lg border p-4"
+        role="status"
+        className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body rounded-lg border p-4"
       >
-        {loadError}
+        Workspace members are temporarily unavailable. We&apos;ll keep checking automatically.
       </p>
     );
   }

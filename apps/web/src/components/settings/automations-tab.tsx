@@ -90,10 +90,13 @@ export default function AutomationsTab({
       {isPending ? (
         <p className="text-muted-foreground text-sm">Loading rules…</p>
       ) : rules.length === 0 ? (
-        <p className="text-muted-foreground text-sm">
-          No automation rules yet. Defaults appear once email-to-task is enabled for a connected
-          mailbox.
-        </p>
+        <div className="border-outline-variant bg-surface-container-low flex flex-col gap-1 rounded-lg border p-4">
+          <p className="text-on-surface text-sm font-medium">No automation rules yet.</p>
+          <p className="text-muted-foreground text-sm">
+            Connect a mailbox from Connections to bring email suggestions into Docket. Once that
+            source is active, Athena can help you turn recurring work into rules.
+          </p>
+        </div>
       ) : (
         <div className="flex flex-col gap-2">
           {rules.map((rule) => (

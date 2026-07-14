@@ -69,7 +69,7 @@ export function ExportRequestForm({
   return (
     <div className="border-outline-variant flex flex-col gap-6 rounded-lg border p-4 sm:p-6">
       <div className="flex flex-col gap-1">
-        <h2 className="text-on-surface text-title font-medium">1. Choose data to include</h2>
+        <h2 className="text-on-surface text-h3 font-semibold">Choose data to include</h2>
         <p className="text-on-surface-variant text-body">
           Start with everything selected, then remove anything you do not need.
         </p>
@@ -153,7 +153,7 @@ export function ExportRequestForm({
       ) : null}
 
       <div className="border-outline-variant bg-surface-container-low flex flex-col gap-2 rounded-lg border p-4">
-        <h2 className="text-on-surface text-title font-medium">2. Review &amp; create</h2>
+        <h2 className="text-on-surface text-body font-semibold">Review &amp; create</h2>
         <p className="text-on-surface-variant text-body">
           Your export will be a ZIP file. Docket will email you at{' '}
           <span className="text-on-surface font-medium">{options.deliveryEmail}</span> when your

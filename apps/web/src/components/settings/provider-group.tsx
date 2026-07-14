@@ -53,7 +53,7 @@ function statusBadge(
 /** A muted one-line hint under the provider name for the non-actionable states. */
 function subtitle(entry: IdentityProviderEntry, configured: boolean): string | null {
   if (entry.kind === 'coming-soon') return 'Support is on the way.';
-  if (!configured) return 'Not available in this workspace yet.';
+  if (!configured) return 'Not configured in this deployment.';
   return null;
 }
 

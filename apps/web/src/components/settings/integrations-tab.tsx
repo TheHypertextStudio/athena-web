@@ -37,7 +37,14 @@ import { authClient } from '@/lib/auth-client';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
 import { userErrorMessage } from '@/lib/problem';
 import { connectorAvailable, connectorOAuthConfigured, usePublicConfig } from '@/lib/public-config';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  unwrap,
+  useApiMutation,
+  useApiQuery,
+  useLiveApiQuery,
+} from '@/lib/query';
 
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountsSection } from './gtasks-accounts-section';
@@ -151,12 +158,13 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
     providerName: string;
   } | null>(null);
 
-  const directoryQ = useApiQuery(
+  const directoryQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.integrationsDirectory(orgId),
       () => api.v1.orgs[':orgId'].integrations.directory.$get({ param: { orgId } }),
       'Could not load the integration directory.',
     ),
+    15_000,
   );
   const integrationsQ = useApiQuery(
     apiQueryOptions(
@@ -437,16 +445,12 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
     return (
       <div
         role="alert"
-        className="border-outline-variant text-on-surface-variant flex flex-col items-start gap-3 rounded-lg border p-4"
+        className="border-outline-variant bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-lg border p-4"
       >
-        <p className="text-destructive text-body">{loadError}</p>
-        <button
-          type="button"
-          onClick={() => void directoryQ.refetch()}
-          className="focus-visible:ring-ring text-primary hover:bg-surface-container-high text-body rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1"
-        >
-          Retry
-        </button>
+        <p className="text-on-surface text-body font-medium">Connections are still loading.</p>
+        <p className="text-body">
+          We&apos;ll keep checking for the available services automatically.
+        </p>
       </div>
     );
   }

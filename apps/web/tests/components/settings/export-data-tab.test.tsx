@@ -107,7 +107,7 @@ describe('ExportDataTab', () => {
   it('makes selected data, delivery, and a ready export understandable', async () => {
     renderTab();
 
-    expect(await screen.findByRole('heading', { name: '1. Choose data to include' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Choose data to include' })).toBeVisible();
     expect(screen.getByText('ada@example.com')).toBeVisible();
     expect(screen.getByRole('checkbox', { name: /Account information/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Personal Docket data/ })).toBeChecked();

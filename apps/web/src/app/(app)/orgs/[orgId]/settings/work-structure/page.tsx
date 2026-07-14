@@ -7,7 +7,7 @@ import { use, useEffect, useState, type JSX } from 'react';
 import { SectionHeader } from '@/components/settings/section-header';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 /** Configure the maximum Initiative hierarchy depth for a workspace. */
 export default function WorkStructureSettingsPage({
@@ -17,7 +17,7 @@ export default function WorkStructureSettingsPage({
 }): JSX.Element {
   const { orgId } = use(params);
   const key = queryKeys.settings(orgId, 'work-structure');
-  const settingsQ = useApiQuery(
+  const settingsQ = useLiveApiQuery(
     apiQueryOptions(
       key,
       () =>
@@ -26,6 +26,7 @@ export default function WorkStructureSettingsPage({
         }),
       'Could not load work structure settings.',
     ),
+    15_000,
   );
   const [depth, setDepth] = useState(2);
   useEffect(() => {
@@ -55,8 +56,8 @@ export default function WorkStructureSettingsPage({
       {settingsQ.isPending ? (
         <Skeleton className="h-44 max-w-2xl rounded-lg" />
       ) : settingsQ.isError ? (
-        <p role="alert" className="text-destructive text-sm">
-          {userErrorMessage(settingsQ.error, 'Could not load work structure settings.')}
+        <p role="status" className="text-on-surface-variant text-sm">
+          Work structure is temporarily unavailable. We&apos;ll keep checking automatically.
         </p>
       ) : (
         <section aria-labelledby="initiative-depth" className="flex max-w-2xl flex-col gap-5">

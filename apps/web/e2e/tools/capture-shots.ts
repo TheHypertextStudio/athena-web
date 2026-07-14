@@ -89,7 +89,9 @@ async function main(): Promise<void> {
       for (const colorScheme of COLOR_SCHEMES) {
         await page.emulateMedia({ colorScheme });
         await page.goto(`${meta.baseURL}${path}`, { waitUntil: 'networkidle' });
-        await page.waitForTimeout(500); // settle layout/theme transitions before capturing
+        await page.waitForFunction(() => document.body.innerText.trim().length > 0);
+        await page.evaluate(async () => document.fonts.ready);
+        await page.waitForTimeout(1500); // settle client data, layout, and theme transitions
         const file = `${outDir}/${slug}-${viewport.label}-${colorScheme}.png`;
         await page.screenshot({ path: file });
         console.log(`[capture-shots] ${file}`);

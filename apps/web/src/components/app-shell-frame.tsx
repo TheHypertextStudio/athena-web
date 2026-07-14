@@ -86,6 +86,11 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   const userId = session?.user.id ?? null;
   const routeOrgId = orgIdFromPath(pathname);
   const shellLoading = !session || orgsQ.isPending;
+  const settingsSurface =
+    pathname === '/settings' ||
+    pathname.startsWith('/settings/') ||
+    pathname.endsWith('/settings') ||
+    pathname.includes('/settings/');
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
 
   return (
@@ -102,6 +107,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
               loading={shellLoading}
+              settingsSurface={settingsSurface}
               routeOrgId={routeOrgId}
               userId={userId}
               workspaceKey={workspaceKeyFromPath(pathname)}
@@ -165,6 +171,7 @@ function AppShellAgendaSkeleton(): JSX.Element {
 
 interface AppShellInnerProps {
   loading: boolean;
+  settingsSurface: boolean;
   routeOrgId: string | null;
   userId: string | null;
   workspaceKey?: WorkspaceNavKey;
@@ -184,6 +191,7 @@ interface AppShellInnerProps {
  */
 function AppShellInner({
   loading,
+  settingsSurface,
   routeOrgId,
   userId,
   workspaceKey,
@@ -242,8 +250,9 @@ function AppShellInner({
     [orgs, resolvedOrgId],
   );
 
-  // The personal org owns the account-level Security settings the recovery-codes nudge links to.
   const personalOrgId = useMemo(() => orgs.find((o) => o.isPersonal)?.id ?? null, [orgs]);
+
+  // The personal org owns the account-level Security settings the recovery-codes nudge links to.
 
   useEffect(() => {
     if (loading) {
@@ -330,17 +339,21 @@ function AppShellInner({
           sidebar={sidebar}
           tabBar={tabBar}
           banner={
-            loading ? undefined : (
+            loading || settingsSurface ? undefined : (
               <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
             )
           }
           mobileBrand={mobileBrand}
           mobileActions={mobileActions}
-          aside={{
-            node: loading ? <AppShellAgendaSkeleton /> : <Agenda />,
-            label: 'Agenda',
-            icon: <Calendar aria-hidden="true" />,
-          }}
+          aside={
+            settingsSurface
+              ? undefined
+              : {
+                  node: loading ? <AppShellAgendaSkeleton /> : <Agenda />,
+                  label: 'Agenda',
+                  icon: <Calendar aria-hidden="true" />,
+                }
+          }
         >
           {loading ? <AppShellContentSkeleton /> : children}
         </AppShell>

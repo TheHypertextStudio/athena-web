@@ -77,6 +77,16 @@ describe('Initiative experience schema', () => {
         and column_name in ('icon_key', 'color_key')
     `)) as unknown as { rows: { table_name: string; column_name: string }[] };
     expect(coreColumns.rows).toEqual([]);
+
+    const constraint = (await db.execute(sql`
+      select pg_get_constraintdef(c.oid) as definition
+      from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      where t.relname = 'entity_display'
+        and c.conname = 'entity_display_icon_key_check'
+    `)) as unknown as { rows: { definition: string }[] };
+    expect(constraint.rows[0]?.definition).toContain("'bus'::text");
+    expect(constraint.rows[0]?.definition).toContain("'library'::text");
   });
 
   it('allows URL resources to name an Initiative as their subject', async () => {

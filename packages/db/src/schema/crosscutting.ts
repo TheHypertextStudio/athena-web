@@ -8,10 +8,11 @@
  * the universal audit feed, and saved views.
  */
 import { sql } from 'drizzle-orm';
-import type {
-  EntityDisplayColorKey,
-  EntityDisplayIconKey,
-  EntityDisplaySubjectType,
+import {
+  ENTITY_DISPLAY_ICON_KEYS,
+  type EntityDisplayColorKey,
+  type EntityDisplayIconKey,
+  type EntityDisplaySubjectType,
 } from '@docket/types';
 import {
   boolean,
@@ -83,6 +84,10 @@ import type {
   ViewSort,
 } from '../types';
 import { actor, auditColumns, hub, organization, team } from './identity';
+
+const entityDisplayIconKeyList = sql.raw(
+  ENTITY_DISPLAY_ICON_KEYS.map((key) => `'${key}'`).join(', '),
+);
 
 /** A named org-level capability bundle (Owner/Admin/Member/Guest defaults + custom). */
 export const role = pgTable(
@@ -168,10 +173,7 @@ export const entityDisplay = pgTable(
   (t) => [
     uniqueIndex('entity_display_subject_uq').on(t.organizationId, t.subjectType, t.subjectId),
     check('entity_display_subject_type_check', sql`${t.subjectType} in ('initiative', 'project')`),
-    check(
-      'entity_display_icon_key_check',
-      sql`${t.iconKey} in ('target', 'flag', 'layers', 'folder', 'workflow', 'globe', 'users', 'sparkles')`,
-    ),
+    check('entity_display_icon_key_check', sql`${t.iconKey} in (${entityDisplayIconKeyList})`),
     check(
       'entity_display_color_key_check',
       sql`${t.colorKey} in ('neutral', 'primary', 'success', 'warning', 'danger')`,

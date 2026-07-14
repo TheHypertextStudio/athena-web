@@ -5,11 +5,12 @@ import type {
   EntityDisplayIconKey,
   EntityDisplayOut,
   InitiativeAttentionItem,
+  InitiativeOverviewItem,
   InitiativeOverviewOut,
 } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronDown, ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
+import { ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -17,6 +18,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
+import { formatDate } from '@/components/initiatives/format-date';
+import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
@@ -35,6 +38,121 @@ const HEALTH_LABEL = {
   at_risk: 'At risk',
   off_track: 'Off track',
 } as const;
+const HEALTH_TEXT_CLASS = {
+  on_track: 'text-state-completed',
+  at_risk: 'text-state-canceled',
+  off_track: 'text-destructive',
+} as const;
+
+const ROSTER_ROW_HEIGHT = 72;
+const ROSTER_CELL_INSET = 12;
+const ROSTER_INDENT_STEP = 48;
+const ROSTER_ICON_TARGET = 40;
+
+interface InitiativeRosterRow {
+  item: InitiativeOverviewItem;
+  continuationDepths: readonly number[];
+  hasVisibleChildren: boolean;
+  isLastSibling: boolean;
+}
+
+/** Add the sibling context needed to draw a hierarchy without storing presentation state. */
+function decorateHierarchy(items: readonly InitiativeOverviewItem[]): InitiativeRosterRow[] {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  const childrenByParent = new Map<string | null, InitiativeOverviewItem[]>();
+  for (const item of items) {
+    const siblings = childrenByParent.get(item.parentInitiativeId) ?? [];
+    childrenByParent.set(item.parentInitiativeId, [...siblings, item]);
+  }
+
+  return items.map((item) => {
+    const siblings = childrenByParent.get(item.parentInitiativeId) ?? [];
+    const continuationDepths: number[] = [];
+    let ancestor = item.parentInitiativeId ? byId.get(item.parentInitiativeId) : undefined;
+    while (ancestor?.parentInitiativeId) {
+      const ancestorSiblings = childrenByParent.get(ancestor.parentInitiativeId) ?? [];
+      if (ancestorSiblings.at(-1)?.id !== ancestor.id) {
+        continuationDepths.push(ancestor.depth - 1);
+      }
+      ancestor = byId.get(ancestor.parentInitiativeId);
+    }
+
+    return {
+      item,
+      continuationDepths,
+      hasVisibleChildren: (childrenByParent.get(item.id)?.length ?? 0) > 0,
+      isLastSibling: siblings.at(-1)?.id === item.id,
+    };
+  });
+}
+
+function HierarchyRails({
+  depth,
+  continuationDepths,
+  hasChildren,
+  hasSummary,
+  isLastSibling,
+}: {
+  depth: number;
+  continuationDepths: readonly number[];
+  hasChildren: boolean;
+  hasSummary: boolean;
+  isLastSibling: boolean;
+}): JSX.Element | null {
+  if (depth === 1 && !hasChildren && continuationDepths.length === 0) return null;
+
+  const iconTop = hasSummary ? 8 : 16;
+  const targetLeft = ROSTER_CELL_INSET + (depth - 1) * ROSTER_INDENT_STEP;
+  const iconCenter = targetLeft + ROSTER_ICON_TARGET / 2;
+  const branchY = iconTop + ROSTER_ICON_TARGET / 2;
+  const parentRailX = iconCenter - ROSTER_INDENT_STEP;
+  const branchEndX = targetLeft;
+
+  return (
+    <svg
+      aria-hidden
+      data-testid="initiative-hierarchy-rail"
+      className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
+      height={ROSTER_ROW_HEIGHT}
+      width="100%"
+    >
+      <g
+        className="stroke-outline-variant"
+        fill="none"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        {continuationDepths.map((railDepth) => {
+          const railX =
+            ROSTER_CELL_INSET + (railDepth - 1) * ROSTER_INDENT_STEP + ROSTER_ICON_TARGET / 2;
+          return <line key={railDepth} x1={railX} y1="0" x2={railX} y2={ROSTER_ROW_HEIGHT} />;
+        })}
+        {depth > 1 ? (
+          <>
+            <line
+              x1={parentRailX}
+              y1="0"
+              x2={parentRailX}
+              y2={isLastSibling ? branchY - 8 : ROSTER_ROW_HEIGHT}
+            />
+            <path
+              d={`M ${parentRailX} ${branchY - 8} Q ${parentRailX} ${branchY} ${parentRailX + 8} ${branchY} H ${branchEndX}`}
+            />
+          </>
+        ) : null}
+        {hasChildren ? (
+          <line
+            x1={iconCenter}
+            y1={iconTop + ROSTER_ICON_TARGET}
+            x2={iconCenter}
+            y2={ROSTER_ROW_HEIGHT}
+          />
+        ) : null}
+      </g>
+    </svg>
+  );
+}
 
 function AttentionSurface({
   item,
@@ -119,7 +237,6 @@ export default function InitiativesListClient(): JSX.Element {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | keyof typeof STATUS_LABEL>('all');
   const [sort, setSort] = useState<'title' | 'target' | 'status'>('title');
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const overview = useApiQuery(initiativeOverviewDef(orgId));
   const data: InitiativeOverviewOut | undefined = overview.data;
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
@@ -217,17 +334,9 @@ export default function InitiativesListClient(): JSX.Element {
         current = current.parentInitiativeId ? byId.get(current.parentInitiativeId) : undefined;
       }
     }
-    return ordered.filter((item) => {
-      if (!keep.has(item.id)) return false;
-      if (needle || statusFilter !== 'all') return true;
-      let parentId = item.parentInitiativeId;
-      while (parentId) {
-        if (collapsed.has(parentId)) return false;
-        parentId = byId.get(parentId)?.parentInitiativeId ?? null;
-      }
-      return true;
-    });
-  }, [collapsed, data?.items, search, sort, statusFilter]);
+    return ordered.filter((item) => keep.has(item.id));
+  }, [data?.items, search, sort, statusFilter]);
+  const rosterRows = useMemo(() => decorateHierarchy(visibleItems), [visibleItems]);
 
   const handleCreated = useCallback(
     (created: { id: string }): void => {
@@ -239,8 +348,13 @@ export default function InitiativesListClient(): JSX.Element {
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex items-center justify-between gap-4">
-        <h1 className="text-on-surface text-h1">{initiativePlural}</h1>
+      <header className="flex items-end justify-between gap-4">
+        <div>
+          <h1 className="text-on-surface text-page-title">{initiativePlural}</h1>
+          <p className="text-on-surface-variant mt-1 text-sm">
+            Strategic direction, health, and ownership at a glance.
+          </p>
+        </div>
         <Button
           className="min-h-10 gap-1.5"
           onClick={() => {
@@ -261,7 +375,7 @@ export default function InitiativesListClient(): JSX.Element {
 
       {!overview.isPending && !overview.isError ? (
         <section
-          className="bg-surface-container-low flex min-h-28 flex-col rounded-lg p-4 @2xl:p-5"
+          className="bg-surface-container-low flex flex-col rounded-xl p-4"
           aria-label="Needs your attention"
         >
           {currentAttention ? (
@@ -289,7 +403,7 @@ export default function InitiativesListClient(): JSX.Element {
       ) : null}
 
       {data && data.items.length > 0 ? (
-        <div className="border-outline-variant flex flex-wrap items-center gap-2 border-b pb-3">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             value={search}
             onChange={(event) => {
@@ -297,14 +411,14 @@ export default function InitiativesListClient(): JSX.Element {
             }}
             placeholder={`Filter ${initiativePlural.toLowerCase()}…`}
             aria-label={`Filter ${initiativePlural.toLowerCase()}`}
-            className="border-input bg-background h-10 min-w-52 flex-1 rounded-md border px-2 text-sm @2xl:h-8"
+            className="border-input bg-background h-10 min-w-52 flex-1 rounded-md border px-3 text-sm"
           />
           <select
             value={statusFilter}
             onChange={(event) => {
               setStatusFilter(event.target.value as typeof statusFilter);
             }}
-            className="border-input bg-background h-10 rounded-md border px-2 text-xs @2xl:h-8"
+            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
             aria-label="Filter by status"
           >
             <option value="all">All statuses</option>
@@ -319,7 +433,7 @@ export default function InitiativesListClient(): JSX.Element {
             onChange={(event) => {
               setSort(event.target.value as typeof sort);
             }}
-            className="border-input bg-background h-10 rounded-md border px-2 text-xs @2xl:h-8"
+            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
             aria-label="Sort initiatives"
           >
             <option value="title">Sort by title</option>
@@ -340,114 +454,141 @@ export default function InitiativesListClient(): JSX.Element {
           {userErrorMessage(overview.error, 'Could not load initiatives.')}
         </p>
       ) : data && data.items.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm md:min-w-[56rem]">
-            <thead className="hidden md:table-header-group">
-              <tr className="border-outline-variant text-on-surface-variant border-b text-left text-xs">
-                <th className="py-2 pl-20 font-medium">Initiative</th>
-                <th className="py-2 pr-4 font-medium whitespace-nowrap">Status</th>
-                <th className="py-2 pr-4 font-medium whitespace-nowrap">Health</th>
-                <th className="py-2 pr-4 font-medium whitespace-nowrap">Owner</th>
-                <th className="py-2 pr-4 font-medium whitespace-nowrap">Target</th>
-                <th className="py-2 font-medium whitespace-nowrap">Last update</th>
-              </tr>
-            </thead>
-            <tbody className="block md:table-row-group">
-              {visibleItems.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b md:table-row"
-                  onMouseEnter={() => {
-                    prefetch(initiativeDetailDef(item.organizationId, item.id));
-                  }}
-                >
-                  <td className="block min-w-0 py-3 md:table-cell md:pr-4">
+        <div className="bg-surface-container-low relative rounded-xl p-2">
+          <div className="overflow-x-auto overscroll-x-contain pb-1">
+            <div
+              role="treegrid"
+              aria-label={`${initiativePlural} hierarchy`}
+              aria-rowcount={rosterRows.length}
+              className="min-w-[56rem] text-sm"
+            >
+              <div
+                role="row"
+                className="text-on-surface-variant grid h-8 grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] items-center text-xs"
+              >
+                <div role="columnheader" className="pr-3 pl-16 font-medium">
+                  {initiativeNoun}
+                </div>
+                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                  Status
+                </div>
+                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                  Health
+                </div>
+                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                  Owner
+                </div>
+                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                  Target
+                </div>
+                <div role="columnheader" className="px-3 font-medium whitespace-nowrap">
+                  Last update
+                </div>
+              </div>
+              {rosterRows.map(
+                ({ item, continuationDepths, hasVisibleChildren, isLastSibling }, rowIndex) => {
+                  const targetDate = formatDate(item.targetDate);
+                  const lastUpdate = formatDate(item.lastUpdateAt);
+                  const hasSummary = Boolean(item.summary?.trim());
+                  const itemLeft = ROSTER_CELL_INSET + (item.depth - 1) * ROSTER_INDENT_STEP;
+                  return (
                     <div
-                      className="flex items-center"
-                      style={{ paddingLeft: `${(item.depth - 1) * 24}px` }}
+                      key={item.id}
+                      role="row"
+                      aria-level={item.depth}
+                      aria-rowindex={rowIndex + 1}
+                      className="hover:bg-surface-container-high grid h-[72px] grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors"
+                      onMouseEnter={() => {
+                        prefetch(initiativeDetailDef(item.organizationId, item.id));
+                      }}
                     >
-                      {item.childCount > 0 ? (
-                        <button
-                          type="button"
-                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center md:mr-0"
-                          aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`}
-                          aria-expanded={!collapsed.has(item.id)}
-                          onClick={() => {
-                            setCollapsed((current) => {
-                              const next = new Set(current);
-                              if (next.has(item.id)) next.delete(item.id);
-                              else next.add(item.id);
-                              return next;
-                            });
-                          }}
+                      <div role="gridcell" className="relative h-full min-w-0">
+                        <HierarchyRails
+                          depth={item.depth}
+                          continuationDepths={continuationDepths}
+                          hasChildren={hasVisibleChildren}
+                          hasSummary={hasSummary}
+                          isLastSibling={isLastSibling}
+                        />
+                        <div
+                          className={`relative flex h-full min-w-0 ${hasSummary ? 'items-start pt-2' : 'items-center'}`}
+                          style={{ paddingLeft: `${itemLeft}px` }}
                         >
-                          {collapsed.has(item.id) ? (
-                            <ChevronRight aria-hidden className="size-5" />
-                          ) : (
-                            <ChevronDown aria-hidden className="size-5" />
-                          )}
-                        </button>
-                      ) : (
-                        <span className="mr-1 size-10 shrink-0 md:mr-0" />
-                      )}
-                      <InitiativeIconPicker
-                        display={item.display}
-                        initiativeName={item.name}
-                        editable={item.organizationId === orgId}
-                        pending={displayMutation.isPending}
-                        onChange={(iconKey, colorKey) => {
-                          displayMutation.mutate({ initiativeId: item.id, iconKey, colorKey });
-                        }}
-                      />
-                      <Link
-                        href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
-                        className="text-on-surface line-clamp-1 min-w-0 font-medium hover:underline"
+                          <InitiativeIconPicker
+                            display={item.display}
+                            initiativeName={item.name}
+                            editable={item.organizationId === orgId}
+                            pending={displayMutation.isPending}
+                            onChange={(iconKey, colorKey) => {
+                              displayMutation.mutate({ initiativeId: item.id, iconKey, colorKey });
+                            }}
+                          />
+                          <div className="ml-3 min-w-0 pt-0.5">
+                            <div className="flex min-w-0 items-center">
+                              <Link
+                                href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
+                                title={item.name}
+                                className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold hover:underline"
+                              >
+                                {item.name}
+                              </Link>
+                              {item.organizationId !== orgId ? (
+                                <Badge className="ml-2 shrink-0" variant="outline">
+                                  {item.organizationName}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            {item.summary ? (
+                              <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[44ch] text-xs leading-4">
+                                {item.summary}
+                              </p>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                      <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                        {STATUS_LABEL[item.status]}
+                      </div>
+                      <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                        {item.health ? (
+                          <span
+                            className={`${HEALTH_TEXT_CLASS[item.health]} flex items-center gap-1.5 font-medium`}
+                          >
+                            <span
+                              aria-hidden
+                              className={`${HEALTH_FILL_CLASS[item.health]} size-1.5 rounded-full`}
+                            />
+                            {HEALTH_LABEL[item.health]}
+                          </span>
+                        ) : (
+                          <span className="text-on-surface-variant">—</span>
+                        )}
+                      </div>
+                      <div role="gridcell" className="flex items-center px-3 whitespace-nowrap">
+                        {item.ownerName ?? <span className="text-on-surface-variant">—</span>}
+                      </div>
+                      <div
+                        role="gridcell"
+                        className="flex items-center px-3 whitespace-nowrap tabular-nums"
                       >
-                        {item.name}
-                      </Link>
-                      {item.organizationId !== orgId ? (
-                        <Badge className="ml-2" variant="outline">
-                          {item.organizationName}
-                        </Badge>
-                      ) : null}
+                        {targetDate ?? <span className="text-on-surface-variant">—</span>}
+                      </div>
+                      <div
+                        role="gridcell"
+                        className="flex items-center px-3 whitespace-nowrap tabular-nums"
+                      >
+                        {lastUpdate ?? <span className="text-on-surface-variant">Never</span>}
+                      </div>
                     </div>
-                    <p
-                      className="text-on-surface-variant mt-1 line-clamp-2 min-h-8 max-w-[45ch] pl-20 text-xs md:mt-0.5"
-                      style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
-                    >
-                      {item.summary ?? ''}
-                    </p>
-                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs md:hidden">
-                      <span>{STATUS_LABEL[item.status]}</span>
-                      <span>{item.health ? HEALTH_LABEL[item.health] : 'No health'}</span>
-                      <span>{`Owner ${item.ownerName ?? 'Unassigned'}`}</span>
-                      <span>{`Target ${item.targetDate ? item.targetDate.slice(0, 10) : 'No target'}`}</span>
-                      <span>
-                        {item.lastUpdateAt
-                          ? `Updated ${item.lastUpdateAt.slice(0, 10)}`
-                          : 'Never updated'}
-                      </span>
-                    </p>
-                  </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap md:table-cell">
-                    {STATUS_LABEL[item.status]}
-                  </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap md:table-cell">
-                    {item.health ? HEALTH_LABEL[item.health] : '—'}
-                  </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap md:table-cell">
-                    {item.ownerName ?? '—'}
-                  </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap tabular-nums md:table-cell">
-                    {item.targetDate ? item.targetDate.slice(0, 10) : '—'}
-                  </td>
-                  <td className="hidden py-3 whitespace-nowrap tabular-nums md:table-cell">
-                    {item.lastUpdateAt ? item.lastUpdateAt.slice(0, 10) : 'Never'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  );
+                },
+              )}
+            </div>
+          </div>
+          <div
+            aria-hidden
+            className="from-surface-container-low/0 to-surface-container-low pointer-events-none absolute top-2 right-0 bottom-2 w-4 bg-linear-to-r @4xl:hidden"
+          />
         </div>
       ) : (
         <EmptyState

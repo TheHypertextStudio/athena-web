@@ -546,6 +546,8 @@ describe('entity display DTOs', () => {
     expect(EntityDisplaySubjectType.parse('initiative')).toBe('initiative');
     expect(EntityDisplaySubjectType.parse('project')).toBe('project');
     expect(EntityDisplayIconKey.parse('target')).toBe('target');
+    expect(EntityDisplayIconKey.parse('bus')).toBe('bus');
+    expect(EntityDisplayIconKey.parse('library')).toBe('library');
     expect(EntityDisplayColorKey.parse('primary')).toBe('primary');
     expect(EntityDisplayUpdate.parse({ iconKey: 'flag', colorKey: 'warning' })).toEqual({
       iconKey: 'flag',

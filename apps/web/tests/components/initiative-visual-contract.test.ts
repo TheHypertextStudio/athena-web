@@ -41,6 +41,13 @@ describe('Initiative visual contract', () => {
     expect(detail).not.toContain('clamp(2.25rem,5vw,4.5rem)');
   });
 
+  it('gives the Initiative overview a named branded page-title scale', () => {
+    const typography = source(typographyPath);
+    const overview = source(overviewPath);
+    expect(typography).toContain('--text-page-title: clamp(2rem, 1.8rem + 0.8vw, 2.5rem);');
+    expect(overview).toContain('text-page-title');
+  });
+
   it('keeps attention content and controls in one borderless tonal surface', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('bg-surface-container-low');
@@ -50,29 +57,40 @@ describe('Initiative visual contract', () => {
     expect(overview).not.toContain('gap-3 border-y px-1 py-4');
   });
 
-  it('keeps medium table columns scrollable and reserves two description lines', () => {
+  it('keeps the complete padded roster scrollable without wrapping metadata', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('overflow-x-auto');
-    expect(overview).toContain('md:min-w-[56rem]');
-    expect(overview).toContain('md:table-header-group');
-    expect(overview).toContain('md:table-row-group');
-    expect(overview).toContain('md:table-cell');
+    expect(overview).toContain('min-w-[56rem]');
+    expect(overview).toContain('role="treegrid"');
+    expect(overview).toContain('px-3');
+    expect(overview).toContain('whitespace-nowrap');
     expect(overview).toContain('line-clamp-1 min-w-0');
-    expect(overview).toContain('line-clamp-2 min-h-8');
-    expect(overview).toContain('max-w-[45ch]');
-    expect(overview).not.toContain('{item.summary ? (');
-    expect(overview).toContain('Owner ${item.ownerName ??');
-    expect(overview).toContain('Target ${item.targetDate');
+    expect(overview).toContain('line-clamp-2');
+    expect(overview).toContain('max-w-[44ch]');
+    expect(overview).toContain('{item.summary ? (');
+    expect(overview).not.toContain('border-b md:table-row');
+  });
+
+  it('renders an always-visible hierarchy with curved semantic rails instead of collapse controls', () => {
+    const overview = source(overviewPath);
+    expect(overview).toContain('data-testid="initiative-hierarchy-rail"');
+    expect(overview).toContain('strokeWidth="2"');
+    expect(overview).toContain('strokeLinecap="round"');
+    expect(overview).toContain('strokeLinejoin="round"');
+    expect(overview).not.toContain('const [collapsed');
+    expect(overview).not.toContain('Collapse ${item.name}');
+    expect(overview).not.toContain('<ChevronDown');
   });
 
   it('keeps icon-only Initiative controls in 40px interactive targets', () => {
     const overview = source(overviewPath);
+    const picker = source(iconPickerPath);
     const button = source(buttonPath);
     const dialog = source(dialogPath);
     expect(button).toContain("icon: 'h-10 w-10'");
     expect(dialog).toContain('h-10 w-10');
     expect(overview).toContain('size="icon"');
-    expect(overview).toContain('flex size-10 shrink-0 items-center justify-center');
+    expect(picker).toContain('flex size-10 shrink-0 items-center justify-center');
     expect(overview).not.toContain('@2xl:size-6');
   });
 
@@ -81,9 +99,10 @@ describe('Initiative visual contract', () => {
     const picker = source(iconPickerPath);
     expect(overview).toContain('<ChevronLeft');
     expect(overview).toContain('<ChevronRight');
-    expect(overview).toContain('<ChevronDown');
     expect(overview).toContain('<InitiativeIconPicker');
     expect(picker).toContain('<PopoverContent');
+    expect(picker).toContain('Rounded');
+    expect(picker).toContain('type="search"');
     expect(picker).toContain('aria-label="Initiative icon"');
     expect(picker).toContain('aria-label="Initiative color"');
     expect(overview).not.toMatch(/[←→›⌄]/u);

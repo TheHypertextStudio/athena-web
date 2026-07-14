@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [INIT-ROSTER-FINAL-001] Ship the polished Initiative roster
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-13
+- **Priority**: P1
+- **Description**: Carry the approved Initiative overview prototype into the production app and
+  deploy the completed Initiative experience to production.
+- **Plan**:
+  1. Lock the approved roster, hierarchy-connector, icon-circle, empty-summary, and searchable
+     rounded-icon-picker behavior in focused failing tests.
+  2. Expand the generic entity-display icon catalog and database constraint without coupling
+     presentation choices to Initiative or Project records; generate the migration.
+  3. Replace the collapse-control roster with the line-free, always-visible hierarchy, padded
+     stable columns, two-line summaries, curved hierarchy rails, and restrained row selection.
+  4. Build the searchable dense rounded Material icon picker while preserving 40-pixel targets,
+     optimistic mutations, vocabulary skinning, cross-workspace read-only behavior, and local
+     horizontal scrolling.
+  5. Update the Initiative design specification, audit, screenshots, and this worklog.
+  6. Run focused red-green checks, then `pnpm typecheck`, `pnpm lint`, `pnpm test`, and
+     `pnpm build`; resolve all in-scope failures before release.
+  7. Commit atomically, verify linear history, push `main`, monitor the gated GitHub production
+     workflow and Vercel promotion, and smoke-test the production domains.
+- **Risks**: A broader persisted icon catalog requires an additive constraint migration; the
+  hierarchy visualization must work through the configured five-level maximum; production web
+  promotion is gated on the full CI and Cloud Run deployment checks.
+- **Validation**: Focused DTO, database, API, picker, hierarchy, and visual-contract tests; Docket
+  craft review at desktop/mobile in light/dark; root gates; production workflow and domain health.
+
+---
+
 ### [ATHENA-CLOUDFLARE-002] Persist durable Athena run generations
 
 - **Status**: COMPLETED

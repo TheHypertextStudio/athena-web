@@ -12,8 +12,8 @@ export const EntityDisplaySubjectType = z.enum(['initiative', 'project']);
 /** Supported display-metadata subject type. */
 export type EntityDisplaySubjectType = z.infer<typeof EntityDisplaySubjectType>;
 
-/** Stable icon keys mapped to the current Material icon set by each client. */
-export const EntityDisplayIconKey = z.enum([
+/** Stable presentation keys for the searchable strategic-work icon catalog. */
+export const ENTITY_DISPLAY_ICON_KEYS = [
   'target',
   'flag',
   'layers',
@@ -22,7 +22,53 @@ export const EntityDisplayIconKey = z.enum([
   'globe',
   'users',
   'sparkles',
-]);
+  'bus',
+  'train',
+  'subway',
+  'route',
+  'map',
+  'campaign',
+  'school',
+  'book',
+  'event',
+  'handshake',
+  'government',
+  'vote',
+  'community',
+  'hub',
+  'psychology',
+  'idea',
+  'launch',
+  'language',
+  'park',
+  'building',
+  'engineering',
+  'construction',
+  'timeline',
+  'analytics',
+  'insights',
+  'growth',
+  'verified',
+  'security',
+  'energy',
+  'favorite',
+  'star',
+  'explore',
+  'travel',
+  'award',
+  'volunteering',
+  'forum',
+  'voice',
+  'podcast',
+  'article',
+  'policy',
+  'justice',
+  'library',
+  'pedestrian',
+] as const;
+
+/** Stable icon key validated independently from any rendering library. */
+export const EntityDisplayIconKey = z.enum(ENTITY_DISPLAY_ICON_KEYS);
 /** Supported entity-display icon key. */
 export type EntityDisplayIconKey = z.infer<typeof EntityDisplayIconKey>;
 

@@ -63,6 +63,7 @@ export { default as Plus } from '@mui/icons-material/Add';
 export { default as RefreshCw } from '@mui/icons-material/Refresh';
 export { default as Schedule } from '@mui/icons-material/Schedule';
 export { default as Search } from '@mui/icons-material/Search';
+export { default as SearchRounded } from '@mui/icons-material/SearchRounded';
 export { default as Settings } from '@mui/icons-material/Settings';
 export { default as Shield } from '@mui/icons-material/ShieldOutlined';
 export { default as Sparkles } from '@mui/icons-material/AutoAwesome';
@@ -89,3 +90,9 @@ export { default as XCircle } from '@mui/icons-material/Cancel';
  * type is derived here from the `@mui/material/SvgIcon` default export it points at.
  */
 export type LucideIcon = typeof SvgIcon;
+
+export {
+  STRATEGIC_WORK_ROUNDED_ICON_BY_KEY,
+  STRATEGIC_WORK_ROUNDED_ICON_OPTIONS,
+  type StrategicWorkRoundedIconOption,
+} from './strategic-work-rounded';

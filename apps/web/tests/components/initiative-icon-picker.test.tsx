@@ -34,11 +34,41 @@ describe('InitiativeIconPicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Customize Transit coalition icon' }));
     expect(screen.getByLabelText('Initiative icon')).toBeTruthy();
     expect(screen.getByLabelText('Initiative color')).toBeTruthy();
+    expect(screen.getAllByTestId('initiative-icon-option').length).toBeGreaterThan(40);
+    expect(screen.getByTestId('initiative-icon-circle').className).toContain('size-8');
 
     fireEvent.click(screen.getByRole('button', { name: 'Flag' }));
     expect(onChange).toHaveBeenCalledWith('flag', 'neutral');
     fireEvent.click(screen.getByRole('button', { name: 'Primary' }));
     expect(onChange).toHaveBeenCalledWith('target', 'primary');
+  });
+
+  it('searches the rounded icon catalog by label and keyword', () => {
+    render(
+      <InitiativeIconPicker
+        display={{
+          subjectType: 'initiative',
+          subjectId: 'initiative-3',
+          iconKey: 'target',
+          colorKey: 'neutral',
+          customized: false,
+        }}
+        initiativeName="Transit education"
+        editable
+        pending={false}
+        onChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Customize Transit education icon' }));
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search icons' }), {
+      target: { value: 'transit' },
+    });
+
+    expect(screen.getByRole('button', { name: 'Bus' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Train' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Subway' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Flag' })).toBeNull();
   });
 
   it('renders a non-interactive icon for a read-only cross-workspace reference', () => {
@@ -59,5 +89,6 @@ describe('InitiativeIconPicker', () => {
     );
     expect(screen.queryByRole('button')).toBeNull();
     expect(screen.getByTitle('Regional coalition')).toBeTruthy();
+    expect(screen.getByTestId('initiative-icon-circle').className).toContain('rounded-full');
   });
 });

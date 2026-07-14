@@ -258,10 +258,11 @@
   /*
    * Named type scale. App text uses these named steps — never raw Tailwind sizes — so
    * hierarchy stays a system decision, not a per-callsite one. The heading sizes encode
-   * the app's REAL hierarchy (calm and dense, Linear-grade): page titles are 20px, not a
-   * marketing 24px+. Weight 600 and tight tracking are baked into the heading steps.
+   * the app's REAL hierarchy (calm and dense, Linear-grade). Weight 600 and tight tracking
+   * are baked into the heading steps.
    *
    *   text-document-title printable object titles that need document-scale emphasis
+   *   text-page-title     strategic portfolio titles that need stronger brand presence
    *   text-h1            page titles (the app's largest standard in-product heading)
    *   text-h2            section headers within a page
    *   text-h3            group headers, card titles
@@ -271,13 +272,17 @@
    *   text-xs            chips, badges, counts, meta — weight 500 baked in for legibility
    *   text-mono          IDs, timestamps, scopes (pair with `font-mono`)
    *
-   * `text-document-title` is the sole app exception to the dense page-title scale. It is
-   * reserved for document-like objects such as Initiative detail pages and caps at 56px.
+   * `text-document-title` is reserved for printable strategic objects and caps at 56px.
+   * `text-page-title` is the restrained 32–40px bridge used by portfolio-level surfaces.
    */
   --text-document-title: clamp(2rem, 1.35rem + 2.4vw, 3.5rem);
   --text-document-title--line-height: 1.06;
   --text-document-title--font-weight: 600;
   --text-document-title--letter-spacing: -0.035em;
+  --text-page-title: clamp(2rem, 1.8rem + 0.8vw, 2.5rem);
+  --text-page-title--line-height: 1.08;
+  --text-page-title--font-weight: 600;
+  --text-page-title--letter-spacing: -0.035em;
   --text-h1: 1.25rem;
   --text-h1--line-height: 1.75rem;
   --text-h1--font-weight: 600;

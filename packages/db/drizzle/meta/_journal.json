@@ -253,6 +253,13 @@
       "when": 1784005649532,
       "tag": "0035_foamy_psynapse",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784008407790,
+      "tag": "0036_stale_magus",
+      "breakpoints": true
     }
   ]
 }

@@ -28,13 +28,13 @@ describe('entity display routes', () => {
     const updated = await app.request(`/initiative/${initiative!.id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ iconKey: 'flag', colorKey: 'primary' }),
+      body: JSON.stringify({ iconKey: 'bus', colorKey: 'primary' }),
     });
     expect(updated.status).toBe(200);
     expect(await updated.json()).toMatchObject({
       subjectType: 'initiative',
       subjectId: initiative!.id,
-      iconKey: 'flag',
+      iconKey: 'bus',
       colorKey: 'primary',
       customized: true,
     });

@@ -7,20 +7,25 @@ import {
   entityDisplay,
   initiative,
   initiativeProject,
+  label,
   program,
   project,
+  projectDependency,
+  projectLabel,
   task,
   team,
 } from '@docket/db';
 import {
   CursorQuery,
+  defaultEntityDisplay,
   pageOf,
   ProjectCreate,
   ProjectOut,
+  ProjectOverviewOut,
   ProjectProgress,
   ProjectUpdate,
 } from '@docket/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -42,6 +47,7 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
     id: p.id,
     organizationId: p.organizationId,
     name: p.name,
+    summary: p.summary,
     description: p.description,
     status: p.status,
     health: p.health,
@@ -125,6 +131,21 @@ async function validatedInitiativeIds(
   return unique;
 }
 
+/** Validate and de-duplicate organization-global Project Labels. */
+async function validatedLabelIds(
+  orgId: string,
+  labelIds: readonly string[] | undefined,
+): Promise<string[]> {
+  const unique = [...new Set(labelIds ?? [])];
+  if (unique.length === 0) return [];
+  const rows = await db
+    .select({ id: label.id })
+    .from(label)
+    .where(and(eq(label.organizationId, orgId), isNull(label.teamId), inArray(label.id, unique)));
+  if (rows.length !== unique.length) throw new NotFoundError('Label not found');
+  return unique;
+}
+
 /**
  * Compute a Project's weighted completion roll-up from its Tasks.
  *
@@ -189,7 +210,10 @@ const projects = new Hono<AppEnv>()
 
       // `initiativeIds` writes `initiative_project` association rows; validate each lives in
       // the caller's org BEFORE the transaction so a bad id rejects the whole create.
-      const initiativeIds = await validatedInitiativeIds(orgId, body.initiativeIds);
+      const [initiativeIds, labelIds] = await Promise.all([
+        validatedInitiativeIds(orgId, body.initiativeIds),
+        validatedLabelIds(orgId, body.labelIds),
+      ]);
 
       const row = await db.transaction(async (tx) => {
         const inserted = await tx
@@ -197,6 +221,7 @@ const projects = new Hono<AppEnv>()
           .values({
             organizationId: orgId,
             name: body.name,
+            summary: body.summary,
             description: body.description,
             leadId: body.leadId,
             teamId: body.teamId,
@@ -219,6 +244,17 @@ const projects = new Hono<AppEnv>()
               organizationId: orgId,
             })),
           );
+        }
+        if (labelIds.length > 0) {
+          await tx
+            .insert(projectLabel)
+            .values(
+              labelIds.map((labelId) => ({
+                projectId: created.id,
+                labelId,
+                organizationId: orgId,
+              })),
+            );
         }
         return created;
       });
@@ -258,6 +294,88 @@ const projects = new Hono<AppEnv>()
       const rows = await (limit === undefined ? base : base.limit(limit + 1));
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
       return ok(c, pageOf(ProjectOut), { items: items.map(toOut), nextCursor });
+    },
+  )
+  .get(
+    '/overview',
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Get Project portfolio overview',
+      response: ProjectOverviewOut,
+      description:
+        'Returns every visible Project with its decoupled display metadata, direct task completion counts, and Project dependency edges in one bounded read. The same aggregate powers list, dependency, and timeline lenses so switching views never changes the underlying portfolio scope.',
+    }),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const [projectRows, taskRows, dependencyRows, displayRows] = await Promise.all([
+        db
+          .select()
+          .from(project)
+          .where(eq(project.organizationId, orgId))
+          .orderBy(desc(project.createdAt), desc(project.id)),
+        db
+          .select({ projectId: task.projectId, completedAt: task.completedAt })
+          .from(task)
+          .where(eq(task.organizationId, orgId)),
+        db
+          .select({
+            blockingProjectId: projectDependency.blockingProjectId,
+            blockedProjectId: projectDependency.blockedProjectId,
+          })
+          .from(projectDependency)
+          .where(eq(projectDependency.organizationId, orgId)),
+        db
+          .select()
+          .from(entityDisplay)
+          .where(
+            and(eq(entityDisplay.organizationId, orgId), eq(entityDisplay.subjectType, 'project')),
+          ),
+      ]);
+
+      const taskCounts = new Map<string, { total: number; completed: number }>();
+      for (const row of taskRows) {
+        if (!row.projectId) continue;
+        const current = taskCounts.get(row.projectId) ?? { total: 0, completed: 0 };
+        current.total += 1;
+        if (row.completedAt) current.completed += 1;
+        taskCounts.set(row.projectId, current);
+      }
+      const blockedBy = new Map<string, string[]>();
+      const blocks = new Map<string, string[]>();
+      for (const row of dependencyRows) {
+        blockedBy.set(row.blockedProjectId, [
+          ...(blockedBy.get(row.blockedProjectId) ?? []),
+          row.blockingProjectId,
+        ]);
+        blocks.set(row.blockingProjectId, [
+          ...(blocks.get(row.blockingProjectId) ?? []),
+          row.blockedProjectId,
+        ]);
+      }
+      const displays = new Map(displayRows.map((row) => [row.subjectId, row]));
+
+      return ok(c, ProjectOverviewOut, {
+        items: projectRows.map((row) => {
+          const counts = taskCounts.get(row.id) ?? { total: 0, completed: 0 };
+          const display = displays.get(row.id);
+          return {
+            ...toOut(row),
+            display: display
+              ? {
+                  subjectType: 'project' as const,
+                  subjectId: row.id,
+                  iconKey: display.iconKey,
+                  colorKey: display.colorKey,
+                  customized: true,
+                }
+              : defaultEntityDisplay('project', row.id),
+            taskCount: counts.total,
+            completedTaskCount: counts.completed,
+            blockedByIds: [...(blockedBy.get(row.id) ?? [])].sort(),
+            blocksIds: [...(blocks.get(row.id) ?? [])].sort(),
+          };
+        }),
+      });
     },
   )
   .get(
@@ -306,9 +424,11 @@ const projects = new Hono<AppEnv>()
       await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
       await assertRefInOrg(program, orgId, body.programId, 'Program not found');
       await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
+      const labelIds = await validatedLabelIds(orgId, body.labelIds);
 
       const patch = {
         ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.summary !== undefined ? { summary: body.summary } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
         ...(body.programId !== undefined ? { programId: body.programId } : {}),
@@ -326,15 +446,32 @@ const projects = new Hono<AppEnv>()
 
       // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`, so
       // re-read the row (still enforcing the org-scoped existence check) and return it.
-      if (Object.keys(patch).length === 0) {
+      if (Object.keys(patch).length === 0 && body.labelIds === undefined) {
         const rows = await db.select().from(project).where(where).limit(1);
         const existing = rows[0];
         if (!existing) throw new NotFoundError('Project not found');
         return ok(c, ProjectOut, toOut(existing));
       }
 
-      const updated = await db.update(project).set(patch).where(where).returning();
-      const row = updated[0];
+      const row = await db.transaction(async (tx) => {
+        const updated =
+          Object.keys(patch).length > 0
+            ? await tx.update(project).set(patch).where(where).returning()
+            : await tx.select().from(project).where(where).limit(1);
+        const changed = updated[0];
+        if (!changed) return undefined;
+        if (body.labelIds !== undefined) {
+          await tx.delete(projectLabel).where(eq(projectLabel.projectId, id));
+          if (labelIds.length > 0) {
+            await tx
+              .insert(projectLabel)
+              .values(
+                labelIds.map((labelId) => ({ projectId: id, labelId, organizationId: orgId })),
+              );
+          }
+        }
+        return changed;
+      });
       if (!row) throw new NotFoundError('Project not found');
 
       if (body.status !== undefined) {

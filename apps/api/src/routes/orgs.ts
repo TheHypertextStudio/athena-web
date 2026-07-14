@@ -64,6 +64,7 @@ import milestones from './milestones';
 import programs from './programs';
 import projects from './projects';
 import projectRollup from './project-rollup';
+import projectResources from './project-resources';
 import roles from './roles';
 import savedViews from './saved-views';
 import search from './search';
@@ -378,6 +379,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/teams', teams)
   .route('/:orgId/projects', projects)
   .route('/:orgId/projects', projectRollup)
+  .route('/:orgId/projects', projectResources)
   .route('/:orgId/tasks', tasks)
   .route('/:orgId/graph', dependencyGraph)
   .route('/:orgId/initiatives', initiatives)

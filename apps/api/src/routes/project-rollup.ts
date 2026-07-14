@@ -16,9 +16,18 @@
  * `orgContextMiddleware` actor context; like the other project *reads* it needs no capability
  * guard (those gate writes only).
  */
-import { agentSession, db, initiativeProject, project, sessionActivity, task } from '@docket/db';
+import {
+  agentSession,
+  db,
+  initiativeProject,
+  label,
+  project,
+  projectLabel,
+  sessionActivity,
+  task,
+} from '@docket/db';
 import { ProjectRollupOut } from '@docket/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -42,7 +51,7 @@ const projectRollup = new Hono<AppEnv>().get(
     tag: 'Projects',
     summary: 'Get project roll-up',
     response: ProjectRollupOut,
-    description: `The project-detail screen's waterfall-collapsing read: the three lookups the screen would otherwise resolve with client-side fan-outs, served in one bounded round-trip. Returns \`taskMilestones\` (each of the project's tasks paired with its \`milestone_id\`, which only \`TaskDetail\` otherwise carries — collapsing an N+1 of \`tasks/:id\` reads), \`currentInitiativeId\` (the project's initiative resolved straight from the \`initiative_project\` join — a project belongs to at most one in practice, and the first is taken deterministically; \`null\` when it belongs to none — collapsing an M+1 of \`initiatives/:id/timeline\` scans), and \`recentActivity\` (up to 8 newest \`session_activity\` rows across the agent sessions on the project's tasks, each annotated with its session's \`agentId\` so the client resolves the actor without a per-session read — collapsing a per-session \`sessions/:id\` fan-out). So the screen makes one read instead of \`1 + N + M\`. The project must exist in the caller's org (404 \`Project not found\`); mounted under the same prefix as the projects router and, like the other project reads, needs no capability guard (guards gate writes only) — org membership suffices. Returns {@link ProjectRollupOut}.`,
+    description: `The project-detail screen's waterfall-collapsing read: task-to-milestone membership, every Initiative linked through \`initiative_project\`, and recent agent activity, served in one bounded round-trip. Initiative identifiers are returned in deterministic order because one Project may support several Initiatives. The project must exist in the caller's organization; organization membership is sufficient for this read. Returns {@link ProjectRollupOut}.`,
   }),
   zParam(idParam),
   async (c) => {
@@ -64,14 +73,23 @@ const projectRollup = new Hono<AppEnv>().get(
       .from(task)
       .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
 
-    // The project's initiative: the inverse of the timeline membership the screen otherwise
-    // discovers by scanning every initiative. A project belongs to at most one in practice;
-    // take the first deterministically.
-    const initRows = await db
-      .select({ initiativeId: initiativeProject.initiativeId })
-      .from(initiativeProject)
-      .where(and(eq(initiativeProject.projectId, id), eq(initiativeProject.organizationId, orgId)))
-      .limit(1);
+    // Initiative membership is genuinely many-to-many. Return every link deterministically so
+    // consumers never manufacture a primary Initiative that the domain does not define.
+    const [initRows, labelRows] = await Promise.all([
+      db
+        .select({ initiativeId: initiativeProject.initiativeId })
+        .from(initiativeProject)
+        .where(
+          and(eq(initiativeProject.projectId, id), eq(initiativeProject.organizationId, orgId)),
+        )
+        .orderBy(asc(initiativeProject.initiativeId)),
+      db
+        .select({ label })
+        .from(projectLabel)
+        .innerJoin(label, eq(projectLabel.labelId, label.id))
+        .where(and(eq(projectLabel.projectId, id), eq(projectLabel.organizationId, orgId)))
+        .orderBy(asc(label.name), asc(label.id)),
+    ]);
 
     // Recent agent activity on the project: the sessions on its tasks (one join), then their newest
     // activities in one ordered read — collapsing the screen's per-session `sessions/:id` fan-out.
@@ -104,7 +122,16 @@ const projectRollup = new Hono<AppEnv>().get(
 
     return ok(c, ProjectRollupOut, {
       taskMilestones: taskRows.map((r) => ({ taskId: r.taskId, milestoneId: r.milestoneId })),
-      currentInitiativeId: initRows[0]?.initiativeId ?? null,
+      initiativeIds: initRows.map((row) => row.initiativeId),
+      labels: labelRows.map(({ label: row }) => ({
+        id: row.id,
+        organizationId: row.organizationId,
+        name: row.name,
+        color: row.color,
+        group: row.group,
+        teamId: row.teamId,
+        createdAt: row.createdAt.toISOString(),
+      })),
       recentActivity,
     });
   },

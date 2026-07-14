@@ -107,6 +107,23 @@ export const initiativeLabel = pgTable(
   (t) => [primaryKey({ columns: [t.initiativeId, t.labelId] })],
 );
 
+/** Many-to-many: Projects ↔ organization-global Labels. */
+export const projectLabel = pgTable(
+  'project_label',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => project.id, { onDelete: 'cascade' }),
+    labelId: text('label_id')
+      .notNull()
+      .references(() => label.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.labelId] })],
+);
+
 /** Many-to-many: Tasks ↔ Labels. */
 export const taskLabel = pgTable(
   'task_label',

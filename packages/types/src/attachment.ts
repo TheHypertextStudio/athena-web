@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { AttachmentId, OrganizationId } from './primitives';
 
 /** The polymorphic subject kinds an Attachment can attach to. */
-export const AttachmentSubjectType = z.enum(['task', 'initiative']);
+export const AttachmentSubjectType = z.enum(['task', 'initiative', 'project']);
 /** Attachment subject-type value. */
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
 

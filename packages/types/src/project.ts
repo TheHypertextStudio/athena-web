@@ -5,10 +5,13 @@ import { z } from 'zod';
 
 import { SessionActivityOut } from './agent';
 import { Health } from './capability';
+import { EntityDisplayOut } from './entity-display';
+import { LabelOut } from './label';
 import {
   ActorId,
   AgentId,
   InitiativeId,
+  LabelId,
   MilestoneId,
   OrganizationId,
   ProgramId,
@@ -21,6 +24,11 @@ import {
 export const ProjectCreate = z
   .object({
     name: z.string().min(1).describe('Human-readable project name. Required, non-empty.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('Optional concise outcome summary, limited to 280 characters.'),
     description: z
       .string()
       .optional()
@@ -49,6 +57,10 @@ export const ProjectCreate = z
       .describe(
         'Optional set of Initiative themes to associate at creation (writes `initiative_project` edges). Each id must live in the caller’s org (404 on any miss); duplicates are de-duplicated. Note `programId` is NOT accepted here — file the project under a Program later via PATCH.',
       ),
+    labelIds: z
+      .array(LabelId)
+      .optional()
+      .describe('Optional organization-global Labels to attach to the Project.'),
   })
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });
 /** Validated project-create body. */
@@ -83,6 +95,12 @@ export const ProjectUpdate = z
       .min(1)
       .optional()
       .describe('New project name. Omit to leave unchanged; non-empty when set.'),
+    summary: z
+      .string()
+      .max(280)
+      .nullable()
+      .optional()
+      .describe('New concise outcome summary. Omit to leave unchanged; `null` clears it.'),
     description: z
       .string()
       .nullable()
@@ -125,10 +143,24 @@ export const ProjectUpdate = z
       .describe(
         'New target/end date (ISO-8601 `YYYY-MM-DD`). Omit to leave unchanged; `null` clears it.',
       ),
+    labelIds: z
+      .array(LabelId)
+      .optional()
+      .describe('Replace the Project’s organization-global Label associations when supplied.'),
   })
   .meta({ id: 'ProjectUpdate', description: 'Partially update a project.' });
 /** Validated project-update body. */
 export type ProjectUpdate = z.infer<typeof ProjectUpdate>;
+
+/** URL resource attached to a Project's operating record. */
+export const ProjectResourceCreate = z
+  .object({
+    title: z.string().min(1).describe('Human-readable resource title.'),
+    url: z.url().describe('External URL referenced by the Project.'),
+  })
+  .meta({ id: 'ProjectResourceCreate', description: 'Attach a URL to a Project.' });
+/** Validated Project resource body. */
+export type ProjectResourceCreate = z.infer<typeof ProjectResourceCreate>;
 
 /** Full project representation returned by reads. */
 export const ProjectOut = z
@@ -136,6 +168,11 @@ export const ProjectOut = z
     id: ProjectId.describe('Stable unique identifier of the project.'),
     organizationId: OrganizationId.describe('The owning organization (tenant).'),
     name: z.string().describe('Human-readable project name.'),
+    summary: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('Concise outcome summary, or `null`/absent when none.'),
     description: z
       .string()
       .nullable()
@@ -171,6 +208,35 @@ export const ProjectOut = z
   .meta({ id: 'ProjectOut', description: 'A project.' });
 /** Project representation value. */
 export type ProjectOut = z.infer<typeof ProjectOut>;
+
+/** One Project row composed for the high-density portfolio overview. */
+export const ProjectOverviewItem = ProjectOut.extend({
+  display: EntityDisplayOut.describe(
+    'Presentation-only icon and semantic color metadata kept outside the Project record.',
+  ),
+  taskCount: z.number().int().min(0).describe('Number of Tasks directly assigned to the Project.'),
+  completedTaskCount: z
+    .number()
+    .int()
+    .min(0)
+    .describe('Number of directly assigned Tasks that have been completed.'),
+  blockedByIds: z
+    .array(ProjectId)
+    .describe('Projects that must complete before this Project can proceed.'),
+  blocksIds: z.array(ProjectId).describe('Projects whose progress depends on this Project.'),
+}).meta({
+  id: 'ProjectOverviewItem',
+  description: 'A Project with display, task-progress, and dependency context for portfolio views.',
+});
+/** Project portfolio row value. */
+export type ProjectOverviewItem = z.infer<typeof ProjectOverviewItem>;
+
+/** Aggregate payload shared by list, dependency, and timeline Project lenses. */
+export const ProjectOverviewOut = z
+  .object({ items: z.array(ProjectOverviewItem) })
+  .meta({ id: 'ProjectOverviewOut', description: 'Project portfolio overview aggregate.' });
+/** Project portfolio aggregate value. */
+export type ProjectOverviewOut = z.infer<typeof ProjectOverviewOut>;
 
 /** A compact Project reference suitable for a dependency list. */
 export const ProjectRef = z
@@ -284,8 +350,8 @@ export type ProjectProgress = z.infer<typeof ProjectProgress>;
  * lists, served in one round-trip.
  *
  * @remarks
- * The detail screen joins each of the project's tasks to its milestone, resolves which initiative
- * the project belongs to, and shows recent agent activity on its tasks' sessions. Done client-side
+ * The detail screen joins each of the project's tasks to its milestone, resolves the Initiatives
+ * the project supports, and shows recent agent activity on its tasks' sessions. Done client-side
  * those become an N+1 (a `tasks/:id` read per task, for the `milestoneId` that only `TaskDetail`
  * carries), an M+1 (an `initiatives/:id/timeline` read per initiative), and a per-session
  * `sessions/:id` fan-out for the activity feed. This roll-up answers all three directly — the
@@ -306,9 +372,12 @@ export const ProjectRollupOut = z
       .describe(
         'Each of the project’s tasks paired with its milestone — the `milestone_id` that otherwise only `TaskDetail` carries, collapsing an N+1 of per-task reads.',
       ),
-    currentInitiativeId: InitiativeId.nullable().describe(
-      'The Initiative this project rolls up into (resolved from the `initiative_project` join; first taken deterministically as a project belongs to at most one in practice), or `null` when it belongs to none.',
-    ),
+    initiativeIds: z
+      .array(InitiativeId)
+      .describe(
+        'All Initiatives this project supports, resolved from the `initiative_project` join in deterministic identifier order.',
+      ),
+    labels: z.array(LabelOut).describe('Organization-global Labels attached to the Project.'),
     recentActivity: z
       .array(
         SessionActivityOut.extend({
@@ -323,7 +392,7 @@ export const ProjectRollupOut = z
   })
   .meta({
     id: 'ProjectRollupOut',
-    description: "A project's task→milestone map, current initiative, and recent activity.",
+    description: "A project's task-to-milestone map, Initiative links, and recent activity.",
   });
 /** Project detail roll-up value. */
 export type ProjectRollupOut = z.infer<typeof ProjectRollupOut>;

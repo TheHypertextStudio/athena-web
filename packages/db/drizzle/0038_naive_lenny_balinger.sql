@@ -1,0 +1,1 @@
+ALTER TYPE "public"."attachment_subject_type" ADD VALUE 'project';

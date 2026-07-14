@@ -72,6 +72,50 @@ describe('projects detail router', () => {
     expect(body.status).toBe('planned');
   });
 
+  it('composes the portfolio overview with display, task progress, and dependency edges', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(projects, orgId, ['view'], humanActorId);
+    const blockingId = await seedProject(orgId, teamId, humanActorId);
+    const blockedId = await seedProject(orgId, teamId, humanActorId);
+    await seedTask({ orgId, teamId, projectId: blockedId, completed: true });
+    await seedTask({ orgId, teamId, projectId: blockedId, completed: false });
+    await db.insert(schema.projectDependency).values({
+      organizationId: orgId,
+      blockingProjectId: blockingId,
+      blockedProjectId: blockedId,
+    });
+    await db.insert(schema.entityDisplay).values({
+      organizationId: orgId,
+      subjectType: 'project',
+      subjectId: blockedId,
+      iconKey: 'campaign',
+      colorKey: 'danger',
+      createdBy: humanActorId,
+    });
+
+    const response = await reader.request('/overview');
+    expect(response.status).toBe(200);
+    const body = await json<{
+      items: {
+        id: string;
+        taskCount: number;
+        completedTaskCount: number;
+        blockedByIds: string[];
+        blocksIds: string[];
+        display: { iconKey: string; colorKey: string; customized: boolean };
+      }[];
+    }>(response);
+    const blocking = body.items.find((item) => item.id === blockingId)!;
+    const blocked = body.items.find((item) => item.id === blockedId)!;
+    expect(blocking.blocksIds).toEqual([blockedId]);
+    expect(blocked.blockedByIds).toEqual([blockingId]);
+    expect(blocked).toMatchObject({
+      taskCount: 2,
+      completedTaskCount: 1,
+      display: { iconKey: 'campaign', colorKey: 'danger', customized: true },
+    });
+  });
+
   it('patches every updatable field (incl. clearing nullable dates)', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
@@ -94,6 +138,7 @@ describe('projects detail router', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         name: 'Renamed',
+        summary: 'A concise outcome',
         description: 'a description',
         leadId: humanActorId,
         programId: prog!.id,
@@ -107,6 +152,7 @@ describe('projects detail router', () => {
     expect(patched.status).toBe(200);
     const after = await json<{
       name: string;
+      summary: string | null;
       description: string | null;
       status: string;
       health: string | null;
@@ -117,6 +163,7 @@ describe('projects detail router', () => {
       leadId: string | null;
     }>(patched);
     expect(after.name).toBe('Renamed');
+    expect(after.summary).toBe('A concise outcome');
     expect(after.description).toBe('a description');
     expect(after.status).toBe('active');
     expect(after.health).toBe('at_risk');
@@ -166,6 +213,36 @@ describe('projects detail router', () => {
     });
     expect(res.status).toBe(200);
     expect((await json<{ id: string; name: string }>(res)).name).toBe('Seeded');
+  });
+
+  it('replaces Project labels and rejects team-scoped labels', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const id = await seedProject(orgId, teamId, humanActorId);
+    const inserted = await db
+      .insert(schema.label)
+      .values([
+        { organizationId: orgId, name: 'Funding', color: '#b35c00' },
+        { organizationId: orgId, teamId, name: 'Internal', color: '#5f6368' },
+      ])
+      .returning();
+
+    const attached = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ labelIds: [inserted[0]!.id] }),
+    });
+    expect(attached.status).toBe(200);
+    expect(
+      await db.select().from(schema.projectLabel).where(eq(schema.projectLabel.projectId, id)),
+    ).toEqual([expect.objectContaining({ labelId: inserted[0]!.id })]);
+
+    const rejected = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ labelIds: [inserted[1]!.id] }),
+    });
+    expect(rejected.status).toBe(404);
   });
 
   it('deletes a project (manage), then 404s on re-read', async () => {

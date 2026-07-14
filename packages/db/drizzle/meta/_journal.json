@@ -267,6 +267,27 @@
       "when": 1784040245916,
       "tag": "0037_broken_shadow_king",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784048875185,
+      "tag": "0038_naive_lenny_balinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1784049264932,
+      "tag": "0039_right_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1784051378511,
+      "tag": "0040_pink_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

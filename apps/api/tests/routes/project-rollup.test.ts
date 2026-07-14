@@ -127,7 +127,8 @@ async function seedSessionActivity(
 
 interface RollupBody {
   taskMilestones: { taskId: string; milestoneId: string | null }[];
-  currentInitiativeId: string | null;
+  initiativeIds: string[];
+  labels: { id: string; name: string; color: string }[];
   recentActivity: { id: string; agentId: string; type: string; createdAt: string }[];
 }
 
@@ -148,13 +149,14 @@ describe('project roll-up (GET /:id/rollup)', () => {
     await makeTask(orgId, teamId, humanActorId, { projectId: otherProject });
 
     const initiativeId = await makeLinkedInitiative(orgId, projectId, humanActorId);
+    const secondInitiativeId = await makeLinkedInitiative(orgId, projectId, humanActorId);
 
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
     const res = await reader.request(`/${projectId}/rollup`);
     expect(res.status).toBe(200);
     const body = await json<RollupBody>(res);
 
-    expect(body.currentInitiativeId).toBe(initiativeId);
+    expect(body.initiativeIds).toEqual([initiativeId, secondInitiativeId].sort());
     expect(body.taskMilestones).toHaveLength(3);
     const byTask = new Map(body.taskMilestones.map((tm) => [tm.taskId, tm.milestoneId]));
     expect(byTask.get(t1)).toBe(milestoneId);
@@ -180,16 +182,37 @@ describe('project roll-up (GET /:id/rollup)', () => {
     expect(body.recentActivity[0]!.agentId).toBe(agentId);
   });
 
-  it('returns a null initiative when the project belongs to none', async () => {
+  it('returns an empty initiative list when the project belongs to none', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const projectId = await makeProject(orgId, teamId, humanActorId);
     await makeTask(orgId, teamId, humanActorId, { projectId });
 
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
     const body = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
-    expect(body.currentInitiativeId).toBeNull();
+    expect(body.initiativeIds).toEqual([]);
+    expect(body.labels).toEqual([]);
     expect(body.taskMilestones).toHaveLength(1);
     expect(body.taskMilestones[0]!.milestoneId).toBeNull();
+  });
+
+  it('returns attached Project labels as objects', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(orgId, teamId, humanActorId);
+    const [projectLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Legislative', color: '#6750a4' })
+      .returning();
+    await db.insert(schema.projectLabel).values({
+      organizationId: orgId,
+      projectId,
+      labelId: projectLabel!.id,
+    });
+
+    const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
+    const body = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
+    expect(body.labels).toEqual([
+      expect.objectContaining({ id: projectLabel!.id, name: 'Legislative', color: '#6750a4' }),
+    ]);
   });
 
   it('404s on a missing project', async () => {

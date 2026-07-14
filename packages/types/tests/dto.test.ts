@@ -1764,6 +1764,7 @@ describe('calendar DTOs', () => {
 
   it('attachments can name an Initiative as their subject', () => {
     expect(AttachmentSubjectType.parse('initiative')).toBe('initiative');
+    expect(AttachmentSubjectType.parse('project')).toBe('project');
   });
 
   it('AttachmentCreate rejects a calendar event attachment without an external event id', () => {

@@ -72,6 +72,7 @@ export const project = pgTable(
   {
     ...auditColumns(),
     name: text('name').notNull(),
+    summary: text('summary'),
     description: text('description'),
     leadId: text('lead_id').references(() => actor.id, { onDelete: 'set null' }),
     programId: text('program_id').references(() => program.id, { onDelete: 'set null' }),

@@ -182,7 +182,11 @@ export const commentSubjectType = pgEnum('comment_subject_type', [
  * Only `task` ships in v1; the enum exists so the subject can widen (calendar events,
  * projects) without reshaping the table — mirroring {@link commentSubjectType}.
  */
-export const attachmentSubjectType = pgEnum('attachment_subject_type', ['task', 'initiative']);
+export const attachmentSubjectType = pgEnum('attachment_subject_type', [
+  'task',
+  'initiative',
+  'project',
+]);
 /**
  * The kind of resource an Attachment references.
  *

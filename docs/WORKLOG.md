@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [INIT-VISUAL-POLISH-001] Remove overlines and repair Initiative layout
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-13
+- **Priority**: P1
+- **Description**: Replace all-caps overline labels with plain sentence-case labels across Docket,
+  give Initiative documents a restrained 32–56px title, prevent roster metadata from collapsing
+  into narrow columns, and align attention actions inside one tonal surface.
+- **Plan**:
+  1. Add failing visual-contract coverage for typography, labels, attention layout, and responsive
+     roster behavior.
+  2. Add the named document-title token and apply the approved Initiative header order.
+  3. Convert visible overline labels to ordinary sentence-case type without changing acronyms or
+     user-entered codes.
+  4. Move the six-column roster to a genuinely wide breakpoint and retain all metadata in the
+     compact row.
+  5. Rebuild attention as one borderless tonal surface with a unified action/pager group.
+  6. Run focused tests, repository gates, live responsive review, documentation, and commits.
+
 ### [AGENT-CONFIG-001] Share repository agent tooling
 
 - **Status**: COMPLETED

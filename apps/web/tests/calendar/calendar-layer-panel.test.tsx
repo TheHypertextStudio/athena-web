@@ -131,7 +131,7 @@ describe('CalendarLayerPanel', () => {
     expect(screen.getByText(/No calendar layers yet/)).toBeInTheDocument();
   });
 
-  it('uses fixed sync-health copy instead of rendering stored diagnostic text', () => {
+  it('does not render stored provider diagnostic text as sync health', () => {
     const client = new QueryClient();
     const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -147,7 +147,7 @@ describe('CalendarLayerPanel', () => {
       { wrapper },
     );
 
-    expect(screen.getByRole('img', { name: 'Calendar sync issue' })).toBeInTheDocument();
+    expect(screen.queryByRole('img', { name: 'Calendar sync issue' })).not.toBeInTheDocument();
     expect(screen.getByRole('list')).not.toHaveTextContent('AGENT_MAX_TURNS');
   });
 });

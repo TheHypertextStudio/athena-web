@@ -7,6 +7,24 @@
 
 ## Active Tasks
 
+### [AGENT-CONFIG-001] Share repository agent tooling
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P2
+- **Description**: Track the Docket design-review skill for Codex-compatible agents and replace the
+  machine-specific Codex commit-scope hook with a portable repository hook.
+- **Validation**: Validate the hook configuration, exercise allowed and rejected commit scopes, and
+  run repository formatting and the focused commit-message tests before committing and pushing.
+- **Implementation**: Added the shared Docket design-review skill for Codex-compatible agents,
+  enabled project Codex hooks, and replaced the missing absolute hook target with a portable
+  repository script that reads the canonical `COMMIT_SCOPES.txt` allowlist.
+- **Validation Results**: Codex target validation passes, and the existing commit-message policy plus
+  new Codex hook regressions pass 19/19 across approved, rejected, stdin, and non-commit commands.
+- **Retrospective**: Repository-facing agent skills and guardrails are project assets. They should be
+  reviewed for portability and committed, not hidden as local working-tree noise.
+
 ### [INIT-DETAIL-REV-001] Revise the Initiatives experience
 
 - **Status**: COMPLETED
@@ -72,6 +90,7 @@
   useful than horizontally scrolling a nominally dense table.
 - **State**: COMPLETE — implementation, focused validation, documentation, and design review are
   complete; unrelated root-suite failures are recorded above rather than absorbed into this task.
+
 ### [ATHENA-CLOUDFLARE-001] Route Athena provider traffic through Cloudflare AI Gateway
 
 - **Status**: COMPLETED

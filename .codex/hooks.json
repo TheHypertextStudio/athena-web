@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/validate-commit-scope.mjs\"",
+            "statusMessage": "Checking Athena commit scope"
+          }
+        ]
+      }
+    ]
+  }
+}

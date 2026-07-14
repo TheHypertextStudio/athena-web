@@ -15,6 +15,8 @@ interface ProviderFixture {
   readonly title: string;
   readonly vars: readonly string[];
   readonly requiredVars?: readonly string[];
+  readonly optionalVars?: readonly string[];
+  readonly optionalCapabilities?: readonly (readonly string[])[];
 }
 
 // Keep this package's compile boundary intact while exercising the repository-level bootstrap.
@@ -29,9 +31,13 @@ const { parseGoogleOAuthClientBundle, PROVIDER_GROUPS } = (await import(scriptMo
   })[];
 };
 const setupModule: string = new URL('../../../scripts/integrations-setup.ts', import.meta.url).href;
-const { buildApiSecretBindings, classifyProviderStatus, splitInstructionSteps } = (await import(
-  setupModule
-)) as {
+const {
+  buildApiSecretBindings,
+  classifyProviderStatus,
+  optionalProviderVars,
+  setupProviderVars,
+  splitInstructionSteps,
+} = (await import(setupModule)) as {
   readonly buildApiSecretBindings: (
     env: 'local' | 'staging' | 'production',
     configured: ReadonlySet<string>,
@@ -40,6 +46,15 @@ const { buildApiSecretBindings, classifyProviderStatus, splitInstructionSteps } 
     group: ProviderFixture,
     configured: ReadonlySet<string>,
   ) => 'missing' | 'partial' | 'configured';
+  readonly optionalProviderVars: (
+    group: ProviderFixture,
+    env: 'local' | 'staging' | 'production',
+  ) => readonly string[];
+  readonly setupProviderVars: (
+    group: ProviderFixture,
+    env: 'local' | 'staging' | 'production',
+    includeOptional: boolean,
+  ) => readonly string[];
   readonly splitInstructionSteps: (
     lines: readonly string[],
   ) => readonly { readonly note: readonly string[] }[];
@@ -140,12 +155,37 @@ describe('guided integration bootstrap contracts', () => {
     expect(classifyProviderStatus(oauth, new Set(['CLIENT_ID', 'CLIENT_SECRET']))).toBe(
       'configured',
     );
+    const observability = PROVIDER_GROUPS.find((group) => group.id === 'observability');
+    if (!observability)
+      throw new Error('Observability provider is missing from the guided catalog');
+    expect(observability.optionalVars).toEqual(observability.vars);
+    expect(observability.optionalCapabilities).toEqual([
+      ['SENTRY_DSN'],
+      ['BLOB_READ_WRITE_TOKEN'],
+      ['EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
+    ]);
+    expect(optionalProviderVars(observability, 'production')).toEqual(observability.vars);
+    expect(setupProviderVars(observability, 'production', false)).toEqual([]);
+    expect(setupProviderVars(observability, 'production', true)).toEqual(observability.vars);
+    expect(classifyProviderStatus(observability, new Set())).toBe('missing');
+    expect(classifyProviderStatus(observability, new Set(['SENTRY_DSN']))).toBe('configured');
+    expect(classifyProviderStatus(observability, new Set(['BLOB_READ_WRITE_TOKEN']))).toBe(
+      'configured',
+    );
+    expect(classifyProviderStatus(observability, new Set(['EXPORT_BUCKET_URL']))).toBe('partial');
+    expect(classifyProviderStatus(observability, new Set(['EXPORT_BUCKET_TOKEN']))).toBe('partial');
+    expect(
+      classifyProviderStatus(observability, new Set(['EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'])),
+    ).toBe('configured');
+    expect(
+      classifyProviderStatus(observability, new Set(['SENTRY_DSN', 'EXPORT_BUCKET_URL'])),
+    ).toBe('partial');
     expect(
       classifyProviderStatus(
-        { ...oauth, vars: ['SENTRY_DSN', 'BLOB_TOKEN'], requiredVars: [] },
-        new Set(['SENTRY_DSN']),
+        observability,
+        new Set(['BLOB_READ_WRITE_TOKEN', 'EXPORT_BUCKET_TOKEN']),
       ),
-    ).toBe('configured');
+    ).toBe('partial');
   });
 
   it('builds deploy bindings from existing canonical and legacy secrets only', () => {

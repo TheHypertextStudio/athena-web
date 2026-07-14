@@ -360,7 +360,7 @@ export function setupProviderVars(
   ].filter((name, index, all) => all.indexOf(name) === index);
 }
 
-/** Classify a provider by its primary capability, not optional connector fields. */
+/** Classify primary capability readiness, or coherent optional-only capabilities. */
 export function classifyProviderStatus(
   group: ProviderGroup,
   configuredVars: ReadonlySet<string>,
@@ -368,9 +368,24 @@ export function classifyProviderStatus(
 ): ProviderConfigurationStatus {
   const vars = requiredProviderVars(group, env);
   if (vars.length === 0) {
-    return providerVars(group, env).some((name) => configuredVars.has(name))
-      ? 'configured'
-      : 'missing';
+    const optional = optionalProviderVars(group, env);
+    const configuredCount = optional.filter((name) => configuredVars.has(name)).length;
+    if (configuredCount === 0) return 'missing';
+    const optionalSet = new Set(optional);
+    const capabilities =
+      group.optionalCapabilities
+        ?.filter(
+          (capability) =>
+            capability.length > 0 && capability.every((name) => optionalSet.has(name)),
+        )
+        .map((capability) => [...capability]) ?? optional.map((name) => [name]);
+    const capabilityStates = capabilities.map((capability): ProviderConfigurationStatus => {
+      const ready = capability.filter((name) => configuredVars.has(name)).length;
+      if (ready === 0) return 'missing';
+      return ready === capability.length ? 'configured' : 'partial';
+    });
+    if (capabilityStates.includes('partial')) return 'partial';
+    return capabilityStates.includes('configured') ? 'configured' : 'partial';
   }
   const configuredCount = vars.filter((name) => configuredVars.has(name)).length;
   if (configuredCount === 0) return 'missing';
@@ -1223,11 +1238,16 @@ async function setupEnvironment(
 
   for (const group of chosenGroups) {
     const primaryStatus = classifyProviderStatus(group, state.configuredVars, env);
+    const primaryVars = requiredProviderVars(group, env);
+    const optionalVars = optionalProviderVars(group, env);
+    const optionalOnly = primaryVars.length === 0 && optionalVars.length > 0;
     const action = unwrap(
       await select<'keep' | 'configure' | 'replace' | 'skip' | 'exit'>({
         message:
           primaryStatus === 'configured'
-            ? `${group.label} is configured. What should happen to its primary sign-in capability?`
+            ? optionalOnly
+              ? `${group.label} is configured. What should happen?`
+              : `${group.label} is configured. What should happen to its primary sign-in capability?`
             : `${group.label} is ${primaryStatus}. What should happen next?`,
         initialValue: primaryStatus === 'configured' ? 'keep' : 'configure',
         options: [
@@ -1235,7 +1255,12 @@ async function setupEnvironment(
             ? [{ value: 'keep' as const, label: 'Keep existing' }]
             : [{ value: 'configure' as const, label: 'Set up or repair missing fields' }]),
           ...(primaryStatus === 'configured'
-            ? [{ value: 'replace' as const, label: 'Replace primary credentials' }]
+            ? [
+                {
+                  value: 'replace' as const,
+                  label: optionalOnly ? 'Replace configured values' : 'Replace primary credentials',
+                },
+              ]
             : [{ value: 'keep' as const, label: 'Leave it incomplete for now' }]),
           { value: 'skip' as const, label: 'Skip this provider' },
           { value: 'exit' as const, label: 'Exit integration setup' },
@@ -1250,10 +1275,9 @@ async function setupEnvironment(
 
     const configurePrimary = action === 'configure' || action === 'replace';
     const replacePrimary = action === 'replace';
-    const optionalVars = optionalProviderVars(group, env);
-    let includeOptional = false;
-    let replaceOptional = false;
-    if (optionalVars.length > 0) {
+    let includeOptional = optionalOnly && configurePrimary;
+    let replaceOptional = optionalOnly && replacePrimary;
+    if (optionalVars.length > 0 && !optionalOnly) {
       const optionalReady = optionalVars.every((name) => state.fieldStatuses.get(name) === 'ready');
       const optionalAction = unwrap(
         await select<'keep' | 'configure' | 'replace'>({
@@ -1331,7 +1355,7 @@ async function setupEnvironment(
       continue;
     }
 
-    const requiredVars = requiredProviderVars(group, env);
+    const requiredVars = primaryVars;
     const requiredNeedsInput = requiredVars.some(
       (name) => state.fieldStatuses.get(name) !== 'ready' || replacePrimary,
     );

@@ -26,13 +26,13 @@ const FEATURES: readonly Feature[] = [
   {
     number: '04',
     title: 'Bring the tools you already use',
-    body: 'Connect Google, Linear, GitHub, Slack, and more per organization. Docket coordinates on top of what each team already runs.',
+    body: 'Connect Gmail, Google Calendar, Google Tasks, Linear, and GitHub per organization. Docket coordinates on top of what each team already runs.',
   },
   {
     number: '05',
-    title: 'Never miss a message that matters',
-    body: 'Connect Slack once and every @mention, direct message, and reply in your threads lands in your Stream — filtered to what actually concerns you, linked back to the conversation.',
-    detail: 'mentioned you in #launch-planning · Slack',
+    title: 'Keep connected work in view',
+    body: 'GitHub and Linear activity lands in your Stream alongside Docket updates, with direct links back to the source when you need the full context.',
+    detail: 'opened pull request #184 · GitHub',
   },
   {
     number: '06',

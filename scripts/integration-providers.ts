@@ -103,6 +103,8 @@ export interface ProviderGroup {
   readonly policyVars?: readonly string[];
   /** Optional connector/webhook values offered after the primary capability is configured. */
   readonly optionalVars?: readonly string[];
+  /** Coherent optional capabilities; every variable in one group is required for that capability. */
+  readonly optionalCapabilities?: readonly (readonly string[])[];
   /** Human-readable label for the optional capability. */
   readonly optionalLabel?: string;
   /** Environment-specific override for providers whose local and hosted transports differ. */
@@ -324,6 +326,13 @@ function encodeApplePrivateKeyInput(raw: string): string {
     return trimmed; // not a readable path and not PEM → assume already escaped
   }
 }
+
+const OBSERVABILITY_VARS = [
+  'SENTRY_DSN',
+  'BLOB_READ_WRITE_TOKEN',
+  'EXPORT_BUCKET_URL',
+  'EXPORT_BUCKET_TOKEN',
+] as const;
 
 export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
   {
@@ -727,8 +736,15 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     label: 'Observability + Storage',
     optional: true,
     consoleUrl: 'https://sentry.io/settings/projects/',
-    vars: ['SENTRY_DSN', 'BLOB_READ_WRITE_TOKEN', 'EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
+    vars: OBSERVABILITY_VARS,
     requiredVars: [],
+    optionalVars: OBSERVABILITY_VARS,
+    optionalCapabilities: [
+      ['SENTRY_DSN'],
+      ['BLOB_READ_WRITE_TOKEN'],
+      ['EXPORT_BUCKET_URL', 'EXPORT_BUCKET_TOKEN'],
+    ],
+    optionalLabel: 'observability and export storage credentials',
     instructions: () => [
       'All optional. Leave blank to disable each.',
       '',

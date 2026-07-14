@@ -205,7 +205,7 @@ const TAGS = [
   {
     name: 'Integrations',
     description:
-      'Integrations connect external providers (GitHub, Linear, Slack, Google) to an org: establishing the connection (OAuth / app install), reconciling and syncing external state, and linking external items to Docket work. Connection management requires `manage`. Webhook ingestion happens on separate signed endpoints outside this contract.',
+      'Integrations connect GitHub, Linear, Gmail, Google Calendar, and Google Tasks to an org: establishing the connection, reconciling and syncing external state, and linking external items to Docket work. Connection management requires `manage`. Webhook ingestion happens on separate signed endpoints outside this contract.',
   },
   {
     name: 'Billing',

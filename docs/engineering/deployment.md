@@ -19,11 +19,6 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 
 All services: `--min-instances=0` (scale to zero), `--max-instances=10`, `--memory=512Mi`.
 
-> **Exception once Slack is activated:** run `docket-api` with `--min-instances=1`. Slack's
-> Events API requires a 200 within 3 seconds and disables an app's deliveries at >5% failures
-> over 60 minutes — a scale-to-zero cold start regularly blows that deadline. (See
-> `docs/engineering/specs/slack-integration.md`.)
-
 ---
 
 ## One-time bootstrap
@@ -349,31 +344,16 @@ API as `LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest`. `pnpm integr
 writes this value for local, staging, or production without placing it in the repository. Create the
 Secret Manager entry before adding the Cloud Run mount: referencing a missing secret fails deploy.
 
-### Slack (signal integration — not a Better Auth provider)
+### Retired provider compatibility
 
-Slack does **not** go through Better Auth: its OAuth callback is
-`${API_URL}/internal/integrations/slack/callback` (not `/api/auth/callback/slack`), and it needs
-**three** secrets, not two — the signing secret additionally verifies the inbound Events API HMAC
-on `POST /internal/ingest/slack`.
+Slack is not an active provider. Historical integration records and adapter code may remain
+readable for compatibility, but new Slack connections, setup prompts, OAuth callbacks, webhook
+mounts, and secret bindings are intentionally disabled. Do not create Slack app credentials or
+raise the API minimum instance count for Slack. Re-enabling it requires an explicit product change
+that restores the provider catalog, runtime routes, setup flow, deployment configuration, and tests
+together.
 
-**To activate:** create the shared Slack app from `infra/slack/docket-app-manifest.yaml`
-(https://api.slack.com/apps → "Create New App" → "From a manifest"; `pnpm integrations` walks
-through it with the real URLs substituted). Deploy `docket-api` **first** — Slack live-verifies
-the events request URL when the manifest is saved. Enable public distribution so arbitrary
-customer workspaces can authorize it. Then set the secrets and redeploy:
-
-| Env var                | Where it comes from                            |
-| ---------------------- | ---------------------------------------------- |
-| `SLACK_CLIENT_ID`      | Slack app → Basic Information → Client ID      |
-| `SLACK_CLIENT_SECRET`  | Slack app → Basic Information → Client Secret  |
-| `SLACK_SIGNING_SECRET` | Slack app → Basic Information → Signing Secret |
-
-Slack requires one events request URL per app, so dev (tunnel host) and prod need **separate
-apps** created from the same manifest. Remember the `docket-api` `--min-instances=1` exception
-above; also consider tightening the event-drain cron cadence (personal-feed freshness is bounded
-by it).
-
-#### Sign in with Apple (web) — differs from the three above
+### Sign in with Apple (web) — differs from the three above
 
 Apple is a fourth social provider (sign-in only, web-only). It does **not** follow the id+secret
 pattern, and — unlike the six vars above — **its secrets are not yet created in Secret Manager nor

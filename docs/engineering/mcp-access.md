@@ -32,7 +32,7 @@ Every MCP call then carries `Authorization: Bearer <token>`. Scopes are the firs
 | `work:read`       | Read work — run views, search, read tasks/projects/hub resources (default) |
 | `work:write`      | Create & update work — tasks, projects, initiatives, comments, updates     |
 | `agents:run`      | Manage agents — trigger sessions, approve/reject proposed actions          |
-| `connectors:link` | Link external items (GitHub/Linear/Slack references) onto work             |
+| `connectors:link` | Link external items (GitHub/Linear references) onto work                   |
 
 A read-only token calling a write tool gets a `403` with a `WWW-Authenticate: Bearer error="insufficient_scope"` challenge; well-behaved clients re-authorize (step-up) automatically.
 

@@ -1,6 +1,7 @@
 # Slack Integration — User Mentions, DMs & Threads in the Stream
 
-> **Status**: Implemented (2026-07-02)
+> **Status**: Retired (2026-07-13). Historical design only; Slack is absent from the active provider
+> catalog, setup flow, OAuth callbacks, webhook routes, and deployment contract.
 > **Depends on**: `activity-feed.md` (the Event substrate), API container + domain package composition
 
 ## Product story

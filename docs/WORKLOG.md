@@ -7,6 +7,17 @@
 
 ## Active Tasks
 
+### [INIT-OVERVIEW-SCROLL-001] Restore medium-width Initiative columns
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-13
+- **Priority**: P1
+- **Description**: Preserve the full Initiative roster columns on medium containers using local
+  horizontal scrolling, keep attention content and controls in a stable vertical structure, and
+  normalize roster heights with descriptions wrapping to at most two reserved lines.
+- **Plan**: Add a failing responsive contract, implement the focused layout correction, verify the
+  reported viewport live, update the design audit, and commit atomically.
+
 ### [AGENT-CONFIG-001] Share repository agent tooling
 
 - **Status**: COMPLETED

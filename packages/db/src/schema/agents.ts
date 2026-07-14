@@ -8,11 +8,12 @@
  * owns execution; Docket owns the work model and the visible session.
  */
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import {
   approvalPolicy,
   approvalStatus,
+  agentSessionRunStatus,
   sessionActivityType,
   sessionKind,
   sessionStatus,
@@ -76,6 +77,40 @@ export const agentSession = pgTable(
     uniqueIndex('agent_session_external_run_uq')
       .on(t.externalRunRef)
       .where(sql`${t.externalRunRef} is not null`),
+  ],
+);
+
+/**
+ * One durable execution generation for an Athena session.
+ *
+ * @remarks
+ * Docket owns this idempotency and lease record; Cloudflare receives only the opaque run and
+ * workflow ids. A retry must reuse the same session/generation pair rather than duplicate work.
+ */
+export const agentSessionRun = pgTable(
+  'agent_session_run',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => agentSession.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    generation: integer('generation').notNull(),
+    workflowInstanceId: text('workflow_instance_id').notNull(),
+    status: agentSessionRunStatus('status').notNull().default('queued'),
+    attempt: integer('attempt').notNull().default(0),
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    lastError: text('last_error'),
+    queuedAt: timestamp('queued_at').notNull().defaultNow(),
+    startedAt: timestamp('started_at'),
+    completedAt: timestamp('completed_at'),
+  },
+  (t) => [
+    uniqueIndex('agent_session_run_generation_uq').on(t.sessionId, t.generation),
+    uniqueIndex('agent_session_run_workflow_uq').on(t.workflowInstanceId),
+    index('agent_session_run_org_status_idx').on(t.organizationId, t.status),
   ],
 );
 

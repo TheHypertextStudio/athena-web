@@ -11,12 +11,14 @@ import {
   actor,
   agent,
   agentSession,
+  agentSessionRun,
   agentSessionTranscript,
   integration,
   integrationCredential,
   organization,
   sessionActivity,
   sessionKind,
+  agentSessionRunStatus,
   user,
 } from '../src/schema';
 import type { SessionActivityBody } from '../src/types';
@@ -95,6 +97,39 @@ describe('athena schema additions', () => {
     )[0]!;
     expect(chat.kind).toBe('chat');
     ids['session'] = job.id;
+  });
+
+  it('persists one idempotent durable run generation for a session', async () => {
+    expect(agentSessionRunStatus.enumValues).toEqual([
+      'queued',
+      'running',
+      'waiting',
+      'completed',
+      'failed',
+      'canceled',
+    ]);
+    const run = (
+      await db
+        .insert(agentSessionRun)
+        .values({
+          sessionId: ids['session']!,
+          organizationId: ids['org']!,
+          generation: 1,
+          workflowInstanceId: `${ids['session']!}:1`,
+        })
+        .returning()
+    )[0]!;
+    expect(run.status).toBe('queued');
+    expect(run.attempt).toBe(0);
+
+    await expect(
+      db.insert(agentSessionRun).values({
+        sessionId: ids['session']!,
+        organizationId: ids['org']!,
+        generation: 1,
+        workflowInstanceId: `${ids['session']!}:retry`,
+      }),
+    ).rejects.toThrow();
   });
 
   it('round-trips a durable transcript of TurnMessages keyed by session', async () => {

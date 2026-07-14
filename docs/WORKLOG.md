@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [ATHENA-CLOUDFLARE-002] Persist durable Athena run generations
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Description**: Establish Docket-owned idempotency and execution state before dispatching Athena
+  work to Cloudflare Queues and Workflows.
+- **Implementation**: Added `agent_session_run`, keyed by session and generation, with a stable
+  workflow instance id, retry attempt, lease expiry, terminal timestamps, and execution status.
+- **Validation**: Generated migration `0035_foamy_psynapse`, added PGlite schema coverage for
+  defaults and duplicate-generation rejection, and passed the focused DB suite and typecheck.
+- **Next**: Create and dispatch these records through the Cloudflare runner boundary.
+
+---
+
 ### [INIT-ICONS-001] Add customizable Material icons to strategic work
 
 - **Status**: COMPLETED

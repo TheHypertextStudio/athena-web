@@ -105,6 +105,15 @@ export const sessionStatus = pgEnum('session_status', [
   'failed',
   'canceled',
 ]);
+/** Lifecycle of one durable Cloudflare-orchestrated session run generation. */
+export const agentSessionRunStatus = pgEnum('agent_session_run_status', [
+  'queued',
+  'running',
+  'waiting',
+  'completed',
+  'failed',
+  'canceled',
+]);
 /** The visible Activity-stream entry types emitted by an agent. */
 export const sessionActivityType = pgEnum('session_activity_type', [
   'thought',

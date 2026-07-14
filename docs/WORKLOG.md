@@ -7,6 +7,27 @@
 
 ## Active Tasks
 
+### [PROJECTS-EXPERIENCE-001] Build the Project operating experience
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-14
+- **Priority**: P1
+- **Description**: Rebuild Project overview and detail around the approved Initiative-aligned,
+  Linear-flavored operating model for managing a high volume of Projects across Docket.
+- **Subtasks**:
+  - [ ] Add rich Project aggregate contracts, Labels, Resources, and multiple Initiative links.
+  - [ ] Build the shared List, Dependencies, and Timeline overview lenses.
+  - [ ] Rebuild detail around progressive disclosure and a unified participant set.
+  - [ ] Add focused tests and responsive light/dark design evidence.
+  - [ ] Complete root validation and atomic commits.
+- **Blockers**: None.
+- **Notes**: The approved prototype intentionally removes decorative totals, the Portfolio
+  overline, Print/back controls, member counts, cadence, and lead-versus-contributor presentation.
+  Only health and target remain immediately visible in the compact detail header; other Project
+  information is available through an anchored disclosure and editable property rail.
+
+---
+
 ### [SETTINGS-IA-001] Reorganize Settings around the user-owned assistant
 
 - **Status**: COMPLETED

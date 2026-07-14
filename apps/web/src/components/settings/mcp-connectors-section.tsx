@@ -14,11 +14,24 @@
  * (see {@link AddMcpConnectorForm}), so a connector never has to be added from Settings alone.
  */
 import type { McpIntegrationOut } from '@docket/types';
-import { Badge, Button, Input, Skeleton } from '@docket/ui/primitives';
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Input,
+  Skeleton,
+} from '@docket/ui/primitives';
 import { useSearchParams } from 'next/navigation';
 import { type JSX, useId, useState } from 'react';
 
-import { deriveMcpConnectorDraft } from '@/components/settings/mcp-connector-draft';
+import {
+  connectorReadinessLabel,
+  deriveMcpConnectorDraft,
+} from '@/components/settings/mcp-connector-draft';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -42,6 +55,7 @@ export interface McpConnectorsSectionProps {
 export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionProps): JSX.Element {
   const searchParams = useSearchParams();
   const mcpReturn = searchParams.get('mcp');
+  const [addOpen, setAddOpen] = useState(false);
   const listQ = useApiQuery(
     apiQueryOptions(
       queryKeys.mcpIntegrations(orgId),
@@ -53,17 +67,37 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
 
   return (
     <section className="flex flex-col gap-3" aria-label="MCP connectors">
-      <h3 className="text-on-surface text-h3">Tools for Athena</h3>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-on-surface text-h3">Tools for Athena</h3>
+          <p className="text-on-surface-variant text-body">
+            Connect services you use. Athena works through them under rules you set.
+          </p>
+        </div>
+        {canManage ? (
+          <Button
+            type="button"
+            className="shrink-0"
+            onClick={() => {
+              setAddOpen(true);
+            }}
+          >
+            Add connector
+          </Button>
+        ) : null}
+      </div>
 
       {mcpReturn === 'connected' ? (
         <p role="status" className="text-success text-body">
-          Connected.
+          Tool connected.
         </p>
       ) : mcpReturn === 'error' ? (
         <p role="alert" className="text-destructive text-body">
           Connection was not approved.
         </p>
       ) : null}
+
+      <h4 className="text-on-surface mt-3 text-sm font-semibold">Connected tools</h4>
 
       {listQ.isLoading ? (
         <div className="flex flex-col gap-2" aria-hidden="true">
@@ -77,10 +111,23 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ))}
         </ul>
       ) : (
-        <p className="text-on-surface-variant text-body">No tools connected.</p>
+        <p className="text-on-surface-variant text-body">No tools yet.</p>
       )}
 
-      {canManage ? <AddMcpConnectorForm orgId={orgId} /> : null}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a connector</DialogTitle>
+            <DialogDescription>Give Athena access to a service you use.</DialogDescription>
+          </DialogHeader>
+          <AddMcpConnectorForm
+            orgId={orgId}
+            onConnected={() => {
+              setAddOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
@@ -139,7 +186,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
         <span className="text-on-surface flex items-center gap-2 text-sm font-medium">
           {mcp.label}
           <Badge variant={badgeVariant} className="shrink-0">
-            {mcp.status}
+            {connectorReadinessLabel(mcp.status)}
           </Badge>
         </span>
         {mcp.status === 'connected' && mcp.toolCount !== null ? (
@@ -244,6 +291,21 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
   const [authMode, setAuthMode] = useState<'oauth' | 'bearer' | 'none'>('oauth');
   const [error, setError] = useState<string | null>(null);
 
+  const preview = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations.mcp.preview.$post({
+            param: { orgId },
+            json: { url: url.trim() },
+          }),
+        'Could not read that server.',
+      ),
+    onSuccess: (server) => {
+      if (!labelEdited) setLabel(server.name);
+    },
+  });
+
   const connect = useApiMutation({
     mutationFn: () =>
       unwrap(
@@ -312,11 +374,8 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
         event.preventDefault();
         if (canSubmit) connect.mutate(undefined);
       }}
-      className="bg-surface-container-low flex flex-col gap-5 rounded-xl p-5"
+      className="flex flex-col gap-5"
     >
-      <div className="flex flex-col gap-1">
-        <h4 className="text-on-surface text-body font-semibold">Add a tool</h4>
-      </div>
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <label htmlFor={urlId} className="text-on-surface text-sm font-medium">
@@ -338,28 +397,31 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
               if (!labelEdited) setLabel(nextDraft.label);
               if (!aliasEdited) setAlias(nextDraft.alias);
             }}
+            onBlur={() => {
+              if (url.trim().length > 0) preview.mutate(undefined);
+            }}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor={labelId} className="text-on-surface text-sm font-medium">
+            Name
+          </label>
+          <Input
+            id={labelId}
+            required
+            placeholder="Sunsama"
+            value={label}
+            onChange={(event) => {
+              setLabelEdited(true);
+              setLabel(event.target.value);
+            }}
           />
         </div>
         <details className="border-outline-variant rounded-lg border px-3 py-2">
           <summary className="text-on-surface cursor-pointer text-sm font-medium">
-            Edit details
+            Advanced options
           </summary>
           <div className="mt-4 flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={labelId} className="text-on-surface text-sm font-medium">
-                Display name
-              </label>
-              <Input
-                id={labelId}
-                required
-                placeholder="Sunsama"
-                value={label}
-                onChange={(event) => {
-                  setLabelEdited(true);
-                  setLabel(event.target.value);
-                }}
-              />
-            </div>
             <div className="flex flex-col gap-1.5">
               <label htmlFor={aliasId} className="text-on-surface text-sm font-medium">
                 Tool prefix
@@ -396,7 +458,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
                 className="border-outline-variant bg-surface text-on-surface h-10 rounded-md border px-3 text-sm"
               >
                 <option value="oauth">Sign in and approve access</option>
-                <option value="bearer">Organization bearer credential</option>
+                <option value="bearer">Bearer token</option>
                 <option value="none">No authentication</option>
               </select>
             </div>
@@ -409,7 +471,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
                   id={tokenId}
                   type="password"
                   required
-                  placeholder="Organization-held credential"
+                  placeholder="Credential for this connector"
                   value={bearerToken}
                   onChange={(event) => {
                     setBearerToken(event.target.value);

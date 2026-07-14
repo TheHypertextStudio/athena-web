@@ -45,8 +45,18 @@ export interface RemoteToolResult {
   readonly isError: boolean;
 }
 
+/** The human-facing identity an MCP server advertises during initialization. */
+export interface RemoteMcpServerInfo {
+  /** The server's product name. */
+  readonly name: string;
+  /** A more descriptive title when the server provides one. */
+  readonly title?: string;
+}
+
 /** One open session against a remote MCP server. */
 export interface RemoteMcpSession {
+  /** Read the server identity captured during MCP initialization. */
+  serverInfo(): RemoteMcpServerInfo;
   /** List the server's tools. */
   listTools(): Promise<readonly RemoteToolDescriptor[]>;
   /** Call one tool by its un-namespaced name. */
@@ -67,6 +77,8 @@ export interface McpConnector {
 
 /** One scripted fixture server. */
 export interface FixtureMcpServer {
+  /** The server identity returned during initialization. */
+  readonly serverInfo?: RemoteMcpServerInfo;
   /** The advertised tools. */
   readonly tools: readonly RemoteToolDescriptor[];
   /** Resolve one call by un-namespaced tool name. */
@@ -75,6 +87,7 @@ export interface FixtureMcpServer {
 
 /** The Sunsama fixture server: a read-only backlog source for the import flow. */
 export const SUNSAMA_FIXTURE_SERVER: FixtureMcpServer = {
+  serverInfo: { name: 'Sunsama', title: 'Sunsama' },
   tools: [
     {
       name: 'get_backlog_tasks',
@@ -143,6 +156,7 @@ export class MockMcpConnector implements McpConnector {
     const server = this.servers[host];
     if (!server) throw new Error(`No MCP server reachable at ${endpoint.url}`);
     return {
+      serverInfo: () => server.serverInfo ?? { name: host },
       listTools: async () => server.tools,
       callTool: async (name, input) => server.call(name, input),
       close: async () => undefined,
@@ -171,7 +185,12 @@ export class RealMcpConnector implements McpConnector {
     });
     const client = new Client({ name: 'docket-athena', version: '1.0.0' });
     await client.connect(transport);
+    const serverInfo = client.getServerVersion();
     return {
+      serverInfo: (): RemoteMcpServerInfo => ({
+        name: serverInfo?.name ?? new URL(endpoint.url).hostname,
+        ...(serverInfo?.title ? { title: serverInfo.title } : {}),
+      }),
       listTools: async (): Promise<readonly RemoteToolDescriptor[]> => {
         const listed = await client.listTools();
         return listed.tools.map((tool) => ({

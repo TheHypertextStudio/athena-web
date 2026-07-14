@@ -1488,6 +1488,20 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ATHENA-MCP-UX-002] Clarify personal connector management
+
+- **Completed**: 2026-07-14
+- **Priority**: P1
+- **Summary**: Reframed the connector surface around personal services and Athena's access,
+  separated adding a connector into a modal, kept the editable name visible, and replaced raw
+  transport statuses with readiness language.
+- **Files Changed**: MCP settings UI and draft helper; MCP connector metadata contract and preview
+  route; focused API and web tests; this work log.
+- **Validation**: Focused integration, API, and web tests pass. Root release gates run before the
+  commit.
+- **Retrospective**: The connector list should communicate what Athena can use, while setup
+  belongs in a focused dialog with the remote service's own identity as the starting point.
+
 ### [ATHENA-MCP-UX-001] Simplify Athena connector setup
 
 - **Completed**: 2026-07-14

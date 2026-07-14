@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { deriveMcpConnectorDraft } from '@/components/settings/mcp-connector-draft';
+import {
+  connectorReadinessLabel,
+  deriveMcpConnectorDraft,
+} from '@/components/settings/mcp-connector-draft';
 
 describe('deriveMcpConnectorDraft', () => {
   it('uses the provider host for a clean default name and alias', () => {
@@ -17,5 +20,13 @@ describe('deriveMcpConnectorDraft', () => {
         alias: 'planning',
       }),
     ).toEqual({ label: 'Planning', alias: 'planning' });
+  });
+});
+
+describe('connectorReadinessLabel', () => {
+  it('uses product language instead of transport status', () => {
+    expect(connectorReadinessLabel('connected')).toBe('Ready for Athena');
+    expect(connectorReadinessLabel('pending')).toBe('Approval required');
+    expect(connectorReadinessLabel('error')).toBe('Needs attention');
   });
 });

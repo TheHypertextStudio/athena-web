@@ -6,6 +6,13 @@ export interface McpConnectorDraft {
   alias: string;
 }
 
+/** Turn a connector transport state into language that describes Athena's availability. */
+export function connectorReadinessLabel(status: 'connected' | 'pending' | 'error'): string {
+  if (status === 'connected') return 'Ready for Athena';
+  if (status === 'pending') return 'Approval required';
+  return 'Needs attention';
+}
+
 const GENERIC_HOST_PARTS = new Set(['api', 'app', 'mcp', 'tools', 'www']);
 
 /**

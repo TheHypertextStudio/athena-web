@@ -126,6 +126,8 @@ export async function verifyIntegration(row: IntegrationRow): Promise<Integratio
 
 const idParam = z.object({ id: z.string() });
 const mcpAuthorizationOut = z.object({ authorizationUrl: z.url() });
+const mcpServerPreviewIn = z.object({ url: z.url() });
+const mcpServerPreviewOut = z.object({ name: z.string().min(1).max(80) });
 
 /** The public callback endpoint supplied to every third-party MCP authorization server. */
 function mcpOAuthRedirectUrl(): string {
@@ -156,6 +158,29 @@ const router = new Hono<AppEnv>()
         .where(and(eq(integration.organizationId, orgId), eq(integration.provider, 'mcp')))
         .orderBy(asc(integration.createdAt));
       return ok(c, z.array(McpIntegrationOut), rows.map(toMcpOut));
+    },
+  )
+  .post(
+    '/preview',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Preview a remote MCP server name',
+      capability: 'manage',
+      response: mcpServerPreviewOut,
+      description:
+        'Initialize the remote MCP server without storing a connection and return its advertised name for the connector form.',
+    }),
+    zJson(mcpServerPreviewIn),
+    async (c) => {
+      const { url } = c.req.valid('json');
+      const session = await getContainer().mcpConnector.open({ url });
+      try {
+        const server = session.serverInfo();
+        return ok(c, mcpServerPreviewOut, { name: server.title ?? server.name });
+      } finally {
+        await session.close();
+      }
     },
   )
   .post(

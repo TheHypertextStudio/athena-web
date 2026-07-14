@@ -123,6 +123,19 @@ async function connectSunsama(seed: Seed, bearerToken?: string): Promise<McpInte
 }
 
 describe('remote MCP integrations', () => {
+  it('uses the MCP server metadata to preview a connector name', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+    const response = await app.request('/preview', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ url: 'https://mcp.sunsama.com/mcp' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ name: 'Sunsama' });
+  });
+
   it('creates OAuth servers pending user approval instead of falsely reporting a connection', async () => {
     const seed = await seedOrg();
     const app = appFor(integrationsMcp, seed);

@@ -12,6 +12,7 @@
  * is already optimistic, so the toggle itself never waits on the network.
  */
 import type { CalendarLayerOut } from '@docket/types';
+import { WarningAmberRounded } from '@docket/ui/icons';
 import { Badge } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
@@ -66,14 +67,12 @@ function LayerRow({ layer }: LayerRowProps): JSX.Element {
         </Badge>
       ) : null}
       {layer.lastError ? (
-        <span
+        <WarningAmberRounded
           role="img"
           aria-label="Calendar sync issue"
-          title="Calendar sync issue"
-          className="text-destructive shrink-0 text-xs"
-        >
-          !
-        </span>
+          titleAccess="Calendar sync issue"
+          className="text-destructive size-4 shrink-0"
+        />
       ) : null}
     </li>
   );

@@ -367,6 +367,11 @@ export function classifyProviderStatus(
   env: Environment = 'production',
 ): ProviderConfigurationStatus {
   const vars = requiredProviderVars(group, env);
+  if (vars.length === 0) {
+    return providerVars(group, env).some((name) => configuredVars.has(name))
+      ? 'configured'
+      : 'missing';
+  }
   const configuredCount = vars.filter((name) => configuredVars.has(name)).length;
   if (configuredCount === 0) return 'missing';
   return vars.every((name) => configuredVars.has(name)) ? 'configured' : 'partial';

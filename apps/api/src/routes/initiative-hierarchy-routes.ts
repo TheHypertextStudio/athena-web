@@ -36,6 +36,8 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Create an Initiative hierarchy link',
+      description:
+        'Places an Initiative beneath another Initiative in this workspace context after validating access, configured depth, unique parentage, and cycle safety.',
       capability: 'contribute',
       response: InitiativeHierarchyLinkOut,
     }),
@@ -80,6 +82,8 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Move an Initiative hierarchy link',
+      description:
+        'Moves an existing child Initiative beneath a different parent in this workspace context while preserving access, depth, unique-parent, and cycle invariants.',
       capability: 'contribute',
       response: InitiativeHierarchyLinkOut,
     }),
@@ -135,6 +139,8 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Remove an Initiative hierarchy link',
+      description:
+        'Removes a workspace-context hierarchy link without deleting either Initiative or changing the hierarchies that may reference them in other workspaces.',
       capability: 'contribute',
       response: InitiativeUnlinked,
     }),

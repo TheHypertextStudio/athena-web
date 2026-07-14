@@ -289,6 +289,8 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
     apiDoc({
       tag: 'Orgs',
       summary: 'Get workspace work-structure settings',
+      description:
+        'Returns the workspace-owned structural constraints that govern strategic work, including the maximum total depth permitted for Initiative hierarchies in this workspace context.',
       response: WorkspaceSettingsOut,
     }),
     async (c) => {
@@ -311,6 +313,8 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
     apiDoc({
       tag: 'Orgs',
       summary: 'Update workspace work-structure settings',
+      description:
+        'Updates workspace-owned structural constraints. Reducing Initiative depth is rejected when an existing hierarchy would exceed the requested maximum, so no links are silently discarded.',
       capability: 'manage',
       response: WorkspaceSettingsOut,
     }),

@@ -69,12 +69,15 @@ async function wouldCreateCycle(
   return rawResultRowCount(reach) > 0;
 }
 
+/** Routes for reading and mutating directed dependency edges between Projects. */
 export const projectDependencyRoutes = new Hono<AppEnv>()
   .get(
     '/:id/dependencies',
     apiDoc({
       tag: 'Projects',
       summary: 'List project dependencies',
+      description:
+        'Lists both directions of the selected Project dependency graph: Projects this one blocks and Projects that must finish before this one can proceed.',
       response: ProjectDependencyOut,
     }),
     zParam(idParam),
@@ -116,6 +119,8 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
     apiDoc({
       tag: 'Projects',
       summary: 'Add a project dependency',
+      description:
+        'Creates a directed dependency between two Projects in the workspace after rejecting self-links, duplicate edges, inaccessible Projects, and cycles.',
       capability: 'contribute',
       response: ProjectDependencyCreated,
     }),
@@ -178,6 +183,8 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
     apiDoc({
       tag: 'Projects',
       summary: 'Remove a project dependency',
+      description:
+        'Removes the dependency edge connecting the selected Project and dependency Project, regardless of which direction is represented by the route parameters.',
       capability: 'contribute',
       response: ProjectDependencyRemoved,
     }),

@@ -6,6 +6,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { userErrorMessage } from './problem';
 import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from './query';
 
 /** Direction relative to the Project currently on screen. */
@@ -75,12 +76,18 @@ export function useProjectDependencies(
   return {
     dependencies: query.data ?? { blocking: [], blockedBy: [] },
     loading: query.isPending,
-    error: query.isError ? query.error.message : null,
+    error: query.isError
+      ? userErrorMessage(query.error, 'Could not load project dependencies.')
+      : null,
     add: (direction, otherProjectId) => {
       addMutation.mutate({ direction, otherProjectId });
     },
     remove: removeMutation.mutate,
     pending: addMutation.isPending || removeMutation.isPending,
-    mutationError: addMutation.error?.message ?? removeMutation.error?.message ?? null,
+    mutationError: addMutation.error
+      ? userErrorMessage(addMutation.error, 'Could not add the project dependency.')
+      : removeMutation.error
+        ? userErrorMessage(removeMutation.error, 'Could not remove the project dependency.')
+        : null,
   };
 }

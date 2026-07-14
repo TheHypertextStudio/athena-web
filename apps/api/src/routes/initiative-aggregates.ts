@@ -56,6 +56,8 @@ const initiativeAggregates = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Get the Initiative hierarchy and attention queue',
+      description:
+        'Returns the viewer-visible Initiative hierarchy for this workspace context together with up to four deduplicated attention items ranked by health severity and update staleness.',
       response: InitiativeOverviewOut,
     }),
     async (c) => {
@@ -232,6 +234,8 @@ const initiativeAggregates = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Get the aggregate Initiative document detail',
+      description:
+        'Returns the Initiative document and properties plus its visible hierarchy context, connected work rollups, labels, resources, and latest narrative update for this viewer.',
       response: InitiativeAggregateDetail,
     }),
     async (c) => {

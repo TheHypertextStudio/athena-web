@@ -10,6 +10,7 @@ import { WorkspaceNameField } from '@/components/workspace-creation/workspace-na
 import { writeLastOrg } from '@/components/app-shell-utils';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
 import { authClient } from '@/lib/auth-client';
+import { userErrorMessage } from '@/lib/problem';
 import { queryKeys } from '@/lib/query';
 import { createWorkspace } from '@/lib/workspace-creation';
 
@@ -51,7 +52,7 @@ export default function NewWorkspacePage(): JSX.Element {
       writeLastOrg(session?.user.id ?? null, result.organization.id);
       router.replace(`/orgs/${result.organization.id}/my-work`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not create your workspace.');
+      setError(userErrorMessage(caught, 'Could not create your workspace.'));
     } finally {
       setPending(false);
     }

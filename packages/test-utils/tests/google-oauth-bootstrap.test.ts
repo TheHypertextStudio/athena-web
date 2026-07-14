@@ -170,7 +170,6 @@ describe('guided integration bootstrap contracts', () => {
       'github',
       'linear',
       'apple',
-      'slack',
       'stripe',
       'anthropic',
       'email',

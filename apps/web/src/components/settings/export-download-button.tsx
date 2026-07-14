@@ -35,7 +35,7 @@ async function downloadError(response: Response): Promise<Error> {
   const error = await readProblemError(response, 'Could not download your export.');
   if (response.status === 401 && error.code === 'unauthorized') {
     return new AuthenticationRequiredError({
-      message: error.message,
+      message: 'Authentication is required. Please sign in again.',
       status: response.status,
       code: error.code,
     });

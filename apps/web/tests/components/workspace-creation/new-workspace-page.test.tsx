@@ -81,7 +81,7 @@ describe('NewWorkspacePage', () => {
     expect(window.localStorage.getItem('docket:last-org:user_1')).toBe('new_org');
   });
 
-  it('keeps the entered name and surfaces an API failure for retry', async () => {
+  it('keeps the entered name and surfaces safe retry copy after an API failure', async () => {
     createWorkspace.mockRejectedValue(new Error('Workspace limit reached.'));
     renderPage();
 
@@ -89,7 +89,7 @@ describe('NewWorkspacePage', () => {
     fireEvent.change(input, { target: { value: 'Acme' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Workspace limit reached.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create your workspace.');
     expect(input).toHaveValue('Acme');
     expect(replace).not.toHaveBeenCalled();
   });

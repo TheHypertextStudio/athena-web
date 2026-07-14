@@ -44,6 +44,7 @@ export class AuthenticationRequiredError extends UserFacingError {
   }
 }
 
+/** User-safe authentication error for a previously valid session that has expired. */
 export class SessionExpiredError extends AuthenticationRequiredError {
   constructor(message = 'Your session has expired. Please sign in again.') {
     super({ message, status: 401, code: 'unauthorized' });

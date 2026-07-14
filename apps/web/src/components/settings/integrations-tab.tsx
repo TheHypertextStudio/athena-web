@@ -35,7 +35,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
-import { readError } from '@/lib/problem';
+import { userErrorMessage } from '@/lib/problem';
 import { connectorAvailable, connectorOAuthConfigured, usePublicConfig } from '@/lib/public-config';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
@@ -185,7 +185,9 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
   const loading = directoryQ.isPending;
-  const loadError = directoryQ.isError ? directoryQ.error.message : null;
+  const loadError = directoryQ.isError
+    ? userErrorMessage(directoryQ.error, 'Could not load integrations.')
+    : null;
   const { data: config } = usePublicConfig();
 
   const setActionError = useCallback((provider: string, message: string | null) => {
@@ -220,7 +222,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       );
       await refreshIntegrations();
       if (verified.status !== 'connected') {
-        setActionError(provider, verified.lastError ?? 'Connection could not be validated.');
+        setActionError(provider, 'Connection could not be validated.');
       }
     },
     [config, orgId, recoverAuthentication, refreshIntegrations, setActionError],
@@ -277,7 +279,7 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         await refreshIntegrations();
         await finishConnection(created.id, provider, externalAccountId !== undefined);
       } catch (err) {
-        setActionError(provider, readError(err, 'Could not connect this integration.'));
+        setActionError(provider, userErrorMessage(err, 'Could not connect this integration.'));
       } finally {
         setBusyProvider(null);
       }
@@ -301,7 +303,10 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       try {
         await finishConnection(existing.id, existing.provider);
       } catch (err) {
-        setActionError(existing.provider, readError(err, 'Could not reconnect this integration.'));
+        setActionError(
+          existing.provider,
+          userErrorMessage(err, 'Could not reconnect this integration.'),
+        );
       } finally {
         setBusyProvider(null);
       }
@@ -345,10 +350,10 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
         setSyncFeedback((prev) => ({ ...prev, [id]: null }));
       }, 5000);
     },
-    onError: (err: { message: string }, id: string) => {
+    onError: (err: unknown, id: string) => {
       setSyncingId(null);
       const provider = integrations.find((i) => i.id === id)?.provider;
-      if (provider) setActionError(provider, err.message);
+      if (provider) setActionError(provider, userErrorMessage(err, 'Sync failed.'));
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
@@ -364,10 +369,12 @@ export function IntegrationsTab({ orgId, canManage, surface }: IntegrationsTabPr
       const provider = integrations.find((i) => i.id === id)?.provider;
       if (provider) setActionError(provider, null);
     },
-    onError: (err: { message: string }, id: string) => {
+    onError: (err: unknown, id: string) => {
       setDisconnectingId(null);
       const provider = integrations.find((i) => i.id === id)?.provider;
-      if (provider) setActionError(provider, err.message);
+      if (provider) {
+        setActionError(provider, userErrorMessage(err, 'Could not disconnect this integration.'));
+      }
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });

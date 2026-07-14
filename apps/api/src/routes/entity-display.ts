@@ -49,6 +49,8 @@ const entityDisplayRouter = new Hono<AppEnv>()
     apiDoc({
       tag: 'Display',
       summary: 'Get work-item display metadata',
+      description:
+        'Returns decoupled icon and semantic color metadata for an Initiative or Project, falling back to stable defaults when the work item has not been customized.',
       response: EntityDisplayOut,
     }),
     zParam(displayParam),
@@ -88,6 +90,8 @@ const entityDisplayRouter = new Hono<AppEnv>()
     apiDoc({
       tag: 'Display',
       summary: 'Customize work-item display metadata',
+      description:
+        'Creates or replaces decoupled icon and semantic color metadata for an Initiative or Project without changing the work item domain record itself.',
       capability: 'contribute',
       response: EntityDisplayOut,
     }),
@@ -134,6 +138,8 @@ const entityDisplayRouter = new Hono<AppEnv>()
     apiDoc({
       tag: 'Display',
       summary: 'Reset work-item display metadata',
+      description:
+        'Deletes customized icon and semantic color metadata for an Initiative or Project and returns the stable default presentation for that work item type.',
       capability: 'contribute',
       response: EntityDisplayOut,
     }),

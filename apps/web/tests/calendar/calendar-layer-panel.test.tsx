@@ -147,10 +147,7 @@ describe('CalendarLayerPanel', () => {
       { wrapper },
     );
 
-    expect(screen.getByRole('img', { name: 'Calendar sync issue' })).toHaveAttribute(
-      'title',
-      'Calendar sync issue',
-    );
+    expect(screen.getByRole('img', { name: 'Calendar sync issue' })).toBeInTheDocument();
     expect(screen.getByRole('list')).not.toHaveTextContent('AGENT_MAX_TURNS');
   });
 });

@@ -41,6 +41,8 @@ const initiativeResources = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'List Initiative URL resources',
+      description:
+        'Lists the ordered URL resources attached directly to the selected Initiative in its owning workspace; file attachments are not supported on this surface.',
       response: pageOf(AttachmentOut),
     }),
     zParam(idParam),
@@ -69,6 +71,8 @@ const initiativeResources = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Attach an Initiative URL resource',
+      description:
+        'Attaches a titled URL resource to the selected Initiative so supporting plans, research, and external references remain available beside the strategic document.',
       capability: 'contribute',
       response: AttachmentOut,
     }),
@@ -103,6 +107,8 @@ const initiativeResources = new Hono<AppEnv>()
     apiDoc({
       tag: 'Initiatives',
       summary: 'Remove an Initiative URL resource',
+      description:
+        'Removes one URL resource from the selected Initiative after verifying that the resource belongs to that Initiative and its owning workspace.',
       capability: 'contribute',
       response: AttachmentRemoved,
     }),

@@ -44,6 +44,8 @@ export interface DocketVitestOptions {
   testTimeout?: number;
   /** Per-hook timeout in milliseconds. */
   hookTimeout?: number;
+  /** Whether separate test files may run concurrently. Defaults to Vitest's parallel behavior. */
+  fileParallelism?: boolean;
 }
 
 /**
@@ -67,6 +69,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
     coverageInclude = ['src/**/*.{ts,tsx}'],
     testTimeout = 30_000,
     hookTimeout = 180_000,
+    fileParallelism = true,
   } = options;
   return defineConfig({
     plugins: useReact ? [react()] : [],
@@ -79,6 +82,7 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       // Keep Vitest file parallelism, but avoid fork-worker startup starvation when
       // Turbo is already running package tests concurrently.
       pool: 'threads',
+      fileParallelism,
       include: ['tests/**/*.{test,spec}.{ts,tsx}'],
       // Turbo runs every package's vitest concurrently, so the machine is heavily
       // oversubscribed during `pnpm test`. PGlite/route bootstrap hooks can spend

@@ -9,8 +9,9 @@
 
 ### [INIT-ROSTER-FINAL-001] Ship the polished Initiative roster
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-07-13
+- **Completed**: 2026-07-14
 - **Priority**: P1
 - **Description**: Carry the approved Initiative overview prototype into the production app and
   deploy the completed Initiative experience to production.
@@ -39,10 +40,29 @@
   corrected Today routing and date-relative Calendar fixtures, targeted the current freeform
   editor semantics, and raised modal dialogs above sheet surfaces so nested destructive
   confirmations remain operable.
-- **Validation results**: The six previously affected browser journeys pass against a clean PGlite
-  dev stack; the shared Dialog suite passes 257/257; formatting passes; and the final root
+- **Implementation**: Shipped the dense, line-free Initiative hierarchy with stable 72-pixel rows,
+  balanced icon/title spacing, curved dependency rails, two-line summaries, padded scrollable
+  columns, rounded Material icons, and a searchable anchored icon picker. Expanded the generic
+  entity-display catalog and migration without coupling presentation to strategic records, and
+  completed the light/dark desktop/mobile design audit and final screenshots.
+- **Files Changed**: Initiative overview and display components; shared rounded icon catalog and
+  Dialog primitive; typed display contracts, API composition, database schema and migration;
+  focused unit, integration, visual-contract, and browser tests; design specification, audit,
+  screenshots, and this work log.
+- **Validation results**: The six release-repair browser journeys pass against a clean PGlite dev
+  stack; the shared Dialog suite passes 257/257; formatting passes; and the final root
   `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` gates pass 17/17, 17/17, 17/17, and
-  3/3 respectively. Production workflow and domain smoke checks remain pending.
+  3/3 respectively. GitHub [run 29313398057](https://github.com/TheHypertextStudio/athena-web/actions/runs/29313398057)
+  passed build, lint/types, tests, all 28 Playwright journeys, production migrations, API health
+  and auth probes, scheduler setup, and API/admin Cloud Run promotion. Vercel deployment
+  `dpl_3Tbj3ttjayXfR86XN9VB5ycdRznw` is Ready and owns the production aliases. Live smoke checks
+  return HTTP 200 from `docket.hypertext.studio`, `docket-api.hypertext.studio/v1/health`, and
+  `docket-admin.hypertext.studio`.
+- **Retrospective**: Dense strategic views benefit from alignment, whitespace, and hierarchy shape
+  more than repeated separators. The uncached release suite also caught contracts that local Turbo
+  cache had hidden; keeping end-to-end selectors aligned with accessible product semantics and
+  enforcing an explicit modal-over-sheet stack made the final release more trustworthy. Optional
+  provider secrets must remain absent from production bindings until real credentials exist.
 
 ---
 

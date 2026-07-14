@@ -63,6 +63,9 @@ describe('Projects experience contract', () => {
     expect(detail).toContain('aria-label="Edit project target date"');
     expect(detail).toContain('bg-surface-container-low hover:bg-surface-container-high');
     expect(detail).toContain('hover:bg-surface-container-high');
+    expect(source(join(root, 'apps/web/src/components/project-detail/tabs.tsx'))).toContain(
+      'min-h-10',
+    );
   });
 
   it('uses full-width heading-free documents and canonical MD3 prose hierarchy', () => {

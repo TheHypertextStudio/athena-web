@@ -51,7 +51,9 @@ _1:_ interchangeable with any SaaS template. _3:_ register correct, copy authore
 
 ### 2. Typographic craft
 
-- Uses the **named type scale** (`text-display/h1/h2/h3/body/sm/xs`, `font-mono`) — no ad-hoc sizes or arbitrary `text-[13px]` values without a token-level reason.
+- Uses the canonical **Material Design 3 type scale** (`text-display-*`, `text-headline-*`,
+  `text-title-*`, `text-body-*`, and `text-label-*`) with `font-mono` reserved for identifiers and
+  aligned numeric data — no compatibility aliases or arbitrary sizes without a token-level reason.
 - Clear hierarchy: 2–3 levels per view, weight changes carry meaning (600 = structural, 500 = emphasis/labels, 400 = body).
 - Prose measure 45–75ch; UI labels never wrap awkwardly; headlines have no orphans at common widths.
 - Mono (with tabular feel) for IDs, counts, timestamps — numbers that align.

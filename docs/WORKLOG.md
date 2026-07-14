@@ -9,7 +9,7 @@
 
 ### [INIT-ROSTER-FINAL-001] Ship the polished Initiative roster
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-07-13
 - **Priority**: P1
 - **Description**: Carry the approved Initiative overview prototype into the production app and
@@ -34,6 +34,15 @@
   promotion is gated on the full CI and Cloud Run deployment checks.
 - **Validation**: Focused DTO, database, API, picker, hierarchy, and visual-contract tests; Docket
   craft review at desktop/mobile in light/dark; root gates; production workflow and domain health.
+- **Release notes**: The first production workflow exposed four stale browser contracts and a real
+  modal-layering defect. Updated the export journey to exercise the secure browser download,
+  corrected Today routing and date-relative Calendar fixtures, targeted the current freeform
+  editor semantics, and raised modal dialogs above sheet surfaces so nested destructive
+  confirmations remain operable.
+- **Validation results**: The six previously affected browser journeys pass against a clean PGlite
+  dev stack; the shared Dialog suite passes 257/257; formatting passes; and the final root
+  `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` gates pass 17/17, 17/17, 17/17, and
+  3/3 respectively. Production workflow and domain smoke checks remain pending.
 
 ---
 

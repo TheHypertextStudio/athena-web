@@ -39,7 +39,7 @@ test.describe('new-task composer', () => {
 
     await dialog.getByPlaceholder('Task title').fill('Ship the launch page');
     await dialog
-      .getByPlaceholder('Add a description…')
+      .locator('[contenteditable="true"][aria-label="Add a description…"]')
       .fill('Draft copy + hero, then hand to design.');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(250);

@@ -204,7 +204,8 @@ test.describe('layered calendar', () => {
     await expect(drawer.getByRole('heading', { name: 'Deep focus block' })).toBeVisible();
 
     await drawer.getByRole('button', { name: 'Delete', exact: true }).click();
-    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    const confirmation = page.getByRole('dialog', { name: 'Delete “Deep focus block”?' });
+    await confirmation.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(body).toHaveCount(0);
   });

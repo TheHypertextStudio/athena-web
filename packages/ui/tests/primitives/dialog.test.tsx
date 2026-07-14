@@ -188,6 +188,8 @@ describe('Dialog family', () => {
     // The overlay is a portalled sibling carrying the dimmed-scrim token classes.
     const overlay = baseElement.querySelector('.bg-black\\/40');
     expect(overlay).not.toBeNull();
+    expect(overlay).toHaveClass('z-[110]');
+    expect(screen.getByRole('dialog')).toHaveClass('z-[110]');
   });
 
   it('merges custom classes onto the content, header, footer, title, and description', async () => {

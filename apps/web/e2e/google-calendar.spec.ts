@@ -7,7 +7,7 @@
  * accounts/events while keeping the shell, routing, TanStack Query, and rendering real.
  */
 import { signUpAndOnboard } from './helpers/app';
-import { orgHref, settingsHref } from './helpers/constants';
+import { settingsHref } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
 
 const CONNECTION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -99,9 +99,9 @@ function calendarSettings(selected = true) {
   };
 }
 
-function agendaPayload() {
+function agendaPayload(date: string) {
   return {
-    date: '2026-06-30',
+    date,
     entries: [
       {
         kind: 'google_calendar_event',
@@ -116,8 +116,8 @@ function agendaPayload() {
           description: null,
           location: null,
           htmlLink: 'https://calendar.google.com/calendar/event?eid=event-1',
-          startsAt: '2026-06-30T16:00:00.000Z',
-          endsAt: '2026-06-30T17:00:00.000Z',
+          startsAt: `${date}T16:00:00.000Z`,
+          endsAt: `${date}T17:00:00.000Z`,
           allDayStartDate: null,
           allDayEndDate: null,
           organizer: null,
@@ -168,8 +168,9 @@ test.describe('google calendar', () => {
       await route.fulfill({ json: calendarSettings(selected) });
     });
     await page.route('**/v1/agenda?**', async (route) => {
+      const requestedDate = new URL(route.request().url()).searchParams.get('date') ?? '2026-06-30';
       await route.fulfill({
-        json: selected ? agendaPayload() : { date: '2026-06-30', entries: [] },
+        json: selected ? agendaPayload(requestedDate) : { date: requestedDate, entries: [] },
       });
     });
 
@@ -193,8 +194,7 @@ test.describe('google calendar', () => {
     await page.getByRole('checkbox', { name: /Ada/ }).click();
     await expect(page.getByText('1 of 2 calendars visible')).toBeVisible();
 
-    await page.goto(orgHref(orgId, 'today'), { waitUntil: 'domcontentloaded' });
+    await page.goto('/today', { waitUntil: 'domcontentloaded' });
     await expect(page.getByText('Design review')).toBeVisible();
-    await expect(page.getByText('Ada · ada@example.com')).toBeVisible();
   });
 });

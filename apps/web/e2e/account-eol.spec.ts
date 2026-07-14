@@ -5,6 +5,8 @@
  * running dev stack. The export becomes ready via the API's in-process dev scheduler (APP_MODE=
  * local); the deletion step-up re-auth is auto-approved by the virtual authenticator.
  */
+import { readFile } from 'node:fs/promises';
+
 import { signUpAndOnboard } from './helpers/app';
 import { TIMEOUTS, settingsHref } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
@@ -14,23 +16,19 @@ test.describe('account end-of-life', () => {
     const { orgId } = await signUpAndOnboard(page, 'Export');
 
     await page.goto(settingsHref(orgId, 'export'));
-    await page.getByRole('button', { name: 'Request export' }).click();
+    await page.getByRole('button', { name: 'Create export' }).click();
 
     // The in-process dev sweep readies the export within a few seconds.
     await expect(page.getByText('Your export is ready')).toBeVisible({ timeout: TIMEOUTS.sweep });
 
-    // Fetch the export's binary sub-resource with the session cookie (the page's request context
-    // shares it) and assert it serves a real ZIP attachment — deterministic, no cross-origin
-    // browser-download flakiness.
-    const href = await page.getByRole('link', { name: 'Download your data' }).getAttribute('href');
-    expect(href, 'download link should have an href').toBeTruthy();
-    const res = await page.request.get(href!);
-    expect(res.status(), 'download should succeed').toBe(200);
-    expect(res.headers()['content-type']).toContain('zip');
-    expect(res.headers()['content-disposition']).toMatch(
-      /attachment; filename="docket-export-.+\.zip"/,
-    );
-    const body = await res.body();
+    // Exercise the secure step-up download button and assert the browser receives a real ZIP.
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download your data' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/^docket-export-.+\.zip$/);
+    const archivePath = await download.path();
+    expect(archivePath, 'download should have a local artifact').toBeTruthy();
+    const body = await readFile(archivePath);
     expect(body.length, 'archive should be non-empty').toBeGreaterThan(100);
     expect(body.subarray(0, 2).toString('latin1'), 'archive should be a ZIP (PK magic)').toBe('PK');
   });

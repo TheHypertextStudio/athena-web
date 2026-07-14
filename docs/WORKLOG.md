@@ -7,6 +7,32 @@
 
 ## Active Tasks
 
+### [PROJECTS-CRAFT-003] Remove the floating Project properties band
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-14
+- **Completed**: 2026-07-14
+- **Priority**: P1
+- **Description**: Start Project detail with the Project identity instead of an empty context row,
+  and anchor the Properties disclosure to the health and target controls where those values appear.
+- **Plan**:
+  1. Add a source contract for identity-first ordering and contextual Properties access.
+  2. Move the anchored disclosure into the property row and remove the top-right control.
+  3. Verify the contract, types, lint, and the authenticated responsive surface.
+- **Risks**: The Popover still needs exactly one stable trigger when health or target is absent.
+- **Blockers**: None.
+- **Files Changed**: Project detail header, focused Project experience contract, and this work log.
+- **Validation**: The focused Project contract passes 7/7; targeted ESLint, root `pnpm typecheck`,
+  root `pnpm lint`, root `pnpm test`, and root `pnpm build` pass. The saved authenticated visual
+  fixture had expired, so the responsive screenshot pass correctly stopped at session recovery and
+  was not counted as visual validation.
+- **Retrospective**: A secondary context label and disclosure control should not reserve a header
+  band above the object identity. Anchoring Properties to health or target keeps the interaction next
+  to the values it edits; the explicit empty-state trigger preserves discoverability without bringing
+  the floating control back.
+
+---
+
 ### [PROJECTS-CRAFT-002] Correct Project detail hierarchy and standardize MD3 typography
 
 - **Status**: COMPLETED

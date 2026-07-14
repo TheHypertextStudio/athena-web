@@ -58,9 +58,11 @@ describe('Projects experience contract', () => {
     const detail = source(detailPath);
     expect(detail).toContain('const [propertiesOpen, setPropertiesOpen]');
     expect(detail).toContain('open={propertiesOpen}');
-    expect(detail).toContain('aria-label="Open project properties"');
+    expect(detail).not.toContain('aria-label="Open project properties"');
+    expect(detail).toContain('Add health or target');
     expect(detail).toContain('aria-label="Edit project health"');
     expect(detail).toContain('aria-label="Edit project target date"');
+    expect(detail.indexOf('<InitiativeIconPicker')).toBeLessThan(detail.indexOf('<Popover open='));
     expect(detail).toContain('bg-surface-container-low hover:bg-surface-container-high');
     expect(detail).toContain('hover:bg-surface-container-high');
     expect(source(join(root, 'apps/web/src/components/project-detail/tabs.tsx'))).toContain(

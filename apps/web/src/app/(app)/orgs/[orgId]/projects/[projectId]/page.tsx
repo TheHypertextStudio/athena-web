@@ -9,7 +9,7 @@ import type {
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Calendar, Target, TuneRounded } from '@docket/ui/icons';
-import { Button, Popover, PopoverContent, PopoverTrigger, Skeleton } from '@docket/ui/primitives';
+import { Popover, PopoverContent, PopoverTrigger, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
@@ -199,74 +199,11 @@ export default function ProjectDetailPage(): JSX.Element {
     );
   }
 
-  const program = detail?.programs.find((item) => item.id === project.programId);
   const health = project.health ?? null;
 
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-4">
-          {program ? (
-            <p className="text-on-surface-variant text-body-medium min-w-0 truncate">
-              {program.name}
-            </p>
-          ) : (
-            <span />
-          )}
-          <Popover open={propertiesOpen} onOpenChange={setPropertiesOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="min-h-10 gap-1.5"
-                aria-label="Open project properties"
-              >
-                <TuneRounded aria-hidden className="size-4" />
-                <span className="hidden @2xl:inline">Properties</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-[min(21rem,calc(100vw-2rem))] p-4">
-              <h2 className="text-on-surface text-title-medium mb-2">Properties</h2>
-              <PropertiesPanel
-                health={health}
-                status={projectStatusOf(project.status)}
-                startDate={project.startDate ?? null}
-                targetDate={project.targetDate ?? null}
-                programId={project.programId ?? null}
-                programOptions={programOptions}
-                initiativeIds={initiativeIds}
-                initiativeOptions={initiativeOptions}
-                labels={labels}
-                availableLabels={availableLabels}
-                canEdit={canEdit}
-                pending={propsPending}
-                onHealthChange={(next) => {
-                  patchProject({ health: next });
-                }}
-                onStatusChange={(status) => {
-                  patchProject({ status });
-                }}
-                onTimelineChange={({ start, end }) => {
-                  patchProject({ startDate: start, targetDate: end });
-                }}
-                onProgramChange={(programId) => {
-                  patchProject({ programId });
-                }}
-                onInitiativesChange={setInitiatives}
-                onLabelsChange={(labelIds) => {
-                  patchProject({ labelIds });
-                }}
-              />
-              {propsError ? (
-                <p role="alert" className="text-destructive mt-2 text-sm">
-                  {propsError}
-                </p>
-              ) : null}
-            </PopoverContent>
-          </Popover>
-        </div>
-
         <div className="flex flex-col items-start gap-2">
           <InitiativeIconPicker
             display={
@@ -301,42 +238,101 @@ export default function ProjectDetailPage(): JSX.Element {
           className="text-on-surface-variant text-body-large max-w-4xl font-normal"
         />
 
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          {participants.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
-              {participants.map((participant) => (
-                <span key={participant.actorId} className="flex h-8 items-center gap-1.5 pr-2">
-                  <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
-                  <span className="text-on-surface text-label-medium">{participant.name}</span>
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {health ? (
-            <button
-              type="button"
-              aria-label="Edit project health"
-              onClick={() => {
-                setPropertiesOpen(true);
+        <Popover open={propertiesOpen} onOpenChange={setPropertiesOpen}>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            {participants.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
+                {participants.map((participant) => (
+                  <span key={participant.actorId} className="flex h-8 items-center gap-1.5 pr-2">
+                    <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
+                    <span className="text-on-surface text-label-medium">{participant.name}</span>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {health ? (
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Edit project health"
+                  className={`${HEALTH_CLASS[health]} bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
+                >
+                  <Target aria-hidden className="size-4" /> {HEALTH_LABEL[health]}
+                </button>
+              </PopoverTrigger>
+            ) : project.targetDate ? (
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Edit project target date"
+                  className="text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <Calendar aria-hidden className="size-4" />{' '}
+                  {formatCalendarDate(project.targetDate)}
+                </button>
+              </PopoverTrigger>
+            ) : (
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="text-on-surface-variant hover:bg-surface-container-low focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <TuneRounded aria-hidden className="size-4" /> Add health or target
+                </button>
+              </PopoverTrigger>
+            )}
+            {health && project.targetDate ? (
+              <button
+                type="button"
+                aria-label="Edit project target date"
+                onClick={() => {
+                  setPropertiesOpen(true);
+                }}
+                className="text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <Calendar aria-hidden className="size-4" /> {formatCalendarDate(project.targetDate)}
+              </button>
+            ) : null}
+          </div>
+          <PopoverContent align="start" className="w-[min(21rem,calc(100vw-2rem))] p-4">
+            <h2 className="text-on-surface text-title-medium mb-2">Properties</h2>
+            <PropertiesPanel
+              health={health}
+              status={projectStatusOf(project.status)}
+              startDate={project.startDate ?? null}
+              targetDate={project.targetDate ?? null}
+              programId={project.programId ?? null}
+              programOptions={programOptions}
+              initiativeIds={initiativeIds}
+              initiativeOptions={initiativeOptions}
+              labels={labels}
+              availableLabels={availableLabels}
+              canEdit={canEdit}
+              pending={propsPending}
+              onHealthChange={(next) => {
+                patchProject({ health: next });
               }}
-              className={`${HEALTH_CLASS[health]} bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
-            >
-              <Target aria-hidden className="size-4" /> {HEALTH_LABEL[health]}
-            </button>
-          ) : null}
-          {project.targetDate ? (
-            <button
-              type="button"
-              aria-label="Edit project target date"
-              onClick={() => {
-                setPropertiesOpen(true);
+              onStatusChange={(status) => {
+                patchProject({ status });
               }}
-              className="text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none"
-            >
-              <Calendar aria-hidden className="size-4" /> {formatCalendarDate(project.targetDate)}
-            </button>
-          ) : null}
-        </div>
+              onTimelineChange={({ start, end }) => {
+                patchProject({ startDate: start, targetDate: end });
+              }}
+              onProgramChange={(programId) => {
+                patchProject({ programId });
+              }}
+              onInitiativesChange={setInitiatives}
+              onLabelsChange={(labelIds) => {
+                patchProject({ labelIds });
+              }}
+            />
+            {propsError ? (
+              <p role="alert" className="text-destructive mt-2 text-sm">
+                {propsError}
+              </p>
+            ) : null}
+          </PopoverContent>
+        </Popover>
       </header>
 
       <ProjectTabs

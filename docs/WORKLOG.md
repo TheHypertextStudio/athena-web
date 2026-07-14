@@ -7,6 +7,24 @@
 
 ## Active Tasks
 
+### [INIT-MOBILE-RHYTHM-001] Calm the Initiative mobile header stack
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-14
+- **Priority**: P1
+- **Description**: Restore deliberate alignment inside the global recovery reminder and separate
+  the Initiative page header, attention surface, and roster controls with a grouped mobile rhythm.
+- **Plan**:
+  1. Lock the banner composition and page spacing in focused failing visual-contract tests.
+  2. Align the recovery message and action in one content column while isolating dismissal.
+  3. Replace the overview's uniform stack gap with explicit 24- and 32-pixel group spacing.
+  4. Validate responsive light/dark states, run repository release gates, and deploy.
+- **Risks**: The reminder appears across the entire authenticated app, so its narrow-width behavior
+  must remain readable outside the Initiative route; unrelated MCP connector work in the primary
+  checkout must remain untouched.
+
+---
+
 ### [PROD-BUILD-001] Restore production build and integration contracts
 
 - **Status**: COMPLETED

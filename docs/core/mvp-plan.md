@@ -276,7 +276,7 @@ When you step out of the bird's-eye Hub and drop into a single organization, the
 
 ### 8.4 Project / Program / Initiative detail
 
-This is the page you open when you want to understand one effort deeply, and Docket deliberately gives it three different shapes depending on what kind of effort it is, because a bounded project and an endless operation are honestly different animals. A Project, something with a finish line like a product launch or a gala, leads with an overview: a progress bar that fills as tasks get done (and counts the heavier tasks for more, so it reflects real effort rather than raw count), a one-glance health label, and the work grouped under the dated checkpoints it's building toward. Its discussion and the running log of what AI workers have done live in a side panel, with a dedicated strip showing which agents are active here and whether any are waiting on you, so you're never surprised by autonomous work. A Program, the ongoing kind of work that never finishes, like a customer-support function or a nonprofit's after-school program, drops the progress bar entirely (there's no 100% to reach) and instead shows a health-and-flow snapshot, with its long history organized by time period so it stays usable even after years of accumulation. An Initiative, which is purely a strategic theme rather than a container of tasks, leads with a timeline rollup of all the efforts that ladder up to it, and its status is calculated automatically from its children rather than something you have to keep updating by hand. The page is shaped this way so the headline you see always matches the question you'd actually ask about that kind of work.
+This is the page you open when you want to understand one effort deeply, and Docket deliberately gives it three different shapes depending on what kind of effort it is, because a bounded project and an endless operation are honestly different animals. A Project, something with a finish line like a product launch or a gala, opens like an operating brief: its identity, outcome summary, people, health, and target stay visible while secondary properties remain one click away. A latest update sits above the permanent Markdown document; Tasks, Updates, and Resources each have a dedicated working tab. Progress, milestones, agent activity, and dependency context remain part of the overview without pushing the Project's actual brief below a wall of metadata. A Program, the ongoing kind of work that never finishes, like a customer-support function or a nonprofit's after-school program, drops the progress bar entirely (there's no 100% to reach) and instead shows a health-and-flow snapshot, with its long history organized by time period so it stays usable even after years of accumulation. An Initiative, which is purely a strategic theme rather than a container of tasks, uses a document-first strategic brief with connected-work rollups. The page is shaped this way so the headline you see always matches the question you'd actually ask about that kind of work.
 
 ```
 ┌──────────────────────────────────────────────────────────────┬────────────┐
@@ -292,7 +292,14 @@ This is the page you open when you want to understand one effort deeply, and Doc
 └──────────────────────────────────────────────────────────────┴────────────┘
 ```
 
-- **Project:** overview‑first; a **weighted‑progress bar** (fills as tasks complete, with bigger tasks counting for more) + a **health pill**; tasks grouped into **Milestone sections**; **Updates get their own tab**; **comments + agent activity live in the properties panel**; a **dedicated "agents here" strip**.
+- **Project:** a document-like operating brief with one unified people set, health and target in the
+  primary header, and secondary properties in an anchored disclosure. Overview keeps the latest
+  update, Markdown document, weighted progress, agents, activity, and dependencies together;
+  Tasks, Updates, and URL Resources have dedicated tabs. Projects may support several Initiatives,
+  carry organization-global Labels, and use display metadata stored separately from the work row.
+- **Projects overview:** one filter/group/sort model drives dense List, dependency-graph, and
+  timeline lenses. Medium widths retain the complete roster in a local horizontal scroller rather
+  than collapsing columns into ambiguous inline metadata.
 - **Program** (ongoing, no % bar): headline is a **health + flow snapshot**; its work list is **grouped by Cycle, segmented by Project** so it stays usable as it accumulates for years.
 - **Initiative:** a **document-first strategic brief** with a manual lifecycle, independently
   writable health, latest narrative update, generated document contents, sub-Initiatives, and

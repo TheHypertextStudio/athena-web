@@ -9,22 +9,45 @@
 
 ### [PROJECTS-EXPERIENCE-001] Build the Project operating experience
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-07-14
 - **Priority**: P1
 - **Description**: Rebuild Project overview and detail around the approved Initiative-aligned,
   Linear-flavored operating model for managing a high volume of Projects across Docket.
 - **Subtasks**:
-  - [ ] Add rich Project aggregate contracts, Labels, Resources, and multiple Initiative links.
-  - [ ] Build the shared List, Dependencies, and Timeline overview lenses.
-  - [ ] Rebuild detail around progressive disclosure and a unified participant set.
-  - [ ] Add focused tests and responsive light/dark design evidence.
-  - [ ] Complete root validation and atomic commits.
+  - [x] Add rich Project aggregate contracts, Labels, Resources, and multiple Initiative links.
+  - [x] Build the shared List, Dependencies, and Timeline overview lenses.
+  - [x] Rebuild detail around progressive disclosure and a unified participant set.
+  - [x] Add focused tests and responsive light/dark design evidence.
+  - [x] Complete root validation and atomic commits.
 - **Blockers**: None.
 - **Notes**: The approved prototype intentionally removes decorative totals, the Portfolio
   overline, Print/back controls, member counts, cadence, and lead-versus-contributor presentation.
   Only health and target remain immediately visible in the compact detail header; other Project
   information is available through an anchored disclosure and editable property rail.
+- **Completed**: 2026-07-14
+- **Implementation**: Added a bounded portfolio aggregate with task completion and Project
+  dependency edges; Project URL Resources, organization-global Label associations, multiple
+  Initiative links, concise summaries, and separate display metadata; rebuilt the overview as
+  shared List, Dependencies, and Timeline lenses; and rebuilt detail as a document-like operating
+  brief with unified people, progressive properties, generated contents, latest update, and
+  dedicated Tasks, Updates, and Resources tabs.
+- **Files Changed**: Project contracts, Drizzle schema and generated migrations, Project API and
+  focused route tests, typed query/mutation definitions, shared multi-entity picker, Projects
+  overview/detail components and focused component contracts, product/data-layer documentation,
+  design audit, screenshots, and this work log.
+- **Validation**: Generated migrations apply to PGlite. Focused Project API tests pass 28/28,
+  Project property tests pass 7/7, and visual-contract tests pass 5/5. Root typecheck and lint pass
+  all 17 tasks. Root tests pass in 16/17 packages; the API search test timed out only during the
+  contention-heavy root run, then passed alone, and the complete isolated API suite passes
+  1,243/1,243. Web passes 733/733. Production build passes all 3 build tasks. Runtime checks at
+  320px show no page overflow or console errors, and the design review covers light/dark
+  desktop/mobile plus dependency and timeline states.
+- **Retrospective**: Projects need several coordinated views over one operating set, not separate
+  list, graph, and roadmap products. Progressive disclosure works when identity, outcome, people,
+  health, and target remain visible while infrequent properties stay one click away. Treating all
+  Project people as one deduplicated set avoids manufacturing role distinctions the product does
+  not need.
 
 ---
 

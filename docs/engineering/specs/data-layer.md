@@ -195,6 +195,14 @@ Initiative entry and detail pages prefetch the aggregate definition for the acti
 The browser reuses that exact definition for navigation prefetch and mutation reconciliation; it
 does not reconstruct hierarchy, attention, inherited work, or access filtering from list queries.
 
+The Projects overview similarly consumes one `projects/overview` aggregate for all three operating
+lenses. The payload includes Project display metadata, direct task completion counts, and both sides
+of every visible Project dependency edge, so switching between List, Dependencies, and Timeline does
+not trigger per-row reads or change the filtered scope. Project detail uses the bounded rollup for
+task-to-milestone membership, multiple Initiative associations, attached Label objects, and recent
+agent activity; URL Resources remain a dedicated tab query because they have an independent mutation
+lifecycle.
+
 - **Dependent keys (cycles).** The roster key embeds the org's team ids, so the server resolves teams first, seeds the shared `queryKeys.teams` cache (which the app-shell `ActiveOrgContext` reads — so it hydrates warm too), then primes the roster under the exact `[...queryKeys.cycles, ...teamIds]` key the client derives, in the same id order.
 - **Serialization-safe view-models.** Dehydrated data crosses the RSC boundary, so a composite read's view-model must serialize. `fetchCyclesWithStats` switched its `statsById` from a `Map` to a plain record — a record survives both JSON and React Flight unchanged; a `Map` does not. Prefer records for any dehydrated view-model.
 - **Migrate-then-SSR (my-work).** A page riding a hand-rolled `useState`/`useEffect` loader (`use-my-work.ts`) is first migrated onto the query layer (here, five `useApiQuery` slices under canonical keys), which then makes the server prefetch a mechanical `allSettled` over the same keys.

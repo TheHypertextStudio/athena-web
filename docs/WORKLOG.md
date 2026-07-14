@@ -7,6 +7,37 @@
 
 ## Active Tasks
 
+### [INIT-INTERACTION-001] Normalize Initiative icon targets and roster measure
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-13
+- **Completed**: 2026-07-13
+- **Priority**: P2
+- **Description**: Keep every icon-only control used by the Initiative overview and detail flow at
+  a minimum 40-by-40-pixel interactive target on larger viewports, and cap Initiative roster copy
+  at the minimum readable character measure while preserving two-line summaries and local table
+  scrolling.
+- **Plan**:
+  1. Extend the Initiative visual contract with the 40-pixel target and readable-measure rules.
+  2. Verify the contract fails against the current desktop hierarchy, pager, and dialog controls.
+  3. Correct shared and Initiative-specific target sizing without enlarging decorative glyphs.
+  4. Validate the focused contract, repository gates, and the live responsive surface.
+- **Validation**: Run the focused Initiative visual contract, `pnpm typecheck`, `pnpm lint`,
+  `pnpm test`, and `pnpm build`; inspect the Initiative overview at desktop and medium widths.
+- **Implementation**: Raised the shared icon-button and dialog-close targets to 40 pixels, kept
+  the Initiative hierarchy disclosure at that size across container breakpoints, aligned leaf-row
+  indentation with the disclosure target, and capped two-line Initiative summaries at 45
+  characters per line.
+- **Validation Results**: The Initiative visual contract passes 5/5 and the shared Button/Dialog
+  suites pass 39/39. Typecheck, lint, and production build pass. At 1440x900, the attention pager,
+  hierarchy disclosure, and dialog close all measure exactly 40 by 40 pixels; summaries measure 45
+  characters wide and 32 pixels high; the 766-pixel roster scrolls its 896-pixel table locally with
+  no page overflow or console errors. The root suite retains four unrelated repository-policy
+  failures in provider catalog, TSDoc coverage, and safe error-copy enforcement.
+- **Retrospective**: Interactive target size belongs to the control, not the glyph. Keeping the
+  artwork restrained inside a consistent 40-pixel target preserves density without sacrificing
+  pointer or touch accessibility; character-based copy measure makes the roster easier to scan.
+
 ### [AGENT-CONFIG-001] Share repository agent tooling
 
 - **Status**: COMPLETED

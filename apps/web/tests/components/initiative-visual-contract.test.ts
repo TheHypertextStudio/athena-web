@@ -13,6 +13,8 @@ const detailPath = join(
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page.tsx',
 );
 const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
+const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
+const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -56,9 +58,21 @@ describe('Initiative visual contract', () => {
     expect(overview).toContain('@2xl:table-cell');
     expect(overview).toContain('line-clamp-1 min-w-0');
     expect(overview).toContain('line-clamp-2 min-h-8');
+    expect(overview).toContain('max-w-[45ch]');
     expect(overview).not.toContain('{item.summary ? (');
     expect(overview).toContain('Owner ${item.ownerName ??');
     expect(overview).toContain('Target ${item.targetDate');
+  });
+
+  it('keeps icon-only Initiative controls in 40px interactive targets', () => {
+    const overview = source(overviewPath);
+    const button = source(buttonPath);
+    const dialog = source(dialogPath);
+    expect(button).toContain("icon: 'h-10 w-10'");
+    expect(dialog).toContain('h-10 w-10');
+    expect(overview).toContain('size="icon"');
+    expect(overview).toContain('flex size-10 shrink-0 items-center justify-center');
+    expect(overview).not.toContain('@2xl:size-6');
   });
 
   it('does not style semantic labels as uppercase overlines', () => {

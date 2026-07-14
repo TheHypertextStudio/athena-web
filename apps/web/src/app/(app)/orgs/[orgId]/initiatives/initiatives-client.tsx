@@ -303,7 +303,7 @@ export default function InitiativesListClient(): JSX.Element {
                       {item.childCount > 0 ? (
                         <button
                           type="button"
-                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @2xl:mr-0 @2xl:size-6"
+                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @2xl:mr-0"
                           aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`}
                           aria-expanded={!collapsed.has(item.id)}
                           onClick={() => {
@@ -318,7 +318,7 @@ export default function InitiativesListClient(): JSX.Element {
                           {collapsed.has(item.id) ? '›' : '⌄'}
                         </button>
                       ) : (
-                        <span className="mr-1 w-10 shrink-0 @2xl:mr-0 @2xl:w-6" />
+                        <span className="mr-1 w-10 shrink-0 @2xl:mr-0" />
                       )}
                       <Link
                         href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
@@ -333,7 +333,7 @@ export default function InitiativesListClient(): JSX.Element {
                       ) : null}
                     </div>
                     <p
-                      className="text-on-surface-variant mt-1 line-clamp-2 min-h-8 pl-10 text-xs @2xl:mt-0.5 @2xl:pl-6"
+                      className="text-on-surface-variant mt-1 line-clamp-2 min-h-8 max-w-[45ch] pl-10 text-xs @2xl:mt-0.5"
                       style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
                     >
                       {item.summary ?? ''}

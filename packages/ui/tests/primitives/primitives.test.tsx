@@ -73,7 +73,7 @@ describe('Button', () => {
     ['default', 'h-9'],
     ['sm', 'h-8'],
     ['lg', 'h-10'],
-    ['icon', 'w-9'],
+    ['icon', 'w-10'],
   ])('applies the %s size class', (size, cls) => {
     render(<Button size={size}>{size}</Button>);
     expect(screen.getByRole('button', { name: size })).toHaveClass(cls);

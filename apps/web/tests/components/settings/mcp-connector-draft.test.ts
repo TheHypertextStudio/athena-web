@@ -28,5 +28,6 @@ describe('connectorReadinessLabel', () => {
     expect(connectorReadinessLabel('connected')).toBe('Ready for Athena');
     expect(connectorReadinessLabel('pending')).toBe('Approval required');
     expect(connectorReadinessLabel('error')).toBe('Needs attention');
+    expect(connectorReadinessLabel('disconnected')).toBe('Disconnected');
   });
 });

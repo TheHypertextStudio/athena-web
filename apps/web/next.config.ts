@@ -73,6 +73,55 @@ const nextConfig: NextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
+  async redirects() {
+    return [
+      {
+        source: '/orgs/:orgId/settings/connections',
+        destination: '/settings/connections',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/connections/google-calendar',
+        destination: '/settings/connections',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/connected-accounts',
+        destination: '/settings/connections',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/notifications',
+        destination: '/settings/notifications',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/calendar',
+        destination: '/settings/calendar',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/security',
+        destination: '/settings/security',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/connected-apps',
+        destination: '/settings/connected-apps',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/export',
+        destination: '/settings/data-privacy',
+        permanent: false,
+      },
+      {
+        source: '/orgs/:orgId/settings/danger',
+        destination: '/settings/data-privacy',
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       { source: '/v1/:path*', destination: `${API_ORIGIN}/v1/:path*` },

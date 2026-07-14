@@ -1,16 +1,5 @@
 import type { LucideIcon } from '@docket/ui/icons';
-import {
-  Cable,
-  Calendar,
-  Download,
-  Inbox,
-  Link,
-  ListChecks,
-  Shield,
-  Trash2,
-  Users,
-  Workflow,
-} from '@docket/ui/icons';
+import { Inbox, Workflow } from '@docket/ui/icons';
 
 /** A settings section's availability: a live routed page, or a planned ("coming soon") stub. */
 export type SectionStatus = 'available' | 'coming-soon';
@@ -45,14 +34,6 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         status: 'available',
       },
       {
-        key: 'connections',
-        label: 'Connections',
-        description: 'Connect a tool to keep it in sync with Docket.',
-        icon: Cable,
-        href: 'connections',
-        status: 'available',
-      },
-      {
         key: 'import',
         label: 'Import',
         description: 'Move everything from another tool into Docket, once.',
@@ -60,71 +41,9 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         href: 'import',
         status: 'available',
       },
-      {
-        key: 'connected-apps',
-        label: 'Authorized apps',
-        description:
-          'External apps (via MCP) you have authorized to read and act on your Docket account.',
-        icon: Link,
-        href: 'connected-apps',
-        status: 'available',
-      },
-      {
-        key: 'notifications',
-        label: 'Notifications',
-        description: 'Decide what Docket tells you, and where.',
-        icon: ListChecks,
-        href: 'notifications',
-        status: 'available',
-      },
-      {
-        key: 'calendar',
-        label: 'Calendar',
-        description: 'Set scheduling defaults and choose what coworkers can compare.',
-        icon: Calendar,
-        href: 'calendar',
-        status: 'available',
-      },
-    ],
-  },
-  {
-    label: 'Account',
-    sections: [
-      {
-        key: 'security',
-        label: 'Security',
-        description: 'Generate recovery codes to get back in if you lose your passkey.',
-        icon: Shield,
-        href: 'security',
-        status: 'available',
-      },
-      {
-        key: 'connected-accounts',
-        label: 'Connected accounts',
-        description: 'The external accounts (Google, …) linked to your Docket identity.',
-        icon: Users,
-        href: 'connected-accounts',
-        status: 'available',
-      },
-      {
-        key: 'export',
-        label: 'Export data',
-        description: 'Download a copy of everything in Docket.',
-        icon: Download,
-        href: 'export',
-        status: 'available',
-      },
-      {
-        key: 'danger',
-        label: 'Danger zone',
-        description: 'Permanently delete your account and personal data.',
-        icon: Trash2,
-        href: 'danger',
-        status: 'available',
-      },
     ],
   },
 ];
 
 /** The section the `settings` root redirects to for a **personal workspace**. */
-export const DEFAULT_PERSONAL_SETTINGS_SECTION = 'connections';
+export const DEFAULT_PERSONAL_SETTINGS_SECTION = 'work-structure';

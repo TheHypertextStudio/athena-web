@@ -62,21 +62,16 @@ describe('personal workspace sections', () => {
     expect(everyLabel).not.toContain('organization');
   });
 
-  it('surfaces Connections and Import without the retired Language picker', () => {
+  it('keeps workspace setup sections without the retired Language picker', () => {
     expect(personalKeys).not.toContain('vocabulary');
-    expect(personalKeys).toContain('connections');
     expect(personalKeys).toContain('import');
+    expect(personalKeys).toContain('work-structure');
   });
 
-  it('exposes Notifications as an available caller-owned settings section', () => {
-    const notifications = settingsSections(true).find((s) => s.key === 'notifications');
-    expect(notifications?.status).toBe('available');
-  });
-
-  it('exposes a Danger zone for deleting personal data', () => {
-    const danger = settingsSections(true).find((s) => s.key === 'danger');
-    expect(danger).toBeDefined();
-    expect(danger?.status).toBe('available');
+  it('does not place caller-owned settings under a personal workspace', () => {
+    for (const key of ['connections', 'notifications', 'calendar', 'security', 'danger']) {
+      expect(personalKeys).not.toContain(key);
+    }
   });
 
   it('gives every section a stable key, label, href, and icon', () => {
@@ -116,9 +111,9 @@ describe('shared org sections (no regression)', () => {
     expect(orgSections).toEqual(flattened);
   });
 
-  it('exposes Notifications as an available shared-org settings section', () => {
-    const notifications = orgSections.find((s) => s.key === 'notifications');
-    expect(notifications?.status).toBe('available');
+  it('does not place caller-owned notifications under a shared workspace', () => {
+    expect(orgSections.map((section) => section.key)).not.toContain('notifications');
+    expect(orgSections.map((section) => section.key)).not.toContain('connections');
   });
 
   it('does not expose the retired vocabulary picker', () => {
@@ -146,7 +141,7 @@ describe('sectionHref', () => {
   it('builds the absolute org-scoped settings route for a section suffix', () => {
     expect(sectionHref('org_123', 'members')).toBe('/orgs/org_123/settings/members');
     expect(sectionHref('org_123', defaultSettingsSection(true))).toBe(
-      '/orgs/org_123/settings/connections',
+      '/orgs/org_123/settings/work-structure',
     );
   });
 });

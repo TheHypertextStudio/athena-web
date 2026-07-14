@@ -7,9 +7,12 @@ export interface McpConnectorDraft {
 }
 
 /** Turn a connector transport state into language that describes Athena's availability. */
-export function connectorReadinessLabel(status: 'connected' | 'pending' | 'error'): string {
+export function connectorReadinessLabel(
+  status: 'connected' | 'pending' | 'error' | 'disconnected',
+): string {
   if (status === 'connected') return 'Ready for Athena';
   if (status === 'pending') return 'Approval required';
+  if (status === 'disconnected') return 'Disconnected';
   return 'Needs attention';
 }
 

@@ -340,12 +340,12 @@ The "Agents" area is essentially a **live, filterable feed of Sessions** (runnin
 - **Approval flow:** pending actions appear in the session **and** mirror to your Inbox/Today.
 - Provider (Athena/Claude/Codex) is a minor chip. **Setup lives in Settings** (connect a provider; Athena built‑in). Permissions start **read‑only, grant‑on‑request**.
 
-### 8.7 Settings (per‑Organization)
+### 8.7 Settings (user-owned, with workspace administration)
 
-Settings is where each organization is shaped to fit how that particular venture actually runs — and because you may run several at once, every organization gets its own settings, kept cleanly apart. The heart of it is people. From here you connect the organization's Gmail, Google Calendar, Google Tasks, GitHub, or Linear account through a short guided wizard that explains whether Docket imports work or links to the external source.
+Settings belongs to the user because Athena is the user's digital chief of staff and Docket is a centralized place to view data from many streams. The global Settings area is ordered around the user's relationship with Athena: Profile, Athena, Connections, Notifications, Calendar, Security, Connected apps, Data & privacy, and Workspaces. Connections are outbound: they are the apps Athena uses as data sources. Connected apps are inbound: external clients the user has authorized to access Docket. Workspace administration remains available under Workspaces for members, roles, billing, work structure, imports, and workspace-level automations.
 
 - **One "Members & Access" area** — people are primary; access is editable per‑person and from each resource. Granular permissions are shown as **plain‑language roles** (Owner/Admin/Member/Guest), with the detailed capability grid behind an "advanced" option for custom roles. **Guests** sit in the same list with a "Guest" badge and see nothing until granted.
-- **Integrations** — a **categorized directory**; connecting a tool is a **wizard that picks Migration vs. Connector up front**, consequences spelled out.
+- **Connections** — a **categorized directory** of the external services Athena can use; connecting a tool is a **wizard that picks Migration vs. Connector up front**, consequences spelled out.
 - **Vocabulary skins** — chosen from **preset themes** (Startup / Nonprofit / Agency) that remap Docket's words for that org.
 
 ### 8.8 Landing + Sign‑up + Onboarding _(top priority)_

@@ -7,6 +7,35 @@
 
 ## Active Tasks
 
+### [SETTINGS-IA-001] Reorganize Settings around the user-owned assistant
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-14
+- **Priority**: P1
+- **Description**: Move the primary Settings experience out of the workspace context and organize
+  it around the user's relationship with Athena and Docket, while keeping workspace administration
+  secondary.
+- **Subtasks**:
+  - [x] Add the global user-owned Settings registry and exact product order.
+  - [x] Add the global Settings shell and account-menu entry.
+  - [x] Separate outbound Connections from inbound Connected apps.
+  - [x] Add compatibility validation and complete repository gates.
+  - [x] Complete documentation and retrospective.
+- **Blockers**: None.
+- **Notes**: The personal workspace registry now contains workspace setup only. User-owned surfaces
+  are reached through `/settings`; legacy organization-scoped account routes redirect there.
+- **Completed**: 2026-07-14
+- **Files Changed**: Global Settings registry, shell, navigation, user-owned route surfaces, account
+  menu, workspace settings registries, legacy redirects, focused tests, product and MCP docs.
+- **Validation**: Focused Settings suites pass 63/63; root typecheck, lint, test, and build pass.
+  Full tests pass with web 730/730, API 1,238/1,238, and all 17 Turbo test tasks successful.
+- **Retrospective**: The correct organizing boundary is ownership, not the current workspace route.
+  Connections must remain outbound data sources for Athena, while Connected apps must remain inbound
+  access granted to external clients. Keeping both concepts explicit makes the centralized assistant
+  model legible without adding an umbrella taxonomy.
+
+---
+
 ### [INIT-MOBILE-RHYTHM-001] Calm the Initiative mobile header stack
 
 - **Status**: COMPLETED

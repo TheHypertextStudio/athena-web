@@ -2,7 +2,7 @@
 
 Docket ships a first-party [Model Context Protocol](https://modelcontextprotocol.io) server. Any MCP-capable agent — Claude Code, Claude Desktop, claude.ai, Codex, Cursor, Windsurf, or anything else that speaks Streamable HTTP + OAuth 2.1 — can read and act on your Docket workspace.
 
-> The in-app equivalent of this guide lives at **Settings → Authorized apps** (personal workspace), which shows the same setup snippets with your deployment's URL pre-filled. The snippets below MUST stay in sync with `apps/web/src/components/settings/mcp-clients.ts` — that catalog is the source of truth.
+> The in-app equivalent of this guide lives at **Settings → Connected apps**, which shows the same setup snippets with your deployment's URL pre-filled. The snippets below MUST stay in sync with `apps/web/src/components/settings/mcp-clients.ts` — that catalog is the source of truth.
 
 ## The endpoint
 
@@ -77,7 +77,7 @@ codex mcp login docket
 
 ### Cursor
 
-Use the install deep link from **Settings → Authorized apps** in Docket, or add to `~/.cursor/mcp.json`:
+Use the install deep link from **Settings → Connected apps** in Docket, or add to `~/.cursor/mcp.json`:
 
 ```json
 { "mcpServers": { "docket": { "url": "https://docket-api.hypertext.studio/mcp" } } }
@@ -97,7 +97,7 @@ Point any MCP-compatible client at the MCP URL. Clients that implement the MCP a
 
 ## Let Athena use another MCP server
 
-Athena can also be an MCP **client** for an organization. Go to **Settings → Connections → MCP
+Athena can also be an MCP **client** for a workspace. Go to **Settings → Connections → MCP
 connectors**, enter the server URL, choose **Sign in and approve access**, and finish the provider's
 browser approval. Docket then verifies `tools/list` before Athena receives any of the server's
 tools. They are namespaced as `<connector>__<tool>` so external tools cannot collide with Docket
@@ -130,7 +130,7 @@ The authoritative surface contract is [`specs/mcp-surface.md`](specs/mcp-surface
 
 ## Revoking access
 
-**Settings → Authorized apps** lists every client you have consented to, with per-client revoke (deletes the consent and its access tokens). Access tokens also expire on their own after 15 minutes; refresh tokens after 30 days.
+**Settings → Connected apps** lists every client you have consented to, with per-client revoke (deletes the consent and its access tokens). Access tokens also expire on their own after 15 minutes; refresh tokens after 30 days.
 
 ## Self-hosting: the server is on by default
 

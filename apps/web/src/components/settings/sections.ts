@@ -6,16 +6,7 @@
  * The nav, the layout, and the section-root redirect all derive from this registry.
  * `settingsSectionGroups` picks the correct registry for the active workspace type.
  */
-import {
-  Cable,
-  CreditCard,
-  Inbox,
-  ListChecks,
-  Shield,
-  Sparkles,
-  Users,
-  Workflow,
-} from '@docket/ui/icons';
+import { CreditCard, Inbox, ListChecks, Shield, Sparkles, Users, Workflow } from '@docket/ui/icons';
 
 export type { SectionStatus, SettingsSection, SettingsSectionGroup } from './sections-personal';
 export {
@@ -79,14 +70,6 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         status: 'available',
       },
       {
-        key: 'connections',
-        label: 'Connections',
-        description: 'Connect a tool to keep it in sync with your team.',
-        icon: Cable,
-        href: 'connections',
-        status: 'available',
-      },
-      {
         key: 'import',
         label: 'Import',
         description: 'Move everything from another tool into Docket, once.',
@@ -109,14 +92,6 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         icon: Sparkles,
         href: 'agents',
         status: 'coming-soon',
-      },
-      {
-        key: 'notifications',
-        label: 'Notifications',
-        description: 'Decide what Docket tells you, and where.',
-        icon: ListChecks,
-        href: 'notifications',
-        status: 'available',
       },
     ],
   },

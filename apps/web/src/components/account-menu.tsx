@@ -1,6 +1,6 @@
 'use client';
 
-import { LogOut, Plus } from '@docket/ui/icons';
+import { LogOut, Plus, Settings } from '@docket/ui/icons';
 import {
   Avatar,
   AvatarFallback,
@@ -67,6 +67,14 @@ export default function AccountMenu({
         <DropdownMenuItem onSelect={onCreateWorkspace}>
           <Plus aria-hidden="true" className="size-4" />
           Create workspace
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            router.push('/settings');
+          }}
+        >
+          <Settings aria-hidden="true" className="size-4" />
+          Settings
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

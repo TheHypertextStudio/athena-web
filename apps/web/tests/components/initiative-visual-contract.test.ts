@@ -42,14 +42,21 @@ describe('Initiative visual contract', () => {
     const overview = source(overviewPath);
     expect(overview).toContain('bg-surface-container-low');
     expect(overview).toContain('data-testid="initiative-attention-controls"');
+    expect(overview).toContain('data-testid="initiative-attention-footer"');
+    expect(overview).not.toContain('@4xl:flex-row @4xl:items-center @4xl:justify-between');
     expect(overview).not.toContain('gap-3 border-y px-1 py-4');
   });
 
-  it('reserves the full table for wide containers and retains compact metadata', () => {
+  it('keeps medium table columns scrollable and reserves two description lines', () => {
     const overview = source(overviewPath);
-    expect(overview).toContain('@5xl:table-header-group');
-    expect(overview).toContain('@5xl:table-row-group');
-    expect(overview).toContain('@5xl:table-cell');
+    expect(overview).toContain('overflow-x-auto');
+    expect(overview).toContain('@2xl:min-w-[56rem]');
+    expect(overview).toContain('@2xl:table-header-group');
+    expect(overview).toContain('@2xl:table-row-group');
+    expect(overview).toContain('@2xl:table-cell');
+    expect(overview).toContain('line-clamp-1 min-w-0');
+    expect(overview).toContain('line-clamp-2 min-h-8');
+    expect(overview).not.toContain('{item.summary ? (');
     expect(overview).toContain('Owner ${item.ownerName ??');
     expect(overview).toContain('Target ${item.targetDate');
   });

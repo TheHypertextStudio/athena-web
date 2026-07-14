@@ -45,7 +45,7 @@ function AttentionSurface({
 }) {
   const href = `/orgs/${item.organizationId}/initiatives/${item.initiativeId}${item.action === 'update' ? '?tab=updates&compose=1' : ''}`;
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-4 @4xl:flex-row @4xl:items-center @4xl:justify-between">
+    <div className="flex min-w-0 flex-1 flex-col gap-4">
       <div className="min-w-0">
         <div className="mb-1 flex items-center gap-2 text-xs">
           <span className="text-on-surface-variant font-medium">Needs your attention</span>
@@ -66,32 +66,34 @@ function AttentionSurface({
           <p className="text-on-surface-variant mt-1 text-xs">In {item.parentInitiativeName}</p>
         ) : null}
       </div>
-      <div
-        data-testid="initiative-attention-controls"
-        className="flex shrink-0 items-center justify-between gap-2 @4xl:justify-end"
-      >
-        <Button asChild size="sm" variant="outline" className="min-h-10 @4xl:min-h-0">
-          <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>
-        </Button>
-        {count > 1 ? (
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Previous attention item"
-              onClick={onPrevious}
-            >
-              ←
-            </Button>
-            <span className="text-on-surface-variant min-w-8 text-center text-xs tabular-nums">
-              {index + 1}/{count}
-            </span>
-            <Button variant="ghost" size="icon" aria-label="Next attention item" onClick={onNext}>
-              →
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <footer data-testid="initiative-attention-footer" className="w-full">
+        <div
+          data-testid="initiative-attention-controls"
+          className="flex items-center justify-between gap-3"
+        >
+          <Button asChild size="sm" variant="outline" className="min-h-10 @2xl:min-h-0">
+            <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>
+          </Button>
+          {count > 1 ? (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Previous attention item"
+                onClick={onPrevious}
+              >
+                ←
+              </Button>
+              <span className="text-on-surface-variant min-w-8 text-center text-xs tabular-nums">
+                {index + 1}/{count}
+              </span>
+              <Button variant="ghost" size="icon" aria-label="Next attention item" onClick={onNext}>
+                →
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </footer>
     </div>
   );
 }
@@ -272,9 +274,9 @@ export default function InitiativesListClient(): JSX.Element {
           {userErrorMessage(overview.error, 'Could not load initiatives.')}
         </p>
       ) : data && data.items.length > 0 ? (
-        <div>
-          <table className="w-full border-collapse text-sm">
-            <thead className="hidden @5xl:table-header-group">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm @2xl:min-w-[56rem]">
+            <thead className="hidden @2xl:table-header-group">
               <tr className="border-outline-variant text-on-surface-variant border-b text-left text-xs">
                 <th className="py-2 font-medium">Initiative</th>
                 <th className="py-2 pr-4 font-medium whitespace-nowrap">Status</th>
@@ -284,16 +286,16 @@ export default function InitiativesListClient(): JSX.Element {
                 <th className="py-2 font-medium whitespace-nowrap">Last update</th>
               </tr>
             </thead>
-            <tbody className="block @5xl:table-row-group">
+            <tbody className="block @2xl:table-row-group">
               {visibleItems.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b @5xl:table-row"
+                  className="border-outline-variant/60 hover:bg-surface-container-low block border-b @2xl:table-row"
                   onMouseEnter={() => {
                     prefetch(initiativeDetailDef(item.organizationId, item.id));
                   }}
                 >
-                  <td className="block min-w-0 py-3 @5xl:table-cell @5xl:pr-4">
+                  <td className="block min-w-0 py-3 @2xl:table-cell @2xl:pr-4">
                     <div
                       className="flex items-center"
                       style={{ paddingLeft: `${(item.depth - 1) * 24}px` }}
@@ -301,7 +303,7 @@ export default function InitiativesListClient(): JSX.Element {
                       {item.childCount > 0 ? (
                         <button
                           type="button"
-                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @5xl:mr-0 @5xl:size-6"
+                          className="text-on-surface-variant -my-2 mr-1 flex size-10 shrink-0 items-center justify-center @2xl:mr-0 @2xl:size-6"
                           aria-label={`${collapsed.has(item.id) ? 'Expand' : 'Collapse'} ${item.name}`}
                           aria-expanded={!collapsed.has(item.id)}
                           onClick={() => {
@@ -316,11 +318,11 @@ export default function InitiativesListClient(): JSX.Element {
                           {collapsed.has(item.id) ? '›' : '⌄'}
                         </button>
                       ) : (
-                        <span className="mr-1 w-10 shrink-0 @5xl:mr-0 @5xl:w-6" />
+                        <span className="mr-1 w-10 shrink-0 @2xl:mr-0 @2xl:w-6" />
                       )}
                       <Link
                         href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
-                        className="text-on-surface min-w-0 font-medium hover:underline"
+                        className="text-on-surface line-clamp-1 min-w-0 font-medium hover:underline"
                       >
                         {item.name}
                       </Link>
@@ -330,15 +332,13 @@ export default function InitiativesListClient(): JSX.Element {
                         </Badge>
                       ) : null}
                     </div>
-                    {item.summary ? (
-                      <p
-                        className="text-on-surface-variant mt-1 line-clamp-2 pl-10 text-xs @5xl:mt-0.5 @5xl:truncate @5xl:pl-6"
-                        style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
-                      >
-                        {item.summary}
-                      </p>
-                    ) : null}
-                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs @5xl:hidden">
+                    <p
+                      className="text-on-surface-variant mt-1 line-clamp-2 min-h-8 pl-10 text-xs @2xl:mt-0.5 @2xl:pl-6"
+                      style={{ marginLeft: `${(item.depth - 1) * 24}px` }}
+                    >
+                      {item.summary ?? ''}
+                    </p>
+                    <p className="text-on-surface-variant mt-2 flex flex-wrap gap-x-3 gap-y-1 pl-10 text-xs @2xl:hidden">
                       <span>{STATUS_LABEL[item.status]}</span>
                       <span>{item.health ? HEALTH_LABEL[item.health] : 'No health'}</span>
                       <span>{`Owner ${item.ownerName ?? 'Unassigned'}`}</span>
@@ -350,19 +350,19 @@ export default function InitiativesListClient(): JSX.Element {
                       </span>
                     </p>
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap @5xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap @2xl:table-cell">
                     {STATUS_LABEL[item.status]}
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap @5xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap @2xl:table-cell">
                     {item.health ? HEALTH_LABEL[item.health] : '—'}
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap @5xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap @2xl:table-cell">
                     {item.ownerName ?? '—'}
                   </td>
-                  <td className="hidden py-3 pr-4 whitespace-nowrap tabular-nums @5xl:table-cell">
+                  <td className="hidden py-3 pr-4 whitespace-nowrap tabular-nums @2xl:table-cell">
                     {item.targetDate ? item.targetDate.slice(0, 10) : '—'}
                   </td>
-                  <td className="hidden py-3 whitespace-nowrap tabular-nums @5xl:table-cell">
+                  <td className="hidden py-3 whitespace-nowrap tabular-nums @2xl:table-cell">
                     {item.lastUpdateAt ? item.lastUpdateAt.slice(0, 10) : 'Never'}
                   </td>
                 </tr>

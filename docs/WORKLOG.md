@@ -7,17 +7,6 @@
 
 ## Active Tasks
 
-### [INIT-OVERVIEW-SCROLL-001] Restore medium-width Initiative columns
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-07-13
-- **Priority**: P1
-- **Description**: Preserve the full Initiative roster columns on medium containers using local
-  horizontal scrolling, keep attention content and controls in a stable vertical structure, and
-  normalize roster heights with descriptions wrapping to at most two reserved lines.
-- **Plan**: Add a failing responsive contract, implement the focused layout correction, verify the
-  reported viewport live, update the design audit, and commit atomically.
-
 ### [AGENT-CONFIG-001] Share repository agent tooling
 
 - **Status**: COMPLETED
@@ -1274,6 +1263,26 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [INIT-OVERVIEW-SCROLL-001] Restore medium-width Initiative columns
+
+- **Completed**: 2026-07-13
+- **Priority**: P1
+- **Summary**: Restored the complete six-column Initiative table from medium container widths
+  onward, constrained horizontal overflow to the roster region, moved attention actions into a
+  dedicated footer, and normalized Initiative row heights with one title line plus two reserved
+  description lines.
+- **Files Changed**: Initiative overview, visual-contract coverage, responsive design spec and plan,
+  design audit screenshots and scorecard, and this worklog.
+- **Validation**: Focused visual contract passes 4/4. Live review confirmed an 896px table scrolls
+  inside a 766px roster without widening the 1440px page; mobile remains compact, 320px has no page
+  overflow, light and dark screenshots are clean, and the browser console reports no warnings or
+  errors. `pnpm typecheck`, `pnpm lint`, and `pnpm build` pass. `pnpm test` remains blocked by the
+  same four unrelated repository-policy failures in provider catalog, documentation coverage, and
+  web error-source enforcement.
+- **Retrospective**: A dense table should preserve its information model and scroll locally when
+  space is constrained. Replacing columns with a different row structure is appropriate for mobile,
+  not for every intermediate workspace configuration.
 
 ### [INIT-VISUAL-POLISH-001] Remove overlines and repair Initiative layout
 

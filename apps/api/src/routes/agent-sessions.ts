@@ -37,7 +37,13 @@ import {
 } from './agent-session-helpers';
 import { createAndRunFromPrompt, postReplyAndResume, runSession } from './agent-session-runner';
 import { replyToElicitation, resolveAction } from './agent-session-approval';
-import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
+import {
+  approveAndResume,
+  approveGroupAndResume,
+  approveLatestAndResume,
+  driveSessionAfterMessage,
+  resumeSessionExecution,
+} from '../agent/loop';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { loadTranscript } from '../agent/transcript';
 
@@ -523,19 +529,16 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'contribute');
+      const { session } = await loadSessionAccess(c, id, 'contribute');
       const body = c.req.valid('json');
       const created = await replyToElicitation(orgId, id, activityId, body.body);
       // Resume-on-user-message: when the reply un-parked the session and the loop owns
       // it (a transcript exists), drive it forward — the reconcile step feeds the reply
       // to the model as the ask_user tool result.
-      const replySession = await db
-        .select({ status: agentSession.status })
-        .from(agentSession)
-        .where(eq(agentSession.id, id))
-        .limit(1);
-      if (replySession[0]?.status === 'running' && (await loadTranscript(db, id)).length > 0) {
-        await driveSession(orgId, id);
+      if ((await loadTranscript(db, id)).length > 0) {
+        await resumeSessionExecution(orgId, id);
+      } else if (session.status === 'awaiting_input') {
+        await transitionLifecycle(session, 'resume');
       }
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(created));
@@ -572,10 +575,10 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
-      let updated = await transitionLifecycle(session, 'resume');
-      if ((await loadTranscript(db, id)).length > 0) {
-        updated = await driveSession(orgId, id);
-      }
+      const updated =
+        (await loadTranscript(db, id)).length > 0
+          ? await resumeSessionExecution(orgId, id)
+          : await transitionLifecycle(session, 'resume');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
@@ -615,11 +618,9 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      const { actorId } = c.get('actorCtx');
       await loadSessionAccess(c, id, 'assign');
-      let updated = await resolveAction(orgId, id, 'approved');
-      if ((await loadTranscript(db, id)).length > 0) {
-        updated = await driveSession(orgId, id);
-      }
+      const updated = await approveLatestAndResume(orgId, actorId, id);
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },

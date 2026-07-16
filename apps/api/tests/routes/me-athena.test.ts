@@ -180,6 +180,34 @@ async function seedActivity(
   ).id;
 }
 
+/** Fill one owner's durable Athena run slots with fresh leases. */
+async function saturateOwnerAdmission(seed: Seed, person: Person): Promise<void> {
+  const sessions = await db
+    .insert(schema.agentSession)
+    .values(
+      Array.from({ length: 8 }, () => ({
+        executorKind: 'athena' as const,
+        ownerUserId: person.userId,
+        contextOrganizationId: seed.orgA,
+        trigger: 'delegation' as const,
+        status: 'running' as const,
+      })),
+    )
+    .returning({ id: schema.agentSession.id });
+  await db.insert(schema.agentSessionRun).values(
+    sessions.map(({ id }) => ({
+      sessionId: id,
+      ownerUserId: person.userId,
+      generation: 1,
+      workflowInstanceId: `${id}:1`,
+      status: 'running' as const,
+      attempt: 1,
+      leaseToken: `personal-route-slot-${id}`,
+      leaseExpiresAt: new Date(Date.now() + 60_000),
+    })),
+  );
+}
+
 /** Script one provider completion after any already-persisted assistant transcript turns. */
 function mockCompletion(text = 'Done', priorAssistantTurns = 0): void {
   const runtime = new agentRuntime.MockAgentTurnRuntime({
@@ -709,6 +737,47 @@ describe('personal Athena routes', () => {
     expect(
       (await ownerApp.request(`/sessions/${sessionId}/cancel`, { method: 'POST' })).status,
     ).toBe(200);
+  });
+
+  it('keeps message-resumed work parked when durable admission is full', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
+    await saturateOwnerAdmission(seed, seed.owner);
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ body: 'Continue with the launch task' }),
+    });
+
+    expect(response.status).toBe(409);
+    const [session] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    expect(session?.status).toBe('awaiting_input');
+  });
+
+  it('keeps explicitly resumed work parked when durable admission is full', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: seed.owner.userId,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Continue' }] }],
+    });
+    await saturateOwnerAdmission(seed, seed.owner);
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/resume`, {
+      method: 'POST',
+    });
+
+    expect(response.status).toBe(409);
+    const [session] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    expect(session?.status).toBe('awaiting_input');
   });
 
   it('keeps raw provider reasoning out of personal detail, activity, and SSE projections', async () => {

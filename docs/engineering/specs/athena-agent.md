@@ -167,10 +167,12 @@ Every initial run, approval execution, reply resume, and lifecycle resume enters
 generation claim. The short transaction locks the stable Athena owner row, restores ownership from
 the session, counts only fresh owner run leases, and either creates the next generation or recovers
 an expired generation with an incremented attempt and a new fencing token. A fresh same-session
-lease rejects duplicate callers. Provider and MCP work begins only after commit; no database lock is
-held across either call. Healthy workers renew their lease indefinitely. Before transcript writes
-and MCP dispatch, the worker verifies its token is still current, so a stale recovered worker cannot
-resume side effects.
+lease rejects duplicate callers. Each entry point supplies its legal source states, and only the
+successful claim transitions the session to `running` or clears a prior terminal timestamp;
+message, reply, lifecycle, and decision services never reopen execution first. Provider and MCP work
+begins only after commit; no database lock is held across either call. Healthy workers renew their
+lease indefinitely. Before transcript writes and MCP dispatch, the worker verifies its token is
+still current, so a stale recovered worker cannot resume side effects.
 
 Athena has no wall-clock or job-duration cap. `AGENT_MAX_TURNS` is one personal generation's
 checkpoint quantum: reaching it completes that run record, claims `generation + 1`, and continues

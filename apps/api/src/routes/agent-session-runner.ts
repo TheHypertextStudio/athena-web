@@ -9,7 +9,7 @@ import {
 import { and, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
-import { driveSession } from '../agent/loop';
+import { driveSession, driveSessionAfterMessage } from '../agent/loop';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import { ensureDefaultAgent } from '../lib/default-agent';
 
@@ -257,12 +257,6 @@ async function applyReplyToSession(
     [...messages, { role: 'user', content: [{ type: 'text', text }] }],
     session.ownerUserId,
   );
-  // A session is never "done" from a reply's perspective: terminal statuses just mean
-  // idle, so a new message re-opens it for the loop (pending stays pending — first run
-  // gates entitlement there).
-  if (session.status !== 'pending' && session.status !== 'running') {
-    await db.update(agentSession).set({ status: 'running' }).where(eq(agentSession.id, sessionId));
-  }
 }
 
 /**
@@ -292,7 +286,10 @@ export async function postReplyAndResume(
   text: string,
 ): Promise<SessionRow> {
   await applyReplyToSession(orgId, sessionId, actorId, text);
-  return driveSession(orgId, sessionId);
+  // `driveSessionAfterMessage`, not `driveSession`: a reply must reopen a session that had
+  // gone idle, and admission is the only thing allowed to move that status now — nudging the
+  // row to `running` here first would reopen it outside the lease that guards the transition.
+  return driveSessionAfterMessage(orgId, sessionId);
 }
 
 /**

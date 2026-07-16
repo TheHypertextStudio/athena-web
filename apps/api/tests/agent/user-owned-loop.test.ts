@@ -451,6 +451,11 @@ describe('user-owned Athena loop', () => {
       .from(schema.sessionActivity)
       .where(eq(schema.sessionActivity.id, action!.id));
     expect(approved?.status).toBe('approved');
+    const [parked] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    expect(parked?.status).toBe('awaiting_approval');
     expect(
       await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
     ).toHaveLength(0);

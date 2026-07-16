@@ -182,9 +182,8 @@ export async function resolveAction(
  * `rejected` and a `type='rejected'`
  * audit_event is written (no apply). With
  * `scope='all_in_session'` every still-`proposed` action in the session is decided the
- * same way in the same transaction. Finally the session advances: to `running` once no
- * proposed action remains after an approval, or to `canceled` (with `endedAt`) when a
- * rejection leaves no proposed action remaining.
+ * same way in the same transaction. Session reopening is deliberately deferred to the
+ * durable approval-and-drive primitive so admission failure leaves it parked.
  *
  * @param orgId - The active organization id.
  * @param approverActorId - The approver's actor id (recorded in the audit metadata).
@@ -300,29 +299,6 @@ export async function decideActivity(
       }
     }
 
-    const remaining = await tx
-      .select({ id: sessionActivity.id })
-      .from(sessionActivity)
-      .where(
-        and(
-          eq(sessionActivity.sessionId, sessionId),
-          eq(sessionActivity.type, 'action'),
-          eq(sessionActivity.approvalStatus, 'proposed'),
-        ),
-      )
-      .limit(1);
-
-    if (remaining.length === 0) {
-      // Reject-and-continue: with a live loop, a rejection is FEEDBACK — the reconcile
-      // step feeds it to the model as an isError tool_result so the agent adapts. Only
-      // the session-level `/reject` shortcut ({@link resolveAction}) keeps cancel
-      // semantics.
-      await tx
-        .update(agentSession)
-        .set({ status: 'running' })
-        .where(eq(agentSession.id, sessionId));
-    }
-
     return decidedTarget;
   });
 }
@@ -333,8 +309,8 @@ export async function decideActivity(
  * @remarks
  * The batch counterpart of {@link decideActivity}: every still-`proposed` action of
  * the group (∩ `activityIds` when given) is decided in ONE transaction with the same
- * per-action audit rows, and the session returns to `running` once no proposed action
- * remains (reject-and-continue included). 404s when the group has no proposed member.
+ * per-action audit rows. The durable caller decides whether the remaining proposal set
+ * permits reopening after admission. 404s when the group has no proposed member.
  *
  * @param orgId - The active organization id.
  * @param approverActorId - The approver's actor id (recorded in the audit metadata).
@@ -417,36 +393,18 @@ export async function decideProposalGroup(
     }
     if (decided.length === 0) throw new NotFoundError('No proposed actions in the group');
 
-    const remaining = await tx
-      .select({ id: sessionActivity.id })
-      .from(sessionActivity)
-      .where(
-        and(
-          eq(sessionActivity.sessionId, sessionId),
-          eq(sessionActivity.type, 'action'),
-          eq(sessionActivity.approvalStatus, 'proposed'),
-        ),
-      )
-      .limit(1);
-    if (remaining.length === 0) {
-      await tx
-        .update(agentSession)
-        .set({ status: 'running' })
-        .where(eq(agentSession.id, sessionId));
-    }
-
     return decided;
   });
 }
 
 /**
- * Reply to an agent `elicitation` — append a human `response` and resume if waiting.
+ * Reply to an agent `elicitation` by appending one human `response`.
  *
  * @remarks
  * Mirrors contract §3.11 `POST /:sessionId/messages`: the referenced activity must be
  * an `elicitation` belonging to the visible registered or caller-owned session. A new response is
- * appended to the stream carrying the reply text, and when the session was
- * `awaiting_input` it is resumed to `running` so the agent can continue.
+ * appended to the stream carrying the reply text. Transcript-backed callers resume separately
+ * through durable generation admission; legacy callers may perform a status-only transition.
  *
  * @param orgId - The active organization id.
  * @param sessionId - The session that owns the elicitation.
@@ -505,13 +463,6 @@ export async function replyToElicitation(
       .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('activity insert returned no row');
-
-    if (session.status === 'awaiting_input') {
-      await tx
-        .update(agentSession)
-        .set({ status: 'running' })
-        .where(eq(agentSession.id, sessionId));
-    }
 
     return created;
   });

@@ -45,7 +45,7 @@ afterEach(() => {
 
 const J = { 'content-type': 'application/json' };
 
-async function seedOrg(): Promise<{ orgId: string; humanActorId: string }> {
+async function seedOrg(): Promise<{ userId: string; orgId: string; humanActorId: string }> {
   const slug = `ch-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
     .insert(schema.organization)
@@ -59,7 +59,7 @@ async function seedOrg(): Promise<{ orgId: string; humanActorId: string }> {
     .insert(schema.actor)
     .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
     .returning({ id: schema.actor.id });
-  return { orgId: org!.id, humanActorId: human!.id };
+  return { userId: u!.id, orgId: org!.id, humanActorId: human!.id };
 }
 
 function appFor(orgId: string, actorId: string) {
@@ -103,9 +103,17 @@ describe('the Athena chat thread', () => {
     const rows = await db
       .select()
       .from(schema.agentSession)
-      .where(eq(schema.agentSession.organizationId, seed.orgId));
+      .where(eq(schema.agentSession.ownerUserId, seed.userId));
     expect(rows).toHaveLength(1);
     expect(rows[0]?.kind).toBe('chat');
+    expect(rows[0]).toMatchObject({
+      executorKind: 'athena',
+      ownerUserId: seed.userId,
+      contextOrganizationId: seed.orgId,
+      organizationId: null,
+      agentId: null,
+    });
+    expect(await db.select().from(schema.agent)).toHaveLength(0);
   });
 
   it('answers a message and keeps the conversation across exchanges', async () => {
@@ -183,7 +191,7 @@ describe('the Athena chat thread', () => {
     const rows = await db
       .select()
       .from(schema.agentSession)
-      .where(eq(schema.agentSession.organizationId, seed.orgId));
+      .where(eq(schema.agentSession.ownerUserId, seed.userId));
     expect(rows).toHaveLength(2);
     const original2 = await app.request(`/${original.id}`, { method: 'GET' });
     expect(original2.status).toBe(200);

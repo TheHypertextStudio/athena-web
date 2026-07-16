@@ -12,7 +12,6 @@ import type { ProposalGroupOut } from '@docket/types';
 import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
-import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { getContainer as GetContainer } from '../../src/container';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
@@ -29,7 +28,6 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let agentRuntime!: typeof AgentRuntimeModule;
 let agentSessions!: typeof agentSessionsRouter;
-let ensureDefaultAgent!: typeof EnsureDefaultAgent;
 let getContainer!: typeof GetContainer;
 
 beforeAll(async () => {
@@ -38,7 +36,6 @@ beforeAll(async () => {
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentRuntime = await import('@docket/agent-runtime');
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
-  ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
   ({ getContainer } = await import('../../src/container'));
 });
 
@@ -54,7 +51,7 @@ interface Seed {
   humanActorId: string;
 }
 
-/** Seed an org + team + human + the default (grant-seeded) agent. */
+/** Seed an org + team + authorized human owner. */
 async function seedOrg(): Promise<Seed> {
   const slug = `pr-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
@@ -65,15 +62,38 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.user)
     .values({ name: 'Ada', email: `${slug}@e.com` })
     .returning({ id: schema.user.id });
+  const [role] = await db
+    .insert(schema.role)
+    .values({
+      organizationId: org!.id,
+      key: `owner-${slug}`,
+      name: 'Owner',
+      capabilities: ['view', 'contribute', 'assign'],
+    })
+    .returning({ id: schema.role.id });
   const [human] = await db
     .insert(schema.actor)
-    .values({ organizationId: org!.id, kind: 'human', displayName: 'Ada', userId: u!.id })
+    .values({
+      organizationId: org!.id,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: u!.id,
+      roleId: role!.id,
+    })
     .returning({ id: schema.actor.id });
+  await db.insert(schema.grant).values({
+    organizationId: org!.id,
+    subjectKind: 'role',
+    subjectId: role!.id,
+    resourceKind: 'organization',
+    resourceId: org!.id,
+    capabilities: ['view', 'contribute', 'assign'],
+    effect: 'allow',
+  });
   const [team] = await db
     .insert(schema.team)
     .values({ organizationId: org!.id, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
-  await ensureDefaultAgent(org!.id, human!.id);
   return { orgId: org!.id, teamId: team!.id, humanActorId: human!.id };
 }
 

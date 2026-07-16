@@ -28,46 +28,54 @@ import {
   activityParam,
   idParam,
   listQuery,
-  loadSession,
   toActivityOut,
   toSessionOut,
   transitionLifecycle,
   loadActivity,
 } from './agent-session-helpers';
-import { createAndRunFromPrompt, runSession } from './agent-session-runner';
+import { createAndRunFromPrompt, ownerUserIdForActor, runSession } from './agent-session-runner';
 import { replyToElicitation, resolveAction } from './agent-session-approval';
 import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
-import { ensureDefaultAgent } from '../lib/default-agent';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 
 /**
- * Get — or lazily create — the org's ONE persistent chat session (`kind: 'chat'`),
- * bound to the default agent. The newest chat session wins so repeated calls converge.
+ * Get — or lazily create — the user's persistent Athena chat session (`kind: 'chat'`).
+ * The newest personal chat wins so repeated contextual workspace calls converge.
  */
 async function getOrCreateChatSession(
   orgId: string,
   actorId: string,
 ): Promise<typeof agentSession.$inferSelect> {
-  const agent = await ensureDefaultAgent(orgId, actorId);
+  const ownerUserId = await ownerUserIdForActor(orgId, actorId);
   const existing = await db
     .select()
     .from(agentSession)
     .where(
       and(
-        eq(agentSession.organizationId, orgId),
-        eq(agentSession.agentId, agent.id),
+        eq(agentSession.executorKind, 'athena'),
+        eq(agentSession.ownerUserId, ownerUserId),
         eq(agentSession.kind, 'chat'),
       ),
     )
     .orderBy(desc(agentSession.createdAt))
     .limit(1);
-  if (existing[0]) return existing[0];
+  if (existing[0]) {
+    if (existing[0].contextOrganizationId === orgId) return existing[0];
+    const [focused] = await db
+      .update(agentSession)
+      .set({ contextOrganizationId: orgId })
+      .where(eq(agentSession.id, existing[0].id))
+      .returning();
+    if (!focused) throw new Error('chat session update returned no row');
+    return focused;
+  }
   const [created] = await db
     .insert(agentSession)
     .values({
-      organizationId: orgId,
-      agentId: agent.id,
+      executorKind: 'athena',
+      ownerUserId,
+      contextOrganizationId: orgId,
       kind: 'chat',
       trigger: 'delegation',
       status: 'pending',
@@ -77,6 +85,23 @@ async function getOrCreateChatSession(
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!created) throw new Error('chat session insert returned no row');
   return created;
+}
+
+/** Load a registered session in its workspace or personal Athena work owned by the caller. */
+async function loadVisibleSession(
+  orgId: string,
+  actorId: string,
+  sessionId: string,
+): Promise<typeof agentSession.$inferSelect> {
+  const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
+  const session = rows[0];
+  if (!session) throw new NotFoundError('Session not found');
+  const visible =
+    session.executorKind === 'registered_agent'
+      ? session.organizationId === orgId
+      : session.ownerUserId === (await ownerUserIdForActor(orgId, actorId));
+  if (!visible) throw new NotFoundError('Session not found');
+  return session;
 }
 
 /** SSE live-tail poll cadence (DB-backed, restart-safe). */
@@ -122,9 +147,9 @@ const agentSessions = new Hono<AppEnv>()
       response: AgentSessionOut,
       description: `Create and run an agent session from a freeform \`prompt\`, returning the **settled** {@link AgentSessionOut} (the call runs the session synchronously to its first resting point, so the returned \`status\` is already past \`running\` — typically \`awaiting_approval\` or \`completed\`). This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
 
-Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this org, else 404 \`Agent not found\`) or, when omitted, to the org's **default agent**, which is lazily created on first use so escalation works with zero agent pre-setup. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\` (a human delegating planning), and the caller becomes the session \`initiatorId\`.
+Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this workspace, else 404 \`Agent not found\`) or, when omitted, to the caller's personal Athena executor. Athena stores the caller's user id as owner and this workspace only as context; no workspace agent or grant is created. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\`, and the caller becomes the session \`initiatorId\`.
 
-Side effects: dispatches the agent against the runtime; each yielded activity (thought/action/response/elicitation/error) is persisted as a {@link SessionActivityOut} row and streams live over \`GET /:id/stream\`. The agent acts as its own Actor under the same capability checks as a human, plus an orthogonal **approval gate**: a proposed \`action\` it emits is stamped \`proposed\` and parks the session in \`awaiting_approval\` until a reviewer approves/rejects it. Requires \`contribute\` (the same bar as creating a task directly). Related: \`POST /:id/run\` (re-run an existing session), the activity approve/reject/reply routes, and the pause/resume/cancel lifecycle routes.`,
+Side effects: dispatches the executor against the runtime; each yielded activity is persisted and streams live over \`GET /:id/stream\`. Athena resolves the owner's current human Actor and permissions on every Docket call; a registered agent retains its own Actor. The approval gate may delay a call but never grants missing authority. Requires \`contribute\`. Related: \`POST /:id/run\`, the activity approve/reject/reply routes, and the pause/resume/cancel lifecycle routes.`,
     }),
     zJson(SessionFromPromptBody),
     async (c) => {
@@ -139,9 +164,9 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
     '/chat',
     apiDoc({
       tag: 'Agents',
-      summary: "Get (or create) the org's Athena chat thread",
+      summary: "Get (or create) the user's Athena chat thread",
       response: AgentSessionDetailOut,
-      description: `Return the organization's ONE persistent conversational session (\`kind: 'chat'\`) with its full activity stream — creating it (bound to the lazily-resolved default agent) on first use, so the chat door works with zero setup. The chat thread is the same session substrate as delegated jobs — same loop, transcript, toolbox, and approval gate — rendered conversationally; a job spawned from chat is just another session. Send messages via \`POST /chat/messages\`. A read (plus the idempotent lazy create); org membership suffices.`,
+      description: `Return the caller's persistent personal Athena session (\`kind: 'chat'\`) with its full activity stream, creating it on first use and focusing it on the current workspace context. The thread belongs to the user and uses the same loop, transcript, toolbox, and approval gate as delegated work. No workspace agent or grant is created. This workspace route is a temporary compatibility door pending the personal Athena API.`,
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
@@ -175,15 +200,18 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
 
       await db.insert(sessionActivity).values({
         sessionId: session.id,
-        organizationId: orgId,
+        organizationId: session.executorKind === 'athena' ? null : orgId,
         type: 'response',
         body: { text: body.body, author: 'user' },
       });
       const messages = await loadTranscript(db, session.id);
-      await saveTranscript(db, session.id, orgId, [
-        ...messages,
-        { role: 'user', content: [{ type: 'text', text: body.body }] },
-      ]);
+      await saveTranscript(
+        db,
+        session.id,
+        session.executorKind === 'athena' ? null : orgId,
+        [...messages, { role: 'user', content: [{ type: 'text', text: body.body }] }],
+        session.ownerUserId,
+      );
       // A chat thread is never "done": terminal statuses just mean idle, so a new
       // message re-opens it for the loop (pending stays pending — first run gates
       // entitlement there).
@@ -218,12 +246,13 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const agent = await ensureDefaultAgent(orgId, actorId);
+      const ownerUserId = await ownerUserIdForActor(orgId, actorId);
       const [created] = await db
         .insert(agentSession)
         .values({
-          organizationId: orgId,
-          agentId: agent.id,
+          executorKind: 'athena',
+          ownerUserId,
+          contextOrganizationId: orgId,
           kind: 'chat',
           trigger: 'delegation',
           status: 'pending',
@@ -245,15 +274,9 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const rows = await db
-        .select()
-        .from(agentSession)
-        .where(and(eq(agentSession.id, id), eq(agentSession.organizationId, orgId)))
-        .limit(1);
-      const row = rows[0];
-      if (!row) throw new NotFoundError('Session not found');
+      const row = await loadVisibleSession(orgId, actorId, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -298,14 +321,9 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const sessionRows = await db
-        .select()
-        .from(agentSession)
-        .where(and(eq(agentSession.id, id), eq(agentSession.organizationId, orgId)))
-        .limit(1);
-      if (!sessionRows[0]) throw new NotFoundError('Session not found');
+      const session = await loadVisibleSession(orgId, actorId, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -333,7 +351,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
           );
           lastSeen = replay.at(-1)?.id ?? lastSeen;
         }
-        let status = sessionRows[0]?.status ?? 'completed';
+        let status = session.status;
         let sincePing = 0;
         while (!terminal.has(status) && !stream.aborted) {
           await new Promise((resolve) => setTimeout(resolve, STREAM_POLL_MS));
@@ -379,9 +397,9 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadSession(orgId, id);
+      await loadVisibleSession(orgId, actorId, id);
       const groups = await listProposalGroups(orgId, id);
       return ok(c, z.array(ProposalGroupOut), groups);
     },
@@ -394,7 +412,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       summary: 'Approve a proposal group (batch)',
       capability: 'assign',
       response: AgentSessionOut,
-      description: `Approve every still-\`proposed\` action of one proposal group — or the subset named by \`activityIds\` ("approve selected") — in one transaction, then EXECUTE the approved tool calls as the agent's own Actor and resume the session so the agent hears the results. This is the batch gate behind "Approve all N" on an import: the group is one assistant turn's related creations. Per-action \`approved\` audit rows are written (approver recorded), execution stamps each action \`applied\` with its real result, and the returned {@link AgentSessionOut} reflects the session AFTER any resume (typically \`completed\` or paused on the next gate). Requires \`assign\` (the approval bar). 404 when the group has no proposed member.`,
+      description: `Approve every still-\`proposed\` action of one proposal group — or the subset named by \`activityIds\` — then execute each stored tool call through the persisted executor and resume the session. Athena re-resolves its owner's current human Actor and permissions for every call; registered agents retain their own Actor. Approval never supplies missing authority. Execution stores the real result and returns the session after any resume. Requires \`assign\` on this compatibility route.`,
     }),
     zParam(groupParam),
     zJson(ProposalGroupDecision.optional()),
@@ -470,9 +488,9 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadSession(orgId, id);
+      await loadVisibleSession(orgId, actorId, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -564,7 +582,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const replySession = await db
         .select({ status: agentSession.status })
         .from(agentSession)
-        .where(and(eq(agentSession.id, id), eq(agentSession.organizationId, orgId)))
+        .where(eq(agentSession.id, id))
         .limit(1);
       if (replySession[0]?.status === 'running' && (await loadTranscript(db, id)).length > 0) {
         await driveSession(orgId, id);

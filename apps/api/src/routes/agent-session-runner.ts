@@ -1,9 +1,8 @@
-import { agent, agentSession, db, sessionActivity } from '@docket/db';
+import { actor, agent, agentSession, db, sessionActivity } from '@docket/db';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import { driveSession } from '../agent/loop';
-import { ensureDefaultAgent } from '../lib/default-agent';
 
 import type { SessionRow } from './agent-session-helpers';
 
@@ -12,8 +11,8 @@ import type { SessionRow } from './agent-session-helpers';
  *
  * @remarks
  * The UI-callable "ask Athena to plan" escalation (DECISION: hybrid prompt→Athena). The
- * session binds to the supplied `agentId` (validated in-org) or — when omitted — the
- * org's lazily-resolved default agent, so escalation works with no agent pre-setup. The
+ * session binds to the supplied registered `agentId` (validated in-org) or — when omitted — to
+ * user-owned Athena using the caller's persisted Better Auth user id. The
  * prompt is persisted as the session's first `response` activity (there is no schema
  * brief column) so {@link runSession} threads it through as the runtime `task` brief;
  * the session then runs and settles like any other. Trigger is `delegation` (a human
@@ -22,7 +21,7 @@ import type { SessionRow } from './agent-session-helpers';
  * @param orgId - The active organization id.
  * @param actorId - The caller's actor id (the session initiator + prompt author).
  * @param prompt - The freeform brief the agent should plan against.
- * @param agentId - An explicit agent to bind to; the default agent is used when omitted.
+ * @param agentId - An explicit registered agent; omission selects user-owned Athena.
  * @returns the settled session row.
  * @throws {NotFoundError} When an explicit `agentId` is not a registered agent in the org.
  */
@@ -32,7 +31,8 @@ export async function createAndRunFromPrompt(
   prompt: string,
   agentId?: string,
 ): Promise<SessionRow> {
-  let boundAgentId: string;
+  let boundAgentId: string | null = null;
+  let ownerUserId: string | null = null;
   if (agentId !== undefined) {
     const agentRows = await db
       .select({ id: agent.id })
@@ -42,19 +42,31 @@ export async function createAndRunFromPrompt(
     if (!agentRows[0]) throw new NotFoundError('Agent not found');
     boundAgentId = agentRows[0].id;
   } else {
-    boundAgentId = (await ensureDefaultAgent(orgId, actorId)).id;
+    ownerUserId = await ownerUserIdForActor(orgId, actorId);
   }
 
   const sessionId = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(agentSession)
-      .values({
-        organizationId: orgId,
-        agentId: boundAgentId,
-        trigger: 'delegation',
-        status: 'pending',
-        initiatorId: actorId,
-      })
+      .values(
+        ownerUserId
+          ? {
+              executorKind: 'athena',
+              ownerUserId,
+              contextOrganizationId: orgId,
+              trigger: 'delegation',
+              status: 'pending',
+              initiatorId: actorId,
+            }
+          : {
+              executorKind: 'registered_agent',
+              organizationId: orgId,
+              agentId: boundAgentId ?? missingRegisteredAgent(),
+              trigger: 'delegation',
+              status: 'pending',
+              initiatorId: actorId,
+            },
+      )
       .returning({ id: agentSession.id });
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('session insert returned no row');
@@ -63,7 +75,7 @@ export async function createAndRunFromPrompt(
     // to `runSession` (a `response` is a human-authored stream entry, like a reply).
     await tx.insert(sessionActivity).values({
       sessionId: created.id,
-      organizationId: orgId,
+      organizationId: ownerUserId ? null : orgId,
       type: 'response',
       body: { text: prompt },
     });
@@ -71,6 +83,37 @@ export async function createAndRunFromPrompt(
   });
 
   return runSession(orgId, sessionId);
+}
+
+/** Defensive branch for a registered-agent insert whose validated id vanished. */
+function missingRegisteredAgent(): never {
+  throw new Error('Registered-agent session is missing its agent');
+}
+
+/**
+ * Resolve the user behind an active human Actor in the requested workspace.
+ *
+ * @param orgId - The current workspace context.
+ * @param actorId - The authenticated human Actor in that workspace.
+ * @returns the Better Auth user id persisted as Athena's owner.
+ * @throws {NotFoundError} When the Actor is absent, inactive, non-human, or not user-backed.
+ */
+export async function ownerUserIdForActor(orgId: string, actorId: string): Promise<string> {
+  const rows = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.id, actorId),
+        eq(actor.organizationId, orgId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+      ),
+    )
+    .limit(1);
+  const ownerUserId = rows[0]?.userId;
+  if (!ownerUserId) throw new NotFoundError('User not found');
+  return ownerUserId;
 }
 
 /**
@@ -96,13 +139,14 @@ export async function createSessionFromObservation(
   trigger: 'mention' | 'assignment',
   prompt: string,
 ): Promise<string | null> {
-  const agentId = (await ensureDefaultAgent(orgId, initiatorActorId)).id;
+  const ownerUserId = await ownerUserIdForActor(orgId, initiatorActorId);
   return db.transaction(async (tx) => {
     const [created] = await tx
       .insert(agentSession)
       .values({
-        organizationId: orgId,
-        agentId,
+        executorKind: 'athena',
+        ownerUserId,
+        contextOrganizationId: orgId,
         trigger,
         status: 'pending',
         initiatorId: initiatorActorId,
@@ -116,7 +160,7 @@ export async function createSessionFromObservation(
     if (!created) return null;
     await tx.insert(sessionActivity).values({
       sessionId: created.id,
-      organizationId: orgId,
+      organizationId: null,
       type: 'response',
       body: { text: prompt },
     });

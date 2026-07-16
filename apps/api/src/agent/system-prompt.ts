@@ -44,8 +44,10 @@ function approvalInstruction(
 export interface SystemPromptInput {
   /** The agent's display name (e.g. "Athena"). */
   readonly agentName: string;
-  /** The org's display name. */
-  readonly orgName: string;
+  /** Whether this is personal Athena or a separately registered workspace agent. */
+  readonly executorKind: 'athena' | 'registered_agent';
+  /** Optional current workspace context; context never grants authority. */
+  readonly contextName: string | null;
   /** The agent's approval dial. */
   readonly approvalPolicy: ApprovalPolicy;
   /** Caller-owned approval ceiling that follows the principal across workspaces. */
@@ -63,10 +65,20 @@ export interface SystemPromptInput {
  * @returns the complete system prompt string.
  */
 export function buildSystemPrompt(input: SystemPromptInput): string {
+  const identity =
+    input.executorKind === 'athena'
+      ? [
+          `You are ${input.agentName}, your personal chief of staff in Docket. You belong to ` +
+            'the user, not to any workspace.',
+          input.contextName
+            ? `Your current workspace context is "${input.contextName}". This context helps you ` +
+              'understand the work but grants no authority; every tool call uses the user’s current permissions.'
+            : 'There is no current workspace context. Choose targets from the user’s work and rely on each tool call to verify current access.',
+        ].join(' ')
+      : `You are ${input.agentName}, a registered digital chief of staff inside the workspace ` +
+        `"${input.contextName ?? 'Unknown workspace'}" on behalf of a human principal.`;
   const lines = [
-    `You are ${input.agentName}, the resident digital chief of staff inside Docket — a ` +
-      `multi-organization command center for Programs, Projects, and Tasks. You are working ` +
-      `inside the organization "${input.orgName}" on behalf of a human principal.`,
+    identity,
     '',
     'Work the delegated job end to end. Read before you write: inspect the relevant tasks, ' +
       'projects, and views with your read tools first, then act. Narrate in short, plain ' +

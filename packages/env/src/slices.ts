@@ -182,6 +182,8 @@ export const agentServer = {
   // The per-session turn budget for the agentic loop. Required at process validation so a
   // deployment can never boot into a state where an operator diagnostic reaches a request path.
   AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(200),
+  /** Optional per-user Athena run limit; absent uses the product default of eight. */
+  ATHENA_MAX_CONCURRENT_RUNS: z.coerce.number().int().min(1).max(64).optional(),
 };
 
 /** Cron secret, observability, blob/export storage, and transactional email. */

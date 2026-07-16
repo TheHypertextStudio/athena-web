@@ -17,7 +17,7 @@
   rebuild the Athena experience as an ambient dock and expandable personal operating workspace.
 - **Subtasks**:
   - [x] Add user-owned executor, activity, transcript, run, and migration contracts.
-  - [ ] Execute Docket tools through the owner's live user permission context.
+  - [x] Execute Docket tools through the owner's live user permission context.
   - [ ] Add private personal Athena APIs, connections, assignments, and approval semantics.
   - [ ] Build the shared workbench, ambient dock, and full `/athena` workspace.
   - [ ] Wire contextual entry points and validate the real application with Playwright.
@@ -48,6 +48,15 @@
      the time-attribution query executor-aware without weakening the exclusive-attribution checks.
   4. Replay focused migration/schema/API tests, run every repository validation gate, self-review,
      and commit the review fix independently without amending or rebasing.
+- **Plan (user-principal authorization)**:
+  1. Add red MCP and loop tests for persisted owner restoration, current Actor/grant resolution,
+     membership suspension, approval-time reauthorization, audit origin, and per-user admission.
+  2. Add the internal first-party user context and discriminate the toolbox, loop, approvals,
+     prompt, transcript/activity attribution, and registered-agent compatibility by executor kind.
+  3. Stop default-agent provisioning from prompt, chat, delegation, proactive, and runner paths;
+     keep explicit registered-agent execution unchanged and defer personal connector migration.
+  4. Run focused and repository validation, document the authorization invariant, self-review, and
+     commit the runtime slice without rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -59,6 +68,17 @@
   connectionless Athena jobs with a human initiating Actor to that Actor's user; shared chats,
   workspaces with multiple matching Athena agents, jobs without an attributable initiator, and all
   other registered-agent history remain unchanged.
+- **Authorization Slice**: Athena now opens the real in-process MCP server as the persisted owner
+  user. Each Docket call resolves that user's current active human Actor and grant cascade in the
+  target workspace, so grant removal, grant restoration, and membership suspension take effect on
+  the next call, including approved and resumed work. Successful tool audit events use that human
+  Actor and carry `executionOrigin: athena`, `athenaSessionId`, and `requestedByUserId`; no Athena
+  Actor participates. Omitted-agent prompt, personal chat, and proactive creation now persist an
+  Athena executor and create no default agent or grant, while an explicit `agentId` retains the
+  registered-agent path. Personal chat transcripts and neutral progress are user-owned;
+  workspace-targeted actions retain their actual workspace attribution. Athena run admission is
+  per owner (eight by default, configurable from one through 64). Workspace-owned remote MCP
+  connections remain available only to registered agents until the personal connection migration.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, focused DTO/schema/migration/OpenAPI/time tests, and this work log.
@@ -72,6 +92,15 @@
   reports no schema changes against the edited snapshot. Root `pnpm typecheck` and `pnpm lint` pass
   17/17 tasks, root `pnpm test` passes 17/17 tasks including API 1,259/1,259, and root `pnpm build`
   passes 3/3 tasks.
+- **Authorization Validation**: Red MCP tests failed because `internalUserContext` and a
+  user-executor toolbox did not exist; red loop tests failed at the org-owned session lookup; red
+  prompt, chat, and concurrency tests exposed the resident-workspace prompt, default-agent
+  provisioning, and missing owner admission limit. The focused green regression passes nine API
+  files and 67 tests across both executor kinds, MCP authorization, direct/approved/resumed work,
+  chat, proposals/SSE, prompt creation, review routes, and audit origin. Environment tests pass
+  45/45. Full API Vitest runs exit successfully. `git diff --check`, root `pnpm typecheck`, root
+  `pnpm lint`, root `pnpm test`, and root `pnpm build` all pass. The only recurring diagnostic is
+  the repository engine warning for local Node 24.14.0 versus the declared minimum 24.15.0.
 - **Retrospective**: Preserving legacy history requires a deliberately narrow positive migration,
   including proof that a workspace has exactly one matching legacy executor, not a blanket rename
   of every agent named Athena. Encoding exclusive attribution in both database checks and the
@@ -82,6 +111,12 @@
   Keeping the registered-agent runtime guards in place lets the persistence contract land
   independently; the next slice can change authorization against explicit `executorKind` branches
   rather than nullable-field inference.
+  The runtime slice confirmed that opening one user-principal toolbox is safe only because Actor
+  and grant resolution remains inside each MCP tool call; caching a workspace Actor would have
+  made approval resumes retain revoked authority. Compatibility org routes can temporarily open
+  personal work when they verify the owner, but the new `/v1/me/athena` surface remains the right
+  permanent privacy boundary for the next slice. Keeping workspace MCP rows out of Athena's
+  toolbox avoids accidentally sharing credentials before user-owned connection migration exists.
 
 ---
 

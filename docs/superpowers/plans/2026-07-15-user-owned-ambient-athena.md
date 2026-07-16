@@ -27,14 +27,15 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 
 ---
 
-### Task 1: User-owned execution contracts and migration
+### Task 1: User-owned execution contracts and fresh schema
 
-- [ ] Write failing type and schema tests for executor discrimination, owner fields, optional context,
+- [x] Write failing type and schema tests for executor discrimination, owner fields, optional context,
       activity attribution, transcript/run ownership, and database constraints.
-- [ ] Add the Drizzle migration and update all session creation/read helpers without changing runtime
+- [x] Add the Drizzle migration and update all session creation/read helpers without changing runtime
       authorization yet.
-- [ ] Add migration tests for unambiguous ownership, legacy chat preservation, and ambiguous history.
-- [ ] Run focused type/database tests and commit the green slice.
+- [x] Require existing databases to be reset. Keep the migration free of ownership inference and
+      verify the complete migration chain creates the fresh executor schema.
+- [x] Run focused type/database tests and commit the green slice.
 
 ### Task 2: User-principal toolbox and authorization
 
@@ -52,14 +53,15 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 - [ ] Add `/v1/me/athena` chat, work, session, message, proposal, approval, lifecycle, and SSE routes.
 - [ ] Make approval owner-scoped and rely on underlying tool authorization instead of unrelated
       `assign` permission.
-- [ ] Preserve legacy org session routes for registered agents and temporary compatibility.
+- [ ] Preserve organization session routes for registered agents and temporary route compatibility.
 - [ ] Run focused API tests and commit the green slice.
 
 ### Task 4: Personal MCP connections and delegation
 
 - [ ] Write failing tests proving personal connectors are reusable across the owner's workspaces and
       invisible to other users.
-- [ ] Add user ownership and safe migration/reconnection behavior for Athena MCP connections.
+- [ ] Add user ownership for new Athena MCP connections; existing database credentials are discarded
+      by the required reset and users reconnect their personal services.
 - [ ] Load remote tools by session owner and keep operational workspace integrations separate.
 - [ ] Add user-owned Athena assignments for initiatives, projects, and tasks; recheck access on each
       triggered run and pause assignments after access loss.

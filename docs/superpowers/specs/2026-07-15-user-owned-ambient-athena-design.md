@@ -64,12 +64,16 @@ Applied Docket actions use the owner's Actor as the authorization and audit Acto
 records `executionOrigin: 'athena'`, `athenaSessionId`, and `requestedByUserId`; product surfaces
 render this as `Athena, for you`.
 
-## Compatibility and migration
+## Database rollout
 
-Existing Athena sessions with an unambiguous human initiator may migrate to that initiator's user.
-Workspace-shared chats are preserved as read-only legacy history and never merged into a new
-personal chat. Ambiguous rows remain legacy registered-agent history. Historical Athena agent rows
-remain while referenced, but no new default Athena Actor, agent registration, or grant is created.
+This ownership change requires a fresh database. Development and rollout environments must reset
+their existing databases and replay the full migration chain; this implementation does not migrate
+or preserve legacy Athena sessions, chats, runs, transcripts, agent rows, assignments, or connector
+credentials.
 
-Existing remote MCP connections migrate to the creating user only when ownership is provable.
-Ambiguous connections require reconnection rather than silent credential sharing.
+Local environments use `pnpm db:reset`; deployed environments provision an empty database before
+replaying migrations.
+
+No ownership is inferred from an initiator, agent name, workspace, or historical connection. Users
+connect personal services again after reset, ensuring credentials are never guessed or silently
+shared. Migration `0041` defines only the fresh executor schema and its constraints.

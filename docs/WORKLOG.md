@@ -154,6 +154,15 @@
   4. Run focused red/green checks, API and root validation gates, self-review transaction and audit
      invariants, update this worklog with the retrospective, and commit the security fix atomically
      without amending, rebasing, merging, or pushing.
+- **Plan (platform and durability integration)**:
+  1. Rebase the reviewed private personal API commits onto the durable-generation branch, retain
+     both work plans, and reconcile per-target authorization with conditional decision claims.
+  2. Add red admission regressions for message, lifecycle-resume, and approval paths that currently
+     reopen sessions before the owner ceiling and same-session lease are claimed.
+  3. Route message, reply, lifecycle, session-level approval, and batch approval execution through
+     entry-specific durable drive primitives that transition state only inside the claim transaction.
+  4. Run focused durability, personal API, owner-privacy, and proposal tests plus API and root gates;
+     self-review the linear history and commit the integration fix without merging or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -325,6 +334,27 @@
   (17/17 tasks, plus 46/46 tooling tests), and build (3/3 tasks). `git diff --check` passes. The
   only recurring diagnostic is the repository engine warning for local Node 24.14.0 versus the
   declared minimum 24.15.0.
+- **Platform and Durability Integration**: Rebased the three personal API commits onto the two
+  durable-generation commits while retaining both WORKLOG plans. Proposal decisions preauthorize
+  every selected target, conditionally claim only still-proposed rows, and audit only winning
+  decisions. Red regressions proved message and approval failures left sessions incorrectly
+  `running`, while explicit resume bypassed admission entirely. Entry-specific generation claims now
+  validate the legal source state and transition to `running` only after the same-session lease and
+  owner ceiling succeed. Message, reply, lifecycle, single/group approval, and latest-action approval
+  all use those durable primitives; partial approvals execute selected work without un-parking the
+  remaining review queue. Focused durability, personal, privacy, proposal, and review coverage passes
+  84/84 tests, and API typecheck and lint pass. The integration also aligned the lease-race test seam
+  with the exported generation-effect type so the full API compiler sees every fenced boundary.
+  Final root validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks, including
+  tooling 46/46, API 147 files and 1,307/1,307 tests, and database 70/70), and build (3/3 tasks).
+  `git diff --check` passes. The only recurring diagnostic is local Node 24.14.0 versus the declared
+  minimum 24.15.0.
+- **Platform and Durability Retrospective**: A route-level status flip is an admission bypass even
+  when the next statement calls the durable loop, because a rejected claim leaves externally visible
+  state reopened. Legal source states therefore belong to the generation claim API, and the claim
+  must own both admission and the `running` transition. Approval decisions remain independently
+  durable: an admitted worker may execute only selected approved rows while the session stays parked
+  for the rest of its review queue.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

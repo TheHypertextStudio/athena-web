@@ -36,6 +36,10 @@ export interface RunGenerationOptions {
   readonly leaseDurationMs?: number;
   /** Keep a partially-approved session parked while executing only the selected actions. */
   readonly resumeSession?: boolean;
+  /** Session states this specific execution entry point may claim atomically. */
+  readonly runnableStatuses?: readonly SessionRow['status'][];
+  /** Clear a prior terminal timestamp only after admission succeeds. */
+  readonly clearEndedAt?: boolean;
 }
 
 /** Transaction handle supplied after a generation lease has been locked and revalidated. */
@@ -73,6 +77,11 @@ export async function claimRunGeneration(
   const now = options.now ?? new Date();
   const leaseDurationMs = options.leaseDurationMs ?? DEFAULT_RUN_LEASE_MS;
   const resumeSession = options.resumeSession ?? true;
+  const runnableStatuses =
+    options.runnableStatuses ??
+    (resumeSession
+      ? (['pending', 'running'] as const)
+      : (['pending', 'running', 'awaiting_approval'] as const));
   const token = genId();
 
   return db.transaction(async (tx) => {
@@ -94,11 +103,7 @@ export async function claimRunGeneration(
     if (current.executorKind !== session.executorKind) {
       throw new ConflictError('Session executor changed during admission');
     }
-    if (
-      current.status !== 'pending' &&
-      current.status !== 'running' &&
-      !(current.status === 'awaiting_approval' && !resumeSession)
-    ) {
+    if (!runnableStatuses.includes(current.status)) {
       throw new ConflictError('Session is not in a runnable state');
     }
 
@@ -177,7 +182,11 @@ export async function claimRunGeneration(
     if (resumeSession) {
       await tx
         .update(agentSession)
-        .set({ status: 'running', startedAt: current.startedAt ?? now })
+        .set({
+          status: 'running',
+          startedAt: current.startedAt ?? now,
+          ...(options.clearEndedAt ? { endedAt: null } : {}),
+        })
         .where(eq(agentSession.id, current.id));
     }
 

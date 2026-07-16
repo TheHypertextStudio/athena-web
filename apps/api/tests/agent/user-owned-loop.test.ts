@@ -11,6 +11,7 @@ import type {
   approveAndResume as ApproveAndResume,
   driveSession as DriveSession,
   executeApprovedActions as ExecuteApprovedActions,
+  GenerationEffectKind,
   LoopDeps,
 } from '../../src/agent/loop';
 import type * as ToolboxModule from '../../src/agent/toolbox';
@@ -191,13 +192,6 @@ function blockingTurnRuntime(entered: Deferred<number>, release: Promise<void>):
   };
   return { turnRuntime };
 }
-
-type GenerationEffectKind =
-  | 'thought-activity'
-  | 'response-activity'
-  | 'assistant-turn'
-  | 'action-claim'
-  | 'action-result';
 
 interface GenerationRaceDeps extends LoopDeps {
   readonly beforeGenerationEffect: (kind: GenerationEffectKind) => Promise<void>;
@@ -457,6 +451,11 @@ describe('user-owned Athena loop', () => {
       .from(schema.sessionActivity)
       .where(eq(schema.sessionActivity.id, action!.id));
     expect(approved?.status).toBe('approved');
+    const [parked] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    expect(parked?.status).toBe('awaiting_approval');
     expect(
       await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
     ).toHaveLength(0);
@@ -654,7 +653,7 @@ describe('user-owned Athena loop', () => {
         driveSession(seed.orgId, seed.sessionId, {
           turnRuntime,
           ...rotateLeaseBefore(seed, effectKind, `${activityType}-takeover`),
-        } as GenerationRaceDeps),
+        }),
       ).rejects.toThrow(/lease was lost/i);
 
       const stale = await db
@@ -695,7 +694,7 @@ describe('user-owned Athena loop', () => {
       driveSession(seed.orgId, seed.sessionId, {
         turnRuntime,
         ...rotateLeaseBefore(seed, 'assistant-turn', 'turn-takeover'),
-      } as GenerationRaceDeps),
+      }),
     ).rejects.toThrow(/lease was lost/i);
 
     const actions = await db

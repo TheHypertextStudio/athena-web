@@ -32,7 +32,7 @@ import type { SessionActivityBody } from '@docket/db';
 import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
 import { HubPreferences } from '@docket/types';
 import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } from '@docket/types';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertAgentSessionsEntitled } from '../billing/entitlement';
 import { getContainer } from '../container';
@@ -341,24 +341,18 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
   return { kind: 'await_approval' };
 }
 
-/**
- * Drive one agent session forward until it settles.
- *
- * @remarks
- * Re-entrant (see module remarks). Callable when the session is `pending` (first run)
- * or `running` (resumed by an approval/reply); any other state conflicts.
- *
- * @param orgId - The active organization id.
- * @param sessionId - The session to drive.
- * @param deps - Injectable turn runtime (tests script it).
- * @returns the settled session row.
- * @throws {NotFoundError} When the session or its agent is not found in the org.
- * @throws {ConflictError} When the session is not in a runnable state.
- */
-export async function driveSession(
+/** Admission policy for one durable loop entry point. */
+interface DriveAdmission {
+  readonly runnableStatuses: readonly SessionRow['status'][];
+  readonly clearEndedAt?: boolean;
+}
+
+/** Drive a session only after its entry-point states win durable admission atomically. */
+async function driveSessionWithAdmission(
   orgId: string,
   sessionId: string,
-  deps: LoopDeps = {},
+  deps: LoopDeps,
+  admission: DriveAdmission,
 ): Promise<SessionRow> {
   const sessionRows = await db
     .select()
@@ -370,7 +364,7 @@ export async function driveSession(
   if (session.executorKind === 'registered_agent' && session.organizationId !== orgId) {
     throw new NotFoundError('Session not found');
   }
-  if (session.status !== 'pending' && session.status !== 'running') {
+  if (!admission.runnableStatuses.includes(session.status)) {
     throw new ConflictError('Session is not in a runnable state');
   }
   const executor = toolboxExecutor(session);
@@ -421,7 +415,11 @@ export async function driveSession(
     if (contextOrganizationId) await assertAgentSessionsEntitled(contextOrganizationId);
   }
 
-  let lease = await claimRunGeneration(session, { leaseDurationMs: deps.leaseDurationMs });
+  let lease = await claimRunGeneration(session, {
+    leaseDurationMs: deps.leaseDurationMs,
+    runnableStatuses: admission.runnableStatuses,
+    clearEndedAt: admission.clearEndedAt,
+  });
   let heartbeat: RunGenerationHeartbeat = startRunGenerationHeartbeat(
     lease,
     deps.heartbeatIntervalMs,
@@ -681,6 +679,46 @@ export async function driveSession(
   }
 }
 
+/**
+ * Drive one already-runnable agent session forward until it settles.
+ *
+ * @remarks
+ * Initial and recovered runs enter only from `pending` or `running`. Message, reply,
+ * approval, and explicit-resume entry points use the narrower durable primitives below.
+ */
+export async function driveSession(
+  orgId: string,
+  sessionId: string,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  return driveSessionWithAdmission(orgId, sessionId, deps, {
+    runnableStatuses: ['pending', 'running'],
+  });
+}
+
+/** Reopen eligible conversational work only after its durable generation claim succeeds. */
+export async function driveSessionAfterMessage(
+  orgId: string,
+  sessionId: string,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  return driveSessionWithAdmission(orgId, sessionId, deps, {
+    runnableStatuses: ['pending', 'running', 'awaiting_input', 'completed', 'failed', 'canceled'],
+    clearEndedAt: true,
+  });
+}
+
+/** Resume awaiting-input execution through the same lease and owner-admission transaction. */
+export async function resumeSessionExecution(
+  orgId: string,
+  sessionId: string,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  return driveSessionWithAdmission(orgId, sessionId, deps, {
+    runnableStatuses: ['awaiting_input'],
+  });
+}
+
 /** Whether any still-proposed action remains (suggest-mode leftovers included). */
 async function finalStatus(sessionId: string): Promise<'completed' | 'awaiting_approval'> {
   const remaining = await db
@@ -898,12 +936,13 @@ export async function executeApprovedActions(
 async function executeApprovedGeneration(
   orgId: string,
   session: SessionRow,
+  resumeSession: boolean,
   deps: LoopDeps,
 ): Promise<SessionRow> {
-  const resumeSession = session.status === 'running' || session.status === 'pending';
   const lease = await claimRunGeneration(session, {
     leaseDurationMs: deps.leaseDurationMs,
     resumeSession,
+    runnableStatuses: ['pending', 'running', 'awaiting_approval'],
   });
   const heartbeat = startRunGenerationHeartbeat(lease, deps.heartbeatIntervalMs);
   let generationSettled = false;
@@ -974,12 +1013,14 @@ export async function approveGroupAndResume(
   const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
   /* v8 ignore next -- @preserve defensive: decideProposalGroup already 404'd unknown sessions */
   if (!rows[0]) throw new NotFoundError('Session not found');
-  if (rows[0].status !== 'running') {
-    return executeApprovedGeneration(orgId, rows[0], deps);
-  }
+  const resumeSession = (await finalStatus(sessionId)) === 'completed';
   const transcript = await loadTranscript(db, sessionId);
-  if (transcript.length === 0) return executeApprovedGeneration(orgId, rows[0], deps);
-  return driveSession(orgId, sessionId, deps);
+  if (resumeSession && transcript.length > 0) {
+    return driveSessionWithAdmission(orgId, sessionId, deps, {
+      runnableStatuses: ['pending', 'running', 'awaiting_approval'],
+    });
+  }
+  return executeApprovedGeneration(orgId, rows[0], resumeSession, deps);
 }
 
 /**
@@ -1013,12 +1054,53 @@ export async function approveAndResume(
   const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
   /* v8 ignore next -- @preserve defensive: decideActivity already 404'd unknown sessions */
   if (!rows[0]) throw new NotFoundError('Session not found');
-  if (rows[0].status !== 'running') {
-    return executeApprovedGeneration(orgId, rows[0], deps);
-  }
+  const resumeSession = (await finalStatus(sessionId)) === 'completed';
   // Only sessions the loop owns (a transcript exists) resume; a hand-created session
   // with no conversation state has nothing to continue.
   const transcript = await loadTranscript(db, sessionId);
-  if (transcript.length === 0) return executeApprovedGeneration(orgId, rows[0], deps);
-  return driveSession(orgId, sessionId, deps);
+  if (resumeSession && transcript.length > 0) {
+    return driveSessionWithAdmission(orgId, sessionId, deps, {
+      runnableStatuses: ['pending', 'running', 'awaiting_approval'],
+    });
+  }
+  return executeApprovedGeneration(orgId, rows[0], resumeSession, deps);
+}
+
+/** Approve the latest proposed action through the durable approval and drive composition. */
+export async function approveLatestAndResume(
+  orgId: string,
+  approverActorId: string | null,
+  sessionId: string,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  const [session] = await db
+    .select({ status: agentSession.status })
+    .from(agentSession)
+    .where(eq(agentSession.id, sessionId))
+    .limit(1);
+  if (!session) throw new NotFoundError('Session not found');
+  if (session.status !== 'awaiting_approval') {
+    throw new ConflictError('Session is not awaiting approval');
+  }
+  const [action] = await db
+    .select({ id: sessionActivity.id })
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'proposed'),
+      ),
+    )
+    .orderBy(desc(sessionActivity.createdAt))
+    .limit(1);
+  if (!action) throw new ConflictError('No proposed action awaiting approval');
+  return approveAndResume(
+    orgId,
+    approverActorId,
+    sessionId,
+    action.id,
+    { decision: 'approve' },
+    deps,
+  );
 }

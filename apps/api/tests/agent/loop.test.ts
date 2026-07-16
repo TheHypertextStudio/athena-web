@@ -12,7 +12,11 @@ vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 import type * as DbModule from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/agent-runtime';
 
-import type { driveSession as DriveSession, LoopDeps } from '../../src/agent/loop';
+import type {
+  driveSession as DriveSession,
+  resumeSessionExecution as ResumeSessionExecution,
+  LoopDeps,
+} from '../../src/agent/loop';
 import type { approveAndResume as ApproveAndResume } from '../../src/agent/loop';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { replyToElicitation as ReplyToElicitation } from '../../src/routes/agent-session-approval';
@@ -31,6 +35,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let agentRuntime!: typeof AgentRuntimeModule;
 let driveSession!: typeof DriveSession;
+let resumeSessionExecution!: typeof ResumeSessionExecution;
 let approveAndResume!: typeof ApproveAndResume;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
 let replyToElicitation!: typeof ReplyToElicitation;
@@ -40,7 +45,8 @@ beforeAll(async () => {
   db = schema.db;
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
   agentRuntime = await import('@docket/agent-runtime');
-  ({ driveSession, approveAndResume } = await import('../../src/agent/loop'));
+  ({ driveSession, approveAndResume, resumeSessionExecution } =
+    await import('../../src/agent/loop'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
   ({ replyToElicitation } = await import('../../src/routes/agent-session-approval'));
 });
@@ -423,7 +429,7 @@ describe('driveSession — elicitation (ask_user)', () => {
       })),
     );
     await replyToElicitation(seed.orgId, seed.sessionId, elicitation!.id, 'The loft, please.');
-    const settled = await driveSession(seed.orgId, seed.sessionId, deps);
+    const settled = await resumeSessionExecution(seed.orgId, seed.sessionId, deps);
     expect(settled.status).toBe('completed');
 
     // The reply reached the model as the ask_user tool_result.

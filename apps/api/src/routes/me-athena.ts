@@ -19,7 +19,13 @@ import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 
-import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
+import {
+  approveAndResume,
+  approveGroupAndResume,
+  approveLatestAndResume,
+  driveSessionAfterMessage,
+  resumeSessionExecution,
+} from '../agent/loop';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import type { AppEnv } from '../context';
@@ -283,13 +289,7 @@ async function latestProposedAction(
 /** Reopen eligible work after a steering message and run synchronously when safe. */
 async function driveAfterMessage(session: SessionRow): Promise<void> {
   if (session.status === 'awaiting_approval' || session.status === 'canceled') return;
-  if (session.status !== 'pending' && session.status !== 'running') {
-    await db
-      .update(agentSession)
-      .set({ status: 'running', endedAt: null })
-      .where(eq(agentSession.id, session.id));
-  }
-  await driveSession(session.contextOrganizationId ?? '', session.id);
+  await driveSessionAfterMessage(session.contextOrganizationId ?? '', session.id);
 }
 
 /** Stream replay plus a DB-polled live tail until terminal state. */
@@ -662,7 +662,11 @@ const meAthena = new Hono<AppEnv>()
         activityId,
         c.req.valid('json').body,
       );
-      if ((await loadTranscript(db, id)).length > 0) await driveSession(workspaceId, id);
+      if ((await loadTranscript(db, id)).length > 0) {
+        await resumeSessionExecution(workspaceId, id);
+      } else if (session.status === 'awaiting_input') {
+        await transitionLifecycle(session, 'resume');
+      }
       return ok(c, SessionActivityOut, toActivityOut(created));
     },
   )
@@ -753,10 +757,11 @@ const meAthena = new Hono<AppEnv>()
     zParam(idParam),
     async (c) => {
       const owner = requestOwner(c);
-      const updated = await transitionLifecycle(
-        await loadOwnedSession(owner, c.req.valid('param').id),
-        'resume',
-      );
+      const session = await loadOwnedSession(owner, c.req.valid('param').id);
+      const updated =
+        (await loadTranscript(db, session.id)).length > 0
+          ? await resumeSessionExecution(session.contextOrganizationId ?? '', session.id)
+          : await transitionLifecycle(session, 'resume');
       return ok(
         c,
         AthenaSessionSummaryOut,
@@ -801,13 +806,10 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      const action = await latestProposedAction(session.id);
-      const updated = await approveAndResume(
+      const updated = await approveLatestAndResume(
         session.contextOrganizationId ?? '',
         null,
         session.id,
-        action.id,
-        { decision: 'approve' },
       );
       return ok(
         c,

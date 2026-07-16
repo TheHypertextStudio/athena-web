@@ -1,8 +1,9 @@
 import { QueryClient } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   athenaHref,
+  personalAthenaTransport,
   personalAthenaDetailDef,
   personalAthenaQueueDef,
   type PersonalAthenaTransport,
@@ -45,7 +46,16 @@ function transport(): PersonalAthenaTransport {
   };
 }
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === 'string') return input;
+  return input instanceof URL ? input.href : input.url;
+}
+
 describe('personal Athena query definitions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('keeps the cross-workspace queue and selected detail in typed me-scoped caches', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const api = transport();
@@ -73,5 +83,77 @@ describe('personal Athena query definitions', () => {
     ).toBe(
       '/athena?workspace=workspace_1&context=calendar_item%3Aitem_1&contextLabel=Launch+review&session=session_1',
     );
+  });
+
+  it('correlates a decision with its owning session on the personal API route', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        requested.push(requestUrl(input));
+        return new Response(
+          JSON.stringify(
+            requested.length === 1
+              ? { id: 'activity_1', sessionId: 'session_1' }
+              : {
+                  id: 'session_1',
+                  kind: 'job',
+                  status: 'running',
+                  queueState: 'working',
+                  objective: 'Prepare the launch review',
+                  context: null,
+                  startedAt: '2026-07-15T15:00:00.000Z',
+                  endedAt: null,
+                  createdAt: '2026-07-15T15:00:00.000Z',
+                  activities: [],
+                },
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+
+    await personalAthenaTransport.decide('session_1', 'activity_1', 'approve');
+
+    expect(requested).toEqual([
+      '/v1/me/athena/sessions/session_1/activity/activity_1/approve',
+      '/v1/me/athena/sessions/session_1',
+    ]);
+  });
+
+  it('keeps display-only context out of the shared invocation DTO', async () => {
+    let submitted: unknown;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(new URL(requestUrl(input), 'http://localhost'), init);
+        submitted = await request.clone().json();
+        return new Response(
+          JSON.stringify({
+            id: 'session_1',
+            kind: 'job',
+            status: 'running',
+            queueState: 'working',
+            objective: 'Prepare the launch review',
+            context: null,
+            startedAt: '2026-07-15T15:00:00.000Z',
+            endedAt: null,
+            createdAt: '2026-07-15T15:00:00.000Z',
+            activities: [],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+
+    await personalAthenaTransport.create({
+      prompt: 'Prepare the launch review',
+      context: { workspaceName: 'Personal' },
+    });
+
+    expect(submitted).toEqual({ prompt: 'Prepare the launch review' });
   });
 });

@@ -380,6 +380,18 @@
      focus ring or disabled treatment, and capture screenshots before exercising the mutation.
   4. Regenerate and inspect all four authenticated desktop/mobile light/dark screenshots, update
      the design audit honestly, run proportionate web/root gates, and commit the isolated fix.
+- **Plan (experience and platform integration)**:
+  1. Rebase the reviewed ambient experience commits onto the current personal API platform branch,
+     retain both work histories, and keep the resulting feature history free of merge commits.
+  2. Add a red transport regression for the activity decision route and owning session, then
+     replace the experience's provisional response interfaces and raw fetch paths with the shared
+     personal Athena DTOs and typed Hono client.
+  3. Pass the selected session through approval, rejection, and elicitation decisions while
+     preserving the dock, workbench, navigation, contextual entry points, contrast treatment, and
+     authenticated screenshot journey.
+  4. Run focused personal API, DTO, web, and shell coverage, then web typecheck/lint, repository
+     test/build, and the authenticated Playwright journey before committing the integration fix
+     without merging or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -676,6 +688,19 @@
   validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks; web 773/773 and
   tooling 46/46), and build (3/3 tasks). `git diff --check` passes. The only recurring diagnostic is
   the repository engine warning for local Node 24.14.0 versus the declared minimum 24.15.0.
+- **Experience and Platform Integration**: Rebased the ambient experience onto the reviewed private
+  personal API and durable execution platform with zero merge commits. Additive conflicts retained
+  the complete platform and experience plans and the ambient product specification. A red transport
+  regression proved the provisional UI sent decisions to a nonexistent session-free route. The web
+  now imports the shared personal Athena DTOs, validates branded invocation context through the
+  shared schema, and calls the real typed Hono routes. Approval, rejection, and elicitation replies
+  carry both the selected session and activity id before refreshing the authoritative detail.
+- **Experience Integration Focused Validation**: The focused web surface passes 12 files and 47/47
+  tests, the shared shell passes 2 files and 44/44, the personal DTO contract passes 2/2, and the
+  personal API routes pass 20/20. The OpenAPI contract passes 1/1 when run alone; its first parallel
+  run exceeded the fixed 30-second test ceiling while four package suites competed for local CPU.
+  Web typecheck and lint pass. Repository test/build and the authenticated Playwright screenshot
+  journey remain in the coordinated final gate set.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A
@@ -707,7 +732,10 @@
   tests could not, while the craft rubric exposed an empty queue that described work but could not
   start it. Both are now covered by executable regressions. The contrast follow-up also showed that
   visual evidence must wait for theme transitions and must not conflate pending mutation controls
-  with their enabled state; those states now have separate assertions.
+  with their enabled state; those states now have separate assertions. The platform integration
+  showed why every mutation path needs the same compound identity as its server route: an activity
+  id alone cannot establish session ownership. Importing shared DTOs and using the typed Hono client
+  turns future personal API drift into a compiler failure instead of a browser-only routing bug.
 
 ---
 

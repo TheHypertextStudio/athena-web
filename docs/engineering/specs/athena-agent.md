@@ -329,9 +329,10 @@ explicit Technical details disclosure, and model reasoning is removed by the pur
 adapter before React receives the work log. Empty queues can start work directly. Legacy workspace
 Athena and Agents URLs preserve the workspace as optional query context while redirecting here.
 
-The web transport is temporarily isolated behind `PersonalAthenaTransport` and the shared typed
-TanStack Query helpers until the generated client includes `/v1/me/athena`; components do not call
-raw `api.v1.*` clients or hand-roll effect-based fetching.
+The web transport stays isolated behind `PersonalAthenaTransport` and the shared typed TanStack
+Query helpers. Its default implementation uses the `AppType`-derived Hono client and shared
+personal Athena DTOs for `/v1/me/athena`; components do not hand-roll effect-based fetching or
+duplicate server response interfaces.
 
 ## 14. Testing doctrine
 

@@ -169,10 +169,14 @@ describe('Time Ledger agent execution bridge', () => {
     const executionId = await beginAgentExecution(session.id);
     const execution = one(
       await schema.db
-        .select({ timeRecordId: schema.agentExecution.timeRecordId })
+        .select({
+          initiatedByUserId: schema.agentExecution.initiatedByUserId,
+          timeRecordId: schema.agentExecution.timeRecordId,
+        })
         .from(schema.agentExecution)
         .where(eq(schema.agentExecution.id, executionId)),
     );
+    expect(execution.initiatedByUserId).toBe(userId);
     expect(execution.timeRecordId).not.toBeNull();
     const contexts = await schema.db
       .select()
@@ -196,6 +200,94 @@ describe('Time Ledger agent execution bridge', () => {
       expect.arrayContaining([
         expect.objectContaining({
           targetKind: 'task',
+          targetId: task.id,
+          organizationId: orgId,
+          basisPoints: 10_000,
+        }),
+      ]),
+    );
+  });
+
+  it('attributes an Athena task execution to its owner and the task actual workspace', async () => {
+    const schema = await getDb();
+    const ownerUserId = await seedUserWithHub(schema.db, schema, 'AthenaTaskOwner');
+    const otherUserId = await seedUserWithHub(schema.db, schema, 'AthenaTaskInitiator');
+    const orgId = await seedOrg(schema.db, schema);
+    const ownerActorId = await addMember(schema.db, schema, orgId, ownerUserId);
+    const otherActorId = await addMember(schema.db, schema, orgId, otherUserId);
+    const team = one(
+      await schema.db
+        .insert(schema.team)
+        .values({ organizationId: orgId, name: 'Operations', key: 'OPS' })
+        .returning({ id: schema.team.id }),
+    );
+    const task = one(
+      await schema.db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId: team.id,
+          title: 'Reconcile the personal queue',
+          state: 'todo',
+          createdBy: ownerActorId,
+        })
+        .returning({ id: schema.task.id }),
+    );
+    const session = one(
+      await schema.db
+        .insert(schema.agentSession)
+        .values({
+          executorKind: 'athena',
+          organizationId: null,
+          contextOrganizationId: null,
+          agentId: null,
+          ownerUserId,
+          taskId: task.id,
+          initiatorId: otherActorId,
+          trigger: 'delegation',
+          status: 'running',
+        })
+        .returning({ id: schema.agentSession.id }),
+    );
+
+    const executionId = await beginAgentExecution(session.id);
+    const execution = one(
+      await schema.db
+        .select({
+          initiatedByUserId: schema.agentExecution.initiatedByUserId,
+          timeRecordId: schema.agentExecution.timeRecordId,
+        })
+        .from(schema.agentExecution)
+        .where(eq(schema.agentExecution.id, executionId)),
+    );
+    expect(execution.initiatedByUserId).toBe(ownerUserId);
+    expect(execution.timeRecordId).not.toBeNull();
+    const record = one(
+      await schema.db
+        .select()
+        .from(schema.timeRecord)
+        .where(eq(schema.timeRecord.id, execution.timeRecordId ?? 'missing')),
+    );
+    expect(record.createdByUserId).toBe(ownerUserId);
+    const contexts = await schema.db
+      .select()
+      .from(schema.timeContext)
+      .where(eq(schema.timeContext.timeRecordId, record.id));
+    const allocations = await schema.db
+      .select()
+      .from(schema.timeAllocation)
+      .where(eq(schema.timeAllocation.timeRecordId, record.id));
+    expect(contexts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          docketEntityId: task.id,
+          organizationId: orgId,
+        }),
+      ]),
+    );
+    expect(allocations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
           targetId: task.id,
           organizationId: orgId,
           basisPoints: 10_000,

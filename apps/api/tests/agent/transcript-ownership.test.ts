@@ -5,7 +5,7 @@ import { getMigratedDb } from '../support/db';
 import { saveTranscript } from '../../src/agent/transcript';
 
 describe('saveTranscript ownership', () => {
-  it('replaces legacy workspace attribution when an Athena transcript becomes user-owned', async () => {
+  it('ignores workspace context when updating a user-owned Athena transcript', async () => {
     const schema = await getMigratedDb();
     const suffix = Math.random().toString(36).slice(2, 10);
     const [owner] = await schema.db
@@ -29,15 +29,15 @@ describe('saveTranscript ownership', () => {
       .returning({ id: schema.agentSession.id });
     await schema.db.insert(schema.agentSessionTranscript).values({
       sessionId: session!.id,
-      organizationId: org!.id,
-      ownerUserId: null,
+      organizationId: null,
+      ownerUserId: owner!.id,
       messages: [],
     });
 
     await saveTranscript(
       schema.db,
       session!.id,
-      null,
+      org!.id,
       [{ role: 'user', content: [{ type: 'text', text: 'Private context' }] }],
       owner!.id,
     );

@@ -43,8 +43,17 @@ beforeAll(async () => {
       .values({ name: 'Willie', email: 'w@example.com', emailVerified: true })
       .returning()
   )[0]!.id;
+  ids['otherUser'] = (
+    await db
+      .insert(user)
+      .values({ name: 'Alice', email: 'alice@example.com', emailVerified: true })
+      .returning()
+  )[0]!.id;
   ids['org'] = (
     await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning()
+  )[0]!.id;
+  ids['otherOrg'] = (
+    await db.insert(organization).values({ name: 'Other', slug: 'other' }).returning()
   )[0]!.id;
   ids['humanActor'] = (
     await db
@@ -251,6 +260,52 @@ describe('athena schema additions', () => {
         sessionId: ids['contextFreeAthenaSession']!,
         organizationId: ids['org']!,
         ownerUserId: ids['user']!,
+        messages: [],
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('requires run and transcript attribution to match their parent session', async () => {
+    await expect(
+      db.insert(agentSessionRun).values({
+        sessionId: ids['contextFreeAthenaSession']!,
+        organizationId: null,
+        ownerUserId: ids['otherUser']!,
+        generation: 1,
+        workflowInstanceId: `${ids['contextFreeAthenaSession']!}:wrong-owner`,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(agentSessionTranscript).values({
+        sessionId: ids['contextFreeAthenaSession']!,
+        organizationId: null,
+        ownerUserId: ids['otherUser']!,
+        messages: [],
+      }),
+    ).rejects.toThrow();
+
+    const registeredSession = (
+      await db
+        .insert(agentSession)
+        .values({
+          organizationId: ids['org']!,
+          agentId: ids['agent']!,
+          trigger: 'delegation',
+        })
+        .returning()
+    )[0]!;
+    await expect(
+      db.insert(agentSessionRun).values({
+        sessionId: registeredSession.id,
+        organizationId: ids['otherOrg']!,
+        generation: 1,
+        workflowInstanceId: `${registeredSession.id}:wrong-org`,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(agentSessionTranscript).values({
+        sessionId: registeredSession.id,
+        organizationId: ids['otherOrg']!,
         messages: [],
       }),
     ).rejects.toThrow();

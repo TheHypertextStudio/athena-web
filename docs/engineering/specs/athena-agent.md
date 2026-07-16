@@ -154,8 +154,13 @@ transcript in the same transaction → dispatch tool calls per the policy engine
 - `propose`: persist with `approvalStatus:'proposed'` + shared `proposalGroupId`; settle the
   session `awaiting_approval`; **stop**. Approval (`decideActivity` + a new
   `executeApprovedActions`) executes the stored `toolCall`, appends paired `tool_result`s,
-  and re-enters the loop. A rejection feeds an `isError` tool_result back so Athena adapts
-  (session continues); session-level reject keeps cancel semantics.
+  and re-enters the loop. The decision audit commits before execution admission. If the owner's
+  concurrency ceiling rejects admission, the action remains `approved` and the session remains
+  `awaiting_approval`; retrying that same activity, group, or latest-action approval skips a second
+  decision/audit and competes for the generation lease again. Only the lease winner may advance
+  `approved → executing`, so concurrent retries dispatch the tool once. A rejection feeds an
+  `isError` tool_result back so Athena adapts (session continues); session-level reject keeps cancel
+  semantics.
 - `record_only`: persist as `mode:'suggestion'`; feed a synthetic "recorded, not executed"
   result so the model proceeds.
 
@@ -172,7 +177,10 @@ successful claim transitions the session to `running` or clears a prior terminal
 message, reply, lifecycle, and decision services never reopen execution first. Provider and MCP work
 begins only after commit; no database lock is held across either call. Healthy workers renew their
 lease indefinitely. Before transcript writes and MCP dispatch, the worker verifies its token is
-still current, so a stale recovered worker cannot resume side effects.
+still current, so a stale recovered worker cannot resume side effects. Transcript presence never
+selects Athena's admission policy: a transcript-free Athena reply or lifecycle resume initializes
+its first transcript only after winning a generation. The direct status-only compatibility fallback
+is restricted to transcript-free registered-agent sessions.
 
 Athena has no wall-clock or job-duration cap. `AGENT_MAX_TURNS` is one personal generation's
 checkpoint quantum: reaching it completes that run record, claims `generation + 1`, and continues

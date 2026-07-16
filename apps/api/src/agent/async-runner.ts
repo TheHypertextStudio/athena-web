@@ -21,6 +21,8 @@ export const MAX_DISPATCH_ATTEMPTS = 8;
 export const DEFAULT_DISPATCH_LEASE_MS = 30_000;
 /** Bounded default sweep size for one scheduled invocation. */
 export const DEFAULT_DISPATCH_SWEEP_SIZE = 25;
+/** Age after which a delivered intent is replayed if Docket still needs the same effect. */
+export const DEFAULT_DISPATCH_RECONCILIATION_MS = 20 * 60_000;
 /** Deadline for one API-to-Worker request. */
 export const DEFAULT_RUNNER_REQUEST_TIMEOUT_MS = 10_000;
 
@@ -186,6 +188,17 @@ async function claimDispatch(
         eq(agentSessionDispatch.status, 'delivering'),
         lte(agentSessionDispatch.leaseExpiresAt, now),
       ),
+      and(
+        eq(agentSessionDispatch.status, 'delivered'),
+        lte(
+          agentSessionDispatch.deliveredAt,
+          new Date(now.getTime() - DEFAULT_DISPATCH_RECONCILIATION_MS),
+        ),
+        or(
+          and(eq(agentSessionDispatch.action, 'enqueue'), eq(agentSessionRun.status, 'queued')),
+          and(eq(agentSessionDispatch.action, 'wake'), eq(agentSessionRun.status, 'waiting')),
+        ),
+      ),
     );
     const rows = await tx
       .select({ intent: agentSessionDispatch, run: agentSessionRun })
@@ -205,17 +218,32 @@ async function claimDispatch(
       .for('update', { skipLocked: true });
     const candidate = rows[0];
     if (!candidate) return null;
+    const priorLeaseToken = candidate.intent.leaseToken;
+    let claimOwnership;
+    if (candidate.intent.status === 'delivering') {
+      if (priorLeaseToken === null) return null;
+      claimOwnership = and(
+        eq(agentSessionDispatch.id, candidate.intent.id),
+        eq(agentSessionDispatch.status, 'delivering'),
+        eq(agentSessionDispatch.leaseToken, priorLeaseToken),
+      );
+    } else {
+      claimOwnership = and(
+        eq(agentSessionDispatch.id, candidate.intent.id),
+        eq(agentSessionDispatch.status, candidate.intent.status),
+      );
+    }
     const [claimed] = await tx
       .update(agentSessionDispatch)
       .set({
         status: 'delivering',
-        attempt: candidate.intent.attempt + 1,
+        attempt: candidate.intent.status === 'delivered' ? 1 : candidate.intent.attempt + 1,
         leaseToken: token,
         leaseExpiresAt: new Date(now.getTime() + leaseDurationMs),
         lastError: null,
         updatedAt: now,
       })
-      .where(and(eq(agentSessionDispatch.id, candidate.intent.id), due))
+      .where(claimOwnership)
       .returning({ attempt: agentSessionDispatch.attempt });
     if (!claimed) return null;
     return {

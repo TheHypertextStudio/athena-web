@@ -3,6 +3,7 @@ import { isExecutionMessage, type ExecutionMessage } from './protocol';
 /** Minimal Workflow instance surface required to resolve idempotent create conflicts. */
 export interface ExistingWorkflowInstance {
   readonly status: () => Promise<{ readonly status: string }>;
+  readonly restart: () => Promise<void>;
 }
 
 /** Minimal generated Workflow binding surface used by the Queue consumer. */
@@ -53,6 +54,9 @@ export async function consumeExecutionBatch(
         const existing = await workflow.get(message.body.workflowId);
         const status = await existing.status();
         if (status.status === 'unknown') throw createError;
+        if (status.status === 'errored' || status.status === 'terminated') {
+          await existing.restart();
+        }
         message.ack();
       } catch {
         message.retry({ delaySeconds: queueRetryDelay(message.attempts) });

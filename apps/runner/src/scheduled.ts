@@ -1,7 +1,8 @@
 import { signInternalRequest } from './hmac';
 
 const DISPATCH_SWEEP_PATH = '/internal/athena/execution/dispatch/sweep';
-const DEFAULT_DOCKET_REQUEST_TIMEOUT_MS = 10_000;
+/** Outer deadline for a bounded sweep containing up to 25 sequential deliveries. */
+export const DEFAULT_DISPATCH_SWEEP_TIMEOUT_MS = 5 * 60_000;
 
 /** Configuration needed by Cloudflare's scheduled dispatch recovery. */
 export interface DispatchSweepEnv {
@@ -43,7 +44,7 @@ export async function runDispatchSweep(
     path: DISPATCH_SWEEP_PATH,
     body,
   });
-  const signal = AbortSignal.timeout(dependencies.timeoutMs ?? DEFAULT_DOCKET_REQUEST_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(dependencies.timeoutMs ?? DEFAULT_DISPATCH_SWEEP_TIMEOUT_MS);
   let response: Response;
   try {
     response = await dependencies.fetch(new URL(DISPATCH_SWEEP_PATH, env.DOCKET_API_URL), {

@@ -1,5 +1,6 @@
 import {
   advanceDocket,
+  DEFAULT_GENERATION_REQUEST_TIMEOUT_MS,
   executeGenerationWorkflow,
   type GenerationWorkflowStep,
 } from '../src/workflow';
@@ -13,6 +14,10 @@ const message: ExecutionMessage = {
 };
 
 describe('durable generation Workflow', () => {
+  it('allows a bounded generation substantially longer than the former ten-second deadline', () => {
+    expect(DEFAULT_GENERATION_REQUEST_TIMEOUT_MS).toBeGreaterThanOrEqual(15 * 60_000);
+  });
+
   it('aborts a stalled Workflow-to-Docket advance at the configured deadline', async () => {
     const fetch = vi.fn(
       async (_input: URL | RequestInfo, init?: RequestInit): Promise<Response> =>

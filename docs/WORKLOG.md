@@ -297,6 +297,18 @@
   5. Add real DB crash-window, duplicate-sweeper, body-stream, timeout, concurrency, and Workflow
      error regressions; generate and validate the migration chain, update execution documentation,
      run focused package/Wrangler gates, and commit without amend, rebase, merge, push, or deployment.
+- **Plan (Cloudflare lifecycle and Workflow recovery review fixes)**:
+  1. Add red personal and compatibility regressions for pause/cancel immediately after asynchronous
+     admission, then make lifecycle changes atomically fence the latest queued or running generation
+     so a delayed Workflow cannot overwrite the user's state.
+  2. Bound Cloudflare callbacks to one model turn per generation and size the per-generation and
+     scheduled-sweep deadlines to their real downstream work without adding an overall Athena job
+     duration limit.
+  3. Add red Queue and outbox reconciliation tests for errored or terminated deterministic
+     Workflows, restart recoverable instances, and replay stale delivered enqueue/wake intents only
+     while Docket still reports the corresponding run as queued or waiting.
+  4. Run focused API, runner, database, type, lint, Wrangler, and diff checks; update the operator
+     documentation and commit the final review fixes without rebase, merge, push, or deployment.
 - **Durable Dispatch Reliability**: Added a payload-free `agent_session_dispatch` outbox whose
   enqueue intent commits with its run and whose wake intent commits with every asynchronous human
   continuation, including decisions, replies, awaiting-input chat, resume, and cancellation. Short
@@ -307,9 +319,9 @@
   so abandoned transport cannot consume an owner's concurrency capacity forever.
 - **Execution Boundary Hardening**: Both signed ingress surfaces count actual streamed bytes and
   cancel above 4 KiB without trusting `Content-Length`. API-to-Worker, nonce-claim,
-  Workflow-to-Docket, and scheduled-sweep fetches have ten-second abort deadlines. Expired exact
-  generation reclaim rechecks owner capacity under the owner lock, and only the bounded documented
-  `waitForEvent` timeout shape starts another yearly wait epoch.
+  Workflow-to-Docket, and scheduled-sweep fetches have bounded abort deadlines sized to their work.
+  Expired exact generation reclaim rechecks owner capacity under the owner lock, and only the
+  bounded documented `waitForEvent` timeout shape starts another yearly wait epoch.
 - **Automatic Recovery and Operations**: Added a signed protected Docket sweep endpoint returning
   counts only, an exported Worker `scheduled()` handler, and the checked-in every-minute Wrangler
   cron. The execution runbook documents automatic and manual recovery, privacy boundaries,
@@ -325,6 +337,24 @@
   user action. Recovery clocks must be taken per lease claim, and terminal delivery exhaustion must
   settle admission state as well as transport state so reliability machinery cannot become a
   permanent capacity leak.
+- **Lifecycle and Workflow Recovery Fixes**: Pause and cancel now lock the parent session and latest
+  Athena generation together, revoke active leases, and park or terminate the generation before a
+  delayed Workflow can claim or settle it. Cloudflare callbacks default to one model turn with a
+  15-minute per-generation deadline, while the overall Athena job remains unbounded. Queue
+  duplicates restart errored or terminated deterministic Workflows, wake ingress repairs the same
+  terminal failure states, and the outbox replays a 20-minute-old delivered enqueue or wake only
+  while Docket still reports the exact run as queued or waiting.
+- **Lifecycle and Workflow Recovery Validation**: Personal and compatibility HTTP regressions prove
+  pause/cancel immediately after `202` settle the queued generation. Real database generation and
+  outbox tests cover delayed callbacks, lease fencing, stale delivered enqueue/wake reconciliation,
+  and terminal-state suppression. Runner tests cover restart success/failure and the widened bounded
+  deadlines. The focused API matrix passes (5 files, 50 tests), the runner suite passes (6 files, 25
+  tests), API/runner typechecks plus runner lint pass, focused API lint is clean, and Wrangler
+  dry-run and startup analysis complete without a deployment.
+- **Lifecycle and Workflow Recovery Retrospective**: The durable unit of work is the session and its
+  latest generation together; changing only the parent leaves an independently runnable child.
+  Recovery must also reconcile Docket's authoritative state after transport accepted a message,
+  because Queue acknowledgement proves ingestion rather than successful Workflow completion.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry

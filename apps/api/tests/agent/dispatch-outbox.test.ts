@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   admitAthenaGeneration,
+  DEFAULT_DISPATCH_RECONCILIATION_MS,
   MAX_DISPATCH_ATTEMPTS,
   sweepAthenaDispatches,
 } from '../../src/agent/async-runner';
@@ -122,6 +123,76 @@ describe('Athena durable dispatch outbox', () => {
     ]);
 
     expect(results.reduce((total, result) => total + result.claimed, 0)).toBe(1);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('replays a stale delivered enqueue only while its Docket run remains queued', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    const deliveredAt = new Date('2026-07-16T12:00:00.000Z');
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ status: 'delivered', attempt: 7, deliveredAt, availableAt: deliveredAt })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    const fetch = vi.fn().mockResolvedValue(Response.json({ accepted: true }, { status: 202 }));
+
+    const result = await sweepAthenaDispatches(
+      {
+        now: new Date(deliveredAt.getTime() + DEFAULT_DISPATCH_RECONCILIATION_MS),
+        batchSize: 1,
+      },
+      { config, fetch },
+    );
+
+    expect(result).toEqual({ claimed: 1, delivered: 1, retried: 0, failed: 0 });
+    expect(fetch).toHaveBeenCalledOnce();
+    const [reconciled] = await dbModule.db
+      .select()
+      .from(agentSessionDispatch)
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    expect(reconciled).toMatchObject({ status: 'delivered', attempt: 1 });
+
+    await dbModule.db
+      .update(agentSessionRun)
+      .set({ status: 'completed', completedAt: new Date() })
+      .where(eq(agentSessionRun.id, queued.runId));
+    const later = await sweepAthenaDispatches(
+      {
+        now: new Date(deliveredAt.getTime() + DEFAULT_DISPATCH_RECONCILIATION_MS * 3),
+        batchSize: 1,
+      },
+      { config, fetch },
+    );
+    expect(later.claimed).toBe(0);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('replays a stale delivered wake only while its generation remains waiting', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionRun)
+      .set({ status: 'waiting', completedAt: new Date() })
+      .where(eq(agentSessionRun.id, queued.runId));
+    const deliveredAt = new Date('2026-07-16T12:00:00.000Z');
+    await dbModule.db.insert(agentSessionDispatch).values({
+      runId: queued.runId,
+      action: 'wake',
+      status: 'delivered',
+      deliveredAt,
+      availableAt: deliveredAt,
+    });
+    const fetch = vi.fn().mockResolvedValue(Response.json({ accepted: true }, { status: 202 }));
+
+    const result = await sweepAthenaDispatches(
+      {
+        now: new Date(deliveredAt.getTime() + DEFAULT_DISPATCH_RECONCILIATION_MS),
+        batchSize: 1,
+      },
+      { config, fetch },
+    );
+
+    expect(result).toEqual({ claimed: 1, delivered: 1, retried: 0, failed: 0 });
     expect(fetch).toHaveBeenCalledOnce();
   });
 

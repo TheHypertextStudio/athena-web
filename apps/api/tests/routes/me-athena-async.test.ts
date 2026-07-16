@@ -104,6 +104,47 @@ describe('personal Athena asynchronous acknowledgement', () => {
     expect(queued?.status).toBe('queued');
   });
 
+  it('atomically parks or cancels a queued generation immediately after acceptance', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Lifecycle Owner', email: `lifecycle-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    runnerMocks.admit.mockImplementation(async (session, options) => ({
+      mode: 'async',
+      queued: await enqueueRunGeneration(session, options),
+    }));
+    const app = appFor(owner!.id);
+    const create = async (prompt: string) => {
+      const response = await app.request('/sessions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      });
+      return (await response.json()) as { id: string };
+    };
+
+    const pausedSession = await create('Pause this safely.');
+    expect(
+      (await app.request(`/sessions/${pausedSession.id}/pause`, { method: 'POST' })).status,
+    ).toBe(200);
+    const [pausedRun] = await schema.db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, pausedSession.id));
+    expect(pausedRun?.status).toBe('waiting');
+
+    const canceledSession = await create('Cancel this safely.');
+    expect(
+      (await app.request(`/sessions/${canceledSession.id}/cancel`, { method: 'POST' })).status,
+    ).toBe(200);
+    const [canceledRun] = await schema.db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, canceledSession.id));
+    expect(canceledRun?.status).toBe('canceled');
+  });
+
   it('commits a reply and wake intent before a failed Worker fetch returns', async () => {
     const suffix = Math.random().toString(36).slice(2, 9);
     const [owner] = await schema.db

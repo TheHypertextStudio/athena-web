@@ -213,7 +213,7 @@ export async function claimQueuedRunGeneration(
   const leaseDurationMs = options.leaseDurationMs ?? DEFAULT_RUN_LEASE_MS;
   const token = genId();
 
-  return db.transaction(async (tx) => {
+  const claimedGeneration = await db.transaction(async (tx) => {
     const [current] = await tx
       .select()
       .from(agentSession)
@@ -242,6 +242,30 @@ export async function claimQueuedRunGeneration(
         ),
       )
       .for('update');
+    if (run?.status === 'queued' && current.status !== 'running') {
+      const settledStatus =
+        current.status === 'awaiting_input' || current.status === 'awaiting_approval'
+          ? 'waiting'
+          : current.status === 'failed'
+            ? 'failed'
+            : current.status === 'completed'
+              ? 'completed'
+              : current.status === 'canceled'
+                ? 'canceled'
+                : null;
+      if (settledStatus) {
+        await tx
+          .update(agentSessionRun)
+          .set({
+            status: settledStatus,
+            leaseToken: null,
+            leaseExpiresAt: null,
+            completedAt: now,
+          })
+          .where(and(eq(agentSessionRun.id, run.id), eq(agentSessionRun.status, 'queued')));
+        return null;
+      }
+    }
     const recoveringExpired =
       run?.status === 'running' &&
       run.leaseExpiresAt !== null &&
@@ -303,6 +327,10 @@ export async function claimQueuedRunGeneration(
       },
     };
   });
+  if (!claimedGeneration) {
+    throw new ConflictError('Queued session generation follows the parent lifecycle state');
+  }
+  return claimedGeneration;
 }
 
 /**

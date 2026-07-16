@@ -1232,7 +1232,6 @@ describe('user-owned Athena loop', () => {
 
     const settled = await driveClaimedGeneration(seed.orgId, seed.sessionId, claimed.lease, {
       turnRuntime: runtimeWithContinuation,
-      generationTurnQuantum: 1,
     });
 
     expect(settled.status).toBe('running');

@@ -14,6 +14,7 @@ export * from './http';
 export * from './json';
 export * from './mail';
 export * from './mcp-connector';
+export * from './mcp-network';
 export * from './mcp-oauth';
 export * from './mock-connector';
 export * from './mock-observer';

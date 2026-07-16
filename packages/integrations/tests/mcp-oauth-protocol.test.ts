@@ -39,14 +39,15 @@ describe('remote MCP OAuth protocol behavior', () => {
       }
       throw new Error(`unexpected fetch: ${url}`);
     });
-    vi.stubGlobal('fetch', fetch);
-
-    const begun = await beginMcpOAuthAuthorization({
-      serverUrl: SERVER,
-      redirectUrl: CALLBACK,
-      clientMetadataUrl: CIMD,
-      state: 'signed-state',
-    });
+    const begun = await beginMcpOAuthAuthorization(
+      {
+        serverUrl: SERVER,
+        redirectUrl: CALLBACK,
+        clientMetadataUrl: CIMD,
+        state: 'signed-state',
+      },
+      fetch,
+    );
 
     const authorization = new URL(begun.authorizationUrl);
     expect(authorization.origin).toBe(AUTHORITY);
@@ -75,14 +76,15 @@ describe('remote MCP OAuth protocol behavior', () => {
       }
       throw new Error(`unexpected fetch: ${url}`);
     });
-    vi.stubGlobal('fetch', fetch);
-
-    const begun = await beginMcpOAuthAuthorization({
-      serverUrl: SERVER,
-      redirectUrl: CALLBACK,
-      clientMetadataUrl: CIMD,
-      state: 'signed-state',
-    });
+    const begun = await beginMcpOAuthAuthorization(
+      {
+        serverUrl: SERVER,
+        redirectUrl: CALLBACK,
+        clientMetadataUrl: CIMD,
+        state: 'signed-state',
+      },
+      fetch,
+    );
 
     expect(new URL(begun.authorizationUrl).searchParams.get('client_id')).toBe(
       'registered-docket-client',
@@ -114,20 +116,24 @@ describe('remote MCP OAuth protocol behavior', () => {
       }
       throw new Error(`unexpected fetch: ${url}`);
     });
-    vi.stubGlobal('fetch', fetch);
-
-    const begun = await beginMcpOAuthAuthorization({
-      serverUrl: SERVER,
-      redirectUrl: CALLBACK,
-      clientMetadataUrl: CIMD,
-      state: 'signed-state',
-    });
-    const complete = await completeMcpOAuthAuthorization({
-      serverUrl: SERVER,
-      redirectUrl: CALLBACK,
-      authorizationCode: 'approval-code',
-      credential: begun.credential,
-    });
+    const begun = await beginMcpOAuthAuthorization(
+      {
+        serverUrl: SERVER,
+        redirectUrl: CALLBACK,
+        clientMetadataUrl: CIMD,
+        state: 'signed-state',
+      },
+      fetch,
+    );
+    const complete = await completeMcpOAuthAuthorization(
+      {
+        serverUrl: SERVER,
+        redirectUrl: CALLBACK,
+        authorizationCode: 'approval-code',
+        credential: begun.credential,
+      },
+      fetch,
+    );
 
     expect(complete.tokens).toMatchObject({ access_token: 'access', refresh_token: 'refresh' });
     expect(complete.obtainedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);

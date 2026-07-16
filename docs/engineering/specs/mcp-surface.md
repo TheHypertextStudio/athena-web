@@ -607,6 +607,22 @@ pause_athena_assignment_trigger -> { id, enabled: false }
 remove_athena_assignment_trigger -> { id, removed: true }
 ```
 
+#### Remote MCP outbound network boundary
+
+Every real remote MCP request uses the central `@docket/integrations` network boundary. This
+includes organization and personal preview, connection verification/reconnect, OAuth discovery,
+registration, token exchange/refresh, and agent toolbox calls. Production endpoints are HTTPS-only;
+there is no request-level allowlist or private-network bypass. Deterministic tests inject a fake
+resolver and transport directly into the boundary instead of weakening production policy.
+
+Before each request and redirect hop, the boundary resolves every address for the hostname and
+rejects the destination if any result is loopback, private/RFC 1918, CGNAT, link-local, multicast,
+reserved, unspecified, or a non-public IPv6 address (including IPv4-mapped IPv6 forms). The chosen
+validated address is pinned into the TLS connection while preserving the original hostname for
+SNI and certificate verification, preventing a second DNS lookup from rebinding the request.
+Redirects are manual, capped at three, and strip authorization on an origin change. Connect and
+overall deadlines plus response-header and response-body size limits bound every call.
+
 ---
 
 ## 4. Resources & Resource Templates (reads)

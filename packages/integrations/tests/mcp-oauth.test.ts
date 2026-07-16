@@ -46,7 +46,7 @@ describe('remote MCP OAuth', () => {
         clientMetadataUrl: 'https://api.docket.test/.well-known/mcp-client.json',
         state: expect.any(Function),
       }),
-      { serverUrl: 'https://api.sunsama.com/mcp' },
+      { serverUrl: 'https://api.sunsama.com/mcp', fetchFn: expect.any(Function) },
     );
     expect(begun.authorizationUrl).toContain('https://login.sunsama.com/authorize');
     expect(begun.credential).toMatchObject({
@@ -120,6 +120,7 @@ describe('remote MCP OAuth', () => {
       expect.objectContaining({
         refreshToken: 'refresh',
         resource: new URL('https://api.sunsama.test/mcp'),
+        fetchFn: expect.any(Function),
       }),
     );
   });

@@ -54,14 +54,16 @@ function serviceLabel(value: string | null): string {
 /** Adapt one nullable-object API summary to the stable presentation model. */
 export function adaptAthenaSummary(summary: AthenaApiSessionSummary): PersonalAthenaSessionSummary {
   const source = summary.context?.source;
-  const validSource = source ? { type: source.type, id: source.id } : undefined;
+  const validSource = source
+    ? { type: source.type, id: source.id, label: source.label }
+    : undefined;
   const objective = summary.objective?.trim();
   return {
     id: summary.id,
     objective: objective && objective.length > 0 ? objective : 'Untitled Athena work',
     status: summary.status,
     queueState: summary.queueState,
-    workspace: null,
+    workspace: summary.workspace,
     context: summary.context
       ? {
           ...(summary.context.workspaceId ? { workspaceId: summary.context.workspaceId } : {}),
@@ -142,7 +144,7 @@ export function adaptAthenaDetail(detail: AthenaApiSessionDetail): PersonalAthen
     detail.status === 'awaiting_approval'
       ? [...detail.activities]
           .reverse()
-          .find((activity) => activity.type === 'action' && activity.approvalStatus !== 'approved')
+          .find((activity) => activity.type === 'action' && activity.approvalStatus === 'proposed')
       : undefined;
   const pendingAction = record(pendingApproval?.body['action']);
   const pendingQuestion =
@@ -184,7 +186,7 @@ export function adaptAthenaDetail(detail: AthenaApiSessionDetail): PersonalAthen
             { id: 'reject', label: 'Reject' },
           ],
         }
-      : pendingQuestion && questionOptions.length > 0
+      : pendingQuestion
         ? {
             kind: 'question',
             id: pendingQuestion.id,

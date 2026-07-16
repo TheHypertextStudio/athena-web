@@ -93,4 +93,79 @@ describe('AthenaWorkspace', () => {
       expect(create).toHaveBeenCalledWith({ prompt: 'Prepare tomorrow morning' });
     });
   });
+
+  it('uses loaded context labels instead of calling focused work cross-workspace', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const contextual: PersonalAthenaSessionDetail = {
+      ...working,
+      workspace: null,
+      context: {
+        workspaceId: 'workspace_1',
+        workspaceName: 'Hypertext Studio',
+        source: { type: 'project', id: 'project_1', label: 'Athena launch' },
+      },
+    };
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 0, working: 1, finished: 0 },
+        currentChat: contextual,
+        sessions: { needsYou: [], working: [contextual], finished: [] },
+      }),
+    );
+    vi.mocked(api.detail).mockResolvedValue(okResponse(contextual));
+
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} initialSessionId={contextual.id} />
+      </QueryClientProvider>,
+    );
+
+    expect(await screen.findAllByText('Hypertext Studio')).not.toHaveLength(0);
+    expect(await screen.findAllByText('Athena launch')).not.toHaveLength(0);
+    expect(screen.queryByText('Across workspaces')).not.toBeInTheDocument();
+  });
+
+  it('routes an optionless question answer through its owning session and activity', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const decide = vi.mocked(api.decide);
+    const question: PersonalAthenaSessionDetail = {
+      ...needs,
+      status: 'awaiting_input',
+      decision: {
+        kind: 'question',
+        id: 'elicitation_1',
+        title: 'Which task?',
+        private: true,
+        options: [],
+      },
+    };
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 1, working: 0, finished: 0 },
+        currentChat: null,
+        sessions: { needsYou: [question], working: [], finished: [] },
+      }),
+    );
+    vi.mocked(api.detail).mockResolvedValue(okResponse(question));
+    decide.mockResolvedValue(okResponse(question));
+
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} initialSessionId={question.id} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Answer Athena' }), {
+      target: { value: 'The launch checklist' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Answer Athena' }));
+
+    await waitFor(() => {
+      expect(decide).toHaveBeenCalledWith('needs', 'elicitation_1', 'reply', {
+        body: 'The launch checklist',
+      });
+    });
+  });
 });

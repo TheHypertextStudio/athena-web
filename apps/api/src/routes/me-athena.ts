@@ -13,6 +13,7 @@ import {
   ProposalGroupOut,
   SessionActivityOut,
 } from '@docket/types';
+import type { AthenaInvocationContext } from '@docket/types';
 import { and, asc, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
@@ -51,7 +52,7 @@ import {
   type SessionRow,
 } from './agent-session-helpers';
 import { runSession } from './agent-session-runner';
-import { resolveAthenaInvocation } from './me-athena-context';
+import { resolveAthenaDisplay, resolveAthenaInvocation } from './me-athena-context';
 
 /** SSE live-tail poll cadence (DB-backed and restart-safe). */
 const STREAM_POLL_MS = 750;
@@ -110,7 +111,7 @@ function queueState(status: SessionRow['status']): 'needs_you' | 'working' | 'fi
 /** Read the user objective and newest persisted invocation context from activity rows. */
 function activityMetadata(activities: readonly (typeof sessionActivity.$inferSelect)[]): {
   readonly objective: string | null;
-  readonly context: z.input<typeof AthenaSessionSummaryOut>['context'];
+  readonly context: z.input<typeof AthenaInvocationContext> | null;
 } {
   const objective = activities.find(
     (row) =>
@@ -121,20 +122,24 @@ function activityMetadata(activities: readonly (typeof sessionActivity.$inferSel
 }
 
 /** Convert one owned session and its activities into the personal response contract. */
-function personalSummary(
+async function personalSummary(
+  ownerUserId: string,
   session: SessionRow,
   activities: readonly (typeof sessionActivity.$inferSelect)[],
-): z.input<typeof AthenaSessionSummaryOut> {
+): Promise<z.input<typeof AthenaSessionSummaryOut>> {
   const metadata = activityMetadata(activities);
+  const persistedContext =
+    metadata.context ??
+    (session.contextOrganizationId ? { workspaceId: session.contextOrganizationId } : null);
+  const display = await resolveAthenaDisplay(ownerUserId, persistedContext);
   return {
     id: session.id,
     kind: session.kind,
     status: session.status,
     queueState: queueState(session.status),
     objective: metadata.objective,
-    context:
-      metadata.context ??
-      (session.contextOrganizationId ? { workspaceId: session.contextOrganizationId } : null),
+    context: display.context,
+    workspace: display.workspace,
     startedAt: session.startedAt?.toISOString() ?? null,
     endedAt: session.endedAt?.toISOString() ?? null,
     createdAt: session.createdAt.toISOString(),
@@ -177,7 +182,7 @@ async function personalDetail(
   const session = await loadOwnedSession(ownerUserId, id);
   const activities = await sessionActivities(id);
   return {
-    ...personalSummary(session, activities),
+    ...(await personalSummary(ownerUserId, session, activities)),
     activities: visibleActivities(activities).map(toActivityOut),
   };
 }
@@ -186,7 +191,7 @@ async function personalDetail(
 async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverviewOut>> {
   const rows = await listOwnedSessions(ownerUserId);
   const summaries = await Promise.all(
-    rows.map(async (row) => personalSummary(row, await sessionActivities(row.id))),
+    rows.map(async (row) => personalSummary(ownerUserId, row, await sessionActivities(row.id))),
   );
   const sessions = {
     needsYou: summaries.filter((row) => row.queueState === 'needs_you'),
@@ -846,7 +851,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(
         c,
         AthenaSessionSummaryOut,
-        personalSummary(updated, await sessionActivities(updated.id)),
+        await personalSummary(owner, updated, await sessionActivities(updated.id)),
       );
     },
   )
@@ -877,7 +882,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(
         c,
         AthenaSessionSummaryOut,
-        personalSummary(updated, await sessionActivities(updated.id)),
+        await personalSummary(owner, updated, await sessionActivities(updated.id)),
       );
     },
   )
@@ -913,7 +918,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(
         c,
         AthenaSessionSummaryOut,
-        personalSummary(updated, await sessionActivities(updated.id)),
+        await personalSummary(owner, updated, await sessionActivities(updated.id)),
       );
     },
   )
@@ -957,7 +962,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(
         c,
         AthenaSessionSummaryOut,
-        personalSummary(updated, await sessionActivities(updated.id)),
+        await personalSummary(owner, updated, await sessionActivities(updated.id)),
       );
     },
   )
@@ -999,7 +1004,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(
         c,
         AthenaSessionSummaryOut,
-        personalSummary(updated, await sessionActivities(updated.id)),
+        await personalSummary(owner, updated, await sessionActivities(updated.id)),
       );
     },
   );

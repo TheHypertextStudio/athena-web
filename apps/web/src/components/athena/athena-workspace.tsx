@@ -274,6 +274,8 @@ export function AthenaWorkspace({
                 <dt className="text-on-surface-variant text-xs">Workspace</dt>
                 <dd className="text-on-surface mt-0.5 break-words">
                   {detail.data?.workspace?.name ??
+                    detail.data?.context?.workspaceName ??
+                    detail.data?.context?.source?.label ??
                     invocationContext?.workspaceName ??
                     'Across workspaces'}
                 </dd>
@@ -324,7 +326,12 @@ function QueueRow({
           {session.objective}
         </span>
         <span className="text-on-surface-variant flex max-w-full items-center gap-1.5 text-xs">
-          <span className="truncate">{session.workspace?.name ?? 'Across workspaces'}</span>
+          <span className="truncate">
+            {session.workspace?.name ??
+              session.context?.workspaceName ??
+              session.context?.source?.label ??
+              'Across workspaces'}
+          </span>
           <span aria-hidden="true">·</span>
           <span className="shrink-0">
             {new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(

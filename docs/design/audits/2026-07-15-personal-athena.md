@@ -1,6 +1,11 @@
 # Design review: personal Athena — 2026-07-15
 
-Screenshots: `/Users/williecubed/Projects/Hypertext Studio/athena-service/.claude/worktrees/athena-experience/apps/web/test-results/athena-personal-personal-A-6daec-rects-and-responsive-themes-chromium/` — authenticated `/athena` at a 1440×900 desktop viewport and 390×844 mobile viewport in light and dark. The 2026-07-16 contrast-review rerun passes 1/1, regenerates all four files after each theme transition settles, and also checks the final surface at 320px.
+Screenshots: `/Users/williecubed/Projects/Hypertext Studio/athena-service/.claude/worktrees/athena-experience/apps/web/test-results/athena-personal-personal-A-6daec-rects-and-responsive-themes-chromium/` — authenticated `/athena` at a 1440×900 desktop viewport and 390×844 mobile viewport in light and dark. The 2026-07-16 spec-review rerun passes 1/1, regenerates all four files after each theme transition settles, checks the final surface at 320px, and adds `athena-mobile-below-fold.png` with the tool outcome, open technical disclosure, and composer visible together.
+
+The five inspected captures have no product-control overlap, clipped tool outcome, disclosure
+overflow, or obstructed composer. The small black `N` launcher in local mobile captures belongs to
+the Next.js development overlay and is absent from the shipped application; the Athena pulse itself
+is absent from the full route as asserted by the browser journey.
 
 | Dimension                         | Score | Evidence                                                                                                                                                                                                                                                         |
 | --------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

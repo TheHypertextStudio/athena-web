@@ -25,6 +25,9 @@ describe('MCP outbound network policy', () => {
     ['IPv6 loopback', '::1'],
     ['IPv6 unique-local', 'fc00::1'],
     ['IPv6 link-local', 'fe80::1'],
+    ['IPv6 IETF reserved', '2001:2::1'],
+    ['IPv6 documentation', '2001:db8::1'],
+    ['IPv6 documentation 3fff', '3fff::1'],
     ['IPv4-mapped private', '::ffff:192.168.1.10'],
     ['IPv4-mapped private hex', '::ffff:a00:1'],
   ])('rejects %s destinations', async (_label, address) => {
@@ -131,7 +134,11 @@ describe('MCP outbound network policy', () => {
   });
 
   it('rejects oversized response headers and bodies', async () => {
-    const headerRequest = response('{}', { headers: { 'x-large': 'x'.repeat(128) } });
+    let headerSignal: AbortSignal | undefined;
+    const headerRequest = vi.fn<McpPinnedRequest>(async (_url, _init, _address, signal) => {
+      headerSignal = signal;
+      return new Response('{}', { headers: { 'x-large': 'x'.repeat(128) } });
+    });
     await expect(
       createMcpSafeFetch({
         lookup: publicLookup,
@@ -139,14 +146,20 @@ describe('MCP outbound network policy', () => {
         limits: { maxHeaderBytes: 64 },
       })('https://public.example/mcp'),
     ).rejects.toThrow(/header/i);
+    expect(headerSignal?.aborted).toBe(true);
 
-    const bodyRequest = response('x'.repeat(128), { headers: { 'content-length': '128' } });
+    let bodySignal: AbortSignal | undefined;
+    const bodyRequest = vi.fn<McpPinnedRequest>(async (_url, _init, _address, signal) => {
+      bodySignal = signal;
+      return new Response('x'.repeat(128), { headers: { 'content-length': '128' } });
+    });
     const bodyResponse = await createMcpSafeFetch({
       lookup: publicLookup,
       request: bodyRequest,
       limits: { maxBodyBytes: 64 },
     })('https://public.example/mcp');
     await expect(bodyResponse.text()).rejects.toThrow(/body/i);
+    expect(bodySignal?.aborted).toBe(true);
   });
 
   it('allows a public HTTPS destination', async () => {
@@ -156,5 +169,13 @@ describe('MCP outbound network policy', () => {
     );
     expect(await result.json()).toEqual({ ok: true });
     expect(request).toHaveBeenCalledOnce();
+  });
+
+  it('allows a globally routable IPv6 destination', async () => {
+    const lookup: McpDnsLookup = async () => [{ address: '2606:4700:4700::1111', family: 6 }];
+    const result = await createMcpSafeFetch({ lookup, request: response('ok') })(
+      'https://public-v6.example/mcp',
+    );
+    expect(await result.text()).toBe('ok');
   });
 });

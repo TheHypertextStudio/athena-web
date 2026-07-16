@@ -138,9 +138,12 @@ function isPublicIpv6(address: string): boolean {
   if (mapped) return isPublicIpv4(`${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`);
   // Globally routable unicast currently occupies 2000::/3. Exclude documentation space.
   const globalUnicast = ((bytes[0] ?? 0) & 0xe0) === 0x20;
+  const ietfReserved = bytes[0] === 0x20 && bytes[1] === 0x01 && ((bytes[2] ?? 0) & 0xfe) === 0;
   const documentation =
     bytes[0] === 0x20 && bytes[1] === 0x01 && bytes[2] === 0x0d && bytes[3] === 0xb8;
-  return globalUnicast && !documentation;
+  const expandedDocumentation =
+    bytes[0] === 0x3f && bytes[1] === 0xff && ((bytes[2] ?? 0) & 0xf0) === 0;
+  return globalUnicast && !ietfReserved && !documentation && !expandedDocumentation;
 }
 
 function isPublicAddress(address: string): boolean {
@@ -186,9 +189,11 @@ function boundedBody(
 ): Response {
   const declared = Number(response.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBodyBytes) {
+    const error = new Error('MCP response body exceeds the size limit');
+    controller.abort(error);
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.error(new Error('MCP response body exceeds the size limit'));
+        controller.error(error);
       },
     });
     return new Response(body, {
@@ -329,7 +334,14 @@ export function createMcpSafeFetch(
           throw new Error('Remote MCP endpoint credentials are not allowed in URLs');
         const address = await resolvePublicAddress(url, lookup, controller.signal);
         const response = await request(url, requestInit, address, controller.signal, limits);
-        assertHeaderBounds(response, limits.maxHeaderBytes);
+        try {
+          assertHeaderBounds(response, limits.maxHeaderBytes);
+        } catch (cause) {
+          const error = cause instanceof Error ? cause : new Error('Invalid MCP response headers');
+          controller.abort(error);
+          await response.body?.cancel(error).catch(() => undefined);
+          throw error;
+        }
         if (![301, 302, 303, 307, 308].includes(response.status)) {
           return boundedBody(response, limits.maxBodyBytes, deadlineAt, controller);
         }

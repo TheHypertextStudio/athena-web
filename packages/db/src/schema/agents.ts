@@ -10,6 +10,7 @@
 import { sql } from 'drizzle-orm';
 import {
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -90,6 +91,8 @@ export const agentSession = pgTable(
     index('agent_session_owner_idx').on(t.ownerUserId, t.createdAt),
     index('agent_session_context_org_idx').on(t.contextOrganizationId, t.createdAt),
     index('agent_session_agent_idx').on(t.agentId),
+    uniqueIndex('agent_session_id_owner_uq').on(t.id, t.ownerUserId),
+    uniqueIndex('agent_session_id_org_uq').on(t.id, t.organizationId),
     check(
       'agent_session_executor_shape_check',
       sql`(
@@ -146,6 +149,16 @@ export const agentSessionRun = pgTable(
     uniqueIndex('agent_session_run_workflow_uq').on(t.workflowInstanceId),
     index('agent_session_run_org_status_idx').on(t.organizationId, t.status),
     index('agent_session_run_owner_status_idx').on(t.ownerUserId, t.status),
+    foreignKey({
+      columns: [t.sessionId, t.ownerUserId],
+      foreignColumns: [agentSession.id, agentSession.ownerUserId],
+      name: 'agent_session_run_parent_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.sessionId, t.organizationId],
+      foreignColumns: [agentSession.id, agentSession.organizationId],
+      name: 'agent_session_run_parent_org_fk',
+    }).onDelete('cascade'),
     check(
       'agent_session_run_attribution_check',
       sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)
@@ -208,6 +221,16 @@ export const agentSessionTranscript = pgTable(
   },
   (t) => [
     index('agent_session_transcript_owner_idx').on(t.ownerUserId),
+    foreignKey({
+      columns: [t.sessionId, t.ownerUserId],
+      foreignColumns: [agentSession.id, agentSession.ownerUserId],
+      name: 'agent_session_transcript_parent_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.sessionId, t.organizationId],
+      foreignColumns: [agentSession.id, agentSession.organizationId],
+      name: 'agent_session_transcript_parent_org_fk',
+    }).onDelete('cascade'),
     check(
       'agent_session_transcript_attribution_check',
       sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)

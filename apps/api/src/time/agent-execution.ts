@@ -52,7 +52,9 @@ export async function beginAgentExecution(
 
     const sessionRows = await tx
       .select({
+        executorKind: agentSession.executorKind,
         initiatorId: agentSession.initiatorId,
+        ownerUserId: agentSession.ownerUserId,
         taskId: agentSession.taskId,
         organizationId: agentSession.organizationId,
       })
@@ -62,14 +64,16 @@ export async function beginAgentExecution(
     const session = sessionRows[0];
     if (!session) throw new Error('agent session vanished before execution started');
 
-    const initiatorRows = session.initiatorId
-      ? await tx
-          .select({ userId: actor.userId })
-          .from(actor)
-          .where(eq(actor.id, session.initiatorId))
-          .limit(1)
-      : [];
-    const userId = initiatorRows[0]?.userId ?? null;
+    const initiatorRows =
+      session.executorKind === 'registered_agent' && session.initiatorId
+        ? await tx
+            .select({ userId: actor.userId })
+            .from(actor)
+            .where(eq(actor.id, session.initiatorId))
+            .limit(1)
+        : [];
+    const userId =
+      session.executorKind === 'athena' ? session.ownerUserId : (initiatorRows[0]?.userId ?? null);
 
     if (options.parentExecutionId) {
       const parents = await tx
@@ -113,16 +117,21 @@ export async function beginAgentExecution(
         .limit(1);
       const hubId = hubRows[0]?.id;
       if (hubId) {
-        const taskRows =
-          session.taskId && session.organizationId
-            ? await tx
-                .select({ id: task.id, title: task.title, organizationId: task.organizationId })
-                .from(task)
-                .where(
-                  and(eq(task.id, session.taskId), eq(task.organizationId, session.organizationId)),
-                )
-                .limit(1)
-            : [];
+        const taskScope =
+          session.taskId === null
+            ? null
+            : session.executorKind === 'athena'
+              ? eq(task.id, session.taskId)
+              : session.organizationId === null
+                ? null
+                : and(eq(task.id, session.taskId), eq(task.organizationId, session.organizationId));
+        const taskRows = taskScope
+          ? await tx
+              .select({ id: task.id, title: task.title, organizationId: task.organizationId })
+              .from(task)
+              .where(taskScope)
+              .limit(1)
+          : [];
         const taskContext = taskRows[0] ?? null;
         const [record] = await tx
           .insert(timeRecord)

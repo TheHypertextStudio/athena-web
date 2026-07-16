@@ -39,28 +39,46 @@
      transcript/run creation helpers without changing runtime authorization.
   4. Run focused red/green checks, the repository validation gates, self-review, and commit the
      persistence slice atomically.
+- **Plan (parent consistency and time attribution review)**:
+  1. Add failing database tests proving run and transcript attribution must match their parent
+     session for both user-owned Athena and organization-owned registered agents.
+  2. Add failing time-attribution tests proving Athena uses its owner and a task's actual workspace,
+     while registered agents retain initiator-based user attribution.
+  3. Add composite parent keys and child foreign keys in Drizzle and migration metadata, then make
+     the time-attribution query executor-aware without weakening the exclusive-attribution checks.
+  4. Replay focused migration/schema/API tests, run every repository validation gate, self-review,
+     and commit the review fix independently without amending or rebasing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
   `organizationId: null`; an optional workspace appears only as execution context, and runs and
-  transcripts are attributed exclusively to either a user or an organization. Migration `0041`
-  maps only uniquely identifiable connectionless Athena jobs with a human initiating Actor to that
-  Actor's user; shared chats, workspaces with multiple matching Athena agents, jobs without an
-  attributable initiator, and all other registered-agent history remain unchanged.
+  transcripts are attributed exclusively to either a user or an organization and must match their
+  parent session through composite foreign keys. Athena time execution uses the owner as its
+  authoritative user and loads task context from the task's canonical workspace; registered agents
+  retain initiating-Actor attribution. Migration `0041` maps only uniquely identifiable
+  connectionless Athena jobs with a human initiating Actor to that Actor's user; shared chats,
+  workspaces with multiple matching Athena agents, jobs without an attributable initiator, and all
+  other registered-agent history remain unchanged.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
-  transcript serializers, compile-time executor branches in existing API/web consumers, focused
-  DTO/schema/migration/OpenAPI tests, and this work log.
+  transcript serializers, executor-aware time attribution, compile-time executor branches in
+  existing API/web consumers, focused DTO/schema/migration/OpenAPI/time tests, and this work log.
 - **Validation**: Red DTO tests rejected workspace-neutral activity and Athena's nullable executor
   fields; red database tests showed the missing executor/owner columns and migration. Spec-review
   red tests then proved non-null Athena executor organizations, dual run/transcript attribution,
   ambiguous migration candidates, and stale transcript attribution were still accepted. Focused
-  green runs pass 271/271 type tests, 67/67 database tests, and 3/3 API ownership/OpenAPI tests.
-  Root `pnpm typecheck` and `pnpm lint` pass 17/17 tasks, root `pnpm test` passes 17/17 tasks, and
-  root `pnpm build` passes 3/3 tasks.
+  Parent-consistency review red tests then showed mismatched child ownership was accepted and Athena
+  time used a different legacy initiator instead of its owner. Focused green runs pass 271/271 type
+  tests, 68/68 database tests, and 5/5 API ownership/time tests. A disposable Drizzle generation
+  reports no schema changes against the edited snapshot. Root `pnpm typecheck` and `pnpm lint` pass
+  17/17 tasks, root `pnpm test` passes 17/17 tasks including API 1,259/1,259, and root `pnpm build`
+  passes 3/3 tasks.
 - **Retrospective**: Preserving legacy history requires a deliberately narrow positive migration,
   including proof that a workspace has exactly one matching legacy executor, not a blanket rename
   of every agent named Athena. Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
+  Composite parent keys turn attribution from a row-local shape into a durable relationship. Once
+  that invariant exists, pre-migration mismatches belong in migration replay coverage rather than
+  fixtures that attempt to recreate impossible state in an already migrated database.
   Keeping the registered-agent runtime guards in place lets the persistence contract land
   independently; the next slice can change authorization against explicit `executorKind` branches
   rather than nullable-field inference.

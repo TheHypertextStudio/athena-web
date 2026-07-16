@@ -7652,6 +7652,48 @@
           "method": "btree",
           "with": {}
         },
+        "agent_session_id_owner_uq": {
+          "name": "agent_session_id_owner_uq",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "agent_session_id_org_uq": {
+          "name": "agent_session_id_org_uq",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "organization_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "agent_session_external_run_uq": {
           "name": "agent_session_external_run_uq",
           "columns": [
@@ -7930,6 +7972,24 @@
           "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "agent_session_run_parent_owner_fk": {
+          "name": "agent_session_run_parent_owner_fk",
+          "tableFrom": "agent_session_run",
+          "tableTo": "agent_session",
+          "columnsFrom": ["session_id", "owner_user_id"],
+          "columnsTo": ["id", "owner_user_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_session_run_parent_org_fk": {
+          "name": "agent_session_run_parent_org_fk",
+          "tableFrom": "agent_session_run",
+          "tableTo": "agent_session",
+          "columnsFrom": ["session_id", "organization_id"],
+          "columnsTo": ["id", "organization_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -8022,6 +8082,24 @@
           "tableTo": "user",
           "columnsFrom": ["owner_user_id"],
           "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_session_transcript_parent_owner_fk": {
+          "name": "agent_session_transcript_parent_owner_fk",
+          "tableFrom": "agent_session_transcript",
+          "tableTo": "agent_session",
+          "columnsFrom": ["session_id", "owner_user_id"],
+          "columnsTo": ["id", "owner_user_id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "agent_session_transcript_parent_org_fk": {
+          "name": "agent_session_transcript_parent_org_fk",
+          "tableFrom": "agent_session_transcript",
+          "tableTo": "agent_session",
+          "columnsFrom": ["session_id", "organization_id"],
+          "columnsTo": ["id", "organization_id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }

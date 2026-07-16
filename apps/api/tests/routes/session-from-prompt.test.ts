@@ -30,6 +30,7 @@ import type { getContainer as GetContainer } from '../../src/container';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import { getMigratedDb } from '../support/db';
+import { fakeSession } from '../support/routes-harness';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -48,6 +49,14 @@ let getContainer!: typeof GetContainer;
 function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor_test') {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
+    const rows = await db
+      .select({ userId: actor.userId })
+      .from(actor)
+      .where(eq(actor.id, actorId))
+      .limit(1);
+    const userId = rows[0]?.userId;
+    if (!userId) throw new Error('test actor is missing its authenticated user');
+    c.set('session', fakeSession(userId));
     const ctx: ActorCtx = { orgId, actorId, roleId: 'role_test', capabilities };
     c.set('actorCtx', ctx);
     await next();

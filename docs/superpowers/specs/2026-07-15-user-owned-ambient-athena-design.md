@@ -25,6 +25,12 @@ Actor in the target workspace and runs the normal permission engine. Approval ne
 capability the owner lacks. The approval decision authorizes execution policy only; the underlying
 tool call is authorized again when it runs.
 
+Athena has no wall-clock or job-duration limit. The per-user run ceiling is a concurrency control,
+not a deadline, and healthy personal work may continue indefinitely. Execution leases detect
+abandoned workers and renew for as long as the worker remains healthy. `AGENT_MAX_TURNS` may define
+one durable generation's checkpoint quantum, but reaching it never settles Athena work as failed or
+completed; the next generation continues from persisted state.
+
 Athena has one personal persistent chat across Docket. Episodic work may have an optional workspace
 and source-object context, but ownership remains personal and a single session may act in more than
 one workspace when the user has access.

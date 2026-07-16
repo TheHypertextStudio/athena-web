@@ -29,6 +29,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import { getMigratedDb } from '../support/db';
+import { fakeSession } from '../support/routes-harness';
 
 let db!: typeof DbType;
 let organization!: typeof OrgTable;
@@ -45,6 +46,7 @@ let agentSessions!: typeof agentSessionsRouter;
 function appFor(orgId: string, capabilities: readonly string[], actorId = 'actor_test') {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
+    c.set('session', fakeSession(`user_${actorId}`));
     const ctx: ActorCtx = { orgId, actorId, roleId: 'role_test', capabilities };
     c.set('actorCtx', ctx);
     await next();

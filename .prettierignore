@@ -4,3 +4,4 @@ dist
 coverage
 pnpm-lock.yaml
 .claude
+apps/runner/worker-configuration.d.ts

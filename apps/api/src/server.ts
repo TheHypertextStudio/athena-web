@@ -29,6 +29,7 @@ import cron from './routes/cron';
 import ingest from './routes/ingest';
 import ingestLinearAgent from './routes/ingest-linear-agent';
 import internalNotifications from './routes/internal-notifications';
+import internalAthenaExecution from './routes/internal-athena-execution';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
@@ -98,6 +99,7 @@ server.route('/internal/ingest', ingest);
 // `/linear-agent`, with no path collision.
 server.route('/internal/ingest', ingestLinearAgent);
 server.route('/internal/notifications', internalNotifications);
+server.route('/internal/athena/execution', internalAthenaExecution);
 server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/linear-agent', integrationsLinearAgentOAuth);
 server.route('/internal/integrations/mcp', integrationsMcpOAuth);

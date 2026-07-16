@@ -47,6 +47,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     GOOGLE_OAUTH_PUBLIC: 'false',
     AGENT_MAX_TURNS: '24',
+    ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     MCP_TASKS_ENABLED: 'false',
@@ -165,6 +166,12 @@ describe('slices', () => {
     expect(agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse(undefined)).toBeUndefined();
     expect(agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse('64')).toBe(64);
     expect(() => agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse('65')).toThrow();
+    expect(() => agentServer.ATHENA_ASYNC_RUNNER_ENABLED.parse(undefined)).toThrow();
+    expect(agentServer.ATHENA_ASYNC_RUNNER_ENABLED.parse('true')).toBe(true);
+    expect(agentServer.CLOUDFLARE_ATHENA_RUNNER_URL.parse('https://runner.example.com')).toBe(
+      'https://runner.example.com',
+    );
+    expect(() => agentServer.CLOUDFLARE_TO_DOCKET_HMAC_SECRET.parse('short')).toThrow();
 
     expect(() => opsServer.CRON_SECRET.parse(undefined)).toThrow();
     expect(opsServer.CRON_SECRET.parse('cron-secret')).toBe('cron-secret');
@@ -363,6 +370,47 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries(productionLinearEnv)) vi.stubEnv(key, value);
       const mod = await import('../src/api');
       expect(mod.env.LINEAR_CLIENT_ID).toBe('linear-client-id');
+    });
+  });
+
+  describe('Cloudflare execution pairing', () => {
+    const productionEnv = {
+      ...validApiEnv(),
+      APP_MODE: 'production',
+      ATHENA_ASYNC_RUNNER_ENABLED: 'true',
+      LINEAR_CLIENT_ID: 'linear-client-id',
+      LINEAR_CLIENT_SECRET: 'linear-client-secret',
+      LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+      CLOUDFLARE_ATHENA_RUNNER_URL: 'https://runner.example.com',
+      CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret-long-enough',
+      DOCKET_TO_CLOUDFLARE_HMAC_SECRET: 'docket-to-cloudflare-secret-long-enough',
+    };
+
+    it('accepts a production runner with distinct directional secrets', async () => {
+      for (const [key, value] of Object.entries(productionEnv)) vi.stubEnv(key, value);
+      const mod = await import('../src/api');
+      expect(mod.env.ATHENA_ASYNC_RUNNER_ENABLED).toBe(true);
+    });
+
+    it('rejects reuse of one HMAC secret in both directions', async () => {
+      for (const [key, value] of Object.entries(productionEnv)) vi.stubEnv(key, value);
+      vi.stubEnv(
+        'DOCKET_TO_CLOUDFLARE_HMAC_SECRET',
+        productionEnv.CLOUDFLARE_TO_DOCKET_HMAC_SECRET,
+      );
+      await expect(import('../src/api')).rejects.toThrow('HMAC secrets must be distinct');
+    });
+
+    it('allows local mode to remain synchronous without Cloudflare credentials', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        APP_MODE: 'local',
+        ATHENA_ASYNC_RUNNER_ENABLED: 'true',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import('../src/api');
+      expect(mod.env.APP_MODE).toBe('local');
     });
   });
 

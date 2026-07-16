@@ -183,8 +183,14 @@ its first transcript only after winning a generation. The direct status-only com
 is restricted to transcript-free registered-agent sessions.
 
 Athena has no wall-clock or job-duration cap. `AGENT_MAX_TURNS` is one personal generation's
-checkpoint quantum: reaching it completes that run record, claims `generation + 1`, and continues
-from the durable transcript without changing the session's `running` state. Completion, explicit
+checkpoint quantum: reaching it completes that run record and continues from the durable transcript
+without changing the session's `running` state. In the synchronous path the API claims
+`generation + 1` directly. When the production-only `ATHENA_ASYNC_RUNNER_ENABLED` flag is on,
+Docket instead persists the next queued generation and a Cloudflare Workflow dispatches its opaque
+identity; Queue and Workflow never receive prompts, users, credentials, or tool inputs. Approval
+and input waits use durable Workflow events in repeated 365-day epochs, while Postgres remains the
+source of truth. The signed boundary, resource names, recovery model, and operator commands live in
+`docs/engineering/cloudflare-athena-execution.md`. Completion, explicit
 pause/cancel, approval/input wait, or an actual error are the only settlement boundaries. Registered
 agents retain the legacy terminal turn cap. `ATHENA_MAX_CONCURRENT_RUNS` defaults to eight and can be
 configured from 1–64. Registered-agent admission remains workspace-scoped. SSE gains a DB-poll live

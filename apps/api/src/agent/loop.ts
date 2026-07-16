@@ -345,6 +345,10 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
 interface DriveAdmission {
   readonly runnableStatuses: readonly SessionRow['status'][];
   readonly clearEndedAt?: boolean;
+  /** Preclaimed queued generation supplied by the authenticated Workflow callback. */
+  readonly lease?: RunGenerationLease;
+  /** Return after one checkpoint instead of claiming the next generation in-process. */
+  readonly stopAfterGeneration?: boolean;
 }
 
 /** Drive a session only after its entry-point states win durable admission atomically. */
@@ -415,11 +419,13 @@ async function driveSessionWithAdmission(
     if (contextOrganizationId) await assertAgentSessionsEntitled(contextOrganizationId);
   }
 
-  let lease = await claimRunGeneration(session, {
-    leaseDurationMs: deps.leaseDurationMs,
-    runnableStatuses: admission.runnableStatuses,
-    clearEndedAt: admission.clearEndedAt,
-  });
+  let lease =
+    admission.lease ??
+    (await claimRunGeneration(session, {
+      leaseDurationMs: deps.leaseDurationMs,
+      runnableStatuses: admission.runnableStatuses,
+      clearEndedAt: admission.clearEndedAt,
+    }));
   let heartbeat: RunGenerationHeartbeat = startRunGenerationHeartbeat(
     lease,
     deps.heartbeatIntervalMs,
@@ -552,6 +558,7 @@ async function driveSessionWithAdmission(
       if (session.executorKind === 'athena' && generationTurns >= maxTurns) {
         heartbeat.stop();
         await checkpointRunGeneration(lease);
+        if (admission.stopAfterGeneration) return session;
         lease = await claimRunGeneration(session, { leaseDurationMs: deps.leaseDurationMs });
         heartbeat = startRunGenerationHeartbeat(lease, deps.heartbeatIntervalMs);
         generationTurns = 0;
@@ -693,6 +700,20 @@ export async function driveSession(
 ): Promise<SessionRow> {
   return driveSessionWithAdmission(orgId, sessionId, deps, {
     runnableStatuses: ['pending', 'running'],
+  });
+}
+
+/** Execute exactly one preclaimed Cloudflare generation quantum. */
+export async function driveClaimedGeneration(
+  orgId: string,
+  sessionId: string,
+  lease: RunGenerationLease,
+  deps: LoopDeps = {},
+): Promise<SessionRow> {
+  return driveSessionWithAdmission(orgId, sessionId, deps, {
+    runnableStatuses: ['running'],
+    lease,
+    stopAfterGeneration: true,
   });
 }
 

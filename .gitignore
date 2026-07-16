@@ -10,6 +10,7 @@ build/
 .turbo/
 out/
 *.tsbuildinfo
+*.cpuprofile
 
 # Local data (embedded PGlite database, local-disk blob store)
 .data/

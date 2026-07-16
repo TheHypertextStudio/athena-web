@@ -17,4 +17,5 @@ export const API_TEST_ENV = {
   CRON_SECRET: 'test-cron-secret',
   SKIP_ENV_VALIDATION: '1',
   AGENT_MAX_TURNS: '8',
+  ATHENA_ASYNC_RUNNER_ENABLED: 'false',
 } as const satisfies Record<string, string>;

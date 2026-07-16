@@ -390,6 +390,7 @@ const RegisteredAgentSessionOut = AgentSessionOutBase.extend({
     .describe('Registered agents are workspace-scoped rather than privately user-owned.'),
 });
 
+/** Caller-owned Athena session representation. */
 export const AthenaSessionOut = AgentSessionOutBase.extend({
   executorKind: z
     .literal('athena')

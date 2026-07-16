@@ -1,0 +1,34 @@
+{
+  "name": "@docket/runner",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Cloudflare Queue and Workflow execution bridge for durable Athena generations.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "dev": "wrangler dev --local",
+    "typecheck": "tsc --noEmit && wrangler types --check",
+    "lint": "eslint . --ignore-pattern worker-configuration.d.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist .turbo .wrangler *.tsbuildinfo",
+    "wrangler:types": "wrangler types",
+    "wrangler:dry-run": "wrangler deploy --dry-run --outdir dist",
+    "wrangler:startup": "wrangler check startup"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.5",
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "wrangler": "4.111.0"
+  }
+}

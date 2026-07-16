@@ -8,7 +8,7 @@
  * workers so an expired process cannot resume writing after another worker takes over.
  */
 import { agentSession, agentSessionRun, db, genId, user } from '@docket/db';
-import { and, count, desc, eq, gt, lte } from 'drizzle-orm';
+import { and, count, desc, eq, gt, lte, or } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
@@ -28,6 +28,25 @@ export interface RunGenerationLease {
   readonly generation: number;
   readonly leaseToken: string;
   readonly leaseDurationMs: number;
+}
+
+/** Opaque execution identity allowed to cross the Docket/Cloudflare boundary. */
+export interface RunGenerationMessage {
+  readonly sessionId: string;
+  readonly generation: number;
+  readonly workflowId: string;
+}
+
+/** Persisted queue admission returned before any Cloudflare side effect. */
+export interface QueuedRunGeneration {
+  readonly runId: string;
+  readonly message: RunGenerationMessage;
+}
+
+/** Exact queued generation claimed by a Cloudflare Workflow callback. */
+export interface ClaimedQueuedRunGeneration {
+  readonly session: SessionRow;
+  readonly lease: RunGenerationLease;
 }
 
 /** Testable timing inputs for a generation claim. */
@@ -59,6 +78,188 @@ function ownerOf(session: SessionRow): string {
 /** Compute the exclusive expiry timestamp for a lease claim or renewal. */
 function expiresAt(now: Date, leaseDurationMs: number): Date {
   return new Date(now.getTime() + leaseDurationMs);
+}
+
+function messageOf(run: typeof agentSessionRun.$inferSelect): RunGenerationMessage {
+  return {
+    sessionId: run.sessionId,
+    generation: run.generation,
+    workflowId: run.workflowInstanceId,
+  };
+}
+
+/**
+ * Persist the next deterministic generation before dispatching it to Cloudflare.
+ *
+ * @remarks
+ * Repeating admission while the latest row is still queued returns that same row, so a failed
+ * HTTP dispatch can safely be retried without creating a second generation. The owner ceiling
+ * includes queued work as well as fresh running leases.
+ */
+export async function enqueueRunGeneration(
+  session: SessionRow,
+  options: RunGenerationOptions = {},
+): Promise<QueuedRunGeneration> {
+  const now = options.now ?? new Date();
+  const resumeSession = options.resumeSession ?? true;
+  const runnableStatuses = options.runnableStatuses ?? (['pending', 'running'] as const);
+
+  return db.transaction(async (tx) => {
+    if (session.executorKind === 'athena') {
+      const [owner] = await tx
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.id, ownerOf(session)))
+        .for('update');
+      if (!owner) throw new NotFoundError('Athena owner not found');
+    }
+
+    const [current] = await tx
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, session.id))
+      .for('update');
+    if (!current) throw new NotFoundError('Session not found');
+    if (current.executorKind !== session.executorKind) {
+      throw new ConflictError('Session executor changed during admission');
+    }
+    if (!runnableStatuses.includes(current.status)) {
+      throw new ConflictError('Session is not in a runnable state');
+    }
+
+    const [latest] = await tx
+      .select()
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.sessionId, current.id))
+      .orderBy(desc(agentSessionRun.generation))
+      .limit(1);
+    if (latest?.status === 'queued') {
+      return { runId: latest.id, message: messageOf(latest) };
+    }
+    if (
+      latest?.status === 'running' &&
+      latest.leaseExpiresAt !== null &&
+      latest.leaseExpiresAt.getTime() > now.getTime()
+    ) {
+      throw new ConflictError('Session generation is already running');
+    }
+
+    if (current.executorKind === 'athena') {
+      const ownerUserId = current.ownerUserId;
+      if (!ownerUserId) throw new Error('Athena session is missing its owner');
+      const [active] = await tx
+        .select({ value: count() })
+        .from(agentSessionRun)
+        .where(
+          and(
+            eq(agentSessionRun.ownerUserId, ownerUserId),
+            or(
+              eq(agentSessionRun.status, 'queued'),
+              and(eq(agentSessionRun.status, 'running'), gt(agentSessionRun.leaseExpiresAt, now)),
+            ),
+          ),
+        );
+      const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
+      if ((active?.value ?? 0) >= limit) {
+        throw new ConflictError('Athena has reached the concurrent run limit');
+      }
+    }
+
+    const generation = (latest?.generation ?? 0) + 1;
+    const [queued] = await tx
+      .insert(agentSessionRun)
+      .values({
+        sessionId: current.id,
+        organizationId: current.executorKind === 'registered_agent' ? current.organizationId : null,
+        ownerUserId: current.executorKind === 'athena' ? current.ownerUserId : null,
+        generation,
+        workflowInstanceId: `${current.id}:${String(generation)}`,
+        status: 'queued',
+      })
+      .returning();
+    if (!queued) throw new Error('queued run generation insert returned no row');
+
+    if (resumeSession) {
+      await tx
+        .update(agentSession)
+        .set({
+          status: 'running',
+          startedAt: current.startedAt ?? now,
+          ...(options.clearEndedAt ? { endedAt: null } : {}),
+        })
+        .where(eq(agentSession.id, current.id));
+    }
+    return { runId: queued.id, message: messageOf(queued) };
+  });
+}
+
+/** Claim the exact queued generation named by an authenticated Workflow callback. */
+export async function claimQueuedRunGeneration(
+  message: RunGenerationMessage,
+  options: Pick<RunGenerationOptions, 'now' | 'leaseDurationMs'> = {},
+): Promise<ClaimedQueuedRunGeneration> {
+  const now = options.now ?? new Date();
+  const leaseDurationMs = options.leaseDurationMs ?? DEFAULT_RUN_LEASE_MS;
+  const token = genId();
+
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, message.sessionId))
+      .for('update');
+    if (!current) throw new NotFoundError('Session not found');
+    if (current.executorKind === 'athena') {
+      const ownerUserId = current.ownerUserId;
+      if (!ownerUserId) throw new Error('Athena session is missing its owner');
+      const [owner] = await tx
+        .select({ id: user.id })
+        .from(user)
+        .where(eq(user.id, ownerUserId))
+        .for('update');
+      if (!owner) throw new NotFoundError('Athena owner not found');
+    }
+
+    const [run] = await tx
+      .select()
+      .from(agentSessionRun)
+      .where(
+        and(
+          eq(agentSessionRun.sessionId, message.sessionId),
+          eq(agentSessionRun.generation, message.generation),
+          eq(agentSessionRun.workflowInstanceId, message.workflowId),
+        ),
+      )
+      .for('update');
+    if (run?.status !== 'queued') {
+      throw new ConflictError('Queued session generation is unavailable');
+    }
+
+    const [claimed] = await tx
+      .update(agentSessionRun)
+      .set({
+        status: 'running',
+        attempt: run.attempt + 1,
+        leaseToken: token,
+        leaseExpiresAt: expiresAt(now, leaseDurationMs),
+        lastError: null,
+        startedAt: run.startedAt ?? now,
+      })
+      .where(and(eq(agentSessionRun.id, run.id), eq(agentSessionRun.status, 'queued')))
+      .returning({ id: agentSessionRun.id });
+    if (!claimed) throw new ConflictError('Queued session generation changed during claim');
+
+    return {
+      session: current,
+      lease: {
+        runId: run.id,
+        sessionId: current.id,
+        generation: run.generation,
+        leaseToken: token,
+        leaseDurationMs,
+      },
+    };
+  });
 }
 
 /**

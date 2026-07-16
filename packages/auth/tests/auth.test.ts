@@ -10,6 +10,7 @@ const SECRET = 'test-secret-at-least-32-characters-long';
 // The API env contract rejects a missing turn budget at process validation. Auth tests import the
 // complete configured instance, so declare the same explicit test-only budget before that import.
 process.env['AGENT_MAX_TURNS'] = '8';
+process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
 
 /** The verified-intent identifier prefix (kept in sync with `src/signup-intent.ts`). */
 const INTENT_PREFIX = 'signup-intent:';

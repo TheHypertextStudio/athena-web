@@ -309,6 +309,13 @@
       "when": 1784184533323,
       "tag": "0043_personal_athena",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1784228078413,
+      "tag": "0044_sour_king_bedlam",
+      "breakpoints": true
     }
   ]
 }

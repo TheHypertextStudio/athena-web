@@ -10,6 +10,7 @@ import type * as DbModule from '@docket/db';
 import type {
   approveAndResume as ApproveAndResume,
   approveGroupAndResume as ApproveGroupAndResume,
+  driveClaimedGeneration as DriveClaimedGeneration,
   driveSession as DriveSession,
   executeApprovedActions as ExecuteApprovedActions,
   GenerationEffectKind,
@@ -21,6 +22,7 @@ import { getMigratedDb } from '../support/db';
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let runtime!: typeof AgentRuntimeModule;
+let driveClaimedGeneration!: typeof DriveClaimedGeneration;
 let driveSession!: typeof DriveSession;
 let approveAndResume!: typeof ApproveAndResume;
 let approveGroupAndResume!: typeof ApproveGroupAndResume;
@@ -31,8 +33,13 @@ beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
   runtime = await import('@docket/agent-runtime');
-  ({ driveSession, approveAndResume, approveGroupAndResume, executeApprovedActions } =
-    await import('../../src/agent/loop'));
+  ({
+    driveClaimedGeneration,
+    driveSession,
+    approveAndResume,
+    approveGroupAndResume,
+    executeApprovedActions,
+  } = await import('../../src/agent/loop'));
   toolboxModule = await import('../../src/agent/toolbox');
 });
 
@@ -1192,5 +1199,48 @@ describe('user-owned Athena loop', () => {
       { generation: 2, status: 'completed' },
       { generation: 3, status: 'completed' },
     ]);
+  });
+
+  it('returns a preclaimed Cloudflare generation at the checkpoint boundary', async () => {
+    const seed = await seedAthenaSession('routine_autonomy');
+    const [session] = await db
+      .select()
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    const { claimQueuedRunGeneration, enqueueRunGeneration } =
+      await import('../../src/agent/run-generation');
+    const queued = await enqueueRunGeneration(session!);
+    const claimed = await claimQueuedRunGeneration(queued.message);
+    const runtimeWithContinuation = new runtime.MockAgentTurnRuntime({
+      script: [
+        {
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_cloudflare_checkpoint',
+                name: 'search',
+                input: { orgId: seed.orgId, query: 'checkpoint boundary' },
+              },
+            ],
+          },
+          stopReason: 'tool_use',
+        },
+      ],
+    });
+
+    const settled = await driveClaimedGeneration(seed.orgId, seed.sessionId, claimed.lease, {
+      turnRuntime: runtimeWithContinuation,
+      generationTurnQuantum: 1,
+    });
+
+    expect(settled.status).toBe('running');
+    const runs = await db
+      .select()
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, seed.sessionId));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.status).toBe('completed');
   });
 });

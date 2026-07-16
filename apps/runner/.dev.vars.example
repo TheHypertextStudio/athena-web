@@ -1,0 +1,6 @@
+# Public Docket API origin used by the Workflow's protected internal requests.
+DOCKET_API_URL=https://api.docket.localhost
+
+# Directional secrets must be distinct. Generate each with a cryptographic password generator.
+CLOUDFLARE_TO_DOCKET_HMAC_SECRET=replace-with-a-local-secret
+DOCKET_TO_CLOUDFLARE_HMAC_SECRET=replace-with-a-different-local-secret

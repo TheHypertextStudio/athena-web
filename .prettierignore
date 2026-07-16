@@ -3,3 +3,4 @@ dist
 .next
 coverage
 pnpm-lock.yaml
+apps/runner/worker-configuration.d.ts

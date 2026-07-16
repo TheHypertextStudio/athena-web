@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "docket-athena-runner",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+    },
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "ATHENA_RUN_QUEUE",
+        "queue": "docket-athena-runs",
+      },
+    ],
+    "consumers": [
+      {
+        "queue": "docket-athena-runs",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "docket-athena-runs-dlq",
+        "retry_delay": 30,
+      },
+    ],
+  },
+  "workflows": [
+    {
+      "binding": "ATHENA_WORKFLOW",
+      "name": "docket-athena-execution",
+      "class_name": "AthenaExecutionWorkflow",
+    },
+  ],
+}

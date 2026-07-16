@@ -24,6 +24,10 @@ overrides:
 # in force for every other dependency. (pnpm supply-chain setting.)
 minimumReleaseAgeExclude:
   - '@types/node'
+  # Wrangler and the current Workers Vitest integration resolve the compatibility-date
+  # runtime declarations as a peer. Pinning the release used to generate the runner's
+  # bindings keeps local Miniflare and CI on the same Workers surface.
+  - '@cloudflare/workers-types@5.20260716.1'
 
 # Single source of truth for cross-cut versions that MUST be byte-identical
 # across every package (FROZEN: DECISIONS.md "turbo+node+pnpm pins" / pnpm catalog).
@@ -117,3 +121,5 @@ allowBuilds:
   '@prisma/client': false
   better-sqlite3: false
   sharp: false
+  # Cloudflare's local Workers runtime used by Wrangler dry-runs and Vitest integration.
+  workerd: true

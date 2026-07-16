@@ -38,6 +38,9 @@ import { user } from './auth';
 import { actor, auditColumns, organization } from './identity';
 import { task } from './work';
 
+/** Directional secret boundary represented by a persisted replay nonce. */
+export type ExecutionRequestDirection = 'cloudflare_to_docket' | 'docket_to_cloudflare';
+
 /** An org-registered agent: the persistent wrapper around an ephemeral external runtime. */
 export const agent = pgTable(
   'agent',
@@ -170,6 +173,32 @@ export const agentSessionRun = pgTable(
     check(
       'agent_session_run_workflow_check',
       sql`${t.workflowInstanceId} = ${t.sessionId} || ':' || ${t.generation}::text`,
+    ),
+  ],
+);
+
+/**
+ * Persistent replay fence for signed Docket/Cloudflare execution requests.
+ *
+ * @remarks
+ * A nonce is unique only within its authentication direction because the two directions use
+ * independent secrets. Expired rows are safe to delete after their five-minute HMAC window.
+ */
+export const executionRequestNonce = pgTable(
+  'execution_request_nonce',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    direction: text('direction').$type<ExecutionRequestDirection>().notNull(),
+    nonce: text('nonce').notNull(),
+    expiresAt: timestamp('expires_at').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('execution_request_nonce_direction_nonce_uq').on(t.direction, t.nonce),
+    index('execution_request_nonce_expiry_idx').on(t.expiresAt),
+    check(
+      'execution_request_nonce_direction_check',
+      sql`${t.direction} in ('cloudflare_to_docket', 'docket_to_cloudflare')`,
     ),
   ],
 );

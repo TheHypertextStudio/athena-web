@@ -184,6 +184,14 @@ export const agentServer = {
   AGENT_MAX_TURNS: z.coerce.number().int().min(1).max(200),
   /** Optional per-user Athena run limit; absent uses the product default of eight. */
   ATHENA_MAX_CONCURRENT_RUNS: z.coerce.number().int().min(1).max(64).optional(),
+  /** Route personal Athena generations through the durable Cloudflare execution bridge. */
+  ATHENA_ASYNC_RUNNER_ENABLED: boolFromString(),
+  /** HTTPS origin of the Cloudflare runner Worker when asynchronous execution is enabled. */
+  CLOUDFLARE_ATHENA_RUNNER_URL: z.url().optional(),
+  /** HMAC secret authenticating Cloudflare callbacks to Docket. */
+  CLOUDFLARE_TO_DOCKET_HMAC_SECRET: z.string().min(32).optional(),
+  /** Distinct HMAC secret authenticating Docket dispatches to Cloudflare. */
+  DOCKET_TO_CLOUDFLARE_HMAC_SECRET: z.string().min(32).optional(),
 };
 
 /** Cron secret, observability, blob/export storage, and transactional email. */

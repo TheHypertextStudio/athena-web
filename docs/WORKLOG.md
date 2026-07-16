@@ -209,6 +209,45 @@
   5. Run focused integration/security/assignment suites and all four root gates, update the worklog
      with validation and retrospection, and commit the two P0 fixes atomically without merge,
      rebase, amend, or push.
+- **Plan (Cloudflare execution layer)**:
+  1. Retrieve the current Cloudflare Queues, Workflows, Workers runtime, Wrangler schema, and test
+     contracts; record the security and durability constraints before changing runtime behavior.
+  2. Add red Worker tests for opaque queue messages, deterministic Workflow creation, duplicate
+     delivery, per-message retry handling, HMAC tamper/replay protection, and durable wait/resume.
+  3. Add red API and database tests for persisted-before-dispatch run admission, directional HMAC
+     internal routes, owner restoration, stale recovery, asynchronous acknowledgement, synchronous
+     fallback, and at-most-once audited effects.
+  4. Implement the Worker Queue/Workflow package and Docket internal execution bridge behind an
+     async-runner feature flag, preserving Postgres, authentication, policy, and provider ownership.
+  5. Generate binding types from `wrangler.jsonc`, document queue/DLQ and secret setup, validate the
+     Worker with Wrangler dry-run/startup checks, run focused and root gates, self-review, and commit
+     the feature slice atomically without deploying, creating resources, rebasing, merging, or pushing.
+- **Cloudflare Execution State**: COMPLETED. The execution slice is integrated atop reviewed
+  connector head `7ad305e1`. Production personal Athena admission now persists a queued generation
+  before dispatching an opaque three-field message to the Cloudflare Queue. The Queue consumer uses
+  deterministic Workflow ids, per-message retry/acknowledgement, and a DLQ; each Workflow callback
+  restores and fences the exact Docket generation, executes one existing loop quantum, and either
+  commits a successor, finishes, or waits durably for an owner decision. Directional HMAC requests
+  authenticate the entire method/path/body/timestamp/nonce tuple, and authenticated nonces are
+  claimed in Postgres before dispatch. Local and test modes retain the synchronous path.
+- **Cloudflare Execution Validation**: Current Cloudflare documentation, published runtime types,
+  and generated bindings were used as the source of truth. Runner tests cover opaque protocols,
+  duplicate delivery, per-message retry, tamper/replay rejection, and repeated durable wait epochs.
+  API and database tests cover persisted-before-dispatch admission, exact-generation claims,
+  asynchronous HTTP acknowledgement, synchronous fallback, callback recovery, and nonce
+  uniqueness. `wrangler types --check`, dry-run upload, and startup validation passed without a
+  deployment or resource mutation. Root `pnpm typecheck`, `pnpm lint`, `pnpm test` (18/18 tasks),
+  and `pnpm build` (including the runner dry-run bundle) passed. The only environment note is the
+  existing Node engine warning: the shell uses 24.14.0 while the repository now requests at least
+  24.15.0.
+- **Cloudflare Execution Retrospective**: Keeping Docket authoritative made at-least-once Queue
+  delivery and Workflow callback recovery composable with the existing generation fence instead of
+  introducing a second state machine. Persisting replay nonces in Docket avoids runtime-local
+  security state, and looping deterministic 365-day wait epochs preserves indefinite human waits
+  within the current Workflows event timeout. The final gate run also exposed two baseline fixture
+  drifts: the exported `AthenaSessionOut` type lacked its required TSDoc and the authorization test
+  schema omitted current `summary` columns. Both were corrected narrowly so the full repository
+  gates exercise the reviewed base and this slice together.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry

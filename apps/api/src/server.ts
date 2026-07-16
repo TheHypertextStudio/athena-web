@@ -29,6 +29,7 @@ import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
 import ingest from './routes/ingest';
 import internalNotifications from './routes/internal-notifications';
+import internalAthenaExecution from './routes/internal-athena-execution';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
@@ -93,6 +94,7 @@ server.get('/.well-known/mcp-client.json', (c) =>
 server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
 server.route('/internal/notifications', internalNotifications);
+server.route('/internal/athena/execution', internalAthenaExecution);
 server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/mcp', integrationsMcpOAuth);
 server.route('/internal/cron', cron);

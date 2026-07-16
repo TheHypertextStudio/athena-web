@@ -104,6 +104,18 @@ function assertCrossFieldRules(e: typeof env): void {
     fail('MCP_TASKS_ENABLED=true requires MCP_SESSION_STORE_URL.');
   }
 
+  if (e.ATHENA_ASYNC_RUNNER_ENABLED && e.APP_MODE === 'production') {
+    if (!e.CLOUDFLARE_ATHENA_RUNNER_URL) {
+      fail('ATHENA_ASYNC_RUNNER_ENABLED=true requires CLOUDFLARE_ATHENA_RUNNER_URL.');
+    }
+    if (!e.CLOUDFLARE_TO_DOCKET_HMAC_SECRET || !e.DOCKET_TO_CLOUDFLARE_HMAC_SECRET) {
+      fail('ATHENA_ASYNC_RUNNER_ENABLED=true requires both directional HMAC secrets.');
+    }
+    if (e.CLOUDFLARE_TO_DOCKET_HMAC_SECRET === e.DOCKET_TO_CLOUDFLARE_HMAC_SECRET) {
+      fail('Cloudflare execution HMAC secrets must be distinct.');
+    }
+  }
+
   if (e.APP_MODE === 'production') {
     for (const [name, value] of Object.entries(e)) {
       if (typeof value === 'string' && !isRealValue(value)) {

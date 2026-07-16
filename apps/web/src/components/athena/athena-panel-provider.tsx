@@ -25,19 +25,31 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   athenaHref,
   personalAthenaDetailDef,
+  personalAthenaPulseDef,
   personalAthenaQueueDef,
   personalAthenaTransport,
-  type PersonalAthenaLifecycle,
   type PersonalAthenaTransport,
 } from '@/lib/athena/query-defs';
 import type { PersonalAthenaContext, PersonalAthenaSessionDetail } from '@/lib/athena/presentation';
-import { queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
+import { queryKeys, useLiveApiQuery } from '@/lib/query';
 
 import { AthenaWorkbench } from './athena-workbench';
+import { useAthenaActions } from './use-athena-actions';
 
 /** Whether a keydown event is the personal Athena shortcut. */
 export function isAthenaShortcut(event: KeyboardEvent): boolean {
-  return (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'j';
+  const target = event.target;
+  const editable =
+    target instanceof Element &&
+    (target.matches('input, textarea, select') ||
+      target.closest('[contenteditable="true"]') !== null);
+  return (
+    !event.repeat &&
+    !editable &&
+    (event.metaKey || event.ctrlKey) &&
+    !event.altKey &&
+    event.key.toLowerCase() === 'j'
+  );
 }
 
 /** Global personal Athena controls available to every contextual entry point. */
@@ -56,6 +68,7 @@ export interface AthenaPanelProviderProps {
   readonly context?: PersonalAthenaContext | null;
   readonly transport?: PersonalAthenaTransport;
   readonly showPulse?: boolean;
+  readonly locationKey?: string;
 }
 
 /**
@@ -70,27 +83,37 @@ export function AthenaPanelProvider({
   context: initialContext = null,
   transport = personalAthenaTransport,
   showPulse = true,
+  locationKey = '',
 }: AthenaPanelProviderProps): JSX.Element {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [context, setContext] = useState<PersonalAthenaContext | null>(initialContext);
   const [selectedId, setSelectedId] = useState('');
   const [launchDraft, setLaunchDraft] = useState<string | null>(null);
-  const queue = useLiveApiQuery(personalAthenaQueueDef(transport), 5_000);
+  const [shortcutLabel, setShortcutLabel] = useState('Ctrl J');
+  const pulse = useLiveApiQuery(personalAthenaPulseDef(transport, showPulse), 5_000);
+  const queue = useLiveApiQuery(personalAthenaQueueDef(transport, open), 5_000);
   const shellWorkspaceId = initialContext?.workspaceId;
   const shellWorkspaceName = initialContext?.workspaceName;
-
-  useEffect(() => {
-    setContext((current) => {
-      if (current?.source && current.workspaceId === shellWorkspaceId) return current;
-      return shellWorkspaceId || shellWorkspaceName
+  const shellContext = useMemo<PersonalAthenaContext | null>(
+    () =>
+      shellWorkspaceId || shellWorkspaceName
         ? {
             ...(shellWorkspaceId ? { workspaceId: shellWorkspaceId } : {}),
             ...(shellWorkspaceName ? { workspaceName: shellWorkspaceName } : {}),
           }
-        : null;
-    });
-  }, [shellWorkspaceId, shellWorkspaceName]);
+        : null,
+    [shellWorkspaceId, shellWorkspaceName],
+  );
+
+  useEffect(() => {
+    setContext(shellContext);
+    setLaunchDraft(null);
+  }, [locationKey, shellContext]);
+
+  useEffect(() => {
+    setShortcutLabel(/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘J' : 'Ctrl J');
+  }, []);
 
   const preferredId =
     queue.data?.sessions.needsYou[0]?.id ??
@@ -101,14 +124,17 @@ export function AthenaPanelProvider({
     if (!selectedId && preferredId) setSelectedId(preferredId);
   }, [preferredId, selectedId]);
 
-  const detail = useLiveApiQuery(personalAthenaDetailDef(selectedId, transport), 3_000);
+  const detail = useLiveApiQuery(personalAthenaDetailDef(selectedId, transport, open), 3_000);
   const selected = detail.data ?? null;
 
-  const openAthena = useCallback((nextContext?: PersonalAthenaContext | null, draft?: string) => {
-    if (nextContext !== undefined) setContext(nextContext);
-    if (draft?.trim()) setLaunchDraft(draft.trim());
-    setOpen(true);
-  }, []);
+  const openAthena = useCallback(
+    (nextContext?: PersonalAthenaContext | null, draft?: string) => {
+      setContext(nextContext === undefined ? shellContext : nextContext);
+      setLaunchDraft(draft?.trim() ? draft.trim() : null);
+      setOpen(true);
+    },
+    [shellContext],
+  );
   const closeAthena = useCallback(() => {
     setOpen(false);
   }, []);
@@ -133,46 +159,11 @@ export function AthenaPanelProvider({
     [queryClient],
   );
 
-  const message = useApiMutation<PersonalAthenaSessionDetail, string>({
-    mutationFn: (body) =>
-      unwrap(() => transport.message(selectedId, { body }), 'Could not steer this Athena work.'),
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: updateSelected,
-  });
-  const lifecycle = useApiMutation<PersonalAthenaSessionDetail, PersonalAthenaLifecycle>({
-    mutationFn: (action) =>
-      unwrap(() => transport.lifecycle(selectedId, action), 'Could not change this Athena work.'),
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: updateSelected,
-  });
-  const decide = useApiMutation<
-    PersonalAthenaSessionDetail,
-    { readonly id: string; readonly option: string; readonly kind?: 'approval' | 'question' }
-  >({
-    mutationFn: ({ id, option, kind }) => {
-      if (kind === 'question') {
-        return unwrap(
-          () => transport.decide(selectedId, id, 'reply', { body: option }),
-          'Could not record your answer.',
-        );
-      }
-      const decision = option === 'reject' ? 'reject' : option === 'reply' ? 'reply' : 'approve';
-      return unwrap(
-        () => transport.decide(selectedId, id, decision),
-        'Could not record your decision.',
-      );
-    },
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: updateSelected,
-  });
-  const create = useApiMutation<
-    PersonalAthenaSessionDetail,
-    { readonly prompt: string; readonly context?: PersonalAthenaContext }
-  >({
-    mutationFn: (input) =>
-      unwrap(() => transport.create(input), 'Athena could not start this work.'),
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: (next) => {
+  const actions = useAthenaActions({
+    selectedId,
+    transport,
+    onSelected: updateSelected,
+    onCreated: (next) => {
       updateSelected(next);
       setLaunchDraft(null);
     },
@@ -182,8 +173,8 @@ export function AthenaPanelProvider({
     () => ({ open, context, openAthena, closeAthena }),
     [closeAthena, context, open, openAthena],
   );
-  const counts = queue.data?.counts;
-  const pending = message.isPending || lifecycle.isPending || decide.isPending || create.isPending;
+  const counts = open ? queue.data?.counts : pulse.data;
+  const pending = actions.pending;
 
   return (
     <AthenaPanelContext.Provider value={value}>
@@ -195,18 +186,20 @@ export function AthenaPanelProvider({
           onClick={() => {
             openAthena();
           }}
-          className="border-outline-variant bg-inverse-surface text-inverse-on-surface focus-visible:ring-ring fixed right-4 bottom-[4.75rem] z-30 flex min-h-12 items-center gap-2 rounded-full border px-4 shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:outline-none lg:right-6 lg:bottom-6"
+          className="border-outline-variant bg-inverse-surface text-inverse-on-surface focus-visible:ring-ring fixed right-4 bottom-[4.75rem] z-30 flex min-h-12 max-w-[calc(100vw-2rem)] items-center gap-2 overflow-hidden rounded-full border px-4 shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:outline-none lg:right-6 lg:bottom-6"
         >
           <Sparkles aria-hidden="true" className="size-4" />
           <span className="text-sm font-semibold">Athena</span>
           {counts && (counts.needsYou > 0 || counts.working > 0) ? (
-            <span className="text-inverse-on-surface/80 text-xs tabular-nums">
+            <span className="text-inverse-on-surface/80 min-w-0 truncate text-xs tabular-nums">
               {counts.needsYou > 0 ? `${counts.needsYou} needs you` : null}
               {counts.needsYou > 0 && counts.working > 0 ? ' · ' : null}
               {counts.working > 0 ? `${counts.working} working` : null}
             </span>
           ) : null}
-          <kbd className="text-inverse-on-surface/60 hidden text-[0.65rem] sm:inline">⌘J</kbd>
+          <kbd className="text-inverse-on-surface/60 hidden text-[0.65rem] sm:inline">
+            {shortcutLabel}
+          </kbd>
         </button>
       ) : null}
 
@@ -249,6 +242,16 @@ export function AthenaPanelProvider({
             </SheetClose>
           </div>
 
+          {actions.feedback ? (
+            <p
+              role="alert"
+              aria-live="assertive"
+              className="border-outline-variant bg-error-container text-on-error-container border-b px-4 py-3 text-sm"
+            >
+              {actions.feedback}
+            </p>
+          ) : null}
+
           {queue.isPending || (selectedId && detail.isPending) ? (
             <div className="flex flex-1 flex-col gap-3 p-4" aria-label="Loading Athena work">
               <Skeleton className="h-20 w-full" />
@@ -267,7 +270,7 @@ export function AthenaPanelProvider({
                 event.preventDefault();
                 const prompt = launchDraft.trim();
                 if (!prompt) return;
-                create.mutate({ prompt, ...(context ? { context } : {}) });
+                actions.create({ prompt, ...(context ? { context } : {}) });
               }}
             >
               <div>
@@ -280,7 +283,7 @@ export function AthenaPanelProvider({
                 aria-label="Athena objective"
                 rows={5}
                 value={launchDraft}
-                disabled={create.isPending}
+                disabled={actions.createPending}
                 onChange={(event) => {
                   setLaunchDraft(event.target.value);
                 }}
@@ -300,9 +303,9 @@ export function AthenaPanelProvider({
                 <Button
                   type="submit"
                   className="min-h-10"
-                  disabled={create.isPending || !launchDraft.trim()}
+                  disabled={actions.createPending || !launchDraft.trim()}
                 >
-                  {create.isPending ? 'Starting…' : 'Start work'}
+                  {actions.createPending ? 'Starting…' : 'Start work'}
                 </Button>
               </div>
             </form>
@@ -311,13 +314,13 @@ export function AthenaPanelProvider({
               session={selected}
               pending={pending}
               onMessage={(body) => {
-                message.mutate(body);
+                actions.message(body);
               }}
               onLifecycle={(action) => {
-                lifecycle.mutate(action);
+                actions.lifecycle(action);
               }}
               onDecision={(id, option) => {
-                decide.mutate({ id, option, kind: selected.decision?.kind });
+                actions.decide({ id, option, kind: selected.decision?.kind });
               }}
             />
           ) : (

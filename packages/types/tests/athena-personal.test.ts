@@ -77,6 +77,19 @@ describe('personal Athena API contracts', () => {
     ).toBe(false);
     expect(schema?.safeParse({ ...summary, workspace: undefined }).success).toBe(false);
   });
+
+  it('defines a compact pulse that cannot carry personal session history', async () => {
+    const types = await import('../src/index');
+    const schema = Reflect.get(types, 'AthenaPulseOut') as
+      | { safeParse(value: unknown): { success: boolean } }
+      | undefined;
+
+    expect(schema).toBeDefined();
+    expect(schema?.safeParse({ needsYou: 2, working: 3 }).success).toBe(true);
+    expect(
+      schema?.safeParse({ needsYou: 2, working: 3, sessions: [{ id: 'private-history' }] }).success,
+    ).toBe(false);
+  });
 });
 
 describe('personal Athena contracts', () => {

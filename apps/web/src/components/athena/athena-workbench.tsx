@@ -59,9 +59,11 @@ export function AthenaWorkbench({
             <span className="text-on-surface-variant">{view.workspaceLabel}</span>
           ) : null}
           {view.contextLabel ? (
-            <span className="text-on-surface-variant inline-flex items-center gap-2 whitespace-nowrap">
-              <span aria-hidden="true">/</span>
-              <span>{view.contextLabel}</span>
+            <span className="text-on-surface-variant inline-flex max-w-full min-w-0 items-center gap-2">
+              <span aria-hidden="true" className="shrink-0">
+                /
+              </span>
+              <span className="min-w-0 truncate">{view.contextLabel}</span>
             </span>
           ) : null}
         </div>

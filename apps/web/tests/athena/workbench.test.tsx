@@ -58,7 +58,9 @@ describe('AthenaWorkbench', () => {
     expect(screen.getByText('Only you can see this decision')).toBeVisible();
     expect(screen.getByText('Sunsama · Protected focus time')).toBeVisible();
     expect(screen.getByText('Added 2 blocks to Thursday')).toBeVisible();
-    expect(screen.getByText('Athena launch').parentElement).toHaveClass('whitespace-nowrap');
+    expect(screen.getByText('Athena launch')).toHaveClass('min-w-0', 'truncate');
+    expect(screen.getByText('Athena launch').parentElement).toHaveClass('max-w-full');
+    expect(screen.getByText('Athena launch').parentElement).not.toHaveClass('whitespace-nowrap');
     expect(screen.queryByText('Private chain of thought')).not.toBeInTheDocument();
     expect(screen.queryByText('sunsama_create_task')).not.toBeInTheDocument();
 

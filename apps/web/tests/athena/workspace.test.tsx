@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { AthenaWorkspace } from '../../src/components/athena/athena-workspace';
 import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
 import type { PersonalAthenaSessionDetail } from '../../src/lib/athena/presentation';
-import { okResponse } from '../support/query';
+import { okResponse, problemResponse } from '../support/query';
 
 const needs: PersonalAthenaSessionDetail = {
   id: 'needs',
@@ -29,6 +29,7 @@ const working: PersonalAthenaSessionDetail = {
 
 function transport(): PersonalAthenaTransport {
   return {
+    pulse: vi.fn().mockResolvedValue(okResponse({ needsYou: 1, working: 1 })),
     queue: vi.fn().mockResolvedValue(
       okResponse({
         counts: { needsYou: 1, working: 1, finished: 0 },
@@ -166,6 +167,73 @@ describe('AthenaWorkspace', () => {
       expect(decide).toHaveBeenCalledWith('needs', 'elicitation_1', 'reply', {
         body: 'The launch checklist',
       });
+    });
+  });
+
+  it('never selects a global or mismatched session outside a workspace filter', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const outside = { ...working, id: 'outside', workspace: { id: 'workspace_2', name: 'Other' } };
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 0, working: 1, finished: 0 },
+        currentChat: outside,
+        sessions: { needsYou: [], working: [outside], finished: [] },
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} initialSessionId="outside" workspaceFilter="workspace_1" />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'What should Athena move forward?' }),
+    ).toBeVisible();
+    expect(api.detail).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Athena objective'), {
+      target: { value: 'Scoped work' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({
+        prompt: 'Scoped work',
+        context: { workspaceId: 'workspace_1' },
+      });
+    });
+  });
+
+  it('announces application-owned mutation failures and clears feedback on retry success', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    const api = transport();
+    vi.mocked(api.create)
+      .mockResolvedValueOnce(problemResponse('provider secret: sk-private', 500))
+      .mockResolvedValueOnce(okResponse(working));
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 0, working: 0, finished: 0 },
+        currentChat: null,
+        sessions: { needsYou: [], working: [], finished: [] },
+      }),
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} />
+      </QueryClientProvider>,
+    );
+
+    const objective = await screen.findByLabelText('Athena objective');
+    fireEvent.change(objective, { target: { value: 'Prepare the review' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Athena could not start this work.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('sk-private');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
   });
 });

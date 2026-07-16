@@ -441,10 +441,18 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     zParam(activityParam),
     zJson(ProposalEditBody),
     async (c) => {
+      const { orgId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'assign');
+      const { session, userId } = await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
-      const updated = await editProposalInput(id, activityId, body.input);
+      const updated = await editProposalInput(
+        id,
+        activityId,
+        body.input,
+        session.executorKind === 'athena'
+          ? { athenaOwnerUserId: userId }
+          : { registeredOrganizationId: orgId },
+      );
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )

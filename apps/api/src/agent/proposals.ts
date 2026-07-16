@@ -10,13 +10,35 @@
  * PATCHes the stored `toolCall.input` (only while `proposed`); approval executes
  * exactly what is stored.
  */
-import { db, sessionActivity } from '@docket/db';
+import { actor, db, sessionActivity } from '@docket/db';
 import type { GhostTaskOut, ProposalGroupOut, ProposalItemOut } from '@docket/types';
-import { and, asc, eq, isNotNull } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../error';
 import type { ActivityRow } from '../routes/agent-session-helpers';
+
+/** Return the workspace declared by a stored proposal tool input, when it has one. */
+export function proposalInputOrganizationId(input: unknown): string | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+  const value = (input as Record<string, unknown>)['orgId'];
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/** Return the current authoritative workspace of a stored proposal. */
+export function proposalOrganizationId(row: ActivityRow, fallbackOrganizationId: string): string {
+  const call = row.body.action?.toolCall;
+  if (!call) {
+    if (row.organizationId) return row.organizationId;
+    if (fallbackOrganizationId) return fallbackOrganizationId;
+    throw new ConflictError('Proposal does not declare a workspace target');
+  }
+  const organizationId = proposalInputOrganizationId(call.input);
+  if (!organizationId) {
+    throw new ConflictError('Proposal does not declare a workspace target');
+  }
+  return organizationId;
+}
 
 /** Project one stored tool call into its workspace ghost, when it has one. */
 function projectGhost(
@@ -106,6 +128,7 @@ export async function listProposalGroups(
  * @param sessionId - The owning session.
  * @param activityId - The proposed action to edit.
  * @param input - The replacement tool input.
+ * @param authorization - Optional owner/organization constraint for the editing surface.
  * @returns the updated activity row.
  * @throws {NotFoundError} When the activity is not found in the org-scoped session.
  * @throws {ConflictError} When the activity is not an editable pending proposal.
@@ -114,6 +137,10 @@ export async function editProposalInput(
   sessionId: string,
   activityId: string,
   input: Record<string, unknown>,
+  authorization?: {
+    readonly athenaOwnerUserId?: string;
+    readonly registeredOrganizationId?: string;
+  },
 ): Promise<ActivityRow> {
   return db.transaction(async (tx) => {
     const rows = await tx
@@ -127,9 +154,38 @@ export async function editProposalInput(
     if (row.type !== 'action' || row.approvalStatus !== 'proposed' || !action?.toolCall) {
       throw new ConflictError('Activity is not an editable pending proposal');
     }
+    const inputOrganizationId = proposalInputOrganizationId(input);
+    let organizationId = row.organizationId;
+    if (authorization?.athenaOwnerUserId) {
+      if (!inputOrganizationId) {
+        throw new ConflictError('Proposal does not declare a workspace target');
+      }
+      const authorized = await tx
+        .select({ id: actor.id })
+        .from(actor)
+        .where(
+          and(
+            eq(actor.userId, authorization.athenaOwnerUserId),
+            eq(actor.organizationId, inputOrganizationId),
+            eq(actor.kind, 'human'),
+            eq(actor.status, 'active'),
+            isNull(actor.archivedAt),
+          ),
+        )
+        .limit(1);
+      if (!authorized[0]) throw new NotFoundError('Workspace not found');
+      organizationId = inputOrganizationId;
+    } else if (
+      authorization?.registeredOrganizationId &&
+      inputOrganizationId &&
+      inputOrganizationId !== authorization.registeredOrganizationId
+    ) {
+      throw new NotFoundError('Workspace not found');
+    }
     const [updated] = await tx
       .update(sessionActivity)
       .set({
+        organizationId,
         body: {
           ...row.body,
           action: { ...action, toolCall: { ...action.toolCall, input } },

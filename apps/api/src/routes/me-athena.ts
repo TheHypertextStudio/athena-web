@@ -38,7 +38,7 @@ import {
   type SessionRow,
 } from './agent-session-helpers';
 import { runSession } from './agent-session-runner';
-import { activeAthenaActor, resolveAthenaInvocation } from './me-athena-context';
+import { resolveAthenaInvocation } from './me-athena-context';
 
 /** SSE live-tail poll cadence (DB-backed and restart-safe). */
 const STREAM_POLL_MS = 750;
@@ -258,13 +258,6 @@ async function appendMessage(
     [...messages, { role: 'user', content: [{ type: 'text', text: body.body }] }],
     ownerUserId,
   );
-}
-
-/** Workspace used to run or decide personal work; it is context, never authority. */
-function operationWorkspace(session: SessionRow, activityOrganizationId?: string | null): string {
-  const workspaceId = activityOrganizationId ?? session.contextOrganizationId;
-  if (!workspaceId) throw new ConflictError('This operation requires a workspace context');
-  return workspaceId;
 }
 
 /** Load the latest still-proposed action in deterministic activity order. */
@@ -587,12 +580,17 @@ const meAthena = new Hono<AppEnv>()
     zParam(activityParam),
     zJson(ProposalEditBody),
     async (c) => {
+      const owner = requestOwner(c);
       const { id, activityId } = c.req.valid('param');
-      await loadOwnedSession(requestOwner(c), id);
+      await loadOwnedSession(owner, id);
       return ok(
         c,
         SessionActivityOut,
-        toActivityOut(await editProposalInput(id, activityId, c.req.valid('json').input)),
+        toActivityOut(
+          await editProposalInput(id, activityId, c.req.valid('json').input, {
+            athenaOwnerUserId: owner,
+          }),
+        ),
       );
     },
   )
@@ -611,11 +609,8 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const { id, activityId } = c.req.valid('param');
       const session = await loadOwnedSession(owner, id);
-      const activity = await loadActivity(id, activityId);
-      const workspaceId = operationWorkspace(session, activity.organizationId);
-      const approverActorId = await activeAthenaActor(owner, workspaceId);
       const body = c.req.valid('json');
-      await approveAndResume(workspaceId, approverActorId, id, activityId, {
+      await approveAndResume(session.contextOrganizationId ?? '', null, id, activityId, {
         decision: 'approve',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
@@ -637,11 +632,8 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const { id, activityId } = c.req.valid('param');
       const session = await loadOwnedSession(owner, id);
-      const activity = await loadActivity(id, activityId);
-      const workspaceId = operationWorkspace(session, activity.organizationId);
-      const approverActorId = await activeAthenaActor(owner, workspaceId);
       const body = c.req.valid('json');
-      await approveAndResume(workspaceId, approverActorId, id, activityId, {
+      await approveAndResume(session.contextOrganizationId ?? '', null, id, activityId, {
         decision: 'reject',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
@@ -689,15 +681,9 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const { id, groupId } = c.req.valid('param');
       const session = await loadOwnedSession(owner, id);
-      const groups = await listProposalGroups(id);
-      const group = groups.find((item) => item.proposalGroupId === groupId);
-      const first = group?.items[0];
-      if (!first) throw new NotFoundError('No proposed actions in the group');
-      const activity = await loadActivity(id, first.activityId);
-      const workspaceId = operationWorkspace(session, activity.organizationId);
       await approveGroupAndResume(
-        workspaceId,
-        await activeAthenaActor(owner, workspaceId),
+        session.contextOrganizationId ?? '',
+        null,
         id,
         groupId,
         'approve',
@@ -721,15 +707,9 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const { id, groupId } = c.req.valid('param');
       const session = await loadOwnedSession(owner, id);
-      const groups = await listProposalGroups(id);
-      const group = groups.find((item) => item.proposalGroupId === groupId);
-      const first = group?.items[0];
-      if (!first) throw new NotFoundError('No proposed actions in the group');
-      const activity = await loadActivity(id, first.activityId);
-      const workspaceId = operationWorkspace(session, activity.organizationId);
       await approveGroupAndResume(
-        workspaceId,
-        await activeAthenaActor(owner, workspaceId),
+        session.contextOrganizationId ?? '',
+        null,
         id,
         groupId,
         'reject',
@@ -822,10 +802,9 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
       const action = await latestProposedAction(session.id);
-      const workspaceId = operationWorkspace(session, action.organizationId);
       const updated = await approveAndResume(
-        workspaceId,
-        await activeAthenaActor(owner, workspaceId),
+        session.contextOrganizationId ?? '',
+        null,
         session.id,
         action.id,
         { decision: 'approve' },
@@ -852,14 +831,9 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
       const action = await latestProposedAction(session.id);
-      const workspaceId = operationWorkspace(session, action.organizationId);
-      await decideActivity(
-        workspaceId,
-        await activeAthenaActor(owner, workspaceId),
-        session.id,
-        action.id,
-        { decision: 'reject' },
-      );
+      await decideActivity(session.contextOrganizationId ?? '', null, session.id, action.id, {
+        decision: 'reject',
+      });
       const updated = await transitionLifecycle(session, 'cancel');
       return ok(
         c,

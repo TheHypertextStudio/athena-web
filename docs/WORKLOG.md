@@ -141,6 +141,19 @@
   4. Run focused red/green checks, API typecheck and lint, proportionate repository gates,
      self-review imports and the final diff, then commit the review fix atomically without
      rebasing, merging, or pushing.
+- **Plan (cross-workspace proposal authorization review fix)**:
+  1. Add red personal-route regressions for editing a proposal from workspace A to B with and
+     without current B access, then prove the persisted activity attribution follows the accepted
+     stored input and approval uses B's human Actor.
+  2. Add red mixed-workspace group and `all_in_session` approve/reject regressions proving every
+     selected proposal derives its target from current `toolCall.input`, inaccessible targets roll
+     back every decision and audit, and accessible targets audit their own workspace Actor.
+  3. Centralize current proposal-target parsing, authorize every Athena decision target before any
+     status/audit mutation in the transaction, remove first-row route fallbacks, and make failed
+     terminal execution read as a failed attempt while preserving durable `applied` semantics.
+  4. Run focused red/green checks, API and root validation gates, self-review transaction and audit
+     invariants, update this worklog with the retrospective, and commit the security fix atomically
+     without amending, rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -298,6 +311,20 @@
   response. The focused personal/OpenAPI green run passes 11/11 tests, and the wider approval,
   owner-privacy, and loop run passes 26/26. API typecheck and lint pass. Final root validation
   passes typecheck and lint (17/17 tasks each), tests (17/17 tasks), and build (3/3 tasks).
+- **Cross-Workspace Proposal Authorization Review Fix**: Personal proposal edits now validate the
+  replacement input's current `orgId` against the owner's active human Actor before atomically
+  moving both stored input and activity attribution. Group and `all_in_session` decisions resolve
+  and authorize every selected action's current input workspace before writing any decision or
+  audit row, so one inaccessible target rolls back the complete approve or reject operation. Each
+  accessible mixed-workspace action records its own organization and human Actor. Narration-only
+  compatibility actions retain the session workspace fallback, while executable proposals never
+  fall back from a missing current input target. Approval-time access failures remain `proposed`;
+  a later tool-level grant failure remains a durable `applied` attempt carrying `isError: true`.
+  Focused personal and owner-privacy coverage passes 23/23 tests. API typecheck, lint, build, and
+  1,289/1,289 tests pass. Final root validation passes typecheck and lint (17/17 tasks each), tests
+  (17/17 tasks, plus 46/46 tooling tests), and build (3/3 tasks). `git diff --check` passes. The
+  only recurring diagnostic is the repository engine warning for local Node 24.14.0 versus the
+  declared minimum 24.15.0.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A
@@ -318,7 +345,11 @@
   presentation models should filter raw provider reasoning at the server boundary. The review fix
   showed that timestamp-only ordering is still ambiguous even when exact replay ids are respected;
   tests that intend distinct chronology must set distinct timestamps, while production polling
-  needs the full `(createdAt, id)` tuple on every query.
+  needs the full `(createdAt, id)` tuple on every query. Cross-workspace batches cannot derive
+  authority from a representative first row: target resolution and Actor lookup must happen for
+  every selected action before the transaction mutates any row. Keeping `applied` as an execution
+  attempt state, with success represented by the stored result's `isError`, preserves deterministic
+  reconciliation without misreporting a denied tool call as an unattempted proposal.
 
 ---
 

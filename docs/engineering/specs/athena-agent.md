@@ -266,6 +266,14 @@ permission loss pauses the assignment and disables all its triggers. The persona
 the `pause_athena_assignment_trigger` / `remove_athena_assignment_trigger` Docket tools match both
 assignment and trigger to the current user, so Athena can manage no other person's automation.
 
+Subtree membership is only trigger routing, never authorization. Before an event trigger claims its
+cooldown or builds a prompt, it resolves the emitted subject by exact type, id, and organization and
+requires the restored owner's current Actor to hold both `view` and the action's `contribute`
+capability on that subject. An initiative association therefore cannot reveal an inaccessible
+linked project or program. Denied subjects count only as a safe skipped outcome: no run is created,
+and neither caller-supplied event titles nor subject titles enter the prompt. Allowed prompts use
+the canonical database title resolved after authorization.
+
 ## 11. Fresh-database rollout
 
 The user-owned executor model does not backfill legacy Athena data. Existing databases must be

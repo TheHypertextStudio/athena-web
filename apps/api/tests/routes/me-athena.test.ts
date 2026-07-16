@@ -180,13 +180,20 @@ async function seedActivity(
   ).id;
 }
 
-/** Script one provider completion so synchronous personal routes settle deterministically. */
-function mockCompletion(text = 'Done'): void {
+/** Script one provider completion after any already-persisted assistant transcript turns. */
+function mockCompletion(text = 'Done', priorAssistantTurns = 0): void {
   const runtime = new agentRuntime.MockAgentTurnRuntime({
     script: [
+      ...Array.from({ length: priorAssistantTurns }, () => ({
+        message: {
+          role: 'assistant' as const,
+          content: [{ type: 'text' as const, text: 'Unused' }],
+        },
+        stopReason: 'end_turn' as const,
+      })),
       {
         message: { role: 'assistant', content: [{ type: 'text', text }] },
-        stopReason: 'end_turn',
+        stopReason: 'end_turn' as const,
       },
     ],
   });
@@ -364,10 +371,15 @@ describe('personal Athena routes', () => {
   it('owner-scopes activity, SSE replay, steering, and lifecycle controls', async () => {
     const seed = await seedPeople();
     const replaySession = await seedSession(seed, seed.owner, 'completed');
-    const first = await seedActivity(replaySession, { type: 'response', body: { text: 'First' } });
+    const first = await seedActivity(replaySession, {
+      type: 'response',
+      body: { text: 'First' },
+      createdAt: new Date('2026-07-15T12:00:00.000Z'),
+    });
     const second = await seedActivity(replaySession, {
       type: 'response',
       body: { text: 'Second' },
+      createdAt: new Date('2026-07-15T12:00:01.000Z'),
     });
     const sessionId = await seedSession(seed, seed.owner, 'running');
     const ownerApp = appFor(seed.owner);
@@ -424,6 +436,28 @@ describe('personal Athena routes', () => {
     expect(streamBody).not.toContain('private chain of thought');
   });
 
+  it('replays same-timestamp activity in stable id order', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    const createdAt = new Date('2026-07-15T12:00:00.000Z');
+    await seedActivity(sessionId, {
+      id: 'activity_zulu',
+      type: 'response',
+      body: { text: 'Inserted first' },
+      createdAt,
+    });
+    await seedActivity(sessionId, {
+      id: 'activity_alpha',
+      type: 'response',
+      body: { text: 'Inserted second' },
+      createdAt,
+    });
+
+    const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`);
+    const body = await stream.text();
+    expect(body.indexOf('id: activity_alpha')).toBeLessThan(body.indexOf('id: activity_zulu'));
+  });
+
   it('lets the owner approve without assign while the underlying tool reauthorizes', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
@@ -470,6 +504,119 @@ describe('personal Athena routes', () => {
           ),
         ),
     ).toHaveLength(1);
+  });
+
+  it('uses the action workspace when the session-level shortcut approves, applies, and resumes', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+    const actionId = await seedActivity(sessionId, {
+      type: 'action',
+      organizationId: seed.orgB,
+      approvalStatus: 'proposed',
+      body: {
+        action: {
+          kind: 'create_task',
+          summary: 'Create cross-workspace work',
+          toolCall: {
+            connection: 'docket',
+            tool: 'create_task',
+            toolUseId: 'toolu_session_shortcut',
+            input: {
+              orgId: seed.orgB,
+              teamId: seed.teamB,
+              title: 'Cross-workspace approved work',
+            },
+          },
+        },
+      },
+    });
+    await db
+      .update(schema.agentSession)
+      .set({ startedAt: new Date() })
+      .where(eq(schema.agentSession.id, sessionId));
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: seed.owner.userId,
+      messages: [
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_session_shortcut',
+              name: 'create_task',
+              input: {
+                orgId: seed.orgB,
+                teamId: seed.teamB,
+                title: 'Cross-workspace approved work',
+              },
+            },
+          ],
+        },
+      ],
+    });
+    mockCompletion('Cross-workspace work created', 1);
+
+    const approved = await appFor(seed.owner).request(`/sessions/${sessionId}/approve`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+
+    expect(approved.status).toBe(200);
+    expect((await approved.json()) as { status: string }).toMatchObject({ status: 'completed' });
+    expect(
+      await db
+        .select({ id: schema.task.id })
+        .from(schema.task)
+        .where(
+          and(
+            eq(schema.task.organizationId, seed.orgB),
+            eq(schema.task.title, 'Cross-workspace approved work'),
+          ),
+        ),
+    ).toHaveLength(1);
+    expect((await loadApproval(actionId)).approvalStatus).toBe('applied');
+  });
+
+  it('audits the owner in the action workspace when the session-level shortcut rejects', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+    const actionId = await seedActivity(sessionId, {
+      type: 'action',
+      organizationId: seed.orgB,
+      approvalStatus: 'proposed',
+      body: { action: { kind: 'create_task', summary: 'Do not create this task' } },
+    });
+
+    const rejected = await appFor(seed.owner).request(`/sessions/${sessionId}/reject`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+
+    expect(rejected.status).toBe(200);
+    expect((await rejected.json()) as { status: string }).toMatchObject({ status: 'canceled' });
+    expect((await loadApproval(actionId)).approvalStatus).toBe('rejected');
+    const audits = await db
+      .select()
+      .from(schema.auditEvent)
+      .where(
+        and(
+          eq(schema.auditEvent.organizationId, seed.orgB),
+          eq(schema.auditEvent.subjectId, sessionId),
+          eq(schema.auditEvent.type, 'rejected'),
+        ),
+      );
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({ actorId: seed.owner.actorIds[seed.orgB] });
+    expect(audits[0]?.metadata).toMatchObject({
+      activityId: actionId,
+      approverActorId: seed.owner.actorIds[seed.orgB],
+      executionOrigin: 'athena',
+      athenaSessionId: sessionId,
+      requestedByUserId: seed.owner.userId,
+    });
   });
 });
 

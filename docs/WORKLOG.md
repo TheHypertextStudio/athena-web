@@ -18,7 +18,8 @@
 - **Subtasks**:
   - [x] Add user-owned executor, activity, transcript, run, and migration contracts.
   - [x] Execute Docket tools through the owner's live user permission context.
-  - [ ] Add private personal Athena APIs, connections, assignments, and approval semantics.
+  - [ ] Complete the private personal Athena chat, work, and session API migration.
+  - [x] Add owner-only personal connections, assignments, and assignment triggers.
   - [ ] Build the shared workbench, ambient dock, and full `/athena` workspace.
   - [ ] Wire contextual entry points and validate the real application with Playwright.
   - [ ] Complete documentation, repository gates, code review, and linear-history closeout.
@@ -175,6 +176,24 @@
   4. Run the focused platform/durability suite set and all repository gates, update validation and
      retrospective evidence, self-review the diff, and commit this fix atomically without rebasing,
      merging, or pushing.
+- **Plan (personal connectors and assignment triggers)**:
+  1. Add red schema, migration, DTO, route, and toolbox regressions for user-owned MCP connections,
+     encrypted credentials, two-user isolation, cross-workspace reuse, deletion, remote Sunsama
+     tools, and unchanged registered-agent workspace connections.
+  2. Add red assignment and trigger regressions for initiative/project/task delegation, preserved
+     human ownership, inbound personal notice plus initial durable run, owner-only endpoints,
+     subtree event scope, five-minute schedule minimum, cooldown, concurrent assignments, and
+     entity writer-lease compatibility.
+  3. Implement separate personal connection/credential, assignment, and trigger tables in a
+     schema-only `0043` migration; add `/v1/me/athena` connection/assignment/trigger APIs and OAuth
+     callback ownership; load Athena remote tools only from its persisted owner while retaining
+     workspace integration loading for registered agents.
+  4. Restore the assignment owner on every triggered run, resolve current target-workspace access,
+     disable triggers and pause the assignment on access loss, and ensure Athena can pause/remove
+     only its own in-scope triggers without inventing an Actor or stale grant.
+  5. Update the reviewed plan, Athena/MCP/API specs, OpenAPI assertions, and this work log; run
+     focused database/API/MCP/assignment suites and every root gate, self-review, then commit the
+     feature slices atomically without rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -254,6 +273,31 @@
   current access without becoming execution authority. Personal projections exclude provider
   reasoning, cross-user reads remain existence-hiding, and registered-agent organization routes
   retain their existing workspace policy.
+- **Personal Connections and Delegation Slice**: Added owner-matched personal MCP connection and
+  encrypted credential rows, URL metadata preview, editable visible names and tool aliases, OAuth
+  callback ownership, and owner-only connection APIs. Athena now loads only its owner's connected
+  personal remotes across workspace contexts, while registered agents continue loading only
+  operational workspace integrations. Added private initiative/project/task assignments and
+  assignment-scoped event or scheduled triggers. Assignment creation preserves human ownership,
+  writes a personal notice, and starts an owner-attributed durable run. Every trigger fire claims
+  its cooldown, resolves the current active human Actor, rechecks target access, and pauses the
+  assignment plus all triggers after access loss. Owner-scoped MCP tools can pause or remove only
+  that user's triggers.
+- **Personal Connections and Delegation Validation**: Red DTO, schema, migration, route, toolbox,
+  and assignment tests established the missing ownership boundaries before implementation. Focused
+  green suites cover encrypted credentials, Sunsama tool dispatch, two users in one workspace,
+  registered-agent compatibility, preserved task ownership, personal notices, durable run rows,
+  project-subtree events, cooldown, scheduled access loss, and owner-only trigger controls. The
+  complete migration chain creates schema-only `0043` with no data backfill. Root `pnpm typecheck`
+  and `pnpm lint` pass 17/17 tasks, root `pnpm test` passes 17/17 tasks including API 148 files and
+  1,297 tests, and root `pnpm build` passes 3/3 tasks. The recurring diagnostic remains local Node
+  24.14.0 versus the declared minimum 24.15.0.
+- **Personal Connections and Delegation Retrospective**: Keeping personal and workspace connector
+  tables separate made credential ownership and executor compatibility explicit rather than
+  nullable inference. Trigger scope is safest when derived from the live assignment subtree instead
+  of copied into each trigger. Validation also found a base test-local lease-effect union that had
+  drifted from the exported loop contract; importing the production type removed that duplication
+  and restored the gate without changing runtime behavior.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, authenticated compatibility-route access helpers, proposal and

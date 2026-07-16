@@ -56,6 +56,8 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   add_comment: 'work:write',
   post_update: 'work:write',
   add_to_daily_plan: 'work:write',
+  pause_athena_assignment_trigger: 'work:write',
+  remove_athena_assignment_trigger: 'work:write',
   // connectors:link — external linking
   link_external: 'connectors:link',
   // agents:run — agent session lifecycle

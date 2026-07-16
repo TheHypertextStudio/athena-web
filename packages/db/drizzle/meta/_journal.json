@@ -302,6 +302,13 @@
       "when": 1784177702749,
       "tag": "0042_durable_agent_execution",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1784184533323,
+      "tag": "0043_personal_athena",
+      "breakpoints": true
     }
   ]
 }

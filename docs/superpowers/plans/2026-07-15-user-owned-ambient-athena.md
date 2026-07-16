@@ -76,14 +76,14 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 
 ### Task 4: Personal MCP connections and delegation
 
-- [ ] Write failing tests proving personal connectors are reusable across the owner's workspaces and
+- [x] Write failing tests proving personal connectors are reusable across the owner's workspaces and
       invisible to other users.
-- [ ] Add user ownership for new Athena MCP connections; existing database credentials are discarded
+- [x] Add user ownership for new Athena MCP connections; existing database credentials are discarded
       by the required reset and users reconnect their personal services.
-- [ ] Load remote tools by session owner and keep operational workspace integrations separate.
-- [ ] Add user-owned Athena assignments for initiatives, projects, and tasks; recheck access on each
+- [x] Load remote tools by session owner and keep operational workspace integrations separate.
+- [x] Add user-owned Athena assignments for initiatives, projects, and tasks; recheck access on each
       triggered run and pause assignments after access loss.
-- [ ] Run focused integration/assignment tests and commit the green slice.
+- [x] Run focused integration/assignment tests and commit the green slice.
 
 ### Task 5: Personal Athena presentation model and workbench
 

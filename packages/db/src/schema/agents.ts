@@ -9,6 +9,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -25,6 +26,7 @@ import {
   approvalStatus,
   agentSessionExecutorKind,
   agentSessionRunStatus,
+  integrationStatus,
   sessionActivityType,
   sessionKind,
   sessionStatus,
@@ -240,6 +242,137 @@ export const agentSessionTranscript = pgTable(
       'agent_session_transcript_attribution_check',
       sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)
         OR (${t.ownerUserId} IS NULL AND ${t.organizationId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/** One remote MCP server connected once for one Better Auth user's Athena. */
+export const personalMcpConnection = pgTable(
+  'personal_mcp_connection',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    alias: text('alias').notNull(),
+    url: text('url').notNull(),
+    authMode: text('auth_mode').$type<'oauth' | 'bearer' | 'none'>().notNull(),
+    status: integrationStatus('status').notNull().default('pending'),
+    toolCount: integer('tool_count'),
+    lastError: text('last_error'),
+    lastErrorAt: timestamp('last_error_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('personal_mcp_connection_id_owner_uq').on(t.id, t.ownerUserId),
+    uniqueIndex('personal_mcp_connection_owner_alias_uq').on(t.ownerUserId, t.alias),
+    uniqueIndex('personal_mcp_connection_owner_url_uq').on(t.ownerUserId, t.url),
+    check(
+      'personal_mcp_connection_auth_mode_check',
+      sql`${t.authMode} in ('oauth','bearer','none')`,
+    ),
+  ],
+);
+
+/** AES-256-GCM credential for one owner-matched personal MCP connection. */
+export const personalMcpCredential = pgTable(
+  'personal_mcp_credential',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    connectionId: text('connection_id').notNull(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    ciphertext: text('ciphertext').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('personal_mcp_credential_connection_uq').on(t.connectionId),
+    foreignKey({
+      columns: [t.connectionId, t.ownerUserId],
+      foreignColumns: [personalMcpConnection.id, personalMcpConnection.ownerUserId],
+      name: 'personal_mcp_credential_connection_owner_fk',
+    }).onDelete('cascade'),
+  ],
+);
+
+/** A private delegation from one user to Athena against a workspace work entity. */
+export const athenaAssignment = pgTable(
+  'athena_assignment',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    entityType: text('entity_type').$type<'initiative' | 'project' | 'task'>().notNull(),
+    entityId: text('entity_id').notNull(),
+    objective: text('objective').notNull(),
+    status: text('status').$type<'active' | 'paused' | 'completed'>().notNull().default('active'),
+    activeSessionId: text('active_session_id').references(() => agentSession.id, {
+      onDelete: 'set null',
+    }),
+    pausedReason: text('paused_reason'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('athena_assignment_id_owner_uq').on(t.id, t.ownerUserId),
+    index('athena_assignment_owner_status_idx').on(t.ownerUserId, t.status, t.createdAt),
+    index('athena_assignment_target_idx').on(t.organizationId, t.entityType, t.entityId),
+    check(
+      'athena_assignment_entity_type_check',
+      sql`${t.entityType} in ('initiative','project','task')`,
+    ),
+    check('athena_assignment_status_check', sql`${t.status} in ('active','paused','completed')`),
+  ],
+);
+
+/** An event or scheduled trigger scoped to exactly one user-owned Athena assignment. */
+export const athenaTrigger = pgTable(
+  'athena_trigger',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    assignmentId: text('assignment_id').notNull(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    type: text('type').$type<'event' | 'scheduled'>().notNull(),
+    eventKinds: text('event_kinds')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    scheduleMinutes: integer('schedule_minutes'),
+    cooldownMinutes: integer('cooldown_minutes').notNull().default(5),
+    enabled: boolean('enabled').notNull().default(true),
+    lastTriggeredAt: timestamp('last_triggered_at'),
+    nextRunAt: timestamp('next_run_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('athena_trigger_owner_idx').on(t.ownerUserId, t.enabled),
+    index('athena_trigger_schedule_idx').on(t.enabled, t.nextRunAt),
+    foreignKey({
+      columns: [t.assignmentId, t.ownerUserId],
+      foreignColumns: [athenaAssignment.id, athenaAssignment.ownerUserId],
+      name: 'athena_trigger_assignment_owner_fk',
+    }).onDelete('cascade'),
+    check('athena_trigger_type_check', sql`${t.type} in ('event','scheduled')`),
+    check('athena_trigger_cooldown_check', sql`${t.cooldownMinutes} >= 5`),
+    check(
+      'athena_trigger_shape_check',
+      sql`(${t.type} = 'event' AND ${t.scheduleMinutes} IS NULL AND cardinality(${t.eventKinds}) > 0)
+        OR (${t.type} = 'scheduled' AND ${t.scheduleMinutes} >= 5 AND cardinality(${t.eventKinds}) = 0)`,
     ),
   ],
 );

@@ -26,6 +26,7 @@ import { registerTaskCrudTools } from './task-crud-tools';
 import { registerTaskDepTools } from './task-dep-tools';
 import { registerTaskFieldTools } from './task-field-tools';
 import { registerViewPlanTools } from './view-plan-tools';
+import { registerAthenaAssignmentTools } from './athena-assignment-tools';
 
 /**
  * Register every Docket mutation tool on `server`, bound to the calling user.
@@ -49,4 +50,5 @@ export function registerTools(server: McpRegistrar, ctx: McpContext): void {
   registerContentTools(server, ctx);
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);
+  registerAthenaAssignmentTools(server, ctx);
 }

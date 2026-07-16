@@ -183,34 +183,36 @@ This is how an agent that started **read-only** (engineering plan / product §4)
 
 ### 3.2 Annotation quick-reference
 
-| Tool                     | readOnly | destructive | idempotent | openWorld | Scope             |
-| ------------------------ | :------: | :---------: | :--------: | :-------: | ----------------- |
-| `create_task`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `update_task`            |    F     |      F      |     T      |     F     | `work:write`      |
-| `move_task`              |    F     |      F      |     T      |     F     | `work:write`      |
-| `set_task_assignee`      |    F     |      F      |     T      |     F     | `work:write`      |
-| `set_task_delegate`      |    F     |      F      |     T      |     F     | `work:write`      |
-| `add_task_dependency`    |    F     |      F      |     T      |     F     | `work:write`      |
-| `remove_task_dependency` |    F     |      T      |     T      |     F     | `work:write`      |
-| `add_subtask`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `set_task_state`         |    F     |      F      |     T      |     F     | `work:write`      |
-| `post_update`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `create_project`         |    F     |      F      |     F      |     F     | `work:write`      |
-| `update_project`         |    F     |      F      |     T      |     F     | `work:write`      |
-| `create_program`         |    F     |      F      |     F      |     F     | `work:write`      |
-| `create_initiative`      |    F     |      F      |     F      |     F     | `work:write`      |
-| `link_initiative`        |    F     |      F      |     T      |     F     | `work:write`      |
-| `add_comment`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `link_external`          |    F     |      F      |     T      |   **T**   | `connectors:link` |
-| `start_connector_link`   |    F     |      F      |     F      |   **T**   | `connectors:link` |
-| `trigger_agent_session`  |    F     |      F      |     F      |   **T**   | `agents:run`      |
-| `respond_to_session`     |    F     |      F      |     F      |     F     | `agents:run`      |
-| `approve_action`         |    F     |      T      |     T      |     F     | `agents:run`      |
-| `reject_action`          |    F     |      T      |     T      |     F     | `agents:run`      |
-| `cancel_session`         |    F     |      T      |     T      |     F     | `agents:run`      |
-| `run_view`               |  **T**   |      —      |     T      |     F     | `work:read`       |
-| `search`                 |  **T**   |      —      |     T      |     F     | `work:read`       |
-| `add_to_daily_plan`      |    F     |      F      |     T      |     F     | `work:write`      |
+| Tool                               | readOnly | destructive | idempotent | openWorld | Scope             |
+| ---------------------------------- | :------: | :---------: | :--------: | :-------: | ----------------- |
+| `create_task`                      |    F     |      F      |     F      |     F     | `work:write`      |
+| `update_task`                      |    F     |      F      |     T      |     F     | `work:write`      |
+| `move_task`                        |    F     |      F      |     T      |     F     | `work:write`      |
+| `set_task_assignee`                |    F     |      F      |     T      |     F     | `work:write`      |
+| `set_task_delegate`                |    F     |      F      |     T      |     F     | `work:write`      |
+| `add_task_dependency`              |    F     |      F      |     T      |     F     | `work:write`      |
+| `remove_task_dependency`           |    F     |      T      |     T      |     F     | `work:write`      |
+| `add_subtask`                      |    F     |      F      |     F      |     F     | `work:write`      |
+| `set_task_state`                   |    F     |      F      |     T      |     F     | `work:write`      |
+| `post_update`                      |    F     |      F      |     F      |     F     | `work:write`      |
+| `create_project`                   |    F     |      F      |     F      |     F     | `work:write`      |
+| `update_project`                   |    F     |      F      |     T      |     F     | `work:write`      |
+| `create_program`                   |    F     |      F      |     F      |     F     | `work:write`      |
+| `create_initiative`                |    F     |      F      |     F      |     F     | `work:write`      |
+| `link_initiative`                  |    F     |      F      |     T      |     F     | `work:write`      |
+| `add_comment`                      |    F     |      F      |     F      |     F     | `work:write`      |
+| `link_external`                    |    F     |      F      |     T      |   **T**   | `connectors:link` |
+| `start_connector_link`             |    F     |      F      |     F      |   **T**   | `connectors:link` |
+| `trigger_agent_session`            |    F     |      F      |     F      |   **T**   | `agents:run`      |
+| `respond_to_session`               |    F     |      F      |     F      |     F     | `agents:run`      |
+| `approve_action`                   |    F     |      T      |     T      |     F     | `agents:run`      |
+| `reject_action`                    |    F     |      T      |     T      |     F     | `agents:run`      |
+| `cancel_session`                   |    F     |      T      |     T      |     F     | `agents:run`      |
+| `run_view`                         |  **T**   |      —      |     T      |     F     | `work:read`       |
+| `search`                           |  **T**   |      —      |     T      |     F     | `work:read`       |
+| `add_to_daily_plan`                |    F     |      F      |     T      |     F     | `work:write`      |
+| `pause_athena_assignment_trigger`  |    F     |      F      |     T      |     F     | `work:write`      |
+| `remove_athena_assignment_trigger` |    F     |      T      |     T      |     F     | `work:write`      |
 
 > `run_view` and `search` are _read_ operations exposed as **tools** (not resources) because they take rich query arguments — resources are for addressable-by-URI reads. They keep `readOnlyHint:true` and need only `work:read`.
 
@@ -590,6 +592,19 @@ input: z.object({ org: Slug, task_id: Id, date: z.string().date(),
 output: z.object({ plan_item: z.object({ id: Id, date: z.string().date(),
                    task: EntityRef, status: z.enum(["planned","done"]) }) })
 annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }
+```
+
+#### Personal Athena assignment trigger controls — `work:write`
+
+These tools are registered only for user principals. Both match `assignmentId`, `triggerId`, and
+the current principal's Better Auth user id; a registered-agent principal never sees them and a
+different user receives `not_found`. Trigger scope is inherited from the assignment and cannot be
+widened by either operation.
+
+```ts
+input: z.object({ assignmentId: Id, triggerId: Id })
+pause_athena_assignment_trigger -> { id, enabled: false }
+remove_athena_assignment_trigger -> { id, removed: true }
 ```
 
 ---

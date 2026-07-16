@@ -54,6 +54,9 @@ describe('openapi spec generation', () => {
       expect.objectContaining({ name: 'Last-Event-ID', in: 'header', required: false }),
     );
     expect(personalStream?.responses?.['200']?.content).toHaveProperty('text/event-stream');
+    expect(paths).toContain('/v1/me/athena/connections');
+    expect(paths).toContain('/v1/me/athena/assignments');
+    expect(paths).toContain('/v1/me/athena/assignments/{id}/triggers');
 
     // A guarded mutation surfaces its tag + capability extension.
     const createTask = spec.paths['/v1/orgs/{orgId}/tasks']?.['post'];

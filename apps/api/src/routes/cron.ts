@@ -24,6 +24,7 @@ import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { processSearchIndexJobs } from '../search/process-jobs';
+import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -116,6 +117,13 @@ const cron = new Hono()
   .post('/sync-calendars', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepCalendarSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // User-owned Athena schedules are assignment-scoped, five-minute minimum, and re-authorize the
+  // persisted owner before every run. The row claim and cooldown make scheduler retries harmless.
+  .post('/athena-triggers', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepAthenaAssignmentTriggers(new Date());
     return c.json({ swept: true, ...result });
   });
 

@@ -31,6 +31,7 @@ export * from './member';
 export * from './role';
 export * from './grant';
 export * from './agent';
+export * from './athena';
 export * from './integration';
 export * from './identity';
 export * from './google-oauth';

@@ -17,7 +17,13 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import type { TurnToolDef } from '@docket/agent-runtime';
-import { db, integration, integrationCredential } from '@docket/db';
+import {
+  db,
+  integration,
+  integrationCredential,
+  personalMcpConnection,
+  personalMcpCredential,
+} from '@docket/db';
 import {
   mcpOAuthTokenNeedsRefresh,
   parseMcpOAuthCredential,
@@ -164,26 +170,54 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
   // names never collide with Docket's). A server that fails to open is demoted to
   // `error` on its row — never silently skipped as if healthy.
   const remoteSessions = new Map<string, RemoteMcpSession>();
-  const remoteRows =
+  const remoteRows: { readonly id: string; readonly url: string; readonly alias: string }[] =
     executor.kind === 'registered_agent'
-      ? await db
-          .select()
-          .from(integration)
+      ? (
+          await db
+            .select({ id: integration.id, config: integration.config })
+            .from(integration)
+            .where(
+              and(
+                eq(integration.organizationId, executor.organizationId),
+                eq(integration.provider, 'mcp'),
+                eq(integration.status, 'connected'),
+              ),
+            )
+        ).map((row) => {
+          const config = row.config as unknown as { readonly url: string; readonly alias: string };
+          return { id: row.id, url: config.url, alias: config.alias };
+        })
+      : await db
+          .select({
+            id: personalMcpConnection.id,
+            url: personalMcpConnection.url,
+            alias: personalMcpConnection.alias,
+          })
+          .from(personalMcpConnection)
           .where(
             and(
-              eq(integration.organizationId, executor.organizationId),
-              eq(integration.provider, 'mcp'),
-              eq(integration.status, 'connected'),
+              eq(personalMcpConnection.ownerUserId, executor.ownerUserId),
+              eq(personalMcpConnection.status, 'connected'),
             ),
-          )
-      : [];
+          );
   for (const row of remoteRows) {
-    const config = row.config as unknown as { url: string; alias: string };
-    const credRows = await db
-      .select({ ciphertext: integrationCredential.ciphertext })
-      .from(integrationCredential)
-      .where(eq(integrationCredential.integrationId, row.id))
-      .limit(1);
+    const credRows =
+      executor.kind === 'registered_agent'
+        ? await db
+            .select({ ciphertext: integrationCredential.ciphertext })
+            .from(integrationCredential)
+            .where(eq(integrationCredential.integrationId, row.id))
+            .limit(1)
+        : await db
+            .select({ ciphertext: personalMcpCredential.ciphertext })
+            .from(personalMcpCredential)
+            .where(
+              and(
+                eq(personalMcpCredential.connectionId, row.id),
+                eq(personalMcpCredential.ownerUserId, executor.ownerUserId),
+              ),
+            )
+            .limit(1);
     try {
       const storedCredential = credRows[0] ? unsealCredential(credRows[0].ciphertext) : undefined;
       const oauthCredential = storedCredential ? parseMcpOAuthCredential(storedCredential) : null;
@@ -195,36 +229,58 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
             : storedCredential;
       if (oauthCredential?.kind === 'mcp_oauth' && mcpOAuthTokenNeedsRefresh(oauthCredential)) {
         const refreshed = await refreshMcpOAuthCredential(oauthCredential);
-        await db
-          .update(integrationCredential)
-          .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
-          .where(eq(integrationCredential.integrationId, row.id));
+        if (executor.kind === 'registered_agent') {
+          await db
+            .update(integrationCredential)
+            .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
+            .where(eq(integrationCredential.integrationId, row.id));
+        } else {
+          await db
+            .update(personalMcpCredential)
+            .set({ ciphertext: sealCredential(JSON.stringify(refreshed)) })
+            .where(
+              and(
+                eq(personalMcpCredential.connectionId, row.id),
+                eq(personalMcpCredential.ownerUserId, executor.ownerUserId),
+              ),
+            );
+        }
         bearerToken = refreshed.tokens.access_token;
       }
       const session = await getContainer().mcpConnector.open({
-        url: config.url,
+        url: row.url,
         ...(bearerToken ? { bearerToken } : {}),
       });
       const tools = await session.listTools();
-      remoteSessions.set(config.alias, session);
+      remoteSessions.set(row.alias, session);
       for (const tool of tools) {
-        const namespaced = `${config.alias}__${tool.name}`;
+        const namespaced = `${row.alias}__${tool.name}`;
         if (tool.annotations) annotationsByName.set(namespaced, tool.annotations);
         defs.push({
           name: namespaced,
-          description: `[${config.alias}] ${tool.description}`,
+          description: `[${row.alias}] ${tool.description}`,
           inputSchema: tool.inputSchema,
         });
       }
     } catch (cause) {
-      await db
-        .update(integration)
-        .set({
-          status: 'error',
-          lastError: cause instanceof Error ? cause.message : 'Connection failed',
-          lastErrorAt: new Date(),
-        })
-        .where(eq(integration.id, row.id));
+      const patch = {
+        status: 'error' as const,
+        lastError: cause instanceof Error ? cause.message : 'Connection failed',
+        lastErrorAt: new Date(),
+      };
+      if (executor.kind === 'registered_agent') {
+        await db.update(integration).set(patch).where(eq(integration.id, row.id));
+      } else {
+        await db
+          .update(personalMcpConnection)
+          .set(patch)
+          .where(
+            and(
+              eq(personalMcpConnection.id, row.id),
+              eq(personalMcpConnection.ownerUserId, executor.ownerUserId),
+            ),
+          );
+      }
     }
   }
 

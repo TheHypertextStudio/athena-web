@@ -221,6 +221,18 @@ lookup, a filtered query, and a bulk write, and offered none of the three) and w
 | `run_agent`      |    F     |      F      |     F      |   **T**   | `agents:run`      | —               |
 | `manage_session` |    F     |    **T**    |     T      |     F     | `agents:run`      | —               |
 
+Two more are registered only for a user principal, never a workspace one, because they act on a
+private delegation rather than on shared work:
+
+| Tool                               | readOnly | destructive | idempotent | openWorld | Scope        | Widget |
+| ---------------------------------- | :------: | :---------: | :--------: | :-------: | ------------ | ------ |
+| `pause_athena_assignment_trigger`  |    F     |      F      |     T      |     F     | `work:write` | —      |
+| `remove_athena_assignment_trigger` |    F     |    **T**    |     T      |     F     | `work:write` | —      |
+
+Both match on the caller's own `assignmentId` and `triggerId`; another user's ids return
+`not_found` rather than a distinguishable error, and trigger scope is inherited from the assignment
+and cannot be widened through them.
+
 Notes on the less obvious entries:
 
 - **`organize` is idempotent** because it reconciles: it matches each item against what already

@@ -198,5 +198,10 @@ async function emitInternal(
     // Observer hook: run automation rules against the freshly committed event. Fires only on
     // non-duplicate inserts; never throws (best-effort, depth-capped inside).
     await runAutomationsForEvent(projectEmitInput(input, occurredAt));
+    // Personal Athena assignment triggers observe the same committed event but derive scope from
+    // the assignment's live subtree and re-authorize the owner before starting work. Loaded lazily
+    // to keep the core mutation/event module graph independent of the agent loop at startup.
+    const { handleAthenaAssignmentEvent } = await import('../agent/assignments');
+    await handleAthenaAssignmentEvent(input, occurredAt).catch(() => undefined);
   }
 }

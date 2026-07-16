@@ -31,6 +31,7 @@ import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
+import personalAthena from './routes/personal-athena';
 import time from './routes/time';
 import { createAdminRoutes } from './routes/admin';
 import { createAdminNotificationRoutes } from './routes/admin-notifications';
@@ -85,6 +86,7 @@ const routes = app
   .route('/me/athena', meAthena)
   .route('/me/recovery-codes', meRecovery)
   .route('/me/sessions', meSessions)
+  .route('/me/athena', personalAthena)
   .route('/oauth/clients', oauthClients);
 
 /** The public Hono RPC contract consumed by the web app via `hc<AppType>`. */

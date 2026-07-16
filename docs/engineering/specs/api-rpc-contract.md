@@ -303,6 +303,28 @@ Mounted `/orgs/:orgId/sessions`. Compute/cost/telemetry NOT stored (provider own
 | `POST /:sessionId/cancel`                | `param`                                                      | `SessionOut` (status `canceled`)                                                                  | org                                             | `org:contribute`                                          |
 | `POST /:sessionId/takeover`              | `param`                                                      | `{ taskId, reassignedTo: actorId }` (human takes over)                                            | org                                             | `org:assign`                                              |
 
+### 3.11A `me/athena` (private personal connections and delegation)
+
+Mounted `/me/athena`. Every row is scoped to the authenticated Better Auth user, not an org Actor.
+Workspace ids on assignments identify target context only; every creation and triggered run still
+resolves the user's current human Actor and normal resource permission.
+
+| Method + Path                                       | Input                                                 | Output                                                     | Auth                                   |
+| --------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------- | -------------------------------------- |
+| `GET /connections`                                  | —                                                     | `PersonalMcpConnectionOut[]`                               | authenticated owner                    |
+| `POST /connections/preview`                         | `{ url }`                                             | `{ name }` from MCP server metadata                        | authenticated                          |
+| `POST /connections`                                 | `PersonalMcpConnectionCreate`                         | `PersonalMcpConnectionOut`                                 | authenticated owner                    |
+| `PATCH /connections/:id`                            | `{ name?, alias? }`                                   | `PersonalMcpConnectionOut`                                 | owner only                             |
+| `POST /connections/:id/authorize`                   | —                                                     | `{ authorizationUrl }`                                     | owner only                             |
+| `POST /connections/:id/reconnect`                   | —                                                     | `PersonalMcpConnectionOut` after live `tools/list`         | owner only                             |
+| `DELETE /connections/:id`                           | —                                                     | `{ ok:true }` and credential cascade                       | owner only                             |
+| `GET /assignments` / `GET /assignments/:id`         | —                                                     | `AthenaAssignmentOut[]` / `AthenaAssignmentOut`            | owner only                             |
+| `POST /assignments`                                 | `{ organizationId, entityType, entityId, objective }` | `AthenaAssignmentOut` plus personal notice and initial run | owner with current target `contribute` |
+| `PATCH /assignments/:id`                            | `{ status }`                                          | `AthenaAssignmentOut`                                      | owner only                             |
+| `DELETE /assignments/:id`                           | —                                                     | `{ ok:true }`                                              | owner only                             |
+| `GET/POST /assignments/:id/triggers`                | — / `AthenaTriggerCreate`                             | `AthenaTriggerOut[]` / `AthenaTriggerOut`                  | owner only                             |
+| `PATCH/DELETE /assignments/:id/triggers/:triggerId` | `{ enabled }` / —                                     | `AthenaTriggerOut` / `{ ok:true }`                         | owner only                             |
+
 ### 3.12 `integrations`
 
 Mounted `/orgs/:orgId/integrations`. Migration vs Connector decided up front; MVP = import (migration) / read-only mirror (connector).

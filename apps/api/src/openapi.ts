@@ -203,6 +203,11 @@ const TAGS = [
       'Registered third-party agents are workspace-scoped Actors (`kind: agent`) that perform work through explicit grants. This compatibility surface registers them and drives Agent Sessions against a subject, streaming activity over SSE and gating proposed mutations through approve/reject review. Personal Athena work uses the separate owner-only `/v1/me/athena` surface.',
   },
   {
+    name: 'Athena',
+    description:
+      'Athena is the signed-in person’s private, cross-workspace assistant. This surface manages personal remote MCP connections and user-owned delegations without creating a workspace Actor, changing a human owner or assignee, or carrying stale workspace authority across runs.',
+  },
+  {
     name: 'Capture',
     description:
       'Quick capture turns a raw note into a triaged task in the org inbox with minimal ceremony — the fast path for getting something out of your head and into Docket. Requires `contribute`.',

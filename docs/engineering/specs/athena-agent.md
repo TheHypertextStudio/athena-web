@@ -199,7 +199,7 @@ stored `toolCall.input` before approval. Approval solidifies in place (stable
 `view-transition-name`; no view swaps). Ghosts are visible only to approvers. Non-spatial
 changes fall back to the session proposal card.
 
-## 8. Remote MCP connections (slice 7 — shipped)
+## 8. Remote MCP connections (personal ownership shipped)
 
 `mcpConnector` boundaries port (real: streamable-HTTP SDK client; mock: fixture registry
 incl. a Sunsama server). Org-level rows: `integration.provider = 'mcp'`, alias
@@ -208,9 +208,18 @@ report success when nothing happened"). The toolbox unions connections — Docke
 remote tools `<alias>__<name>` (collision-free by construction) — and remote tools without
 `readOnlyHint: true` classify as writes (fail closed).
 
-Workspace-owned remote MCP connections currently load only for registered agents. Athena's toolbox
-exposes Docket tools alone until personal connection ownership lands; it never
-borrows a workspace credential as a substitute for a user-owned connection.
+Personal rows live in `personal_mcp_connection` with an owner-matched
+`personal_mcp_credential`. They are connected once per Better Auth user, reusable by that user's
+Athena in every workspace, and invisible to every other user. URL preview initializes the server
+and returns its advertised visible name; the create and update contracts always include that
+editable name. Bearer and OAuth material is sealed with AES-256-GCM and the composite credential
+foreign key prevents a credential owner from differing from its connection owner.
+
+`openToolbox({kind:'athena', ownerUserId})` loads only connected personal rows for that owner.
+`openToolbox({kind:'registered_agent', organizationId, agentId})` continues loading only
+workspace `integration.provider='mcp'` rows. A remote tool call uses the selected connection's
+owner-matched credential. Docket tools remain independent: they resolve the Athena owner's current
+human Actor and permissions in the target workspace on every call.
 
 ## 9. Personal API (shipped)
 
@@ -240,7 +249,24 @@ random ULIDs created in the same millisecond are lexically ordered.
 The runner is currently in-process, so create/message/run/approval routes preserve synchronous
 settle responses. No queue, Workflow, or Cloudflare dispatcher is claimed until one exists.
 
-## 10. Fresh-database rollout
+## 10. User-owned assignments and triggers
+
+`athena_assignment` is a private delegation to an initiative, project, or task. It never changes an
+initiative owner, project lead, task assignee, or task delegate, and it never creates an Athena
+Actor. Creating an assignment confirms the user's current `contribute` access, writes a personal
+inbox notice, and starts an `executorKind='athena'` session and fenced run with the Better Auth user
+as `ownerUserId`. Multiple assignments are independent and do not take entity writer leases.
+
+`athena_trigger` belongs to the same user through an owner-matched composite foreign key. Event
+triggers accept only events in the assigned entity's live subtree. Scheduled triggers run no more
+frequently than every five minutes; every trigger has a five-minute-or-longer cooldown and is
+claimed before execution. Each fire restores `ownerUserId`, resolves the current active human Actor,
+and rechecks access to the assignment target. Missing membership, suspension, target deletion, or
+permission loss pauses the assignment and disables all its triggers. The personal REST surface and
+the `pause_athena_assignment_trigger` / `remove_athena_assignment_trigger` Docket tools match both
+assignment and trigger to the current user, so Athena can manage no other person's automation.
+
+## 11. Fresh-database rollout
 
 The user-owned executor model does not backfill legacy Athena data. Existing databases must be
 reset and rebuilt from the complete migration chain. Migration `0041` adds the executor columns,
@@ -249,15 +275,18 @@ heuristics. Legacy sessions, runs, transcripts, chats, Athena agent rows, and co
 are not supported by this rollout; users reconnect personal services after reset. Local development
 uses `pnpm db:reset`; deployed environments start from an empty database. Migration `0042` adds the
 fenced run lease token, deterministic workflow-id check, and internal `executing` action claim.
+Migration `0043` creates the personal connection, credential, assignment, and trigger tables using
+DDL only. It never inspects or backfills legacy integration credentials, sessions, or assignees;
+users reconnect personal services after the required reset.
 
-## 11. Entitlement (slice 6 — shipped)
+## 12. Entitlement (slice 6 — shipped)
 
 `assertAgentSessionsEntitled(orgId)` at `driveSession` first-run — the single choke point
 covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Entitled =
 `organization.lifecycleState ∈ {trialing, active}` (the trial IS the funnel). Typed
 `AgentPlanRequiredError` (402, `agent_plan_required`) for the web upsell.
 
-## 12. Testing doctrine
+## 13. Testing doctrine
 
 Everything runs with `APP_MODE=test`, zero API keys: scripted mock turns drive the real
 loop; the mock Sunsama server backs the import flow; restart resilience is tested by

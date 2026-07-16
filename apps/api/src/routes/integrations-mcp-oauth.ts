@@ -12,7 +12,13 @@
  */
 import { completeMcpOAuthAuthorization, parseMcpOAuthCredential } from '@docket/integrations';
 import { auth } from '@docket/auth';
-import { db, integration, integrationCredential } from '@docket/db';
+import {
+  db,
+  integration,
+  integrationCredential,
+  personalMcpConnection,
+  personalMcpCredential,
+} from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -21,11 +27,17 @@ import { sealCredential, unsealCredential } from '../lib/credentials';
 import { webAppOrigin } from '../lib/github-app';
 import { verifyConnectState } from '../lib/oauth-state';
 import { mcpConfig, verifyIntegration } from './integrations-mcp';
+import { verifyPersonalMcpConnection } from './personal-athena';
 
 /** Return to the Athena settings screen (where MCP connectors now live) with status copy. */
 function settingsRedirect(status: 'connected' | 'error'): string {
   const base = webAppOrigin();
   return `${base}/settings/athena?mcp=${status}`;
+}
+
+/** Return to the personal Connections screen without exposing provider error text. */
+function personalSettingsRedirect(status: 'connected' | 'error'): string {
+  return `${webAppOrigin()}/settings/connections?mcp=${status}`;
 }
 
 /** The same callback URL supplied when the approval was initiated. */
@@ -37,6 +49,95 @@ function redirectUrl(): string {
 const integrationsMcpOAuth = new Hono().get('/callback', async (c) => {
   const state = c.req.query('state');
   const decoded = state ? verifyConnectState(state) : null;
+  if (decoded?.['scope'] === 'personal') {
+    const connectionId = decoded['personalConnectionId'];
+    const ownerUserId = decoded['ownerUserId'];
+    if (typeof connectionId !== 'string' || typeof ownerUserId !== 'string') {
+      return c.redirect(personalSettingsRedirect('error'));
+    }
+    const [personal] = await db
+      .select()
+      .from(personalMcpConnection)
+      .where(
+        and(
+          eq(personalMcpConnection.id, connectionId),
+          eq(personalMcpConnection.ownerUserId, ownerUserId),
+        ),
+      )
+      .limit(1);
+    if (personal?.authMode !== 'oauth') {
+      return c.redirect(personalSettingsRedirect('error'));
+    }
+    const code = c.req.query('code');
+    if (!code) {
+      await db
+        .update(personalMcpConnection)
+        .set({
+          status: 'error',
+          lastError: c.req.query('error') ?? 'MCP authorization was not completed',
+          lastErrorAt: new Date(),
+        })
+        .where(
+          and(
+            eq(personalMcpConnection.id, personal.id),
+            eq(personalMcpConnection.ownerUserId, ownerUserId),
+          ),
+        );
+      return c.redirect(personalSettingsRedirect('error'));
+    }
+    try {
+      const [credentialRow] = await db
+        .select({ ciphertext: personalMcpCredential.ciphertext })
+        .from(personalMcpCredential)
+        .where(
+          and(
+            eq(personalMcpCredential.connectionId, personal.id),
+            eq(personalMcpCredential.ownerUserId, ownerUserId),
+          ),
+        )
+        .limit(1);
+      const pending = credentialRow?.ciphertext
+        ? parseMcpOAuthCredential(unsealCredential(credentialRow.ciphertext))
+        : null;
+      if (pending?.kind !== 'mcp_oauth_pending') {
+        throw new Error('MCP OAuth approval is no longer active');
+      }
+      const approved = await completeMcpOAuthAuthorization({
+        serverUrl: personal.url,
+        redirectUrl: redirectUrl(),
+        authorizationCode: code,
+        credential: pending,
+      });
+      await db
+        .update(personalMcpCredential)
+        .set({ ciphertext: sealCredential(JSON.stringify(approved)) })
+        .where(
+          and(
+            eq(personalMcpCredential.connectionId, personal.id),
+            eq(personalMcpCredential.ownerUserId, ownerUserId),
+          ),
+        );
+      const verified = await verifyPersonalMcpConnection(personal);
+      return c.redirect(
+        personalSettingsRedirect(verified.status === 'connected' ? 'connected' : 'error'),
+      );
+    } catch (cause) {
+      await db
+        .update(personalMcpConnection)
+        .set({
+          status: 'error',
+          lastError: cause instanceof Error ? cause.message : 'MCP authorization failed',
+          lastErrorAt: new Date(),
+        })
+        .where(
+          and(
+            eq(personalMcpConnection.id, personal.id),
+            eq(personalMcpConnection.ownerUserId, ownerUserId),
+          ),
+        );
+      return c.redirect(personalSettingsRedirect('error'));
+    }
+  }
   const integrationId = decoded?.['integrationId'];
   const orgId = decoded?.['orgId'];
   if (typeof integrationId !== 'string' || typeof orgId !== 'string') {

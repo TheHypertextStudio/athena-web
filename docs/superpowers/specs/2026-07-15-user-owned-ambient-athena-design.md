@@ -103,4 +103,6 @@ replaying migrations.
 
 No ownership is inferred from an initiator, agent name, workspace, or historical connection. Users
 connect personal services again after reset, ensuring credentials are never guessed or silently
-shared. Migration `0041` defines only the fresh executor schema and its constraints.
+shared. Migration `0041` defines only the fresh executor schema and its constraints; `0042` adds
+durable execution fencing; schema-only `0043` creates personal MCP connections, assignments, and
+assignment-scoped triggers without backfill or credential inference.

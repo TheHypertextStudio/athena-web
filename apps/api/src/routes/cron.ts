@@ -25,6 +25,7 @@ import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
+import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 import { reapIdleSessions } from '../mcp/session-registry';
 import { sweepExpiredSessions } from './session-sweep';
 
@@ -121,13 +122,20 @@ const cron = new Hono()
     const result = await sweepCalendarSync(new Date());
     return c.json({ swept: true, ...result });
   })
-  // Linear Agent session-run sweep: claims queued (or lease-abandoned) `agent_session_run`
-  // rows, drives each session's turn via `driveSession`, and relays the resulting activity
-  // back to the Linear thread. Lease-guarded (see `linear-agent-sweep.ts`), so a concurrent or
-  // retried scheduler invocation can never double-drive the same run.
+  // Linear Agent session-run sweep: finds queued (or lease-abandoned) `agent_session_run` rows,
+  // drives each session's turn, and relays the resulting activity back to the Linear thread. The
+  // generation claim inside `driveSession` is the atomic one, so a concurrent or retried
+  // scheduler invocation can never double-drive the same run.
   .post('/run-linear-agent-sessions', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepLinearAgentSessions(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // User-owned Athena schedules are assignment-scoped, five-minute minimum, and re-authorize the
+  // persisted owner before every run. The row claim and cooldown make scheduler retries harmless.
+  .post('/athena-triggers', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepAthenaAssignmentTriggers(new Date());
     return c.json({ swept: true, ...result });
   })
   // Expired-session sweep: deletes every `session` row past its `expiresAt` — Better Auth itself

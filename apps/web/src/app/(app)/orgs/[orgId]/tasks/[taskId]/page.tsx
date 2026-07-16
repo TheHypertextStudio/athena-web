@@ -23,6 +23,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { formatWindow } from '@/components/cycles/format-window';
@@ -270,31 +271,35 @@ export default function TaskDetailPage(): JSX.Element {
             triggerVariant="outline"
             readOnly={!canEdit}
           />
-          {canManage ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="ml-auto h-8 w-8"
-                  aria-label="Task actions"
-                >
-                  <Ellipsis className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[12rem]">
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => {
-                    changeConfirmDeleteOpen(true);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete task
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+          <div className="ml-auto flex items-center gap-2">
+            <AthenaContextAction
+              label="Have Athena handle this"
+              context={{
+                workspaceId: orgId,
+                source: { type: 'task', id: taskId, label: task.title },
+              }}
+            />
+            {canManage ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Task actions">
+                    <Ellipsis className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[12rem]">
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => {
+                      changeConfirmDeleteOpen(true);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete task
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </div>
         </div>
 
         {actionError ? (

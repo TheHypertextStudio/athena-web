@@ -231,6 +231,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
               loading={shellLoading}
               settingsSurface={settingsSurface}
               calendarSurface={calendarSurface}
+              showAthenaPulse={pathname !== '/athena'}
               routeOrgId={routeOrgId}
               userId={userId}
               offline={
@@ -329,6 +330,7 @@ interface AppShellInnerProps {
   loading: boolean;
   settingsSurface: boolean;
   calendarSurface: boolean;
+  showAthenaPulse: boolean;
   routeOrgId: string | null;
   userId: string | null;
   /**
@@ -360,6 +362,7 @@ function AppShellInner({
   loading,
   settingsSurface,
   calendarSurface,
+  showAthenaPulse,
   routeOrgId,
   userId,
   offline,
@@ -513,7 +516,14 @@ function AppShellInner({
 
   return (
     <VocabularyProvider skin={loading ? null : skin}>
-      <AthenaPanelProvider orgId={loading ? null : resolvedOrgId}>
+      <AthenaPanelProvider
+        showPulse={showAthenaPulse}
+        context={
+          loading || !resolvedOrgId
+            ? null
+            : { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
+        }
+      >
         <AppShell
           sidebar={sidebar}
           tabBar={tabBar}

@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -39,6 +40,7 @@ import {
   INITIATIVE_STATUS_LABEL,
   InitiativePropertiesPanel,
 } from '@/components/initiatives/properties-panel';
+
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
@@ -359,32 +361,42 @@ export default function InitiativeDetailPage(): JSX.Element {
         </div>
       }
       actions={
-        canManage ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                className="min-h-10"
-                variant="ghost"
-                size="icon"
-                aria-label={`${initiativeNoun} actions`}
-              >
-                <Ellipsis className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => {
-                  deleteInitiative.reset();
-                  setConfirmDeleteOpen(true);
-                }}
-              >
-                <Trash2 className="size-4" />
-                Delete {initiativeNoun.toLowerCase()}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null
+        <>
+          <AthenaContextAction
+            label={`Open Athena for this ${initiativeNoun.toLowerCase()}`}
+            context={{
+              workspaceId: orgId,
+              source: { type: 'initiative', id: initiativeId, label: detail.name },
+            }}
+            variant="ghost"
+          />
+          {canManage ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="min-h-10"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`${initiativeNoun} actions`}
+                >
+                  <Ellipsis className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    deleteInitiative.reset();
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                  Delete {initiativeNoun.toLowerCase()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </>
       }
       tabs={
         <Tabs

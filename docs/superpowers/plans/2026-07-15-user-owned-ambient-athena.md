@@ -87,32 +87,32 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 
 ### Task 5: Personal Athena presentation model and workbench
 
-- [ ] Write failing presenter/component tests for queue grouping, owner-only data, state language,
+- [x] Write failing presenter/component tests for queue grouping, owner-only data, state language,
       structured tool rows, approvals, results, and hidden raw reasoning.
-- [ ] Add typed TanStack Query definitions and pure presentation adapters.
-- [ ] Build the shared dense workbench: objective, needs-you lane, progress log, tool activity,
+- [x] Add typed TanStack Query definitions and pure presentation adapters.
+- [x] Build the shared dense workbench: objective, needs-you lane, progress log, tool activity,
       proposals, receipt, lifecycle controls, and state-aware command input.
-- [ ] Reuse the workbench on personal session deep links and commit the green slice.
+- [x] Reuse the workbench on personal session deep links and commit the green slice.
 
 ### Task 6: Ambient dock and full Athena workspace
 
-- [ ] Write failing shell/route tests for global `Cmd/Ctrl+J`, invocation context, personal counts,
+- [x] Write failing shell/route tests for global `Cmd/Ctrl+J`, invocation context, personal counts,
       dock expansion, `/athena`, and legacy redirects.
-- [ ] Replace `AthenaConversation` with the contextual dock and add the compact shell pulse.
-- [ ] Build `/athena` as a responsive queue/workbench/context composition.
-- [ ] Remove Athena and Agents from workspace navigation; move personal controls to global Settings.
-- [ ] Run focused web tests and commit the green slice.
+- [x] Replace `AthenaConversation` with the contextual dock and add the compact shell pulse.
+- [x] Build `/athena` as a responsive queue/workbench/context composition.
+- [x] Remove Athena and Agents from workspace navigation; move personal controls to global Settings.
+- [x] Run focused web tests and commit the green slice.
 
 ### Task 7: Ambient entry points and real-browser validation
 
-- [ ] Write failing interaction tests for Today, task, project, initiative, Stream, Calendar, and Inbox
+- [x] Write failing interaction tests for Today, task, project, initiative, Stream, Calendar, and Inbox
       invocations.
-- [ ] Wire each surface through the shared `openAthena` contract without creating local mini-chat UIs.
-- [ ] Add Playwright coverage for personal privacy, contextual handoff, approval, Sunsama tool calls,
+- [x] Wire each surface through the shared `openAthena` contract without creating local mini-chat UIs.
+- [x] Add Playwright coverage for personal privacy, contextual handoff, approval, Sunsama tool calls,
       dock expansion, and redirects.
-- [ ] Capture the actual authenticated app at desktop/mobile widths in light/dark themes and run the
+- [x] Capture the actual authenticated app at desktop/mobile widths in light/dark themes and run the
       Docket design review.
-- [ ] Resolve visual, wrapping, focus, touch-target, and accessibility findings.
+- [x] Resolve visual, wrapping, focus, touch-target, and accessibility findings.
 
 ### Task 8: Documentation, verification, and linear closeout
 

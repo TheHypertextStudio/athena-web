@@ -313,7 +313,27 @@ covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Entitled =
 `organization.lifecycleState ∈ {trialing, active}` (the trial IS the funnel). Typed
 `AgentPlanRequiredError` (402, `agent_plan_required`) for the web upsell.
 
-## 13. Testing doctrine
+## 13. Personal ambient experience
+
+Athena is one private, user-owned operations layer rather than a workspace destination or a chat
+transcript. The app shell exposes a compact needs-you/working pulse and a contextual `Cmd/Ctrl+J`
+dock on personal and workspace routes. Today, tasks, projects, initiatives, Stream, Calendar, and
+Inbox pass optional workspace and source context through the same invocation contract; context
+focuses work but never changes ownership or authority.
+
+`/athena` is the canonical full surface. It groups personal work into Needs you, Working, and
+Finished, keeps the objective and current decision ahead of chronology, and reuses the same
+workbench as the dock and `?session=` deep links. Tool activity is rendered as a structured
+`Service · Action` row with an outcome. Provider/tool identifiers and payloads remain inside an
+explicit Technical details disclosure, and model reasoning is removed by the pure presentation
+adapter before React receives the work log. Empty queues can start work directly. Legacy workspace
+Athena and Agents URLs preserve the workspace as optional query context while redirecting here.
+
+The web transport is temporarily isolated behind `PersonalAthenaTransport` and the shared typed
+TanStack Query helpers until the generated client includes `/v1/me/athena`; components do not call
+raw `api.v1.*` clients or hand-roll effect-based fetching.
+
+## 14. Testing doctrine
 
 Everything runs with `APP_MODE=test`, zero API keys: scripted mock turns drive the real
 loop; the mock Sunsama server backs the import flow; restart resilience is tested by

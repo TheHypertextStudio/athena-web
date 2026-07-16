@@ -27,6 +27,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { FreeformText } from '@/components/editor/freeform-text';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
@@ -326,31 +327,41 @@ export default function ProjectDetailPage(): JSX.Element {
         </>
       }
       actions={
-        canDelete ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0"
-                aria-label={`${projectNoun} actions`}
-              >
-                <Ellipsis className="size-5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => {
-                  deleteProject.reset();
-                  setConfirmDeleteOpen(true);
-                }}
-              >
-                <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null
+        <>
+          <AthenaContextAction
+            label="Open Athena for this project"
+            context={{
+              workspaceId: orgId,
+              source: { type: 'project', id: projectId, label: project.name },
+            }}
+            variant="ghost"
+          />
+          {canDelete ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label={`${projectNoun} actions`}
+                >
+                  <Ellipsis className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    deleteProject.reset();
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </>
       }
       tabs={
         <Tabs

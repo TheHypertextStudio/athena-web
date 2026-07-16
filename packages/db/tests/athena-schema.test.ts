@@ -131,12 +131,37 @@ describe('athena schema additions', () => {
     expect(athena.contextOrganizationId).toBe(ids['org']);
     ids['athenaSession'] = athena.id;
 
+    const contextFreeAthena = (
+      await db
+        .insert(agentSession)
+        .values({
+          executorKind: 'athena',
+          organizationId: null,
+          agentId: null,
+          ownerUserId: ids['user']!,
+          trigger: 'delegation',
+        })
+        .returning()
+    )[0]!;
+    ids['contextFreeAthenaSession'] = contextFreeAthena.id;
+    expect(contextFreeAthena.contextOrganizationId).toBeNull();
+
     await expect(
       db.insert(agentSession).values({
         executorKind: 'athena',
         organizationId: null,
         agentId: null,
         ownerUserId: null,
+        trigger: 'delegation',
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(agentSession).values({
+        executorKind: 'athena',
+        organizationId: ids['org']!,
+        contextOrganizationId: ids['org']!,
+        agentId: null,
+        ownerUserId: ids['user']!,
         trigger: 'delegation',
       }),
     ).rejects.toThrow();
@@ -211,6 +236,24 @@ describe('athena schema additions', () => {
         .returning()
     )[0]!;
     expect(transcript.ownerUserId).toBe(ids['user']);
+
+    await expect(
+      db.insert(agentSessionRun).values({
+        sessionId: ids['athenaSession']!,
+        organizationId: ids['org']!,
+        ownerUserId: ids['user']!,
+        generation: 2,
+        workflowInstanceId: `${ids['athenaSession']!}:2`,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(agentSessionTranscript).values({
+        sessionId: ids['contextFreeAthenaSession']!,
+        organizationId: ids['org']!,
+        ownerUserId: ids['user']!,
+        messages: [],
+      }),
+    ).rejects.toThrow();
   });
 
   it('round-trips a durable transcript of TurnMessages keyed by session', async () => {

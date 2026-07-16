@@ -41,20 +41,29 @@
      persistence slice atomically.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
-  runs, and transcripts, plus database checks and owner/context indexes. Migration `0041` maps
-  only connectionless Athena jobs with a human initiating Actor to that Actor's user; shared chats,
-  jobs without an attributable initiator, and all other registered-agent history remain unchanged.
+  runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
+  `organizationId: null`; an optional workspace appears only as execution context, and runs and
+  transcripts are attributed exclusively to either a user or an organization. Migration `0041`
+  maps only uniquely identifiable connectionless Athena jobs with a human initiating Actor to that
+  Actor's user; shared chats, workspaces with multiple matching Athena agents, jobs without an
+  attributable initiator, and all other registered-agent history remain unchanged.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, compile-time executor branches in existing API/web consumers, focused
   DTO/schema/migration/OpenAPI tests, and this work log.
 - **Validation**: Red DTO tests rejected workspace-neutral activity and Athena's nullable executor
-  fields; red database tests showed the missing executor/owner columns and migration. Focused green
-  runs pass 271/271 type tests and 66/66 database tests. Root `pnpm typecheck` and `pnpm lint` pass
-  17/17 tasks, root `pnpm test` passes 17/17 tasks, and root `pnpm build` passes 3/3 tasks.
+  fields; red database tests showed the missing executor/owner columns and migration. Spec-review
+  red tests then proved non-null Athena executor organizations, dual run/transcript attribution,
+  ambiguous migration candidates, and stale transcript attribution were still accepted. Focused
+  green runs pass 271/271 type tests, 67/67 database tests, and 3/3 API ownership/OpenAPI tests.
+  Root `pnpm typecheck` and `pnpm lint` pass 17/17 tasks, root `pnpm test` passes 17/17 tasks, and
+  root `pnpm build` passes 3/3 tasks.
 - **Retrospective**: Preserving legacy history requires a deliberately narrow positive migration,
-  not a blanket rename of every agent named Athena. Keeping the registered-agent runtime guards in
-  place lets the persistence contract land independently; the next slice can change authorization
-  against explicit `executorKind` branches rather than nullable-field inference.
+  including proof that a workspace has exactly one matching legacy executor, not a blanket rename
+  of every agent named Athena. Encoding exclusive attribution in both database checks and the
+  transcript upsert prevents personal data from retaining an organization owner by accident.
+  Keeping the registered-agent runtime guards in place lets the persistence contract land
+  independently; the next slice can change authorization against explicit `executorKind` branches
+  rather than nullable-field inference.
 
 ---
 

@@ -7731,7 +7731,7 @@
       "checkConstraints": {
         "agent_session_executor_shape_check": {
           "name": "agent_session_executor_shape_check",
-          "value": "(\n        \"agent_session\".\"executor_kind\" = 'athena'\n        AND \"agent_session\".\"owner_user_id\" IS NOT NULL\n        AND \"agent_session\".\"agent_id\" IS NULL\n      ) OR (\n        \"agent_session\".\"executor_kind\" = 'registered_agent'\n        AND \"agent_session\".\"owner_user_id\" IS NULL\n        AND \"agent_session\".\"context_organization_id\" IS NULL\n        AND \"agent_session\".\"organization_id\" IS NOT NULL\n        AND \"agent_session\".\"agent_id\" IS NOT NULL\n      )"
+          "value": "(\n        \"agent_session\".\"executor_kind\" = 'athena'\n        AND \"agent_session\".\"owner_user_id\" IS NOT NULL\n        AND \"agent_session\".\"organization_id\" IS NULL\n        AND \"agent_session\".\"agent_id\" IS NULL\n      ) OR (\n        \"agent_session\".\"executor_kind\" = 'registered_agent'\n        AND \"agent_session\".\"owner_user_id\" IS NULL\n        AND \"agent_session\".\"context_organization_id\" IS NULL\n        AND \"agent_session\".\"organization_id\" IS NOT NULL\n        AND \"agent_session\".\"agent_id\" IS NOT NULL\n      )"
         }
       },
       "isRLSEnabled": false
@@ -7938,7 +7938,7 @@
       "checkConstraints": {
         "agent_session_run_attribution_check": {
           "name": "agent_session_run_attribution_check",
-          "value": "\"agent_session_run\".\"owner_user_id\" IS NOT NULL OR \"agent_session_run\".\"organization_id\" IS NOT NULL"
+          "value": "(\"agent_session_run\".\"owner_user_id\" IS NOT NULL AND \"agent_session_run\".\"organization_id\" IS NULL)\n        OR (\"agent_session_run\".\"owner_user_id\" IS NULL AND \"agent_session_run\".\"organization_id\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false
@@ -8032,7 +8032,7 @@
       "checkConstraints": {
         "agent_session_transcript_attribution_check": {
           "name": "agent_session_transcript_attribution_check",
-          "value": "\"agent_session_transcript\".\"owner_user_id\" IS NOT NULL OR \"agent_session_transcript\".\"organization_id\" IS NOT NULL"
+          "value": "(\"agent_session_transcript\".\"owner_user_id\" IS NOT NULL AND \"agent_session_transcript\".\"organization_id\" IS NULL)\n        OR (\"agent_session_transcript\".\"owner_user_id\" IS NULL AND \"agent_session_transcript\".\"organization_id\" IS NOT NULL)"
         }
       },
       "isRLSEnabled": false

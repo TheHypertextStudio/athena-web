@@ -95,6 +95,7 @@ export const agentSession = pgTable(
       sql`(
         ${t.executorKind} = 'athena'
         AND ${t.ownerUserId} IS NOT NULL
+        AND ${t.organizationId} IS NULL
         AND ${t.agentId} IS NULL
       ) OR (
         ${t.executorKind} = 'registered_agent'
@@ -147,7 +148,8 @@ export const agentSessionRun = pgTable(
     index('agent_session_run_owner_status_idx').on(t.ownerUserId, t.status),
     check(
       'agent_session_run_attribution_check',
-      sql`${t.ownerUserId} IS NOT NULL OR ${t.organizationId} IS NOT NULL`,
+      sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)
+        OR (${t.ownerUserId} IS NULL AND ${t.organizationId} IS NOT NULL)`,
     ),
   ],
 );
@@ -208,7 +210,8 @@ export const agentSessionTranscript = pgTable(
     index('agent_session_transcript_owner_idx').on(t.ownerUserId),
     check(
       'agent_session_transcript_attribution_check',
-      sql`${t.ownerUserId} IS NOT NULL OR ${t.organizationId} IS NOT NULL`,
+      sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)
+        OR (${t.ownerUserId} IS NULL AND ${t.organizationId} IS NOT NULL)`,
     ),
   ],
 );

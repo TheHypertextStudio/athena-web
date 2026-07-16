@@ -25,15 +25,29 @@ WHERE
 	AND "registered"."connection" IS NULL
 	AND "registered"."actor_id" = "executor_actor"."id"
 	AND "executor_actor"."kind" = 'agent'
-	AND "executor_actor"."display_name" = 'Athena';--> statement-breakpoint
+	AND "executor_actor"."display_name" = 'Athena'
+	AND (
+		SELECT count(*)
+		FROM "agent" AS "candidate"
+		JOIN "actor" AS "candidate_actor" ON "candidate_actor"."id" = "candidate"."actor_id"
+		WHERE
+			"candidate"."organization_id" = "session"."organization_id"
+			AND "candidate"."connection" IS NULL
+			AND "candidate_actor"."kind" = 'agent'
+			AND "candidate_actor"."display_name" = 'Athena'
+	) = 1;--> statement-breakpoint
 UPDATE "agent_session_run" AS "run"
-SET "owner_user_id" = "session"."owner_user_id"
+SET
+	"owner_user_id" = "session"."owner_user_id",
+	"organization_id" = NULL
 FROM "agent_session" AS "session"
 WHERE
 	"run"."session_id" = "session"."id"
 	AND "session"."executor_kind" = 'athena';--> statement-breakpoint
 UPDATE "agent_session_transcript" AS "transcript"
-SET "owner_user_id" = "session"."owner_user_id"
+SET
+	"owner_user_id" = "session"."owner_user_id",
+	"organization_id" = NULL
 FROM "agent_session" AS "session"
 WHERE
 	"transcript"."session_id" = "session"."id"
@@ -49,6 +63,7 @@ CREATE INDEX "agent_session_transcript_owner_idx" ON "agent_session_transcript" 
 ALTER TABLE "agent_session" ADD CONSTRAINT "agent_session_executor_shape_check" CHECK ((
         "agent_session"."executor_kind" = 'athena'
         AND "agent_session"."owner_user_id" IS NOT NULL
+        AND "agent_session"."organization_id" IS NULL
         AND "agent_session"."agent_id" IS NULL
       ) OR (
         "agent_session"."executor_kind" = 'registered_agent'
@@ -57,5 +72,7 @@ ALTER TABLE "agent_session" ADD CONSTRAINT "agent_session_executor_shape_check" 
         AND "agent_session"."organization_id" IS NOT NULL
         AND "agent_session"."agent_id" IS NOT NULL
       ));--> statement-breakpoint
-ALTER TABLE "agent_session_run" ADD CONSTRAINT "agent_session_run_attribution_check" CHECK ("agent_session_run"."owner_user_id" IS NOT NULL OR "agent_session_run"."organization_id" IS NOT NULL);--> statement-breakpoint
-ALTER TABLE "agent_session_transcript" ADD CONSTRAINT "agent_session_transcript_attribution_check" CHECK ("agent_session_transcript"."owner_user_id" IS NOT NULL OR "agent_session_transcript"."organization_id" IS NOT NULL);
+ALTER TABLE "agent_session_run" ADD CONSTRAINT "agent_session_run_attribution_check" CHECK (("agent_session_run"."owner_user_id" IS NOT NULL AND "agent_session_run"."organization_id" IS NULL)
+        OR ("agent_session_run"."owner_user_id" IS NULL AND "agent_session_run"."organization_id" IS NOT NULL));--> statement-breakpoint
+ALTER TABLE "agent_session_transcript" ADD CONSTRAINT "agent_session_transcript_attribution_check" CHECK (("agent_session_transcript"."owner_user_id" IS NOT NULL AND "agent_session_transcript"."organization_id" IS NULL)
+        OR ("agent_session_transcript"."owner_user_id" IS NULL AND "agent_session_transcript"."organization_id" IS NOT NULL));

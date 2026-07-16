@@ -25,13 +25,13 @@ export function toSessionOut(s: SessionRow): z.input<typeof AgentSessionOut> {
     createdAt: s.createdAt.toISOString(),
   };
   if (s.executorKind === 'athena') {
-    if (s.ownerUserId === null || s.agentId !== null) {
+    if (s.ownerUserId === null || s.organizationId !== null || s.agentId !== null) {
       throw new Error('Athena session violates its executor ownership contract');
     }
     return {
       ...common,
       executorKind: 'athena',
-      organizationId: s.organizationId,
+      organizationId: null,
       contextOrganizationId: s.contextOrganizationId,
       agentId: null,
       ownerUserId: s.ownerUserId,

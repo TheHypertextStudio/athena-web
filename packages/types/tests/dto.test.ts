@@ -1350,12 +1350,22 @@ describe('agent DTOs', () => {
     });
     expect(athena.ownerUserId).toBe(ID2);
     expect(athena.contextOrganizationId).toBe(ID);
+    expect(
+      AgentSessionOut.parse({
+        ...athena,
+        contextOrganizationId: undefined,
+      }).contextOrganizationId,
+    ).toBeUndefined();
+    expect(
+      AgentSessionOut.parse({ ...athena, contextOrganizationId: null }).contextOrganizationId,
+    ).toBeNull();
 
     for (const invalid of [
       { ...registered, ownerUserId: ID2 },
       { ...registered, agentId: null },
       { ...athena, ownerUserId: null },
       { ...athena, agentId: ID },
+      { ...athena, organizationId: ID },
     ]) {
       expect(AgentSessionOut.safeParse(invalid).success).toBe(false);
     }

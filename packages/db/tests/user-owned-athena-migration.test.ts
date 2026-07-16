@@ -103,16 +103,57 @@ describe('user-owned Athena migration', () => {
       },
     ]);
 
-    const runs = await client.query<{ owner_user_id: string | null }>(
-      `SELECT owner_user_id FROM agent_session_run WHERE id = 'run_owned'`,
-    );
-    expect(runs.rows[0]?.owner_user_id).toBe('user_owner');
-    const transcripts = await client.query<{ session_id: string; owner_user_id: string | null }>(
-      `SELECT session_id, owner_user_id FROM agent_session_transcript ORDER BY session_id`,
+    const runs = await client.query<{
+      organization_id: string | null;
+      owner_user_id: string | null;
+    }>(`SELECT organization_id, owner_user_id FROM agent_session_run WHERE id = 'run_owned'`);
+    expect(runs.rows[0]).toEqual({ organization_id: null, owner_user_id: 'user_owner' });
+    const transcripts = await client.query<{
+      session_id: string;
+      organization_id: string | null;
+      owner_user_id: string | null;
+    }>(
+      `SELECT session_id, organization_id, owner_user_id
+       FROM agent_session_transcript ORDER BY session_id`,
     );
     expect(transcripts.rows).toEqual([
-      { session_id: 'session_owned', owner_user_id: 'user_owner' },
-      { session_id: 'session_shared_chat', owner_user_id: null },
+      { session_id: 'session_owned', organization_id: null, owner_user_id: 'user_owner' },
+      {
+        session_id: 'session_shared_chat',
+        organization_id: 'org_one',
+        owner_user_id: null,
+      },
     ]);
+  });
+
+  it('leaves jobs registered when a workspace has multiple matching Athena candidates', async () => {
+    const client = await legacyDatabase();
+    await client.exec(`
+      INSERT INTO actor (id, organization_id, kind, display_name, user_id)
+      VALUES ('actor_athena_two', 'org_one', 'agent', 'Athena', null);
+      INSERT INTO agent (id, organization_id, actor_id)
+      VALUES ('agent_athena_two', 'org_one', 'actor_athena_two');
+      INSERT INTO agent_session
+        (id, organization_id, agent_id, trigger, kind, initiator_id)
+      VALUES ('session_ambiguous_agent', 'org_one', 'agent_athena', 'delegation', 'job', 'actor_owner');
+    `);
+
+    await client.exec(readFileSync(resolve(migrationsFolder, migrationName), 'utf8'));
+
+    const result = await client.query<{
+      executor_kind: string;
+      organization_id: string | null;
+      owner_user_id: string | null;
+      agent_id: string | null;
+    }>(`
+      SELECT executor_kind, organization_id, owner_user_id, agent_id
+      FROM agent_session WHERE id = 'session_ambiguous_agent'
+    `);
+    expect(result.rows[0]).toEqual({
+      executor_kind: 'registered_agent',
+      organization_id: 'org_one',
+      owner_user_id: null,
+      agent_id: 'agent_athena',
+    });
   });
 });

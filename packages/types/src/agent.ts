@@ -394,9 +394,9 @@ const AthenaSessionOut = AgentSessionOutBase.extend({
   executorKind: z
     .literal('athena')
     .describe('The caller-owned Athena runtime executes this session.'),
-  organizationId: OrganizationId.nullable().describe(
-    'Legacy workspace attribution retained when present; null for new personal sessions.',
-  ),
+  organizationId: z
+    .null()
+    .describe('Athena is user-owned; workspace focus is carried only as optional context.'),
   contextOrganizationId: OrganizationId.nullable()
     .optional()
     .describe('The optional workspace in which Athena is operating.'),

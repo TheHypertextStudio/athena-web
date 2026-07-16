@@ -106,6 +106,18 @@
   4. Update the Athena execution spec and reviewed plan, run focused race/retry/recovery suites and
      every repository gate, self-review the linear diff, and commit without rebasing, merging, or
      pushing.
+- **Plan (atomic lease-fencing review fix)**:
+  1. Add deterministic red race regressions that rotate a generation token at each persisted-effect
+     boundary: streamed thought/response activity, transcript plus action/elicitation, approved
+     action claim, applied/failed result, and toolbox initialization failure.
+  2. Introduce one transaction-scoped lease fence that locks and revalidates the run id, token,
+     running status, and freshness before committing any generation-owned write; route every loop
+     activity, transcript, action, claim, result, error, checkpoint, and settlement through it.
+  3. Move toolbox initialization under the heartbeat-owned try/finally and make initialization
+     failures atomically settle the generation and session as failed with `lastError`.
+  4. Audit generation-owned writes for remaining check-then-write sequences, run focused race and
+     API gates plus proportionate root gates, document the outcome, self-review, and commit this fix
+     independently without rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -158,6 +170,26 @@
   and always release blocked providers. Self-review also showed that reply identity must be queried
   without an arbitrary history bound; future resumable edges should prefer durable correlation ids
   over timestamp windows from the start.
+- **Atomic Lease-Fencing Review Fix**: Replaced generation-owned check-then-write sequences with one
+  transaction-scoped fence that locks and revalidates the run id, token, running status, and lease
+  freshness before committing transcript, activity, action, result, and audit writes. Checkpoints
+  remain one conditional ownership update, while settlement conditionally completes the run and
+  updates the session plus any error activity in one transaction. Toolbox initialization now runs
+  inside the heartbeat-owned failure boundary, so initialization errors atomically fail both the run
+  generation and session with the persisted error instead of leaving either row running.
+- **Atomic Lease-Fencing Validation**: Deterministic takeover regressions rotate the token at streamed
+  thought/response, assistant transcript/action, approved-action claim, and action-result boundaries;
+  stale workers persist none of those effects, and toolbox initialization failure settles the run.
+  Focused race coverage and the full API suite pass at 146 files and 1,288/1,288 tests. Root
+  `pnpm typecheck` and `pnpm lint` pass 17/17 tasks each; the final ordered `pnpm test` passes 17/17
+  tasks, including the same API total, and `pnpm build` passes 3/3 tasks. `git diff --check` passes.
+  The only recurring diagnostic is local Node 24.14.0 versus the declared minimum 24.15.0.
+- **Atomic Lease-Fencing Retrospective**: A lease check before a database write is observation, not
+  fencing; ownership must be locked and revalidated in the same transaction as the persisted effect.
+  The durable `approved → executing` action claim remains the external-dispatch boundary, so lease
+  takeover can prevent stale result persistence without making an interrupted MCP write repeatable.
+- **Atomic Lease-Fencing Files Changed**: `apps/api/src/agent/{loop,run-generation}.ts`,
+  `apps/api/tests/agent/user-owned-loop.test.ts`, and this work log.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, authenticated compatibility-route access helpers, proposal and

@@ -15,6 +15,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { EditableFreeformText, FreeformText } from '@/components/editor/freeform-text';
 import { InitiativeDocument } from '@/components/initiatives/initiative-document';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
@@ -225,6 +226,14 @@ export default function ProjectDetailPage(): JSX.Element {
           <h1 className="text-headline-large text-on-surface max-w-[32ch] font-medium">
             {project.name}
           </h1>
+          <AthenaContextAction
+            label="Open Athena for this project"
+            context={{
+              workspaceId: orgId,
+              source: { type: 'project', id: projectId, label: project.name },
+            }}
+            variant="ghost"
+          />
         </div>
 
         <EditableFreeformText

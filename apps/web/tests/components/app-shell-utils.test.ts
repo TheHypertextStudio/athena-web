@@ -44,3 +44,10 @@ describe('object detail shell treatment', () => {
     expect(shellFrame).toContain('loading || settingsSurface || objectDetailSurface');
   });
 });
+
+describe('workspace navigation', () => {
+  it('keeps personal Athena and Agents out of workspace-owned navigation', () => {
+    expect(shellUtils).not.toContain("  'athena',");
+    expect(shellUtils).not.toContain("  'agents',");
+  });
+});

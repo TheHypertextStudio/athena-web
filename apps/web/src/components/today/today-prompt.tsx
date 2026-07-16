@@ -5,14 +5,13 @@
  *
  * @remarks
  * The single entry point for getting work INTO Docket from the daily surface, wiring the
- * two backend paths that already exist:
+ * the direct capture path and the one shared personal Athena dock:
  *
  * - **Capture** (`POST /v1/orgs/:orgId/capture`) — the default. Free text becomes a real
  *   task in the active workspace (its default team's entry state, attached to the live
  *   cycle when one covers today). `Enter` submits.
- * - **Ask Athena** (`POST /v1/orgs/:orgId/sessions`) — the escalation. The same text
- *   becomes an agent session brief; on success we navigate straight into the live
- *   session view. `⌘Enter` submits.
+ * - **Ask Athena** opens the global personal dock with this workspace and draft attached. The dock
+ *   creates and supervises the work; Today does not grow its own mini session UI.
  *
  * The box always names the workspace it will write into (the active workspace), so the
  * cross-org Today surface is never ambiguous about where a thought lands.
@@ -23,25 +22,16 @@
  * workspace as reviewable ghosts, and nothing lands until you approve. Same engine,
  * same doors — the empty state just leads with the Athena door.
  */
-import type { SessionStatus } from '@docket/types';
 import { ArrowRight, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
-import { SessionStatusPill } from '@/components/agents/session-status';
+import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { api } from '@/lib/api';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { STALE, apiQueryOptions, useApiQuery } from '@/lib/query';
 import { queryKeys } from '@/lib/query-keys';
-
-/** A just-created Athena job session, tracked inline instead of navigating away from Today. */
-interface AthenaSessionNotice {
-  id: string;
-  orgId: string;
-  status: SessionStatus;
-}
 
 /** A successful capture: enough to confirm AND point at the created task. */
 interface CaptureNotice {
@@ -63,11 +53,10 @@ export interface TodayPromptProps {
 
 /** The hybrid prompt box: capture a task, or hand the thought to Athena. */
 export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): JSX.Element {
-  const router = useRouter();
+  const { openAthena } = useAthenaPanel();
   const [text, setText] = useState('');
-  const [busy, setBusy] = useState<'capture' | 'athena' | null>(null);
+  const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
-  const [athenaSession, setAthenaSession] = useState<AthenaSessionNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Detect the fresh-workspace moment: zero tasks flips the box into its onboarding
@@ -91,7 +80,6 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
     setBusy('capture');
     setError(null);
     setNotice(null);
-    setAthenaSession(null);
     try {
       const res = await api.v1.orgs[':orgId'].capture.$post({
         param: { orgId },
@@ -120,43 +108,13 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
     }
   }, [orgId, orgLabel, text, onCaptured]);
 
-  const askAthena = useCallback(async (): Promise<void> => {
+  const askAthena = useCallback((): void => {
     if (!orgId || !text.trim()) return;
-    setBusy('athena');
     setError(null);
     setNotice(null);
-    setAthenaSession(null);
-    try {
-      const res = await api.v1.orgs[':orgId'].sessions.$post({
-        param: { orgId },
-        json: { prompt: text.trim() },
-      });
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(res, 'Athena could not take that on.'),
-            'Athena could not take that on.',
-          ),
-        );
-        return;
-      }
-      const session = await res.json();
-      // The firehose-onboarding moment (empty workspace) has its own dedicated full-page
-      // review — that flow is unchanged. An everyday ask stays on Today: the session is
-      // tracked inline instead of navigating away, so asking Athena something never feels
-      // like leaving the page you were on.
-      if (emptyWorkspace) {
-        router.push(`/orgs/${orgId}/sessions/${session.id}`);
-        return;
-      }
-      setText('');
-      setAthenaSession({ id: session.id, orgId, status: session.status });
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Athena could not take that on.'));
-    } finally {
-      setBusy(null);
-    }
-  }, [orgId, text, router, emptyWorkspace]);
+    openAthena({ workspaceId: orgId, workspaceName: orgLabel }, text.trim());
+    setText('');
+  }, [openAthena, orgId, orgLabel, text]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -165,7 +123,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       if (!canSubmit) return;
       // On an empty workspace the Athena door leads: plain Enter hands the firehose to
       // her (⌘Enter still does everywhere).
-      if (event.metaKey || event.ctrlKey || emptyWorkspace) void askAthena();
+      if (event.metaKey || event.ctrlKey || emptyWorkspace) askAthena();
       else void capture();
     },
     [canSubmit, capture, askAthena, emptyWorkspace],
@@ -189,7 +147,6 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           onChange={(event) => {
             setText(event.target.value);
             if (notice) setNotice(null);
-            if (athenaSession) setAthenaSession(null);
           }}
           onKeyDown={onKeyDown}
           rows={text.includes('\n') || text.length > 90 ? 3 : 2}
@@ -212,11 +169,11 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
               variant={emptyWorkspace ? 'default' : 'ghost'}
               disabled={!canSubmit}
               onClick={() => {
-                void askAthena();
+                askAthena();
               }}
             >
-              <Sparkles className={busy === 'athena' ? 'animate-pulse' : undefined} />
-              {busy === 'athena' ? 'Handing off…' : 'Ask Athena'}
+              <Sparkles />
+              Ask Athena
               <kbd className="text-on-surface-variant ml-1 hidden font-mono text-[10px] @lg:inline">
                 ⌘↵
               </kbd>
@@ -251,20 +208,6 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           </p>
         ) : null}
       </div>
-      {athenaSession ? (
-        <div className="border-outline-variant bg-surface-container-low flex items-center justify-between gap-3 rounded-xl border px-4 py-3">
-          <span className="flex min-w-0 items-center gap-2">
-            <SessionStatusPill status={athenaSession.status} />
-            <span className="text-on-surface-variant text-sm">Athena is on it</span>
-          </span>
-          <Link
-            href={`/orgs/${athenaSession.orgId}/sessions/${athenaSession.id}`}
-            className="text-on-surface hover:text-primary shrink-0 text-sm font-medium underline underline-offset-4 transition-colors"
-          >
-            View session
-          </Link>
-        </div>
-      ) : null}
     </div>
   );
 }

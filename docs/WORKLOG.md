@@ -18,10 +18,10 @@
 - **Subtasks**:
   - [x] Add user-owned executor, activity, transcript, run, and migration contracts.
   - [x] Execute Docket tools through the owner's live user permission context.
-  - [ ] Complete the private personal Athena chat, work, and session API migration.
+  - [x] Complete the private personal Athena chat, work, and session API migration.
   - [x] Add owner-only personal connections, assignments, and assignment triggers.
-  - [ ] Build the shared workbench, ambient dock, and full `/athena` workspace.
-  - [ ] Wire contextual entry points and validate the real application with Playwright.
+  - [x] Build the shared workbench, ambient dock, and full `/athena` workspace.
+  - [x] Wire contextual entry points and validate the real application with Playwright.
   - [ ] Complete documentation, repository gates, code review, and linear-history closeout.
 - **Decisions**: Athena never receives a workspace Actor, grant, role, or independent capability.
   Workspaces are optional execution context only. Personal work logs and connectors are owner-only;
@@ -355,6 +355,22 @@
   latest generation together; changing only the parent leaves an independently runnable child.
   Recovery must also reconcile Docket's authoritative state after transport accepted a message,
   because Queue acknowledgement proves ingestion rather than successful Workflow completion.
+- **Plan (ambient personal experience)**:
+  1. Add red presenter and component tests for personal queue grouping, state language, private
+     decisions, structured connection activity, outcome receipts, and suppression of model
+     reasoning and raw tool payloads outside technical disclosure.
+  2. Isolate the expected `/v1/me/athena` transport behind typed TanStack Query definitions and
+     pure presentation adapters, then build one dense workbench shared by the dock, personal route,
+     and session deep links.
+  3. Add red shell and route tests for the contextual `Cmd/Ctrl+J` dock, compact needs-you/working
+     counts, preserved invocation context, `/athena`, workspace-filter redirects, and removal of
+     personal Athena from workspace navigation.
+  4. Wire Today, task, project, initiative, Stream, Calendar, and Inbox surfaces through one
+     `openAthena` context contract; add authenticated Playwright journeys for the dock, approvals,
+     structured Sunsama activity, redirects, and contextual handoff.
+  5. Validate responsive light/dark application renders at desktop and mobile widths, resolve
+     accessibility and interaction findings, run the web and repository gates, complete the
+     retrospective, and commit the experience slice locally without rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -484,6 +500,16 @@
   but cannot carry authority across resource types. Centralizing fetch at the integration boundary
   made SDK discovery and transport behavior subject to the same invariant and made rebinding,
   redirect, and resource-bound regressions deterministic through construction-time test seams.
+- **Ambient Personal Experience**: Added a pure owner-safe presenter and a typed, isolated
+  `/v1/me/athena` TanStack Query transport seam; one objective-first workbench now renders private
+  decisions, state-aware lifecycle controls, structured `Service · Action` activity, outcomes,
+  receipts, and technical disclosures without exposing model reasoning. The global shell carries a
+  compact counts pulse and contextual `Cmd/Ctrl+J` dock everywhere, including Hub routes. `/athena`
+  provides the responsive Needs you, Working, and Finished queue, selected workbench, contextual
+  rail, workspace-preserving deep links, and a real empty-queue start action. Legacy workspace
+  Athena and Agents routes redirect into this personal surface, and those destinations no longer
+  appear in workspace navigation. Today, Tasks, task detail, Project, Initiative, Stream, Calendar,
+  and Inbox now enter the same dock contract instead of opening local mini chats.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, authenticated compatibility-route access helpers, proposal and
@@ -616,6 +642,20 @@
   admission are separate commits by necessity, so the state between them must be a first-class
   retry point rather than an unreachable transient. Keeping `approved` retryable and `executing`
   non-repeatable preserves both human audit idempotency and the external tool dispatch boundary.
+- **Experience Validation**: Red presenter, adapter, component, shell, route, entry-point, and
+  empty-queue tests drove the personal experience. The final focused web suite passes 44/44 tests
+  across twelve files, including the Athena, Inbox, and app-shell boundaries; the shared shell suite
+  passes 39/39. The authenticated Chromium
+  journey signs up and onboards a real user, opens the dock from the keyboard and Today, verifies
+  private approval and structured Sunsama activity, reveals raw payload only through Technical
+  details, follows the legacy redirect, proves the redundant pulse is absent from `/athena`, and
+  passes 1/1 while regenerating four real application screenshots at desktop/mobile widths in both
+  themes. The same journey proves zero 320px document overflow, 40px minimum visible Athena
+  controls, visible focus treatment, and AA contrast on the primary decision. The Docket craft
+  scorecard records a ship verdict. Final root validation passes typecheck and lint (17/17 tasks
+  each), tests (17/17 tasks; web 772/772, API 1,272/1,272, tooling 46/46), and build (3/3 tasks).
+  `git diff --check` passes. The only recurring diagnostic is the repository engine warning for
+  local Node 24.14.0 versus the declared minimum 24.15.0.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A
@@ -641,6 +681,11 @@
   every selected action before the transaction mutates any row. Keeping `applied` as an execution
   attempt state, with success represented by the stored result's `isError`, preserves deterministic
   reconciliation without misreporting a denied tool call as an unattempted proposal.
+  The experience pass reinforced that a persistent assistant should read as an operations desk,
+  not a transcript: objectives, decisions, receipts, and structured service outcomes carry the
+  hierarchy. Running the real narrow viewport exposed a flex-shrink queue collapse that component
+  tests could not, while the craft rubric exposed an empty queue that described work but could not
+  start it. Both are now covered by executable regressions.
 
 ---
 

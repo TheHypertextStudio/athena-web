@@ -1,17 +1,15 @@
 'use client';
 
-/**
- * The global ⌘J slide-over onto Athena's persistent chat thread.
- *
- * @remarks
- * Athena is meant to be summonable from anywhere without leaving the page you're on — this is
- * that door. It renders the SAME {@link AthenaConversation} the standalone `/orgs/:orgId/athena`
- * page shows (one thread, many doors: never a second, ephemeral conversation). The panel needs
- * the shell's already-resolved active org (route ?? last-used ?? personal space — see
- * `AppShellInner`), so it's mounted there and takes `orgId` as a prop rather than re-deriving it.
- */
 import { Sparkles, X } from '@docket/ui/icons';
-import { Button, Sheet, SheetClose, SheetContent, SheetTitle } from '@docket/ui/primitives';
+import {
+  Button,
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  Skeleton,
+} from '@docket/ui/primitives';
+import Link from 'next/link';
 import {
   createContext,
   type JSX,
@@ -22,107 +20,322 @@ import {
   useMemo,
   useState,
 } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
-import AthenaConversation from './athena-conversation';
+import {
+  athenaHref,
+  personalAthenaDetailDef,
+  personalAthenaQueueDef,
+  personalAthenaTransport,
+  type PersonalAthenaLifecycle,
+  type PersonalAthenaTransport,
+} from '@/lib/athena/query-defs';
+import type { PersonalAthenaContext, PersonalAthenaSessionDetail } from '@/lib/athena/presentation';
+import { queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
-/** Whether a keydown event is the Athena shortcut (Cmd+J / Ctrl+J) — summon the org's chat thread. */
-function isAthenaShortcut(event: KeyboardEvent): boolean {
+import { AthenaWorkbench } from './athena-workbench';
+
+/** Whether a keydown event is the personal Athena shortcut. */
+export function isAthenaShortcut(event: KeyboardEvent): boolean {
   return (event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'j';
 }
 
-/** The Athena panel controls exposed to the app shell. */
+/** Global personal Athena controls available to every contextual entry point. */
 export interface AthenaPanelValue {
-  /** Whether the panel is currently open. */
   readonly open: boolean;
-  /** Open the panel (a no-op with no resolved org, e.g. on the cross-org Hub). */
-  readonly openPanel: () => void;
-  /** Close the panel. */
-  readonly closePanel: () => void;
+  readonly context: PersonalAthenaContext | null;
+  readonly openAthena: (context?: PersonalAthenaContext | null, draft?: string) => void;
+  readonly closeAthena: () => void;
 }
 
-/** Internal context; consumed only through {@link useAthenaPanel}. */
 const AthenaPanelContext = createContext<AthenaPanelValue | null>(null);
 
-/** Props for {@link AthenaPanelProvider}. */
+/** Props for the global personal Athena layer. */
 export interface AthenaPanelProviderProps {
-  /** The shell's resolved active org, or `null` when none is bound (the Hub). */
-  orgId: string | null;
-  children: ReactNode;
+  readonly children: ReactNode;
+  readonly context?: PersonalAthenaContext | null;
+  readonly transport?: PersonalAthenaTransport;
+  readonly showPulse?: boolean;
 }
 
-/** Provide the global Athena panel: open state and the slide-over onto the org's chat thread. */
-export function AthenaPanelProvider({ orgId, children }: AthenaPanelProviderProps): JSX.Element {
+/**
+ * Provide the global Athena pulse and contextual dock.
+ *
+ * @remarks
+ * Personal Athena is available without an active workspace, including the Hub. Opening from a
+ * concrete Docket object replaces only the dock's invocation context; work remains user-owned.
+ */
+export function AthenaPanelProvider({
+  children,
+  context: initialContext = null,
+  transport = personalAthenaTransport,
+  showPulse = true,
+}: AthenaPanelProviderProps): JSX.Element {
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [context, setContext] = useState<PersonalAthenaContext | null>(initialContext);
+  const [selectedId, setSelectedId] = useState('');
+  const [launchDraft, setLaunchDraft] = useState<string | null>(null);
+  const queue = useLiveApiQuery(personalAthenaQueueDef(transport), 5_000);
+  const shellWorkspaceId = initialContext?.workspaceId;
+  const shellWorkspaceName = initialContext?.workspaceName;
 
-  const openPanel = useCallback(() => {
-    if (orgId) setOpen(true);
-  }, [orgId]);
-  const closePanel = useCallback(() => {
+  useEffect(() => {
+    setContext((current) => {
+      if (current?.source && current.workspaceId === shellWorkspaceId) return current;
+      return shellWorkspaceId || shellWorkspaceName
+        ? {
+            ...(shellWorkspaceId ? { workspaceId: shellWorkspaceId } : {}),
+            ...(shellWorkspaceName ? { workspaceName: shellWorkspaceName } : {}),
+          }
+        : null;
+    });
+  }, [shellWorkspaceId, shellWorkspaceName]);
+
+  const preferredId =
+    queue.data?.sessions.needsYou[0]?.id ??
+    queue.data?.sessions.working[0]?.id ??
+    queue.data?.currentChat?.id ??
+    '';
+  useEffect(() => {
+    if (!selectedId && preferredId) setSelectedId(preferredId);
+  }, [preferredId, selectedId]);
+
+  const detail = useLiveApiQuery(personalAthenaDetailDef(selectedId, transport), 3_000);
+  const selected = detail.data ?? null;
+
+  const openAthena = useCallback((nextContext?: PersonalAthenaContext | null, draft?: string) => {
+    if (nextContext !== undefined) setContext(nextContext);
+    if (draft?.trim()) setLaunchDraft(draft.trim());
+    setOpen(true);
+  }, []);
+  const closeAthena = useCallback(() => {
     setOpen(false);
   }, []);
 
-  // ⌘J / Ctrl+J toggles the panel from anywhere — a no-op with no resolved org (the cross-org
-  // Hub), same guard as `openPanel`.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (!isAthenaShortcut(event) || !orgId) return;
+      if (!isAthenaShortcut(event)) return;
       event.preventDefault();
-      setOpen((o) => !o);
+      setOpen((current) => !current);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [orgId]);
+  }, []);
+
+  const updateSelected = useCallback(
+    (next: PersonalAthenaSessionDetail): void => {
+      queryClient.setQueryData(queryKeys.athenaSession(next.id), next);
+      setSelectedId(next.id);
+    },
+    [queryClient],
+  );
+
+  const message = useApiMutation<PersonalAthenaSessionDetail, string>({
+    mutationFn: (body) =>
+      unwrap(() => transport.message(selectedId, { body }), 'Could not steer this Athena work.'),
+    invalidateKeys: [queryKeys.athena()],
+    onSuccess: updateSelected,
+  });
+  const lifecycle = useApiMutation<PersonalAthenaSessionDetail, PersonalAthenaLifecycle>({
+    mutationFn: (action) =>
+      unwrap(() => transport.lifecycle(selectedId, action), 'Could not change this Athena work.'),
+    invalidateKeys: [queryKeys.athena()],
+    onSuccess: updateSelected,
+  });
+  const decide = useApiMutation<
+    PersonalAthenaSessionDetail,
+    { readonly id: string; readonly option: string; readonly kind?: 'approval' | 'question' }
+  >({
+    mutationFn: ({ id, option, kind }) => {
+      if (kind === 'question') {
+        return unwrap(
+          () => transport.decide(id, 'reply', { body: option }),
+          'Could not record your answer.',
+        );
+      }
+      const decision = option === 'reject' ? 'reject' : option === 'reply' ? 'reply' : 'approve';
+      return unwrap(() => transport.decide(id, decision), 'Could not record your decision.');
+    },
+    invalidateKeys: [queryKeys.athena()],
+    onSuccess: updateSelected,
+  });
+  const create = useApiMutation<
+    PersonalAthenaSessionDetail,
+    { readonly prompt: string; readonly context?: PersonalAthenaContext }
+  >({
+    mutationFn: (input) =>
+      unwrap(() => transport.create(input), 'Athena could not start this work.'),
+    invalidateKeys: [queryKeys.athena()],
+    onSuccess: (next) => {
+      updateSelected(next);
+      setLaunchDraft(null);
+    },
+  });
 
   const value = useMemo<AthenaPanelValue>(
-    () => ({ open, openPanel, closePanel }),
-    [open, openPanel, closePanel],
+    () => ({ open, context, openAthena, closeAthena }),
+    [closeAthena, context, open, openAthena],
   );
+  const counts = queue.data?.counts;
+  const pending = message.isPending || lifecycle.isPending || decide.isPending || create.isPending;
 
   return (
     <AthenaPanelContext.Provider value={value}>
       {children}
-      {orgId ? (
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetContent
-            side="right"
-            aria-describedby={undefined}
-            className="@container flex w-[26rem] max-w-[90vw] flex-col p-0"
-          >
-            <div className="border-outline-variant flex h-11 shrink-0 items-center justify-between border-b pr-2 pl-4">
-              <SheetTitle asChild>
-                <span className="flex items-center gap-1.5">
-                  <Sparkles aria-hidden="true" className="text-primary size-4" />
-                  Athena
-                </span>
-              </SheetTitle>
-              <SheetClose asChild>
-                <Button variant="ghost" size="icon" aria-label="Close" className="size-10">
-                  <X aria-hidden="true" className="size-4" />
-                </Button>
-              </SheetClose>
-            </div>
-            <div className="min-h-0 flex-1 overflow-hidden p-4">
-              <AthenaConversation orgId={orgId} className="h-full" />
-            </div>
-          </SheetContent>
-        </Sheet>
+      {showPulse ? (
+        <button
+          type="button"
+          aria-label="Open Athena"
+          onClick={() => {
+            openAthena();
+          }}
+          className="border-outline-variant bg-inverse-surface text-inverse-on-surface focus-visible:ring-ring fixed right-4 bottom-[4.75rem] z-30 flex min-h-12 items-center gap-2 rounded-full border px-4 shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:outline-none lg:right-6 lg:bottom-6"
+        >
+          <Sparkles aria-hidden="true" className="size-4" />
+          <span className="text-sm font-semibold">Athena</span>
+          {counts && (counts.needsYou > 0 || counts.working > 0) ? (
+            <span className="text-inverse-on-surface/80 text-xs tabular-nums">
+              {counts.needsYou > 0 ? `${counts.needsYou} needs you` : null}
+              {counts.needsYou > 0 && counts.working > 0 ? ' · ' : null}
+              {counts.working > 0 ? `${counts.working} working` : null}
+            </span>
+          ) : null}
+          <kbd className="text-inverse-on-surface/60 hidden text-[0.65rem] sm:inline">⌘J</kbd>
+        </button>
       ) : null}
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="right"
+          aria-describedby={undefined}
+          className="@container flex w-[36rem] max-w-[96vw] flex-col overflow-hidden p-0"
+        >
+          <div className="border-outline-variant bg-surface-container-low flex min-h-14 shrink-0 items-center gap-3 border-b px-4">
+            <SheetTitle asChild>
+              <span className="text-on-surface flex items-center gap-2 font-semibold">
+                <Sparkles aria-hidden="true" className="text-primary size-4" />
+                Athena
+              </span>
+            </SheetTitle>
+            <div className="text-on-surface-variant flex min-w-0 flex-1 items-center gap-2 text-xs">
+              {counts ? (
+                <>
+                  <span>{counts.needsYou} needs you</span>
+                  <span aria-hidden="true">·</span>
+                  <span>{counts.working} working</span>
+                </>
+              ) : null}
+              {context?.source?.label ? (
+                <span className="border-outline-variant ml-auto max-w-40 truncate border-l pl-2">
+                  {context.source.label}
+                </span>
+              ) : null}
+            </div>
+            <Button variant="ghost" size="sm" className="min-h-10" asChild>
+              <Link href={athenaHref(context, selectedId)} aria-label="Open full Athena">
+                Expand
+              </Link>
+            </Button>
+            <SheetClose asChild>
+              <Button variant="ghost" size="icon" aria-label="Close Athena" className="size-10">
+                <X aria-hidden="true" className="size-4" />
+              </Button>
+            </SheetClose>
+          </div>
+
+          {queue.isPending || (selectedId && detail.isPending) ? (
+            <div className="flex flex-1 flex-col gap-3 p-4" aria-label="Loading Athena work">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-14 w-full" />
+              <Skeleton className="h-14 w-4/5" />
+            </div>
+          ) : queue.isError || detail.isError ? (
+            <p role="status" className="text-on-surface-variant p-6 text-sm">
+              Athena is temporarily unavailable. We&apos;ll keep checking.
+            </p>
+          ) : launchDraft !== null ? (
+            <form
+              aria-label="Start Athena work"
+              className="flex flex-1 flex-col justify-end gap-3 p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const prompt = launchDraft.trim();
+                if (!prompt) return;
+                create.mutate({ prompt, ...(context ? { context } : {}) });
+              }}
+            >
+              <div>
+                <h2 className="text-on-surface text-lg font-semibold">Start this work</h2>
+                <p className="text-on-surface-variant mt-1 text-sm">
+                  Athena will keep moving in the background. You can return here to steer it.
+                </p>
+              </div>
+              <textarea
+                aria-label="Athena objective"
+                rows={5}
+                value={launchDraft}
+                disabled={create.isPending}
+                onChange={(event) => {
+                  setLaunchDraft(event.target.value);
+                }}
+                className="border-outline-variant bg-surface-container-low text-on-surface focus-visible:ring-ring w-full resize-none rounded-lg border p-3 text-sm leading-6 outline-none focus-visible:ring-2"
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="min-h-10"
+                  onClick={() => {
+                    setLaunchDraft(null);
+                  }}
+                >
+                  Back
+                </Button>
+                <Button
+                  type="submit"
+                  className="min-h-10"
+                  disabled={create.isPending || !launchDraft.trim()}
+                >
+                  {create.isPending ? 'Starting…' : 'Start work'}
+                </Button>
+              </div>
+            </form>
+          ) : selected ? (
+            <AthenaWorkbench
+              session={selected}
+              pending={pending}
+              onMessage={(body) => {
+                message.mutate(body);
+              }}
+              onLifecycle={(action) => {
+                lifecycle.mutate(action);
+              }}
+              onDecision={(id, option) => {
+                decide.mutate({ id, option, kind: selected.decision?.kind });
+              }}
+            />
+          ) : (
+            <div className="flex flex-1 flex-col justify-end p-4">
+              <p className="text-on-surface max-w-sm text-lg font-semibold">
+                What should Athena move forward?
+              </p>
+              <p className="text-on-surface-variant mt-1 text-sm">
+                Open Athena from work to bring that context with you.
+              </p>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </AthenaPanelContext.Provider>
   );
 }
 
-/**
- * Read the Athena panel controls.
- *
- * @returns the current {@link AthenaPanelValue}.
- * @throws {Error} when called outside an {@link AthenaPanelProvider}.
- */
+/** Read the personal Athena controls from a contextual surface. */
 export function useAthenaPanel(): AthenaPanelValue {
   const value = useContext(AthenaPanelContext);
-  if (value === null) {
-    throw new Error('useAthenaPanel must be used within an <AthenaPanelProvider>.');
-  }
+  if (value === null) throw new Error('useAthenaPanel must be used within AthenaPanelProvider.');
   return value;
 }

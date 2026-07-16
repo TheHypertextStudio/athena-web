@@ -111,6 +111,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
               loading={shellLoading}
               objectDetailSurface={objectDetailSurface}
               settingsSurface={settingsSurface}
+              showAthenaPulse={pathname !== '/athena'}
               routeOrgId={routeOrgId}
               userId={userId}
               workspaceKey={workspaceKeyFromPath(pathname)}
@@ -176,6 +177,7 @@ interface AppShellInnerProps {
   loading: boolean;
   objectDetailSurface: boolean;
   settingsSurface: boolean;
+  showAthenaPulse: boolean;
   routeOrgId: string | null;
   userId: string | null;
   workspaceKey?: WorkspaceNavKey;
@@ -197,6 +199,7 @@ function AppShellInner({
   loading,
   objectDetailSurface,
   settingsSurface,
+  showAthenaPulse,
   routeOrgId,
   userId,
   workspaceKey,
@@ -321,7 +324,9 @@ function AppShellInner({
   const mobileBrand = loading ? (
     <span className="text-body-medium font-semibold">Docket</span>
   ) : (
-    <span className="text-body-medium truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
+    <span className="text-body-medium truncate font-semibold">
+      {activeWorkspaceName ?? 'Docket'}
+    </span>
   );
 
   const mobileActions = loading ? (
@@ -339,7 +344,14 @@ function AppShellInner({
 
   return (
     <VocabularyProvider skin={loading ? null : skin}>
-      <AthenaPanelProvider orgId={loading ? null : resolvedOrgId}>
+      <AthenaPanelProvider
+        showPulse={showAthenaPulse}
+        context={
+          loading || !resolvedOrgId
+            ? null
+            : { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
+        }
+      >
         <AppShell
           sidebar={sidebar}
           tabBar={tabBar}

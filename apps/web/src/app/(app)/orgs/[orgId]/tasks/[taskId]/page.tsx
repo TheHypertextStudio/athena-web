@@ -14,6 +14,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
@@ -231,6 +232,13 @@ export default function TaskDetailPage(): JSX.Element {
             triggerVariant="outline"
             readOnly={!canEdit}
             disabled={propsPending}
+          />
+          <AthenaContextAction
+            label="Have Athena handle this"
+            context={{
+              workspaceId: orgId,
+              source: { type: 'task', id: taskId, label: task.title },
+            }}
           />
         </div>
 

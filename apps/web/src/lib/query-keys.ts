@@ -64,6 +64,8 @@ export const queryKeys = {
   dailyPlan: (date: string) => ['me', 'daily-plan', date] as const,
   calendarSettings: () => ['me', 'calendar-settings'] as const,
   hubPreferences: () => ['me', 'hub-preferences'] as const,
+  athena: () => ['me', 'athena'] as const,
+  athenaSession: (sessionId: string) => ['me', 'athena', 'sessions', sessionId] as const,
   calendarLayers: () => ['me', 'calendar-layers'] as const,
   calendarShares: (organizationId: string) => ['me', 'calendar-shares', organizationId] as const,
   scheduleComparison: (

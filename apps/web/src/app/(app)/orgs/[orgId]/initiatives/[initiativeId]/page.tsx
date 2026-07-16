@@ -18,6 +18,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { InitiativeDocument } from '@/components/initiatives/initiative-document';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { InitiativePropertiesPanel } from '@/components/initiatives/properties-panel';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { UpdatesPanel } from '@/components/programs/updates-panel';
@@ -220,6 +221,14 @@ export default function InitiativeDetailPage(): JSX.Element {
           ) : null}
         </nav>
         <div className="flex items-center gap-2">
+          <AthenaContextAction
+            label="Open Athena for this initiative"
+            context={{
+              workspaceId: orgId,
+              source: { type: 'initiative', id: initiativeId, label: detail.name },
+            }}
+            variant="ghost"
+          />
           {canEdit ? (
             <Button
               className="min-h-10"

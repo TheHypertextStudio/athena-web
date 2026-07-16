@@ -18,6 +18,10 @@ vi.mock('../../../src/components/active-org', () => ({
   }),
 }));
 
+vi.mock('../../../src/components/athena/athena-panel-provider', () => ({
+  useAthenaPanel: () => ({ openAthena: vi.fn() }),
+}));
+
 import InboxClient from '../../../src/app/(app)/inbox/inbox-client';
 
 const ORG_ID = OrganizationId.parse('01F8MECHZX3TBDSZ7XRADM79XV');

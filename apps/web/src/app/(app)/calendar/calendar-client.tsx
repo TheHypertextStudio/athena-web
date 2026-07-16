@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
@@ -150,16 +151,27 @@ export default function CalendarClient(): JSX.Element {
           savePreferences.mutate({ ...(preferences ?? {}), pixelsPerHour: nextPixelsPerHour });
         }}
         createControl={
-          <CreateBlockForm
-            displayTimezone={displayTimezone}
-            layers={dateAxis.layers}
-            preferences={preferences}
-            selection={selection}
-            selectionAnchorRef={selection ? selectionAnchorRef : undefined}
-            onSelectionConsumed={() => {
-              setSelection(null);
-            }}
-          />
+          <div className="flex items-center gap-2">
+            <AthenaContextAction
+              label={openItemId ? 'Open Athena for this calendar item' : 'Open Athena for Calendar'}
+              context={
+                openItemId
+                  ? { source: { type: 'calendar_item', id: openItemId, label: heading } }
+                  : null
+              }
+              variant="ghost"
+            />
+            <CreateBlockForm
+              displayTimezone={displayTimezone}
+              layers={dateAxis.layers}
+              preferences={preferences}
+              selection={selection}
+              selectionAnchorRef={selection ? selectionAnchorRef : undefined}
+              onSelectionConsumed={() => {
+                setSelection(null);
+              }}
+            />
+          </div>
         }
       />
 

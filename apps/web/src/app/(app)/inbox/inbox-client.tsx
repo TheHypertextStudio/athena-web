@@ -6,6 +6,7 @@ import type { NotificationOut } from '@docket/types';
 import { type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ActivityRow } from '@/components/inbox/activity-row';
 import { isApproval } from '@/components/inbox/notification-meta';
 import { NotificationRow } from '@/components/inbox/notification-row';
@@ -43,9 +44,12 @@ export default function InboxClient(): JSX.Element {
 
   return (
     <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-title-large">Inbox</h1>
-        <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-on-surface text-title-large">Inbox</h1>
+          <p className="text-on-surface-variant text-xs">Everything that needs a response.</p>
+        </div>
+        <AthenaContextAction label="Open Athena for Inbox" variant="ghost" />
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">

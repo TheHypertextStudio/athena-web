@@ -17,7 +17,7 @@
  * - **Home** (cross-org, no header): Today · Inbox · Portfolio · Search (opens the command
  *   palette). These route to `/today`, `/inbox`, `/portfolio` regardless of the active org.
  * - **Workspace** (the active org): My Work · Triage · Initiatives · Programs · Projects ·
- *   Cycles · Teams · Views · Agents · Settings — entity-noun labels skinned per org via
+ *   Cycles · Teams · Views · Settings — entity-noun labels skinned per org via
  *   `useVocabulary`, linking to `/orgs/<activeOrgId>/…`.
  *
  * The Workspace section always reflects the active org (route org ?? last-selected ?? personal),
@@ -29,7 +29,6 @@
 import * as React from 'react';
 
 import {
-  MessageSquare,
   Activity,
   Building,
   Calendar,
@@ -44,7 +43,6 @@ import {
   RefreshCw,
   Search,
   Settings,
-  Sparkles,
   Target,
   Users,
   Workflow,
@@ -89,7 +87,7 @@ export interface SidebarProps {
    * when `true` the Workspace section omits the **Teams** row (there are no other members to
    * organize into teams). This is a *presentation* gate only — the workspace still has its hidden
    * default team under the hood; this prop simply doesn't surface team-management chrome. Every
-   * other row (My Work, Triage, Initiatives, Programs, Projects, Cycles, Views, Agents, Settings)
+   * other row (My Work, Triage, Initiatives, Programs, Projects, Cycles, Views, Settings)
    * stays, as each is meaningful for a single person. Defaults to `false` (a shared org), so
    * existing consumers are unaffected.
    */
@@ -120,7 +118,11 @@ interface NavRow<K extends string> {
  * (rows then start flush beneath it), matching the section-spacing rhythm.
  */
 function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
-  return <p className="text-on-surface-variant text-body-medium mt-4 mb-1 px-3 font-medium">{children}</p>;
+  return (
+    <p className="text-on-surface-variant text-body-medium mt-4 mb-1 px-3 font-medium">
+      {children}
+    </p>
+  );
 }
 
 /**
@@ -189,7 +191,6 @@ export function Sidebar({
   const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
     { key: 'triage', label: 'Triage', icon: Inbox },
-    { key: 'athena', label: 'Athena', icon: MessageSquare },
     { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'initiatives', label: initiatives, icon: Target },
     { key: 'programs', label: programs, icon: Layers },
@@ -198,7 +199,6 @@ export function Sidebar({
     ...(personalWorkspace ? [] : [{ key: 'teams' as const, label: teams, icon: Users }]),
     { key: 'views', label: 'Views', icon: LayoutGrid },
     { key: 'graph', label: 'Graph', icon: Workflow },
-    { key: 'agents', label: 'Agents', icon: Sparkles },
     { key: 'settings', label: 'Settings', icon: Settings },
   ];
 

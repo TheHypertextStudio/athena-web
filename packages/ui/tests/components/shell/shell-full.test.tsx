@@ -294,6 +294,8 @@ describe('Sidebar', () => {
       'href',
       `/orgs/${ACME.id}/settings`,
     );
+    expect(screen.queryByRole('link', { name: 'Athena' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Agents' })).not.toBeInTheDocument();
   });
 
   it('blends into the canvas — no separate-container chrome (fill, border, rounding, shadow)', () => {
@@ -445,8 +447,8 @@ describe('Sidebar', () => {
     );
     // A personal space is the user's own space, not an org with members — no Teams row.
     expect(screen.queryByRole('link', { name: 'Teams' })).not.toBeInTheDocument();
-    // Every other Workspace row stays — each is meaningful for a single person.
-    for (const name of ['My Work', 'Triage', 'Views', 'Agents', 'Settings']) {
+    // Every other workspace-owned row stays — personal Athena lives in the global pulse.
+    for (const name of ['My Work', 'Triage', 'Views', 'Settings']) {
       expect(screen.getByRole('link', { name })).toHaveAttribute(
         'href',
         `/orgs/${PERSONAL.id}/${name === 'My Work' ? 'my-work' : name.toLowerCase()}`,

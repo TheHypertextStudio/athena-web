@@ -3,6 +3,7 @@
 import { Button, Skeleton, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { GhostProposals } from '@/components/today/ghost-proposals';
 import NextUp from '@/components/today/next-up';
 import { TodayPrompt } from '@/components/today/today-prompt';
@@ -52,6 +53,13 @@ export default function TodayPage(): JSX.Element {
           </h1>
         </Stack>
         <p className="text-on-surface-variant text-2xl">{heading}</p>
+        <div>
+          <AthenaContextAction
+            label="Open Athena for today"
+            context={activeOrgId ? { workspaceId: activeOrgId } : null}
+            variant="ghost"
+          />
+        </div>
       </Stack>
 
       <TodayPrompt

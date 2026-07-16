@@ -56,6 +56,10 @@ vi.mock('../../src/lib/api', () => ({
 
 vi.mock('../../src/components/authentication-interlock', () => ({
   useAuthenticationInterlock: () => ({ requireAuthentication }),
+  useOptionalAuthenticationRecovery:
+    () =>
+    async <T,>(action: () => Promise<T>) =>
+      action(),
 }));
 
 vi.mock('../../src/components/tabs/resolve-title', () => ({

@@ -118,6 +118,18 @@
   4. Audit generation-owned writes for remaining check-then-write sequences, run focused race and
      API gates plus proportionate root gates, document the outcome, self-review, and commit this fix
      independently without rebasing, merging, or pushing.
+- **Plan (personal Athena API)**:
+  1. Add red personal-route and OpenAPI tests for owner-only overview, grouped work, current/fresh
+     chat, session creation/detail, invocation context, activity, SSE replay, steering, lifecycle,
+     proposals, and decisions while retaining organization-route compatibility.
+  2. Define application-owned personal Athena DTOs and an invocation resolver that validates the
+     canonical source workspace plus the caller's current access without accepting an owner id.
+  3. Mount `/v1/me/athena` over the existing owner-access, transcript, loop, proposal, approval, and
+     lifecycle services; derive each cross-workspace approval's operation context without treating
+     the session's initial focus as authority.
+  4. Update the Athena design/engineering/OpenAPI documentation, run focused and full repository
+     gates, self-review privacy and linear history, and commit the slice atomically without schema,
+     connector, assignment, UI, rebase, merge, or push changes.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -190,6 +202,13 @@
   takeover can prevent stale result persistence without making an interrupted MCP write repeatable.
 - **Atomic Lease-Fencing Files Changed**: `apps/api/src/agent/{loop,run-generation}.ts`,
   `apps/api/tests/agent/user-owned-loop.test.ts`, and this work log.
+- **Personal API Slice**: Added the private `/v1/me/athena` surface for owner-scoped overview counts,
+  needs-you/working/finished queues, durable current and fresh chat, contextual sessions, steering,
+  lifecycle controls, activity JSON and replayable SSE, proposals, approvals, rejections, and
+  elicitation replies. Invocation sources validate their canonical workspace and the caller's
+  current access without becoming execution authority. Personal projections exclude provider
+  reasoning, cross-user reads remain existence-hiding, and registered-agent organization routes
+  retain their existing workspace policy.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, authenticated compatibility-route access helpers, proposal and
@@ -248,6 +267,14 @@
   tests (17/17 tasks; API 146 files and 1,272 tests), and build (3/3 tasks). `git diff --check`
   passes. The only recurring diagnostic is the repository engine warning for local Node 24.14.0
   versus the declared minimum 24.15.0.
+- **Personal API Validation**: Red type tests failed on the absent personal contracts, red route
+  tests failed on the absent router, and a privacy regression exposed provider thought activity
+  until the personal projection filtered it. Focused coverage passes 32/32 tests across personal,
+  compatibility, proposal, agent-flow, and OpenAPI suites. The final ordered root chain passes
+  typecheck and lint (17/17 tasks each), tests (17/17 tasks; API 147 files and 1,279 tests), and
+  build (3/3 tasks). `git diff --check` and the zero-merge history check pass. The only recurring
+  diagnostic is the repository engine warning for local Node 24.14.0 versus the declared minimum
+  24.15.0.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A
@@ -262,6 +289,10 @@
   personal work when they verify the owner, but the new `/v1/me/athena` surface remains the right
   permanent privacy boundary for the next slice. Keeping workspace MCP rows out of Athena's
   toolbox avoids accidentally sharing credentials before user-owned connection migration exists.
+  The personal API slice reinforced that invocation context must be validated at the boundary but
+  never cached as authority. Exact SSE replay also has to locate the supplied event in persisted
+  order rather than compare randomly generated same-millisecond ULIDs lexically, and personal
+  presentation models should filter raw provider reasoning at the server boundary.
 
 ---
 

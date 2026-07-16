@@ -28,6 +28,15 @@ describe('openapi spec generation', () => {
     expect(paths).toContain('/v1/orgs/{orgId}/tasks');
     expect(paths).toContain('/v1/orgs/{orgId}/projects');
     expect(paths).toContain('/v1/orgs');
+    expect(paths).toContain('/v1/me/athena');
+    expect(paths).toContain('/v1/me/athena/chat/messages');
+    expect(paths).toContain('/v1/me/athena/sessions');
+    expect(paths).toContain('/v1/me/athena/sessions/{id}/stream');
+    expect(paths).toContain('/v1/me/athena/sessions/{id}/activity/{activityId}/approve');
+    expect(paths).toContain('/v1/me/athena/sessions/{id}/proposals/{groupId}/reject');
+
+    const personalAthena = spec.paths['/v1/me/athena']?.['get'];
+    expect(personalAthena?.tags).toContain('Athena');
 
     // A guarded mutation surfaces its tag + capability extension.
     const createTask = spec.paths['/v1/orgs/{orgId}/tasks']?.['post'];

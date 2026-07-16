@@ -35,6 +35,27 @@ Athena has one personal persistent chat across Docket. Episodic work may have an
 and source-object context, but ownership remains personal and a single session may act in more than
 one workspace when the user has access.
 
+## Personal API
+
+Authenticated personal routes live under `/v1/me/athena`; they never accept an owner id from a
+path, query, or body. The root read returns the current personal chat, counts, and session summaries
+grouped into `needs_you`, `working`, and `finished`. Session detail, activity, proposals, lifecycle,
+and SSE routes expose only rows whose persisted `ownerUserId` matches the request session. The
+existing organization routes remain as compatibility doors and keep registered-agent behavior.
+
+Invocation context is optional and consists of a workspace plus an optional source pointer. When a
+source is supplied, the API loads the canonical row, derives its workspace, requires any supplied
+workspace to match, and confirms that the caller has an active human Actor there before creating
+the session. Calendar sources must be owned by the caller and associated with the stated workspace;
+Stream events must belong to that workspace and concern the caller. Context is attribution and
+prompt focus only. It never grants authority, and every later tool call resolves the owner's current
+workspace access again.
+
+The persistent chat is selected by owner and newest chat creation time, never by workspace. Starting
+a fresh chat creates a new current row without deleting or rewriting the owner's older private chat
+history. Personal routes may keep the existing synchronous runner response while execution is
+in-process; they must not claim asynchronous dispatch until a real dispatcher exists.
+
 Remote MCP connections used by Athena are user-owned. Operational integrations that genuinely
 belong to a shared workspace remain workspace-owned. A personal connection can be used from any
 Athena session owned by the same user.

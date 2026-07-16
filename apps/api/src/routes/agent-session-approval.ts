@@ -6,13 +6,12 @@ import { ConflictError, NotFoundError } from '../error';
 
 import type { ActivityRow, SessionRow } from './agent-session-helpers';
 
-/** Assert an org compatibility route is addressing the session's persisted context. */
+/** Assert registered-agent work remains in-org; Athena ownership is enforced by its caller. */
 function assertSessionContext(session: SessionRow | undefined, orgId: string): SessionRow {
   if (!session) throw new NotFoundError('Session not found');
-  const matches =
-    session.executorKind === 'athena'
-      ? session.contextOrganizationId === orgId
-      : session.organizationId === orgId;
+  // Athena is owner-scoped before this service is called. Its initial workspace is only prompt
+  // focus; approvals may target a different workspace and the stored tool reauthorizes there.
+  const matches = session.executorKind === 'athena' || session.organizationId === orgId;
   if (!matches) throw new NotFoundError('Session not found');
   return session;
 }
@@ -224,7 +223,10 @@ export async function decideActivity(
           type: 'approved',
           metadata: {
             activityId: action.id,
-            approverActorId,
+            approverActorId:
+              session.executorKind === 'athena'
+                ? (authorizationActorId ?? approverActorId)
+                : approverActorId,
             ...athenaAuditOrigin(session),
           },
         });
@@ -239,7 +241,10 @@ export async function decideActivity(
           type: 'rejected',
           metadata: {
             activityId: action.id,
-            approverActorId,
+            approverActorId:
+              session.executorKind === 'athena'
+                ? (authorizationActorId ?? approverActorId)
+                : approverActorId,
             ...athenaAuditOrigin(session),
           },
         });
@@ -345,7 +350,10 @@ export async function decideProposalGroup(
         type: decision === 'approve' ? 'approved' : 'rejected',
         metadata: {
           activityId: action.id,
-          approverActorId,
+          approverActorId:
+            session.executorKind === 'athena'
+              ? (authorizationActorId ?? approverActorId)
+              : approverActorId,
           proposalGroupId,
           ...athenaAuditOrigin(session),
         },

@@ -25,6 +25,7 @@ import type { AppEnv } from './context';
 import dailyPlan from './routes/daily-plan';
 import hubRouter from './routes/hub';
 import meAccount from './routes/me-account';
+import meAthena from './routes/me-athena';
 import meCalendar from './routes/me-calendar';
 import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
@@ -81,6 +82,7 @@ const routes = app
   )
   .route('/me/contact-points', createContactPointRoutes(notificationContactPoints))
   .route('/me/account', meAccount)
+  .route('/me/athena', meAthena)
   .route('/me/recovery-codes', meRecovery)
   .route('/me/sessions', meSessions)
   .route('/oauth/clients', oauthClients);

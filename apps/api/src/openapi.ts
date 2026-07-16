@@ -51,10 +51,10 @@ containment hierarchy:
 - **Updates** — narrative status posts on a project/initiative/program that drive its health.
 - **Comments** — threaded discussion on any work item.
 
-People and agents act through **Actors** — a member's (or agent's) identity *within one org*.
-**Agents** are first-class Actors (\`kind: 'agent'\`) that run **Agent Sessions**: they call the
-same service layer as humans, under the same permission checks, plus an orthogonal **approval
-gate** for the mutations they propose.
+People and registered third-party agents act through **Actors** — identities *within one org*.
+Personal **Athena** work instead belongs directly to the signed-in user and resolves that user's
+current Actor separately for every targeted workspace tool call. Both executors share the durable
+session substrate and an orthogonal approval gate, but workspace context never grants Athena access.
 
 ## The cross-org cockpit
 
@@ -193,9 +193,14 @@ const TAGS = [
       'Saved views persist a filter/grouping/sort configuration over work items, scoped to an org (and optionally a team or person), so a team can return to a curated slice of work.',
   },
   {
+    name: 'Athena',
+    description:
+      'Athena is the signed-in person’s private operating assistant across Docket. These owner-only routes expose the current persistent chat, grouped personal work, replayable activity, steering, lifecycle controls, proposals, and approvals. Optional workspace/source context is validated at invocation but never grants authority; every tool call resolves the owner’s current permission again.',
+  },
+  {
     name: 'Agents',
     description:
-      'Agents are first-class Actors (`kind: agent`) that perform work autonomously. This surface registers agents and drives **Agent Sessions** — a dispatched run against a subject, streaming its activity, gated by the same capabilities as a human plus an approval step for proposed mutations (approve/reject). The session activity stream is available over SSE.',
+      'Registered third-party agents are workspace-scoped Actors (`kind: agent`) that perform work through explicit grants. This compatibility surface registers them and drives Agent Sessions against a subject, streaming activity over SSE and gating proposed mutations through approve/reject review. Personal Athena work uses the separate owner-only `/v1/me/athena` surface.',
   },
   {
     name: 'Capture',

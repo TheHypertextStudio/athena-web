@@ -390,7 +390,7 @@ const RegisteredAgentSessionOut = AgentSessionOutBase.extend({
     .describe('Registered agents are workspace-scoped rather than privately user-owned.'),
 });
 
-const AthenaSessionOut = AgentSessionOutBase.extend({
+export const AthenaSessionOut = AgentSessionOutBase.extend({
   executorKind: z
     .literal('athena')
     .describe('The caller-owned Athena runtime executes this session.'),
@@ -403,6 +403,8 @@ const AthenaSessionOut = AgentSessionOutBase.extend({
   agentId: z.null().describe('Athena is user-owned and never represented by a registered agent.'),
   ownerUserId: z.string().min(1).describe('The user who privately owns this Athena session.'),
 });
+/** Caller-owned Athena session representation value. */
+export type AthenaSessionOut = z.infer<typeof AthenaSessionOut>;
 
 /** An Agent Session summary returned by list reads, discriminated by its runtime executor. */
 export const AgentSessionOut = z
@@ -423,6 +425,149 @@ export const AgentSessionDetailOut = AgentSessionOut.and(
 ).meta({ id: 'AgentSessionDetailOut', description: 'An agent session with its activity stream.' });
 /** Agent-session-detail representation value. */
 export type AgentSessionDetailOut = z.infer<typeof AgentSessionDetailOut>;
+
+/** A Docket object that focused Athena when a personal session was opened. */
+export const AthenaInvocationSource = z
+  .object({
+    type: z
+      .enum(['task', 'project', 'initiative', 'program', 'calendar_item', 'stream_event'])
+      .describe('The canonical kind of Docket object that supplied invocation context.'),
+    id: z.string().min(1).describe('The canonical source row id.'),
+  })
+  .strict()
+  .meta({ id: 'AthenaInvocationSource', description: 'A source object that focused Athena.' });
+/** Athena invocation-source value. */
+export type AthenaInvocationSource = z.infer<typeof AthenaInvocationSource>;
+
+/** Optional workspace and source-object focus supplied when opening personal Athena work. */
+export const AthenaInvocationContext = z
+  .object({
+    workspaceId: OrganizationId.optional().describe(
+      'Optional workspace focus. The server validates current membership and never treats it as authority.',
+    ),
+    source: AthenaInvocationSource.optional().describe(
+      'Optional source object. Its canonical workspace must match `workspaceId` when both are supplied.',
+    ),
+  })
+  .strict()
+  .refine((value) => value.workspaceId !== undefined || value.source !== undefined, {
+    message: 'Invocation context must name a workspace or source',
+  })
+  .meta({
+    id: 'AthenaInvocationContext',
+    description: 'Validated invocation focus for caller-owned Athena work.',
+  });
+/** Athena invocation-context value. */
+export type AthenaInvocationContext = z.infer<typeof AthenaInvocationContext>;
+
+/** Product queue lane derived from a personal session lifecycle state. */
+export const AthenaQueueState = z
+  .enum(['needs_you', 'working', 'finished'])
+  .describe('The personal work lane: user decision, active work, or terminal history.');
+/** Athena queue-state value. */
+export type AthenaQueueState = z.infer<typeof AthenaQueueState>;
+
+/** Dense personal-session summary used by Athena queue and dock surfaces. */
+export const AthenaSessionSummaryOut = z
+  .object({
+    id: AgentSessionId.describe('The private personal session id.'),
+    kind: SessionKind.describe('Persistent `chat` or episodic `job` work.'),
+    status: SessionStatus.describe('The durable execution lifecycle state.'),
+    queueState: AthenaQueueState.describe('The product queue lane derived from `status`.'),
+    objective: z
+      .string()
+      .nullable()
+      .describe('The first user-authored brief, or null before the user supplies one.'),
+    context: AthenaInvocationContext.nullable().describe(
+      'Validated invocation focus, or null for workspace-neutral work.',
+    ),
+    startedAt: z.string().nullable().describe('ISO-8601 start instant, or null before execution.'),
+    endedAt: z.string().nullable().describe('ISO-8601 terminal instant, or null while active.'),
+    createdAt: z.string().describe('ISO-8601 creation instant used for newest-first ordering.'),
+  })
+  .meta({ id: 'AthenaSessionSummaryOut', description: 'A private Athena work summary.' });
+/** Personal Athena summary value. */
+export type AthenaSessionSummaryOut = z.infer<typeof AthenaSessionSummaryOut>;
+
+/** Personal Athena session detail with its ordered work-log activities. */
+export const AthenaSessionDetailOut = AthenaSessionSummaryOut.extend({
+  activities: z
+    .array(SessionActivityOut)
+    .describe('Application-visible work-log activities ordered oldest-first.'),
+}).meta({ id: 'AthenaSessionDetailOut', description: 'Private Athena work and activity detail.' });
+/** Personal Athena detail value. */
+export type AthenaSessionDetailOut = z.infer<typeof AthenaSessionDetailOut>;
+
+/** Counts for the three personal Athena work lanes. */
+export const AthenaQueueCounts = z
+  .object({
+    needsYou: z.number().int().nonnegative().describe('Sessions awaiting user input or approval.'),
+    working: z.number().int().nonnegative().describe('Pending or actively running sessions.'),
+    finished: z.number().int().nonnegative().describe('Completed, failed, or canceled sessions.'),
+  })
+  .meta({ id: 'AthenaQueueCounts', description: 'Personal Athena work counts by queue lane.' });
+/** Athena queue-count value. */
+export type AthenaQueueCounts = z.infer<typeof AthenaQueueCounts>;
+
+/** Personal Athena work grouped for direct queue rendering. */
+export const AthenaQueueOut = z
+  .object({
+    needsYou: z
+      .array(AthenaSessionSummaryOut)
+      .describe('Work requiring a user decision or answer.'),
+    working: z.array(AthenaSessionSummaryOut).describe('Pending or actively executing work.'),
+    finished: z.array(AthenaSessionSummaryOut).describe('Terminal personal work history.'),
+  })
+  .meta({ id: 'AthenaQueueOut', description: 'Grouped personal Athena work summaries.' });
+/** Athena queue value. */
+export type AthenaQueueOut = z.infer<typeof AthenaQueueOut>;
+
+/** Personal Athena landing response: current chat plus grouped work and counts. */
+export const AthenaOverviewOut = z
+  .object({
+    counts: AthenaQueueCounts.describe('Counts matching the grouped session arrays.'),
+    currentChat: AthenaSessionSummaryOut.nullable().describe(
+      'The current persistent personal chat, or null before first use.',
+    ),
+    sessions: AthenaQueueOut.describe('All caller-owned sessions grouped by product state.'),
+  })
+  .meta({ id: 'AthenaOverviewOut', description: 'The private Athena operating overview.' });
+/** Personal Athena overview value. */
+export type AthenaOverviewOut = z.infer<typeof AthenaOverviewOut>;
+
+/** Create and synchronously drive one episodic personal Athena session. */
+export const AthenaSessionCreateBody = z
+  .object({
+    prompt: z.string().min(1).describe('The user-authored objective for this personal work.'),
+    context: AthenaInvocationContext.optional().describe('Optional validated invocation focus.'),
+  })
+  .strict()
+  .meta({ id: 'AthenaSessionCreateBody', description: 'Create personal Athena work.' });
+/** Personal Athena session-create body. */
+export type AthenaSessionCreateBody = z.infer<typeof AthenaSessionCreateBody>;
+
+/** Send a user-authored message that steers or continues personal Athena work. */
+export const AthenaMessageBody = z
+  .object({
+    body: z.string().min(1).describe('The user-authored message appended to the work log.'),
+    context: AthenaInvocationContext.optional().describe(
+      'Optional invocation focus applied only when opening or refocusing personal chat.',
+    ),
+  })
+  .strict()
+  .meta({ id: 'AthenaMessageBody', description: 'A personal Athena steering message.' });
+/** Personal Athena message body. */
+export type AthenaMessageBody = z.infer<typeof AthenaMessageBody>;
+
+/** Start a fresh personal chat while preserving prior private history. */
+export const AthenaFreshChatBody = z
+  .object({
+    context: AthenaInvocationContext.optional().describe('Optional focus for the fresh chat.'),
+  })
+  .strict()
+  .meta({ id: 'AthenaFreshChatBody', description: 'Start a fresh personal Athena chat.' });
+/** Fresh-chat body value. */
+export type AthenaFreshChatBody = z.infer<typeof AthenaFreshChatBody>;
 
 /**
  * Body for deciding on a proposed agent action (the approval gate, permissions §9).

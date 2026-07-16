@@ -195,15 +195,11 @@ function blockingTurnRuntime(entered: Deferred<number>, release: Promise<void>):
   return { turnRuntime };
 }
 
-interface GenerationRaceDeps extends LoopDeps {
-  readonly beforeGenerationEffect: (kind: GenerationEffectKind) => Promise<void>;
-}
-
 function rotateLeaseBefore(
   seed: Seed,
   target: GenerationEffectKind,
   replacement: string,
-): Pick<GenerationRaceDeps, 'beforeGenerationEffect'> {
+): Required<Pick<LoopDeps, 'beforeGenerationEffect'>> {
   return {
     async beforeGenerationEffect(kind): Promise<void> {
       if (kind !== target) return;

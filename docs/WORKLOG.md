@@ -1,11 +1,37 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-14
+> **Last Updated**: 2026-07-15
 
 ---
 
 ## Active Tasks
+
+### [ATHENA-OWNERSHIP-001] Make Athena user-owned and ambient
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-15
+- **Priority**: P0
+- **Description**: Replace workspace-owned Athena agents and shared chat with one private,
+  user-owned assistant that executes with exactly the requesting user's current permissions, then
+  rebuild the Athena experience as an ambient dock and expandable personal operating workspace.
+- **Subtasks**:
+  - [ ] Add user-owned executor, activity, transcript, run, and migration contracts.
+  - [ ] Execute Docket tools through the owner's live user permission context.
+  - [ ] Add private personal Athena APIs, connections, assignments, and approval semantics.
+  - [ ] Build the shared workbench, ambient dock, and full `/athena` workspace.
+  - [ ] Wire contextual entry points and validate the real application with Playwright.
+  - [ ] Complete documentation, repository gates, code review, and linear-history closeout.
+- **Decisions**: Athena never receives a workspace Actor, grant, role, or independent capability.
+  Workspaces are optional execution context only. Personal work logs and connectors are owner-only;
+  shared results retain normal visibility. Approval never grants authority beyond the underlying
+  tool permission.
+- **Risks**: Existing workspace-shared chats cannot be safely assigned to one user; they must remain
+  legacy history. The executor union must preserve third-party registered-agent behavior while all
+  Athena paths stop relying on the default-agent grant model.
+- **Blockers**: None.
+
+---
 
 ### [PROJECTS-CRAFT-003] Remove the floating Project properties band
 

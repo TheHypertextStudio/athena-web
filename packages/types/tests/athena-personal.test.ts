@@ -46,6 +46,37 @@ describe('personal Athena API contracts', () => {
       }).success,
     ).toBe(true);
   });
+
+  it('requires application-owned display metadata on personal work summaries', async () => {
+    const types = await import('../src/index');
+    const schema = Reflect.get(types, 'AthenaSessionSummaryOut') as
+      | { safeParse(value: unknown): { success: boolean } }
+      | undefined;
+    const summary = {
+      id: ID,
+      kind: 'job',
+      status: 'running',
+      queueState: 'working',
+      objective: 'Prepare the launch plan',
+      context: {
+        workspaceId: ID,
+        source: { type: 'project', id: ID, label: 'Athena launch' },
+      },
+      workspace: { id: ID, name: 'Hypertext Studio' },
+      startedAt: null,
+      endedAt: null,
+      createdAt: '2026-07-16T12:00:00.000Z',
+    };
+
+    expect(schema?.safeParse(summary).success).toBe(true);
+    expect(
+      schema?.safeParse({
+        ...summary,
+        context: { workspaceId: ID, source: { type: 'project', id: ID } },
+      }).success,
+    ).toBe(false);
+    expect(schema?.safeParse({ ...summary, workspace: undefined }).success).toBe(false);
+  });
 });
 
 describe('personal Athena contracts', () => {

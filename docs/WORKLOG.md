@@ -392,6 +392,19 @@
   4. Run focused personal API, DTO, web, and shell coverage, then web typecheck/lint, repository
      test/build, and the authenticated Playwright journey before committing the integration fix
      without merging or pushing.
+- **Plan (experience spec-review fixes)**:
+  1. Add red adapter, workbench, queue, shared-DTO, and personal-route regressions for optionless
+     `ask_user` elicitations, exact proposed-action selection, and owner-safe canonical workspace
+     and source display labels.
+  2. Extend only the application-owned personal response projection with resolved display metadata;
+     retain the invocation input and authorization contract, then render those labels in every
+     personal queue, dock, workbench, and context rail.
+  3. Correct the authenticated Playwright approval fixture and assert the exact owner session plus
+     activity route, settled UI acknowledgement, pulse suppression, and narrow below-fold health.
+  4. Run focused types, API, web, OpenAPI, typecheck, and lint checks; launch an isolated local app
+     with required connector and URL configuration; run the real personal-Athena journey, inspect
+     all four theme/viewport captures plus the mobile continuation, and commit this review slice
+     independently without rebase, merge, push, or root-heavy gates.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -701,6 +714,39 @@
   run exceeded the fixed 30-second test ceiling while four package suites competed for local CPU.
   Web typecheck and lint pass. Repository test/build and the authenticated Playwright screenshot
   journey remain in the coordinated final gate set.
+- **Experience Spec-Review Fix**: Provider-native `ask_user` activities now remain structured
+  decisions when they carry freeform text and no options, and their answers use the owning session
+  plus activity reply route. Pending approval selects only an action whose status is exactly
+  `proposed`, so applied and rejected siblings cannot replace the remaining live decision. Personal
+  session responses resolve application-owned workspace and source labels from canonical rows only
+  after rechecking the owner's current access; historical work remains readable after access loss
+  with generic source language and no canonical-name disclosure. The queue, workbench, and context
+  rail use those labels. The mobile breadcrumb keeps its separator and source label in one
+  non-breaking fragment, preventing an orphaned slash at narrow widths.
+- **Experience Spec-Review Validation**: Red shared-type and personal-route tests established that
+  display metadata was absent and that lost source access made an owner's historical session
+  unreadable. Red adapter and workbench tests reproduced the discarded optionless question and
+  stale multi-action approval choice, while a render regression reproduced the breakable breadcrumb
+  separator. Green focused checks pass shared types 6/6, personal API plus OpenAPI 22/22, and web
+  adapter/workbench/workspace/query/panel coverage 23/23. Types, API, and web typecheck and lint pass;
+  Prettier and `git diff --check` pass. An isolated app used a dedicated PGlite database, explicit
+  API/web origins, and connector base configuration. Its authenticated Chromium personal-Athena
+  journey passes 1/1 in 23.0 seconds, exercises the exact
+  `/v1/me/athena/sessions/:sessionId/activity/:activityId/approve` route, observes `Work finished`,
+  and regenerates five inspected desktop/mobile light/dark and below-fold captures. `/athena` has no
+  redundant Athena pulse; the mobile tool outcome, expanded disclosure, and composer have no
+  product overlap or horizontal overflow. The recurring diagnostic is local Node 24.14.0 versus
+  the declared minimum 24.15.0.
+- **Experience Spec-Review Retrospective**: Decision shape must follow provider intent rather than
+  the presence of predefined choices, and durable status selection must use the exact live state
+  instead of treating every non-applied action as pending. Separating invocation input from the
+  owner-safe output projection preserved the authorization contract while making presentation
+  labels trustworthy. Real narrow screenshots caught a line-break defect that DOM behavior tests
+  alone did not make visible; the resulting test now protects the non-breaking fragment.
+- **Experience Spec-Review Files Changed**: Shared Athena output DTOs and tests; personal API display
+  resolution, projections, and route tests; web adapter, transport, workbench, queue, context rail,
+  unit tests, and authenticated Playwright fixture; the personal-Athena design audit; and this work
+  log.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

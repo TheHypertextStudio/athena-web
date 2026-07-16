@@ -92,8 +92,16 @@ async function expectControlContrast(
 }
 
 /** Install the personal API fixture until the generated client lane lands in this worktree. */
-async function installAthenaFixture(page: Page, orgId: string): Promise<() => void> {
+async function installAthenaFixture(
+  page: Page,
+  orgId: string,
+): Promise<{
+  readonly releaseApproval: () => void;
+  readonly readApprovalPath: () => string | null;
+}> {
   let releaseApproval = (): void => undefined;
+  let approvalPath: string | null = null;
+  let approved = false;
   const approvalGate = new Promise<void>((resolve) => {
     releaseApproval = resolve;
   });
@@ -103,7 +111,11 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<() => vo
     status: 'awaiting_approval',
     queueState: 'needs_you',
     objective: 'Protect two hours for the launch review',
-    context: { workspaceId: orgId, source: { type: 'project', id: 'project_fixture' } },
+    context: {
+      workspaceId: orgId,
+      source: { type: 'project', id: 'project_fixture', label: 'Athena launch' },
+    },
+    workspace: { id: orgId, name: 'Personal workspace' },
     startedAt: createdAt,
     endedAt: null,
     createdAt,
@@ -116,7 +128,7 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<() => vo
         sessionId: summary.id,
         organizationId: orgId,
         type: 'action',
-        approvalStatus: 'pending',
+        approvalStatus: 'proposed',
         createdAt,
         body: {
           action: {
@@ -139,6 +151,13 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<() => vo
     currentChat: null,
     sessions: { needsYou: [summary], working: [], finished: [] },
   } as const;
+  const settledDetail = {
+    ...detail,
+    status: 'completed',
+    queueState: 'finished',
+    endedAt: '2026-07-15T16:00:00.000Z',
+    activities: [{ ...detail.activities[0], approvalStatus: 'applied' }],
+  } as const;
 
   await page.route('**/v1/me/athena**', async (route: Route) => {
     const request = route.request();
@@ -155,29 +174,34 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<() => vo
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(detail),
+        body: JSON.stringify(approved ? settledDetail : detail),
       });
       return;
     }
-    if (request.method() === 'POST' && path === '/v1/me/athena/activity/action_fixture/approve') {
+    if (
+      request.method() === 'POST' &&
+      path === `/v1/me/athena/sessions/${summary.id}/activity/action_fixture/approve`
+    ) {
+      approvalPath = path;
       await approvalGate;
+      approved = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ ...detail.activities[0], sessionId: summary.id }),
+        body: JSON.stringify(settledDetail.activities[0]),
       });
       return;
     }
     await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
   });
-  return releaseApproval;
+  return { releaseApproval, readApprovalPath: () => approvalPath };
 }
 
 test('personal Athena dock, workbench, context, redirects, and responsive themes', async ({
   page,
 }, testInfo) => {
   const { orgId } = await signUpAndOnboard(page, 'personal-athena');
-  const releaseApproval = await installAthenaFixture(page, orgId);
+  const { releaseApproval, readApprovalPath } = await installAthenaFixture(page, orgId);
 
   await page.goto('/today');
   await page.keyboard.press('Meta+J');
@@ -218,6 +242,18 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
     }
   }
 
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByText('Technical details').click();
+  await expect(page.getByText(/sunsama_create_task/)).toBeVisible();
+  await page.getByRole('form', { name: 'Steer Athena' }).scrollIntoViewIfNeeded();
+  await expect(page.getByText('Added 2 blocks to Thursday', { exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Add context or answer' })).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath('athena-mobile-below-fold.png'),
+    fullPage: false,
+  });
+
   await page.setViewportSize({ width: 320, height: 844 });
   const viewportHealth = await page.locator('[data-athena-workspace]').evaluate((workspace) => {
     const visibleControls = [...workspace.querySelectorAll<HTMLElement>('button, textarea')].filter(
@@ -242,6 +278,9 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
     name: /Protect two hours for the launch review/,
   });
   await selectedWork.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(selectedWork).toBeFocused();
   const focusStyle = await selectedWork.evaluate((element) => {
     const style = window.getComputedStyle(element);
     return `${style.outlineStyle} ${style.boxShadow}`;
@@ -249,11 +288,15 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   expect(focusStyle).not.toBe('none none');
 
   await page.getByRole('button', { name: 'Approve' }).click();
+  await expect
+    .poll(readApprovalPath)
+    .toBe(`/v1/me/athena/sessions/athena_fixture_session/activity/action_fixture/approve`);
   for (const name of ['Cancel work', 'Approve', 'Reject'] as const) {
     const control = page.getByRole('button', { name });
     await expect(control).toBeDisabled();
     await expect(control).toHaveCSS('opacity', '0.5');
   }
   releaseApproval();
-  await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Work finished' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
 });

@@ -35,13 +35,16 @@ export function AthenaWorkbench({
 }: AthenaWorkbenchProps): JSX.Element {
   const view = useMemo(() => presentAthenaSession(session), [session]);
   const decision = view.decision;
+  const freeformQuestion = decision?.kind === 'question' && decision.options.length === 0;
+  const commandLabel = freeformQuestion ? 'Answer Athena' : view.commandLabel;
   const [draft, setDraft] = useState('');
 
   function submit(event: SyntheticEvent<HTMLFormElement>): void {
     event.preventDefault();
     const body = draft.trim();
     if (!body || pending) return;
-    onMessage?.(body);
+    if (freeformQuestion) onDecision?.(decision.id, body);
+    else onMessage?.(body);
     setDraft('');
   }
 
@@ -56,8 +59,9 @@ export function AthenaWorkbench({
             <span className="text-on-surface-variant">{view.workspaceLabel}</span>
           ) : null}
           {view.contextLabel ? (
-            <span className="text-on-surface-variant before:mr-2 before:content-['/']">
-              {view.contextLabel}
+            <span className="text-on-surface-variant inline-flex items-center gap-2 whitespace-nowrap">
+              <span aria-hidden="true">/</span>
+              <span>{view.contextLabel}</span>
             </span>
           ) : null}
         </div>
@@ -206,18 +210,18 @@ export function AthenaWorkbench({
       </div>
 
       <form
-        aria-label="Steer Athena"
+        aria-label={freeformQuestion ? 'Answer Athena' : 'Steer Athena'}
         className="border-outline-variant bg-surface flex items-end gap-2 border-t p-3 @2xl:p-4"
         onSubmit={submit}
       >
         <label className="min-w-0 flex-1">
-          <span className="sr-only">{view.commandLabel}</span>
+          <span className="sr-only">{commandLabel}</span>
           <textarea
-            aria-label={view.commandLabel}
+            aria-label={commandLabel}
             value={draft}
             disabled={pending}
             rows={2}
-            placeholder={`${view.commandLabel}…`}
+            placeholder={`${commandLabel}…`}
             onChange={(event) => {
               setDraft(event.target.value);
             }}

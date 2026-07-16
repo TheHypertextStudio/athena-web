@@ -121,6 +121,54 @@ describe('personal Athena query definitions', () => {
     ]);
   });
 
+  it('posts an elicitation answer to the owning session and activity reply route', async () => {
+    const requested: { readonly url: string; readonly body: unknown }[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request =
+          input instanceof Request
+            ? input
+            : new Request(new URL(requestUrl(input), 'http://localhost'), init);
+        requested.push({
+          url: new URL(request.url).pathname,
+          body: request.method === 'POST' ? await request.clone().json() : null,
+        });
+        return new Response(
+          JSON.stringify(
+            requested.length === 1
+              ? { id: 'elicitation_reply', sessionId: 'session_1' }
+              : {
+                  id: 'session_1',
+                  kind: 'job',
+                  status: 'awaiting_input',
+                  queueState: 'needs_you',
+                  objective: 'Prepare the launch review',
+                  context: null,
+                  startedAt: '2026-07-15T15:00:00.000Z',
+                  endedAt: null,
+                  createdAt: '2026-07-15T15:00:00.000Z',
+                  activities: [],
+                },
+          ),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+
+    await personalAthenaTransport.decide('session_1', 'elicitation_1', 'reply', {
+      body: 'The launch checklist',
+    });
+
+    expect(requested).toEqual([
+      {
+        url: '/v1/me/athena/sessions/session_1/activity/elicitation_1/reply',
+        body: { body: 'The launch checklist' },
+      },
+      { url: '/v1/me/athena/sessions/session_1', body: null },
+    ]);
+  });
+
   it('keeps display-only context out of the shared invocation DTO', async () => {
     let submitted: unknown;
     vi.stubGlobal(

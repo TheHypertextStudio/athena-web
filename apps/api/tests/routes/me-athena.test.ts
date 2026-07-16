@@ -325,12 +325,81 @@ describe('personal Athena routes', () => {
     });
     expect(created.status).toBe(200);
     const body = (await created.json()) as {
-      context: { workspaceId?: string; source?: { type: string; id: string } };
+      id: string;
+      workspace: { id: string; name: string } | null;
+      context: {
+        workspaceId?: string;
+        source?: { type: string; id: string; label: string };
+      };
     };
     expect(body.context).toEqual({
       workspaceId: seed.orgA,
-      source: { type: 'project', id: projectId },
+      source: { type: 'project', id: projectId, label: 'Launch' },
     });
+    expect(body.workspace).toEqual({ id: seed.orgA, name: expect.stringMatching(/^Alpha-/) });
+
+    const overview = (await (await appFor(seed.owner).request('/')).json()) as {
+      sessions: Record<
+        'needsYou' | 'working' | 'finished',
+        { id: string; workspace: unknown; context: unknown }[]
+      >;
+    };
+    const summaries = [
+      ...overview.sessions.needsYou,
+      ...overview.sessions.working,
+      ...overview.sessions.finished,
+    ];
+    expect(summaries.find((session) => session.id === body.id)).toMatchObject({
+      workspace: { id: seed.orgA, name: expect.stringMatching(/^Alpha-/) },
+      context: {
+        workspaceId: seed.orgA,
+        source: { type: 'project', id: projectId, label: 'Launch' },
+      },
+    });
+  });
+
+  it('does not disclose canonical labels after the owner loses source access', async () => {
+    const seed = await seedPeople();
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({
+          organizationId: seed.orgA,
+          name: 'Secret launch codename',
+          status: 'active',
+          createdBy: seed.owner.actorIds[seed.orgA],
+        })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    await seedActivity(sessionId, {
+      type: 'response',
+      body: {
+        text: 'Review the contextual work',
+        author: 'user',
+        context: {
+          workspaceId: seed.orgA,
+          source: { type: 'project', id: projectId },
+        },
+      },
+    });
+    const ownerActorId = seed.owner.actorIds[seed.orgA];
+    if (!ownerActorId) throw new Error('owner actor missing');
+    await db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, ownerActorId));
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      workspace: unknown;
+      context: { source?: { label?: string } } | null;
+    };
+    expect(body.workspace).toBeNull();
+    expect(body.context?.source?.label).toBe('Project');
+    expect(JSON.stringify(body)).not.toContain('Secret launch codename');
+    expect(JSON.stringify(body)).not.toMatch(/Alpha-/);
   });
 
   it('supports owner-only proposal review, edits, rejection, and elicitation replies', async () => {

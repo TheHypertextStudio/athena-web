@@ -461,6 +461,45 @@ export const AthenaInvocationContext = z
 /** Athena invocation-context value. */
 export type AthenaInvocationContext = z.infer<typeof AthenaInvocationContext>;
 
+/** Canonical source metadata resolved by the server for personal Athena reads. */
+export const AthenaInvocationSourceOut = AthenaInvocationSource.extend({
+  label: z
+    .string()
+    .min(1)
+    .describe('Application-owned canonical display label visible to the authenticated owner.'),
+})
+  .strict()
+  .meta({ id: 'AthenaInvocationSourceOut', description: 'Display-safe Athena source context.' });
+/** Display-safe Athena source value. */
+export type AthenaInvocationSourceOut = z.infer<typeof AthenaInvocationSourceOut>;
+
+/** Personal Athena context projected with server-resolved source display metadata. */
+export const AthenaInvocationContextOut = z
+  .object({
+    workspaceId: OrganizationId.optional().describe('Validated workspace focus.'),
+    source: AthenaInvocationSourceOut.optional().describe(
+      'Canonical source identity and label resolved for the authenticated owner.',
+    ),
+  })
+  .strict()
+  .refine((value) => value.workspaceId !== undefined || value.source !== undefined, {
+    message: 'Invocation context must name a workspace or source',
+  })
+  .meta({ id: 'AthenaInvocationContextOut', description: 'Display-safe Athena invocation focus.' });
+/** Display-safe Athena invocation-context value. */
+export type AthenaInvocationContextOut = z.infer<typeof AthenaInvocationContextOut>;
+
+/** Canonical workspace display metadata resolved for a personal Athena read. */
+export const AthenaWorkspaceOut = z
+  .object({
+    id: OrganizationId.describe('Canonical workspace id.'),
+    name: z.string().min(1).describe('Canonical workspace name visible to the owner.'),
+  })
+  .strict()
+  .meta({ id: 'AthenaWorkspaceOut', description: 'Display-safe Athena workspace metadata.' });
+/** Display-safe Athena workspace value. */
+export type AthenaWorkspaceOut = z.infer<typeof AthenaWorkspaceOut>;
+
 /** Product queue lane derived from a personal session lifecycle state. */
 export const AthenaQueueState = z
   .enum(['needs_you', 'working', 'finished'])
@@ -479,8 +518,11 @@ export const AthenaSessionSummaryOut = z
       .string()
       .nullable()
       .describe('The first user-authored brief, or null before the user supplies one.'),
-    context: AthenaInvocationContext.nullable().describe(
-      'Validated invocation focus, or null for workspace-neutral work.',
+    context: AthenaInvocationContextOut.nullable().describe(
+      'Validated invocation focus with owner-safe source metadata, or null for neutral work.',
+    ),
+    workspace: AthenaWorkspaceOut.nullable().describe(
+      'Canonical workspace metadata visible to the authenticated owner, or null when neutral or no longer accessible.',
     ),
     startedAt: z.string().nullable().describe('ISO-8601 start instant, or null before execution.'),
     endedAt: z.string().nullable().describe('ISO-8601 terminal instant, or null while active.'),

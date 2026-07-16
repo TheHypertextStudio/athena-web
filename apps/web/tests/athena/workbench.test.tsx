@@ -58,6 +58,7 @@ describe('AthenaWorkbench', () => {
     expect(screen.getByText('Only you can see this decision')).toBeVisible();
     expect(screen.getByText('Sunsama · Protected focus time')).toBeVisible();
     expect(screen.getByText('Added 2 blocks to Thursday')).toBeVisible();
+    expect(screen.getByText('Athena launch').parentElement).toHaveClass('whitespace-nowrap');
     expect(screen.queryByText('Private chain of thought')).not.toBeInTheDocument();
     expect(screen.queryByText('sunsama_create_task')).not.toBeInTheDocument();
 
@@ -89,6 +90,36 @@ describe('AthenaWorkbench', () => {
     });
     fireEvent.submit(screen.getByRole('form', { name: 'Steer Athena' }));
     expect(onMessage).toHaveBeenCalledWith('Keep the attendee list unchanged.');
+  });
+
+  it('submits an optionless Athena question as an activity reply instead of a steering message', () => {
+    const onDecision = vi.fn();
+    const onMessage = vi.fn();
+    render(
+      <AthenaWorkbench
+        session={{
+          ...session,
+          status: 'awaiting_input',
+          decision: {
+            kind: 'question',
+            id: 'elicitation_1',
+            title: 'Which launch task should I update?',
+            private: true,
+            options: [],
+          },
+        }}
+        onDecision={onDecision}
+        onMessage={onMessage}
+      />,
+    );
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Answer Athena' }), {
+      target: { value: 'Update the launch checklist.' },
+    });
+    fireEvent.submit(screen.getByRole('form', { name: 'Answer Athena' }));
+
+    expect(onDecision).toHaveBeenCalledWith('elicitation_1', 'Update the launch checklist.');
+    expect(onMessage).not.toHaveBeenCalled();
   });
 
   it('owns enabled foreground tokens for primary and secondary workbench actions', () => {

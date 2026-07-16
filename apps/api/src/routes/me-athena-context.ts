@@ -9,11 +9,16 @@ import {
   event,
   eventRecipient,
   initiative,
+  organization,
   program,
   project,
   task,
 } from '@docket/db';
-import type { AthenaInvocationContext } from '@docket/types';
+import type {
+  AthenaInvocationContext,
+  AthenaInvocationContextOut,
+  AthenaWorkspaceOut,
+} from '@docket/types';
 import { and, eq, isNull, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -26,6 +31,23 @@ export interface ResolvedAthenaInvocation {
   /** Active human Actor for the resolved workspace, or null for neutral work. */
   readonly actorId: string | null;
 }
+
+/** Owner-safe display metadata for one persisted personal-Athena invocation. */
+export interface ResolvedAthenaDisplay {
+  /** Persisted focus enriched with a canonical or safe generic source label. */
+  readonly context: z.input<typeof AthenaInvocationContextOut> | null;
+  /** Canonical workspace metadata only while the owner retains current access. */
+  readonly workspace: z.input<typeof AthenaWorkspaceOut> | null;
+}
+
+const SOURCE_KIND_LABELS = {
+  task: 'Task',
+  project: 'Project',
+  initiative: 'Initiative',
+  program: 'Program',
+  calendar_item: 'Calendar item',
+  stream_event: 'Stream event',
+} as const;
 
 /** Load the caller's active human Actor in a workspace, hiding membership failures. */
 export async function activeAthenaActor(userId: string, workspaceId: string): Promise<string> {
@@ -173,4 +195,107 @@ export async function resolveAthenaInvocation(
     context: { workspaceId: resolved.workspaceId, source: input.source },
     actorId: resolved.actorId,
   };
+}
+
+/** Load a canonical label after the invocation resolver has rechecked owner access. */
+async function sourceDisplayLabel(
+  userId: string,
+  source: z.input<typeof AthenaInvocationContext>['source'] & {},
+): Promise<string | null> {
+  const rows =
+    source.type === 'task'
+      ? await db
+          .select({ label: task.title })
+          .from(task)
+          .where(and(eq(task.id, source.id), isNull(task.archivedAt)))
+          .limit(1)
+      : source.type === 'project'
+        ? await db
+            .select({ label: project.name })
+            .from(project)
+            .where(and(eq(project.id, source.id), isNull(project.archivedAt)))
+            .limit(1)
+        : source.type === 'initiative'
+          ? await db
+              .select({ label: initiative.name })
+              .from(initiative)
+              .where(and(eq(initiative.id, source.id), isNull(initiative.archivedAt)))
+              .limit(1)
+          : source.type === 'program'
+            ? await db
+                .select({ label: program.name })
+                .from(program)
+                .where(and(eq(program.id, source.id), isNull(program.archivedAt)))
+                .limit(1)
+            : source.type === 'calendar_item'
+              ? await db
+                  .select({ label: calendarItem.title })
+                  .from(calendarItem)
+                  .where(and(eq(calendarItem.id, source.id), eq(calendarItem.userId, userId)))
+                  .limit(1)
+              : await db
+                  .select({ label: event.title })
+                  .from(event)
+                  .where(and(eq(event.id, source.id), isNull(event.archivedAt)))
+                  .limit(1);
+  return rows[0]?.label ?? null;
+}
+
+/**
+ * Resolve current canonical display metadata without making old personal work disappear.
+ *
+ * @remarks
+ * The existing invocation resolver remains the authority for checking current membership and
+ * source visibility. If that check now fails, reads retain only previously persisted ids plus a
+ * generic source-kind label; canonical workspace/source names are never loaded or disclosed.
+ */
+export async function resolveAthenaDisplay(
+  userId: string,
+  input: z.input<typeof AthenaInvocationContext> | null,
+): Promise<ResolvedAthenaDisplay> {
+  if (!input) return { context: null, workspace: null };
+  try {
+    const resolved = await resolveAthenaInvocation(userId, input);
+    const context = resolved.context;
+    if (!context) return { context: null, workspace: null };
+    const workspaceRows = context.workspaceId
+      ? await db
+          .select({ id: organization.id, name: organization.name })
+          .from(organization)
+          .where(and(eq(organization.id, context.workspaceId), isNull(organization.archivedAt)))
+          .limit(1)
+      : [];
+    const source = context.source;
+    const label = source ? await sourceDisplayLabel(userId, source) : null;
+    return {
+      context: {
+        ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
+        ...(source
+          ? {
+              source: {
+                ...source,
+                label: label ?? SOURCE_KIND_LABELS[source.type],
+              },
+            }
+          : {}),
+      },
+      workspace: workspaceRows[0] ?? null,
+    };
+  } catch (error) {
+    if (!(error instanceof NotFoundError)) throw error;
+    return {
+      context: {
+        ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+        ...(input.source
+          ? {
+              source: {
+                ...input.source,
+                label: SOURCE_KIND_LABELS[input.source.type],
+              },
+            }
+          : {}),
+      },
+      workspace: null,
+    };
+  }
 }

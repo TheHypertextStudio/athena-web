@@ -371,6 +371,15 @@
   5. Validate responsive light/dark application renders at desktop and mobile widths, resolve
      accessibility and interaction findings, run the web and repository gates, complete the
      retrospective, and commit the experience slice locally without rebasing, merging, or pushing.
+- **Plan (visual contrast review fix)**:
+  1. Reproduce the reviewed screenshots and trace Cancel work, Approve, and Reject through the
+     workbench button variants, semantic foreground tokens, and mutation pending state.
+  2. Add red component assertions for explicit enabled foreground ownership and red authenticated
+     browser assertions for enabled state plus WCAG AA text contrast in light and dark.
+  3. Give secondary workbench actions explicit on-surface foregrounds without weakening the shared
+     focus ring or disabled treatment, and capture screenshots before exercising the mutation.
+  4. Regenerate and inspect all four authenticated desktop/mobile light/dark screenshots, update
+     the design audit honestly, run proportionate web/root gates, and commit the isolated fix.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -656,6 +665,17 @@
   each), tests (17/17 tasks; web 772/772, API 1,272/1,272, tooling 46/46), and build (3/3 tasks).
   `git diff --check` passes. The only recurring diagnostic is the repository engine warning for
   local Node 24.14.0 versus the declared minimum 24.15.0.
+- **Experience Contrast Review Fix**: The red component contract proved Cancel work and the
+  secondary decision had no explicit enabled foreground token. The authenticated review also showed
+  that captures must be taken before mutations and after the shared color transition settles.
+  Secondary workbench actions now own `text-on-surface`, while the primary retains the default
+  primary foreground. The focused component suite passes 3/3. The authenticated Chromium journey
+  passes 1/1, measures WCAG AA contrast for Cancel work, Approve, and Reject in both themes, holds a
+  real approval request to verify the separate 50% disabled treatment, and regenerates four
+  inspected desktop/mobile light/dark screenshots with every action visibly enabled. Final root
+  validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks; web 773/773 and
+  tooling 46/46), and build (3/3 tasks). `git diff --check` passes. The only recurring diagnostic is
+  the repository engine warning for local Node 24.14.0 versus the declared minimum 24.15.0.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A
@@ -685,7 +705,9 @@
   not a transcript: objectives, decisions, receipts, and structured service outcomes carry the
   hierarchy. Running the real narrow viewport exposed a flex-shrink queue collapse that component
   tests could not, while the craft rubric exposed an empty queue that described work but could not
-  start it. Both are now covered by executable regressions.
+  start it. Both are now covered by executable regressions. The contrast follow-up also showed that
+  visual evidence must wait for theme transitions and must not conflate pending mutation controls
+  with their enabled state; those states now have separate assertions.
 
 ---
 

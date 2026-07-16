@@ -31,8 +31,72 @@ function relativeLuminance(color: string): number {
   return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
 }
 
+/** Read an enabled control's foreground and nearest opaque background from the rendered page. */
+async function readEnabledControlColors(
+  page: Page,
+  name: 'Approve' | 'Cancel work' | 'Reject',
+): Promise<{ foreground: string; background: string }> {
+  const control = page.getByRole('button', { name });
+  await expect(control).toBeEnabled();
+  return control.evaluate((element, controlName) => {
+    const toSrgb = (color: string): string => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Could not normalize a computed color');
+      context.fillStyle = color;
+      context.fillRect(0, 0, 1, 1);
+      const [red = 0, green = 0, blue = 0] = context.getImageData(0, 0, 1, 1).data;
+      return `rgb(${String(red)}, ${String(green)}, ${String(blue)})`;
+    };
+    const button = element as HTMLButtonElement;
+    const style = window.getComputedStyle(button);
+    let background = style.backgroundColor;
+    let effectiveOpacity = Number(style.opacity);
+    let ancestor = button.parentElement;
+    while ((background === 'rgba(0, 0, 0, 0)' || background === 'transparent') && ancestor) {
+      const ancestorStyle = window.getComputedStyle(ancestor);
+      background = ancestorStyle.backgroundColor;
+      effectiveOpacity *= Number(ancestorStyle.opacity);
+      ancestor = ancestor.parentElement;
+    }
+
+    if (button.disabled || effectiveOpacity !== 1) {
+      throw new Error(`${controlName} must be visibly enabled before review captures`);
+    }
+    return {
+      foreground: toSrgb(style.color),
+      background: toSrgb(background),
+    };
+  }, name);
+}
+
+/** Assert WCAG AA contrast for ordinary-size text in one enabled action. */
+async function expectControlContrast(
+  page: Page,
+  name: 'Approve' | 'Cancel work' | 'Reject',
+): Promise<void> {
+  let colors = await readEnabledControlColors(page, name);
+  const readContrast = async (): Promise<number> => {
+    colors = await readEnabledControlColors(page, name);
+    const foreground = relativeLuminance(colors.foreground);
+    const background = relativeLuminance(colors.background);
+    return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+  };
+  await expect
+    .poll(readContrast, { message: `${name} color transition did not settle` })
+    .toBeGreaterThanOrEqual(4.5);
+  const contrast = await readContrast();
+  expect(contrast, `${name}: ${JSON.stringify(colors)}`).toBeGreaterThanOrEqual(4.5);
+}
+
 /** Install the personal API fixture until the generated client lane lands in this worktree. */
-async function installAthenaFixture(page: Page, orgId: string): Promise<void> {
+async function installAthenaFixture(page: Page, orgId: string): Promise<() => void> {
+  let releaseApproval = (): void => undefined;
+  const approvalGate = new Promise<void>((resolve) => {
+    releaseApproval = resolve;
+  });
   const summary = {
     id: 'athena_fixture_session',
     kind: 'job',
@@ -96,6 +160,7 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<void> {
       return;
     }
     if (request.method() === 'POST' && path === '/v1/me/athena/activity/action_fixture/approve') {
+      await approvalGate;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -105,13 +170,14 @@ async function installAthenaFixture(page: Page, orgId: string): Promise<void> {
     }
     await route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
   });
+  return releaseApproval;
 }
 
 test('personal Athena dock, workbench, context, redirects, and responsive themes', async ({
   page,
 }, testInfo) => {
   const { orgId } = await signUpAndOnboard(page, 'personal-athena');
-  await installAthenaFixture(page, orgId);
+  const releaseApproval = await installAthenaFixture(page, orgId);
 
   await page.goto('/today');
   await page.keyboard.press('Meta+J');
@@ -125,8 +191,6 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   await expect(page.getByText('sunsama_create_task')).toBeHidden();
   await page.getByText('Technical details').click();
   await expect(page.getByText(/sunsama_create_task/)).toBeVisible();
-  await page.getByRole('button', { name: 'Approve' }).click();
-
   await page.getByRole('button', { name: 'Close Athena' }).click();
   await page.getByRole('button', { name: 'Open Athena for today' }).click();
   await expect(page.getByRole('dialog', { name: 'Athena' })).toBeVisible();
@@ -144,6 +208,9 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
     await expect(page.getByRole('navigation', { name: 'Athena work queue' })).toBeVisible();
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
+      await expectControlContrast(page, 'Cancel work');
+      await expectControlContrast(page, 'Approve');
+      await expectControlContrast(page, 'Reject');
       await page.screenshot({
         path: testInfo.outputPath(`athena-${viewport.label}-${colorScheme}.png`),
         fullPage: true,
@@ -181,13 +248,12 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   });
   expect(focusStyle).not.toBe('none none');
 
-  const approvalColors = await page.getByRole('button', { name: 'Approve' }).evaluate((element) => {
-    const style = window.getComputedStyle(element);
-    return { foreground: style.color, background: style.backgroundColor };
-  });
-  const foreground = relativeLuminance(approvalColors.foreground);
-  const background = relativeLuminance(approvalColors.background);
-  const approvalContrast =
-    (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
-  expect(approvalContrast, JSON.stringify(approvalColors)).toBeGreaterThanOrEqual(4.5);
+  await page.getByRole('button', { name: 'Approve' }).click();
+  for (const name of ['Cancel work', 'Approve', 'Reject'] as const) {
+    const control = page.getByRole('button', { name });
+    await expect(control).toBeDisabled();
+    await expect(control).toHaveCSS('opacity', '0.5');
+  }
+  releaseApproval();
+  await expect(page.getByRole('button', { name: 'Approve' })).toBeEnabled();
 });

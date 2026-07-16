@@ -1,5 +1,6 @@
 import type * as DbModule from '@docket/db';
 import type meAthenaRoute from '../../src/routes/me-athena';
+import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +16,7 @@ vi.mock('../../src/agent/async-runner', () => ({
 }));
 
 import type { AppEnv } from '../../src/context';
+import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import { onError } from '../../src/error';
 import { fakeSession, getDb } from '../support/routes-harness';
 
@@ -33,13 +35,10 @@ describe('personal Athena asynchronous acknowledgement', () => {
       .insert(schema.user)
       .values({ name: 'Async Owner', email: `async-${suffix}@example.com` })
       .returning({ id: schema.user.id });
-    runnerMocks.admit.mockResolvedValue({
+    runnerMocks.admit.mockImplementation(async (session, options) => ({
       mode: 'async',
-      queued: {
-        runId: '01RUN',
-        message: { sessionId: 'opaque', generation: 1, workflowId: 'opaque:1' },
-      },
-    });
+      queued: await enqueueRunGeneration(session, options),
+    }));
     const app = new Hono<AppEnv>();
     app.use('*', async (c, next) => {
       c.set('session', fakeSession(owner!.id));
@@ -60,8 +59,13 @@ describe('personal Athena asynchronous acknowledgement', () => {
       { runnableStatuses: ['pending'] },
     );
     await expect(response.json()).resolves.toMatchObject({
-      status: 'pending',
+      status: 'running',
       objective: 'Prepare the launch plan.',
     });
+    const [queued] = await schema.db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.ownerUserId, owner!.id));
+    expect(queued?.status).toBe('queued');
   });
 });

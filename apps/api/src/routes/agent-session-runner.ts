@@ -2,6 +2,7 @@ import { actor, agent, agentSession, db, sessionActivity } from '@docket/db';
 import { and, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import { admitAthenaGeneration } from '../agent/async-runner';
 import { driveSession } from '../agent/loop';
 
 import type { SessionRow } from './agent-session-helpers';
@@ -14,16 +15,17 @@ import type { SessionRow } from './agent-session-helpers';
  * session binds to the supplied registered `agentId` (validated in-org) or — when omitted — to
  * user-owned Athena using the caller's persisted Better Auth user id. The
  * prompt is persisted as the session's first `response` activity (there is no schema
- * brief column) so {@link runSession} threads it through as the runtime `task` brief;
- * the session then runs and settles like any other. Trigger is `delegation` (a human
- * delegating planning to the agent), matching `trigger_agent`'s default.
+ * brief column) so {@link runSession} threads it through as the runtime `task` brief.
+ * Personal Athena work enters the configured asynchronous admission path in production,
+ * while registered agents and local/test Athena work continue synchronously. Trigger is
+ * `delegation` (a human delegating planning to the agent), matching `trigger_agent`'s default.
  *
  * @param orgId - The active organization id.
  * @param actorId - The caller's actor id (the session initiator + prompt author).
  * @param prompt - The freeform brief the agent should plan against.
  * @param agentId - An explicit registered agent; omission selects user-owned Athena.
  * @param authenticatedUserId - Request-authenticated owner for Athena creation.
- * @returns the settled session row.
+ * @returns the accepted Athena session or settled synchronous session row.
  * @throws {NotFoundError} When an explicit `agentId` is not a registered agent in the org.
  */
 export async function createAndRunFromPrompt(
@@ -47,7 +49,7 @@ export async function createAndRunFromPrompt(
     ownerUserId = authenticatedUserId ?? (await ownerUserIdForActor(orgId, actorId));
   }
 
-  const sessionId = await db.transaction(async (tx) => {
+  const createdSession = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(agentSession)
       .values(
@@ -69,7 +71,7 @@ export async function createAndRunFromPrompt(
               initiatorId: actorId,
             },
       )
-      .returning({ id: agentSession.id });
+      .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('session insert returned no row');
 
@@ -81,10 +83,26 @@ export async function createAndRunFromPrompt(
       type: 'response',
       body: { text: prompt },
     });
-    return created.id;
+    return created;
   });
 
-  return runSession(orgId, sessionId);
+  if (createdSession.executorKind === 'athena') {
+    const admission = await admitAthenaGeneration(createdSession, {
+      runnableStatuses: ['pending'],
+    });
+    if (admission.mode === 'async') {
+      const [current] = await db
+        .select()
+        .from(agentSession)
+        .where(eq(agentSession.id, createdSession.id))
+        .limit(1);
+      /* v8 ignore next -- @preserve admission updates the row it was given */
+      if (!current) throw new Error('admitted session returned no row');
+      return current;
+    }
+  }
+
+  return runSession(orgId, createdSession.id);
 }
 
 /** Defensive branch for a registered-agent insert whose validated id vanished. */

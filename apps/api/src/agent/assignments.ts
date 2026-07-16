@@ -29,6 +29,7 @@ import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { NotFoundError } from '../error';
 import type { EmitEventInput } from '../routes/event-emit';
 import { runSession } from '../routes/agent-session-runner';
+import { admitAthenaGeneration } from './async-runner';
 
 /** Assignment row used by route serializers and trigger workers. */
 export type AthenaAssignmentRow = typeof athenaAssignment.$inferSelect;
@@ -186,7 +187,7 @@ export async function startAssignmentRun(
   prompt: string,
   externalRunRef: string,
 ): Promise<string> {
-  const sessionId = await db.transaction(async (tx) => {
+  const session = await db.transaction(async (tx) => {
     const [session] = await tx
       .insert(agentSession)
       .values({
@@ -199,7 +200,7 @@ export async function startAssignmentRun(
         initiatorId: actorId,
         externalRunRef,
       })
-      .returning({ id: agentSession.id });
+      .returning();
     if (!session) throw new Error('assignment session insert returned no row');
     await tx.insert(sessionActivity).values({
       sessionId: session.id,
@@ -216,10 +217,13 @@ export async function startAssignmentRun(
           eq(athenaAssignment.ownerUserId, assignment.ownerUserId),
         ),
       );
-    return session.id;
+    return session;
   });
-  await runSession(assignment.organizationId, sessionId);
-  return sessionId;
+  const admission = await admitAthenaGeneration(session, { runnableStatuses: ['pending'] });
+  if (admission.mode === 'sync') {
+    await runSession(assignment.organizationId, session.id);
+  }
+  return session.id;
 }
 
 /** Create a user-owned assignment, personal notice, and initial durable run. */

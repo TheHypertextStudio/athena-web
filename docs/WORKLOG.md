@@ -248,6 +248,39 @@
   drifts: the exported `AthenaSessionOut` type lacked its required TSDoc and the authorization test
   schema omitted current `summary` columns. Both were corrected narrowly so the full repository
   gates exercise the reviewed base and this slice together.
+- **Plan (Cloudflare stale recovery and assignment dispatch review fixes)**:
+  1. Add real database regressions proving an exact queued Workflow generation can be reclaimed only
+     after its running lease expires, receives a new fencing token and incremented attempt, rejects
+     a fresh duplicate, and prevents the stale worker from committing a fenced write.
+  2. Add a state-machine regression proving a duplicate Workflow callback drives the reclaimed
+     generation instead of treating the expired running row as an unrecoverable persisted outcome.
+  3. Add assignment route/service regressions proving production-style asynchronous admission
+     persists and dispatches initial, event-triggered, and scheduled personal work through the same
+     runner seam while local/test mode retains synchronous execution and owner/access checks.
+  4. Add a compatibility-route matrix proving personal create/chat/run, activity and group decisions,
+     session shortcuts, reply, and resume persist through asynchronous admission or wake with `202`,
+     parked chats remain `200`, owner mismatches stay hidden, and registered agents remain synchronous.
+  5. Trace every direct personal `runSession` call, replace assignment and compatibility execution
+     with shared durable admission, update the Athena execution specification, run focused runner/API/
+     database plus root type/lint gates, self-review, and commit the review fixes separately without
+     amend, rebase, merge, deploy, resource creation, or push.
+- **Cloudflare Review Fixes**: Expired `running` generations can now be reclaimed only at their
+  exact lease boundary with a fresh token and incremented attempt; the previous worker remains
+  fenced from writes. Assignment initial/event/scheduled execution and every temporary workspace
+  compatibility entry for personal Athena now use production asynchronous admission or Workflow
+  wake, while local/test Athena and all registered-agent variants retain synchronous execution.
+  Eligible asynchronous mutations return `202` with the persisted parent/run state; parked chat
+  messages remain `200`, and every compatibility owner mismatch is rejected before admission,
+  decision, or wake.
+- **Cloudflare Review Validation**: The focused runner, loop, personal route, compatibility,
+  assignment, and generation suite passes (9 files, 93 tests). The narrower final regression set
+  passes (4 files, 21 tests), `pnpm --filter @docket/api typecheck` passes, focused API ESLint passes,
+  and `git diff --check` is clean. Root test/build were intentionally left to the integrating agent
+  per the milestone handoff scope.
+- **Cloudflare Review Retrospective**: The safest executor boundary is the persisted session row,
+  not the URL family: the temporary org routes contain both personal and registered work. Keeping
+  the discriminator at each mutation preserves legacy registered-agent behavior while preventing
+  any personal production entry from bypassing the durable owner admission and fencing model.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry

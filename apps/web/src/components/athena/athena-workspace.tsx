@@ -29,6 +29,20 @@ export interface AthenaWorkspaceProps {
   readonly transport?: PersonalAthenaTransport;
 }
 
+/** Derive the selected session entirely from the currently visible workspace roster. */
+export function effectiveAthenaSelectedId(
+  selectedId: string,
+  initialSessionId: string | null,
+  visibleSessions: readonly PersonalAthenaSessionSummary[],
+): string {
+  if (visibleSessions.some((session) => session.id === selectedId)) return selectedId;
+  return (
+    visibleSessions.find((session) => session.id === initialSessionId)?.id ??
+    visibleSessions[0]?.id ??
+    ''
+  );
+}
+
 /** Render the responsive cross-workspace queue, selected workbench, and contextual receipt rail. */
 export function AthenaWorkspace({
   initialSessionId = null,
@@ -63,14 +77,16 @@ export function AthenaWorkspace({
   const groups = useMemo(() => groupAthenaQueue(visibleSessions), [visibleSessions]);
   const [selectedId, setSelectedId] = useState('');
   const [newObjective, setNewObjective] = useState('');
+  const effectiveSelectedId = effectiveAthenaSelectedId(
+    selectedId,
+    initialSessionId,
+    visibleSessions,
+  );
   useEffect(() => {
     if (!queue.data) return;
-    const selectedVisible = visibleSessions.some((session) => session.id === selectedId);
-    if (selectedVisible) return;
-    const requested = visibleSessions.find((session) => session.id === initialSessionId);
-    setSelectedId(requested?.id ?? visibleSessions[0]?.id ?? '');
-  }, [initialSessionId, queue.data, selectedId, visibleSessions]);
-  const detail = useLiveApiQuery(personalAthenaDetailDef(selectedId, transport), 3_000);
+    if (selectedId !== effectiveSelectedId) setSelectedId(effectiveSelectedId);
+  }, [effectiveSelectedId, queue.data, selectedId]);
+  const detail = useLiveApiQuery(personalAthenaDetailDef(effectiveSelectedId, transport), 3_000);
 
   const updateSelected = useCallback(
     (next: PersonalAthenaSessionDetail): void => {
@@ -80,7 +96,7 @@ export function AthenaWorkspace({
     [queryClient],
   );
   const actions = useAthenaActions({
-    selectedId,
+    selectedId: effectiveSelectedId,
     transport,
     onSelected: updateSelected,
     onCreated: (next) => {
@@ -157,7 +173,7 @@ export function AthenaWorkspace({
                       <QueueRow
                         key={session.id}
                         session={session}
-                        selected={session.id === selectedId}
+                        selected={session.id === effectiveSelectedId}
                         onSelect={() => {
                           setSelectedId(session.id);
                         }}
@@ -170,7 +186,7 @@ export function AthenaWorkspace({
           </nav>
 
           <main className="flex min-h-[32rem] min-w-0 shrink-0 flex-col @3xl:min-h-0">
-            {selectedId && detail.isPending ? (
+            {effectiveSelectedId && detail.isPending ? (
               <div className="flex flex-col gap-3 p-6">
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-16 w-full" />

@@ -192,6 +192,33 @@ function blockingTurnRuntime(entered: Deferred<number>, release: Promise<void>):
   return { turnRuntime };
 }
 
+type GenerationEffectKind =
+  | 'thought-activity'
+  | 'response-activity'
+  | 'assistant-turn'
+  | 'action-claim'
+  | 'action-result';
+
+interface GenerationRaceDeps extends LoopDeps {
+  readonly beforeGenerationEffect: (kind: GenerationEffectKind) => Promise<void>;
+}
+
+function rotateLeaseBefore(
+  seed: Seed,
+  target: GenerationEffectKind,
+  replacement: string,
+): Pick<GenerationRaceDeps, 'beforeGenerationEffect'> {
+  return {
+    async beforeGenerationEffect(kind): Promise<void> {
+      if (kind !== target) return;
+      await db
+        .update(schema.agentSessionRun)
+        .set({ leaseToken: replacement })
+        .where(eq(schema.agentSessionRun.sessionId, seed.sessionId));
+    },
+  };
+}
+
 describe('user-owned Athena loop', () => {
   it('acts as the persisted owner and audits the current human Actor with Athena origin', async () => {
     const seed = await seedAthenaSession('routine_autonomy');
@@ -475,7 +502,60 @@ describe('user-owned Athena loop', () => {
     expect(stillClaimed?.status).toBe('executing');
   });
 
-  it('does not persist a stale tool result after the generation lease is fenced', async () => {
+  it('does not claim an approved action when its lease rotates at the persistence boundary', async () => {
+    const seed = await seedAthenaSession('routine_autonomy');
+    await db
+      .update(schema.agentSession)
+      .set({ status: 'running', startedAt: new Date() })
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    const leaseToken = 'claim-worker';
+    const [run] = await db
+      .insert(schema.agentSessionRun)
+      .values({
+        sessionId: seed.sessionId,
+        ownerUserId: seed.ownerUserId,
+        generation: 1,
+        workflowInstanceId: `${seed.sessionId}:1`,
+        status: 'running',
+        attempt: 1,
+        leaseToken,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })
+      .returning({ id: schema.agentSessionRun.id });
+    const [action] = await db
+      .insert(schema.sessionActivity)
+      .values({
+        sessionId: seed.sessionId,
+        organizationId: null,
+        type: 'action',
+        approvalStatus: 'approved',
+        body: { action: { kind: 'record', summary: 'Record outcome', mode: 'proposal' } },
+      })
+      .returning({ id: schema.sessionActivity.id });
+
+    await expect(
+      executeApprovedActions(
+        seed.orgId,
+        seed.sessionId,
+        {
+          runId: run!.id,
+          sessionId: seed.sessionId,
+          generation: 1,
+          leaseToken,
+          leaseDurationMs: 60_000,
+        },
+        rotateLeaseBefore(seed, 'action-claim', 'claim-takeover'),
+      ),
+    ).rejects.toThrow(/lease was lost/i);
+
+    const [persisted] = await db
+      .select({ status: schema.sessionActivity.approvalStatus })
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.id, action!.id));
+    expect(persisted?.status).toBe('approved');
+  });
+
+  it('does not persist a stale tool result when its lease rotates at the persistence boundary', async () => {
     const seed = await seedAthenaSession('routine_autonomy');
     await db
       .update(schema.agentSession)
@@ -521,25 +601,24 @@ describe('user-owned Athena loop', () => {
       tools: [],
       annotations: () => undefined,
       resolve: (name) => ({ connection: 'docket', rawName: name }),
-      callTool: async () => {
-        await db
-          .update(schema.agentSessionRun)
-          .set({ leaseToken: 'recovered-worker' })
-          .where(eq(schema.agentSessionRun.id, run!.id));
-        return { content: 'stale success', isError: false };
-      },
+      callTool: async () => ({ content: 'stale success', isError: false }),
       close: async () => undefined,
     });
 
     try {
       await expect(
-        executeApprovedActions(seed.orgId, seed.sessionId, {
-          runId: run!.id,
-          sessionId: seed.sessionId,
-          generation: 1,
-          leaseToken,
-          leaseDurationMs: 60_000,
-        }),
+        executeApprovedActions(
+          seed.orgId,
+          seed.sessionId,
+          {
+            runId: run!.id,
+            sessionId: seed.sessionId,
+            generation: 1,
+            leaseToken,
+            leaseDurationMs: 60_000,
+          },
+          rotateLeaseBefore(seed, 'action-result', 'result-takeover'),
+        ),
       ).rejects.toThrow(/lease was lost/i);
     } finally {
       toolbox.mockRestore();
@@ -553,37 +632,120 @@ describe('user-owned Athena loop', () => {
     expect(claimed?.body.action?.result).toBeUndefined();
   });
 
-  it('does not persist streamed activity after the generation lease is fenced', async () => {
-    const seed = await seedAthenaSession('routine_autonomy');
-    const turnRuntime: AgentRuntimeModule.AgentTurnRuntime = {
-      async *streamTurn(): AsyncIterable<AgentRuntimeModule.TurnEvent> {
-        await db
-          .update(schema.agentSessionRun)
-          .set({ leaseToken: 'recovered-stream-worker' })
-          .where(eq(schema.agentSessionRun.sessionId, seed.sessionId));
-        yield { type: 'thinking', text: 'stale provider event' };
-        yield {
-          type: 'turn_end',
-          stopReason: 'end_turn',
-          message: { role: 'assistant', content: [{ type: 'text', text: 'stale response' }] },
-        };
-      },
-    };
+  it.each([
+    ['thought', 'thinking', 'thought-activity'],
+    ['response', 'text', 'response-activity'],
+  ] as const)(
+    'does not persist a stale %s when its lease rotates at the activity boundary',
+    async (activityType, eventType, effectKind) => {
+      const seed = await seedAthenaSession('routine_autonomy');
+      const turnRuntime: AgentRuntimeModule.AgentTurnRuntime = {
+        async *streamTurn(): AsyncIterable<AgentRuntimeModule.TurnEvent> {
+          yield { type: eventType, text: 'stale provider event' };
+          yield {
+            type: 'turn_end',
+            stopReason: 'end_turn',
+            message: { role: 'assistant', content: [{ type: 'text', text: 'stale response' }] },
+          };
+        },
+      };
 
-    await expect(driveSession(seed.orgId, seed.sessionId, { turnRuntime })).rejects.toThrow(
-      /lease was lost/i,
-    );
+      await expect(
+        driveSession(seed.orgId, seed.sessionId, {
+          turnRuntime,
+          ...rotateLeaseBefore(seed, effectKind, `${activityType}-takeover`),
+        } as GenerationRaceDeps),
+      ).rejects.toThrow(/lease was lost/i);
 
-    const stale = await db
+      const stale = await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, seed.sessionId),
+            eq(schema.sessionActivity.type, activityType),
+          ),
+        );
+      expect(stale.filter((row) => row.body.text === 'stale provider event')).toHaveLength(0);
+    },
+  );
+
+  it('does not persist an assistant transcript or action when its lease rotates at the turn boundary', async () => {
+    const seed = await seedAthenaSession('ask_before_acting');
+    const turnRuntime = new runtime.MockAgentTurnRuntime({
+      script: [
+        {
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_stale_turn',
+                name: 'create_task',
+                input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Do not persist' },
+              },
+            ],
+          },
+          stopReason: 'tool_use',
+        },
+      ],
+    });
+
+    await expect(
+      driveSession(seed.orgId, seed.sessionId, {
+        turnRuntime,
+        ...rotateLeaseBefore(seed, 'assistant-turn', 'turn-takeover'),
+      } as GenerationRaceDeps),
+    ).rejects.toThrow(/lease was lost/i);
+
+    const actions = await db
       .select()
       .from(schema.sessionActivity)
       .where(
         and(
           eq(schema.sessionActivity.sessionId, seed.sessionId),
-          eq(schema.sessionActivity.type, 'thought'),
+          eq(schema.sessionActivity.type, 'action'),
         ),
       );
-    expect(stale).toHaveLength(0);
+    const [transcript] = await db
+      .select({ messages: schema.agentSessionTranscript.messages })
+      .from(schema.agentSessionTranscript)
+      .where(eq(schema.agentSessionTranscript.sessionId, seed.sessionId));
+    expect(actions).toHaveLength(0);
+    expect(transcript?.messages).toHaveLength(1);
+    expect(transcript?.messages[0]?.role).toBe('user');
+  });
+
+  it('settles the generation when toolbox initialization fails', async () => {
+    const seed = await seedAthenaSession('routine_autonomy');
+    const toolbox = vi
+      .spyOn(toolboxModule, 'openToolbox')
+      .mockRejectedValue(new Error('toolbox initialization failed'));
+
+    try {
+      await expect(driveSession(seed.orgId, seed.sessionId, scriptedCreate(seed))).rejects.toThrow(
+        'toolbox initialization failed',
+      );
+    } finally {
+      toolbox.mockRestore();
+    }
+
+    const [session] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    const [run] = await db
+      .select({
+        status: schema.agentSessionRun.status,
+        lastError: schema.agentSessionRun.lastError,
+      })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, seed.sessionId));
+    expect(session?.status).toBe('failed');
+    expect(run).toMatchObject({
+      status: 'failed',
+      lastError: 'toolbox initialization failed',
+    });
   });
 
   it('admits at most eight concurrent runs for one Athena owner by default', async () => {

@@ -51,17 +51,28 @@ import {
   type ToolboxExecutor,
   type ToolboxResult,
 } from './toolbox';
-import { loadTranscript, saveTranscript } from './transcript';
+import { loadTranscript, saveTranscript, type DbHandle } from './transcript';
 import {
-  assertRunGeneration,
   checkpointRunGeneration,
   claimRunGeneration,
   DEFAULT_ATHENA_CONCURRENCY,
   settleRunGeneration,
   startRunGenerationHeartbeat,
+  withRunGenerationFence,
+  type RunGenerationEffect,
   type RunGenerationHeartbeat,
   type RunGenerationLease,
 } from './run-generation';
+
+/** A deterministic boundary immediately before one generation-owned persistence transaction. */
+export type GenerationEffectKind =
+  | 'initial-transcript'
+  | 'reconciled-transcript'
+  | 'thought-activity'
+  | 'response-activity'
+  | 'assistant-turn'
+  | 'action-claim'
+  | 'action-result';
 
 /** Injectable dependencies for the loop (tests script the turn runtime). */
 export interface LoopDeps {
@@ -73,6 +84,8 @@ export interface LoopDeps {
   readonly heartbeatIntervalMs?: number;
   /** Test seam for Athena's per-generation provider-turn checkpoint quantum. */
   readonly generationTurnQuantum?: number;
+  /** Test seam that can rotate a lease immediately before an owned persistence transaction. */
+  readonly beforeGenerationEffect?: (kind: GenerationEffectKind) => Promise<void>;
 }
 
 export { DEFAULT_ATHENA_CONCURRENCY };
@@ -178,13 +191,14 @@ function summarizeToolCall(name: string, input: unknown): string {
 
 /** Insert one activity row and return it. */
 async function insertActivity(
+  handle: DbHandle,
   organizationId: string | null,
   sessionId: string,
   type: 'thought' | 'response' | 'elicitation' | 'error' | 'action',
   body: SessionActivityBody,
   extras: { approvalStatus?: 'proposed' | 'applied'; proposalGroupId?: string } = {},
 ): Promise<string> {
-  const [row] = await db
+  const [row] = await handle
     .insert(sessionActivity)
     .values({ sessionId, organizationId, type, body, ...extras })
     .returning({ id: sessionActivity.id });
@@ -193,22 +207,41 @@ async function insertActivity(
   return row.id;
 }
 
-/** Write the audit row for one agent-executed tool call. */
-async function auditExecution(
+/** Run one persisted effect after the deterministic race seam and behind the transaction fence. */
+async function persistGenerationEffect<T>(
+  lease: RunGenerationLease,
+  deps: Pick<LoopDeps, 'beforeGenerationEffect'>,
+  kind: GenerationEffectKind,
+  effect: RunGenerationEffect<T>,
+): Promise<T> {
+  await deps.beforeGenerationEffect?.(kind);
+  return withRunGenerationFence(lease, effect);
+}
+
+/** Resolve the current human Actor used to audit one agent-executed tool call. */
+async function executionAuditActorId(
+  orgId: string,
+  executor: ToolboxExecutor,
+  registeredAgentActorId: string | null,
+): Promise<string | null> {
+  return executor.kind === 'athena'
+    ? (await resolveActor(await internalUserContext(executor.ownerUserId), orgId)).actorId
+    : registeredAgentActorId;
+}
+
+/** Insert the audit half of an atomically persisted successful action result. */
+async function insertExecutionAudit(
+  handle: DbHandle,
   orgId: string,
   sessionId: string,
   executor: ToolboxExecutor,
-  registeredAgentActorId: string | null,
+  authorizationActorId: string | null,
   initiatorId: string | null,
   activityId: string,
   tool: string,
 ): Promise<void> {
   const ownerUserId = executor.kind === 'athena' ? executor.ownerUserId : null;
-  const authorizationActorId =
-    executor.kind === 'athena'
-      ? (await resolveActor(await internalUserContext(executor.ownerUserId), orgId)).actorId
-      : registeredAgentActorId;
-  await db.insert(auditEvent).values({
+  await handle.insert(auditEvent).values({
     organizationId: orgId,
     actorId: authorizationActorId,
     initiatorId,
@@ -403,15 +436,28 @@ export async function driveSession(
   let generationTurns = 0;
 
   const turnRuntime = deps.turnRuntime ?? getContainer().agentTurn;
-  const toolbox = await openToolbox(executor);
+  let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
+    const openedToolbox = await openToolbox(executor);
+    toolbox = openedToolbox;
     const settleOwned = async (
       status: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',
       lastError?: string,
+      errorActivity?: string,
     ): Promise<SessionRow> => {
       heartbeat.stop();
-      await heartbeat.assertActive();
-      return settleRunGeneration(lease, status, lastError);
+      return settleRunGeneration(
+        lease,
+        status,
+        lastError,
+        errorActivity
+          ? async (tx) => {
+              await insertActivity(tx, generalActivityOrganizationId(session), sessionId, 'error', {
+                text: errorActivity,
+              });
+            }
+          : undefined,
+      );
     };
 
     let messages = await loadTranscript(db, sessionId);
@@ -427,12 +473,14 @@ export async function driveSession(
           ],
         },
       ];
-      await saveTranscript(
-        db,
-        sessionId,
-        generalActivityOrganizationId(session),
-        messages,
-        session.ownerUserId,
+      await persistGenerationEffect(lease, deps, 'initial-transcript', async (tx) =>
+        saveTranscript(
+          tx,
+          sessionId,
+          generalActivityOrganizationId(session),
+          messages,
+          session.ownerUserId,
+        ),
       );
     }
 
@@ -447,7 +495,7 @@ export async function driveSession(
     });
 
     for (;;) {
-      const execution = await executeApprovedActions(orgId, sessionId, lease);
+      const execution = await executeApprovedActions(orgId, sessionId, lease, deps);
       if (execution === 'needs_attention') {
         return await settleOwned('awaiting_approval');
       }
@@ -474,12 +522,14 @@ export async function driveSession(
             });
           }
           messages = [...messages, { role: 'user', content: results }];
-          await saveTranscript(
-            db,
-            sessionId,
-            generalActivityOrganizationId(session),
-            messages,
-            session.ownerUserId,
+          await persistGenerationEffect(lease, deps, 'reconciled-transcript', async (tx) =>
+            saveTranscript(
+              tx,
+              sessionId,
+              generalActivityOrganizationId(session),
+              messages,
+              session.ownerUserId,
+            ),
           );
         } else {
           // A trailing assistant message with no tool calls is a finished job.
@@ -510,16 +560,13 @@ export async function driveSession(
       const assistantTurns = messages.filter((m) => m.role === 'assistant').length;
       if (session.executorKind === 'athena' && generationTurns >= maxTurns) {
         heartbeat.stop();
-        await heartbeat.assertActive();
         await checkpointRunGeneration(lease);
         lease = await claimRunGeneration(session, { leaseDurationMs: deps.leaseDurationMs });
         heartbeat = startRunGenerationHeartbeat(lease, deps.heartbeatIntervalMs);
         generationTurns = 0;
       } else if (session.executorKind === 'registered_agent' && assistantTurns >= maxTurns) {
-        await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
-          text: `Turn budget exhausted (${String(maxTurns)} turns); stopping the session.`,
-        });
-        return await settleOwned('failed', `Turn budget exhausted (${String(maxTurns)} turns)`);
+        const message = `Turn budget exhausted (${String(maxTurns)} turns)`;
+        return await settleOwned('failed', message, `${message}; stopping the session.`);
       }
 
       // ── One provider turn.
@@ -529,17 +576,23 @@ export async function driveSession(
       for await (const event of turnRuntime.streamTurn({
         system,
         messages,
-        tools: toolbox.tools,
+        tools: openedToolbox.tools,
       })) {
         if (event.type === 'thinking') {
-          await heartbeat.assertActive();
-          await insertActivity(generalActivityOrganizationId(session), sessionId, 'thought', {
-            text: event.text,
+          await persistGenerationEffect(lease, deps, 'thought-activity', async (tx) => {
+            await insertActivity(tx, generalActivityOrganizationId(session), sessionId, 'thought', {
+              text: event.text,
+            });
           });
         } else if (event.type === 'text') {
-          await heartbeat.assertActive();
-          await insertActivity(generalActivityOrganizationId(session), sessionId, 'response', {
-            text: event.text,
+          await persistGenerationEffect(lease, deps, 'response-activity', async (tx) => {
+            await insertActivity(
+              tx,
+              generalActivityOrganizationId(session),
+              sessionId,
+              'response',
+              { text: event.text },
+            );
           });
         } else if (event.type === 'turn_end') {
           assistantMessage = event.message;
@@ -547,21 +600,22 @@ export async function driveSession(
         }
       }
       generationTurns += 1;
-      await heartbeat.assertActive();
       /* v8 ignore next -- @preserve defensive: every turn ends with turn_end */
       if (!assistantMessage) throw new Error('turn ended without a terminal message');
 
       if (stopReason === 'refusal') {
-        await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
-          text: 'The agent declined to complete this task (model refusal).',
-        });
-        return await settleOwned('failed', 'Model refusal');
+        return await settleOwned(
+          'failed',
+          'Model refusal',
+          'The agent declined to complete this task (model refusal).',
+        );
       }
       if (stopReason === 'max_tokens') {
-        await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
-          text: 'The turn exceeded the output limit before completing.',
-        });
-        return await settleOwned('failed', 'Provider output limit exceeded');
+        return await settleOwned(
+          'failed',
+          'Provider output limit exceeded',
+          'The turn exceeded the output limit before completing.',
+        );
       }
 
       messages = [...messages, assistantMessage];
@@ -570,7 +624,7 @@ export async function driveSession(
 
       // Persist the transcript and the gated/elicitation rows atomically, so a crash
       // between "model asked" and "rows exist" cannot strand an unanswerable tool_use.
-      await db.transaction(async (tx) => {
+      await persistGenerationEffect(lease, deps, 'assistant-turn', async (tx) => {
         await saveTranscript(
           tx,
           sessionId,
@@ -592,9 +646,9 @@ export async function driveSession(
           const decision = decideUserOwnedToolExecution(
             agentRow.approvalPolicy,
             principalPreferences.approvalMode,
-            classifyTool(toolbox.annotations(use.name)),
+            classifyTool(openedToolbox.annotations(use.name)),
           );
-          const target = toolbox.resolve(use.name);
+          const target = openedToolbox.resolve(use.name);
           await tx.insert(sessionActivity).values({
             sessionId,
             organizationId:
@@ -625,19 +679,12 @@ export async function driveSession(
     }
   } catch (error) {
     heartbeat.stop();
-    try {
-      await heartbeat.assertActive();
-    } catch (leaseError) {
-      throw leaseError instanceof Error
-        ? leaseError
-        : new Error('Session generation fencing check failed');
-    }
     const lastError = error instanceof Error ? error.message : 'Agent execution failed';
     await settleRunGeneration(lease, 'failed', lastError);
     throw error;
   } finally {
     heartbeat.stop();
-    await toolbox.close();
+    if (toolbox) await toolbox.close();
   }
 }
 
@@ -691,12 +738,14 @@ async function deriveBrief(
  * @param orgId - The active organization id.
  * @param sessionId - The session whose approved actions should execute.
  * @param lease - The fenced session generation that owns provider and tool execution.
+ * @param deps - Optional deterministic persistence-race seam used by durability tests.
  * @returns `needs_attention` when an in-flight/failed claim must not be retried automatically.
  */
 export async function executeApprovedActions(
   orgId: string,
   sessionId: string,
   lease: RunGenerationLease,
+  deps: Pick<LoopDeps, 'beforeGenerationEffect'> = {},
 ): Promise<'settled' | 'needs_attention'> {
   const sessionRows = await db
     .select()
@@ -754,17 +803,20 @@ export async function executeApprovedActions(
   const registeredAgentActorId = agentRows[0]?.actorId ?? null;
 
   const withCalls = approved.filter((a) => a.body.action?.toolCall);
-  const toolbox = withCalls.length > 0 ? await openToolbox(executor) : null;
+  let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
+    toolbox = withCalls.length > 0 ? await openToolbox(executor) : null;
     for (const action of approved) {
-      await assertRunGeneration(lease);
-      const [claimed] = await db
-        .update(sessionActivity)
-        .set({ approvalStatus: 'executing' })
-        .where(
-          and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'approved')),
-        )
-        .returning();
+      const claimed = await persistGenerationEffect(lease, deps, 'action-claim', async (tx) => {
+        const [row] = await tx
+          .update(sessionActivity)
+          .set({ approvalStatus: 'executing' })
+          .where(
+            and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'approved')),
+          )
+          .returning();
+        return row;
+      });
       if (!claimed) continue;
 
       const call = claimed.body.action?.toolCall;
@@ -786,57 +838,69 @@ export async function executeApprovedActions(
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Approved action execution failed';
-        await db
+        await persistGenerationEffect(lease, deps, 'action-result', async (tx) => {
+          await tx
+            .update(sessionActivity)
+            .set({
+              body: {
+                ...claimed.body,
+                ...(claimed.body.action
+                  ? {
+                      action: {
+                        ...claimed.body.action,
+                        result: { content: message, isError: true },
+                      },
+                    }
+                  : {}),
+              },
+            })
+            .where(
+              and(
+                eq(sessionActivity.id, claimed.id),
+                eq(sessionActivity.approvalStatus, 'executing'),
+              ),
+            );
+          await insertActivity(tx, generalActivityOrganizationId(session), sessionId, 'error', {
+            text: 'An approved action needs attention and was not retried.',
+          });
+        });
+        return 'needs_attention';
+      }
+      const actionOrganizationId =
+        session.executorKind === 'athena'
+          ? toolOrganizationId(call?.input)
+          : session.organizationId;
+      const authorizationActorId =
+        !executionFailed && actionOrganizationId
+          ? await executionAuditActorId(actionOrganizationId, executor, registeredAgentActorId)
+          : null;
+      const applied = await persistGenerationEffect(lease, deps, 'action-result', async (tx) => {
+        const [row] = await tx
           .update(sessionActivity)
-          .set({
-            body: {
-              ...claimed.body,
-              ...(claimed.body.action
-                ? {
-                    action: {
-                      ...claimed.body.action,
-                      result: { content: message, isError: true },
-                    },
-                  }
-                : {}),
-            },
-          })
+          .set({ approvalStatus: 'applied', body })
           .where(
             and(
               eq(sessionActivity.id, claimed.id),
               eq(sessionActivity.approvalStatus, 'executing'),
             ),
+          )
+          .returning({ id: sessionActivity.id });
+        if (!row) return undefined;
+        if (!executionFailed && actionOrganizationId) {
+          await insertExecutionAudit(
+            tx,
+            actionOrganizationId,
+            sessionId,
+            executor,
+            authorizationActorId,
+            session.initiatorId,
+            claimed.id,
+            call?.tool ?? claimed.body.action?.kind ?? 'action',
           );
-        await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
-          text: 'An approved action needs attention and was not retried.',
-        });
-        return 'needs_attention';
-      }
-      await assertRunGeneration(lease);
-
-      const [applied] = await db
-        .update(sessionActivity)
-        .set({ approvalStatus: 'applied', body })
-        .where(
-          and(eq(sessionActivity.id, claimed.id), eq(sessionActivity.approvalStatus, 'executing')),
-        )
-        .returning({ id: sessionActivity.id });
+        }
+        return row;
+      });
       if (!applied) return 'needs_attention';
-      const actionOrganizationId =
-        session.executorKind === 'athena'
-          ? toolOrganizationId(call?.input)
-          : session.organizationId;
-      if (!executionFailed && actionOrganizationId) {
-        await auditExecution(
-          actionOrganizationId,
-          sessionId,
-          executor,
-          registeredAgentActorId,
-          session.initiatorId,
-          claimed.id,
-          call?.tool ?? claimed.body.action?.kind ?? 'action',
-        );
-      }
     }
   } finally {
     if (toolbox) await toolbox.close();
@@ -856,14 +920,17 @@ async function executeApprovedGeneration(
     resumeSession,
   });
   const heartbeat = startRunGenerationHeartbeat(lease, deps.heartbeatIntervalMs);
+  let generationSettled = false;
   try {
-    const outcome = await executeApprovedActions(orgId, session.id, lease);
+    const outcome = await executeApprovedActions(orgId, session.id, lease, deps);
     heartbeat.stop();
-    await heartbeat.assertActive();
     if (outcome === 'needs_attention') {
-      return await settleRunGeneration(lease, 'awaiting_approval');
+      const settled = await settleRunGeneration(lease, 'awaiting_approval');
+      generationSettled = true;
+      return settled;
     }
     await checkpointRunGeneration(lease);
+    generationSettled = true;
     const [current] = await db
       .select()
       .from(agentSession)
@@ -871,6 +938,13 @@ async function executeApprovedGeneration(
       .limit(1);
     if (!current) throw new NotFoundError('Session not found');
     return current;
+  } catch (error) {
+    heartbeat.stop();
+    if (!generationSettled) {
+      const lastError = error instanceof Error ? error.message : 'Agent execution failed';
+      await settleRunGeneration(lease, 'failed', lastError);
+    }
+    throw error;
   } finally {
     heartbeat.stop();
   }

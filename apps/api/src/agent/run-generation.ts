@@ -38,6 +38,12 @@ export interface RunGenerationOptions {
   readonly resumeSession?: boolean;
 }
 
+/** Transaction handle supplied after a generation lease has been locked and revalidated. */
+export type RunGenerationTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** A persisted effect committed only while the caller owns the locked generation lease. */
+export type RunGenerationEffect<T> = (tx: RunGenerationTransaction) => Promise<T>;
+
 /** Return the Athena owner after checking the persisted executor shape. */
 function ownerOf(session: SessionRow): string {
   if (session.executorKind !== 'athena' || !session.ownerUserId) {
@@ -226,8 +232,46 @@ export async function assertRunGeneration(
   if (!owned) throw new ConflictError('Session generation lease was lost');
 }
 
+/**
+ * Commit a generation-owned persisted effect behind the lease fence.
+ *
+ * @remarks
+ * The matching run row is locked and checked inside the same database transaction as the effect.
+ * A takeover can therefore happen either before the lock (the stale worker writes nothing) or
+ * after commit (the completed effect belongs to the still-current worker), never between the
+ * ownership check and effect commit.
+ *
+ * @param lease - The generation ownership token to lock and revalidate.
+ * @param effect - The writes to commit while the matching run row remains locked.
+ * @param now - Testable freshness boundary for the lease.
+ * @returns The effect result after the transaction commits.
+ */
+export async function withRunGenerationFence<T>(
+  lease: RunGenerationLease,
+  effect: RunGenerationEffect<T>,
+  now = new Date(),
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    const [owned] = await tx
+      .select({ id: agentSessionRun.id })
+      .from(agentSessionRun)
+      .where(
+        and(
+          eq(agentSessionRun.id, lease.runId),
+          eq(agentSessionRun.status, 'running'),
+          eq(agentSessionRun.leaseToken, lease.leaseToken),
+          gt(agentSessionRun.leaseExpiresAt, now),
+        ),
+      )
+      .for('update');
+    if (!owned) throw new ConflictError('Session generation lease was lost');
+    return effect(tx);
+  });
+}
+
 /** Complete one checkpoint generation without changing the parent session. */
 export async function checkpointRunGeneration(lease: RunGenerationLease): Promise<void> {
+  const now = new Date();
   const [completed] = await db
     .update(agentSessionRun)
     .set({
@@ -241,6 +285,7 @@ export async function checkpointRunGeneration(lease: RunGenerationLease): Promis
         eq(agentSessionRun.id, lease.runId),
         eq(agentSessionRun.status, 'running'),
         eq(agentSessionRun.leaseToken, lease.leaseToken),
+        gt(agentSessionRun.leaseExpiresAt, now),
       ),
     )
     .returning({ id: agentSessionRun.id });
@@ -254,7 +299,9 @@ export async function settleRunGeneration(
   lease: RunGenerationLease,
   sessionStatus: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',
   lastError?: string,
+  effect?: RunGenerationEffect<void>,
 ): Promise<SessionRow> {
+  const now = new Date();
   return db.transaction(async (tx) => {
     const runStatus =
       sessionStatus === 'completed'
@@ -278,10 +325,13 @@ export async function settleRunGeneration(
           eq(agentSessionRun.id, lease.runId),
           eq(agentSessionRun.status, 'running'),
           eq(agentSessionRun.leaseToken, lease.leaseToken),
+          gt(agentSessionRun.leaseExpiresAt, now),
         ),
       )
       .returning({ id: agentSessionRun.id });
     if (!completed) throw new ConflictError('Session generation lease was lost');
+
+    await effect?.(tx);
 
     const terminal =
       sessionStatus === 'completed' || sessionStatus === 'failed' || sessionStatus === 'canceled';

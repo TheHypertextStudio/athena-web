@@ -392,6 +392,21 @@
   4. Run focused personal API, DTO, web, and shell coverage, then web typecheck/lint, repository
      test/build, and the authenticated Playwright journey before committing the integration fix
      without merging or pushing.
+- **Plan (personal experience hardening review)**:
+  1. Add red API and contract regressions for authorization-bound display labels, bounded history,
+     batched activity metadata, compact pulse counts, and recursively sanitized activity output.
+  2. Add red workbench, workspace, and panel regressions for filter-contained selection, fresh
+     invocation drafts, shared application-owned mutation feedback, demand-driven polling, keyboard
+     repeat/editable-target guards, and resilient long-label layout.
+  3. Bind display projection to a final current-access recheck, batch overview metadata, cap finished
+     history, expose a compact pulse contract, and sanitize all personal activity at the server
+     boundary before shared DTO validation.
+  4. Consolidate the dock and workspace mutations behind one feedback-aware action hook, scope
+     selection to visible work, clear transient launch state on every contextual open/navigation,
+     and poll session detail only while a workbench host is visible.
+  5. Run focused API, types, OpenAPI, and web red/green suites plus package typecheck/lint; commit the
+     review fix independently, then restart the isolated app once for authenticated responsive
+     Playwright and full-page screenshot inspection without root-heavy gates or a push.
 - **Plan (experience spec-review fixes)**:
   1. Add red adapter, workbench, queue, shared-DTO, and personal-route regressions for optionless
      `ask_user` elicitations, exact proposed-action selection, and owner-safe canonical workspace
@@ -747,6 +762,30 @@
   resolution, projections, and route tests; web adapter, transport, workbench, queue, context rail,
   unit tests, and authenticated Playwright fixture; the personal-Athena design audit; and this work
   log.
+- **Personal Experience Hardening Review**: The ambient pulse now reads compact counts without
+  loading personal history; queue and detail polling activate only while their host is open.
+  Overview keeps every active row, caps terminal history at 50, and uses two bounded first/latest
+  activity projections instead of reading unbounded work logs. Canonical display labels receive a
+  final current-access recheck before disclosure. Personal activity is server-projected through a
+  recursive secret redactor and strict depth/key/item/string/byte caps; opaque provider success and
+  failure prose is replaced with application-owned copy. Workspace filters contain both initial and
+  fallback selection, contextual source/draft state resets on route and open transitions, and one
+  shared mutation hook supplies safe assertive feedback across create, message, decision, and
+  lifecycle actions. Shortcut repeat/editable-target guards, platform labels, realistic queue
+  transitions, and narrow-label containment close the adjacent review findings.
+- **Personal Experience Hardening Validation**: RED runs reproduced the absent pulse contract, six
+  dock/workspace behavior gaps, unbounded overview history, label-revocation disclosure window, and
+  unsafe activity projection. GREEN focused runs pass shared types 7/7, web Athena/shell/action
+  coverage 41/41, personal API history 1/1 plus pulse/sanitizer/authorization 4/4, and OpenAPI 1/1.
+  API typecheck and targeted lint pass; the web typecheck emitted no diagnostics before the local
+  command wrapper failed to terminate, while its 41 compiled Vitest cases pass. Prettier and
+  `git diff --check` pass. The recurring diagnostic is local Node 24.14.0 versus the required
+  minimum 24.15.0. Root-heavy test/build gates remain intentionally deferred by coordination.
+- **Personal Experience Hardening Retrospective**: Limiting session count does not bound activity
+  cardinality; overview metadata must be narrow at the SQL projection itself. Display names need an
+  authorization check at the disclosure boundary, not only before their lookup. Provider payloads
+  are never trustworthy presentation copy, even on successful calls, so the server must own both
+  the technical allowlist and the human outcome language.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

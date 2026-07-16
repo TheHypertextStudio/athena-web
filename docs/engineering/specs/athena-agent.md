@@ -332,7 +332,17 @@ Athena and Agents URLs preserve the workspace as optional query context while re
 The web transport stays isolated behind `PersonalAthenaTransport` and the shared typed TanStack
 Query helpers. Its default implementation uses the `AppType`-derived Hono client and shared
 personal Athena DTOs for `/v1/me/athena`; components do not hand-roll effect-based fetching or
-duplicate server response interfaces.
+duplicate server response interfaces. The closed shell pulse polls only compact Needs you and
+Working counts. Full queue and selected-detail polling run only while the dock or canonical
+workspace is open. Overview reads always include active work, cap terminal history at 50 rows, and
+load only each session's first brief and latest context rather than its unbounded activity log.
+
+The personal API owns the disclosure boundary. It rechecks current owner access after canonical
+workspace/source labels are loaded and redacts those names if authorization changed during the
+read. Personal activity bodies are projected through an allowlist before serialization: provider
+errors and successful tool receipts use stable application copy, secret-like keys and values are
+redacted recursively, and technical values have explicit key, item, depth, string, and byte caps.
+Opaque provider results, stacks, credentials, signatures, and model reasoning never reach React.
 
 ## 14. Testing doctrine
 

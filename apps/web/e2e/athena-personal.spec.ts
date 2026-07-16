@@ -146,11 +146,6 @@ async function installAthenaFixture(
       },
     ],
   } as const;
-  const overview = {
-    counts: { needsYou: 1, working: 2, finished: 4 },
-    currentChat: null,
-    sessions: { needsYou: [summary], working: [], finished: [] },
-  } as const;
   const settledDetail = {
     ...detail,
     status: 'completed',
@@ -162,11 +157,37 @@ async function installAthenaFixture(
   await page.route('**/v1/me/athena**', async (route: Route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
-    if (request.method() === 'GET' && path === '/v1/me/athena') {
+    if (request.method() === 'GET' && path === '/v1/me/athena/pulse') {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ needsYou: approved ? 0 : 1, working: 0 }),
+      });
+      return;
+    }
+    if (request.method() === 'GET' && path === '/v1/me/athena') {
+      const settledSummary = {
+        ...summary,
+        status: settledDetail.status,
+        queueState: settledDetail.queueState,
+        endedAt: settledDetail.endedAt,
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          approved
+            ? {
+                counts: { needsYou: 0, working: 0, finished: 1 },
+                currentChat: null,
+                sessions: { needsYou: [], working: [], finished: [settledSummary] },
+              }
+            : {
+                counts: { needsYou: 1, working: 0, finished: 0 },
+                currentChat: null,
+                sessions: { needsYou: [summary], working: [], finished: [] },
+              },
+        ),
       });
       return;
     }
@@ -204,6 +225,7 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   const { releaseApproval, readApprovalPath } = await installAthenaFixture(page, orgId);
 
   await page.goto('/today');
+  await expect(page.getByRole('button', { name: 'Open Athena' })).toContainText('1 needs you');
   await page.keyboard.press('Meta+J');
   await expect(page.getByRole('dialog', { name: 'Athena' })).toBeVisible();
   await expect(page.getByText('1 needs you').first()).toBeVisible();
@@ -299,4 +321,6 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   releaseApproval();
   await expect(page.getByRole('heading', { name: 'Work finished' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Needs you' }).locator('..')).toContainText('0');
+  await expect(page.getByRole('heading', { name: 'Finished' }).locator('..')).toContainText('1');
 });

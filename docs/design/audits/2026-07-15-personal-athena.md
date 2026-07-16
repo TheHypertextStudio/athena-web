@@ -28,5 +28,9 @@ Gates: A11y ✅ (semantic landmarks/labels, keyboard shortcut, visible focus, me
 4. Cancel work and the secondary decision relied on inherited foreground color, while the original review captured controls after starting a mutation and before theme transitions had settled. Both secondary variants now own the on-surface foreground explicitly. The browser journey waits for enabled AA contrast before every capture, then separately holds approval pending to prove the disabled state remains visibly distinct.
 5. Raw provider identifiers were present in the DOM under a native disclosure but hidden visually. The browser journey now distinguishes hidden from absent and proves the identifier becomes visible only after the user opens Technical details.
 6. The global pulse overlapped approval controls in the narrow full workspace. `/athena` now suppresses that redundant pulse while retaining the keyboard-accessible dock; the route journey asserts the pulse is absent before capturing.
+7. The ambient shell previously polled the full queue and selected detail even while closed. It now
+   polls only compact counts, enables queue/detail reads on demand, contains filtered selection to
+   visible sessions, clears transient source/draft context on every route/open, and announces safe
+   shared mutation feedback. Queue and workbench labels truncate within their lanes at narrow widths.
 
 Verdict: **SHIP BAR** — every dimension is at least 3 and every hard gate passes.

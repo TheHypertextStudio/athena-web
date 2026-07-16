@@ -267,6 +267,16 @@ export async function resolveAthenaDisplay(
       : [];
     const source = context.source;
     const label = source ? await sourceDisplayLabel(userId, source) : null;
+    // Authorization may be revoked while canonical names are being loaded. Re-resolve at the
+    // disclosure boundary so a stale successful check can never release those names.
+    const finalAuthorization = await resolveAthenaInvocation(userId, input);
+    if (
+      finalAuthorization.context?.workspaceId !== context.workspaceId ||
+      finalAuthorization.context?.source?.type !== context.source?.type ||
+      finalAuthorization.context?.source?.id !== context.source?.id
+    ) {
+      throw new NotFoundError('Source not found');
+    }
     return {
       context: {
         ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),

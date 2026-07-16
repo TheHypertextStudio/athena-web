@@ -1,4 +1,4 @@
-import { AthenaInvocationContext } from '@docket/types';
+import { AthenaInvocationContext, type AthenaPulseOut } from '@docket/types';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, rpcErrorResponse, type RpcResponse, STALE } from '@/lib/query-core';
@@ -15,6 +15,7 @@ export type PersonalAthenaLifecycle = 'run' | 'pause' | 'resume' | 'cancel';
 
 /** The isolated transport seam for the personal Athena API. */
 export interface PersonalAthenaTransport {
+  readonly pulse: () => Promise<RpcResponse<AthenaPulseOut>>;
   readonly queue: () => Promise<RpcResponse<PersonalAthenaQueuePayload>>;
   readonly detail: (sessionId: string) => Promise<RpcResponse<PersonalAthenaSessionDetail>>;
   readonly create: (input: {
@@ -71,6 +72,7 @@ function detailRequest(sessionId: string): Promise<RpcResponse<PersonalAthenaSes
 
 /** Default transport backed by the platform's typed Hono personal-Athena contract. */
 export const personalAthenaTransport: PersonalAthenaTransport = {
+  pulse: () => api.v1.me.athena.pulse.$get(),
   queue: () => adaptedResponse(api.v1.me.athena.$get(), adaptAthenaOverview),
   detail: detailRequest,
   create: (input) => {
@@ -125,15 +127,29 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
   },
 };
 
+/** Compact live-count definition for the closed ambient pulse. */
+export function personalAthenaPulseDef(
+  transport: PersonalAthenaTransport = personalAthenaTransport,
+  enabled = true,
+) {
+  return apiQueryOptions(
+    queryKeys.athenaPulse(),
+    () => transport.pulse(),
+    'Could not load Athena status.',
+    { enabled, staleTime: STALE.volatile },
+  );
+}
+
 /** Typed live queue definition shared by the shell dock and full Athena workspace. */
 export function personalAthenaQueueDef(
   transport: PersonalAthenaTransport = personalAthenaTransport,
+  enabled = true,
 ) {
   return apiQueryOptions(
     queryKeys.athena(),
     () => transport.queue(),
     'Could not load Athena work.',
-    { staleTime: STALE.volatile },
+    { enabled, staleTime: STALE.volatile },
   );
 }
 
@@ -141,12 +157,13 @@ export function personalAthenaQueueDef(
 export function personalAthenaDetailDef(
   sessionId: string,
   transport: PersonalAthenaTransport = personalAthenaTransport,
+  hostVisible = true,
 ) {
   return apiQueryOptions(
     queryKeys.athenaSession(sessionId),
     () => transport.detail(sessionId),
     'Could not load this Athena work.',
-    { enabled: sessionId.length > 0, staleTime: STALE.volatile },
+    { enabled: hostVisible && sessionId.length > 0, staleTime: STALE.volatile },
   );
 }
 

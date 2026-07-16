@@ -5,6 +5,7 @@ import {
   athenaHref,
   personalAthenaTransport,
   personalAthenaDetailDef,
+  personalAthenaPulseDef,
   personalAthenaQueueDef,
   type PersonalAthenaTransport,
 } from '../../src/lib/athena/query-defs';
@@ -31,6 +32,7 @@ const detail: PersonalAthenaSessionDetail = {
 
 function transport(): PersonalAthenaTransport {
   return {
+    pulse: vi.fn().mockResolvedValue(okResponse({ needsYou: 0, working: 1 })),
     queue: vi.fn().mockResolvedValue(
       okResponse({
         counts: { needsYou: 0, working: 1, finished: 0 },
@@ -69,6 +71,18 @@ describe('personal Athena query definitions', () => {
     expect(selected.objective).toBe('Prepare the launch review');
     expect(queueRequest).toHaveBeenCalledOnce();
     expect(detailRequest).toHaveBeenCalledWith('session_1');
+  });
+
+  it('uses the compact pulse without loading personal history for a closed dock', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+
+    const pulse = await client.fetchQuery(personalAthenaPulseDef(api));
+
+    expect(pulse).toEqual({ needsYou: 0, working: 1 });
+    expect(api.pulse).toHaveBeenCalledOnce();
+    expect(api.queue).not.toHaveBeenCalled();
+    expect(api.detail).not.toHaveBeenCalled();
   });
 
   it('preserves workspace, object context, and selection when expanding to the full experience', () => {

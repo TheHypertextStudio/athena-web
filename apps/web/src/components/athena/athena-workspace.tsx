@@ -8,7 +8,6 @@ import {
   personalAthenaDetailDef,
   personalAthenaQueueDef,
   personalAthenaTransport,
-  type PersonalAthenaLifecycle,
   type PersonalAthenaTransport,
 } from '@/lib/athena/query-defs';
 import {
@@ -17,9 +16,10 @@ import {
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
-import { queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
+import { queryKeys, useLiveApiQuery } from '@/lib/query';
 
 import { AthenaWorkbench } from './athena-workbench';
+import { useAthenaActions } from './use-athena-actions';
 
 /** Props for the full personal Athena operations workspace. */
 export interface AthenaWorkspaceProps {
@@ -61,13 +61,15 @@ export function AthenaWorkspace({
     [allSessions, workspaceFilter],
   );
   const groups = useMemo(() => groupAthenaQueue(visibleSessions), [visibleSessions]);
-  const fallbackId =
-    visibleSessions[0]?.id ?? queue.data?.currentChat?.id ?? allSessions[0]?.id ?? '';
-  const [selectedId, setSelectedId] = useState(initialSessionId ?? '');
+  const [selectedId, setSelectedId] = useState('');
   const [newObjective, setNewObjective] = useState('');
   useEffect(() => {
-    if (!selectedId && fallbackId) setSelectedId(fallbackId);
-  }, [fallbackId, selectedId]);
+    if (!queue.data) return;
+    const selectedVisible = visibleSessions.some((session) => session.id === selectedId);
+    if (selectedVisible) return;
+    const requested = visibleSessions.find((session) => session.id === initialSessionId);
+    setSelectedId(requested?.id ?? visibleSessions[0]?.id ?? '');
+  }, [initialSessionId, queue.data, selectedId, visibleSessions]);
   const detail = useLiveApiQuery(personalAthenaDetailDef(selectedId, transport), 3_000);
 
   const updateSelected = useCallback(
@@ -77,59 +79,16 @@ export function AthenaWorkspace({
     },
     [queryClient],
   );
-  const message = useApiMutation<PersonalAthenaSessionDetail, string>({
-    mutationFn: (body) =>
-      unwrap(() => transport.message(selectedId, { body }), 'Could not steer this Athena work.'),
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: updateSelected,
-  });
-  const lifecycle = useApiMutation<PersonalAthenaSessionDetail, PersonalAthenaLifecycle>({
-    mutationFn: (action) =>
-      unwrap(() => transport.lifecycle(selectedId, action), 'Could not change this Athena work.'),
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: updateSelected,
-  });
-  const decide = useApiMutation<
-    PersonalAthenaSessionDetail,
-    { readonly id: string; readonly option: string; readonly kind?: 'approval' | 'question' }
-  >({
-    mutationFn: ({ id, option, kind }) => {
-      if (kind === 'question') {
-        return unwrap(
-          () => transport.decide(selectedId, id, 'reply', { body: option }),
-          'Could not record your answer.',
-        );
-      }
-      const decision = option === 'reject' ? 'reject' : option === 'reply' ? 'reply' : 'approve';
-      return unwrap(
-        () => transport.decide(selectedId, id, decision),
-        'Could not record your decision.',
-      );
-    },
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: updateSelected,
-  });
-  const create = useApiMutation<PersonalAthenaSessionDetail, string>({
-    mutationFn: (prompt) =>
-      unwrap(
-        () =>
-          transport.create({
-            prompt,
-            ...(invocationContext
-              ? { context: invocationContext }
-              : workspaceFilter
-                ? { context: { workspaceId: workspaceFilter } }
-                : {}),
-          }),
-        'Athena could not start this work.',
-      ),
-    invalidateKeys: [queryKeys.athena()],
-    onSuccess: (next) => {
+  const actions = useAthenaActions({
+    selectedId,
+    transport,
+    onSelected: updateSelected,
+    onCreated: (next) => {
       updateSelected(next);
       setNewObjective('');
     },
   });
-  const pending = message.isPending || lifecycle.isPending || decide.isPending || create.isPending;
+  const pending = actions.pending;
 
   return (
     <div data-athena-workspace className="bg-surface flex h-full min-h-0 w-full flex-col">
@@ -149,6 +108,16 @@ export function AthenaWorkspace({
           </div>
         ) : null}
       </header>
+
+      {actions.feedback ? (
+        <p
+          role="alert"
+          aria-live="assertive"
+          className="border-outline-variant bg-error-container text-on-error-container border-b px-4 py-3 text-sm"
+        >
+          {actions.feedback}
+        </p>
+      ) : null}
 
       {queue.isPending ? (
         <div className="grid min-h-0 flex-1 gap-0 @3xl:grid-cols-[18rem_minmax(0,1fr)]">
@@ -211,13 +180,13 @@ export function AthenaWorkspace({
                 session={detail.data}
                 pending={pending}
                 onMessage={(body) => {
-                  message.mutate(body);
+                  actions.message(body);
                 }}
                 onLifecycle={(action) => {
-                  lifecycle.mutate(action);
+                  actions.lifecycle(action);
                 }}
                 onDecision={(id, option) => {
-                  decide.mutate({ id, option, kind: detail.data.decision?.kind });
+                  actions.decide({ id, option, kind: detail.data.decision?.kind });
                 }}
               />
             ) : (
@@ -227,8 +196,15 @@ export function AthenaWorkspace({
                 onSubmit={(event) => {
                   event.preventDefault();
                   const prompt = newObjective.trim();
-                  if (!prompt || create.isPending) return;
-                  create.mutate(prompt);
+                  if (!prompt || actions.createPending) return;
+                  actions.create({
+                    prompt,
+                    ...(invocationContext
+                      ? { context: invocationContext }
+                      : workspaceFilter
+                        ? { context: { workspaceId: workspaceFilter } }
+                        : {}),
+                  });
                 }}
               >
                 <div className="w-full max-w-xl">
@@ -245,7 +221,7 @@ export function AthenaWorkspace({
                       aria-label="Athena objective"
                       rows={4}
                       value={newObjective}
-                      disabled={create.isPending}
+                      disabled={actions.createPending}
                       placeholder="Prepare tomorrow morning…"
                       onChange={(event) => {
                         setNewObjective(event.target.value);
@@ -256,10 +232,10 @@ export function AthenaWorkspace({
                   <div className="mt-3 flex justify-end">
                     <Button
                       type="submit"
-                      disabled={create.isPending || newObjective.trim().length === 0}
+                      disabled={actions.createPending || newObjective.trim().length === 0}
                       className="min-h-10"
                     >
-                      {create.isPending ? 'Starting…' : 'Start work'}
+                      {actions.createPending ? 'Starting…' : 'Start work'}
                     </Button>
                   </div>
                 </div>
@@ -325,8 +301,8 @@ function QueueRow({
         <span className="text-on-surface line-clamp-2 text-sm leading-5 font-medium">
           {session.objective}
         </span>
-        <span className="text-on-surface-variant flex max-w-full items-center gap-1.5 text-xs">
-          <span className="truncate">
+        <span className="text-on-surface-variant flex w-full min-w-0 items-center gap-1.5 text-xs">
+          <span className="min-w-0 flex-1 truncate">
             {session.workspace?.name ??
               session.context?.workspaceName ??
               session.context?.source?.label ??

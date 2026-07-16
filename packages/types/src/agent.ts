@@ -552,6 +552,17 @@ export const AthenaQueueCounts = z
 /** Athena queue-count value. */
 export type AthenaQueueCounts = z.infer<typeof AthenaQueueCounts>;
 
+/** Compact counts used by the ambient pulse without loading private session history. */
+export const AthenaPulseOut = z
+  .object({
+    needsYou: z.number().int().nonnegative().describe('Sessions awaiting owner input.'),
+    working: z.number().int().nonnegative().describe('Pending or actively running sessions.'),
+  })
+  .strict()
+  .meta({ id: 'AthenaPulseOut', description: 'Compact personal Athena pulse counts.' });
+/** Personal Athena pulse value. */
+export type AthenaPulseOut = z.infer<typeof AthenaPulseOut>;
+
 /** Personal Athena work grouped for direct queue rendering. */
 export const AthenaQueueOut = z
   .object({

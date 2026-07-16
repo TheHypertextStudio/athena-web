@@ -1,4 +1,5 @@
 import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AuthzModule from '@docket/authz';
 import type * as DbModule from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -13,6 +14,7 @@ import { fakeSession, getDb, one } from '../support/routes-harness';
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let agentRuntime!: typeof AgentRuntimeModule;
+let authz!: typeof AuthzModule;
 let meAthena!: typeof meAthenaRouter;
 let getContainer!: typeof GetContainer;
 
@@ -36,6 +38,7 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   agentRuntime = await import('@docket/agent-runtime');
+  authz = await import('@docket/authz');
   meAthena = (await import('../../src/routes/me-athena')).default;
   ({ getContainer } = await import('../../src/container'));
 });
@@ -260,6 +263,124 @@ describe('personal Athena routes', () => {
     expect(JSON.stringify(body)).not.toContain(privateOther);
   });
 
+  it('keeps active work complete, caps finished history, and batches overview reads', async () => {
+    const seed = await seedPeople();
+    const needs = await seedSession(seed, seed.owner, 'awaiting_input');
+    const working = await seedSession(seed, seed.owner, 'running');
+    await seedActivity(needs, { type: 'response', body: { text: 'Need input' } });
+    await seedActivity(working, { type: 'response', body: { text: 'Still working' } });
+    await db.insert(schema.sessionActivity).values(
+      Array.from({ length: 200 }, (_, index) => ({
+        sessionId: working,
+        organizationId: null,
+        type: 'thought' as const,
+        body: { text: `Unbounded activity ${index}` },
+      })),
+    );
+    for (let index = 0; index < 55; index += 1) {
+      const finished = await seedSession(seed, seed.owner, 'completed');
+      await seedActivity(finished, { type: 'response', body: { text: `Finished ${index}` } });
+    }
+    const client = Reflect.get(db, '$client') as {
+      query: (...args: unknown[]) => Promise<unknown>;
+    };
+    const query = vi.spyOn(client, 'query');
+
+    const response = await appFor(seed.owner).request('/');
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      counts: { needsYou: number; working: number; finished: number };
+      sessions: Record<'needsYou' | 'working' | 'finished', { id: string }[]>;
+    };
+    expect(body.counts).toEqual({ needsYou: 1, working: 1, finished: 55 });
+    expect(body.sessions.needsYou.map((row) => row.id)).toContain(needs);
+    expect(body.sessions.working.map((row) => row.id)).toContain(working);
+    expect(body.sessions.finished).toHaveLength(50);
+    expect(query.mock.calls.length).toBeLessThanOrEqual(12);
+  });
+
+  it('returns compact pulse counts without personal session history', async () => {
+    const seed = await seedPeople();
+    await seedSession(seed, seed.owner, 'awaiting_approval');
+    await seedSession(seed, seed.owner, 'running');
+    await seedSession(seed, seed.owner, 'completed');
+
+    const response = await appFor(seed.owner).request('/pulse');
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ needsYou: 1, working: 1 });
+  });
+
+  it('sanitizes personal activity recursively at the server boundary', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    await seedActivity(sessionId, {
+      type: 'action',
+      approvalStatus: 'applied',
+      body: {
+        action: {
+          kind: 'remote_tool',
+          summary: 'Created the launch task',
+          toolCall: {
+            connection: 'sunsama',
+            tool: 'create_task',
+            toolUseId: 'provider-internal-id',
+            input: {
+              title: 'Launch task',
+              nested: {
+                apiKey: 'sk-private',
+                safe: 'visible',
+                deeper: { cookie: 'session-secret' },
+              },
+            },
+          },
+          result: { content: 'Created Launch task', isError: false, providerTrace: 'trace-secret' },
+        },
+        authorization: 'Bearer private',
+      } as unknown as typeof schema.sessionActivity.$inferInsert.body,
+    });
+    await seedActivity(sessionId, {
+      type: 'action',
+      approvalStatus: 'applied',
+      body: {
+        action: {
+          kind: 'remote_tool',
+          summary: 'Processed the large import',
+          toolCall: {
+            connection: 'docket',
+            tool: 'import',
+            toolUseId: 'large-import',
+            input: Object.fromEntries(
+              Array.from({ length: 12 }, (_, index) => [`field${index}`, 'x'.repeat(600)]),
+            ),
+          },
+          result: { content: 'opaque provider success', isError: false },
+        },
+      },
+    });
+    await seedActivity(sessionId, {
+      type: 'error',
+      body: { text: 'Provider exception sk-private', stack: 'private stack' },
+    });
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}`);
+
+    expect(response.status).toBe(200);
+    const serialized = JSON.stringify(await response.json());
+    expect(serialized).toContain('Created the launch task');
+    expect(serialized).toContain('Completed: Created the launch task');
+    expect(serialized).toContain('[redacted]');
+    expect(serialized).toContain('Technical input omitted because it was too large.');
+    expect(serialized).toContain('Athena could not complete this step.');
+    expect(serialized.length).toBeLessThan(12_000);
+    expect(serialized).not.toContain('sk-private');
+    expect(serialized).not.toContain('session-secret');
+    expect(serialized).not.toContain('providerTrace');
+    expect(serialized).not.toContain('private stack');
+    expect(serialized).not.toContain('provider-internal-id');
+  });
+
   it('keeps current and fresh chat private while preserving old history', async () => {
     const seed = await seedPeople();
     const ownerApp = appFor(seed.owner);
@@ -356,6 +477,57 @@ describe('personal Athena routes', () => {
         source: { type: 'project', id: projectId, label: 'Launch' },
       },
     });
+  });
+
+  it('redacts canonical names when access is revoked between resolution and disclosure', async () => {
+    const seed = await seedPeople();
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({
+          organizationId: seed.orgA,
+          name: 'Private launch name',
+          status: 'active',
+          createdBy: seed.owner.actorIds[seed.orgA],
+        })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    await seedActivity(sessionId, {
+      type: 'response',
+      body: {
+        text: 'Review it',
+        context: { workspaceId: seed.orgA, source: { type: 'project', id: projectId } },
+      },
+    });
+    const originalCanActor = authz.canActor;
+    const ownerActorId = seed.owner.actorIds[seed.orgA];
+    if (!ownerActorId) throw new Error('owner actor was not seeded');
+    let checks = 0;
+    vi.spyOn(authz, 'canActor').mockImplementation(async (actorId, required, target, database) => {
+      const result = await originalCanActor(actorId, required, target, database);
+      checks += 1;
+      if (checks === 1) {
+        await db
+          .update(schema.actor)
+          .set({ status: 'suspended' })
+          .where(eq(schema.actor.id, ownerActorId));
+      }
+      return result;
+    });
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}`);
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      workspace: { name: string } | null;
+      context: { source?: { label: string } } | null;
+    };
+    expect(checks).toBe(1);
+    expect(body.workspace).toBeNull();
+    expect(body.context?.source?.label).toBe('Project');
+    expect(JSON.stringify(body)).not.toContain('Private launch name');
+    expect(JSON.stringify(body)).not.toContain('Alpha-');
   });
 
   it('does not disclose canonical labels after the owner loses source access', async () => {

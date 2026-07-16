@@ -112,6 +112,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
               objectDetailSurface={objectDetailSurface}
               settingsSurface={settingsSurface}
               showAthenaPulse={pathname !== '/athena'}
+              locationKey={pathname}
               routeOrgId={routeOrgId}
               userId={userId}
               workspaceKey={workspaceKeyFromPath(pathname)}
@@ -178,6 +179,7 @@ interface AppShellInnerProps {
   objectDetailSurface: boolean;
   settingsSurface: boolean;
   showAthenaPulse: boolean;
+  locationKey: string;
   routeOrgId: string | null;
   userId: string | null;
   workspaceKey?: WorkspaceNavKey;
@@ -200,6 +202,7 @@ function AppShellInner({
   objectDetailSurface,
   settingsSurface,
   showAthenaPulse,
+  locationKey,
   routeOrgId,
   userId,
   workspaceKey,
@@ -346,6 +349,7 @@ function AppShellInner({
     <VocabularyProvider skin={loading ? null : skin}>
       <AthenaPanelProvider
         showPulse={showAthenaPulse}
+        locationKey={locationKey}
         context={
           loading || !resolvedOrgId
             ? null

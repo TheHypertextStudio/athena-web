@@ -4,6 +4,7 @@ import {
   AthenaFreshChatBody,
   AthenaMessageBody,
   AthenaOverviewOut,
+  AthenaPulseOut,
   AthenaSessionCreateBody,
   AthenaSessionDetailOut,
   AthenaSessionSummaryOut,
@@ -14,7 +15,7 @@ import {
   SessionActivityOut,
 } from '@docket/types';
 import type { AthenaInvocationContext } from '@docket/types';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -47,10 +48,10 @@ import {
   activityParam,
   idParam,
   loadActivity,
-  toActivityOut,
   transitionLifecycle,
   type SessionRow,
 } from './agent-session-helpers';
+import { toPersonalActivityOut } from './me-athena-activity';
 import { runSession } from './agent-session-runner';
 import { resolveAthenaDisplay, resolveAthenaInvocation } from './me-athena-context';
 
@@ -58,6 +59,8 @@ import { resolveAthenaDisplay, resolveAthenaInvocation } from './me-athena-conte
 const STREAM_POLL_MS = 750;
 /** SSE heartbeat cadence for idle proxy connections. */
 const STREAM_HEARTBEAT_MS = 15_000;
+/** Maximum terminal rows returned by the non-paginated ambient overview. */
+const FINISHED_HISTORY_LIMIT = 50;
 /** Route params for proposal-group decisions. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
 /** Optional activity decision scope. */
@@ -92,14 +95,9 @@ async function loadOwnedSession(ownerUserId: string, id: string): Promise<Sessio
   return rows[0];
 }
 
-/** List every caller-owned Athena session, newest first. */
-async function listOwnedSessions(ownerUserId: string): Promise<SessionRow[]> {
-  return db
-    .select()
-    .from(agentSession)
-    .where(and(eq(agentSession.executorKind, 'athena'), eq(agentSession.ownerUserId, ownerUserId)))
-    .orderBy(desc(agentSession.createdAt));
-}
+const NEEDS_YOU_STATUSES = ['awaiting_input', 'awaiting_approval'] as const;
+const WORKING_STATUSES = ['pending', 'running'] as const;
+const FINISHED_STATUSES = ['completed', 'failed', 'canceled'] as const;
 
 /** Product queue grouping for durable lifecycle states. */
 function queueState(status: SessionRow['status']): 'needs_you' | 'working' | 'finished' {
@@ -126,12 +124,27 @@ async function personalSummary(
   ownerUserId: string,
   session: SessionRow,
   activities: readonly (typeof sessionActivity.$inferSelect)[],
+  resolvedDisplay?: Awaited<ReturnType<typeof resolveAthenaDisplay>>,
 ): Promise<z.input<typeof AthenaSessionSummaryOut>> {
-  const metadata = activityMetadata(activities);
+  return personalSummaryFromMetadata(
+    ownerUserId,
+    session,
+    activityMetadata(activities),
+    resolvedDisplay,
+  );
+}
+
+/** Convert bounded overview metadata to a display-safe summary. */
+async function personalSummaryFromMetadata(
+  ownerUserId: string,
+  session: SessionRow,
+  metadata: ReturnType<typeof activityMetadata>,
+  resolvedDisplay?: Awaited<ReturnType<typeof resolveAthenaDisplay>>,
+): Promise<z.input<typeof AthenaSessionSummaryOut>> {
   const persistedContext =
     metadata.context ??
     (session.contextOrganizationId ? { workspaceId: session.contextOrganizationId } : null);
-  const display = await resolveAthenaDisplay(ownerUserId, persistedContext);
+  const display = resolvedDisplay ?? (await resolveAthenaDisplay(ownerUserId, persistedContext));
   return {
     id: session.id,
     kind: session.kind,
@@ -143,6 +156,78 @@ async function personalSummary(
     startedAt: session.startedAt?.toISOString() ?? null,
     endedAt: session.endedAt?.toISOString() ?? null,
     createdAt: session.createdAt.toISOString(),
+  };
+}
+
+/** Load only the first response and latest contextual row for every overview session. */
+async function metadataBySession(
+  sessionIds: readonly string[],
+): Promise<ReadonlyMap<string, ReturnType<typeof activityMetadata>>> {
+  if (sessionIds.length === 0) return new Map();
+  const [briefs, contexts] = await Promise.all([
+    db
+      .selectDistinctOn([sessionActivity.sessionId], {
+        sessionId: sessionActivity.sessionId,
+        body: sessionActivity.body,
+      })
+      .from(sessionActivity)
+      .where(
+        and(
+          inArray(sessionActivity.sessionId, [...sessionIds]),
+          eq(sessionActivity.type, 'response'),
+        ),
+      )
+      .orderBy(sessionActivity.sessionId, asc(sessionActivity.createdAt), asc(sessionActivity.id)),
+    db
+      .selectDistinctOn([sessionActivity.sessionId], {
+        sessionId: sessionActivity.sessionId,
+        body: sessionActivity.body,
+      })
+      .from(sessionActivity)
+      .where(
+        and(
+          inArray(sessionActivity.sessionId, [...sessionIds]),
+          sql`${sessionActivity.body} ? 'context'`,
+        ),
+      )
+      .orderBy(
+        sessionActivity.sessionId,
+        desc(sessionActivity.createdAt),
+        desc(sessionActivity.id),
+      ),
+  ]);
+  const grouped = new Map<string, ReturnType<typeof activityMetadata>>();
+  for (const row of briefs) {
+    grouped.set(row.sessionId, {
+      objective:
+        typeof row.body.text === 'string' && row.body.text.length > 0 ? row.body.text : null,
+      context: null,
+    });
+  }
+  for (const row of contexts) {
+    const current = grouped.get(row.sessionId) ?? { objective: null, context: null };
+    grouped.set(row.sessionId, { ...current, context: row.body.context ?? null });
+  }
+  return grouped;
+}
+
+/** Count durable queue states without loading any session or activity body. */
+async function pulseCounts(ownerUserId: string): Promise<
+  z.input<typeof AthenaPulseOut> & {
+    readonly finished: number;
+  }
+> {
+  const rows = await db
+    .select({ status: agentSession.status, total: count() })
+    .from(agentSession)
+    .where(and(eq(agentSession.executorKind, 'athena'), eq(agentSession.ownerUserId, ownerUserId)))
+    .groupBy(agentSession.status);
+  const total = (statuses: readonly SessionRow['status'][]): number =>
+    rows.filter((row) => statuses.includes(row.status)).reduce((sum, row) => sum + row.total, 0);
+  return {
+    needsYou: total(NEEDS_YOU_STATUSES),
+    working: total(WORKING_STATUSES),
+    finished: total(FINISHED_STATUSES),
   };
 }
 
@@ -183,28 +268,77 @@ async function personalDetail(
   const activities = await sessionActivities(id);
   return {
     ...(await personalSummary(ownerUserId, session, activities)),
-    activities: visibleActivities(activities).map(toActivityOut),
+    activities: visibleActivities(activities).map(toPersonalActivityOut),
   };
 }
 
 /** Build grouped personal work and counts without exposing registered-agent rows. */
 async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverviewOut>> {
-  const rows = await listOwnedSessions(ownerUserId);
+  const ownership = and(
+    eq(agentSession.executorKind, 'athena'),
+    eq(agentSession.ownerUserId, ownerUserId),
+  );
+  const [active, finished, chats, counts] = await Promise.all([
+    db
+      .select()
+      .from(agentSession)
+      .where(
+        and(ownership, inArray(agentSession.status, [...NEEDS_YOU_STATUSES, ...WORKING_STATUSES])),
+      )
+      .orderBy(desc(agentSession.createdAt)),
+    db
+      .select()
+      .from(agentSession)
+      .where(and(ownership, inArray(agentSession.status, [...FINISHED_STATUSES])))
+      .orderBy(desc(agentSession.createdAt))
+      .limit(FINISHED_HISTORY_LIMIT),
+    db
+      .select()
+      .from(agentSession)
+      .where(and(ownership, eq(agentSession.kind, 'chat')))
+      .orderBy(desc(agentSession.createdAt))
+      .limit(1),
+    pulseCounts(ownerUserId),
+  ]);
+  const rows = [
+    ...new Map([...active, ...finished, ...chats].map((row) => [row.id, row])).values(),
+  ];
+  const metadata = await metadataBySession(rows.map((row) => row.id));
+  const uniqueContexts = new Map<string, z.input<typeof AthenaInvocationContext> | null>();
+  for (const row of rows) {
+    const context =
+      metadata.get(row.id)?.context ??
+      (row.contextOrganizationId ? { workspaceId: row.contextOrganizationId } : null);
+    uniqueContexts.set(JSON.stringify(context), context);
+  }
+  const contexts = new Map<string, Awaited<ReturnType<typeof resolveAthenaDisplay>>>();
+  await Promise.all(
+    [...uniqueContexts].map(async ([key, context]) => {
+      contexts.set(key, await resolveAthenaDisplay(ownerUserId, context));
+    }),
+  );
   const summaries = await Promise.all(
-    rows.map(async (row) => personalSummary(ownerUserId, row, await sessionActivities(row.id))),
+    rows.map((row) => {
+      const rowMetadata = metadata.get(row.id) ?? { objective: null, context: null };
+      const context =
+        rowMetadata.context ??
+        (row.contextOrganizationId ? { workspaceId: row.contextOrganizationId } : null);
+      return personalSummaryFromMetadata(
+        ownerUserId,
+        row,
+        rowMetadata,
+        contexts.get(JSON.stringify(context)),
+      );
+    }),
   );
   const sessions = {
     needsYou: summaries.filter((row) => row.queueState === 'needs_you'),
     working: summaries.filter((row) => row.queueState === 'working'),
     finished: summaries.filter((row) => row.queueState === 'finished'),
   };
-  const current = summaries.find((row) => rows.find((item) => item.id === row.id)?.kind === 'chat');
+  const current = summaries.find((row) => row.id === chats[0]?.id);
   return {
-    counts: {
-      needsYou: sessions.needsYou.length,
-      working: sessions.working.length,
-      finished: sessions.finished.length,
-    },
+    counts,
     currentChat: current ?? null,
     sessions,
   };
@@ -351,7 +485,7 @@ async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
       await stream.writeSSE({
         id: activity.id,
         event: activity.type,
-        data: JSON.stringify(toActivityOut(activity)),
+        data: JSON.stringify(toPersonalActivityOut(activity)),
       });
       lastSeen = activity.id;
     }
@@ -367,7 +501,7 @@ async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
         await stream.writeSSE({
           id: activity.id,
           event: activity.type,
-          data: JSON.stringify(toActivityOut(activity)),
+          data: JSON.stringify(toPersonalActivityOut(activity)),
         });
         lastSeen = activity.id;
       }
@@ -398,6 +532,20 @@ const meAthena = new Hono<AppEnv>()
         'Return only the authenticated user’s Athena work, grouped into Needs you, Working, and Finished with matching counts and the current persistent chat.',
     }),
     async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c))),
+  )
+  .get(
+    '/pulse',
+    apiDoc({
+      tag: 'Athena',
+      summary: 'Get compact personal Athena counts',
+      response: AthenaPulseOut,
+      description:
+        'Return only Needs you and Working counts for the ambient closed-dock pulse without loading private session history or activity.',
+    }),
+    async (c) => {
+      const counts = await pulseCounts(requestOwner(c));
+      return ok(c, AthenaPulseOut, { needsYou: counts.needsYou, working: counts.working });
+    },
   )
   .get(
     '/chat',
@@ -588,7 +736,7 @@ const meAthena = new Hono<AppEnv>()
       const id = c.req.valid('param').id;
       await loadOwnedSession(owner, id);
       return ok(c, pageOf(SessionActivityOut), {
-        items: visibleActivities(await sessionActivities(id)).map(toActivityOut),
+        items: visibleActivities(await sessionActivities(id)).map(toPersonalActivityOut),
       });
     },
   )
@@ -653,7 +801,7 @@ const meAthena = new Hono<AppEnv>()
       return ok(
         c,
         SessionActivityOut,
-        toActivityOut(
+        toPersonalActivityOut(
           await editProposalInput(id, activityId, c.req.valid('json').input, {
             athenaOwnerUserId: owner,
           }),
@@ -686,10 +834,14 @@ const meAthena = new Hono<AppEnv>()
           queueWake: true,
         });
         await wakeWaitingAthenaGeneration(id);
-        return accepted(c, SessionActivityOut, toActivityOut(await loadActivity(id, activityId)));
+        return accepted(
+          c,
+          SessionActivityOut,
+          toPersonalActivityOut(await loadActivity(id, activityId)),
+        );
       }
       await approveAndResume(session.contextOrganizationId ?? '', null, id, activityId, decision);
-      return ok(c, SessionActivityOut, toActivityOut(await loadActivity(id, activityId)));
+      return ok(c, SessionActivityOut, toPersonalActivityOut(await loadActivity(id, activityId)));
     },
   )
   .post(
@@ -717,10 +869,14 @@ const meAthena = new Hono<AppEnv>()
           queueWake: true,
         });
         await wakeWaitingAthenaGeneration(id);
-        return accepted(c, SessionActivityOut, toActivityOut(await loadActivity(id, activityId)));
+        return accepted(
+          c,
+          SessionActivityOut,
+          toPersonalActivityOut(await loadActivity(id, activityId)),
+        );
       }
       await approveAndResume(session.contextOrganizationId ?? '', null, id, activityId, decision);
-      return ok(c, SessionActivityOut, toActivityOut(await loadActivity(id, activityId)));
+      return ok(c, SessionActivityOut, toPersonalActivityOut(await loadActivity(id, activityId)));
     },
   )
   .post(
@@ -751,7 +907,7 @@ const meAthena = new Hono<AppEnv>()
         return accepted(c, SessionActivityOut, toActivityOut(created));
       }
       await resumeSessionExecution(workspaceId, id);
-      return ok(c, SessionActivityOut, toActivityOut(created));
+      return ok(c, SessionActivityOut, toPersonalActivityOut(created));
     },
   )
   .post(

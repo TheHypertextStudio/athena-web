@@ -40,6 +40,7 @@ describe('openapi spec generation', () => {
     expect(paths).toContain('/v1/orgs/{orgId}/projects');
     expect(paths).toContain('/v1/orgs');
     expect(paths).toContain('/v1/me/athena');
+    expect(paths).toContain('/v1/me/athena/pulse');
     expect(paths).toContain('/v1/me/athena/chat/messages');
     expect(paths).toContain('/v1/me/athena/sessions');
     expect(paths).toContain('/v1/me/athena/sessions/{id}/stream');

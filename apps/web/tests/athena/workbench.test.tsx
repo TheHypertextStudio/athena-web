@@ -90,4 +90,24 @@ describe('AthenaWorkbench', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Steer Athena' }));
     expect(onMessage).toHaveBeenCalledWith('Keep the attendee list unchanged.');
   });
+
+  it('owns enabled foreground tokens for primary and secondary workbench actions', () => {
+    const { rerender } = render(<AthenaWorkbench session={session} />);
+
+    const actions = [
+      screen.getByRole('button', { name: 'Approve' }),
+      screen.getByRole('button', { name: 'Keep current time' }),
+      screen.getByRole('button', { name: 'Cancel work' }),
+    ];
+    expect(actions[0]).toHaveClass('text-primary-foreground');
+    expect(actions[1]).toHaveClass('text-on-surface');
+    expect(actions[2]).toHaveClass('text-on-surface');
+    for (const action of actions) {
+      expect(action).toBeEnabled();
+      expect(action).toHaveClass('focus-visible:ring-ring', 'disabled:opacity-50');
+    }
+
+    rerender(<AthenaWorkbench session={session} pending />);
+    for (const action of actions) expect(action).toBeDisabled();
+  });
 });

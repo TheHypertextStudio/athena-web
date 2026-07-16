@@ -94,7 +94,7 @@ export function AthenaWorkbench({
               type="button"
               variant="ghost"
               size="sm"
-              className="min-h-10"
+              className="text-on-surface min-h-10"
               disabled={pending}
               onClick={() => onLifecycle?.('cancel')}
             >
@@ -135,7 +135,7 @@ export function AthenaWorkbench({
                     key={option.id}
                     type="button"
                     variant={index === 0 ? 'default' : 'outline'}
-                    className="min-h-10"
+                    className={cn('min-h-10', index > 0 && 'text-on-surface')}
                     disabled={pending}
                     onClick={() => onDecision?.(decision.id, option.id)}
                   >

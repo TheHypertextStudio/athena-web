@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
@@ -14,6 +14,15 @@ vi.hoisted(() => {
 
 import type * as DbModule from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/agent-runtime';
+import type * as AsyncRunnerModule from '../../src/agent/async-runner';
+
+const runnerMocks = vi.hoisted(() => ({ admit: vi.fn() }));
+
+vi.mock('../../src/agent/async-runner', async (importOriginal) => {
+  const actual = await importOriginal<typeof AsyncRunnerModule>();
+  runnerMocks.admit.mockImplementation(actual.admitAthenaGeneration);
+  return { ...actual, admitAthenaGeneration: runnerMocks.admit };
+});
 
 import type personalAthenaRouter from '../../src/routes/personal-athena';
 import type {
@@ -22,6 +31,7 @@ import type {
 } from '../../src/agent/assignments';
 import type { getContainer as GetContainer } from '../../src/container';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
+import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -497,5 +507,88 @@ describe('personal Athena assignments', () => {
       await ownerToolbox.close();
       await otherToolbox.close();
     }
+  });
+
+  it('queues initial, event-triggered, and scheduled assignment work through async admission', async () => {
+    runnerMocks.admit.mockClear().mockImplementation(async (session, options) => ({
+      mode: 'async',
+      queued: await enqueueRunGeneration(session, options),
+    }));
+    const seedData = await seed();
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const assignmentResponse = await app.request('/assignments', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        organizationId: seedData.orgId,
+        entityType: 'task',
+        entityId: seedData.taskId,
+        objective: 'Keep this queued through the durable runner.',
+      }),
+    });
+    expect(assignmentResponse.status, await assignmentResponse.clone().text()).toBe(200);
+    const assignment = (await assignmentResponse.json()) as {
+      id: string;
+      activeSessionId: string;
+    };
+
+    const eventTriggerResponse = await app.request(`/assignments/${assignment.id}/triggers`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ type: 'event', eventKinds: ['status_change'] }),
+    });
+    const eventTrigger = (await eventTriggerResponse.json()) as { id: string };
+    const scheduledTriggerResponse = await app.request(`/assignments/${assignment.id}/triggers`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+    });
+    const scheduledTrigger = (await scheduledTriggerResponse.json()) as { id: string };
+    expect(eventTrigger.id).not.toBe(scheduledTrigger.id);
+
+    const firedAt = new Date('2026-07-16T20:00:00.000Z');
+    await handleAthenaAssignmentEvent(
+      {
+        organizationId: seedData.orgId,
+        kind: 'status_change',
+        subject: { type: 'task', id: seedData.taskId, title: 'untrusted title' },
+        title: 'untrusted event',
+      },
+      firedAt,
+    );
+    const [afterEvent] = await db
+      .select({ activeSessionId: schema.athenaAssignment.activeSessionId })
+      .from(schema.athenaAssignment)
+      .where(eq(schema.athenaAssignment.id, assignment.id));
+    expect(afterEvent?.activeSessionId).not.toBe(assignment.activeSessionId);
+
+    await sweepAthenaAssignmentTriggers(new Date(firedAt.getTime() + 10 * 60_000));
+    const [afterSchedule] = await db
+      .select({ activeSessionId: schema.athenaAssignment.activeSessionId })
+      .from(schema.athenaAssignment)
+      .where(eq(schema.athenaAssignment.id, assignment.id));
+    expect(afterSchedule?.activeSessionId).not.toBe(afterEvent?.activeSessionId);
+
+    const sessionIds = [
+      assignment.activeSessionId,
+      afterEvent!.activeSessionId!,
+      afterSchedule!.activeSessionId!,
+    ];
+    const sessions = await db
+      .select({ id: schema.agentSession.id, status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(inArray(schema.agentSession.id, sessionIds));
+    const runs = await db
+      .select({
+        sessionId: schema.agentSessionRun.sessionId,
+        status: schema.agentSessionRun.status,
+      })
+      .from(schema.agentSessionRun)
+      .where(inArray(schema.agentSessionRun.sessionId, sessionIds));
+    expect(sessions).toHaveLength(3);
+    expect(sessions.every((session) => session.status === 'running')).toBe(true);
+    expect(runs).toHaveLength(3);
+    expect(runs.every((run) => run.status === 'queued')).toBe(true);
+    expect(runnerMocks.admit).toHaveBeenCalledTimes(3);
   });
 });

@@ -1,8 +1,15 @@
-import { agentSession, agentSessionRun, user } from '@docket/db';
+import { agentSession, agentSessionRun, sessionActivity, user } from '@docket/db';
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { claimQueuedRunGeneration, enqueueRunGeneration } from '../../src/agent/run-generation';
+import { advanceCloudflareGeneration } from '../../src/agent/execution-advance';
+import { admitAthenaGeneration } from '../../src/agent/async-runner';
+import {
+  claimQueuedRunGeneration,
+  enqueueRunGeneration,
+  type RunGenerationLease,
+  withRunGenerationFence,
+} from '../../src/agent/run-generation';
 import { getMigratedDb } from '../support/db';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
@@ -53,6 +60,43 @@ describe('queued Athena generations', () => {
     expect(queued).toMatchObject({ status: 'queued', attempt: 0, leaseToken: null });
   });
 
+  it('returns async acceptance with the parent running and its generation queued', async () => {
+    const seed = await seedPendingAthena();
+    const [session] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const fetch = vi.fn(async () => Response.json({ accepted: true }, { status: 202 }));
+
+    const admission = await admitAthenaGeneration(
+      session!,
+      { runnableStatuses: ['pending'] },
+      {
+        config: {
+          APP_MODE: 'production',
+          ATHENA_ASYNC_RUNNER_ENABLED: true,
+          CLOUDFLARE_ATHENA_RUNNER_URL: 'https://runner.example',
+          DOCKET_TO_CLOUDFLARE_HMAC_SECRET: 'docket-to-cloudflare-secret-long-enough',
+        },
+        enqueue: enqueueRunGeneration,
+        fetch,
+      },
+    );
+
+    expect(admission.mode).toBe('async');
+    const [current] = await dbModule.db
+      .select({ status: agentSession.status })
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const [run] = await dbModule.db
+      .select({ status: agentSessionRun.status })
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.sessionId, seed.sessionId));
+    expect(current?.status).toBe('running');
+    expect(run?.status).toBe('queued');
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
   it('claims only the exact persisted generation and fences duplicate workers', async () => {
     const seed = await seedPendingAthena();
     const [session] = await dbModule.db
@@ -72,5 +116,100 @@ describe('queued Athena generations', () => {
       .where(eq(agentSessionRun.sessionId, seed.sessionId));
     expect(run).toMatchObject({ status: 'running', attempt: 1 });
     expect(run?.leaseToken).toBeTruthy();
+  });
+
+  it('reclaims an expired exact generation and fences the stale worker token', async () => {
+    const seed = await seedPendingAthena();
+    const [session] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(session!);
+    const claimedAt = new Date('2026-07-16T18:00:00.000Z');
+    const first = await claimQueuedRunGeneration(queued.message, {
+      now: claimedAt,
+      leaseDurationMs: 1_000,
+    });
+
+    await expect(
+      claimQueuedRunGeneration(queued.message, {
+        now: new Date(claimedAt.getTime() + 999),
+        leaseDurationMs: 1_000,
+      }),
+    ).rejects.toThrow(/generation/i);
+
+    const recovered = await claimQueuedRunGeneration(queued.message, {
+      now: new Date(claimedAt.getTime() + 1_000),
+      leaseDurationMs: 1_000,
+    });
+
+    expect(recovered.lease.leaseToken).not.toBe(first.lease.leaseToken);
+    const [run] = await dbModule.db
+      .select()
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.id, first.lease.runId));
+    expect(run).toMatchObject({ status: 'running', attempt: 2 });
+    expect(run?.leaseToken).toBe(recovered.lease.leaseToken);
+
+    await expect(
+      withRunGenerationFence(
+        first.lease,
+        async (tx) => {
+          await tx.insert(sessionActivity).values({
+            sessionId: seed.sessionId,
+            organizationId: null,
+            type: 'response',
+            body: { text: 'stale worker write' },
+          });
+        },
+        new Date(claimedAt.getTime() + 1_001),
+      ),
+    ).rejects.toThrow(/lease was lost/i);
+    expect(
+      await dbModule.db
+        .select()
+        .from(sessionActivity)
+        .where(eq(sessionActivity.sessionId, seed.sessionId)),
+    ).toHaveLength(0);
+  });
+
+  it('lets a duplicate Workflow callback drive an expired running generation', async () => {
+    const seed = await seedPendingAthena();
+    const [session] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(session!);
+    const claimedAt = new Date('2026-07-16T19:00:00.000Z');
+    const first = await claimQueuedRunGeneration(queued.message, {
+      now: claimedAt,
+      leaseDurationMs: 1_000,
+    });
+    const drive = vi.fn(async (_orgId: string, _sessionId: string, _lease: RunGenerationLease) => ({
+      ...session!,
+      status: 'completed' as const,
+    }));
+
+    await expect(
+      advanceCloudflareGeneration(queued.message, 'run', {
+        claim: (message) =>
+          claimQueuedRunGeneration(message, {
+            now: new Date(claimedAt.getTime() + 1_000),
+            leaseDurationMs: 60_000,
+          }),
+        drive,
+        enqueue: vi.fn(),
+        loadWaiting: vi.fn(),
+      }),
+    ).resolves.toEqual({ state: 'complete' });
+
+    expect(drive).toHaveBeenCalledOnce();
+    const recoveredLease = drive.mock.calls[0]?.[2];
+    expect(recoveredLease?.leaseToken).not.toBe(first.lease.leaseToken);
+    const [run] = await dbModule.db
+      .select()
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.id, first.lease.runId));
+    expect(run).toMatchObject({ status: 'running', attempt: 2 });
   });
 });

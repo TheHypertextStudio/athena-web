@@ -7,11 +7,31 @@ import type { SessionActivityBody } from '@docket/db';
 import type * as AgentRuntimeModule from '@docket/agent-runtime';
 import type { SessionStatus } from '@docket/types';
 
+import type * as AsyncRunnerModule from '../../src/agent/async-runner';
+import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import type { ActorCtx, AppEnv } from '../../src/context';
 import type { getContainer as GetContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import { fakeSession, getDb, one } from '../support/routes-harness';
+
+const runnerMocks = vi.hoisted(() => ({
+  enabled: false,
+  admit: vi.fn<typeof AsyncRunnerModule.admitAthenaGeneration>(async () => ({
+    mode: 'sync' as const,
+  })),
+  wake: vi.fn<typeof AsyncRunnerModule.wakeWaitingAthenaGeneration>(),
+}));
+
+vi.mock('../../src/agent/async-runner', async (importOriginal) => {
+  const actual = await importOriginal<typeof AsyncRunnerModule>();
+  return {
+    ...actual,
+    asynchronousRunnerEnabled: () => runnerMocks.enabled,
+    admitAthenaGeneration: runnerMocks.admit,
+    wakeWaitingAthenaGeneration: runnerMocks.wake,
+  };
+});
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -44,6 +64,9 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  runnerMocks.enabled = false;
+  runnerMocks.admit.mockReset().mockResolvedValue({ mode: 'sync' });
+  runnerMocks.wake.mockReset();
   vi.restoreAllMocks();
 });
 
@@ -216,6 +239,233 @@ function post(app: ReturnType<typeof appFor>, path: string, body: unknown = {}) 
 }
 
 describe('owner-private Athena compatibility routes', () => {
+  it('returns asynchronous acceptance across the personal compatibility mutation matrix', async () => {
+    runnerMocks.enabled = true;
+    runnerMocks.admit.mockImplementation(
+      async (
+        session: Parameters<typeof enqueueRunGeneration>[0],
+        options?: Parameters<typeof enqueueRunGeneration>[1],
+      ) => ({ mode: 'async' as const, queued: await enqueueRunGeneration(session, options) }),
+    );
+    runnerMocks.wake.mockImplementation(async (sessionId: string) => ({
+      sessionId,
+      generation: 1,
+      workflowId: `${sessionId}:1`,
+    }));
+
+    const seed = await seedWorkspace();
+    const ownerApp = appFor(seed, seed.owner);
+    const otherApp = appFor(seed, seed.other);
+    const runtime = new agentRuntime.MockAgentTurnRuntime({
+      script: Array.from({ length: 10 }, (_, index) => ({
+        message: {
+          role: 'assistant' as const,
+          content: [{ type: 'text' as const, text: `Settled ${index}` }],
+        },
+        stopReason: 'end_turn' as const,
+      })),
+    });
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation((input) =>
+      runtime.streamTurn(input),
+    );
+
+    const created = await post(ownerApp, '/', { prompt: 'Queue this personal request' });
+    expect(created.status).toBe(202);
+    expect((await created.json()) as { status: string }).toMatchObject({ status: 'running' });
+
+    const chatted = await post(ownerApp, '/chat/messages', { body: 'Queue this chat turn' });
+    expect(chatted.status).toBe(202);
+    const chatBody = (await chatted.json()) as { id: string; status: string };
+    expect(chatBody).toMatchObject({ status: 'running' });
+    await db
+      .update(schema.agentSession)
+      .set({ status: 'awaiting_approval' })
+      .where(eq(schema.agentSession.id, chatBody.id));
+    const admissionsBeforeParkedMessage = runnerMocks.admit.mock.calls.length;
+    const parkedMessage = await post(ownerApp, '/chat/messages', {
+      body: 'Keep this message parked behind the existing review',
+    });
+    expect(parkedMessage.status).toBe(200);
+    expect((await parkedMessage.json()) as { status: string }).toMatchObject({
+      status: 'awaiting_approval',
+    });
+    expect(runnerMocks.admit).toHaveBeenCalledTimes(admissionsBeforeParkedMessage);
+
+    const runnable = await seedAthena(seed, seed.owner, 'pending');
+    await seedActivity(seed, runnable, 'athena', {
+      type: 'response',
+      body: { text: 'Queue this existing session' },
+    });
+    const admissionsBeforeIntrusion = runnerMocks.admit.mock.calls.length;
+    expect((await post(otherApp, `/${runnable}/run`)).status).toBe(404);
+    expect(runnerMocks.admit).toHaveBeenCalledTimes(admissionsBeforeIntrusion);
+    expect((await post(ownerApp, `/${runnable}/run`)).status).toBe(202);
+
+    const approval = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedActivity(seed, approval, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      body: { action: { kind: 'note', summary: 'Approve asynchronously' } },
+    });
+    const wakesBeforeShortcutIntrusion = runnerMocks.wake.mock.calls.length;
+    expect((await post(otherApp, `/${approval}/approve`)).status).toBe(404);
+    expect(runnerMocks.wake).toHaveBeenCalledTimes(wakesBeforeShortcutIntrusion);
+    expect((await post(ownerApp, `/${approval}/approve`)).status).toBe(202);
+
+    const rejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedActivity(seed, rejection, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      body: { action: { kind: 'note', summary: 'Reject asynchronously' } },
+    });
+    expect((await post(ownerApp, `/${rejection}/reject`)).status).toBe(202);
+
+    const activityApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    const activityApprovalId = await seedActivity(seed, activityApproval, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      body: { action: { kind: 'note', summary: 'Approve one asynchronously' } },
+    });
+    const wakesBeforeActivityIntrusion = runnerMocks.wake.mock.calls.length;
+    expect(
+      (await post(otherApp, `/${activityApproval}/activity/${activityApprovalId}/approve`)).status,
+    ).toBe(404);
+    expect(runnerMocks.wake).toHaveBeenCalledTimes(wakesBeforeActivityIntrusion);
+    expect(
+      (await post(ownerApp, `/${activityApproval}/activity/${activityApprovalId}/approve`)).status,
+    ).toBe(202);
+
+    const activityRejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    const activityRejectionId = await seedActivity(seed, activityRejection, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      body: { action: { kind: 'note', summary: 'Reject one asynchronously' } },
+    });
+    expect(
+      (await post(ownerApp, `/${activityRejection}/activity/${activityRejectionId}/reject`)).status,
+    ).toBe(202);
+
+    const groupApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedActivity(seed, groupApproval, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      proposalGroupId: 'group_async_approve',
+      body: { action: { kind: 'note', summary: 'Approve the group asynchronously' } },
+    });
+    const wakesBeforeGroupIntrusion = runnerMocks.wake.mock.calls.length;
+    expect(
+      (await post(otherApp, `/${groupApproval}/proposals/group_async_approve/approve`)).status,
+    ).toBe(404);
+    expect(runnerMocks.wake).toHaveBeenCalledTimes(wakesBeforeGroupIntrusion);
+    expect(
+      (await post(ownerApp, `/${groupApproval}/proposals/group_async_approve/approve`)).status,
+    ).toBe(202);
+
+    const groupRejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedActivity(seed, groupRejection, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      proposalGroupId: 'group_async_reject',
+      body: { action: { kind: 'note', summary: 'Reject the group asynchronously' } },
+    });
+    expect(
+      (await post(ownerApp, `/${groupRejection}/proposals/group_async_reject/reject`)).status,
+    ).toBe(202);
+
+    const asking = await seedAthena(seed, seed.owner, 'awaiting_input');
+    const elicitation = await seedActivity(seed, asking, 'athena', {
+      type: 'elicitation',
+      body: { text: 'Which one?', toolUseId: 'toolu_compat_async' },
+    });
+    expect(
+      (await post(ownerApp, `/${asking}/activity/${elicitation}/reply`, { body: 'This one' }))
+        .status,
+    ).toBe(202);
+
+    const resumable = await seedAthena(seed, seed.owner, 'awaiting_input');
+    expect((await post(ownerApp, `/${resumable}/resume`)).status).toBe(202);
+
+    const registered = await post(ownerApp, '/', {
+      prompt: 'Keep the conventional agent synchronous',
+      agentId: seed.agentId,
+    });
+    expect(registered.status).toBe(200);
+
+    const registeredActivityApproval = await seedRegistered(seed, 'awaiting_approval');
+    const registeredActivityApprovalId = await seedActivity(
+      seed,
+      registeredActivityApproval,
+      'registered_agent',
+      {
+        type: 'action',
+        approvalStatus: 'proposed',
+        body: { action: { kind: 'note', summary: 'Registered activity approval' } },
+      },
+    );
+    expect(
+      (
+        await post(
+          otherApp,
+          `/${registeredActivityApproval}/activity/${registeredActivityApprovalId}/approve`,
+        )
+      ).status,
+    ).toBe(200);
+
+    const registeredActivityRejection = await seedRegistered(seed, 'awaiting_approval');
+    const registeredActivityRejectionId = await seedActivity(
+      seed,
+      registeredActivityRejection,
+      'registered_agent',
+      {
+        type: 'action',
+        approvalStatus: 'proposed',
+        body: { action: { kind: 'note', summary: 'Registered activity rejection' } },
+      },
+    );
+    expect(
+      (
+        await post(
+          otherApp,
+          `/${registeredActivityRejection}/activity/${registeredActivityRejectionId}/reject`,
+        )
+      ).status,
+    ).toBe(200);
+
+    const registeredGroupApproval = await seedRegistered(seed, 'awaiting_approval');
+    await seedActivity(seed, registeredGroupApproval, 'registered_agent', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      proposalGroupId: 'registered_group_approve',
+      body: { action: { kind: 'note', summary: 'Registered group approval' } },
+    });
+    expect(
+      (
+        await post(
+          otherApp,
+          `/${registeredGroupApproval}/proposals/registered_group_approve/approve`,
+        )
+      ).status,
+    ).toBe(200);
+
+    const registeredGroupRejection = await seedRegistered(seed, 'awaiting_approval');
+    await seedActivity(seed, registeredGroupRejection, 'registered_agent', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      proposalGroupId: 'registered_group_reject',
+      body: { action: { kind: 'note', summary: 'Registered group rejection' } },
+    });
+    expect(
+      (
+        await post(
+          otherApp,
+          `/${registeredGroupRejection}/proposals/registered_group_reject/reject`,
+        )
+      ).status,
+    ).toBe(200);
+    expect(runnerMocks.admit).toHaveBeenCalledTimes(3);
+    expect(runnerMocks.wake).toHaveBeenCalledTimes(8);
+  });
+
   it("lists only the caller's Athena work while retaining shared registered-agent sessions", async () => {
     const seed = await seedWorkspace();
     const mine = await seedAthena(seed, seed.owner, 'completed');

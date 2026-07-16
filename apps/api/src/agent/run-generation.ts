@@ -231,7 +231,11 @@ export async function claimQueuedRunGeneration(
         ),
       )
       .for('update');
-    if (run?.status !== 'queued') {
+    const recoveringExpired =
+      run?.status === 'running' &&
+      run.leaseExpiresAt !== null &&
+      run.leaseExpiresAt.getTime() <= now.getTime();
+    if (run?.status !== 'queued' && !recoveringExpired) {
       throw new ConflictError('Queued session generation is unavailable');
     }
 
@@ -245,7 +249,14 @@ export async function claimQueuedRunGeneration(
         lastError: null,
         startedAt: run.startedAt ?? now,
       })
-      .where(and(eq(agentSessionRun.id, run.id), eq(agentSessionRun.status, 'queued')))
+      .where(
+        and(
+          eq(agentSessionRun.id, run.id),
+          recoveringExpired
+            ? and(eq(agentSessionRun.status, 'running'), lte(agentSessionRun.leaseExpiresAt, now))
+            : eq(agentSessionRun.status, 'queued'),
+        ),
+      )
       .returning({ id: agentSessionRun.id });
     if (!claimed) throw new ConflictError('Queued session generation changed during claim');
 

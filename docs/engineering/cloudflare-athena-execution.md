@@ -118,7 +118,10 @@ when upgrading.
 - A growing DLQ means the original Docket rows remain authoritative. Inspect the Docket run status,
   Worker structured logs, Queue message attempts, and Workflow instance status before replaying.
 - Retrying a queued Docket request reuses the same queued generation. Retrying a Workflow callback
-  returns the already-persisted wait, terminal state, or successor generation.
+  returns the already-persisted wait, terminal state, or successor generation. If that callback
+  finds its exact generation still `running` with an expired lease, it reclaims the row with an
+  incremented attempt and a new fencing token; a fresh lease remains unavailable, and the prior
+  token cannot commit transcript, activity, or tool-effect state.
 - Never replay an `executing` action automatically. That state is the existing non-repeatable MCP
   dispatch boundary and requires human attention after interruption.
 - Rotate secrets one direction at a time with a coordinated Docket/Worker update. Requests signed

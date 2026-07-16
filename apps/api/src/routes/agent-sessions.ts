@@ -13,10 +13,17 @@ import {
 } from '@docket/types';
 import { and, asc, desc, eq, gt } from 'drizzle-orm';
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 
+import {
+  admitAthenaGeneration,
+  asynchronousRunnerEnabled,
+  wakeWaitingAthenaGeneration,
+} from '../agent/async-runner';
 import type { AppEnv } from '../context';
+import { ConflictError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -36,7 +43,12 @@ import {
   loadActivity,
 } from './agent-session-helpers';
 import { createAndRunFromPrompt, postReplyAndResume, runSession } from './agent-session-runner';
-import { replyToElicitation, resolveAction } from './agent-session-approval';
+import {
+  decideActivity,
+  decideProposalGroup,
+  replyToElicitation,
+  resolveAction,
+} from './agent-session-approval';
 import {
   approveAndResume,
   approveGroupAndResume,
@@ -102,6 +114,31 @@ const STREAM_HEARTBEAT_MS = 15_000;
 /** Route params for the proposal-group routes. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
 
+/** Validate and return an asynchronous mutation acknowledgement. */
+function accepted<T extends z.ZodType>(c: Context<AppEnv>, schema: T, data: z.input<T>) {
+  return c.json(schema.parse(data), 202);
+}
+
+/** Load the latest still-proposed action for a session-level compatibility decision. */
+async function latestProposedAction(
+  sessionId: string,
+): Promise<typeof sessionActivity.$inferSelect> {
+  const rows = await db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'proposed'),
+      ),
+    )
+    .orderBy(desc(sessionActivity.createdAt), desc(sessionActivity.id))
+    .limit(1);
+  if (!rows[0]) throw new ConflictError('No proposed action awaiting approval');
+  return rows[0];
+}
+
 /** Agent-sessions router: list (status filter), read with stream, approve + reject. */
 const agentSessions = new Hono<AppEnv>()
   .get(
@@ -127,7 +164,7 @@ const agentSessions = new Hono<AppEnv>()
       summary: 'Start an agent session from a prompt',
       capability: 'contribute',
       response: AgentSessionOut,
-      description: `Create and run an agent session from a freeform \`prompt\`, returning the **settled** {@link AgentSessionOut} (the call runs the session synchronously to its first resting point, so the returned \`status\` is already past \`running\` — typically \`awaiting_approval\` or \`completed\`). This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
+      description: `Create and dispatch an agent session from a freeform \`prompt\`. Personal Athena work returns \`202\` after production asynchronous admission, with the parent session \`running\` and its generation durably queued; local/test Athena and explicit registered agents preserve the synchronous \`200\` settled response. This is the "ask Athena to plan" escalation of the hybrid Home prompt box; its sibling, plain quick-capture, lives at \`POST /v1/orgs/:orgId/capture\` and never invokes an agent.
 
 Behavior: the session binds to the supplied \`agentId\` (validated to be a registered agent in this workspace, else 404 \`Agent not found\`) or, when omitted, to the caller's personal Athena executor. Athena stores the caller's user id as owner and this workspace only as context; no workspace agent or grant is created. The prompt is persisted as the session's first \`response\` activity (there is no schema brief column) and threaded through as the runtime task brief. \`trigger\` is recorded as \`delegation\`, and the caller becomes the session \`initiatorId\`.
 
@@ -140,6 +177,9 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       const { prompt, agentId } = c.req.valid('json');
       const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId, ownerUserId);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
+      if (settled.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        return accepted(c, AgentSessionOut, toSessionOut(settled));
+      }
       return ok(c, AgentSessionOut, toSessionOut(settled));
     },
   )
@@ -173,24 +213,32 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       summary: 'Send a message to the Athena chat thread',
       capability: 'contribute',
       response: AgentSessionDetailOut,
-      description: `Append a natural-language message to the org's chat thread and drive Athena's reply: the text lands as a visible \`response\` activity (author: user) AND as the next user turn of the durable transcript, then the loop runs — reads answer instantly, writes obey the same approval dial as any session (a proposed batch parks the thread \`awaiting_approval\` and reviews through the ghost system). Returns the settled thread with its full stream. Requires \`contribute\` (chatting IS contributing). This is the "one engine, many doors" door: the home prompt box and delegation drive the identical machinery.`,
+      description: `Append a natural-language message to the org's chat thread: the text lands as a visible \`response\` activity (author: user) and as the next user turn of the durable transcript. Eligible production work is admitted or woken asynchronously and returns \`202\`; local/test execution settles synchronously. A thread already awaiting approval or canceled remains parked and returns \`200\` without dispatch. Writes obey the same approval dial as any session. Requires \`contribute\` (chatting IS contributing).`,
     }),
     zJson(SessionReplyBody),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
       const session = await getOrCreateChatSession(orgId, actorId, requestUserId(c));
-      const settled = await postReplyAndResume(orgId, session.id, actorId, body.body);
+      const { session: settled, asynchronous } = await postReplyAndResume(
+        orgId,
+        session.id,
+        actorId,
+        body.body,
+      );
 
       const activities = await db
         .select()
         .from(sessionActivity)
         .where(eq(sessionActivity.sessionId, session.id))
         .orderBy(asc(sessionActivity.createdAt));
-      return ok(c, AgentSessionDetailOut, {
+      const detail = {
         ...toSessionOut(settled),
         activities: activities.map(toActivityOut),
-      });
+      };
+      return asynchronous
+        ? accepted(c, AgentSessionDetailOut, detail)
+        : ok(c, AgentSessionDetailOut, detail);
     },
   )
   .post(
@@ -252,7 +300,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       tag: 'Agents',
       summary: 'Run an agent session',
       response: AgentSessionOut,
-      description: `Run (or resume execution of) an existing session against the agent runtime and return the **settled** {@link AgentSessionOut}. Only a session in a *runnable* state — \`pending\` (created but not yet dispatched, e.g. a proactively drafted plan) or \`running\` — may be run; any other state (terminal, or parked awaiting human input/approval) yields 409 (\`Session is not in a runnable state\`). A missing/cross-tenant id returns 404, and a session whose agent has since been deregistered returns 404 (\`Agent not found\`).
+      description: `Run (or resume execution of) an existing session. Production personal Athena work returns \`202\` after durable admission; local/test Athena and registered agents return the settled \`200\` {@link AgentSessionOut}. Only a session in a *runnable* state — \`pending\` (created but not yet dispatched) or \`running\` — may be run; any other state yields 409 (\`Session is not in a runnable state\`). A missing/cross-tenant id returns 404, and a session whose agent has since been deregistered returns 404 (\`Agent not found\`).
 
 Behavior & side effects: atomically claims a durable \`agent_session_run\` generation before provider work. A fresh same-session lease rejects duplicate callers; an expired lease is recovered with a new fencing token, and healthy work renews indefinitely. The loop derives the task brief, consumes the runtime stream, persists activities and transcript checkpoints, and settles only on completion, a human wait, cancellation, or an actual error. For Athena, \`AGENT_MAX_TURNS\` starts the next durable generation instead of ending personal work. Activities stream live to \`GET /:id/stream\`. Personal Athena work requires its authenticated owner; registered-agent work requires \`contribute\`.`,
     }),
@@ -261,7 +309,13 @@ Behavior & side effects: atomically claims a durable \`agent_session_run\` gener
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'contribute');
+      const { session } = await loadSessionAccess(c, id, 'contribute');
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await admitAthenaGeneration(session, { runnableStatuses: ['pending', 'running'] });
+        const { session: current } = await loadSessionAccess(c, id, 'contribute');
+        await enqueueSearchUpsert(orgId, 'agent_session', current.id);
+        return accepted(c, AgentSessionOut, toSessionOut(current));
+      }
       const settled = await runSession(orgId, id);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       return ok(c, AgentSessionOut, toSessionOut(settled));
@@ -372,9 +426,15 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, groupId } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'assign');
+      const { session } = await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
-      const session = await approveGroupAndResume(
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await decideProposalGroup(orgId, null, id, groupId, 'approve', body?.activityIds);
+        await wakeWaitingAthenaGeneration(id);
+        const { session: current } = await loadSessionAccess(c, id, 'assign');
+        return accepted(c, AgentSessionOut, toSessionOut(current));
+      }
+      const settled = await approveGroupAndResume(
         orgId,
         actorId,
         id,
@@ -382,7 +442,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
         'approve',
         body?.activityIds,
       );
-      return ok(c, AgentSessionOut, toSessionOut(session));
+      return ok(c, AgentSessionOut, toSessionOut(settled));
     },
   )
   .post(
@@ -398,9 +458,15 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, groupId } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'assign');
+      const { session } = await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
-      const session = await approveGroupAndResume(
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await decideProposalGroup(orgId, null, id, groupId, 'reject', body?.activityIds);
+        await wakeWaitingAthenaGeneration(id);
+        const { session: current } = await loadSessionAccess(c, id, 'assign');
+        return accepted(c, AgentSessionOut, toSessionOut(current));
+      }
+      const settled = await approveGroupAndResume(
         orgId,
         actorId,
         id,
@@ -408,7 +474,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
         'reject',
         body?.activityIds,
       );
-      return ok(c, AgentSessionOut, toSessionOut(session));
+      return ok(c, AgentSessionOut, toSessionOut(settled));
     },
   )
   .patch(
@@ -474,12 +540,20 @@ Athena approval requires the authenticated owner; registered-agent approval requ
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'assign');
+      const { session } = await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
-      await approveAndResume(orgId, actorId, id, activityId, {
+      const decision = {
         decision: 'approve',
         ...(body?.scope ? { scope: body.scope } : {}),
-      });
+      } as const;
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await decideActivity(orgId, null, id, activityId, decision);
+        await wakeWaitingAthenaGeneration(id);
+        const updated = await loadActivity(id, activityId);
+        await enqueueSearchUpsert(orgId, 'agent_session', id);
+        return accepted(c, SessionActivityOut, toActivityOut(updated));
+      }
+      await approveAndResume(orgId, actorId, id, activityId, decision);
       const updated = await loadActivity(id, activityId);
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
@@ -502,12 +576,20 @@ Athena rejection requires the authenticated owner; registered-agent rejection re
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'assign');
+      const { session } = await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
-      await approveAndResume(orgId, actorId, id, activityId, {
+      const decision = {
         decision: 'reject',
         ...(body?.scope ? { scope: body.scope } : {}),
-      });
+      } as const;
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await decideActivity(orgId, null, id, activityId, decision);
+        await wakeWaitingAthenaGeneration(id);
+        const updated = await loadActivity(id, activityId);
+        await enqueueSearchUpsert(orgId, 'agent_session', id);
+        return accepted(c, SessionActivityOut, toActivityOut(updated));
+      }
+      await approveAndResume(orgId, actorId, id, activityId, decision);
       const updated = await loadActivity(id, activityId);
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
@@ -531,6 +613,11 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { session } = await loadSessionAccess(c, id, 'contribute');
       const body = c.req.valid('json');
       const created = await replyToElicitation(orgId, id, activityId, body.body);
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await wakeWaitingAthenaGeneration(id);
+        await enqueueSearchUpsert(orgId, 'agent_session', id);
+        return accepted(c, SessionActivityOut, toActivityOut(created));
+      }
       // Athena always enters through durable admission, initializing a missing transcript only
       // after its claim. Registered-agent rows keep the status-only fallback solely for legacy
       // sessions whose conversation state was never persisted.
@@ -574,6 +661,12 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        await wakeWaitingAthenaGeneration(id);
+        const { session: current } = await loadSessionAccess(c, id, 'contribute');
+        await enqueueSearchUpsert(orgId, 'agent_session', current.id);
+        return accepted(c, AgentSessionOut, toSessionOut(current));
+      }
       const updated =
         session.executorKind === 'athena' || (await loadTranscript(db, id)).length > 0
           ? await resumeSessionExecution(orgId, id)
@@ -596,6 +689,13 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
       const updated = await transitionLifecycle(session, 'cancel');
+      if (
+        session.executorKind === 'athena' &&
+        asynchronousRunnerEnabled() &&
+        (session.status === 'awaiting_input' || session.status === 'awaiting_approval')
+      ) {
+        await wakeWaitingAthenaGeneration(id);
+      }
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
@@ -618,7 +718,15 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { actorId } = c.get('actorCtx');
-      await loadSessionAccess(c, id, 'assign');
+      const { session } = await loadSessionAccess(c, id, 'assign');
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        const action = await latestProposedAction(id);
+        await decideActivity(orgId, null, id, action.id, { decision: 'approve' });
+        await wakeWaitingAthenaGeneration(id);
+        const { session: current } = await loadSessionAccess(c, id, 'assign');
+        await enqueueSearchUpsert(orgId, 'agent_session', current.id);
+        return accepted(c, AgentSessionOut, toSessionOut(current));
+      }
       const updated = await approveLatestAndResume(orgId, actorId, id);
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
@@ -640,7 +748,15 @@ Athena requires its authenticated owner; registered-agent work requires \`assign
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadSessionAccess(c, id, 'assign');
+      const { session } = await loadSessionAccess(c, id, 'assign');
+      if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
+        const action = await latestProposedAction(id);
+        await decideActivity(orgId, null, id, action.id, { decision: 'reject' });
+        const updated = await transitionLifecycle(session, 'cancel');
+        await wakeWaitingAthenaGeneration(id);
+        await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
+        return accepted(c, AgentSessionOut, toSessionOut(updated));
+      }
       const updated = await resolveAction(orgId, id, 'rejected');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));

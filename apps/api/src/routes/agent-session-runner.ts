@@ -9,6 +9,11 @@ import {
 import { and, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import {
+  admitAthenaGeneration,
+  asynchronousRunnerEnabled,
+  wakeWaitingAthenaGeneration,
+} from '../agent/async-runner';
 import { driveSession, driveSessionAfterMessage } from '../agent/loop';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import { ensureDefaultAgent } from '../lib/default-agent';
@@ -23,16 +28,17 @@ import type { SessionRow } from './agent-session-helpers';
  * session binds to the supplied registered `agentId` (validated in-org) or — when omitted — to
  * user-owned Athena using the caller's persisted Better Auth user id. The
  * prompt is persisted as the session's first `response` activity (there is no schema
- * brief column) so {@link runSession} threads it through as the runtime `task` brief;
- * the session then runs and settles like any other. Trigger is `delegation` (a human
- * delegating planning to the agent), matching `run_agent`'s default.
+ * brief column) so {@link runSession} threads it through as the runtime `task` brief.
+ * Personal Athena work enters the configured asynchronous admission path in production,
+ * while registered agents and local/test Athena work continue synchronously. Trigger is
+ * `delegation` (a human delegating planning to the agent), matching `run_agent`'s default.
  *
  * @param orgId - The active organization id.
  * @param actorId - The caller's actor id (the session initiator + prompt author).
  * @param prompt - The freeform brief the agent should plan against.
  * @param agentId - An explicit registered agent; omission selects user-owned Athena.
  * @param authenticatedUserId - Request-authenticated owner for Athena creation.
- * @returns the settled session row.
+ * @returns the accepted Athena session or settled synchronous session row.
  * @throws {NotFoundError} When an explicit `agentId` is not a registered agent in the org.
  */
 export async function createAndRunFromPrompt(
@@ -56,7 +62,7 @@ export async function createAndRunFromPrompt(
     ownerUserId = authenticatedUserId ?? (await ownerUserIdForActor(orgId, actorId));
   }
 
-  const sessionId = await db.transaction(async (tx) => {
+  const createdSession = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(agentSession)
       .values(
@@ -78,7 +84,7 @@ export async function createAndRunFromPrompt(
               initiatorId: actorId,
             },
       )
-      .returning({ id: agentSession.id });
+      .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('session insert returned no row');
 
@@ -90,15 +96,57 @@ export async function createAndRunFromPrompt(
       type: 'response',
       body: { text: prompt },
     });
-    return created.id;
+    return created;
   });
 
-  return runSession(orgId, sessionId);
+  if (createdSession.executorKind === 'athena') {
+    const admission = await admitAthenaGeneration(createdSession, {
+      runnableStatuses: ['pending'],
+    });
+    if (admission.mode === 'async') {
+      const [current] = await db
+        .select()
+        .from(agentSession)
+        .where(eq(agentSession.id, createdSession.id))
+        .limit(1);
+      /* v8 ignore next -- @preserve admission updates the row it was given */
+      if (!current) throw new Error('admitted session returned no row');
+      return current;
+    }
+  }
+
+  return runSession(orgId, createdSession.id);
 }
 
 /** Defensive branch for a registered-agent insert whose validated id vanished. */
 function missingRegisteredAgent(): never {
   throw new Error('Registered-agent session is missing its agent');
+}
+
+/**
+ * Read one session by id alone.
+ *
+ * @remarks
+ * Visibility is the caller's job and is settled before control reaches the reply path — a
+ * personal Athena session belongs to a user rather than to the workspace the reply arrived
+ * through, so an org-scoped lookup would reject its own owner.
+ */
+async function loadSessionRow(sessionId: string): Promise<SessionRow> {
+  const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
+  const session = rows[0];
+  if (!session) throw new NotFoundError('Session not found');
+  return session;
+}
+
+/** What a reply did: the session as it now stands, and whether a turn was left running. */
+export interface ReplyOutcome {
+  /** The session after the reply landed and whatever resumption applies was started. */
+  readonly session: SessionRow;
+  /**
+   * True when the turn was handed to the durable runner rather than driven inline, so the
+   * caller should answer `202 Accepted` — the reply is recorded, the answer is not here yet.
+   */
+  readonly asynchronous: boolean;
 }
 
 /**
@@ -235,9 +283,7 @@ async function applyReplyToSession(
   actorId: string | null,
   text: string,
 ): Promise<void> {
-  const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
-  const session = rows[0];
-  if (!session) throw new NotFoundError('Session not found');
+  const session = await loadSessionRow(sessionId);
   // User-owned Athena work is never attributed to a workspace: the schema's attribution
   // check requires exactly one of owner/org, so an `athena` session's rows carry the owner
   // and a null org even when the caller reached this route through one.
@@ -284,12 +330,34 @@ export async function postReplyAndResume(
   sessionId: string,
   actorId: string | null,
   text: string,
-): Promise<SessionRow> {
+): Promise<ReplyOutcome> {
   await applyReplyToSession(orgId, sessionId, actorId, text);
-  // `driveSessionAfterMessage`, not `driveSession`: a reply must reopen a session that had
-  // gone idle, and admission is the only thing allowed to move that status now — nudging the
-  // row to `running` here first would reopen it outside the lease that guards the transition.
-  return driveSessionAfterMessage(orgId, sessionId);
+  const current = await loadSessionRow(sessionId);
+
+  // A parked or cancelled thread takes the message but starts nothing: approval is the only
+  // thing that resumes the first, and nothing resumes the second.
+  if (current.status === 'awaiting_approval' || current.status === 'canceled') {
+    return { session: current, asynchronous: false };
+  }
+
+  if (!asynchronousRunnerEnabled()) {
+    // `driveSessionAfterMessage`, not `driveSession`: a reply must reopen a session that had
+    // gone idle, and admission is the only thing allowed to move that status — nudging the row
+    // to `running` first would reopen it outside the lease that guards the transition.
+    return { session: await driveSessionAfterMessage(orgId, sessionId), asynchronous: false };
+  }
+
+  // A session already waiting on a human has a Workflow generation parked mid-turn; wake that
+  // one rather than admitting a second, which would run the same turn twice.
+  if (current.status === 'awaiting_input') {
+    await wakeWaitingAthenaGeneration(current.id);
+  } else {
+    await admitAthenaGeneration(current, {
+      runnableStatuses: ['pending', 'running', 'completed', 'failed'],
+      clearEndedAt: true,
+    });
+  }
+  return { session: await loadSessionRow(sessionId), asynchronous: true };
 }
 
 /**

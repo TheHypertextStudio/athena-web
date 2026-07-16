@@ -252,8 +252,13 @@ clients receive only user messages, application-visible progress, structured act
 elicitations, and errors. SSE resumes after the exact persisted `Last-Event-ID`; it does not assume
 random ULIDs created in the same millisecond are lexically ordered.
 
-The runner is currently in-process, so create/message/run/approval routes preserve synchronous
-settle responses. No queue, Workflow, or Cloudflare dispatcher is claimed until one exists.
+Local/test execution and every registered-agent compatibility route preserve synchronous `200`
+settle responses. With the production asynchronous runner enabled, personal create, eligible chat
+message, run, approval/rejection, reply, and resume mutations persist their admission or wake first
+and return `202`; the visible parent session is `running` while its admitted generation is `queued`.
+The temporary organization-scoped compatibility routes follow the same executor split and owner
+privacy as `/v1/me/athena`. A chat already awaiting approval or canceled remains parked after a new
+message and returns `200` without dispatch, matching the canonical personal route.
 
 ## 10. User-owned assignments and triggers
 
@@ -261,7 +266,10 @@ settle responses. No queue, Workflow, or Cloudflare dispatcher is claimed until 
 initiative owner, project lead, task assignee, or task delegate, and it never creates an Athena
 Actor. Creating an assignment confirms the user's current `contribute` access, writes a personal
 inbox notice, and starts an `executorKind='athena'` session and fenced run with the Better Auth user
-as `ownerUserId`. Multiple assignments are independent and do not take entity writer leases.
+as `ownerUserId`. Initial, event-triggered, and scheduled assignment runs all enter the shared
+personal admission path: production persists and dispatches an asynchronous generation, while
+local/test execution uses the synchronous fallback. Multiple assignments are independent and do
+not take entity writer leases.
 
 `athena_trigger` belongs to the same user through an owner-matched composite foreign key. Event
 triggers accept only events in the assigned entity's live subtree. Scheduled triggers run no more

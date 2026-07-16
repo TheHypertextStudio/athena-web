@@ -20,6 +20,7 @@
         "ATHENA_*",
         "ANTHROPIC_API_KEY",
         "AGENT_MAX_TURNS",
+        "ATHENA_MAX_CONCURRENT_RUNS",
         "CRON_SECRET",
         "SENTRY_DSN",
         "BLOB_READ_WRITE_TOKEN",

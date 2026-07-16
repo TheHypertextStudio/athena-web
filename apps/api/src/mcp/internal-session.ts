@@ -1,5 +1,5 @@
 /**
- * `@docket/api` — the first-class internal MCP session for agent principals.
+ * `@docket/api` — first-class internal MCP sessions for durable executors.
  *
  * @remarks
  * Athena's loop drives Docket through the SAME `buildServer` the `/mcp` endpoint
@@ -11,12 +11,44 @@
  * still gates every tool via `requireScope`, and `resolveActor` + `canActor` bind the
  * agent to its explicit grants exactly like any caller (permissions.md §8).
  */
-import { actor, agent, db } from '@docket/db';
+import { actor, agent, db, user } from '@docket/db';
 import { eq } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import type { McpContext } from './auth';
-import type { McpScope } from './scope';
+import { MCP_SCOPES, type McpScope } from './scope';
+
+/**
+ * Resolve Athena's persisted owner into a first-party user MCP context.
+ *
+ * @remarks
+ * This intentionally resolves only the Better Auth user. The user's human Actor and
+ * grants are loaded later by {@link import('./auth').resolveActor} for every targeted
+ * workspace tool call, so membership revocation and permission changes take effect
+ * without recreating the session or toolbox.
+ *
+ * @param ownerUserId - The user id persisted on the Athena session.
+ * @returns a full first-party user context for the in-process MCP server.
+ * @throws {NotFoundError} When the persisted owner no longer exists.
+ */
+export async function internalUserContext(ownerUserId: string): Promise<McpContext> {
+  const rows = await db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(eq(user.id, ownerUserId))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('User not found');
+  return {
+    principal: {
+      kind: 'user',
+      userId: row.id,
+      userName: row.name || null,
+      userEmail: row.email,
+    },
+    scopes: [...MCP_SCOPES],
+  };
+}
 
 /**
  * The fixed scope set an internal agent session carries.

@@ -184,4 +184,13 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     zod: agentServer.AGENT_MAX_TURNS,
     where: 'Per-session turn budget for the Athena agentic loop (e.g. 24)',
   },
+  {
+    name: 'ATHENA_MAX_CONCURRENT_RUNS',
+    slice: 'agent',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: agentServer.ATHENA_MAX_CONCURRENT_RUNS,
+    where: 'Per-user Athena run limit (default 8, maximum 64)',
+  },
 ] as const;

@@ -5,8 +5,9 @@
  * Athena eats through the front door. The toolbox connects an MCP SDK client over
  * `InMemoryTransport` to the SAME {@link buildServer} the `/mcp` endpoint serves —
  * one tool catalog, two transports, zero drift with third-party agents. The context
- * is the internal agent principal ({@link internalAgentContext}), so the scope layer
- * and the per-org grant cascade gate every call exactly as they would over HTTP.
+ * is selected from the persisted session executor. Athena uses a user principal and
+ * therefore resolves the owner's current human Actor and grants on every Docket call;
+ * registered agents retain their org-scoped principal and grant path.
  *
  * The toolbox also carries the loop-owned `ask_user` tool definition: elicitations are
  * a hosting-loop concern (persist an `elicitation` activity, pause the session), not a
@@ -27,7 +28,7 @@ import { and, eq } from 'drizzle-orm';
 
 import { getContainer } from '../container';
 import { sealCredential, unsealCredential } from '../lib/credentials';
-import { internalAgentContext } from '../mcp/internal-session';
+import { internalAgentContext, internalUserContext } from '../mcp/internal-session';
 import { buildServer } from '../mcp/server';
 import type { ToolAnnotationHints } from './approval-policy';
 
@@ -83,6 +84,23 @@ export interface Toolbox {
   close(): Promise<void>;
 }
 
+/** The persisted executor identity used to open one loop toolbox. */
+export type ToolboxExecutor =
+  | {
+      /** User-owned Athena; no workspace identity is provisioned. */
+      readonly kind: 'athena';
+      /** Better Auth user id persisted on the session. */
+      readonly ownerUserId: string;
+    }
+  | {
+      /** A separately registered, workspace-owned agent. */
+      readonly kind: 'registered_agent';
+      /** The agent's owning workspace. */
+      readonly organizationId: string;
+      /** The registered agent row id. */
+      readonly agentId: string;
+    };
+
 /** Flatten an MCP result's content blocks into one text payload. */
 function flattenContent(result: CallToolResult): string {
   const parts: string[] = [];
@@ -101,12 +119,14 @@ function flattenContent(result: CallToolResult): string {
  * is fetched once and cached for the run — the same catalog+annotations any MCP client
  * sees.
  *
- * @param orgId - The organization the session runs in.
- * @param agentId - The agent registration to act as.
+ * @param executor - The persisted Athena owner or registered-agent identity.
  * @returns the connected {@link Toolbox}.
  */
-export async function openToolbox(orgId: string, agentId: string): Promise<Toolbox> {
-  const ctx = await internalAgentContext(orgId, agentId);
+export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
+  const ctx =
+    executor.kind === 'athena'
+      ? await internalUserContext(executor.ownerUserId)
+      : await internalAgentContext(executor.organizationId, executor.agentId);
   const server = buildServer(ctx);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await server.connect(serverTransport);
@@ -144,16 +164,19 @@ export async function openToolbox(orgId: string, agentId: string): Promise<Toolb
   // names never collide with Docket's). A server that fails to open is demoted to
   // `error` on its row — never silently skipped as if healthy.
   const remoteSessions = new Map<string, RemoteMcpSession>();
-  const remoteRows = await db
-    .select()
-    .from(integration)
-    .where(
-      and(
-        eq(integration.organizationId, orgId),
-        eq(integration.provider, 'mcp'),
-        eq(integration.status, 'connected'),
-      ),
-    );
+  const remoteRows =
+    executor.kind === 'registered_agent'
+      ? await db
+          .select()
+          .from(integration)
+          .where(
+            and(
+              eq(integration.organizationId, executor.organizationId),
+              eq(integration.provider, 'mcp'),
+              eq(integration.status, 'connected'),
+            ),
+          )
+      : [];
   for (const row of remoteRows) {
     const config = row.config as unknown as { url: string; alias: string };
     const credRows = await db

@@ -21,6 +21,7 @@ import type {
   agent as AgentTable,
   agentSession as AgentSessionTable,
   sessionActivity as SessionActivityTable,
+  user as UserTable,
 } from '@docket/db';
 
 import type { ActorCtx, AppEnv } from '../../src/context';
@@ -37,6 +38,7 @@ let actor!: typeof ActorTable;
 let agent!: typeof AgentTable;
 let agentSession!: typeof AgentSessionTable;
 let sessionActivity!: typeof SessionActivityTable;
+let user!: typeof UserTable;
 let agentSessions!: typeof agentSessionsRouter;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
 let DEFAULT_AGENT_NAME!: string;
@@ -64,6 +66,7 @@ beforeAll(async () => {
   agent = dbmod.agent;
   agentSession = dbmod.agentSession;
   sessionActivity = dbmod.sessionActivity;
+  user = dbmod.user;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   const helperMod = await import('../../src/lib/default-agent');
   ensureDefaultAgent = helperMod.ensureDefaultAgent;
@@ -72,6 +75,7 @@ beforeAll(async () => {
 });
 
 interface Seed {
+  readonly userId: string;
   readonly orgId: string;
   readonly humanActorId: string;
 }
@@ -85,11 +89,20 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: organization.id });
   const orgId = org!.id;
   await db.insert(team).values({ organizationId: orgId, name: 'Core', key: 'CORE' });
+  const [owner] = await db
+    .insert(user)
+    .values({ name: 'Ada', email: `${slug}@example.com` })
+    .returning({ id: user.id });
   const [human] = await db
     .insert(actor)
-    .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
+    .values({
+      organizationId: orgId,
+      kind: 'human',
+      displayName: 'Ada',
+      userId: owner!.id,
+    })
     .returning({ id: actor.id });
-  return { orgId, humanActorId: human!.id };
+  return { userId: owner!.id, orgId, humanActorId: human!.id };
 }
 
 describe('ensureDefaultAgent', () => {
@@ -147,7 +160,7 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
     expect(res.status).toBe(422);
   });
 
-  it('binds to the lazily-created default agent, persists the prompt, and runs the session', async () => {
+  it('binds omitted-agent prompts to user-owned Athena without provisioning a default agent', async () => {
     const s = await seedOrg();
     const app = appFor(s.orgId, ['contribute'], s.humanActorId);
     const res = await app.request('/', {
@@ -156,14 +169,24 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       body: JSON.stringify({ prompt: 'plan outreach strategy' }),
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { id: string; status: string; agentId: string };
+    const body = (await res.json()) as {
+      id: string;
+      status: string;
+      executorKind: string;
+      ownerUserId: string;
+      agentId: string | null;
+    };
     // The scripted mock session ends holding the approval gate.
     expect(body.status).toBe('awaiting_approval');
 
-    // The default agent was materialized and the session is bound to it.
+    // Athena belongs to the caller; no workspace agent identity is materialized.
     const agents = await db.select().from(agent).where(eq(agent.organizationId, s.orgId));
-    expect(agents).toHaveLength(1);
-    expect(body.agentId).toBe(agents[0]?.id);
+    expect(agents).toHaveLength(0);
+    expect(body).toMatchObject({
+      executorKind: 'athena',
+      ownerUserId: s.userId,
+      agentId: null,
+    });
 
     // The prompt is the session's opening `response` activity, followed by the first
     // one-turn runtime pass (thought → action).
@@ -184,6 +207,8 @@ describe('POST /sessions (create + run from a freeform prompt)', () => {
       .limit(1);
     expect(session[0]?.taskId).toBeNull();
     expect(session[0]?.initiatorId).toBe(s.humanActorId);
+    expect(session[0]?.organizationId).toBeNull();
+    expect(session[0]?.contextOrganizationId).toBe(s.orgId);
   });
 
   it('threads the freeform prompt through to the runtime as the task brief', async () => {

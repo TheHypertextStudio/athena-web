@@ -38,12 +38,12 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 
 ### Task 2: User-principal toolbox and authorization
 
-- [ ] Write failing MCP/loop tests proving Athena uses the owner's current Actor, creates no default
+- [x] Write failing MCP/loop tests proving Athena uses the owner's current Actor, creates no default
       agent/grant, loses access immediately after revocation, and gains access without reprovisioning.
-- [ ] Add an internal user MCP context and make Athena's toolbox load it from `ownerUserId`.
-- [ ] Update the loop, approved-action executor, runner, audit metadata, prompt, and concurrency owner.
-- [ ] Keep the registered-agent path unchanged and cover both executor kinds.
-- [ ] Run focused MCP/agent tests and commit the green slice.
+- [x] Add an internal user MCP context and make Athena's toolbox load it from `ownerUserId`.
+- [x] Update the loop, approved-action executor, runner, audit metadata, prompt, and concurrency owner.
+- [x] Keep the registered-agent path unchanged and cover both executor kinds.
+- [x] Run focused MCP/agent tests and commit the green slice.
 
 ### Task 3: Personal Athena APIs, privacy, and steering
 

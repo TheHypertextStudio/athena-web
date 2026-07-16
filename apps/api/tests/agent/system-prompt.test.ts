@@ -4,13 +4,23 @@ import { buildSystemPrompt } from '../../src/agent/system-prompt';
 
 const BASE = {
   agentName: 'Athena',
-  orgName: 'Operations',
+  executorKind: 'athena' as const,
+  contextName: 'Operations',
   approvalPolicy: 'autonomous' as const,
   personalInstructions: null,
   guidance: null,
 };
 
 describe('buildSystemPrompt user-owned preferences', () => {
+  it('frames Athena as the user’s personal chief of staff with workspace context only', () => {
+    const prompt = buildSystemPrompt({ ...BASE, personalApprovalMode: 'ask_before_acting' });
+
+    expect(prompt).toContain('your personal chief of staff');
+    expect(prompt).toContain('current workspace context is "Operations"');
+    expect(prompt).not.toContain('resident');
+    expect(prompt).not.toContain('inside the organization');
+  });
+
   it('places the principal instructions in every workspace session', () => {
     const prompt = buildSystemPrompt({
       ...BASE,

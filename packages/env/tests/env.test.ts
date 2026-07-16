@@ -162,6 +162,9 @@ describe('slices', () => {
     expect(() => agentServer.AGENT_MAX_TURNS.parse(undefined)).toThrow();
     expect(agentServer.AGENT_MAX_TURNS.parse('24')).toBe(24);
     expect(() => agentServer.AGENT_MAX_TURNS.parse('0')).toThrow();
+    expect(agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse(undefined)).toBeUndefined();
+    expect(agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse('64')).toBe(64);
+    expect(() => agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse('65')).toThrow();
 
     expect(() => opsServer.CRON_SECRET.parse(undefined)).toThrow();
     expect(opsServer.CRON_SECRET.parse('cron-secret')).toBe('cron-secret');

@@ -3,6 +3,7 @@ import type { SessionApprovalDecision } from '@docket/types';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
 import { proposalOrganizationId } from '../agent/proposals';
+import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { ConflictError, NotFoundError } from '../error';
 
 import type { ActivityRow, SessionRow } from './agent-session-helpers';
@@ -22,6 +23,12 @@ interface ApprovalAuthorization {
   readonly organizationId: string;
   readonly actorId: string | null;
   readonly approverActorId: string | null;
+}
+
+/** Production-only durable continuation requested by a personal route. */
+export interface HumanContinuationOptions {
+  readonly queueWake?: boolean;
+  readonly cancelSession?: boolean;
 }
 
 /** Resolve one selected action's current target and audit authorization. */
@@ -200,6 +207,7 @@ export async function decideActivity(
   sessionId: string,
   activityId: string,
   decision: SessionApprovalDecision,
+  continuation: HumanContinuationOptions = {},
 ): Promise<ActivityRow> {
   return db.transaction(async (tx) => {
     const sessionRows = await tx
@@ -299,6 +307,14 @@ export async function decideActivity(
       }
     }
 
+    if (continuation.cancelSession) {
+      await tx
+        .update(agentSession)
+        .set({ status: 'canceled', endedAt: new Date() })
+        .where(eq(agentSession.id, sessionId));
+    }
+    if (continuation.queueWake) await persistWaitingAthenaWake(tx, sessionId);
+
     return decidedTarget;
   });
 }
@@ -327,6 +343,7 @@ export async function decideProposalGroup(
   proposalGroupId: string,
   decision: 'approve' | 'reject',
   activityIds?: readonly string[],
+  continuation: HumanContinuationOptions = {},
 ): Promise<ActivityRow[]> {
   return db.transaction(async (tx) => {
     const sessionRows = await tx
@@ -392,6 +409,7 @@ export async function decideProposalGroup(
       decided.push(row);
     }
     if (decided.length === 0) throw new NotFoundError('No proposed actions in the group');
+    if (continuation.queueWake) await persistWaitingAthenaWake(tx, sessionId);
 
     return decided;
   });
@@ -419,6 +437,7 @@ export async function replyToElicitation(
   sessionId: string,
   activityId: string,
   text: string,
+  continuation: HumanContinuationOptions = {},
 ): Promise<ActivityRow> {
   return db.transaction(async (tx) => {
     const sessionRows = await tx
@@ -463,6 +482,7 @@ export async function replyToElicitation(
       .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('activity insert returned no row');
+    if (continuation.queueWake) await persistWaitingAthenaWake(tx, sessionId);
 
     return created;
   });

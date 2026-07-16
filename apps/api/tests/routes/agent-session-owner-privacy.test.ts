@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, eq, or } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -205,6 +205,18 @@ async function seedRegistered(seed: Seed, status: SessionStatus = 'pending') {
   ).id;
 }
 
+/** Attach the human-waiting generation whose wake must be committed with the mutation. */
+async function seedWaitingRun(person: Person, sessionId: string): Promise<void> {
+  await db.insert(schema.agentSessionRun).values({
+    sessionId,
+    ownerUserId: person.userId,
+    generation: 1,
+    workflowInstanceId: `${sessionId}:1`,
+    status: 'waiting',
+    attempt: 1,
+  });
+}
+
 /** Add an activity to a session, with personal or workspace attribution. */
 async function seedActivity(
   seed: Seed,
@@ -302,6 +314,7 @@ describe('owner-private Athena compatibility routes', () => {
     expect((await post(ownerApp, `/${runnable}/run`)).status).toBe(202);
 
     const approval = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedWaitingRun(seed.owner, approval);
     await seedActivity(seed, approval, 'athena', {
       type: 'action',
       approvalStatus: 'proposed',
@@ -313,6 +326,7 @@ describe('owner-private Athena compatibility routes', () => {
     expect((await post(ownerApp, `/${approval}/approve`)).status).toBe(202);
 
     const rejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedWaitingRun(seed.owner, rejection);
     await seedActivity(seed, rejection, 'athena', {
       type: 'action',
       approvalStatus: 'proposed',
@@ -321,6 +335,7 @@ describe('owner-private Athena compatibility routes', () => {
     expect((await post(ownerApp, `/${rejection}/reject`)).status).toBe(202);
 
     const activityApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedWaitingRun(seed.owner, activityApproval);
     const activityApprovalId = await seedActivity(seed, activityApproval, 'athena', {
       type: 'action',
       approvalStatus: 'proposed',
@@ -336,6 +351,7 @@ describe('owner-private Athena compatibility routes', () => {
     ).toBe(202);
 
     const activityRejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedWaitingRun(seed.owner, activityRejection);
     const activityRejectionId = await seedActivity(seed, activityRejection, 'athena', {
       type: 'action',
       approvalStatus: 'proposed',
@@ -346,6 +362,7 @@ describe('owner-private Athena compatibility routes', () => {
     ).toBe(202);
 
     const groupApproval = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedWaitingRun(seed.owner, groupApproval);
     await seedActivity(seed, groupApproval, 'athena', {
       type: 'action',
       approvalStatus: 'proposed',
@@ -362,6 +379,7 @@ describe('owner-private Athena compatibility routes', () => {
     ).toBe(202);
 
     const groupRejection = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    await seedWaitingRun(seed.owner, groupRejection);
     await seedActivity(seed, groupRejection, 'athena', {
       type: 'action',
       approvalStatus: 'proposed',
@@ -373,6 +391,7 @@ describe('owner-private Athena compatibility routes', () => {
     ).toBe(202);
 
     const asking = await seedAthena(seed, seed.owner, 'awaiting_input');
+    await seedWaitingRun(seed.owner, asking);
     const elicitation = await seedActivity(seed, asking, 'athena', {
       type: 'elicitation',
       body: { text: 'Which one?', toolUseId: 'toolu_compat_async' },
@@ -383,6 +402,7 @@ describe('owner-private Athena compatibility routes', () => {
     ).toBe(202);
 
     const resumable = await seedAthena(seed, seed.owner, 'awaiting_input');
+    await seedWaitingRun(seed.owner, resumable);
     expect((await post(ownerApp, `/${resumable}/resume`)).status).toBe(202);
 
     const registered = await post(ownerApp, '/', {
@@ -464,6 +484,29 @@ describe('owner-private Athena compatibility routes', () => {
     ).toBe(200);
     expect(runnerMocks.admit).toHaveBeenCalledTimes(3);
     expect(runnerMocks.wake).toHaveBeenCalledTimes(8);
+    const wakeIntents = await db
+      .select({ sessionId: schema.agentSessionRun.sessionId })
+      .from(schema.agentSessionDispatch)
+      .innerJoin(
+        schema.agentSessionRun,
+        eq(schema.agentSessionRun.id, schema.agentSessionDispatch.runId),
+      )
+      .where(
+        and(
+          eq(schema.agentSessionDispatch.action, 'wake'),
+          inArray(schema.agentSessionRun.sessionId, [
+            approval,
+            rejection,
+            activityApproval,
+            activityRejection,
+            groupApproval,
+            groupRejection,
+            asking,
+            resumable,
+          ]),
+        ),
+      );
+    expect(wakeIntents).toHaveLength(8);
   });
 
   it("lists only the caller's Athena work while retaining shared registered-agent sessions", async () => {

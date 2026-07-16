@@ -1,4 +1,8 @@
-import { executeGenerationWorkflow, type GenerationWorkflowStep } from '../src/workflow';
+import {
+  advanceDocket,
+  executeGenerationWorkflow,
+  type GenerationWorkflowStep,
+} from '../src/workflow';
 import type { ExecutionMessage } from '../src/protocol';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,10 +13,36 @@ const message: ExecutionMessage = {
 };
 
 describe('durable generation Workflow', () => {
+  it('aborts a stalled Workflow-to-Docket advance at the configured deadline', async () => {
+    const fetch = vi.fn(
+      async (_input: URL | RequestInfo, init?: RequestInit): Promise<Response> =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(new Error('aborted', { cause: init.signal?.reason }));
+          });
+        }),
+    );
+
+    await expect(
+      advanceDocket(
+        {
+          DOCKET_API_URL: 'https://api.example',
+          CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret',
+        },
+        message,
+        'run',
+        { fetch, timeoutMs: 1 },
+      ),
+    ).rejects.toThrow(/advance timed out/i);
+    expect((fetch.mock.calls[0]?.[1]?.signal as AbortSignal | undefined)?.aborted).toBe(true);
+  });
+
   it('waits through yearly epochs without a product duration cap and dispatches the next generation', async () => {
     const waitForEvent = vi
       .fn()
-      .mockRejectedValueOnce(new Error('timeout'))
+      .mockRejectedValueOnce(
+        Object.assign(new Error('waitForEvent timed out'), { name: 'TimeoutError' }),
+      )
       .mockResolvedValueOnce({ payload: { wakeId: 'wake-1' } });
     const doStep = vi.fn();
     const step: GenerationWorkflowStep = {
@@ -46,6 +76,27 @@ describe('durable generation Workflow', () => {
     expect(advance).toHaveBeenNthCalledWith(1, message, 'run');
     expect(advance).toHaveBeenNthCalledWith(2, message, 'wake');
     expect(dispatch).toHaveBeenCalledWith(next);
+  });
+
+  it('surfaces non-timeout wait failures instead of entering another wait epoch', async () => {
+    const failure = new Error('workflow storage unavailable');
+    const waitForEvent = vi.fn().mockRejectedValueOnce(failure).mockResolvedValueOnce({});
+    const step: GenerationWorkflowStep = {
+      async do<T>(_name: string, callback: () => Promise<T>): Promise<T> {
+        return callback();
+      },
+      waitForEvent,
+    };
+    const advance = vi
+      .fn()
+      .mockResolvedValueOnce({ state: 'wait' })
+      .mockResolvedValueOnce({ state: 'complete' });
+
+    await expect(
+      executeGenerationWorkflow(message, step, { advance, dispatch: vi.fn() }),
+    ).rejects.toBe(failure);
+    expect(waitForEvent).toHaveBeenCalledOnce();
+    expect(advance).toHaveBeenCalledOnce();
   });
 
   it('completes without dispatch when Docket reports a terminal generation', async () => {

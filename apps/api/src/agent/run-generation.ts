@@ -7,8 +7,8 @@
  * run ceiling, and commits before any provider or MCP work begins. Lease tokens fence recovered
  * workers so an expired process cannot resume writing after another worker takes over.
  */
-import { agentSession, agentSessionRun, db, genId, user } from '@docket/db';
-import { and, count, desc, eq, gt, lte, or } from 'drizzle-orm';
+import { agentSession, agentSessionDispatch, agentSessionRun, db, genId, user } from '@docket/db';
+import { and, count, desc, eq, gt, lte, ne, or } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
@@ -134,6 +134,12 @@ export async function enqueueRunGeneration(
       .orderBy(desc(agentSessionRun.generation))
       .limit(1);
     if (latest?.status === 'queued') {
+      await tx
+        .insert(agentSessionDispatch)
+        .values({ runId: latest.id, action: 'enqueue', availableAt: now })
+        .onConflictDoNothing({
+          target: [agentSessionDispatch.runId, agentSessionDispatch.action],
+        });
       return { runId: latest.id, message: messageOf(latest) };
     }
     if (
@@ -178,6 +184,11 @@ export async function enqueueRunGeneration(
       })
       .returning();
     if (!queued) throw new Error('queued run generation insert returned no row');
+    await tx.insert(agentSessionDispatch).values({
+      runId: queued.id,
+      action: 'enqueue',
+      availableAt: now,
+    });
 
     if (resumeSession) {
       await tx
@@ -237,6 +248,27 @@ export async function claimQueuedRunGeneration(
       run.leaseExpiresAt.getTime() <= now.getTime();
     if (run?.status !== 'queued' && !recoveringExpired) {
       throw new ConflictError('Queued session generation is unavailable');
+    }
+    if (recoveringExpired && current.executorKind === 'athena') {
+      const ownerUserId = current.ownerUserId;
+      if (!ownerUserId) throw new Error('Athena session is missing its owner');
+      const [active] = await tx
+        .select({ value: count() })
+        .from(agentSessionRun)
+        .where(
+          and(
+            eq(agentSessionRun.ownerUserId, ownerUserId),
+            ne(agentSessionRun.id, run.id),
+            or(
+              eq(agentSessionRun.status, 'queued'),
+              and(eq(agentSessionRun.status, 'running'), gt(agentSessionRun.leaseExpiresAt, now)),
+            ),
+          ),
+        );
+      const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
+      if ((active?.value ?? 0) >= limit) {
+        throw new ConflictError('Athena has reached the concurrent run limit');
+      }
     }
 
     const [claimed] = await tx

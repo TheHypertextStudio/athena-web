@@ -7,6 +7,7 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { persistWaitingAthenaWake } from '../agent/async-runner';
 import { AuthError, CapabilityError, ConflictError, NotFoundError } from '../error';
 
 /** SessionRow is the selected database row shape consumed by these API route serializers. */
@@ -169,6 +170,12 @@ export const listQuery = z.object({ status: SessionStatus.optional() });
 /** A session lifecycle transition the reviewer may drive directly. */
 export type LifecycleAction = 'pause' | 'resume' | 'cancel';
 
+/** Durable continuation effects that must commit with a lifecycle transition. */
+export interface LifecycleTransitionOptions {
+  /** Persist a wake for the latest waiting Athena generation in the same transaction. */
+  readonly queueWake?: boolean;
+}
+
 /**
  * Drive a session lifecycle transition (contract §3.11 pause/resume/cancel).
  *
@@ -182,6 +189,7 @@ export type LifecycleAction = 'pause' | 'resume' | 'cancel';
 export async function transitionLifecycle(
   session: SessionRow,
   action: LifecycleAction,
+  options: LifecycleTransitionOptions = {},
 ): Promise<SessionRow> {
   let nextStatus: z.infer<typeof SessionStatus>;
   if (action === 'pause') {
@@ -200,15 +208,18 @@ export async function transitionLifecycle(
     nextStatus = 'canceled';
   }
 
-  const [updated] = await db
-    .update(agentSession)
-    .set({
-      status: nextStatus,
-      ...(nextStatus === 'canceled' ? { endedAt: new Date() } : {}),
-    })
-    .where(eq(agentSession.id, session.id))
-    .returning();
-  /* v8 ignore next -- @preserve defensive: update always returns a row */
-  if (!updated) throw new Error('session update returned no row');
-  return updated;
+  return db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(agentSession)
+      .set({
+        status: nextStatus,
+        ...(nextStatus === 'canceled' ? { endedAt: new Date() } : {}),
+      })
+      .where(eq(agentSession.id, session.id))
+      .returning();
+    /* v8 ignore next -- @preserve defensive: update always returns a row */
+    if (!updated) throw new Error('session update returned no row');
+    if (options.queueWake) await persistWaitingAthenaWake(tx, session.id);
+    return updated;
+  });
 }

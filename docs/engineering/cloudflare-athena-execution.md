@@ -18,8 +18,10 @@ inputs, provider credentials, and MCP credentials must never be added to this me
 ## Runtime flow
 
 1. Docket locks the Athena owner and session, enforces owner concurrency, and commits a new
-   `agent_session_run` row with `status='queued'`.
-2. Docket signs `POST /enqueue` with the Docket-to-Cloudflare secret. The runner authenticates the
+   `agent_session_run` row with `status='queued'` and its unique `enqueue` outbox intent in one
+   transaction.
+2. A dispatcher claims the intent with a short lease, then Docket signs `POST /enqueue` with the
+   Docket-to-Cloudflare secret. The runner authenticates the
    complete method/path/body/timestamp/nonce request and asks Docket to persist the authenticated
    nonce before it sends the opaque message to Queue.
 3. The Queue consumer creates `docket-athena-execution` with the deterministic instance id.
@@ -31,9 +33,14 @@ inputs, provider credentials, and MCP credentials must never be added to this me
 5. A completed quantum commits the next queued generation before the Workflow dispatches it. A
    terminal session ends. Approval or input settles the run as `waiting` and the Workflow enters a
    durable event wait.
-6. An owner decision or reply is committed in Docket first, then signed `POST /wake` delivers a
-   `docket_wake` event. The Workflow calls Docket again; Docket creates the next generation and the
-   Workflow dispatches it.
+6. An owner decision, reply, awaiting-input message, resume, or waiting-session cancellation commits
+   its unique `wake` intent in the same transaction as the human mutation. Signed `POST /wake`
+   then delivers a `docket_wake` event. The Workflow calls Docket again; Docket creates the next
+   generation and the Workflow dispatches it.
+7. The Worker cron calls the protected Docket sweep every minute. It claims no more than 25 due or
+   expired-lease intents, marks an intent delivered only after Worker `202`, and retries failures
+   with capped exponential backoff. Eight failed attempts move the intent to `failed` for operator
+   attention.
 
 Cloudflare limits one `waitForEvent` timeout to 365 days. The Workflow uses deterministic yearly
 wait epochs and starts another epoch after timeout, so this infrastructure limit is not a Docket
@@ -44,18 +51,21 @@ and [Workflow limits](https://developers.cloudflare.com/workflows/reference/limi
 
 The checked-in [`wrangler.jsonc`](../../apps/runner/wrangler.jsonc) declares:
 
-| Resource | Name                      | Purpose                                        |
-| -------- | ------------------------- | ---------------------------------------------- |
-| Worker   | `docket-athena-runner`    | Signed ingress, Queue consumer, Workflow class |
-| Queue    | `docket-athena-runs`      | Opaque persisted generation messages           |
-| DLQ      | `docket-athena-runs-dlq`  | Messages exhausted after five delivery retries |
-| Workflow | `docket-athena-execution` | One durable instance per run generation        |
+| Resource | Name                      | Purpose                                              |
+| -------- | ------------------------- | ---------------------------------------------------- |
+| Worker   | `docket-athena-runner`    | Signed ingress, cron, Queue consumer, Workflow class |
+| Queue    | `docket-athena-runs`      | Opaque persisted generation messages                 |
+| DLQ      | `docket-athena-runs-dlq`  | Messages exhausted after five delivery retries       |
+| Workflow | `docket-athena-execution` | One durable instance per run generation              |
 
 Queue delivery is at least once. The implementation therefore uses per-message acknowledgement,
 deterministic Workflow ids, Docket generation uniqueness, and replay-safe callbacks rather than
 assuming a message is delivered once. The configuration follows Cloudflare's current [retry and
 batching contract](https://developers.cloudflare.com/queues/configuration/batching-retries/) and
 [dead-letter queue guidance](https://developers.cloudflare.com/queues/configuration/dead-letter-queues/).
+The checked-in `* * * * *` cron is recovery only: request traffic still attempts immediate
+delivery, while the cron closes process-crash and transient-network windows without scanning an
+unbounded number of rows.
 
 ## Configuration and secrets
 
@@ -115,13 +125,27 @@ when upgrading.
 
 ## Operations and recovery
 
+- The protected manual recovery route is
+  `POST /internal/athena/execution/dispatch/sweep` with body `{}`. It requires the standard
+  Cloudflare-to-Docket HMAC headers and durable nonce claim used by the Workflow callback, accepts
+  at most 4 KiB of streamed request data, runs the same 25-intent bounded sweep as cron, and returns
+  only `claimed`, `delivered`, `retried`, and `failed` counts. Operators may invoke it with an
+  approved internal HMAC signer when an immediate pass is needed; never expose it through public
+  OpenAPI or copy a production secret into shell history.
+- Worker ingress and Docket's internal execution ingress count actual streamed bytes and cancel the
+  reader after 4 KiB, regardless of `Content-Length`. API-to-Worker, Worker-to-Docket nonce claim,
+  Workflow-to-Docket advance, and scheduled sweep requests abort after 10 seconds.
+- Inspect `agent_session_dispatch.status='failed'` as an attention queue. `last_error` is a bounded
+  application-owned category; the table never stores prompts, identities, credentials, tool input,
+  or provider error text.
 - A growing DLQ means the original Docket rows remain authoritative. Inspect the Docket run status,
   Worker structured logs, Queue message attempts, and Workflow instance status before replaying.
 - Retrying a queued Docket request reuses the same queued generation. Retrying a Workflow callback
   returns the already-persisted wait, terminal state, or successor generation. If that callback
   finds its exact generation still `running` with an expired lease, it reclaims the row with an
   incremented attempt and a new fencing token; a fresh lease remains unavailable, and the prior
-  token cannot commit transcript, activity, or tool-effect state.
+  token cannot commit transcript, activity, or tool-effect state. Exact-generation recovery locks
+  the owner and rechecks capacity while excluding only that expired row.
 - Never replay an `executing` action automatically. That state is the existing non-repeatable MCP
   dispatch boundary and requires human attention after interruption.
 - Rotate secrets one direction at a time with a coordinated Docket/Worker update. Requests signed

@@ -3,6 +3,7 @@ import { isExecutionMessage } from './protocol';
 
 const NONCE_CLAIM_PATH = '/internal/athena/execution/nonces/claim';
 const MAX_REQUEST_BYTES = 4096;
+const DEFAULT_OUTBOUND_TIMEOUT_MS = 10_000;
 
 /** Secrets and binding surface needed by the runner's signed HTTP ingress. */
 export interface RunnerHttpEnv {
@@ -16,6 +17,30 @@ export interface RunnerHttpEnv {
 /** Injectable network boundary used to persist replay nonces in Docket. */
 export interface RunnerHttpDependencies {
   readonly fetch: typeof fetch;
+  readonly timeoutMs?: number;
+}
+
+async function readBoundedBody(request: Request): Promise<string | null> {
+  if (!request.body) return '';
+  const reader = request.body.getReader();
+  const decoder = new TextDecoder();
+  let total = 0;
+  let body = '';
+  try {
+    for (;;) {
+      const chunk = (await reader.read()) as ReadableStreamReadResult<Uint8Array>;
+      if (chunk.done) break;
+      total += chunk.value.byteLength;
+      if (total > MAX_REQUEST_BYTES) {
+        await reader.cancel('request too large');
+        return null;
+      }
+      body += decoder.decode(chunk.value, { stream: true });
+    }
+    return body + decoder.decode();
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /** Persist an authenticated Docket-to-Cloudflare nonce before accepting its side effect. */
@@ -36,6 +61,7 @@ async function claimInboundNonce(
     method: 'POST',
     headers,
     body,
+    signal: AbortSignal.timeout(dependencies.timeoutMs ?? DEFAULT_OUTBOUND_TIMEOUT_MS),
   });
   if (response.status === 409) return false;
   if (!response.ok) {
@@ -53,12 +79,8 @@ export function createRunnerFetchHandler(
     if (request.method !== 'POST' || (url.pathname !== '/enqueue' && url.pathname !== '/wake')) {
       return Response.json({ error: 'not_found' }, { status: 404 });
     }
-    const declaredLength = Number(request.headers.get('content-length') ?? '0');
-    if (declaredLength > MAX_REQUEST_BYTES) {
-      return Response.json({ error: 'request_too_large' }, { status: 413 });
-    }
-    const body = await request.text();
-    if (new TextEncoder().encode(body).byteLength > MAX_REQUEST_BYTES) {
+    const body = await readBoundedBody(request);
+    if (body === null) {
       return Response.json({ error: 'request_too_large' }, { status: 413 });
     }
 
@@ -73,11 +95,11 @@ export function createRunnerFetchHandler(
         claimNonce: (nonce, expiresAtMs) =>
           claimInboundNonce(env, dependencies, nonce, expiresAtMs),
       });
-    } catch (error) {
+    } catch {
       console.error(
         JSON.stringify({
           event: 'athena_runner_nonce_claim_failed',
-          error: error instanceof Error ? error.message : 'unknown',
+          error: 'unavailable',
         }),
       );
       return Response.json({ error: 'nonce_store_unavailable' }, { status: 503 });

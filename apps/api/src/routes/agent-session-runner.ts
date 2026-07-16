@@ -282,27 +282,46 @@ async function applyReplyToSession(
   sessionId: string,
   actorId: string | null,
   text: string,
-): Promise<void> {
-  const session = await loadSessionRow(sessionId);
-  // User-owned Athena work is never attributed to a workspace: the schema's attribution
-  // check requires exactly one of owner/org, so an `athena` session's rows carry the owner
-  // and a null org even when the caller reached this route through one.
-  const attributedOrgId = session.executorKind === 'athena' ? null : orgId;
+): Promise<SessionRow> {
+  return db.transaction(async (tx) => {
+    // Locked for the whole write: the visible activity, the transcript turn, and the wake
+    // marker have to land together, or a crash between them leaves a reply the runner will
+    // never answer and a transcript that disagrees with the stream.
+    const [session] = await tx
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, sessionId))
+      .for('update');
+    if (!session) throw new NotFoundError('Session not found');
 
-  await db.insert(sessionActivity).values({
-    sessionId,
-    organizationId: attributedOrgId,
-    type: 'response',
-    body: { text, author: 'user' },
+    // User-owned Athena work is never attributed to a workspace: the schema's attribution
+    // check requires exactly one of owner/org, so an `athena` session's rows carry the owner
+    // and a null org even when the caller reached this route through one.
+    const attributedOrgId = session.executorKind === 'athena' ? null : orgId;
+
+    await tx.insert(sessionActivity).values({
+      sessionId,
+      organizationId: attributedOrgId,
+      type: 'response',
+      body: { text, author: 'user' },
+    });
+    const messages = await loadTranscript(tx, sessionId);
+    await saveTranscript(
+      tx,
+      sessionId,
+      attributedOrgId,
+      [...messages, { role: 'user', content: [{ type: 'text', text }] }],
+      session.ownerUserId,
+    );
+    if (
+      session.executorKind === 'athena' &&
+      asynchronousRunnerEnabled() &&
+      session.status === 'awaiting_input'
+    ) {
+      await persistWaitingAthenaWake(tx, sessionId);
+    }
+    return session;
   });
-  const messages = await loadTranscript(db, sessionId);
-  await saveTranscript(
-    db,
-    sessionId,
-    attributedOrgId,
-    [...messages, { role: 'user', content: [{ type: 'text', text }] }],
-    session.ownerUserId,
-  );
 }
 
 /**
@@ -331,8 +350,7 @@ export async function postReplyAndResume(
   actorId: string | null,
   text: string,
 ): Promise<ReplyOutcome> {
-  await applyReplyToSession(orgId, sessionId, actorId, text);
-  const current = await loadSessionRow(sessionId);
+  const current = await applyReplyToSession(orgId, sessionId, actorId, text);
 
   // A parked or cancelled thread takes the message but starts nothing: approval is the only
   // thing that resumes the first, and nothing resumes the second.

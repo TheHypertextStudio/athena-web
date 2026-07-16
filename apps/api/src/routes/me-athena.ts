@@ -22,6 +22,8 @@ import { z } from 'zod';
 import {
   admitAthenaGeneration,
   asynchronousRunnerEnabled,
+  persistWaitingAthenaWake,
+  queueWaitingAthenaWake,
   wakeWaitingAthenaGeneration,
 } from '../agent/async-runner';
 import {
@@ -247,33 +249,51 @@ async function appendMessage(
   session: SessionRow,
   body: z.input<typeof AthenaMessageBody>,
   ownerUserId: string,
-): Promise<void> {
+): Promise<SessionRow> {
   const invocation = await resolveAthenaInvocation(ownerUserId, body.context);
   const context = invocation.context;
-  if (context?.workspaceId && context.workspaceId !== session.contextOrganizationId) {
-    await db
-      .update(agentSession)
-      .set({ contextOrganizationId: context.workspaceId, initiatorId: invocation.actorId })
-      .where(eq(agentSession.id, session.id));
-  }
-  await db.insert(sessionActivity).values({
-    sessionId: session.id,
-    organizationId: null,
-    type: 'response',
-    body: {
-      text: body.body,
-      author: 'user',
-      ...(context ? { context } : {}),
-    },
+  return db.transaction(async (tx) => {
+    const [locked] = await tx
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, session.id))
+      .for('update');
+    if (locked?.ownerUserId !== ownerUserId || locked.executorKind !== 'athena') {
+      throw new NotFoundError('Session not found');
+    }
+    let current = locked;
+    if (context?.workspaceId && context.workspaceId !== locked.contextOrganizationId) {
+      const [focused] = await tx
+        .update(agentSession)
+        .set({ contextOrganizationId: context.workspaceId, initiatorId: invocation.actorId })
+        .where(eq(agentSession.id, session.id))
+        .returning();
+      if (!focused) throw new Error('session focus update returned no row');
+      current = focused;
+    }
+    await tx.insert(sessionActivity).values({
+      sessionId: session.id,
+      organizationId: null,
+      type: 'response',
+      body: {
+        text: body.body,
+        author: 'user',
+        ...(context ? { context } : {}),
+      },
+    });
+    const messages = await loadTranscript(tx, session.id);
+    await saveTranscript(
+      tx,
+      session.id,
+      null,
+      [...messages, { role: 'user', content: [{ type: 'text', text: body.body }] }],
+      ownerUserId,
+    );
+    if (asynchronousRunnerEnabled() && current.status === 'awaiting_input') {
+      await persistWaitingAthenaWake(tx, current.id);
+    }
+    return current;
   });
-  const messages = await loadTranscript(db, session.id);
-  await saveTranscript(
-    db,
-    session.id,
-    null,
-    [...messages, { role: 'user', content: [{ type: 'text', text: body.body }] }],
-    ownerUserId,
-  );
 }
 
 /** Load the latest still-proposed action in deterministic activity order. */
@@ -421,8 +441,8 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await currentChat(owner);
-      await appendMessage(session, c.req.valid('json'), owner);
-      const mode = await driveAfterMessage(session);
+      const current = await appendMessage(session, c.req.valid('json'), owner);
+      const mode = await driveAfterMessage(current);
       const detail = await personalDetail(owner, session.id);
       return mode === 'async'
         ? accepted(c, AthenaSessionDetailOut, detail)
@@ -514,8 +534,8 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      await appendMessage(session, c.req.valid('json'), owner);
-      const mode = await driveAfterMessage(session);
+      const current = await appendMessage(session, c.req.valid('json'), owner);
+      const mode = await driveAfterMessage(current);
       const detail = await personalDetail(owner, session.id);
       return mode === 'async'
         ? accepted(c, AthenaSessionDetailOut, detail)
@@ -657,7 +677,9 @@ const meAthena = new Hono<AppEnv>()
         ...(body?.scope ? { scope: body.scope } : {}),
       };
       if (asynchronousRunnerEnabled()) {
-        await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision);
+        await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision, {
+          queueWake: true,
+        });
         await wakeWaitingAthenaGeneration(id);
         return accepted(c, SessionActivityOut, toActivityOut(await loadActivity(id, activityId)));
       }
@@ -686,7 +708,9 @@ const meAthena = new Hono<AppEnv>()
         ...(body?.scope ? { scope: body.scope } : {}),
       };
       if (asynchronousRunnerEnabled()) {
-        await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision);
+        await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision, {
+          queueWake: true,
+        });
         await wakeWaitingAthenaGeneration(id);
         return accepted(c, SessionActivityOut, toActivityOut(await loadActivity(id, activityId)));
       }
@@ -715,6 +739,7 @@ const meAthena = new Hono<AppEnv>()
         id,
         activityId,
         c.req.valid('json').body,
+        asynchronousRunnerEnabled() ? { queueWake: true } : {},
       );
       if (asynchronousRunnerEnabled()) {
         await wakeWaitingAthenaGeneration(id);
@@ -747,6 +772,7 @@ const meAthena = new Hono<AppEnv>()
           groupId,
           'approve',
           c.req.valid('json').activityIds,
+          { queueWake: true },
         );
         await wakeWaitingAthenaGeneration(id);
         return accepted(c, AthenaSessionDetailOut, await personalDetail(owner, id));
@@ -785,6 +811,7 @@ const meAthena = new Hono<AppEnv>()
           groupId,
           'reject',
           c.req.valid('json').activityIds,
+          { queueWake: true },
         );
         await wakeWaitingAthenaGeneration(id);
         return accepted(c, AthenaSessionDetailOut, await personalDetail(owner, id));
@@ -837,6 +864,7 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
       if (asynchronousRunnerEnabled()) {
+        await queueWaitingAthenaWake(session.id);
         await wakeWaitingAthenaGeneration(session.id);
         const current = await loadOwnedSession(owner, session.id);
         return accepted(
@@ -866,12 +894,21 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      const updated = await transitionLifecycle(session, 'cancel');
-      if (
+      const shouldWake =
         asynchronousRunnerEnabled() &&
-        (session.status === 'awaiting_input' || session.status === 'awaiting_approval')
-      ) {
+        (session.status === 'awaiting_input' || session.status === 'awaiting_approval');
+      const updated = await transitionLifecycle(
+        session,
+        'cancel',
+        shouldWake ? { queueWake: true } : {},
+      );
+      if (shouldWake) {
         await wakeWaitingAthenaGeneration(session.id);
+        return accepted(
+          c,
+          AthenaSessionSummaryOut,
+          personalSummary(updated, await sessionActivities(updated.id)),
+        );
       }
       return ok(
         c,
@@ -896,9 +933,14 @@ const meAthena = new Hono<AppEnv>()
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
       if (asynchronousRunnerEnabled()) {
         const action = await latestProposedAction(session.id);
-        await decideActivity(session.contextOrganizationId ?? '', null, session.id, action.id, {
-          decision: 'approve',
-        });
+        await decideActivity(
+          session.contextOrganizationId ?? '',
+          null,
+          session.id,
+          action.id,
+          { decision: 'approve' },
+          { queueWake: true },
+        );
         await wakeWaitingAthenaGeneration(session.id);
         const current = await loadOwnedSession(owner, session.id);
         return accepted(
@@ -934,11 +976,19 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
       const action = await latestProposedAction(session.id);
-      await decideActivity(session.contextOrganizationId ?? '', null, session.id, action.id, {
-        decision: 'reject',
-      });
-      const updated = await transitionLifecycle(session, 'cancel');
-      if (asynchronousRunnerEnabled()) {
+      const asynchronous = asynchronousRunnerEnabled();
+      await decideActivity(
+        session.contextOrganizationId ?? '',
+        null,
+        session.id,
+        action.id,
+        { decision: 'reject' },
+        asynchronous ? { queueWake: true, cancelSession: true } : {},
+      );
+      const updated = asynchronous
+        ? await loadOwnedSession(owner, session.id)
+        : await transitionLifecycle(session, 'cancel');
+      if (asynchronous) {
         await wakeWaitingAthenaGeneration(session.id);
         return accepted(
           c,

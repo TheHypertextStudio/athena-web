@@ -212,4 +212,53 @@ describe('queued Athena generations', () => {
       .where(eq(agentSessionRun.id, first.lease.runId));
     expect(run).toMatchObject({ status: 'running', attempt: 2 });
   });
+
+  it('rechecks owner capacity before reclaiming an expired exact generation', async () => {
+    const seed = await seedPendingAthena();
+    const [session] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(session!);
+    const claimedAt = new Date('2026-07-16T20:00:00.000Z');
+    const first = await claimQueuedRunGeneration(queued.message, {
+      now: claimedAt,
+      leaseDurationMs: 1_000,
+    });
+    const competingSessions = await dbModule.db
+      .insert(agentSession)
+      .values(
+        Array.from({ length: 8 }, () => ({
+          executorKind: 'athena' as const,
+          ownerUserId: seed.ownerUserId,
+          trigger: 'delegation' as const,
+          status: 'running' as const,
+        })),
+      )
+      .returning({ id: agentSession.id });
+    await dbModule.db.insert(agentSessionRun).values(
+      competingSessions.map(({ id }) => ({
+        sessionId: id,
+        ownerUserId: seed.ownerUserId,
+        generation: 1,
+        workflowInstanceId: `${id}:1`,
+        status: 'running' as const,
+        attempt: 1,
+        leaseToken: `competing-${id}`,
+        leaseExpiresAt: new Date(claimedAt.getTime() + 61_000),
+      })),
+    );
+
+    await expect(
+      claimQueuedRunGeneration(queued.message, {
+        now: new Date(claimedAt.getTime() + 1_000),
+        leaseDurationMs: 60_000,
+      }),
+    ).rejects.toThrow(/concurrent run limit/i);
+    const [run] = await dbModule.db
+      .select()
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.id, first.lease.runId));
+    expect(run).toMatchObject({ attempt: 1, leaseToken: first.lease.leaseToken });
+  });
 });

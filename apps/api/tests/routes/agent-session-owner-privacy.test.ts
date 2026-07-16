@@ -355,11 +355,6 @@ describe('owner-private Athena compatibility routes', () => {
     );
 
     const lifecycleSession = await seedAthena(seed, seed.owner, 'awaiting_input');
-    await db.insert(schema.agentSessionTranscript).values({
-      sessionId: lifecycleSession,
-      ownerUserId: seed.owner.userId,
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'Continue.' }] }],
-    });
     const lifecycleResponse = await ownerApp.request(`/${lifecycleSession}/resume`, {
       method: 'POST',
     });
@@ -367,24 +362,6 @@ describe('owner-private Athena compatibility routes', () => {
     expect(((await lifecycleResponse.json()) as { status: string }).status).toBe('completed');
 
     const replySession = await seedAthena(seed, seed.owner, 'awaiting_input');
-    await db.insert(schema.agentSessionTranscript).values({
-      sessionId: replySession,
-      ownerUserId: seed.owner.userId,
-      messages: [
-        { role: 'user', content: [{ type: 'text', text: 'Help me choose.' }] },
-        {
-          role: 'assistant',
-          content: [
-            {
-              type: 'tool_use',
-              id: 'toolu_owner_reply',
-              name: 'ask_user',
-              input: { question: 'Which task?' },
-            },
-          ],
-        },
-      ],
-    });
     const elicitation = await seedActivity(seed, replySession, 'athena', {
       type: 'elicitation',
       body: { text: 'Which task?', toolUseId: 'toolu_owner_reply' },

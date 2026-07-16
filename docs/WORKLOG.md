@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-15
+> **Last Updated**: 2026-07-16
 
 ---
 
@@ -163,6 +163,18 @@
      entry-specific durable drive primitives that transition state only inside the claim transaction.
   4. Run focused durability, personal API, owner-privacy, and proposal tests plus API and root gates;
      self-review the linear history and commit the integration fix without merging or pushing.
+- **Plan (platform integration review blockers)**:
+  1. Add red personal and organization-compatibility route regressions proving transcript-free
+     Athena reply and explicit-resume entries claim an owner-admitted durable generation, while
+     transcript-free registered-agent compatibility rows alone retain the legacy status fallback.
+  2. Add red activity and proposal-group regressions for approval capacity contention followed by
+     retry, including concurrent retries and assertions for one decision audit and one tool effect.
+  3. Route every Athena reply/resume through durable drive admission regardless of transcript state,
+     and make an already-approved pending action or group an idempotent approval retry without
+     reopening the decision race or duplicating its audit.
+  4. Run the focused platform/durability suite set and all repository gates, update validation and
+     retrospective evidence, self-review the diff, and commit this fix atomically without rebasing,
+     merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -355,6 +367,25 @@
   must own both admission and the `running` transition. Approval decisions remain independently
   durable: an admitted worker may execute only selected approved rows while the session stays parked
   for the rest of its review queue.
+- **Platform Integration Review Fix**: Transcript presence no longer selects Athena's execution
+  path. Personal and organization-compatibility reply/resume doors always claim an owner-admitted
+  generation before initializing or consuming a transcript; only transcript-free registered-agent
+  legacy rows retain the status-only fallback. Approval capacity contention now leaves a coherent
+  `awaiting_approval` session with durable `approved` actions. Retrying the same activity, proposal
+  group, or latest-action shortcut reuses that decision and audit, then competes for the generation
+  lease; the winner alone advances `approved → executing` and dispatches the tool.
+- **Platform Integration Review Validation**: Red route tests showed transcript-free Athena reply
+  and resume entries created no run row, while red activity/group tests showed an approved action
+  could not be reached after owner capacity was released. Focused durability, personal, privacy,
+  proposal, flow, and review coverage passes 7 files and 97/97 tests. API typecheck and lint pass.
+  Final root validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks, including
+  tooling 46/46 and API 147 files with 1,309/1,309 tests), and build (3/3 tasks). `git diff --check`
+  and the zero-merge history check pass. The only recurring diagnostic is local Node 24.14.0 versus
+  the declared minimum 24.15.0.
+- **Platform Integration Review Retrospective**: A durable approval decision and executable
+  admission are separate commits by necessity, so the state between them must be a first-class
+  retry point rather than an unreachable transient. Keeping `approved` retryable and `executing`
+  non-repeatable preserves both human audit idempotency and the external tool dispatch boundary.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

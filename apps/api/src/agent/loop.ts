@@ -975,6 +975,42 @@ async function executeApprovedGeneration(
   }
 }
 
+/** Whether an activity decision was already durably approved but has not reached dispatch. */
+async function isRetryableActivityApproval(
+  sessionId: string,
+  activityId: string,
+): Promise<boolean> {
+  const [activity] = await db
+    .select({ approvalStatus: sessionActivity.approvalStatus, type: sessionActivity.type })
+    .from(sessionActivity)
+    .where(and(eq(sessionActivity.id, activityId), eq(sessionActivity.sessionId, sessionId)))
+    .limit(1);
+  return activity?.type === 'action' && activity.approvalStatus === 'approved';
+}
+
+/** Whether the selected proposal group is wholly in the retryable approved-before-dispatch state. */
+async function isRetryableGroupApproval(
+  sessionId: string,
+  proposalGroupId: string,
+  activityIds?: readonly string[],
+): Promise<boolean> {
+  const members = await db
+    .select({ id: sessionActivity.id, approvalStatus: sessionActivity.approvalStatus })
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.proposalGroupId, proposalGroupId),
+      ),
+    );
+  const wanted = activityIds ? new Set(activityIds) : null;
+  const selected = wanted ? members.filter(({ id }) => wanted.has(id)) : members;
+  return (
+    selected.length > 0 && selected.every(({ approvalStatus }) => approvalStatus === 'approved')
+  );
+}
+
 /**
  * Decide a whole proposal group (optionally a subset), execute what was approved, and
  * resume the loop when the session came back to `running`.
@@ -1001,14 +1037,19 @@ export async function approveGroupAndResume(
   activityIds?: readonly string[],
   deps: LoopDeps = {},
 ): Promise<SessionRow> {
-  await decideProposalGroup(
-    orgId,
-    approverActorId,
-    sessionId,
-    proposalGroupId,
-    decision,
-    activityIds,
-  );
+  const retryingApprovedGroup =
+    decision === 'approve' &&
+    (await isRetryableGroupApproval(sessionId, proposalGroupId, activityIds));
+  if (!retryingApprovedGroup) {
+    await decideProposalGroup(
+      orgId,
+      approverActorId,
+      sessionId,
+      proposalGroupId,
+      decision,
+      activityIds,
+    );
+  }
 
   const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
   /* v8 ignore next -- @preserve defensive: decideProposalGroup already 404'd unknown sessions */
@@ -1049,7 +1090,11 @@ export async function approveAndResume(
   decision: SessionApprovalDecision,
   deps: LoopDeps = {},
 ): Promise<SessionRow> {
-  await decideActivity(orgId, approverActorId, sessionId, activityId, decision);
+  const retryingApprovedActivity =
+    decision.decision === 'approve' && (await isRetryableActivityApproval(sessionId, activityId));
+  if (!retryingApprovedActivity) {
+    await decideActivity(orgId, approverActorId, sessionId, activityId, decision);
+  }
 
   const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
   /* v8 ignore next -- @preserve defensive: decideActivity already 404'd unknown sessions */
@@ -1082,7 +1127,7 @@ export async function approveLatestAndResume(
   if (session.status !== 'awaiting_approval') {
     throw new ConflictError('Session is not awaiting approval');
   }
-  const [action] = await db
+  const [proposedAction] = await db
     .select({ id: sessionActivity.id })
     .from(sessionActivity)
     .where(
@@ -1094,6 +1139,21 @@ export async function approveLatestAndResume(
     )
     .orderBy(desc(sessionActivity.createdAt))
     .limit(1);
+  const [approvedAction] = proposedAction
+    ? []
+    : await db
+        .select({ id: sessionActivity.id })
+        .from(sessionActivity)
+        .where(
+          and(
+            eq(sessionActivity.sessionId, sessionId),
+            eq(sessionActivity.type, 'action'),
+            eq(sessionActivity.approvalStatus, 'approved'),
+          ),
+        )
+        .orderBy(desc(sessionActivity.createdAt))
+        .limit(1);
+  const action = proposedAction ?? approvedAction;
   if (!action) throw new ConflictError('No proposed action awaiting approval');
   return approveAndResume(
     orgId,

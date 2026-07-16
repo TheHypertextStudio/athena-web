@@ -662,11 +662,7 @@ const meAthena = new Hono<AppEnv>()
         activityId,
         c.req.valid('json').body,
       );
-      if ((await loadTranscript(db, id)).length > 0) {
-        await resumeSessionExecution(workspaceId, id);
-      } else if (session.status === 'awaiting_input') {
-        await transitionLifecycle(session, 'resume');
-      }
+      await resumeSessionExecution(workspaceId, id);
       return ok(c, SessionActivityOut, toActivityOut(created));
     },
   )
@@ -758,10 +754,7 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      const updated =
-        (await loadTranscript(db, session.id)).length > 0
-          ? await resumeSessionExecution(session.contextOrganizationId ?? '', session.id)
-          : await transitionLifecycle(session, 'resume');
+      const updated = await resumeSessionExecution(session.contextOrganizationId ?? '', session.id);
       return ok(
         c,
         AthenaSessionSummaryOut,

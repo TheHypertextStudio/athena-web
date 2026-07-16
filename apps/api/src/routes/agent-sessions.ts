@@ -549,10 +549,10 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { session } = await loadSessionAccess(c, id, 'contribute');
       const body = c.req.valid('json');
       const created = await replyToElicitation(orgId, id, activityId, body.body);
-      // Resume-on-user-message: when the reply un-parked the session and the loop owns
-      // it (a transcript exists), drive it forward — the reconcile step feeds the reply
-      // to the model as the ask_user tool result.
-      if ((await loadTranscript(db, id)).length > 0) {
+      // Athena always enters through durable admission, initializing a missing transcript only
+      // after its claim. Registered-agent rows keep the status-only fallback solely for legacy
+      // sessions whose conversation state was never persisted.
+      if (session.executorKind === 'athena' || (await loadTranscript(db, id)).length > 0) {
         await resumeSessionExecution(orgId, id);
       } else if (session.status === 'awaiting_input') {
         await transitionLifecycle(session, 'resume');
@@ -585,7 +585,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       tag: 'Agents',
       summary: 'Resume an agent session',
       response: AgentSessionOut,
-      description: `Resume a session that is parked in \`awaiting_input\`. Transcript-backed work re-enters the same durable generation admission used by initial runs, so Athena's owner ceiling and same-session mutex apply before provider execution; legacy rows without a transcript retain the compatibility status transition. Only an \`awaiting_input\` session may be resumed; any other state yields 409, and missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`contribute\`.`,
+      description: `Resume a session that is parked in \`awaiting_input\`. Every Athena entry re-enters durable generation admission before provider execution, including rows whose transcript has not been initialized yet, so the owner's concurrency ceiling and same-session mutex always apply. Only transcript-free registered-agent legacy rows retain the compatibility status transition. Any other state yields 409, and missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`contribute\`.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -593,7 +593,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
       const updated =
-        (await loadTranscript(db, id)).length > 0
+        session.executorKind === 'athena' || (await loadTranscript(db, id)).length > 0
           ? await resumeSessionExecution(orgId, id)
           : await transitionLifecycle(session, 'resume');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);

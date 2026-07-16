@@ -9,6 +9,7 @@ import type * as DbModule from '@docket/db';
 
 import type {
   approveAndResume as ApproveAndResume,
+  approveGroupAndResume as ApproveGroupAndResume,
   driveSession as DriveSession,
   executeApprovedActions as ExecuteApprovedActions,
   GenerationEffectKind,
@@ -22,6 +23,7 @@ let db!: typeof DbModule.db;
 let runtime!: typeof AgentRuntimeModule;
 let driveSession!: typeof DriveSession;
 let approveAndResume!: typeof ApproveAndResume;
+let approveGroupAndResume!: typeof ApproveGroupAndResume;
 let executeApprovedActions!: typeof ExecuteApprovedActions;
 let toolboxModule!: typeof ToolboxModule;
 
@@ -29,7 +31,7 @@ beforeAll(async () => {
   schema = await getMigratedDb();
   db = schema.db;
   runtime = await import('@docket/agent-runtime');
-  ({ driveSession, approveAndResume, executeApprovedActions } =
+  ({ driveSession, approveAndResume, approveGroupAndResume, executeApprovedActions } =
     await import('../../src/agent/loop'));
   toolboxModule = await import('../../src/agent/toolbox');
 });
@@ -459,6 +461,172 @@ describe('user-owned Athena loop', () => {
     expect(
       await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
     ).toHaveLength(0);
+
+    await db
+      .update(schema.agentSessionRun)
+      .set({
+        status: 'completed',
+        leaseToken: null,
+        leaseExpiresAt: null,
+        completedAt: new Date(),
+      })
+      .where(or(...activeSessions.map(({ id }) => eq(schema.agentSessionRun.sessionId, id))));
+
+    const claimEntered = deferred<undefined>();
+    const releaseClaim = deferred<undefined>();
+    let blocked = false;
+    const retryDeps: LoopDeps = {
+      ...deps,
+      async beforeGenerationEffect(kind): Promise<void> {
+        if (kind !== 'action-claim' || blocked) return;
+        blocked = true;
+        claimEntered.resolve(undefined);
+        await releaseClaim.promise;
+      },
+    };
+    const firstRetry = approveAndResume(
+      seed.orgId,
+      seed.ownerActorId,
+      seed.sessionId,
+      action!.id,
+      { decision: 'approve' },
+      retryDeps,
+    );
+    await claimEntered.promise;
+    const concurrentRetry = approveAndResume(
+      seed.orgId,
+      seed.ownerActorId,
+      seed.sessionId,
+      action!.id,
+      { decision: 'approve' },
+      deps,
+    );
+    await expect(concurrentRetry).rejects.toThrow(/generation|runnable/i);
+    releaseClaim.resolve(undefined);
+    await expect(firstRetry).resolves.toMatchObject({ status: 'completed' });
+
+    expect(
+      await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
+    ).toHaveLength(1);
+    const approvalAudits = await db
+      .select({ id: schema.auditEvent.id })
+      .from(schema.auditEvent)
+      .where(
+        and(
+          eq(schema.auditEvent.subjectId, seed.sessionId),
+          eq(schema.auditEvent.type, 'approved'),
+        ),
+      );
+    expect(approvalAudits).toHaveLength(1);
+  });
+
+  it('retries an approved proposal group after admission contention without duplicate work', async () => {
+    const seed = await seedAthenaSession('ask_before_acting');
+    const deps = scriptedCreate(seed);
+    await driveSession(seed.orgId, seed.sessionId, deps);
+    const [action] = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(
+        and(
+          eq(schema.sessionActivity.sessionId, seed.sessionId),
+          eq(schema.sessionActivity.type, 'action'),
+        ),
+      );
+    const activeSessions = await db
+      .insert(schema.agentSession)
+      .values(
+        Array.from({ length: 8 }, () => ({
+          executorKind: 'athena' as const,
+          ownerUserId: seed.ownerUserId,
+          contextOrganizationId: seed.orgId,
+          trigger: 'delegation' as const,
+          status: 'running' as const,
+        })),
+      )
+      .returning({ id: schema.agentSession.id });
+    await db.insert(schema.agentSessionRun).values(
+      activeSessions.map(({ id }) => ({
+        sessionId: id,
+        ownerUserId: seed.ownerUserId,
+        generation: 1,
+        workflowInstanceId: `${id}:1`,
+        status: 'running' as const,
+        attempt: 1,
+        leaseToken: `group-slot-${id}`,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })),
+    );
+
+    await expect(
+      approveGroupAndResume(
+        seed.orgId,
+        seed.ownerActorId,
+        seed.sessionId,
+        action!.proposalGroupId!,
+        'approve',
+        undefined,
+        deps,
+      ),
+    ).rejects.toThrow(/concurrent/i);
+    await db
+      .update(schema.agentSessionRun)
+      .set({
+        status: 'completed',
+        leaseToken: null,
+        leaseExpiresAt: null,
+        completedAt: new Date(),
+      })
+      .where(or(...activeSessions.map(({ id }) => eq(schema.agentSessionRun.sessionId, id))));
+
+    const claimEntered = deferred<undefined>();
+    const releaseClaim = deferred<undefined>();
+    let blocked = false;
+    const retryDeps: LoopDeps = {
+      ...deps,
+      async beforeGenerationEffect(kind): Promise<void> {
+        if (kind !== 'action-claim' || blocked) return;
+        blocked = true;
+        claimEntered.resolve(undefined);
+        await releaseClaim.promise;
+      },
+    };
+    const firstRetry = approveGroupAndResume(
+      seed.orgId,
+      seed.ownerActorId,
+      seed.sessionId,
+      action!.proposalGroupId!,
+      'approve',
+      undefined,
+      retryDeps,
+    );
+    await claimEntered.promise;
+    const concurrentRetry = approveGroupAndResume(
+      seed.orgId,
+      seed.ownerActorId,
+      seed.sessionId,
+      action!.proposalGroupId!,
+      'approve',
+      undefined,
+      deps,
+    );
+    await expect(concurrentRetry).rejects.toThrow(/generation|runnable/i);
+    releaseClaim.resolve(undefined);
+    await expect(firstRetry).resolves.toMatchObject({ status: 'completed' });
+
+    expect(
+      await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
+    ).toHaveLength(1);
+    const approvalAudits = await db
+      .select({ id: schema.auditEvent.id })
+      .from(schema.auditEvent)
+      .where(
+        and(
+          eq(schema.auditEvent.subjectId, seed.sessionId),
+          eq(schema.auditEvent.type, 'approved'),
+        ),
+      );
+    expect(approvalAudits).toHaveLength(1);
   });
 
   it('does not automatically repeat a previously claimed action after recovery', async () => {

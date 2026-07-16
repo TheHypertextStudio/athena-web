@@ -713,8 +713,10 @@ describe('personal Athena routes', () => {
       createdAt: new Date('2026-07-15T12:00:01.000Z'),
     });
     const sessionId = await seedSession(seed, seed.owner, 'running');
+    const cancelSession = await seedSession(seed, seed.owner, 'running');
     const ownerApp = appFor(seed.owner);
     const otherApp = appFor(seed.other);
+    mockCompletion('Resumed through a durable generation');
 
     expect((await otherApp.request(`/sessions/${sessionId}/activity`)).status).toBe(404);
     const stream = await ownerApp.request(`/sessions/${replaySession}/stream`, {
@@ -735,8 +737,39 @@ describe('personal Athena routes', () => {
       (await ownerApp.request(`/sessions/${sessionId}/resume`, { method: 'POST' })).status,
     ).toBe(200);
     expect(
-      (await ownerApp.request(`/sessions/${sessionId}/cancel`, { method: 'POST' })).status,
+      (await ownerApp.request(`/sessions/${cancelSession}/cancel`, { method: 'POST' })).status,
     ).toBe(200);
+    const runs = await db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, sessionId));
+    expect(runs).toEqual([{ status: 'completed' }]);
+  });
+
+  it('admits transcript-free personal replies through durable generations', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
+    const elicitationId = await seedActivity(sessionId, {
+      type: 'elicitation',
+      body: { text: 'Which task?', toolUseId: 'toolu_personal_reply' },
+    });
+    mockCompletion('Reply received');
+
+    const response = await appFor(seed.owner).request(
+      `/sessions/${sessionId}/activity/${elicitationId}/reply`,
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ body: 'The launch task' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    const runs = await db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, sessionId));
+    expect(runs).toEqual([{ status: 'completed' }]);
   });
 
   it('keeps message-resumed work parked when durable admission is full', async () => {
@@ -761,11 +794,6 @@ describe('personal Athena routes', () => {
   it('keeps explicitly resumed work parked when durable admission is full', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
-    await db.insert(schema.agentSessionTranscript).values({
-      sessionId,
-      ownerUserId: seed.owner.userId,
-      messages: [{ role: 'user', content: [{ type: 'text', text: 'Continue' }] }],
-    });
     await saturateOwnerAdmission(seed, seed.owner);
 
     const response = await appFor(seed.owner).request(`/sessions/${sessionId}/resume`, {

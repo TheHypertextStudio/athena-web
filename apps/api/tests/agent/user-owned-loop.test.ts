@@ -1,4 +1,4 @@
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const getSession = vi.fn(async () => null);
@@ -156,6 +156,36 @@ function scriptedCreate(seed: Seed): LoopDeps {
   };
 }
 
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T | PromiseLike<T>) => void;
+}
+
+function deferred<T>(): Deferred<T> {
+  let resolve!: Deferred<T>['resolve'];
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
+function blockingTurnRuntime(entered: Deferred<number>, release: Promise<void>): LoopDeps {
+  let enteredCount = 0;
+  const turnRuntime: AgentRuntimeModule.AgentTurnRuntime = {
+    async *streamTurn(): AsyncIterable<AgentRuntimeModule.TurnEvent> {
+      enteredCount += 1;
+      entered.resolve(enteredCount);
+      await release;
+      yield {
+        type: 'turn_end',
+        stopReason: 'end_turn',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Finished.' }] },
+      };
+    },
+  };
+  return { turnRuntime };
+}
+
 describe('user-owned Athena loop', () => {
   it('acts as the persisted owner and audits the current human Actor with Athena origin', async () => {
     const seed = await seedAthenaSession('routine_autonomy');
@@ -258,5 +288,66 @@ describe('user-owned Athena loop', () => {
       .from(schema.agentSession)
       .where(eq(schema.agentSession.id, seed.sessionId));
     expect(pending?.status).toBe('pending');
+  });
+
+  it('serializes concurrent admission for distinct pending sessions owned by one user', async () => {
+    const seed = await seedAthenaSession('routine_autonomy');
+    await db.insert(schema.agentSession).values(
+      Array.from({ length: 7 }, () => ({
+        executorKind: 'athena' as const,
+        ownerUserId: seed.ownerUserId,
+        contextOrganizationId: seed.orgId,
+        trigger: 'delegation' as const,
+        status: 'running' as const,
+      })),
+    );
+    const [second] = await db
+      .insert(schema.agentSession)
+      .values({
+        executorKind: 'athena',
+        ownerUserId: seed.ownerUserId,
+        contextOrganizationId: seed.orgId,
+        trigger: 'delegation',
+        status: 'pending',
+        initiatorId: seed.initiatorActorId,
+      })
+      .returning({ id: schema.agentSession.id });
+    await db.insert(schema.sessionActivity).values({
+      sessionId: second!.id,
+      organizationId: null,
+      type: 'response',
+      body: { text: 'Create another task.' },
+    });
+
+    const entered = deferred<number>();
+    const release = deferred<undefined>();
+    const deps = blockingTurnRuntime(entered, release.promise);
+    const firstRun = driveSession(seed.orgId, seed.sessionId, deps).then(
+      (session) => ({ kind: 'fulfilled' as const, session }),
+      (error: unknown) => ({ kind: 'rejected' as const, error }),
+    );
+    const secondRun = driveSession(seed.orgId, second!.id, deps).then(
+      (session) => ({ kind: 'fulfilled' as const, session }),
+      (error: unknown) => ({ kind: 'rejected' as const, error }),
+    );
+
+    await entered.promise;
+    await Promise.race([firstRun, secondRun, new Promise((resolve) => setTimeout(resolve, 25))]);
+    const admitted = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(
+        or(eq(schema.agentSession.id, seed.sessionId), eq(schema.agentSession.id, second!.id)),
+      );
+    release.resolve(undefined);
+    const outcomes = await Promise.all([firstRun, secondRun]);
+
+    expect(admitted.map(({ status }) => status).sort()).toEqual(['pending', 'running']);
+    expect(outcomes.filter(({ kind }) => kind === 'fulfilled')).toHaveLength(1);
+    const rejected = outcomes.find(({ kind }) => kind === 'rejected');
+    expect(rejected).toMatchObject({ kind: 'rejected' });
+    if (rejected?.kind === 'rejected') {
+      expect(rejected.error).toMatchObject({ message: expect.stringMatching(/concurrent/i) });
+    }
   });
 });

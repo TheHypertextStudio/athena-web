@@ -159,8 +159,10 @@ transcript in the same transaction → dispatch tool calls per the policy engine
 Elicitations are a Docket-side `ask_user` tool (deterministic, no MCP surface change).
 Turn count is bounded by explicit `AGENT_MAX_TURNS`. Athena admission is per user, defaults to eight
 simultaneous `running` sessions, and can be configured from 1–64 with
-`ATHENA_MAX_CONCURRENT_RUNS`; registered-agent admission remains workspace-scoped. SSE gains a DB-poll live tail
-(restart-safe; Last-Event-ID resume).
+`ATHENA_MAX_CONCURRENT_RUNS`. Admission locks the stable owner user row and performs the active-run
+count plus pending-to-running transition in one short transaction; provider and tool work begins
+only after commit. Registered-agent admission remains workspace-scoped. SSE gains a DB-poll live
+tail (restart-safe; Last-Event-ID resume).
 
 ## 7. Ghost projection (slices 5c/9 — shipped; see docs/design/ghost-grammar.md)
 

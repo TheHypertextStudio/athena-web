@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 const migrationsFolder = resolve(import.meta.dirname, '../drizzle');
 const migrationName = '0041_user_owned_athena.sql';
 const clients: PGlite[] = [];
+const allowedDdlVerbs = new Set(['ALTER', 'COMMENT', 'CREATE', 'DROP']);
 
 function migrationSql(through: string): string {
   return readdirSync(migrationsFolder)
@@ -16,17 +17,50 @@ function migrationSql(through: string): string {
     .join('\n');
 }
 
+function normalizedStatements(sql: string): string[] {
+  return sql
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/--[^\n]*/g, ' ')
+    .split(';')
+    .map((statement) => statement.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+}
+
+function isDdlOnlyStatement(statement: string): boolean {
+  const [verb] = statement.toUpperCase().split(' ');
+  return Boolean(verb && allowedDdlVerbs.has(verb));
+}
+
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((client) => client.close()));
 });
 
 describe('user-owned Athena migration', () => {
-  it('ships the next ordered migration without legacy ownership backfill', () => {
+  it('ships the next ordered migration using DDL statements only', () => {
     const sql = readFileSync(resolve(migrationsFolder, migrationName), 'utf8');
+    const statements = normalizedStatements(sql);
 
     expect(readdirSync(migrationsFolder)).toContain(migrationName);
-    expect(sql).not.toMatch(/^\s*UPDATE\s/im);
-    expect(sql).not.toContain("display_name\" = 'Athena'");
+    expect(statements.length).toBeGreaterThan(0);
+    expect(statements.filter((statement) => !isDdlOnlyStatement(statement))).toEqual([]);
+  });
+
+  it('classifies direct and CTE data modification as unsafe after removing comments', () => {
+    const [commentedDdl] = normalizedStatements(
+      '-- DELETE FROM ignored_comment\nCREATE TABLE safe(id text)',
+    );
+    expect(commentedDdl).toBeDefined();
+    expect(isDdlOnlyStatement(commentedDdl ?? '')).toBe(true);
+
+    const unsafeStatements = [
+      'INSERT INTO target VALUES (1)',
+      'UPDATE target SET value = 1',
+      'DELETE FROM target',
+      'MERGE INTO target USING source ON true WHEN MATCHED THEN DELETE',
+      'COPY target FROM STDIN',
+      'WITH changed AS (DELETE FROM target RETURNING *) SELECT * FROM changed',
+    ];
+    expect(unsafeStatements.every((statement) => !isDdlOnlyStatement(statement))).toBe(true);
   });
 
   it('replays the complete migration chain into the fresh executor schema', async () => {

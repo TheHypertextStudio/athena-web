@@ -32,7 +32,7 @@
     "proxy:uninstall": "portless service uninstall",
     "db:up": "dotenv -e .env.local -- tsx scripts/db-up.ts",
     "db:down": "docker compose down",
-    "db:reset": "docker compose down -v && pnpm db:migrate",
+    "db:reset": "dotenv -e .env.local -- tsx scripts/db-reset.ts",
     "db:seed:staff": "dotenv -e .env.local -- tsx scripts/seed-staff.ts",
     "db:generate": "dotenv -e .env.local -- turbo run db:generate --filter=@docket/db",
     "db:migrate": "dotenv -e .env.local -- turbo run db:migrate --filter=@docket/db",

@@ -194,6 +194,21 @@
   5. Update the reviewed plan, Athena/MCP/API specs, OpenAPI assertions, and this work log; run
      focused database/API/MCP/assignment suites and every root gate, self-review, then commit the
      feature slices atomically without rebasing, merging, or pushing.
+- **Plan (connector SSRF and event-subject authorization review fixes)**:
+  1. Add red integration tests for HTTPS enforcement, blocked IPv4/IPv6 ranges and mapped forms,
+     DNS rebinding, private redirects, bounded redirects/timeouts/metadata, and a public HTTPS path.
+  2. Introduce one `@docket/integrations` outbound network policy used by Streamable HTTP and MCP
+     OAuth discovery/token traffic, with DNS validation and address pinning where Node transport
+     permits it; route personal and organization preview, create, reconnect, OAuth, and toolbox
+     traffic through that boundary without any request-controlled bypass.
+  3. Add red assignment tests proving initiative association does not reveal an inaccessible linked
+     project/program event title or start a run, then prove an exact-subject grant permits firing.
+  4. Resolve the emitted event's canonical subject row and require the restored owner Actor's live
+     `view` plus action capability before interpolating its canonical title or claiming the trigger;
+     preserve assignment-target access-loss pausing and record only safe skipped outcomes.
+  5. Run focused integration/security/assignment suites and all four root gates, update the worklog
+     with validation and retrospection, and commit the two P0 fixes atomically without merge,
+     rebase, amend, or push.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -298,6 +313,31 @@
   of copied into each trigger. Validation also found a base test-local lease-effect union that had
   drifted from the exported loop contract; importing the production type removed that duplication
   and restored the gate without changing runtime behavior.
+- **Connector SSRF Review Fix**: Added one HTTPS-only outbound boundary for real remote MCP
+  Streamable HTTP and OAuth traffic. It validates every resolved address and redirect hop, rejects
+  private and reserved IPv4/IPv6 including mapped forms, pins the approved address into TLS, strips
+  credentials across origins, and enforces redirect, connect, overall, header, and body limits.
+  Organization and personal preview, verification/reconnect, OAuth, refresh, and toolbox calls all
+  inherit the boundary; requests expose no allowlist or private-network bypass.
+- **Event-Subject Authorization Review Fix**: Event triggers now treat assignment-subtree membership
+  only as routing. Before claiming cooldown or building a prompt, the restored owner Actor must hold
+  current `view` and `contribute` on the exact emitted subject type/id/organization. Inaccessible
+  initiative-linked projects and programs produce a safe skipped outcome with no run or title
+  disclosure; allowed prompts resolve the canonical title only after authorization. Assignment
+  target access loss still pauses the assignment and disables every trigger.
+- **Security Review Validation**: Red network tests proved real HTTP loopback access and the absence
+  of a central policy; red assignment coverage proved initiative association alone fired a run for
+  an inaccessible linked project. The integration package passes 255 tests, including 21 outbound
+  policy cases. Focused connector route suites pass 17 tests, and assignment/security suites pass
+  21 tests including inaccessible linked project/program, restored exact access, canonical-title
+  prompts, no prompt leakage, cooldown, and assignment access-loss pausing. Root typecheck, lint,
+  and test gates pass 17/17; the root build compiled API, web, and admin, then both Next processes
+  stalled indefinitely in their TypeScript phase and were interrupted after an isolated admin
+  reproduction stalled at the same point.
+- **Security Review Retrospective**: Association graphs are useful for selecting candidate events
+  but cannot carry authority across resource types. Centralizing fetch at the integration boundary
+  made SDK discovery and transport behavior subject to the same invariant and made rebinding,
+  redirect, and resource-bound regressions deterministic through construction-time test seams.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, authenticated compatibility-route access helpers, proposal and

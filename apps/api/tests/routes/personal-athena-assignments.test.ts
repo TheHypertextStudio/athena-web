@@ -280,6 +280,149 @@ describe('personal Athena assignments', () => {
     expect(assignmentSessions).toHaveLength(3);
   });
 
+  it('does not expose or fire for an inaccessible initiative-linked subject until exact access is granted', async () => {
+    const seedData = await seed();
+    const initiative = one(
+      await db
+        .insert(schema.initiative)
+        .values({
+          organizationId: seedData.orgId,
+          name: 'Portfolio theme',
+          ownerId: seedData.actorId,
+        })
+        .returning({ id: schema.initiative.id }),
+    );
+    const linkedProgram = one(
+      await db
+        .insert(schema.program)
+        .values({
+          organizationId: seedData.orgId,
+          name: 'Sensitive operations',
+          ownerId: seedData.actorId,
+        })
+        .returning({ id: schema.program.id }),
+    );
+    await db.insert(schema.initiativeProject).values({
+      organizationId: seedData.orgId,
+      initiativeId: initiative.id,
+      projectId: seedData.projectId,
+    });
+    await db.insert(schema.initiativeProgram).values({
+      organizationId: seedData.orgId,
+      initiativeId: initiative.id,
+      programId: linkedProgram.id,
+    });
+    await db.delete(schema.grant).where(eq(schema.grant.organizationId, seedData.orgId));
+    await db.insert(schema.grant).values({
+      organizationId: seedData.orgId,
+      subjectKind: 'actor',
+      subjectId: seedData.actorId,
+      resourceKind: 'initiative',
+      resourceId: initiative.id,
+      capabilities: ['view', 'contribute'],
+    });
+
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const created = await app.request('/assignments', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        organizationId: seedData.orgId,
+        entityType: 'initiative',
+        entityId: initiative.id,
+        objective: 'Watch this theme.',
+      }),
+    });
+    expect(created.status).toBe(200);
+    const assignment = (await created.json()) as { id: string };
+    expect(
+      (
+        await app.request(`/assignments/${assignment.id}/triggers`, {
+          method: 'POST',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ type: 'event', eventKinds: ['status_change'] }),
+        })
+      ).status,
+    ).toBe(200);
+
+    const denied = await handleAthenaAssignmentEvent({
+      organizationId: seedData.orgId,
+      kind: 'status_change',
+      subject: { type: 'project', id: seedData.projectId, title: 'Secret launch' },
+      title: 'SECRET PROJECT TITLE MUST NOT LEAK',
+    });
+    expect(denied).toEqual({ triggered: 0, paused: 0, skipped: 1 });
+    const activitiesAfterDenied = await db
+      .select({ body: schema.sessionActivity.body })
+      .from(schema.sessionActivity)
+      .innerJoin(schema.agentSession, eq(schema.sessionActivity.sessionId, schema.agentSession.id))
+      .where(eq(schema.agentSession.ownerUserId, seedData.userId));
+    expect(JSON.stringify(activitiesAfterDenied)).not.toContain(
+      'SECRET PROJECT TITLE MUST NOT LEAK',
+    );
+    expect(JSON.stringify(activitiesAfterDenied)).not.toContain('Secret launch');
+    const deniedProgram = await handleAthenaAssignmentEvent({
+      organizationId: seedData.orgId,
+      kind: 'status_change',
+      subject: { type: 'program', id: linkedProgram.id, title: 'Secret operations' },
+      title: 'SECRET PROGRAM TITLE MUST NOT LEAK',
+    });
+    expect(deniedProgram).toEqual({ triggered: 0, paused: 0, skipped: 1 });
+
+    await db.insert(schema.grant).values({
+      organizationId: seedData.orgId,
+      subjectKind: 'actor',
+      subjectId: seedData.actorId,
+      resourceKind: 'project',
+      resourceId: seedData.projectId,
+      capabilities: ['view', 'contribute'],
+    });
+    await db.insert(schema.grant).values({
+      organizationId: seedData.orgId,
+      subjectKind: 'actor',
+      subjectId: seedData.actorId,
+      resourceKind: 'program',
+      resourceId: linkedProgram.id,
+      capabilities: ['view', 'contribute'],
+    });
+    const allowed = await handleAthenaAssignmentEvent(
+      {
+        organizationId: seedData.orgId,
+        kind: 'status_change',
+        subject: { type: 'project', id: seedData.projectId, title: 'Spoofed title' },
+        title: 'Spoofed event title',
+      },
+      new Date(Date.now() + 6 * 60_000),
+    );
+    expect(allowed.triggered).toBe(1);
+    const activitiesAfterAllowed = await db
+      .select({ body: schema.sessionActivity.body })
+      .from(schema.sessionActivity)
+      .innerJoin(schema.agentSession, eq(schema.sessionActivity.sessionId, schema.agentSession.id))
+      .where(eq(schema.agentSession.ownerUserId, seedData.userId));
+    expect(JSON.stringify(activitiesAfterAllowed)).toContain('Launch');
+    expect(JSON.stringify(activitiesAfterAllowed)).not.toContain('Spoofed title');
+    expect(JSON.stringify(activitiesAfterAllowed)).not.toContain('Spoofed event title');
+    const allowedProgram = await handleAthenaAssignmentEvent(
+      {
+        organizationId: seedData.orgId,
+        kind: 'status_change',
+        subject: { type: 'program', id: linkedProgram.id, title: 'Spoofed operations' },
+        title: 'Spoofed program event title',
+      },
+      new Date(Date.now() + 12 * 60_000),
+    );
+    expect(allowedProgram.triggered).toBe(1);
+    const finalActivities = await db
+      .select({ body: schema.sessionActivity.body })
+      .from(schema.sessionActivity)
+      .innerJoin(schema.agentSession, eq(schema.sessionActivity.sessionId, schema.agentSession.id))
+      .where(eq(schema.agentSession.ownerUserId, seedData.userId));
+    expect(JSON.stringify(finalActivities)).toContain('Sensitive operations');
+    expect(JSON.stringify(finalActivities)).not.toContain('Spoofed operations');
+    expect(JSON.stringify(finalActivities)).not.toContain('SECRET PROGRAM TITLE MUST NOT LEAK');
+  });
+
   it('pauses work and disables triggers when the owner loses current access', async () => {
     const seedData = await seed();
     const assignment = await createAssignment(seedData);

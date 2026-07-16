@@ -17,6 +17,7 @@ import {
   initiativeProgram,
   initiativeProject,
   notification,
+  program,
   project,
   sessionActivity,
   task,
@@ -90,15 +91,66 @@ export async function resolveAssignmentAccess(input: {
     )
     .limit(1);
   if (!member) return null;
-  const title = await targetTitle(input.organizationId, input.entityType, input.entityId);
-  if (!title) return null;
   const permission = await canActor(
     member.actorId,
     'contribute',
     { kind: input.entityType, id: input.entityId, orgId: input.organizationId },
     db,
   );
-  return permission.allow ? { actorId: member.actorId, title } : null;
+  if (!permission.allow) return null;
+  const title = await targetTitle(input.organizationId, input.entityType, input.entityId);
+  return title ? { actorId: member.actorId, title } : null;
+}
+
+type TriggerEventSubject = EmitEventInput['subject'];
+
+/** Resolve an emitted subject's canonical title only after exact-subject authorization. */
+async function resolveEventSubjectTitle(
+  actorId: string,
+  organizationId: string,
+  subject: TriggerEventSubject,
+): Promise<string | null> {
+  if (!['initiative', 'project', 'program', 'task'].includes(subject.type)) return null;
+  const resource = {
+    kind: subject.type as 'initiative' | 'project' | 'program' | 'task',
+    id: subject.id,
+    orgId: organizationId,
+  };
+  const visible = await canActor(actorId, 'view', resource, db);
+  if (!visible.allow) return null;
+  const actionable = await canActor(actorId, 'contribute', resource, db);
+  if (!actionable.allow) return null;
+
+  if (subject.type === 'initiative') {
+    const [row] = await db
+      .select({ title: initiative.name })
+      .from(initiative)
+      .where(and(eq(initiative.id, subject.id), eq(initiative.organizationId, organizationId)))
+      .limit(1);
+    return row?.title ?? null;
+  }
+  if (subject.type === 'project') {
+    const [row] = await db
+      .select({ title: project.name })
+      .from(project)
+      .where(and(eq(project.id, subject.id), eq(project.organizationId, organizationId)))
+      .limit(1);
+    return row?.title ?? null;
+  }
+  if (subject.type === 'program') {
+    const [row] = await db
+      .select({ title: program.name })
+      .from(program)
+      .where(and(eq(program.id, subject.id), eq(program.organizationId, organizationId)))
+      .limit(1);
+    return row?.title ?? null;
+  }
+  const [row] = await db
+    .select({ title: task.title })
+    .from(task)
+    .where(and(eq(task.id, subject.id), eq(task.organizationId, organizationId)))
+    .limit(1);
+  return row?.title ?? null;
 }
 
 /** Disable every trigger and pause an assignment after current access is lost. */
@@ -303,9 +355,32 @@ export interface AthenaTriggerSweepResult {
 async function fireTrigger(
   trigger: AthenaTriggerRow,
   assignment: AthenaAssignmentRow,
-  prompt: string,
+  promptOrSubject: string | TriggerEventSubject,
   now: Date,
 ): Promise<'triggered' | 'paused' | 'skipped'> {
+  const access = await resolveAssignmentAccess({
+    ownerUserId: assignment.ownerUserId,
+    organizationId: assignment.organizationId,
+    entityType: assignment.entityType,
+    entityId: assignment.entityId,
+  });
+  if (!access) {
+    await pauseForAccessLoss(assignment);
+    return 'paused';
+  }
+  let prompt: string;
+  if (typeof promptOrSubject === 'string') {
+    prompt = promptOrSubject;
+  } else {
+    const subjectTitle = await resolveEventSubjectTitle(
+      access.actorId,
+      assignment.organizationId,
+      promptOrSubject,
+    );
+    if (!subjectTitle) return 'skipped';
+    prompt = `A Docket event on ${subjectTitle} needs attention in your assigned work.`;
+  }
+
   const cooldownCutoff = new Date(now.getTime() - trigger.cooldownMinutes * 60_000);
   const nextRunAt =
     trigger.type === 'scheduled' && trigger.scheduleMinutes
@@ -327,16 +402,6 @@ async function fireTrigger(
     )
     .returning({ id: athenaTrigger.id });
   if (!claimed) return 'skipped';
-  const access = await resolveAssignmentAccess({
-    ownerUserId: assignment.ownerUserId,
-    organizationId: assignment.organizationId,
-    entityType: assignment.entityType,
-    entityId: assignment.entityId,
-  });
-  if (!access) {
-    await pauseForAccessLoss(assignment);
-    return 'paused';
-  }
   await startAssignmentRun(
     assignment,
     access.actorId,
@@ -367,12 +432,7 @@ export async function handleAthenaAssignmentEvent(
   for (const row of rows) {
     if (!(row.trigger.eventKinds as EventKind[]).includes(input.kind)) continue;
     if (!(await eventIsInAssignmentScope(row.assignment, input.subject))) continue;
-    const outcome = await fireTrigger(
-      row.trigger,
-      row.assignment,
-      `A Docket event in your assigned work needs attention: ${input.title}`,
-      now,
-    );
+    const outcome = await fireTrigger(row.trigger, row.assignment, input.subject, now);
     result[outcome] += 1;
   }
   return result;

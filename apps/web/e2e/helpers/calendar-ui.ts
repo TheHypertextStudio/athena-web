@@ -95,9 +95,13 @@ export async function dragLocatorToLocator(
   if (!sourceBox || !targetBox) throw new Error('Relationship drag has no browser geometry.');
   const from = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
   const to = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+  const activationDelta = {
+    x: Math.min(6, sourceBox.width / 4),
+    y: Math.min(4, sourceBox.height / 4),
+  };
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(from.x + 12, from.y + 6, { steps: 3 });
+  await page.mouse.move(from.x + activationDelta.x, from.y + activationDelta.y, { steps: 3 });
   await page.mouse.move(to.x, to.y, { steps: 12 });
   await page.mouse.up();
 }

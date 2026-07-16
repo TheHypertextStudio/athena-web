@@ -152,12 +152,15 @@ export function AthenaPanelProvider({
     mutationFn: ({ id, option, kind }) => {
       if (kind === 'question') {
         return unwrap(
-          () => transport.decide(id, 'reply', { body: option }),
+          () => transport.decide(selectedId, id, 'reply', { body: option }),
           'Could not record your answer.',
         );
       }
       const decision = option === 'reject' ? 'reject' : option === 'reply' ? 'reply' : 'approve';
-      return unwrap(() => transport.decide(id, decision), 'Could not record your decision.');
+      return unwrap(
+        () => transport.decide(selectedId, id, decision),
+        'Could not record your decision.',
+      );
     },
     invalidateKeys: [queryKeys.athena()],
     onSuccess: updateSelected,

@@ -1,55 +1,27 @@
 import type {
+  AthenaOverviewOut,
+  AthenaSessionDetailOut,
+  AthenaSessionSummaryOut,
+  SessionActivityOut,
+} from '@docket/types';
+
+import type {
   PersonalAthenaActivity,
-  PersonalAthenaSource,
   PersonalAthenaSessionDetail,
   PersonalAthenaSessionSummary,
-  PersonalAthenaStatus,
 } from './presentation';
 
-/** Personal session summary shape returned by the API lane before generated client integration. */
-export interface AthenaApiSessionSummary {
-  readonly id: string;
-  readonly kind: 'chat' | 'job';
-  readonly status: PersonalAthenaStatus;
-  readonly queueState: 'needs_you' | 'working' | 'finished';
-  readonly objective: string | null;
-  readonly context: {
-    readonly workspaceId?: string;
-    readonly source?: { readonly type: PersonalAthenaSource['type']; readonly id: string };
-  } | null;
-  readonly startedAt: string | null;
-  readonly endedAt: string | null;
-  readonly createdAt: string;
-}
+/** Personal summary DTO owned by the shared platform contract. */
+export type AthenaApiSessionSummary = AthenaSessionSummaryOut;
 
-/** Existing session activity shape returned inside a personal detail. */
-export interface AthenaApiActivity {
-  readonly id: string;
-  readonly type: 'thought' | 'action' | 'response' | 'elicitation' | 'error';
-  readonly body: Readonly<Record<string, unknown>>;
-  readonly approvalStatus?: string | null;
-  readonly createdAt: string;
-}
+/** Personal activity DTO owned by the shared platform contract. */
+export type AthenaApiActivity = SessionActivityOut;
 
-/** Personal detail shape returned by the API lane. */
-export interface AthenaApiSessionDetail extends AthenaApiSessionSummary {
-  readonly activities: readonly AthenaApiActivity[];
-}
+/** Personal detail DTO owned by the shared platform contract. */
+export type AthenaApiSessionDetail = AthenaSessionDetailOut;
 
-/** Grouped personal queue response from `GET /v1/me/athena`. */
-export interface AthenaApiOverview {
-  readonly counts: {
-    readonly needsYou: number;
-    readonly working: number;
-    readonly finished: number;
-  };
-  readonly currentChat: AthenaApiSessionSummary | null;
-  readonly sessions: {
-    readonly needsYou: readonly AthenaApiSessionSummary[];
-    readonly working: readonly AthenaApiSessionSummary[];
-    readonly finished: readonly AthenaApiSessionSummary[];
-  };
-}
+/** Grouped personal queue DTO owned by the shared platform contract. */
+export type AthenaApiOverview = AthenaOverviewOut;
 
 /** Presentation-ready grouped queue. */
 export interface AdaptedAthenaOverview {

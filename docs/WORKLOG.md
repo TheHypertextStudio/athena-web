@@ -25,7 +25,10 @@
 - **Decisions**: Athena never receives a workspace Actor, grant, role, or independent capability.
   Workspaces are optional execution context only. Personal work logs and connectors are owner-only;
   shared results retain normal visibility. Approval never grants authority beyond the underlying
-  tool permission.
+  tool permission. The per-user ceiling limits concurrent runs only; healthy Athena work may run
+  indefinitely. Leases renew while work is healthy and exist only to recover abandoned execution.
+  A configured turn budget is a per-generation checkpoint quantum and must not settle personal
+  Athena work as failed or completed.
 - **Risks**: The executor union must preserve third-party registered-agent behavior while all Athena
   paths stop relying on the default-agent grant model. Existing databases are intentionally
   disposable for this rollout and must be reset before the new executor constraints apply.
@@ -78,6 +81,18 @@
   3. Strengthen migration `0041` coverage by parsing normalized statements and allowing DDL only.
   4. Exercise the command against a disposable PGlite path, run repository gates, and commit the
      review fix independently without amending, rebasing, merging, or pushing.
+- **Plan (owner-private compatibility routes)**:
+  1. Add a two-user same-workspace red regression covering Athena enumeration, direct reads, SSE,
+     chat, proposals, run, reply, lifecycle, and approval decisions while retaining registered-agent
+     workspace behavior.
+  2. Introduce one request-authenticated session access discriminator: Athena resolves only for its
+     persisted owner, while registered agents retain workspace and capability authorization.
+  3. Route every organization compatibility lookup and mutation through that discriminator, make
+     Athena lifecycle transitions operate without an organization owner field, and remove the
+     unrelated assign requirement only for owner-approved Athena work.
+  4. Prove an owner with contribute can decide Athena work while the underlying MCP tool still
+     reauthorizes the actual write, then run focused and repository gates and commit the security
+     slice without adding personal `/v1/me` routes or execution-idempotency work.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -99,9 +114,18 @@
   workspace-targeted actions retain their actual workspace attribution. Athena run admission is
   per owner (eight by default, configurable from one through 64). Workspace-owned remote MCP
   connections remain available only to registered agents until the personal connection migration.
+- **Owner-Private Compatibility Routes**: Every existing workspace compatibility route now
+  discriminates access from the authenticated request user. Personal Athena sessions can be listed,
+  read, streamed, steered, paused, resumed, cancelled, and decided only by their persisted owner;
+  cross-user access is hidden as not found even when both users belong to the same workspace.
+  Registered-agent sessions retain workspace membership and capability checks. Athena lifecycle
+  transitions now support workspace-neutral sessions, and owner approvals no longer require the
+  unrelated `assign` capability while the stored MCP action still rechecks the owner's current
+  permission before writing.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
-  existing API/web consumers, focused DTO/schema/migration/OpenAPI/time tests, and this work log.
+  existing API/web consumers, authenticated compatibility-route access helpers, proposal and
+  lifecycle handlers, focused DTO/schema/migration/OpenAPI/time/privacy tests, and this work log.
 - **Validation**: Red DTO tests rejected workspace-neutral activity and Athena's nullable executor
   fields; red database tests showed the missing executor/owner columns and migration. Spec-review
   red tests then proved non-null Athena executor organizations, dual run/transcript attribution,
@@ -148,6 +172,14 @@
   which was deleted after validation. Tooling passes 46/46 tests and database coverage passes 68/68.
   Final root validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks), and build
   (3/3 tasks).
+- **Owner Route Validation**: The new two-user same-workspace regression passes 6/6 tests across
+  enumeration, detail, activity, SSE, proposals, chat isolation, steering, lifecycle, and decisions.
+  It also proves a contribute-only owner can approve and execute a permitted task write, cannot use
+  approval to bypass a manage-only tool, and that a non-owner with `assign` cannot decide another
+  user's Athena work. The final ordered root chain passes typecheck and lint (17/17 tasks each),
+  tests (17/17 tasks; API 146 files and 1,272 tests), and build (3/3 tasks). `git diff --check`
+  passes. The only recurring diagnostic is the repository engine warning for local Node 24.14.0
+  versus the declared minimum 24.15.0.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

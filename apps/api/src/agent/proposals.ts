@@ -59,11 +59,9 @@ function toProposalItem(row: ActivityRow): z.input<typeof ProposalItemOut> | nul
 /**
  * List a session's pending proposal groups, oldest-first, ghost-projected.
  *
- * @param orgId - The active organization id.
  * @param sessionId - The owning session.
  */
 export async function listProposalGroups(
-  orgId: string,
   sessionId: string,
 ): Promise<z.input<typeof ProposalGroupOut>[]> {
   const rows = await db
@@ -72,7 +70,6 @@ export async function listProposalGroups(
     .where(
       and(
         eq(sessionActivity.sessionId, sessionId),
-        eq(sessionActivity.organizationId, orgId),
         eq(sessionActivity.type, 'action'),
         eq(sessionActivity.approvalStatus, 'proposed'),
         isNotNull(sessionActivity.proposalGroupId),
@@ -106,7 +103,6 @@ export async function listProposalGroups(
  * executes the edited input verbatim. The summary is left as authored — the edit is a
  * refinement of the same intent, not a new action.
  *
- * @param orgId - The active organization id.
  * @param sessionId - The owning session.
  * @param activityId - The proposed action to edit.
  * @param input - The replacement tool input.
@@ -115,7 +111,6 @@ export async function listProposalGroups(
  * @throws {ConflictError} When the activity is not an editable pending proposal.
  */
 export async function editProposalInput(
-  orgId: string,
   sessionId: string,
   activityId: string,
   input: Record<string, unknown>,
@@ -124,13 +119,7 @@ export async function editProposalInput(
     const rows = await tx
       .select()
       .from(sessionActivity)
-      .where(
-        and(
-          eq(sessionActivity.id, activityId),
-          eq(sessionActivity.sessionId, sessionId),
-          eq(sessionActivity.organizationId, orgId),
-        ),
-      )
+      .where(and(eq(sessionActivity.id, activityId), eq(sessionActivity.sessionId, sessionId)))
       .limit(1);
     const row = rows[0];
     if (!row) throw new NotFoundError('Activity not found');

@@ -17,6 +17,7 @@ import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import type { unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
+import { fakeSession } from '../support/routes-harness';
 
 vi.hoisted(() => {
   process.env['DATABASE_URL'] = 'pglite://memory://';
@@ -61,6 +62,7 @@ afterEach(() => {
 const J = { 'content-type': 'application/json' };
 
 interface Seed {
+  userId: string;
   orgId: string;
   teamId: string;
   humanActorId: string;
@@ -87,6 +89,7 @@ async function seedOrg(): Promise<Seed> {
     .returning({ id: schema.team.id });
   const registeredAgent = await ensureDefaultAgent(org!.id, human!.id);
   return {
+    userId: u!.id,
     orgId: org!.id,
     teamId: team!.id,
     humanActorId: human!.id,
@@ -304,6 +307,7 @@ describe('the union toolbox: remote read + local writes in one session', () => {
 
     const sessions = new Hono<AppEnv>();
     sessions.use('*', async (c, next) => {
+      c.set('session', fakeSession(seed.userId));
       const ctx: ActorCtx = {
         orgId: seed.orgId,
         actorId: seed.humanActorId,

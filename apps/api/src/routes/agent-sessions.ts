@@ -17,7 +17,6 @@ import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -27,13 +26,16 @@ import { enqueueSearchUpsert } from '../search/write-through';
 import {
   activityParam,
   idParam,
+  listSessionAccess,
   listQuery,
+  loadSessionAccess,
+  requestUserId,
   toActivityOut,
   toSessionOut,
   transitionLifecycle,
   loadActivity,
 } from './agent-session-helpers';
-import { createAndRunFromPrompt, ownerUserIdForActor, runSession } from './agent-session-runner';
+import { createAndRunFromPrompt, runSession } from './agent-session-runner';
 import { replyToElicitation, resolveAction } from './agent-session-approval';
 import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
@@ -46,8 +48,8 @@ import { loadTranscript, saveTranscript } from '../agent/transcript';
 async function getOrCreateChatSession(
   orgId: string,
   actorId: string,
+  ownerUserId: string,
 ): Promise<typeof agentSession.$inferSelect> {
-  const ownerUserId = await ownerUserIdForActor(orgId, actorId);
   const existing = await db
     .select()
     .from(agentSession)
@@ -87,23 +89,6 @@ async function getOrCreateChatSession(
   return created;
 }
 
-/** Load a registered session in its workspace or personal Athena work owned by the caller. */
-async function loadVisibleSession(
-  orgId: string,
-  actorId: string,
-  sessionId: string,
-): Promise<typeof agentSession.$inferSelect> {
-  const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
-  const session = rows[0];
-  if (!session) throw new NotFoundError('Session not found');
-  const visible =
-    session.executorKind === 'registered_agent'
-      ? session.organizationId === orgId
-      : session.ownerUserId === (await ownerUserIdForActor(orgId, actorId));
-  if (!visible) throw new NotFoundError('Session not found');
-  return session;
-}
-
 /** SSE live-tail poll cadence (DB-backed, restart-safe). */
 const STREAM_POLL_MS = 750;
 /** SSE heartbeat cadence (keeps proxies from idling the connection out). */
@@ -124,16 +109,8 @@ const agentSessions = new Hono<AppEnv>()
     }),
     zQuery(listQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
       const { status } = c.req.valid('query');
-      const where = status
-        ? and(eq(agentSession.organizationId, orgId), eq(agentSession.status, status))
-        : eq(agentSession.organizationId, orgId);
-      const rows = await db
-        .select()
-        .from(agentSession)
-        .where(where)
-        .orderBy(desc(agentSession.createdAt));
+      const rows = await listSessionAccess(c, status);
       return ok(c, pageOf(AgentSessionOut), { items: rows.map(toSessionOut) });
     },
   )
@@ -154,8 +131,9 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     zJson(SessionFromPromptBody),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
+      const ownerUserId = requestUserId(c);
       const { prompt, agentId } = c.req.valid('json');
-      const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId);
+      const settled = await createAndRunFromPrompt(orgId, actorId, prompt, agentId, ownerUserId);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       return ok(c, AgentSessionOut, toSessionOut(settled));
     },
@@ -170,7 +148,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const session = await getOrCreateChatSession(orgId, actorId);
+      const session = await getOrCreateChatSession(orgId, actorId, requestUserId(c));
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -196,7 +174,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
-      const session = await getOrCreateChatSession(orgId, actorId);
+      const session = await getOrCreateChatSession(orgId, actorId, requestUserId(c));
 
       await db.insert(sessionActivity).values({
         sessionId: session.id,
@@ -246,7 +224,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const ownerUserId = await ownerUserIdForActor(orgId, actorId);
+      const ownerUserId = requestUserId(c);
       const [created] = await db
         .insert(agentSession)
         .values({
@@ -274,9 +252,8 @@ Side effects: dispatches the executor against the runtime; each yielded activity
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const row = await loadVisibleSession(orgId, actorId, id);
+      const { session: row } = await loadSessionAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -290,21 +267,20 @@ Side effects: dispatches the executor against the runtime; each yielded activity
   )
   .post(
     '/:id/run',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Agents',
       summary: 'Run an agent session',
-      capability: 'contribute',
       response: AgentSessionOut,
       description: `Run (or resume execution of) an existing session against the agent runtime and return the **settled** {@link AgentSessionOut}. Only a session in a *runnable* state — \`pending\` (created but not yet dispatched, e.g. a proactively drafted plan) or \`running\` — may be run; any other state (terminal, or parked awaiting human input/approval) yields 409 (\`Session is not in a runnable state\`). A missing/cross-tenant id returns 404, and a session whose agent has since been deregistered returns 404 (\`Agent not found\`).
 
-Behavior & side effects: derives the task brief (a linked task's title, else the session's seed \`response\` prompt), flips the session to \`running\` (stamping \`startedAt\` on first run), then consumes the runtime's activity stream — persisting one {@link SessionActivityOut} per yielded activity and stamping \`proposed\` on gated actions. When the stream ends the session settles to \`awaiting_approval\` if any proposed action remains unresolved, otherwise \`completed\` (stamping \`endedAt\`). Activities stream live to \`GET /:id/stream\`. Requires \`contribute\`. The body is an empty object. Related: \`POST /\` (create-and-run from a prompt), the approve/reject routes to clear an \`awaiting_approval\` gate.`,
+Behavior & side effects: derives the task brief (a linked task's title, else the session's seed \`response\` prompt), flips the session to \`running\` (stamping \`startedAt\` on first run), then consumes the runtime's activity stream — persisting one {@link SessionActivityOut} per yielded activity and stamping \`proposed\` on gated actions. When the stream ends the session settles to \`awaiting_approval\` if any proposed action remains unresolved, otherwise \`completed\` (stamping \`endedAt\`). Activities stream live to \`GET /:id/stream\`. Personal Athena work requires its authenticated owner; registered-agent work requires \`contribute\`. The body is an empty object. Related: \`POST /\` (create-and-run from a prompt), the approve/reject routes to clear an \`awaiting_approval\` gate.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'contribute');
       const settled = await runSession(orgId, id);
       await enqueueSearchUpsert(orgId, 'agent_session', settled.id);
       return ok(c, AgentSessionOut, toSessionOut(settled));
@@ -321,9 +297,8 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const session = await loadVisibleSession(orgId, actorId, id);
+      const { session } = await loadSessionAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -397,28 +372,26 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadVisibleSession(orgId, actorId, id);
-      const groups = await listProposalGroups(orgId, id);
+      await loadSessionAccess(c, id);
+      const groups = await listProposalGroups(id);
       return ok(c, z.array(ProposalGroupOut), groups);
     },
   )
   .post(
     '/:id/proposals/:groupId/approve',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: 'Approve a proposal group (batch)',
-      capability: 'assign',
       response: AgentSessionOut,
-      description: `Approve every still-\`proposed\` action of one proposal group — or the subset named by \`activityIds\` — then execute each stored tool call through the persisted executor and resume the session. Athena re-resolves its owner's current human Actor and permissions for every call; registered agents retain their own Actor. Approval never supplies missing authority. Execution stores the real result and returns the session after any resume. Requires \`assign\` on this compatibility route.`,
+      description: `Approve every still-\`proposed\` action of one proposal group — or the subset named by \`activityIds\` — then execute each stored tool call through the persisted executor and resume the session. Athena requires its authenticated owner and re-resolves that owner's current human Actor and permissions for every call; registered-agent work requires \`assign\`. Approval never supplies missing authority. Execution stores the real result and returns the session after any resume.`,
     }),
     zParam(groupParam),
     zJson(ProposalGroupDecision.optional()),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, groupId } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
       const session = await approveGroupAndResume(
         orgId,
@@ -433,19 +406,18 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
   )
   .post(
     '/:id/proposals/:groupId/reject',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: 'Reject a proposal group (batch)',
-      capability: 'assign',
       response: AgentSessionOut,
-      description: `Reject every still-\`proposed\` action of one proposal group (or the \`activityIds\` subset) in one transaction. Nothing executes; per-action \`rejected\` audit rows are written, and — reject-and-continue — the session resumes so the agent hears each veto as an error result and adapts instead of being canceled. Returns the {@link AgentSessionOut} after any resume. Requires \`assign\`. 404 when the group has no proposed member.`,
+      description: `Reject every still-\`proposed\` action of one proposal group (or the \`activityIds\` subset) in one transaction. Nothing executes; per-action \`rejected\` audit rows are written, and — reject-and-continue — the session resumes so the agent hears each veto as an error result and adapts instead of being canceled. Athena requires its authenticated owner; registered-agent work requires \`assign\`. Returns the {@link AgentSessionOut} after any resume. 404 when the group has no proposed member.`,
     }),
     zParam(groupParam),
     zJson(ProposalGroupDecision.optional()),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, groupId } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
       const session = await approveGroupAndResume(
         orgId,
@@ -460,21 +432,19 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
   )
   .patch(
     '/:id/activity/:activityId/proposal',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: "Edit a pending proposal's input",
-      capability: 'assign',
       response: SessionActivityOut,
-      description: `Replace the stored \`toolCall.input\` of a still-\`proposed\` action — the write behind inline ghost editing (retitle/redate a translucent row before blessing it). Approval then executes the edited input verbatim. Only \`proposed\` actions with a stored tool call are editable (409 otherwise); org-scoped 404 for a missing activity. Requires \`assign\`: shaping what will be applied is part of the approval act.`,
+      description: `Replace the stored \`toolCall.input\` of a still-\`proposed\` action — the write behind inline ghost editing (retitle/redate a translucent row before blessing it). Approval then executes the edited input verbatim. Only \`proposed\` actions with a stored tool call are editable (409 otherwise); missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`assign\`.`,
     }),
     zParam(activityParam),
     zJson(ProposalEditBody),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
-      const updated = await editProposalInput(orgId, id, activityId, body.input);
+      const updated = await editProposalInput(id, activityId, body.input);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )
@@ -488,9 +458,8 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
     }),
     zParam(idParam),
     async (c) => {
-      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      await loadVisibleSession(orgId, actorId, id);
+      await loadSessionAccess(c, id);
       const activities = await db
         .select()
         .from(sessionActivity)
@@ -501,79 +470,76 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
   )
   .post(
     '/:id/activity/:activityId/approve',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: 'Approve a gated session activity',
-      capability: 'assign',
       response: SessionActivityOut,
       description: `Approve a single gated \`action\` the agent has proposed, clearing the approval gate so the mutation may apply. Returns the decided {@link SessionActivityOut} (the one named by \`:activityId\`), now \`applied\`. The target must belong to this org-scoped session, be \`type='action'\`, and currently be \`proposed\` — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not a proposed action\`).
 
 Side effects (transactional): the activity advances \`proposed → applied\` (the gate's terminal applied state) and an \`audit_event\` (\`type='approved'\`, \`subjectType='agent_session'\`) is written with the **agent's** Actor as \`actorId\`, the session \`initiatorId\` as \`initiatorId\`, and the approved activity id + approver recorded in \`metadata\` — so the feed always shows both who acted (the agent) and who authorized it. Pass body \`{ scope: 'all_in_session' }\` to approve every still-\`proposed\` action in the session in one transaction (default \`{ scope: 'this' }\`, just the target). Once no proposed action remains, the session advances from \`awaiting_approval\` back to \`running\` so the agent can continue.
 
-Requires \`assign\` — the approval gate is orthogonal to the \`contribute\` bar that lets a human *propose* work: clearing an agent's write is an authorization act, so a contribute-only actor must not self-approve. Related: \`/reject\` (deny), \`/reply\` (answer an elicitation instead of a gated action), and the session-level \`POST /:id/approve\` shortcut.`,
+Athena approval requires the authenticated owner; registered-agent approval requires \`assign\`. The stored tool still rechecks the Athena owner's current permissions when it executes. Related: \`/reject\` (deny), \`/reply\` (answer an elicitation instead of a gated action), and the session-level \`POST /:id/approve\` shortcut.`,
     }),
     zParam(activityParam),
     zJson(z.object({ scope: z.enum(['this', 'all_in_session']).optional() }).optional()),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
       await approveAndResume(orgId, actorId, id, activityId, {
         decision: 'approve',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
-      const updated = await loadActivity(orgId, id, activityId);
+      const updated = await loadActivity(id, activityId);
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )
   .post(
     '/:id/activity/:activityId/reject',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: 'Reject a gated session activity',
-      capability: 'assign',
       response: SessionActivityOut,
       description: `Reject a single gated \`action\` the agent has proposed, so the mutation is **never applied**. Returns the decided {@link SessionActivityOut} (named by \`:activityId\`), now \`rejected\`. Same preconditions as approve: the target must belong to the org-scoped session, be \`type='action'\`, and be \`proposed\` (else 404 or 409 \`Activity is not a proposed action\`).
 
 Side effects (transactional): the activity becomes \`rejected\` (no apply) and a \`type='rejected'\` \`audit_event\` is written attributing the agent as \`actorId\`, the session \`initiatorId\`, and the rejecting approver in \`metadata\`. Pass \`{ scope: 'all_in_session' }\` to reject every still-\`proposed\` action at once (default \`{ scope: 'this' }\`). When no proposed action remains after a rejection, the session is moved to \`canceled\` (stamping \`endedAt\`) — a rejection ends the run rather than resuming it.
 
-Requires \`assign\`: vetoing an agent's proposed write is an authorization act, the same bar as approving. Related: \`/approve\` (allow), \`/reply\` (answer an elicitation), and the session-level \`POST /:id/reject\` shortcut.`,
+Athena rejection requires the authenticated owner; registered-agent rejection requires \`assign\`. Related: \`/approve\` (allow), \`/reply\` (answer an elicitation), and the session-level \`POST /:id/reject\` shortcut.`,
     }),
     zParam(activityParam),
     zJson(z.object({ scope: z.enum(['this', 'all_in_session']).optional() }).optional()),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const body = c.req.valid('json');
       await approveAndResume(orgId, actorId, id, activityId, {
         decision: 'reject',
         ...(body?.scope ? { scope: body.scope } : {}),
       });
-      const updated = await loadActivity(orgId, id, activityId);
+      const updated = await loadActivity(id, activityId);
       await enqueueSearchUpsert(orgId, 'agent_session', id);
       return ok(c, SessionActivityOut, toActivityOut(updated));
     },
   )
   .post(
     '/:id/activity/:activityId/reply',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Agents',
       summary: 'Reply to a session elicitation',
-      capability: 'contribute',
       response: SessionActivityOut,
       description: `Answer an agent's \`elicitation\` (a mid-run question the agent asked the human) by appending a human \`response\` activity carrying the reply \`body\`, and return that new {@link SessionActivityOut}. The referenced \`:activityId\` must be an \`elicitation\` belonging to this org-scoped session — otherwise 404 (\`Activity not found\` / \`Session not found\`) or 409 (\`Activity is not an elicitation\`).
 
-Side effect: when the session was parked in \`awaiting_input\` it is resumed to \`running\` so the agent can continue with the answer; if it was already running the reply is simply recorded into the stream. This is distinct from the approval gate — replying *steers/answers* the agent, whereas approve/reject *authorizes or vetoes a proposed write* — which is why this is a \`contribute\` act (participating in the conversation) rather than the \`assign\`-level approval bar. Related: \`/approve\` & \`/reject\` (for gated actions), and \`POST /:id/resume\` (resume without a textual answer).`,
+Side effect: when the session was parked in \`awaiting_input\` it is resumed to \`running\` so the agent can continue with the answer; if it was already running the reply is simply recorded into the stream. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Related: \`/approve\` & \`/reject\` (for gated actions), and \`POST /:id/resume\` (resume without a textual answer).`,
     }),
     zParam(activityParam),
     zJson(SessionReplyBody),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'contribute');
       const body = c.req.valid('json');
       const created = await replyToElicitation(orgId, id, activityId, body.body);
       // Resume-on-user-message: when the reply un-parked the session and the loop owns
@@ -593,105 +559,98 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
   )
   .post(
     '/:id/pause',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Agents',
       summary: 'Pause an agent session',
-      capability: 'contribute',
       response: AgentSessionOut,
-      description: `Pause a \`running\` session, transitioning it to \`awaiting_input\` and returning the updated {@link AgentSessionOut}. Only a \`running\` session may be paused; any other state yields 409 (\`Session is not running\`), and a missing/cross-tenant id 404. Pausing parks the session pending human attention without ending it; \`POST /:id/resume\` returns it to \`running\`. Requires \`contribute\` (steering an in-flight run is a contribution act, not an authorization one). Related: \`/resume\`, \`/cancel\` (terminal stop), and \`/activity/:activityId/reply\` (which also resumes an \`awaiting_input\` session when it carries an answer).`,
+      description: `Pause a \`running\` session, transitioning it to \`awaiting_input\` and returning the updated {@link AgentSessionOut}. Only a \`running\` session may be paused; any other state yields 409 (\`Session is not running\`), and missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Related: \`/resume\`, \`/cancel\` (terminal stop), and \`/activity/:activityId/reply\` (which also resumes an \`awaiting_input\` session when it carries an answer).`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const updated = await transitionLifecycle(orgId, id, 'pause');
+      const { session } = await loadSessionAccess(c, id, 'contribute');
+      const updated = await transitionLifecycle(session, 'pause');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
   .post(
     '/:id/resume',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Agents',
       summary: 'Resume an agent session',
-      capability: 'contribute',
       response: AgentSessionOut,
-      description: `Resume a session that is parked in \`awaiting_input\`, transitioning it back to \`running\` and returning the updated {@link AgentSessionOut}. Only an \`awaiting_input\` session may be resumed; any other state yields 409 (\`Session is not awaiting input\`), and a missing/cross-tenant id 404. This is the inverse of \`POST /:id/pause\`. Note resuming does not by itself re-drive the runtime — use \`POST /:id/run\` to continue consuming the activity stream — and that replying to an elicitation via \`/activity/:activityId/reply\` resumes automatically. Requires \`contribute\`. Related: \`/pause\`, \`/cancel\`.`,
+      description: `Resume a session that is parked in \`awaiting_input\`, transitioning it back to \`running\` and returning the updated {@link AgentSessionOut}. Only an \`awaiting_input\` session may be resumed; any other state yields 409 (\`Session is not awaiting input\`), and missing or private work returns 404. This is the inverse of \`POST /:id/pause\`. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Note resuming does not by itself re-drive the runtime — use \`POST /:id/run\` to continue consuming the activity stream. Related: \`/pause\`, \`/cancel\`.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const updated = await transitionLifecycle(orgId, id, 'resume');
+      const { session } = await loadSessionAccess(c, id, 'contribute');
+      const updated = await transitionLifecycle(session, 'resume');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
   .post(
     '/:id/cancel',
-    capabilityGuard('contribute'),
     apiDoc({
       tag: 'Agents',
       summary: 'Cancel an agent session',
-      capability: 'contribute',
       response: AgentSessionOut,
-      description: `Cancel a session, driving it to the terminal \`canceled\` state (stamping \`endedAt\`) and returning the updated {@link AgentSessionOut}. Any non-terminal session may be canceled; a session already in a terminal state (\`completed\`/\`failed\`/\`canceled\`) yields 409 (\`Session is already in a terminal state\`), and a missing/cross-tenant id 404. Cancellation is final — unlike pause, it cannot be resumed, and any still-\`proposed\` gated actions are abandoned (never applied). Requires \`contribute\`. Related: \`/pause\` (recoverable stop), and the reject routes (which can also cancel a session by vetoing its last proposed action).`,
+      description: `Cancel a session, driving it to the terminal \`canceled\` state (stamping \`endedAt\`) and returning the updated {@link AgentSessionOut}. Any non-terminal session may be canceled; a session already in a terminal state (\`completed\`/\`failed\`/\`canceled\`) yields 409 (\`Session is already in a terminal state\`), and missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Cancellation is final and proposed actions are never applied. Related: \`/pause\` and the reject routes.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const updated = await transitionLifecycle(orgId, id, 'cancel');
+      const { session } = await loadSessionAccess(c, id, 'contribute');
+      const updated = await transitionLifecycle(session, 'cancel');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
   .post(
-    // Approving/rejecting an agent's proposed write is an `assign`-level act (permissions
-    // §9.3; api-rpc-contract `POST /:sessionId/approvals/:activityId` → org:assign), the
-    // same bar as the activity-scoped approval routes above. A contribute-only actor must
-    // not clear an agent's gated action via this legacy session-level shortcut.
+    // Athena decisions belong only to the authenticated owner; conventional registered-agent
+    // decisions retain the assign-level compatibility policy.
     '/:id/approve',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: 'Approve a session-level proposed action',
-      capability: 'assign',
       response: AgentSessionOut,
       description: `Legacy session-level approval shortcut: approve the session's **latest** \`proposed\` action and move the session forward, returning the updated {@link AgentSessionOut}. Unlike the activity-scoped \`/activity/:activityId/approve\`, this does not name a specific activity — it flips the most recent proposed action to \`approved\` and transitions the session from \`awaiting_approval\` to \`running\`. The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing/cross-tenant id 404. The body is an empty object.
 
-Requires \`assign\` — the same authorization bar as the activity-scoped route: clearing an agent's proposed write is an authorization act (permissions §9.3; the contract maps \`POST /:sessionId/approvals/:activityId\` → \`org:assign\`), so a contribute-only actor must not clear a gate via this shortcut. Prefer the activity-scoped \`/activity/:activityId/approve\` (which writes a richer audit event and supports \`scope: 'all_in_session'\`); this route remains for the simple single-gate case. Related: \`POST /:id/reject\`.`,
+Athena requires its authenticated owner and reauthorizes the stored tool with that owner's current permissions; registered-agent work requires \`assign\`. Prefer the activity-scoped \`/activity/:activityId/approve\` for richer audit data and scope control. Related: \`POST /:id/reject\`.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const updated = await resolveAction(orgId, id, 'approved');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
   )
   .post(
-    // See `/:id/approve`: rejecting a proposed action is likewise an `assign`-level act.
+    // See `/:id/approve` for the executor-specific decision policy.
     '/:id/reject',
-    capabilityGuard('assign'),
     apiDoc({
       tag: 'Agents',
       summary: 'Reject a session-level proposed action',
-      capability: 'assign',
       response: AgentSessionOut,
       description: `Legacy session-level rejection shortcut: reject the session's **latest** \`proposed\` action and move the session to \`canceled\` (stamping \`endedAt\`), returning the updated {@link AgentSessionOut}. The session must be \`awaiting_approval\` (else 409 \`Session is not awaiting approval\`) with a proposed action present (else 409 \`No proposed action awaiting approval\`); a missing/cross-tenant id 404. The body is an empty object.
 
-Requires \`assign\` — rejecting a proposed write is likewise an authorization act, the same bar as approving. Prefer the activity-scoped \`/activity/:activityId/reject\` (richer audit event, \`scope\` support); this remains for the simple single-gate case. Related: \`POST /:id/approve\`.`,
+Athena requires its authenticated owner; registered-agent work requires \`assign\`. Prefer the activity-scoped \`/activity/:activityId/reject\` for richer audit data and scope control. Related: \`POST /:id/approve\`.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+      await loadSessionAccess(c, id, 'assign');
       const updated = await resolveAction(orgId, id, 'rejected');
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));

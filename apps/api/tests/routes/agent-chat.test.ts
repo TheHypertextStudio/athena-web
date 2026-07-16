@@ -13,6 +13,7 @@ import type { ActorCtx, AppEnv } from '../../src/context';
 import { onError } from '../../src/error';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { getContainer as GetContainer } from '../../src/container';
+import { fakeSession } from '../support/routes-harness';
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
 process.env['APP_MODE'] = 'test';
@@ -65,6 +66,14 @@ async function seedOrg(): Promise<{ userId: string; orgId: string; humanActorId:
 function appFor(orgId: string, actorId: string) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
+    const rows = await db
+      .select({ userId: schema.actor.userId })
+      .from(schema.actor)
+      .where(eq(schema.actor.id, actorId))
+      .limit(1);
+    const userId = rows[0]?.userId;
+    if (!userId) throw new Error('test actor is missing its authenticated user');
+    c.set('session', fakeSession(userId));
     const ctx: ActorCtx = {
       orgId,
       actorId,

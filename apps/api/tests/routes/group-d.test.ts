@@ -7,7 +7,7 @@ import type * as DbModule from '@docket/db';
 import type { AppEnv, AuthSession } from '../../src/context';
 import { onError } from '../../src/error';
 import {
-  appWithActor,
+  appWithActor as mountActorApp,
   appWithSession,
   fakeSession,
   getDb,
@@ -25,6 +25,21 @@ let notifications!: unknown;
 let dailyPlan!: typeof dailyPlanRouter;
 let hub!: typeof hubRouter;
 let agentSessions!: typeof agentSessionsRouter;
+
+/** Preserve anonymous harness cases while authenticating the session compatibility router. */
+function appWithActor(
+  router: unknown,
+  orgId: string,
+  capabilities: readonly string[],
+  actorId = 'actor_test',
+  session?: AuthSession,
+) {
+  const resolvedSession =
+    session === undefined && router === agentSessions
+      ? fakeSession(`user_${actorId}`)
+      : (session ?? null);
+  return mountActorApp(router, orgId, capabilities, actorId, resolvedSession);
+}
 
 beforeAll(async () => {
   schema = await getDb();

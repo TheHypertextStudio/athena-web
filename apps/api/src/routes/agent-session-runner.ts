@@ -22,6 +22,7 @@ import type { SessionRow } from './agent-session-helpers';
  * @param actorId - The caller's actor id (the session initiator + prompt author).
  * @param prompt - The freeform brief the agent should plan against.
  * @param agentId - An explicit registered agent; omission selects user-owned Athena.
+ * @param authenticatedUserId - Request-authenticated owner for Athena creation.
  * @returns the settled session row.
  * @throws {NotFoundError} When an explicit `agentId` is not a registered agent in the org.
  */
@@ -30,6 +31,7 @@ export async function createAndRunFromPrompt(
   actorId: string,
   prompt: string,
   agentId?: string,
+  authenticatedUserId?: string,
 ): Promise<SessionRow> {
   let boundAgentId: string | null = null;
   let ownerUserId: string | null = null;
@@ -42,7 +44,7 @@ export async function createAndRunFromPrompt(
     if (!agentRows[0]) throw new NotFoundError('Agent not found');
     boundAgentId = agentRows[0].id;
   } else {
-    ownerUserId = await ownerUserIdForActor(orgId, actorId);
+    ownerUserId = authenticatedUserId ?? (await ownerUserIdForActor(orgId, actorId));
   }
 
   const sessionId = await db.transaction(async (tx) => {

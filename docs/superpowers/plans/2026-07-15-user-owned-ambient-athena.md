@@ -21,6 +21,8 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 - Athena never receives a workspace Actor, grant, role, or independent authorization path.
 - Personal work is owner-only; shared results retain ordinary resource visibility.
 - Approval re-authorizes the stored tool call as the current user.
+- Athena work has no duration cap: concurrency limits admission, renewable leases detect crashes,
+  and turn budgets are checkpoint quanta rather than terminal outcomes.
 - Existing unrelated working-tree changes remain untouched.
 - User-facing language says workspace, work, and Athena—not company or generic session management.
 - Every implementation slice is committed atomically with a substantive Conventional Commit body.
@@ -48,13 +50,16 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 
 ### Task 3: Personal Athena APIs, privacy, and steering
 
-- [ ] Write failing route tests for owner-only list/detail/chat/stream/lifecycle/approval access and
-      cross-workspace invocation context.
+- [x] Secure every organization compatibility route with a request-authenticated executor
+      discriminator: owner-only Athena access and existing workspace/capability policy for
+      registered agents.
+- [x] Write failing route tests for owner-only list/detail/chat/stream/lifecycle/approval access.
+- [ ] Cover cross-workspace invocation context with the personal route surface.
 - [ ] Add `/v1/me/athena` chat, work, session, message, proposal, approval, lifecycle, and SSE routes.
-- [ ] Make approval owner-scoped and rely on underlying tool authorization instead of unrelated
+- [x] Make approval owner-scoped and rely on underlying tool authorization instead of unrelated
       `assign` permission.
-- [ ] Preserve organization session routes for registered agents and temporary route compatibility.
-- [ ] Run focused API tests and commit the green slice.
+- [x] Preserve organization session routes for registered agents and temporary route compatibility.
+- [x] Run focused API tests and commit the green slice.
 
 ### Task 4: Personal MCP connections and delegation
 

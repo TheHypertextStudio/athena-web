@@ -64,6 +64,7 @@ interface Seed {
   orgId: string;
   teamId: string;
   humanActorId: string;
+  agentId: string;
 }
 
 async function seedOrg(): Promise<Seed> {
@@ -84,8 +85,13 @@ async function seedOrg(): Promise<Seed> {
     .insert(schema.team)
     .values({ organizationId: org!.id, name: 'Core', key: 'CORE' })
     .returning({ id: schema.team.id });
-  await ensureDefaultAgent(org!.id, human!.id);
-  return { orgId: org!.id, teamId: team!.id, humanActorId: human!.id };
+  const registeredAgent = await ensureDefaultAgent(org!.id, human!.id);
+  return {
+    orgId: org!.id,
+    teamId: team!.id,
+    humanActorId: human!.id,
+    agentId: registeredAgent.id,
+  };
 }
 
 function appFor(router: typeof integrationsMcpRouter, seed: Seed) {
@@ -313,7 +319,10 @@ describe('the union toolbox: remote read + local writes in one session', () => {
     const created = await sessions.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ prompt: 'Import my Sunsama backlog' }),
+      body: JSON.stringify({
+        prompt: 'Import my Sunsama backlog',
+        agentId: seed.agentId,
+      }),
     });
     expect(created.status).toBe(200);
     const session = (await created.json()) as { id: string; status: string };

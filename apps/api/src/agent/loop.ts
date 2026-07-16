@@ -27,12 +27,13 @@ import {
   organization,
   sessionActivity,
   task,
+  user,
 } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
 import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
 import { HubPreferences } from '@docket/types';
 import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } from '@docket/types';
-import { and, asc, count, eq, gt, ne } from 'drizzle-orm';
+import { and, asc, count, eq, gt } from 'drizzle-orm';
 
 import { assertAgentSessionsEntitled } from '../billing/entitlement';
 import { getContainer } from '../container';
@@ -62,25 +63,69 @@ export interface LoopDeps {
 /** Product default for simultaneously running personal Athena sessions. */
 export const DEFAULT_ATHENA_CONCURRENCY = 8;
 
-/** Enforce the per-owner Athena admission limit before a pending run starts. */
-async function assertAthenaConcurrencyAvailable(session: SessionRow): Promise<void> {
-  if (session.executorKind !== 'athena' || session.status === 'running') return;
-  const ownerUserId = requireAthenaOwner(session);
-  const [row] = await db
-    .select({ value: count() })
-    .from(agentSession)
-    .where(
-      and(
-        eq(agentSession.executorKind, 'athena'),
-        eq(agentSession.ownerUserId, ownerUserId),
-        eq(agentSession.status, 'running'),
-        ne(agentSession.id, session.id),
-      ),
-    );
-  const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
-  if ((row?.value ?? 0) >= limit) {
-    throw new ConflictError('Athena has reached the concurrent run limit');
+/**
+ * Admit a pending session without allowing concurrent Athena runs to oversubscribe one owner.
+ *
+ * @remarks
+ * Athena admission locks the owner's stable user row, then reloads and transitions only this
+ * session inside the same short transaction. Re-entrant callers that observe the same session
+ * already running continue safely; provider and tool execution always happens after commit.
+ */
+async function admitSession(session: SessionRow): Promise<void> {
+  if (session.executorKind === 'registered_agent') {
+    await db
+      .update(agentSession)
+      .set({ status: 'running', startedAt: session.startedAt ?? new Date() })
+      .where(eq(agentSession.id, session.id));
+    return;
   }
+  if (session.status === 'running') return;
+
+  const ownerUserId = requireAthenaOwner(session);
+  await db.transaction(async (tx) => {
+    const [owner] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, ownerUserId))
+      .for('update');
+    if (!owner) throw new NotFoundError('Athena owner not found');
+
+    const [current] = await tx
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, session.id))
+      .limit(1);
+    if (!current) throw new NotFoundError('Session not found');
+    if (current.executorKind !== 'athena' || current.ownerUserId !== ownerUserId) {
+      throw new ConflictError('Session executor changed during admission');
+    }
+    if (current.status === 'running') return;
+    if (current.status !== 'pending') {
+      throw new ConflictError('Session is not in a runnable state');
+    }
+
+    const [row] = await tx
+      .select({ value: count() })
+      .from(agentSession)
+      .where(
+        and(
+          eq(agentSession.executorKind, 'athena'),
+          eq(agentSession.ownerUserId, ownerUserId),
+          eq(agentSession.status, 'running'),
+        ),
+      );
+    const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
+    if ((row?.value ?? 0) >= limit) {
+      throw new ConflictError('Athena has reached the concurrent run limit');
+    }
+
+    const [admitted] = await tx
+      .update(agentSession)
+      .set({ status: 'running', startedAt: current.startedAt ?? new Date() })
+      .where(and(eq(agentSession.id, current.id), eq(agentSession.status, 'pending')))
+      .returning({ id: agentSession.id });
+    if (!admitted) throw new ConflictError('Session admission changed concurrently');
+  });
 }
 
 /** A `tool_use` block extracted from an assistant message. */
@@ -373,7 +418,6 @@ export async function driveSession(
   if (session.status !== 'pending' && session.status !== 'running') {
     throw new ConflictError('Session is not in a runnable state');
   }
-  await assertAthenaConcurrencyAvailable(session);
   const executor = toolboxExecutor(session);
   const agentRow =
     session.executorKind === 'registered_agent'
@@ -422,10 +466,7 @@ export async function driveSession(
     if (contextOrganizationId) await assertAgentSessionsEntitled(contextOrganizationId);
   }
 
-  await db
-    .update(agentSession)
-    .set({ status: 'running', startedAt: session.startedAt ?? new Date() })
-    .where(eq(agentSession.id, sessionId));
+  await admitSession(session);
 
   const turnRuntime = deps.turnRuntime ?? getContainer().agentTurn;
   const toolbox = await openToolbox(executor);

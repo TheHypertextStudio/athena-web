@@ -57,6 +57,13 @@
      keep explicit registered-agent execution unchanged and defer personal connector migration.
   4. Run focused and repository validation, document the authorization invariant, self-review, and
      commit the runtime slice without rebasing, merging, or pushing.
+- **Plan (per-user admission review fix)**:
+  1. Add a concurrent red regression proving two pending sessions cannot both claim the final
+     per-user Athena run slot.
+  2. Lock the stable owner user row and perform the active count plus this session's transition in
+     one short transaction, preserving re-entry and registered-agent behavior.
+  3. Run focused green checks, API and repository gates, review the final diff, and commit the fix
+     independently without amending, rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -101,6 +108,15 @@
   45/45. Full API Vitest runs exit successfully. `git diff --check`, root `pnpm typecheck`, root
   `pnpm lint`, root `pnpm test`, and root `pnpm build` all pass. The only recurring diagnostic is
   the repository engine warning for local Node 24.14.0 versus the declared minimum 24.15.0.
+- **Admission Review Validation**: The concurrent red regression reproduced the race with both
+  sessions observed as `running` from a seven-run starting point. Athena admission now serializes
+  on the owner user row and contains only the count and state transition; billing remains before
+  admission and provider/tool execution remains after commit. The focused test passes 4/4. Review
+  also exposed a stale Sunsama fixture that omitted its registered agent after omitted-agent
+  sessions became personal Athena; the fixture now explicitly uses its workspace agent, preserving
+  coverage for organization-owned connector discovery, read-only annotation, and immediate reads.
+  The final ordered root chain passes typecheck and lint (17/17 tasks each), tests (17/17 tasks;
+  API 145 files and 1,266 tests), and build (3/3 tasks).
 - **Retrospective**: Preserving legacy history requires a deliberately narrow positive migration,
   including proof that a workspace has exactly one matching legacy executor, not a blanket rename
   of every agent named Athena. Encoding exclusive attribution in both database checks and the

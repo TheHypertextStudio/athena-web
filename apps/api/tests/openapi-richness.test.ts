@@ -66,14 +66,23 @@ describe('openapi documentation richness', () => {
     const sample = ['TaskOut', 'OrgOut', 'ProjectOut', 'CommentOut', 'AgentSessionOut'] as const;
     for (const name of sample) {
       const schema = (t as Record<string, unknown>)[name];
-      const json = (await import('zod')).z.toJSONSchema(schema as never, { io: 'output' }) as {
-        properties?: Record<string, { description?: string }>;
-      };
-      const props = Object.entries(json.properties ?? {});
-      expect(props.length).toBeGreaterThan(0);
-      const withDesc = props.filter(([, v]) => (v.description ?? '').length > 0);
-      // Every property of these core output DTOs is documented.
-      expect(withDesc.length).toBe(props.length);
+      interface JsonSchema {
+        readonly properties?: Readonly<Record<string, { readonly description?: string }>>;
+        readonly anyOf?: readonly JsonSchema[];
+        readonly oneOf?: readonly JsonSchema[];
+      }
+      const json = (await import('zod')).z.toJSONSchema(schema as never, {
+        io: 'output',
+      }) as JsonSchema;
+      const variants = json.properties ? [json] : [...(json.anyOf ?? []), ...(json.oneOf ?? [])];
+      expect(variants.length).toBeGreaterThan(0);
+      for (const variant of variants) {
+        const props = Object.entries(variant.properties ?? {});
+        expect(props.length).toBeGreaterThan(0);
+        const withDesc = props.filter(([, v]) => (v.description ?? '').length > 0);
+        // Every property of every discriminated core-output variant is documented.
+        expect(withDesc.length).toBe(props.length);
+      }
     }
   });
 });

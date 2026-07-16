@@ -127,12 +127,18 @@ export function useSessionDetail(orgId: string, sessionId: string): SessionDetai
   const directory = useMemo(() => buildActorDirectory(members, agents), [members, agents]);
 
   const agentActor = useMemo(() => {
+    if (session?.executorKind === 'athena') {
+      return { name: 'Athena', kind: 'agent' as const, avatarUrl: null };
+    }
     const agentActorId = session ? directory.actorIdForAgent(session.agentId) : null;
     return directory.resolve(agentActorId);
   }, [directory, session]);
 
   const ownerName = useMemo(
-    () => (session ? directory.ownerNameForAgent(session.agentId) : null),
+    () =>
+      session?.executorKind === 'registered_agent'
+        ? directory.ownerNameForAgent(session.agentId)
+        : null,
     [directory, session],
   );
 

@@ -113,15 +113,16 @@ export async function beginAgentExecution(
         .limit(1);
       const hubId = hubRows[0]?.id;
       if (hubId) {
-        const taskRows = session.taskId
-          ? await tx
-              .select({ id: task.id, title: task.title, organizationId: task.organizationId })
-              .from(task)
-              .where(
-                and(eq(task.id, session.taskId), eq(task.organizationId, session.organizationId)),
-              )
-              .limit(1)
-          : [];
+        const taskRows =
+          session.taskId && session.organizationId
+            ? await tx
+                .select({ id: task.id, title: task.title, organizationId: task.organizationId })
+                .from(task)
+                .where(
+                  and(eq(task.id, session.taskId), eq(task.organizationId, session.organizationId)),
+                )
+                .limit(1)
+            : [];
         const taskContext = taskRows[0] ?? null;
         const [record] = await tx
           .insert(timeRecord)

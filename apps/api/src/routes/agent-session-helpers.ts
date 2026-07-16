@@ -13,10 +13,8 @@ export type ActivityRow = typeof sessionActivity.$inferSelect;
 
 /** toSessionOut converts internal API route data into the public API response shape. */
 export function toSessionOut(s: SessionRow): z.input<typeof AgentSessionOut> {
-  return {
+  const common = {
     id: s.id,
-    organizationId: s.organizationId,
-    agentId: s.agentId,
     taskId: s.taskId,
     trigger: s.trigger,
     status: s.status,
@@ -25,6 +23,30 @@ export function toSessionOut(s: SessionRow): z.input<typeof AgentSessionOut> {
     startedAt: s.startedAt?.toISOString() ?? null,
     endedAt: s.endedAt?.toISOString() ?? null,
     createdAt: s.createdAt.toISOString(),
+  };
+  if (s.executorKind === 'athena') {
+    if (s.ownerUserId === null || s.agentId !== null) {
+      throw new Error('Athena session violates its executor ownership contract');
+    }
+    return {
+      ...common,
+      executorKind: 'athena',
+      organizationId: s.organizationId,
+      contextOrganizationId: s.contextOrganizationId,
+      agentId: null,
+      ownerUserId: s.ownerUserId,
+    };
+  }
+  if (s.organizationId === null || s.agentId === null || s.ownerUserId !== null) {
+    throw new Error('Registered-agent session violates its executor ownership contract');
+  }
+  return {
+    ...common,
+    executorKind: 'registered_agent',
+    organizationId: s.organizationId,
+    contextOrganizationId: null,
+    agentId: s.agentId,
+    ownerUserId: null,
   };
 }
 

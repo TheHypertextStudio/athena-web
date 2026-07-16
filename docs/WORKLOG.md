@@ -16,7 +16,7 @@
   user-owned assistant that executes with exactly the requesting user's current permissions, then
   rebuild the Athena experience as an ambient dock and expandable personal operating workspace.
 - **Subtasks**:
-  - [ ] Add user-owned executor, activity, transcript, run, and migration contracts.
+  - [x] Add user-owned executor, activity, transcript, run, and migration contracts.
   - [ ] Execute Docket tools through the owner's live user permission context.
   - [ ] Add private personal Athena APIs, connections, assignments, and approval semantics.
   - [ ] Build the shared workbench, ambient dock, and full `/athena` workspace.
@@ -30,6 +30,31 @@
   legacy history. The executor union must preserve third-party registered-agent behavior while all
   Athena paths stop relying on the default-agent grant model.
 - **Blockers**: None.
+- **Plan (persistence contracts)**:
+  1. Add failing DTO and database tests for the executor union, nullable workspace attribution,
+     ownership propagation, and database shape constraints.
+  2. Add migration coverage that proves unambiguous Athena jobs become user-owned while shared
+     chats and ambiguous jobs remain registered-agent history.
+  3. Implement the discriminated Drizzle/Zod contracts and update session serialization and
+     transcript/run creation helpers without changing runtime authorization.
+  4. Run focused red/green checks, the repository validation gates, self-review, and commit the
+     persistence slice atomically.
+- **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
+  and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
+  runs, and transcripts, plus database checks and owner/context indexes. Migration `0041` maps
+  only connectionless Athena jobs with a human initiating Actor to that Actor's user; shared chats,
+  jobs without an attributable initiator, and all other registered-agent history remain unchanged.
+- **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
+  transcript serializers, compile-time executor branches in existing API/web consumers, focused
+  DTO/schema/migration/OpenAPI tests, and this work log.
+- **Validation**: Red DTO tests rejected workspace-neutral activity and Athena's nullable executor
+  fields; red database tests showed the missing executor/owner columns and migration. Focused green
+  runs pass 271/271 type tests and 66/66 database tests. Root `pnpm typecheck` and `pnpm lint` pass
+  17/17 tasks, root `pnpm test` passes 17/17 tasks, and root `pnpm build` passes 3/3 tasks.
+- **Retrospective**: Preserving legacy history requires a deliberately narrow positive migration,
+  not a blanket rename of every agent named Athena. Keeping the registered-agent runtime guards in
+  place lets the persistence contract land independently; the next slice can change authorization
+  against explicit `executorKind` branches rather than nullable-field inference.
 
 ---
 

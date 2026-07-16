@@ -309,7 +309,9 @@ export const SessionActivityOut = z
       'The activity entry id — also the SSE event id on `GET /:id/stream`, usable as `Last-Event-ID` to resume.',
     ),
     sessionId: AgentSessionId.describe('The session this entry belongs to.'),
-    organizationId: OrganizationId.describe('The organization the session (and entry) belong to.'),
+    organizationId: OrganizationId.nullable().describe(
+      'The workspace an action targets, or null for workspace-neutral personal activity.',
+    ),
     type: SessionActivityType.describe(
       'The kind of entry (thought/action/response/elicitation/error).',
     ),
@@ -331,63 +333,94 @@ export const SessionActivityOut = z
 /** Session-activity representation value. */
 export type SessionActivityOut = z.infer<typeof SessionActivityOut>;
 
-/** An Agent Session summary returned by list reads. */
-export const AgentSessionOut = z
-  .object({
-    id: AgentSessionId.describe('The session id.'),
-    organizationId: OrganizationId.describe('The organization the session runs in.'),
-    agentId: AgentId.describe(
-      'The registered agent this session is bound to (its default agent when started from a prompt with no `agentId`).',
+const AgentSessionOutBase = z.object({
+  id: AgentSessionId.describe('The session id.'),
+  taskId: TaskId.nullable()
+    .optional()
+    .describe(
+      'The Docket task the session is working on, when task-bound; null for a freeform-prompt or proactively-drafted session.',
     ),
-    taskId: TaskId.nullable()
-      .optional()
-      .describe(
-        'The Docket task the session is working on, when task-bound; null for a freeform-prompt or proactively-drafted session.',
-      ),
-    trigger: SessionTrigger.describe('Why the session started (assignment/delegation/mention).'),
-    status: SessionStatus.describe('Current lifecycle state of the session.'),
-    initiatorId: ActorId.nullable()
-      .optional()
-      .describe(
-        'The human Actor who started or is accountable for the session (the prompt author / observation recipient); null when system-initiated.',
-      ),
-    externalRunRef: z
-      .string()
-      .nullable()
-      .optional()
-      .describe(
-        'Idempotency key for proactively-created sessions (`observation:<observationId>:<userId>`), enforced by a unique partial index so a re-scan never spawns a duplicate run; null for directly-started sessions.',
-      ),
-    startedAt: z
-      .string()
-      .nullable()
-      .optional()
-      .describe(
-        'ISO-8601 instant the session first transitioned to `running`; null while still `pending`.',
-      ),
-    endedAt: z
-      .string()
-      .nullable()
-      .optional()
-      .describe(
-        'ISO-8601 instant the session reached a terminal state (`completed`/`canceled`); null while non-terminal.',
-      ),
-    createdAt: z
-      .string()
-      .describe('ISO-8601 timestamp the session was created — the list sort key (descending).'),
-  })
+  trigger: SessionTrigger.describe('Why the session started (assignment/delegation/mention).'),
+  status: SessionStatus.describe('Current lifecycle state of the session.'),
+  initiatorId: ActorId.nullable()
+    .optional()
+    .describe(
+      'The human Actor who started or is accountable for the session (the prompt author / observation recipient); null when system-initiated.',
+    ),
+  externalRunRef: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'Idempotency key for proactively-created sessions (`observation:<observationId>:<userId>`), enforced by a unique partial index so a re-scan never spawns a duplicate run; null for directly-started sessions.',
+    ),
+  startedAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'ISO-8601 instant the session first transitioned to `running`; null while still `pending`.',
+    ),
+  endedAt: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'ISO-8601 instant the session reached a terminal state (`completed`/`canceled`); null while non-terminal.',
+    ),
+  createdAt: z
+    .string()
+    .describe('ISO-8601 timestamp the session was created — the list sort key (descending).'),
+});
+
+const RegisteredAgentSessionOut = AgentSessionOutBase.extend({
+  executorKind: z
+    .literal('registered_agent')
+    .default('registered_agent')
+    .describe('A workspace-scoped registered third-party agent executes this session.'),
+  organizationId: OrganizationId.describe('The workspace that owns the registered agent.'),
+  contextOrganizationId: z
+    .null()
+    .default(null)
+    .describe('Registered-agent sessions use their owning workspace, not a separate context.'),
+  agentId: AgentId.describe('The workspace-registered third-party agent executing this session.'),
+  ownerUserId: z
+    .null()
+    .default(null)
+    .describe('Registered agents are workspace-scoped rather than privately user-owned.'),
+});
+
+const AthenaSessionOut = AgentSessionOutBase.extend({
+  executorKind: z
+    .literal('athena')
+    .describe('The caller-owned Athena runtime executes this session.'),
+  organizationId: OrganizationId.nullable().describe(
+    'Legacy workspace attribution retained when present; null for new personal sessions.',
+  ),
+  contextOrganizationId: OrganizationId.nullable()
+    .optional()
+    .describe('The optional workspace in which Athena is operating.'),
+  agentId: z.null().describe('Athena is user-owned and never represented by a registered agent.'),
+  ownerUserId: z.string().min(1).describe('The user who privately owns this Athena session.'),
+});
+
+/** An Agent Session summary returned by list reads, discriminated by its runtime executor. */
+export const AgentSessionOut = z
+  .union([AthenaSessionOut, RegisteredAgentSessionOut])
   .meta({ id: 'AgentSessionOut', description: 'A Docket-hosted agent session.' });
 /** Agent-session representation value. */
 export type AgentSessionOut = z.infer<typeof AgentSessionOut>;
 
 /** An Agent Session with its full ordered Activity stream (single-session read). */
-export const AgentSessionDetailOut = AgentSessionOut.extend({
-  activities: z
-    .array(SessionActivityOut)
-    .describe(
-      "The session's full Activity stream, oldest-first — the complete transcript of thoughts, actions, responses, elicitations, and errors.",
-    ),
-}).meta({ id: 'AgentSessionDetailOut', description: 'An agent session with its activity stream.' });
+export const AgentSessionDetailOut = AgentSessionOut.and(
+  z.object({
+    activities: z
+      .array(SessionActivityOut)
+      .describe(
+        "The session's full Activity stream, oldest-first — the complete transcript of thoughts, actions, responses, elicitations, and errors.",
+      ),
+  }),
+).meta({ id: 'AgentSessionDetailOut', description: 'An agent session with its activity stream.' });
 /** Agent-session-detail representation value. */
 export type AgentSessionDetailOut = z.infer<typeof AgentSessionDetailOut>;
 

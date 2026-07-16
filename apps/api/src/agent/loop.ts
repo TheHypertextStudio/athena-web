@@ -264,6 +264,8 @@ export async function driveSession(
   if (session.status !== 'pending' && session.status !== 'running') {
     throw new ConflictError('Session is not in a runnable state');
   }
+  const registeredAgentId = session.agentId;
+  if (registeredAgentId === null) throw new NotFoundError('Agent not found');
 
   const agentRows = await db
     .select({
@@ -274,7 +276,7 @@ export async function driveSession(
     })
     .from(agent)
     .innerJoin(actor, eq(agent.actorId, actor.id))
-    .where(and(eq(agent.id, session.agentId), eq(agent.organizationId, orgId)))
+    .where(and(eq(agent.id, registeredAgentId), eq(agent.organizationId, orgId)))
     .limit(1);
   const agentRow = agentRows[0];
   if (!agentRow) throw new NotFoundError('Agent not found');
@@ -303,7 +305,7 @@ export async function driveSession(
     .where(and(eq(agentSession.id, sessionId), eq(agentSession.organizationId, orgId)));
 
   const turnRuntime = deps.turnRuntime ?? getContainer().agentTurn;
-  const toolbox = await openToolbox(orgId, session.agentId);
+  const toolbox = await openToolbox(orgId, registeredAgentId);
   try {
     let messages = await loadTranscript(db, sessionId);
     if (messages.length === 0) {
@@ -571,6 +573,8 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
     .limit(1);
   const session = sessionRows[0];
   if (!session) throw new NotFoundError('Session not found');
+  const registeredAgentId = session.agentId;
+  if (registeredAgentId === null) throw new NotFoundError('Agent not found');
 
   const approved = await db
     .select()
@@ -588,12 +592,12 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
   const agentRows = await db
     .select({ actorId: agent.actorId })
     .from(agent)
-    .where(eq(agent.id, session.agentId))
+    .where(eq(agent.id, registeredAgentId))
     .limit(1);
   const agentActorId = agentRows[0]?.actorId ?? null;
 
   const withCalls = approved.filter((a) => a.body.action?.toolCall);
-  const toolbox = withCalls.length > 0 ? await openToolbox(orgId, session.agentId) : null;
+  const toolbox = withCalls.length > 0 ? await openToolbox(orgId, registeredAgentId) : null;
   try {
     for (const action of approved) {
       const call = action.body.action?.toolCall;

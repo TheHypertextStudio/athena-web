@@ -184,8 +184,14 @@ export function fetchProjectDetail(
       ? (await sessionsRes.json()).items
       : [];
     const here = sessions.filter(
-      (s): s is AgentSessionOut & { taskId: string } =>
-        typeof s.taskId === 'string' && projectTaskIds.has(s.taskId),
+      (
+        s,
+      ): s is Extract<AgentSessionOut, { executorKind: 'registered_agent' }> & {
+        taskId: string;
+      } =>
+        s.executorKind === 'registered_agent' &&
+        typeof s.taskId === 'string' &&
+        projectTaskIds.has(s.taskId),
     );
     const agentsHere: readonly AgentHere[] = here.map((s) => ({
       sessionId: s.id,

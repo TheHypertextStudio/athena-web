@@ -8,11 +8,21 @@
  * owns execution; Docket owns the work model and the visible session.
  */
 import { sql } from 'drizzle-orm';
-import { index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import {
   approvalPolicy,
   approvalStatus,
+  agentSessionExecutorKind,
   agentSessionRunStatus,
   sessionActivityType,
   sessionKind,
@@ -21,6 +31,7 @@ import {
 } from '../enums';
 import { genId } from '../id';
 import type { AgentConnection, ApprovalRouting, SessionActivityBody, TurnMessage } from '../types';
+import { user } from './auth';
 import { actor, auditColumns, organization } from './identity';
 import { task } from './work';
 
@@ -48,12 +59,17 @@ export const agentSession = pgTable(
   'agent_session',
   {
     id: text('id').primaryKey().$defaultFn(genId),
-    organizationId: text('organization_id')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
-    agentId: text('agent_id')
-      .notNull()
-      .references(() => agent.id, { onDelete: 'cascade' }),
+    /** Legacy tenant attribution for registered agents; Athena may have no workspace at all. */
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'cascade',
+    }),
+    /** Optional workspace in which the user-owned Athena executor is currently operating. */
+    contextOrganizationId: text('context_organization_id').references(() => organization.id, {
+      onDelete: 'set null',
+    }),
+    executorKind: agentSessionExecutorKind('executor_kind').notNull().default('registered_agent'),
+    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'cascade' }),
+    agentId: text('agent_id').references(() => agent.id, { onDelete: 'cascade' }),
     taskId: text('task_id').references(() => task.id, { onDelete: 'set null' }),
     trigger: sessionTrigger('trigger').notNull(),
     /**
@@ -71,7 +87,23 @@ export const agentSession = pgTable(
   },
   (t) => [
     index('agent_session_org_idx').on(t.organizationId),
+    index('agent_session_owner_idx').on(t.ownerUserId, t.createdAt),
+    index('agent_session_context_org_idx').on(t.contextOrganizationId, t.createdAt),
     index('agent_session_agent_idx').on(t.agentId),
+    check(
+      'agent_session_executor_shape_check',
+      sql`(
+        ${t.executorKind} = 'athena'
+        AND ${t.ownerUserId} IS NOT NULL
+        AND ${t.agentId} IS NULL
+      ) OR (
+        ${t.executorKind} = 'registered_agent'
+        AND ${t.ownerUserId} IS NULL
+        AND ${t.contextOrganizationId} IS NULL
+        AND ${t.organizationId} IS NOT NULL
+        AND ${t.agentId} IS NOT NULL
+      )`,
+    ),
     // Idempotency for event-triggered (proactive) sessions: `external_run_ref` is set to
     // `observation:<id>`, so re-processing the same observation can't spawn a duplicate run.
     uniqueIndex('agent_session_external_run_uq')
@@ -94,9 +126,10 @@ export const agentSessionRun = pgTable(
     sessionId: text('session_id')
       .notNull()
       .references(() => agentSession.id, { onDelete: 'cascade' }),
-    organizationId: text('organization_id')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'cascade',
+    }),
+    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'cascade' }),
     generation: integer('generation').notNull(),
     workflowInstanceId: text('workflow_instance_id').notNull(),
     status: agentSessionRunStatus('status').notNull().default('queued'),
@@ -111,6 +144,11 @@ export const agentSessionRun = pgTable(
     uniqueIndex('agent_session_run_generation_uq').on(t.sessionId, t.generation),
     uniqueIndex('agent_session_run_workflow_uq').on(t.workflowInstanceId),
     index('agent_session_run_org_status_idx').on(t.organizationId, t.status),
+    index('agent_session_run_owner_status_idx').on(t.ownerUserId, t.status),
+    check(
+      'agent_session_run_attribution_check',
+      sql`${t.ownerUserId} IS NOT NULL OR ${t.organizationId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -122,9 +160,9 @@ export const sessionActivity = pgTable(
     sessionId: text('session_id')
       .notNull()
       .references(() => agentSession.id, { onDelete: 'cascade' }),
-    organizationId: text('organization_id')
-      .notNull()
-      .references(() => organization.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'cascade',
+    }),
     type: sessionActivityType('type').notNull(),
     body: jsonb('body').$type<SessionActivityBody>().notNull().default({}),
     approvalStatus: approvalStatus('approval_status'),
@@ -153,13 +191,24 @@ export const sessionActivity = pgTable(
  * Adjacent to `agent_session` (the agent island), never woven into the event
  * substrate.
  */
-export const agentSessionTranscript = pgTable('agent_session_transcript', {
-  sessionId: text('session_id')
-    .primaryKey()
-    .references(() => agentSession.id, { onDelete: 'cascade' }),
-  organizationId: text('organization_id')
-    .notNull()
-    .references(() => organization.id, { onDelete: 'cascade' }),
-  messages: jsonb('messages').$type<TurnMessage[]>().notNull().default([]),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-});
+export const agentSessionTranscript = pgTable(
+  'agent_session_transcript',
+  {
+    sessionId: text('session_id')
+      .primaryKey()
+      .references(() => agentSession.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'cascade',
+    }),
+    ownerUserId: text('owner_user_id').references(() => user.id, { onDelete: 'cascade' }),
+    messages: jsonb('messages').$type<TurnMessage[]>().notNull().default([]),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    index('agent_session_transcript_owner_idx').on(t.ownerUserId),
+    check(
+      'agent_session_transcript_attribution_check',
+      sql`${t.ownerUserId} IS NOT NULL OR ${t.organizationId} IS NOT NULL`,
+    ),
+  ],
+);

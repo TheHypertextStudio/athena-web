@@ -1282,6 +1282,16 @@ describe('agent DTOs', () => {
     });
     expect(parsed.type).toBe('thought');
     expect(
+      SessionActivityOut.parse({
+        id: ID,
+        sessionId: ID2,
+        organizationId: null,
+        type: 'response',
+        body: { text: 'Personal message' },
+        createdAt: 'x',
+      }).organizationId,
+    ).toBeNull();
+    expect(
       SessionActivityOut.safeParse({
         id: ID,
         sessionId: ID2,
@@ -1293,29 +1303,72 @@ describe('agent DTOs', () => {
     ).toBe(false);
   });
 
-  it('AgentSessionOut parses', () => {
+  it('AgentSessionOut discriminates registered-agent and user-owned Athena executors', () => {
+    const registered = AgentSessionOut.parse({
+      id: ID,
+      executorKind: 'registered_agent',
+      organizationId: ID2,
+      contextOrganizationId: null,
+      agentId: ID,
+      ownerUserId: null,
+      taskId: null,
+      trigger: 'assignment',
+      status: 'pending',
+      initiatorId: null,
+      externalRunRef: null,
+      startedAt: null,
+      endedAt: null,
+      createdAt: 'x',
+    });
+    expect(registered.trigger).toBe('assignment');
     expect(
       AgentSessionOut.parse({
         id: ID,
         organizationId: ID2,
         agentId: ID,
-        taskId: null,
         trigger: 'assignment',
         status: 'pending',
-        initiatorId: null,
-        externalRunRef: null,
-        startedAt: null,
-        endedAt: null,
         createdAt: 'x',
-      }).trigger,
-    ).toBe('assignment');
+      }).executorKind,
+    ).toBe('registered_agent');
+
+    const athena = AgentSessionOut.parse({
+      id: ID2,
+      executorKind: 'athena',
+      organizationId: null,
+      contextOrganizationId: ID,
+      agentId: null,
+      ownerUserId: ID2,
+      taskId: null,
+      trigger: 'delegation',
+      status: 'running',
+      initiatorId: null,
+      externalRunRef: null,
+      startedAt: 'x',
+      endedAt: null,
+      createdAt: 'x',
+    });
+    expect(athena.ownerUserId).toBe(ID2);
+    expect(athena.contextOrganizationId).toBe(ID);
+
+    for (const invalid of [
+      { ...registered, ownerUserId: ID2 },
+      { ...registered, agentId: null },
+      { ...athena, ownerUserId: null },
+      { ...athena, agentId: ID },
+    ]) {
+      expect(AgentSessionOut.safeParse(invalid).success).toBe(false);
+    }
   });
 
   it('AgentSessionDetailOut parses with activities + rejects bad activity', () => {
     const parsed = AgentSessionDetailOut.parse({
       id: ID,
+      executorKind: 'registered_agent',
       organizationId: ID2,
+      contextOrganizationId: null,
       agentId: ID,
+      ownerUserId: null,
       taskId: ID2,
       trigger: 'delegation',
       status: 'running',
@@ -1340,8 +1393,11 @@ describe('agent DTOs', () => {
     expect(
       AgentSessionDetailOut.safeParse({
         id: ID,
+        executorKind: 'registered_agent',
         organizationId: ID2,
+        contextOrganizationId: null,
         agentId: ID,
+        ownerUserId: null,
         trigger: 'mention',
         status: 'running',
         createdAt: 'y',

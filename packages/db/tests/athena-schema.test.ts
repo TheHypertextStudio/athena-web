@@ -46,6 +46,17 @@ beforeAll(async () => {
   ids['org'] = (
     await db.insert(organization).values({ name: 'Acme', slug: 'acme' }).returning()
   )[0]!.id;
+  ids['humanActor'] = (
+    await db
+      .insert(actor)
+      .values({
+        organizationId: ids['org'],
+        kind: 'human',
+        displayName: 'Willie',
+        userId: ids['user'],
+      })
+      .returning()
+  )[0]!.id;
   ids['agentActor'] = (
     await db
       .insert(actor)
@@ -83,6 +94,8 @@ describe('athena schema additions', () => {
         .returning()
     )[0]!;
     expect(job.kind).toBe('job');
+    expect(job.executorKind).toBe('registered_agent');
+    expect(job.ownerUserId).toBeNull();
 
     const chat = (
       await db
@@ -97,6 +110,45 @@ describe('athena schema additions', () => {
     )[0]!;
     expect(chat.kind).toBe('chat');
     ids['session'] = job.id;
+  });
+
+  it('enforces the executor ownership shape at the database boundary', async () => {
+    const athena = (
+      await db
+        .insert(agentSession)
+        .values({
+          executorKind: 'athena',
+          organizationId: null,
+          contextOrganizationId: ids['org']!,
+          agentId: null,
+          ownerUserId: ids['user']!,
+          trigger: 'delegation',
+          initiatorId: ids['humanActor']!,
+        })
+        .returning()
+    )[0]!;
+    expect(athena.ownerUserId).toBe(ids['user']);
+    expect(athena.contextOrganizationId).toBe(ids['org']);
+    ids['athenaSession'] = athena.id;
+
+    await expect(
+      db.insert(agentSession).values({
+        executorKind: 'athena',
+        organizationId: null,
+        agentId: null,
+        ownerUserId: null,
+        trigger: 'delegation',
+      }),
+    ).rejects.toThrow();
+    await expect(
+      db.insert(agentSession).values({
+        executorKind: 'registered_agent',
+        organizationId: ids['org']!,
+        agentId: ids['agent']!,
+        ownerUserId: ids['user']!,
+        trigger: 'delegation',
+      }),
+    ).rejects.toThrow();
   });
 
   it('persists one idempotent durable run generation for a session', async () => {
@@ -130,6 +182,35 @@ describe('athena schema additions', () => {
         workflowInstanceId: `${ids['session']!}:retry`,
       }),
     ).rejects.toThrow();
+  });
+
+  it('attributes Athena runs and transcripts to their owning user', async () => {
+    const run = (
+      await db
+        .insert(agentSessionRun)
+        .values({
+          sessionId: ids['athenaSession']!,
+          organizationId: null,
+          ownerUserId: ids['user']!,
+          generation: 1,
+          workflowInstanceId: `${ids['athenaSession']!}:1`,
+        })
+        .returning()
+    )[0]!;
+    expect(run.ownerUserId).toBe(ids['user']);
+
+    const transcript = (
+      await db
+        .insert(agentSessionTranscript)
+        .values({
+          sessionId: ids['athenaSession']!,
+          organizationId: null,
+          ownerUserId: ids['user']!,
+          messages: [],
+        })
+        .returning()
+    )[0]!;
+    expect(transcript.ownerUserId).toBe(ids['user']);
   });
 
   it('round-trips a durable transcript of TurnMessages keyed by session', async () => {
@@ -193,6 +274,21 @@ describe('athena schema additions', () => {
       .from(sessionActivity)
       .where(eq(sessionActivity.proposalGroupId, '01HZPROPOSALGROUP000000001'));
     expect(grouped).toHaveLength(1);
+  });
+
+  it('allows personal activity without workspace attribution', async () => {
+    const row = (
+      await db
+        .insert(sessionActivity)
+        .values({
+          sessionId: ids['athenaSession']!,
+          organizationId: null,
+          type: 'response',
+          body: { text: 'What should I work on today?' },
+        })
+        .returning()
+    )[0]!;
+    expect(row.organizationId).toBeNull();
   });
 
   it('stores an org-held integration credential 1:1 with its integration', async () => {

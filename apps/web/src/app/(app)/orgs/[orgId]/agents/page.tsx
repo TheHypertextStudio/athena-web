@@ -131,8 +131,10 @@ export default function AgentsFeedPage(): JSX.Element {
   /** Adapt a session DTO to its feed-row view-model (task title + agent + owner). */
   const toRow = useCallback(
     (session: AgentSessionOut): SessionRowData => {
-      const agentActorId = directory.actorIdForAgent(session.agentId);
-      const agentActor = directory.resolve(agentActorId);
+      const agentActor =
+        session.executorKind === 'registered_agent'
+          ? directory.resolve(directory.actorIdForAgent(session.agentId))
+          : { name: 'Athena', avatarUrl: null };
       const taskTitle = session.taskId
         ? (taskTitleById.get(session.taskId) ?? `Untitled ${taskLabel.toLowerCase()}`)
         : `Ad-hoc ${taskLabel.toLowerCase()}`;
@@ -141,7 +143,10 @@ export default function AgentsFeedPage(): JSX.Element {
         taskTitle,
         agentName: agentActor.name,
         agentAvatarUrl: agentActor.avatarUrl,
-        ownerName: directory.ownerNameForAgent(session.agentId),
+        ownerName:
+          session.executorKind === 'registered_agent'
+            ? directory.ownerNameForAgent(session.agentId)
+            : null,
         status: session.status,
         startedAt: session.startedAt ?? null,
         endedAt: session.endedAt ?? null,

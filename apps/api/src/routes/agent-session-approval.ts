@@ -23,6 +23,7 @@ export async function resolveAction(
       .limit(1);
     const session = sessionRows[0];
     if (!session) throw new NotFoundError('Session not found');
+    if (session.agentId === null) throw new NotFoundError('Agent not found');
     if (session.status !== 'awaiting_approval') {
       throw new ConflictError('Session is not awaiting approval');
     }
@@ -102,6 +103,7 @@ export async function decideActivity(
       .limit(1);
     const session = sessionRows[0];
     if (!session) throw new NotFoundError('Session not found');
+    if (session.agentId === null) throw new NotFoundError('Agent not found');
 
     // The audit feed records the agent's *actor* id (audit_event.actor_id → actor.id),
     // not the agent row id; resolve it once for every action we decide below.
@@ -243,6 +245,7 @@ export async function decideProposalGroup(
       .limit(1);
     const session = sessionRows[0];
     if (!session) throw new NotFoundError('Session not found');
+    if (session.agentId === null) throw new NotFoundError('Agent not found');
 
     const agentRows = await tx
       .select({ actorId: agent.actorId })

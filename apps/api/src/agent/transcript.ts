@@ -36,20 +36,22 @@ export async function loadTranscript(handle: DbHandle, sessionId: string): Promi
  *
  * @param handle - The db/transaction handle to write on (pass the turn's transaction).
  * @param sessionId - The owning session.
- * @param organizationId - The owning org (tenant isolation).
+ * @param organizationId - The legacy owning org or current workspace attribution.
+ * @param ownerUserId - The owning user for a private Athena transcript.
  * @param messages - The complete conversation to persist.
  */
 export async function saveTranscript(
   handle: DbHandle,
   sessionId: string,
-  organizationId: string,
+  organizationId: string | null,
   messages: readonly TurnMessage[],
+  ownerUserId: string | null = null,
 ): Promise<void> {
   await handle
     .insert(agentSessionTranscript)
-    .values({ sessionId, organizationId, messages: [...messages] })
+    .values({ sessionId, organizationId, ownerUserId, messages: [...messages] })
     .onConflictDoUpdate({
       target: agentSessionTranscript.sessionId,
-      set: { messages: [...messages], updatedAt: sql`now()` },
+      set: { ownerUserId, messages: [...messages], updatedAt: sql`now()` },
     });
 }

@@ -12,7 +12,8 @@ export interface DocketWorkflowEnv {
 
 /** Application secrets intentionally omitted from generated binding interfaces. */
 export type RunnerEnv = Pick<Cloudflare.Env, 'ATHENA_RUN_QUEUE'> & DocketWorkflowEnv;
-const DEFAULT_DOCKET_REQUEST_TIMEOUT_MS = 10_000;
+/** Per-generation callback deadline; Athena's overall work has no duration cap. */
+export const DEFAULT_GENERATION_REQUEST_TIMEOUT_MS = 15 * 60_000;
 
 /** Injectable Workflow-to-Docket transport. */
 export interface WorkflowHttpDependencies {
@@ -113,7 +114,9 @@ export async function advanceDocket(
     path,
     body,
   });
-  const signal = AbortSignal.timeout(dependencies.timeoutMs ?? DEFAULT_DOCKET_REQUEST_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(
+    dependencies.timeoutMs ?? DEFAULT_GENERATION_REQUEST_TIMEOUT_MS,
+  );
   let response: Response;
   try {
     response = await dependencies.fetch(new URL(path, env.DOCKET_API_URL), {

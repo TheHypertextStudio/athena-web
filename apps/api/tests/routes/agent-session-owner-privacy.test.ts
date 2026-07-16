@@ -283,7 +283,24 @@ describe('owner-private Athena compatibility routes', () => {
 
     const created = await post(ownerApp, '/', { prompt: 'Queue this personal request' });
     expect(created.status).toBe(202);
-    expect((await created.json()) as { status: string }).toMatchObject({ status: 'running' });
+    const createdBody = (await created.json()) as { id: string; status: string };
+    expect(createdBody).toMatchObject({ status: 'running' });
+    expect((await post(ownerApp, `/${createdBody.id}/pause`)).status).toBe(200);
+    const [pausedRun] = await db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, createdBody.id));
+    expect(pausedRun?.status).toBe('waiting');
+
+    const cancelCreated = await post(ownerApp, '/', { prompt: 'Cancel this queued request' });
+    expect(cancelCreated.status).toBe(202);
+    const cancelBody = (await cancelCreated.json()) as { id: string };
+    expect((await post(ownerApp, `/${cancelBody.id}/cancel`)).status).toBe(200);
+    const [canceledRun] = await db
+      .select({ status: schema.agentSessionRun.status })
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, cancelBody.id));
+    expect(canceledRun?.status).toBe('canceled');
 
     const chatted = await post(ownerApp, '/chat/messages', { body: 'Queue this chat turn' });
     expect(chatted.status).toBe(202);
@@ -482,7 +499,7 @@ describe('owner-private Athena compatibility routes', () => {
         )
       ).status,
     ).toBe(200);
-    expect(runnerMocks.admit).toHaveBeenCalledTimes(3);
+    expect(runnerMocks.admit).toHaveBeenCalledTimes(4);
     expect(runnerMocks.wake).toHaveBeenCalledTimes(8);
     const wakeIntents = await db
       .select({ sessionId: schema.agentSessionRun.sessionId })

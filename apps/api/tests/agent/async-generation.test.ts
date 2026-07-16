@@ -10,6 +10,7 @@ import {
   type RunGenerationLease,
   withRunGenerationFence,
 } from '../../src/agent/run-generation';
+import { transitionLifecycle } from '../../src/routes/agent-session-helpers';
 import { getMigratedDb } from '../support/db';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
@@ -95,6 +96,56 @@ describe('queued Athena generations', () => {
     expect(current?.status).toBe('running');
     expect(run?.status).toBe('queued');
     expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it('atomically parks a just-accepted queued generation when its owner pauses', async () => {
+    const seed = await seedPendingAthena();
+    const [pending] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(pending!);
+    const [running] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+
+    const paused = await transitionLifecycle(running!, 'pause');
+
+    expect(paused.status).toBe('awaiting_input');
+    const [run] = await dbModule.db
+      .select()
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.sessionId, seed.sessionId));
+    expect(run).toMatchObject({ status: 'waiting', leaseToken: null, leaseExpiresAt: null });
+    await expect(advanceCloudflareGeneration(queued.message, 'run')).resolves.toEqual({
+      state: 'wait',
+    });
+  });
+
+  it('atomically cancels a just-accepted queued generation before a delayed Workflow claim', async () => {
+    const seed = await seedPendingAthena();
+    const [pending] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(pending!);
+    const [running] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+
+    const canceled = await transitionLifecycle(running!, 'cancel');
+
+    expect(canceled.status).toBe('canceled');
+    const [run] = await dbModule.db
+      .select()
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.sessionId, seed.sessionId));
+    expect(run).toMatchObject({ status: 'canceled', leaseToken: null, leaseExpiresAt: null });
+    await expect(advanceCloudflareGeneration(queued.message, 'run')).resolves.toEqual({
+      state: 'complete',
+    });
   });
 
   it('claims only the exact persisted generation and fences duplicate workers', async () => {

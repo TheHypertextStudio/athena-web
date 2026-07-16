@@ -25,11 +25,14 @@ inputs, provider credentials, and MCP credentials must never be added to this me
    complete method/path/body/timestamp/nonce request and asks Docket to persist the authenticated
    nonce before it sends the opaque message to Queue.
 3. The Queue consumer creates `docket-athena-execution` with the deterministic instance id.
-   Duplicate Queue delivery resolves the existing instance and is acknowledged; transient failures
-   retry that message independently and eventually move to the DLQ.
+   Duplicate Queue delivery resolves the existing instance. Active instances are acknowledged;
+   errored or terminated instances are restarted before acknowledgement; transient failures retry
+   that message independently and eventually move to the DLQ.
 4. The Workflow signs `POST /internal/athena/execution/advance` with the separate
    Cloudflare-to-Docket secret. Docket claims only the exact queued generation, restores the owner
-   from Postgres, and runs one existing generation quantum behind its lease fence.
+   from Postgres, and runs one model turn behind its lease fence. Each callback has a 15-minute
+   deadline, but successful continuations create another deterministic generation, so the deadline
+   never caps the duration of the user's overall work.
 5. A completed quantum commits the next queued generation before the Workflow dispatches it. A
    terminal session ends. Approval or input settles the run as `waiting` and the Workflow enters a
    durable event wait.
@@ -39,8 +42,10 @@ inputs, provider credentials, and MCP credentials must never be added to this me
    generation and the Workflow dispatches it.
 7. The Worker cron calls the protected Docket sweep every minute. It claims no more than 25 due or
    expired-lease intents, marks an intent delivered only after Worker `202`, and retries failures
-   with capped exponential backoff. Eight failed attempts move the intent to `failed` for operator
-   attention.
+   with capped exponential backoff. It also replays an enqueue or wake marked delivered for at
+   least 20 minutes when Docket still reports the corresponding run as queued or waiting. That
+   reconciliation restarts a failed deterministic Workflow without replaying already-settled work.
+   Eight consecutive failed attempts move the intent to `failed` for operator attention.
 
 Cloudflare limits one `waitForEvent` timeout to 365 days. The Workflow uses deterministic yearly
 wait epochs and starts another epoch after timeout, so this infrastructure limit is not a Docket
@@ -133,8 +138,10 @@ when upgrading.
   approved internal HMAC signer when an immediate pass is needed; never expose it through public
   OpenAPI or copy a production secret into shell history.
 - Worker ingress and Docket's internal execution ingress count actual streamed bytes and cancel the
-  reader after 4 KiB, regardless of `Content-Length`. API-to-Worker, Worker-to-Docket nonce claim,
-  Workflow-to-Docket advance, and scheduled sweep requests abort after 10 seconds.
+  reader after 4 KiB, regardless of `Content-Length`. API-to-Worker and Worker-to-Docket nonce
+  claims abort after 10 seconds. A one-turn Workflow generation has a 15-minute callback deadline,
+  and the bounded 25-intent scheduled sweep has a five-minute outer deadline. These are per-call
+  safety bounds, not an overall Athena work-duration limit.
 - Inspect `agent_session_dispatch.status='failed'` as an attention queue. `last_error` is a bounded
   application-owned category; the table never stores prompts, identities, credentials, tool input,
   or provider error text.
@@ -146,6 +153,9 @@ when upgrading.
   incremented attempt and a new fencing token; a fresh lease remains unavailable, and the prior
   token cannot commit transcript, activity, or tool-effect state. Exact-generation recovery locks
   the owner and rechecks capacity while excluding only that expired row.
+- Pausing or canceling Athena work locks the session and latest generation together. A queued or
+  active generation is parked or canceled under the same transaction, its lease is revoked, and a
+  delayed Workflow callback can only observe that persisted lifecycle state.
 - Never replay an `executing` action automatically. That state is the existing non-repeatable MCP
   dispatch boundary and requires human attention after interruption.
 - Rotate secrets one direction at a time with a coordinated Docket/Worker update. Requests signed

@@ -123,6 +123,13 @@ export function createRunnerFetchHandler(
       await env.ATHENA_RUN_QUEUE.send(input, { contentType: 'json' });
     } else {
       const instance = await env.ATHENA_WORKFLOW.get(input.workflowId);
+      const status = await instance.status();
+      if (status.status === 'unknown') {
+        throw new Error('Athena Workflow instance is unavailable');
+      }
+      if (status.status === 'errored' || status.status === 'terminated') {
+        await instance.restart();
+      }
       await instance.sendEvent({ type: 'docket_wake', payload: {} });
     }
     console.log(

@@ -23,7 +23,11 @@ async function signedRequest(path: '/enqueue' | '/wake'): Promise<Request> {
 }
 
 function runnerEnv() {
-  const instance = { sendEvent: vi.fn().mockResolvedValue(undefined) };
+  const instance = {
+    sendEvent: vi.fn().mockResolvedValue(undefined),
+    status: vi.fn().mockResolvedValue({ status: 'waiting' }),
+    restart: vi.fn().mockResolvedValue(undefined),
+  };
   return {
     instance,
     env: {
@@ -104,6 +108,23 @@ describe('signed runner HTTP ingress', () => {
     expect(env.ATHENA_WORKFLOW.get).toHaveBeenCalledWith(message.workflowId);
     expect(instance.sendEvent).toHaveBeenCalledWith({ type: 'docket_wake', payload: {} });
   });
+
+  it.each(['errored', 'terminated'])(
+    'restarts a %s Workflow before delivering its wake',
+    async (status) => {
+      const { env, instance } = runnerEnv();
+      instance.status.mockResolvedValue({ status });
+      const handler = createRunnerFetchHandler({
+        fetch: vi.fn().mockResolvedValue(new Response(null, { status: 201 })),
+      });
+
+      const response = await handler(await signedRequest('/wake'), env);
+
+      expect(response.status).toBe(202);
+      expect(instance.restart).toHaveBeenCalledOnce();
+      expect(instance.sendEvent).toHaveBeenCalledWith({ type: 'docket_wake', payload: {} });
+    },
+  );
 
   it('aborts a stalled Docket nonce claim at the configured deadline', async () => {
     const { env } = runnerEnv();

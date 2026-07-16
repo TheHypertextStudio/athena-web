@@ -710,11 +710,16 @@ export async function driveClaimedGeneration(
   lease: RunGenerationLease,
   deps: LoopDeps = {},
 ): Promise<SessionRow> {
-  return driveSessionWithAdmission(orgId, sessionId, deps, {
-    runnableStatuses: ['running'],
-    lease,
-    stopAfterGeneration: true,
-  });
+  return driveSessionWithAdmission(
+    orgId,
+    sessionId,
+    { ...deps, generationTurnQuantum: deps.generationTurnQuantum ?? 1 },
+    {
+      runnableStatuses: ['running'],
+      lease,
+      stopAfterGeneration: true,
+    },
+  );
 }
 
 /** Reopen eligible conversational work only after its durable generation claim succeeds. */

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import worker from '../src/index';
-import { runDispatchSweep } from '../src/scheduled';
+import { DEFAULT_DISPATCH_SWEEP_TIMEOUT_MS, runDispatchSweep } from '../src/scheduled';
 
 const env = {
   CLOUDFLARE_TO_DOCKET_HMAC_SECRET: 'cloudflare-to-docket-secret',
@@ -13,6 +13,10 @@ afterEach(() => {
 });
 
 describe('scheduled durable dispatch recovery', () => {
+  it('allows the bounded sweep to deliver its full sequential batch', () => {
+    expect(DEFAULT_DISPATCH_SWEEP_TIMEOUT_MS).toBeGreaterThanOrEqual(5 * 60_000);
+  });
+
   it('signs and invokes the protected bounded Docket sweep', async () => {
     const fetchMock = vi
       .fn()

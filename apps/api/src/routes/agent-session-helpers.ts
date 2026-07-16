@@ -1,4 +1,4 @@
-import { agentSession, db, sessionActivity } from '@docket/db';
+import { agentSession, agentSessionRun, db, sessionActivity } from '@docket/db';
 import { type Capability, satisfies } from '@docket/authz';
 import type { AgentSessionDetailOut, AgentSessionOut } from '@docket/types';
 import { SessionStatus } from '@docket/types';
@@ -191,35 +191,98 @@ export async function transitionLifecycle(
   action: LifecycleAction,
   options: LifecycleTransitionOptions = {},
 ): Promise<SessionRow> {
-  let nextStatus: z.infer<typeof SessionStatus>;
-  if (action === 'pause') {
-    if (session.status !== 'running') throw new ConflictError('Session is not running');
-    nextStatus = 'awaiting_input';
-  } else if (action === 'resume') {
-    if (session.status !== 'awaiting_input') {
-      throw new ConflictError('Session is not awaiting input');
-    }
-    nextStatus = 'running';
-  } else {
-    const terminal: readonly z.infer<typeof SessionStatus>[] = ['completed', 'failed', 'canceled'];
-    if (terminal.includes(session.status)) {
-      throw new ConflictError('Session is already in a terminal state');
-    }
-    nextStatus = 'canceled';
-  }
-
   return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, session.id))
+      .for('update');
+    if (!current) throw new NotFoundError('Session not found');
+
+    let nextStatus: z.infer<typeof SessionStatus>;
+    if (action === 'pause') {
+      if (current.status !== 'running') throw new ConflictError('Session is not running');
+      nextStatus = 'awaiting_input';
+    } else if (action === 'resume') {
+      if (current.status !== 'awaiting_input') {
+        throw new ConflictError('Session is not awaiting input');
+      }
+      nextStatus = 'running';
+    } else {
+      const terminal: readonly z.infer<typeof SessionStatus>[] = [
+        'completed',
+        'failed',
+        'canceled',
+      ];
+      if (terminal.includes(current.status)) {
+        throw new ConflictError('Session is already in a terminal state');
+      }
+      nextStatus = 'canceled';
+    }
+
+    const [latestRun] =
+      current.executorKind === 'athena'
+        ? await tx
+            .select()
+            .from(agentSessionRun)
+            .where(eq(agentSessionRun.sessionId, current.id))
+            .orderBy(desc(agentSessionRun.generation))
+            .limit(1)
+            .for('update')
+        : [];
+    const now = new Date();
+
+    if (latestRun && action === 'pause' && latestRun.status !== 'waiting') {
+      if (
+        latestRun.status === 'queued' ||
+        latestRun.status === 'running' ||
+        latestRun.status === 'completed'
+      ) {
+        await tx
+          .update(agentSessionRun)
+          .set({
+            status: 'waiting',
+            leaseToken: null,
+            leaseExpiresAt: null,
+            completedAt: now,
+          })
+          .where(eq(agentSessionRun.id, latestRun.id));
+      }
+    }
+
+    if (latestRun && action === 'cancel') {
+      if (latestRun.status === 'waiting') {
+        await persistWaitingAthenaWake(tx, current.id, now);
+      } else if (
+        latestRun.status === 'queued' ||
+        latestRun.status === 'running' ||
+        latestRun.status === 'completed'
+      ) {
+        await tx
+          .update(agentSessionRun)
+          .set({
+            status: 'canceled',
+            leaseToken: null,
+            leaseExpiresAt: null,
+            completedAt: now,
+          })
+          .where(eq(agentSessionRun.id, latestRun.id));
+      }
+    }
+
     const [updated] = await tx
       .update(agentSession)
       .set({
         status: nextStatus,
-        ...(nextStatus === 'canceled' ? { endedAt: new Date() } : {}),
+        ...(nextStatus === 'canceled' ? { endedAt: now } : {}),
       })
-      .where(eq(agentSession.id, session.id))
+      .where(eq(agentSession.id, current.id))
       .returning();
     /* v8 ignore next -- @preserve defensive: update always returns a row */
     if (!updated) throw new Error('session update returned no row');
-    if (options.queueWake) await persistWaitingAthenaWake(tx, session.id);
+    if (options.queueWake && latestRun?.status !== 'waiting') {
+      await persistWaitingAthenaWake(tx, current.id, now);
+    }
     return updated;
   });
 }

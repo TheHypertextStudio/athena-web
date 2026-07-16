@@ -103,10 +103,12 @@ export async function resolveAction(
     const action = pending[0];
     if (!action) throw new ConflictError('No proposed action awaiting approval');
 
-    await tx
+    const [decided] = await tx
       .update(sessionActivity)
       .set({ approvalStatus: decision })
-      .where(eq(sessionActivity.id, action.id));
+      .where(and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')))
+      .returning({ id: sessionActivity.id });
+    if (!decided) throw new ConflictError('No proposed action awaiting approval');
 
     const nextStatus = decision === 'approved' ? 'running' : 'canceled';
     const [updated] = await tx
@@ -129,11 +131,13 @@ export async function resolveAction(
  * @remarks
  * The targeted activity must belong to a visible registered or caller-owned session, be
  * `type='action'`,
- * and currently be `proposed`. On `approve` the activity advances to `applied` (the
- * gate's terminal applied state) and an `audit_event` (`type='approved'`,
+ * and currently be `proposed`. On `approve` the activity advances conditionally to `approved` and
+ * an `audit_event` (`type='approved'`,
  * `subjectType='agent_session'`) is written with the authorization Actor as `actorId`, the session
  * initiator as `initiatorId`, and the approved activity id + approver recorded in `metadata`.
- * Athena events also carry structured execution-origin metadata. On `reject` the activity becomes
+ * Athena events also carry structured execution-origin metadata. The admitted run then claims
+ * `approved → executing` before MCP dispatch and settles `applied` only after the result is durable.
+ * On `reject` the activity becomes
  * `rejected` and a `type='rejected'`
  * audit_event is written (no apply). With
  * `scope='all_in_session'` every still-`proposed` action in the session is decided the
@@ -193,6 +197,21 @@ export async function decideActivity(
 
     let decidedTarget = target;
     for (const action of targets) {
+      const nextApprovalStatus = decision.decision === 'approve' ? 'approved' : 'rejected';
+      const [decidedRow] = await tx
+        .update(sessionActivity)
+        .set({ approvalStatus: nextApprovalStatus })
+        .where(
+          and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')),
+        )
+        .returning();
+      if (!decidedRow) {
+        if (action.id === activityId) {
+          throw new ConflictError('Activity is not a proposed action');
+        }
+        continue;
+      }
+
       const auditOrganizationId = action.organizationId ?? orgId;
       const authorizationActorId = await approvalAuditActor(tx, session, auditOrganizationId);
       if (decision.decision === 'approve') {
@@ -209,18 +228,7 @@ export async function decideActivity(
             ...athenaAuditOrigin(session),
           },
         });
-        // `approved` is the transient gate state: the post-commit executor
-        // (`executeApprovedActions`) runs the stored toolCall and advances it to
-        // `applied` with the real result. Legacy narration-only actions are applied
-        // there too, without execution.
-        const [approvedRow] = await tx
-          .update(sessionActivity)
-          .set({ approvalStatus: 'approved' })
-          .where(eq(sessionActivity.id, action.id))
-          .returning();
-        /* v8 ignore next -- @preserve defensive: update always returns a row */
-        if (!approvedRow) throw new Error('activity update returned no row');
-        if (action.id === activityId) decidedTarget = approvedRow;
+        if (action.id === activityId) decidedTarget = decidedRow;
       } else {
         await tx.insert(auditEvent).values({
           organizationId: auditOrganizationId,
@@ -235,14 +243,7 @@ export async function decideActivity(
             ...athenaAuditOrigin(session),
           },
         });
-        const [rejected] = await tx
-          .update(sessionActivity)
-          .set({ approvalStatus: 'rejected' })
-          .where(eq(sessionActivity.id, action.id))
-          .returning();
-        /* v8 ignore next -- @preserve defensive: update always returns a row */
-        if (!rejected) throw new Error('activity update returned no row');
-        if (action.id === activityId) decidedTarget = rejected;
+        if (action.id === activityId) decidedTarget = decidedRow;
       }
     }
 
@@ -324,6 +325,15 @@ export async function decideProposalGroup(
 
     const decided: ActivityRow[] = [];
     for (const action of targets) {
+      const [row] = await tx
+        .update(sessionActivity)
+        .set({ approvalStatus: decision === 'approve' ? 'approved' : 'rejected' })
+        .where(
+          and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')),
+        )
+        .returning();
+      if (!row) continue;
+
       const auditOrganizationId = action.organizationId ?? orgId;
       const authorizationActorId = await approvalAuditActor(tx, session, auditOrganizationId);
       await tx.insert(auditEvent).values({
@@ -340,15 +350,9 @@ export async function decideProposalGroup(
           ...athenaAuditOrigin(session),
         },
       });
-      const [row] = await tx
-        .update(sessionActivity)
-        .set({ approvalStatus: decision === 'approve' ? 'approved' : 'rejected' })
-        .where(eq(sessionActivity.id, action.id))
-        .returning();
-      /* v8 ignore next -- @preserve defensive: update always returns a row */
-      if (!row) throw new Error('activity update returned no row');
       decided.push(row);
     }
+    if (decided.length === 0) throw new NotFoundError('No proposed actions in the group');
 
     const remaining = await tx
       .select({ id: sessionActivity.id })
@@ -407,11 +411,24 @@ export async function replyToElicitation(
       .select()
       .from(sessionActivity)
       .where(and(eq(sessionActivity.id, activityId), eq(sessionActivity.sessionId, sessionId)))
+      .for('update')
       .limit(1);
     const prompt = promptRows[0];
     if (!prompt) throw new NotFoundError('Activity not found');
     if (prompt.type !== 'elicitation') {
       throw new ConflictError('Activity is not an elicitation');
+    }
+
+    const toolUseId =
+      typeof prompt.body['toolUseId'] === 'string' ? prompt.body['toolUseId'] : undefined;
+    if (toolUseId) {
+      const priorResponses = await tx
+        .select({ body: sessionActivity.body })
+        .from(sessionActivity)
+        .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')));
+      if (priorResponses.some((response) => response.body['toolUseId'] === toolUseId)) {
+        throw new ConflictError('Elicitation already has a reply');
+      }
     }
 
     const [created] = await tx
@@ -420,7 +437,7 @@ export async function replyToElicitation(
         sessionId,
         organizationId: session.executorKind === 'athena' ? null : orgId,
         type: 'response',
-        body: { text },
+        body: { text, ...(toolUseId ? { toolUseId } : {}) },
       })
       .returning();
     /* v8 ignore next -- @preserve defensive: insert always returns a row */

@@ -410,6 +410,18 @@ describe('driveSession — elicitation (ask_user)', () => {
     const elicitation = acts.find((a) => a.type === 'elicitation');
     expect(elicitation?.body.text).toBe('Which venue do you prefer?');
 
+    await db.insert(schema.sessionActivity).values(
+      Array.from({ length: 11 }, (_, index) => ({
+        sessionId: seed.sessionId,
+        organizationId: seed.orgId,
+        type: 'response' as const,
+        body: {
+          text: `Unrelated response ${String(index)}`,
+          toolUseId: `toolu_other_${String(index)}`,
+        },
+        createdAt: new Date(index),
+      })),
+    );
     await replyToElicitation(seed.orgId, seed.sessionId, elicitation!.id, 'The loft, please.');
     const settled = await driveSession(seed.orgId, seed.sessionId, deps);
     expect(settled.status).toBe('completed');

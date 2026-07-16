@@ -13,6 +13,7 @@ import {
   agentSession,
   agentSessionRun,
   agentSessionTranscript,
+  approvalStatus,
   integration,
   integrationCredential,
   organization,
@@ -216,6 +217,41 @@ describe('athena schema additions', () => {
         workflowInstanceId: `${ids['session']!}:retry`,
       }),
     ).rejects.toThrow();
+
+    await expect(
+      db.insert(agentSessionRun).values({
+        sessionId: ids['session']!,
+        organizationId: ids['org']!,
+        generation: 2,
+        workflowInstanceId: `${ids['session']!}:not-the-generation`,
+      }),
+    ).rejects.toThrow();
+  });
+
+  it('persists a fenced lease token and the non-repeatable action execution state', async () => {
+    expect(approvalStatus.enumValues).toEqual([
+      'proposed',
+      'approved',
+      'executing',
+      'rejected',
+      'applied',
+    ]);
+
+    const [run] = await db
+      .insert(agentSessionRun)
+      .values({
+        sessionId: ids['contextFreeAthenaSession']!,
+        organizationId: null,
+        ownerUserId: ids['user']!,
+        generation: 7,
+        workflowInstanceId: `${ids['contextFreeAthenaSession']!}:7`,
+        status: 'running',
+        leaseToken: 'worker-token',
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })
+      .returning();
+
+    expect(run?.leaseToken).toBe('worker-token');
   });
 
   it('attributes Athena runs and transcripts to their owning user', async () => {

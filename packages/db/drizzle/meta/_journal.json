@@ -372,6 +372,13 @@
       "when": 1784162213104,
       "tag": "0052_user_owned_athena",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1784177702749,
+      "tag": "0042_durable_agent_execution",
+      "breakpoints": true
     }
   ]
 }

@@ -135,7 +135,9 @@ export function toActivityOut(
     organizationId: a.organizationId,
     type: a.type,
     body: a.body,
-    approvalStatus: a.approvalStatus,
+    // `executing` is an internal non-repeatable dispatch claim. Compatibility clients see the
+    // existing non-terminal `approved` state while the session itself is parked for attention.
+    approvalStatus: a.approvalStatus === 'executing' ? 'approved' : a.approvalStatus,
     createdAt: a.createdAt.toISOString(),
   };
 }

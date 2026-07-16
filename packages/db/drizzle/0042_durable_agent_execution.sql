@@ -1,0 +1,3 @@
+ALTER TYPE "public"."approval_status" ADD VALUE 'executing' BEFORE 'rejected';--> statement-breakpoint
+ALTER TABLE "agent_session_run" ADD COLUMN "lease_token" text;--> statement-breakpoint
+ALTER TABLE "agent_session_run" ADD CONSTRAINT "agent_session_run_workflow_check" CHECK ("agent_session_run"."workflow_instance_id" = "agent_session_run"."session_id" || ':' || "agent_session_run"."generation"::text);

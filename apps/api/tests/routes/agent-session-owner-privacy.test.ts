@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -333,6 +333,88 @@ describe('owner-private Athena compatibility routes', () => {
       runtime.streamTurn(input),
     );
     expect((await post(ownerApp, `/${pending}/run`)).status).toBe(200);
+  });
+
+  it('admits owner lifecycle and reply resumes through durable generations', async () => {
+    const seed = await seedWorkspace();
+    const ownerApp = appFor(seed, seed.owner);
+    const runtime = new agentRuntime.MockAgentTurnRuntime({
+      script: [
+        {
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Resumed safely.' }] },
+          stopReason: 'end_turn',
+        },
+        {
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Reply received.' }] },
+          stopReason: 'end_turn',
+        },
+      ],
+    });
+    vi.spyOn(getContainer().agentTurn, 'streamTurn').mockImplementation((input) =>
+      runtime.streamTurn(input),
+    );
+
+    const lifecycleSession = await seedAthena(seed, seed.owner, 'awaiting_input');
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId: lifecycleSession,
+      ownerUserId: seed.owner.userId,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Continue.' }] }],
+    });
+    const lifecycleResponse = await ownerApp.request(`/${lifecycleSession}/resume`, {
+      method: 'POST',
+    });
+    expect(lifecycleResponse.status).toBe(200);
+    expect(((await lifecycleResponse.json()) as { status: string }).status).toBe('completed');
+
+    const replySession = await seedAthena(seed, seed.owner, 'awaiting_input');
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId: replySession,
+      ownerUserId: seed.owner.userId,
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'Help me choose.' }] },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_owner_reply',
+              name: 'ask_user',
+              input: { question: 'Which task?' },
+            },
+          ],
+        },
+      ],
+    });
+    const elicitation = await seedActivity(seed, replySession, 'athena', {
+      type: 'elicitation',
+      body: { text: 'Which task?', toolUseId: 'toolu_owner_reply' },
+    });
+    expect(
+      (await post(ownerApp, `/${replySession}/activity/${elicitation}/reply`, { body: 'Mine' }))
+        .status,
+    ).toBe(200);
+
+    const sessions = await db
+      .select({ id: schema.agentSession.id, status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(
+        or(eq(schema.agentSession.id, lifecycleSession), eq(schema.agentSession.id, replySession)),
+      );
+    expect(sessions.map(({ status }) => status).sort()).toEqual(['completed', 'completed']);
+    const runs = await db
+      .select({
+        sessionId: schema.agentSessionRun.sessionId,
+        status: schema.agentSessionRun.status,
+      })
+      .from(schema.agentSessionRun)
+      .where(
+        or(
+          eq(schema.agentSessionRun.sessionId, lifecycleSession),
+          eq(schema.agentSessionRun.sessionId, replySession),
+        ),
+      );
+    expect(runs).toHaveLength(2);
+    expect(runs.every(({ status }) => status === 'completed')).toBe(true);
   });
 
   it('lets a contribute-only owner approve while the tool still enforces current permissions', async () => {

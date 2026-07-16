@@ -16,6 +16,9 @@ import type {
   OAuthClientMetadata,
   OAuthTokens,
 } from '@modelcontextprotocol/sdk/shared/auth.js';
+import type { FetchLike } from '@modelcontextprotocol/sdk/shared/transport.js';
+
+import { mcpSafeFetch } from './mcp-network';
 
 /** Persisted, encrypted state while an OAuth browser approval is in progress. */
 export interface PendingMcpOAuthCredential {
@@ -63,6 +66,7 @@ export function mcpOAuthClientMetadata(redirectUrl: string): OAuthClientMetadata
 /** Begin OAuth authorization with the official MCP SDK. */
 export async function beginMcpOAuthAuthorization(
   input: BeginMcpOAuthInput,
+  fetchFn: FetchLike = mcpSafeFetch,
 ): Promise<BegunMcpOAuthAuthorization> {
   let authorizationUrl: string | undefined;
   let codeVerifier: string | undefined;
@@ -93,7 +97,7 @@ export async function beginMcpOAuthAuthorization(
       discoveryState = value;
     },
   };
-  await auth(provider, { serverUrl: input.serverUrl });
+  await auth(provider, { serverUrl: input.serverUrl, fetchFn });
   if (!authorizationUrl || !codeVerifier)
     throw new Error('MCP server did not start an OAuth redirect');
   return {
@@ -108,12 +112,15 @@ export async function beginMcpOAuthAuthorization(
 }
 
 /** Complete a browser approval and return the encrypted-at-rest credential payload. */
-export async function completeMcpOAuthAuthorization(input: {
-  readonly serverUrl: string;
-  readonly redirectUrl: string;
-  readonly authorizationCode: string;
-  readonly credential: PendingMcpOAuthCredential;
-}): Promise<McpOAuthCredential> {
+export async function completeMcpOAuthAuthorization(
+  input: {
+    readonly serverUrl: string;
+    readonly redirectUrl: string;
+    readonly authorizationCode: string;
+    readonly credential: PendingMcpOAuthCredential;
+  },
+  fetchFn: FetchLike = mcpSafeFetch,
+): Promise<McpOAuthCredential> {
   let tokens: OAuthTokens | undefined;
   let clientInformation = input.credential.clientInformation;
   let discoveryState = input.credential.discoveryState;
@@ -136,7 +143,11 @@ export async function completeMcpOAuthAuthorization(input: {
       discoveryState = value;
     },
   };
-  await auth(provider, { serverUrl: input.serverUrl, authorizationCode: input.authorizationCode });
+  await auth(provider, {
+    serverUrl: input.serverUrl,
+    authorizationCode: input.authorizationCode,
+    fetchFn,
+  });
   if (!tokens) throw new Error('MCP OAuth authorization did not return an access token');
   return {
     kind: 'mcp_oauth',
@@ -150,6 +161,7 @@ export async function completeMcpOAuthAuthorization(input: {
 /** Refresh an approved connection when its token is nearing expiry. */
 export async function refreshMcpOAuthCredential(
   credential: McpOAuthCredential,
+  fetchFn: FetchLike = mcpSafeFetch,
 ): Promise<McpOAuthCredential> {
   if (
     !credential.tokens.refresh_token ||
@@ -167,6 +179,7 @@ export async function refreshMcpOAuthCredential(
       ...(credential.discoveryState.resourceMetadata
         ? { resource: new URL(credential.discoveryState.resourceMetadata.resource) }
         : {}),
+      fetchFn,
     },
   );
   // The SDK preserves this already, but retain it here as a defense for OAuth servers that omit

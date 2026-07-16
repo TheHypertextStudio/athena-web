@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MockMcpConnector, SUNSAMA_BACKLOG } from '../src';
+import { MockMcpConnector, RealMcpConnector, SUNSAMA_BACKLOG } from '../src';
 
 describe('MockMcpConnector', () => {
   it('serves the Sunsama fixture server by endpoint host, regardless of path', async () => {
@@ -58,5 +58,13 @@ describe('MockMcpConnector', () => {
     });
     const session = await connector.open({ url: 'https://mcp.example.com/mcp' });
     expect((await session.listTools()).map((t) => t.name)).toEqual(['echo']);
+  });
+});
+
+describe('RealMcpConnector network policy', () => {
+  it('rejects insecure endpoints before opening a transport', async () => {
+    await expect(new RealMcpConnector().open({ url: 'http://127.0.0.1:3000/mcp' })).rejects.toThrow(
+      /HTTPS/i,
+    );
   });
 });

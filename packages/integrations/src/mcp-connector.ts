@@ -6,6 +6,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { SUNSAMA_BACKLOG } from './fixtures';
+import { mcpSafeFetch } from './mcp-network';
 
 /** A remote MCP endpoint plus its unsealed credential. */
 export interface McpEndpoint {
@@ -179,6 +180,7 @@ export class RealMcpConnector implements McpConnector {
   /* v8 ignore start -- live network edge */
   async open(endpoint: McpEndpoint): Promise<RemoteMcpSession> {
     const transport = new StreamableHTTPClientTransport(new URL(endpoint.url), {
+      fetch: mcpSafeFetch,
       ...(endpoint.bearerToken
         ? { requestInit: { headers: { authorization: `Bearer ${endpoint.bearerToken}` } } }
         : {}),

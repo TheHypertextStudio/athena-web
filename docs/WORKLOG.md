@@ -70,6 +70,14 @@
   3. Replace legacy-data fixtures with a complete fresh migration replay and constraint inspection.
   4. Update the design, implementation, engineering, and worklog documentation; validate and commit
      the cleanup independently without rebasing, merging, or pushing.
+- **Plan (fresh-reset review fix)**:
+  1. Add red tooling tests for reset-target detection, production/remote refusal, repo-local path
+     boundaries, symlink defense, and PGlite/Docker command behavior.
+  2. Replace the shell reset alias with a typed script that deletes only a configured database under
+     the repository `.data` directory or the exact local Docker Compose database volume.
+  3. Strengthen migration `0041` coverage by parsing normalized statements and allowing DDL only.
+  4. Exercise the command against a disposable PGlite path, run repository gates, and commit the
+     review fix independently without amending, rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -129,6 +137,17 @@
   Drizzle generation reports no schema changes; database typecheck, lint, and 67/67 tests pass.
   Final root validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks; API 145
   files and 1,266 tests), and build (3/3 tasks).
+- **Fresh Reset Review Fix**: Replaced the Docker-only reset alias with a typed, fail-closed reset
+  command. It accepts only nested repository-local PGlite paths or the exact local Compose database,
+  refuses production and remote targets, revalidates deletion boundaries at execution, rejects
+  symlink components, and runs migrations after removal. A controlled red test proved that execution
+  initially trusted a forged out-of-bound plan; the fix now rejects it before deletion. Migration
+  coverage normalizes statements and permits DDL only while explicitly rejecting direct and CTE
+  `INSERT`, `UPDATE`, `DELETE`, `MERGE`, and `COPY` forms. The real `pnpm db:reset` command removed,
+  migrated, and recreated only a disposable `.data/codex-db-reset-validation-aad1950f` database,
+  which was deleted after validation. Tooling passes 46/46 tests and database coverage passes 68/68.
+  Final root validation passes typecheck and lint (17/17 tasks each), tests (17/17 tasks), and build
+  (3/3 tasks).
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

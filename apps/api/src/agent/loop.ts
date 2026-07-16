@@ -955,7 +955,7 @@ async function executeApprovedGeneration(
  */
 export async function approveGroupAndResume(
   orgId: string,
-  approverActorId: string,
+  approverActorId: string | null,
   sessionId: string,
   proposalGroupId: string,
   decision: 'approve' | 'reject',
@@ -1002,7 +1002,7 @@ export async function approveGroupAndResume(
  */
 export async function approveAndResume(
   orgId: string,
-  approverActorId: string,
+  approverActorId: string | null,
   sessionId: string,
   activityId: string,
   decision: SessionApprovalDecision,

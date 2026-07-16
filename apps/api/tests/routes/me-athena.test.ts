@@ -368,6 +368,309 @@ describe('personal Athena routes', () => {
     });
   });
 
+  it('reauthorizes proposal edits in the current input workspace and moves attribution atomically', async () => {
+    const seed = await seedPeople();
+    const app = appFor(seed.owner);
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+    const activityId = await seedActivity(sessionId, {
+      type: 'action',
+      organizationId: seed.orgA,
+      approvalStatus: 'proposed',
+      proposalGroupId: 'group_retarget',
+      body: {
+        action: {
+          kind: 'create_task',
+          summary: 'Create retargeted work',
+          toolCall: {
+            connection: 'docket',
+            tool: 'create_task',
+            toolUseId: 'toolu_retarget',
+            input: { orgId: seed.orgA, teamId: seed.teamA, title: 'Original target' },
+          },
+        },
+      },
+    });
+
+    const edited = await app.request(`/sessions/${sessionId}/activity/${activityId}/proposal`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        input: { orgId: seed.orgB, teamId: seed.teamB, title: 'Retargeted to Beta' },
+      }),
+    });
+    expect(edited.status).toBe(200);
+    const [stored] = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.id, activityId));
+    expect(stored?.organizationId).toBe(seed.orgB);
+    expect(stored?.body.action?.toolCall?.input).toMatchObject({ orgId: seed.orgB });
+
+    const approved = await app.request(`/sessions/${sessionId}/activity/${activityId}/approve`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+    expect(approved.status).toBe(200);
+    const betaTasks = await db
+      .select({ title: schema.task.title })
+      .from(schema.task)
+      .where(eq(schema.task.organizationId, seed.orgB));
+    expect(betaTasks).toContainEqual({ title: 'Retargeted to Beta' });
+    const [approvalAudit] = await db
+      .select()
+      .from(schema.auditEvent)
+      .where(
+        and(eq(schema.auditEvent.subjectId, sessionId), eq(schema.auditEvent.type, 'approved')),
+      );
+    expect(approvalAudit).toMatchObject({
+      organizationId: seed.orgB,
+      actorId: seed.owner.actorIds[seed.orgB],
+    });
+  });
+
+  it('rejects unsupported or inaccessible proposal retargeting without changing stored authority', async () => {
+    const seed = await seedPeople();
+    const app = appFor(seed.owner);
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+    const activityId = await seedActivity(sessionId, {
+      type: 'action',
+      organizationId: seed.orgA,
+      approvalStatus: 'proposed',
+      proposalGroupId: 'group_denied_retarget',
+      body: {
+        action: {
+          kind: 'create_task',
+          summary: 'Keep original authority',
+          toolCall: {
+            connection: 'docket',
+            tool: 'create_task',
+            toolUseId: 'toolu_denied_retarget',
+            input: { orgId: seed.orgA, teamId: seed.teamA, title: 'Original authority' },
+          },
+        },
+      },
+    });
+    await db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, seed.owner.actorIds[seed.orgB]!));
+
+    const missingTarget = await app.request(
+      `/sessions/${sessionId}/activity/${activityId}/proposal`,
+      {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ input: { teamId: seed.teamB, title: 'No workspace' } }),
+      },
+    );
+    expect(missingTarget.status).toBe(409);
+    const inaccessible = await app.request(
+      `/sessions/${sessionId}/activity/${activityId}/proposal`,
+      {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          input: { orgId: seed.orgB, teamId: seed.teamB, title: 'Inaccessible target' },
+        }),
+      },
+    );
+    expect(inaccessible.status).toBe(404);
+
+    const [stored] = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.id, activityId));
+    expect(stored).toMatchObject({ organizationId: seed.orgA, approvalStatus: 'proposed' });
+    expect(stored?.body.action?.toolCall?.input).toMatchObject({
+      orgId: seed.orgA,
+      title: 'Original authority',
+    });
+  });
+
+  it.each(['approve', 'reject'] as const)(
+    'rolls back mixed-workspace group %s when any current proposal target is inaccessible',
+    async (decision) => {
+      const seed = await seedPeople();
+      const app = appFor(seed.owner);
+      const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+      const groupId = `group_mixed_${decision}`;
+      for (const [index, target] of [
+        { orgId: seed.orgA, teamId: seed.teamA },
+        { orgId: seed.orgB, teamId: seed.teamB },
+      ].entries()) {
+        await seedActivity(sessionId, {
+          type: 'action',
+          organizationId: seed.orgA,
+          approvalStatus: 'proposed',
+          proposalGroupId: groupId,
+          body: {
+            action: {
+              kind: 'create_task',
+              summary: `Mixed target ${String(index)}`,
+              toolCall: {
+                connection: 'docket',
+                tool: 'create_task',
+                toolUseId: `toolu_group_${decision}_${String(index)}`,
+                input: {
+                  orgId: target.orgId,
+                  teamId: target.teamId,
+                  title: `Mixed target ${String(index)}`,
+                },
+              },
+            },
+          },
+        });
+      }
+      await db
+        .update(schema.actor)
+        .set({ status: 'suspended' })
+        .where(eq(schema.actor.id, seed.owner.actorIds[seed.orgB]!));
+
+      const response = await app.request(
+        `/sessions/${sessionId}/proposals/${groupId}/${decision}`,
+        {
+          method: 'POST',
+          headers: JSON_HEADERS,
+          body: '{}',
+        },
+      );
+      expect(response.status).toBe(404);
+      const actions = await db
+        .select({ approvalStatus: schema.sessionActivity.approvalStatus })
+        .from(schema.sessionActivity)
+        .where(eq(schema.sessionActivity.sessionId, sessionId));
+      expect(actions.map((row) => row.approvalStatus)).toEqual(['proposed', 'proposed']);
+      expect(
+        await db
+          .select({ id: schema.auditEvent.id })
+          .from(schema.auditEvent)
+          .where(eq(schema.auditEvent.subjectId, sessionId)),
+      ).toHaveLength(0);
+    },
+  );
+
+  it.each(['approve', 'reject'] as const)(
+    'rolls back mixed-workspace all_in_session %s when any current target is inaccessible',
+    async (decision) => {
+      const seed = await seedPeople();
+      const app = appFor(seed.owner);
+      const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+      const activityIds: string[] = [];
+      for (const [index, target] of [
+        { orgId: seed.orgA, teamId: seed.teamA },
+        { orgId: seed.orgB, teamId: seed.teamB },
+      ].entries()) {
+        activityIds.push(
+          await seedActivity(sessionId, {
+            type: 'action',
+            organizationId: seed.orgA,
+            approvalStatus: 'proposed',
+            proposalGroupId: `group_${String(index)}`,
+            body: {
+              action: {
+                kind: 'create_task',
+                summary: `Session target ${String(index)}`,
+                toolCall: {
+                  connection: 'docket',
+                  tool: 'create_task',
+                  toolUseId: `toolu_session_${decision}_${String(index)}`,
+                  input: {
+                    orgId: target.orgId,
+                    teamId: target.teamId,
+                    title: `Session target ${String(index)}`,
+                  },
+                },
+              },
+            },
+          }),
+        );
+      }
+      await db
+        .update(schema.actor)
+        .set({ status: 'suspended' })
+        .where(eq(schema.actor.id, seed.owner.actorIds[seed.orgB]!));
+
+      const response = await app.request(
+        `/sessions/${sessionId}/activity/${activityIds[0]!}/${decision}`,
+        {
+          method: 'POST',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ scope: 'all_in_session' }),
+        },
+      );
+      expect(response.status).toBe(404);
+      const actions = await db
+        .select({ approvalStatus: schema.sessionActivity.approvalStatus })
+        .from(schema.sessionActivity)
+        .where(eq(schema.sessionActivity.sessionId, sessionId));
+      expect(actions.map((row) => row.approvalStatus)).toEqual(['proposed', 'proposed']);
+      expect(
+        await db
+          .select({ id: schema.auditEvent.id })
+          .from(schema.auditEvent)
+          .where(eq(schema.auditEvent.subjectId, sessionId)),
+      ).toHaveLength(0);
+    },
+  );
+
+  it('audits each accessible mixed-workspace action with its current target Actor', async () => {
+    const seed = await seedPeople();
+    const app = appFor(seed.owner);
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+    const groupId = 'group_actor_attribution';
+    for (const [index, target] of [
+      { orgId: seed.orgA, teamId: seed.teamA },
+      { orgId: seed.orgB, teamId: seed.teamB },
+    ].entries()) {
+      await seedActivity(sessionId, {
+        type: 'action',
+        organizationId: seed.orgA,
+        approvalStatus: 'proposed',
+        proposalGroupId: groupId,
+        body: {
+          action: {
+            kind: 'create_task',
+            summary: `Audited target ${String(index)}`,
+            toolCall: {
+              connection: 'docket',
+              tool: 'create_task',
+              toolUseId: `toolu_audit_${String(index)}`,
+              input: {
+                orgId: target.orgId,
+                teamId: target.teamId,
+                title: `Audited target ${String(index)}`,
+              },
+            },
+          },
+        },
+      });
+    }
+
+    const response = await app.request(`/sessions/${sessionId}/proposals/${groupId}/approve`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+    expect(response.status).toBe(200);
+    const approvals = await db
+      .select({
+        organizationId: schema.auditEvent.organizationId,
+        actorId: schema.auditEvent.actorId,
+      })
+      .from(schema.auditEvent)
+      .where(
+        and(eq(schema.auditEvent.subjectId, sessionId), eq(schema.auditEvent.type, 'approved')),
+      );
+    expect(approvals).toHaveLength(2);
+    expect(approvals).toEqual(
+      expect.arrayContaining([
+        { organizationId: seed.orgA, actorId: seed.owner.actorIds[seed.orgA] },
+        { organizationId: seed.orgB, actorId: seed.owner.actorIds[seed.orgB] },
+      ]),
+    );
+  });
+
   it('owner-scopes activity, SSE replay, steering, and lifecycle controls', async () => {
     const seed = await seedPeople();
     const replaySession = await seedSession(seed, seed.owner, 'completed');

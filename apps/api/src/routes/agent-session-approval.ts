@@ -1,7 +1,8 @@
 import { actor, agent, agentSession, auditEvent, db, sessionActivity } from '@docket/db';
 import type { SessionApprovalDecision } from '@docket/types';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
+import { proposalOrganizationId } from '../agent/proposals';
 import { ConflictError, NotFoundError } from '../error';
 
 import type { ActivityRow, SessionRow } from './agent-session-helpers';
@@ -16,14 +17,24 @@ function assertSessionContext(session: SessionRow | undefined, orgId: string): S
   return session;
 }
 
-/** Resolve audit attribution for an approval without inventing an Athena Actor. */
-async function approvalAuditActor(
+/** Current workspace and Actor authorization for one selected approval target. */
+interface ApprovalAuthorization {
+  readonly organizationId: string;
+  readonly actorId: string | null;
+  readonly approverActorId: string | null;
+}
+
+/** Resolve one selected action's current target and audit authorization. */
+async function authorizeApprovalTarget(
   handle: Parameters<Parameters<typeof db.transaction>[0]>[0],
   session: SessionRow,
-  organizationId: string,
-): Promise<string | null> {
+  action: ActivityRow,
+  fallbackOrganizationId: string,
+  fallbackApproverActorId: string | null,
+): Promise<ApprovalAuthorization> {
   if (session.executorKind === 'athena') {
     const ownerUserId = athenaOwner(session);
+    const organizationId = proposalOrganizationId(action, fallbackOrganizationId);
     const rows = await handle
       .select({ id: actor.id })
       .from(actor)
@@ -33,19 +44,50 @@ async function approvalAuditActor(
           eq(actor.organizationId, organizationId),
           eq(actor.kind, 'human'),
           eq(actor.status, 'active'),
+          isNull(actor.archivedAt),
         ),
       )
       .limit(1);
-    return rows[0]?.id ?? null;
+    const actorId = rows[0]?.id;
+    if (!actorId) throw new NotFoundError('Workspace not found');
+    return { organizationId, actorId, approverActorId: actorId };
   }
   const registeredAgentId = session.agentId;
   if (!registeredAgentId) throw new Error('Registered-agent session is missing its agent');
+  const organizationId = session.organizationId ?? fallbackOrganizationId;
   const rows = await handle
     .select({ actorId: agent.actorId })
     .from(agent)
     .where(and(eq(agent.id, registeredAgentId), eq(agent.organizationId, organizationId)))
     .limit(1);
-  return rows[0]?.actorId ?? null;
+  return {
+    organizationId,
+    actorId: rows[0]?.actorId ?? null,
+    approverActorId: fallbackApproverActorId,
+  };
+}
+
+/** Authorize every selected action before the transaction writes any decision or audit. */
+async function authorizeApprovalTargets(
+  handle: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  session: SessionRow,
+  actions: readonly ActivityRow[],
+  fallbackOrganizationId: string,
+  fallbackApproverActorId: string | null,
+): Promise<ApprovalAuthorization[]> {
+  const authorizations: ApprovalAuthorization[] = [];
+  for (const action of actions) {
+    authorizations.push(
+      await authorizeApprovalTarget(
+        handle,
+        session,
+        action,
+        fallbackOrganizationId,
+        fallbackApproverActorId,
+      ),
+    );
+  }
+  return authorizations;
 }
 
 /** Return an Athena owner after checking the persisted executor shape. */
@@ -155,7 +197,7 @@ export async function resolveAction(
  */
 export async function decideActivity(
   orgId: string,
-  approverActorId: string,
+  approverActorId: string | null,
   sessionId: string,
   activityId: string,
   decision: SessionApprovalDecision,
@@ -193,13 +235,26 @@ export async function decideActivity(
             )
             .orderBy(asc(sessionActivity.createdAt))
         : [target];
+    const authorizations = await authorizeApprovalTargets(
+      tx,
+      session,
+      targets,
+      orgId,
+      approverActorId,
+    );
 
     let decidedTarget = target;
-    for (const action of targets) {
+    for (const [index, action] of targets.entries()) {
+      const authorization = authorizations[index];
+      /* v8 ignore next -- @preserve defensive: authorizations are built from the same targets */
+      if (!authorization) throw new Error('approval authorization returned no row');
       const nextApprovalStatus = decision.decision === 'approve' ? 'approved' : 'rejected';
       const [decidedRow] = await tx
         .update(sessionActivity)
-        .set({ approvalStatus: nextApprovalStatus })
+        .set({
+          approvalStatus: nextApprovalStatus,
+          organizationId: authorization.organizationId,
+        })
         .where(
           and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')),
         )
@@ -210,41 +265,34 @@ export async function decideActivity(
         }
         continue;
       }
-
-      const auditOrganizationId = action.organizationId ?? orgId;
-      const authorizationActorId = await approvalAuditActor(tx, session, auditOrganizationId);
       if (decision.decision === 'approve') {
         await tx.insert(auditEvent).values({
-          organizationId: auditOrganizationId,
-          actorId: authorizationActorId,
+          organizationId: authorization.organizationId,
+          actorId: authorization.actorId,
           initiatorId: session.initiatorId,
           subjectType: 'agent_session',
           subjectId: sessionId,
           type: 'approved',
           metadata: {
             activityId: action.id,
-            approverActorId:
-              session.executorKind === 'athena'
-                ? (authorizationActorId ?? approverActorId)
-                : approverActorId,
+            approverActorId: authorization.approverActorId,
             ...athenaAuditOrigin(session),
           },
         });
+        // `approved` is the transient gate state: the admitted executor claims it as
+        // `executing` before dispatch and advances it only after the result is durable.
         if (action.id === activityId) decidedTarget = decidedRow;
       } else {
         await tx.insert(auditEvent).values({
-          organizationId: auditOrganizationId,
-          actorId: authorizationActorId,
+          organizationId: authorization.organizationId,
+          actorId: authorization.actorId,
           initiatorId: session.initiatorId,
           subjectType: 'agent_session',
           subjectId: sessionId,
           type: 'rejected',
           metadata: {
             activityId: action.id,
-            approverActorId:
-              session.executorKind === 'athena'
-                ? (authorizationActorId ?? approverActorId)
-                : approverActorId,
+            approverActorId: authorization.approverActorId,
             ...athenaAuditOrigin(session),
           },
         });
@@ -298,7 +346,7 @@ export async function decideActivity(
  */
 export async function decideProposalGroup(
   orgId: string,
-  approverActorId: string,
+  approverActorId: string | null,
   sessionId: string,
   proposalGroupId: string,
   decision: 'approve' | 'reject',
@@ -327,33 +375,40 @@ export async function decideProposalGroup(
     const wanted = activityIds ? new Set(activityIds) : null;
     const targets = wanted ? members.filter((m) => wanted.has(m.id)) : members;
     if (targets.length === 0) throw new NotFoundError('No proposed actions in the group');
+    const authorizations = await authorizeApprovalTargets(
+      tx,
+      session,
+      targets,
+      orgId,
+      approverActorId,
+    );
 
     const decided: ActivityRow[] = [];
-    for (const action of targets) {
+    for (const [index, action] of targets.entries()) {
+      const authorization = authorizations[index];
+      /* v8 ignore next -- @preserve defensive: authorizations are built from the same targets */
+      if (!authorization) throw new Error('approval authorization returned no row');
       const [row] = await tx
         .update(sessionActivity)
-        .set({ approvalStatus: decision === 'approve' ? 'approved' : 'rejected' })
+        .set({
+          approvalStatus: decision === 'approve' ? 'approved' : 'rejected',
+          organizationId: authorization.organizationId,
+        })
         .where(
           and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')),
         )
         .returning();
       if (!row) continue;
-
-      const auditOrganizationId = action.organizationId ?? orgId;
-      const authorizationActorId = await approvalAuditActor(tx, session, auditOrganizationId);
       await tx.insert(auditEvent).values({
-        organizationId: auditOrganizationId,
-        actorId: authorizationActorId,
+        organizationId: authorization.organizationId,
+        actorId: authorization.actorId,
         initiatorId: session.initiatorId,
         subjectType: 'agent_session',
         subjectId: sessionId,
         type: decision === 'approve' ? 'approved' : 'rejected',
         metadata: {
           activityId: action.id,
-          approverActorId:
-            session.executorKind === 'athena'
-              ? (authorizationActorId ?? approverActorId)
-              : approverActorId,
+          approverActorId: authorization.approverActorId,
           proposalGroupId,
           ...athenaAuditOrigin(session),
         },

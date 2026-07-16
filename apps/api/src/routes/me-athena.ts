@@ -945,7 +945,7 @@ const meAthena = new Hono<AppEnv>()
       );
       if (asynchronousRunnerEnabled()) {
         await wakeWaitingAthenaGeneration(id);
-        return accepted(c, SessionActivityOut, toActivityOut(created));
+        return accepted(c, SessionActivityOut, toPersonalActivityOut(created));
       }
       await resumeSessionExecution(workspaceId, id);
       return ok(c, SessionActivityOut, toPersonalActivityOut(created));
@@ -1072,7 +1072,7 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          personalSummary(current, await sessionActivities(current.id)),
+          await personalSummary(owner, current, await sessionActivities(current.id)),
         );
       }
       const updated = await resumeSessionExecution(session.contextOrganizationId ?? '', session.id);
@@ -1109,7 +1109,7 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          personalSummary(updated, await sessionActivities(updated.id)),
+          await personalSummary(owner, updated, await sessionActivities(updated.id)),
         );
       }
       return ok(
@@ -1148,7 +1148,7 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          personalSummary(current, await sessionActivities(current.id)),
+          await personalSummary(owner, current, await sessionActivities(current.id)),
         );
       }
       const updated = await approveLatestAndResume(
@@ -1195,7 +1195,7 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          personalSummary(updated, await sessionActivities(updated.id)),
+          await personalSummary(owner, updated, await sessionActivities(updated.id)),
         );
       }
       return ok(

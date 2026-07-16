@@ -817,6 +817,12 @@
   cardinality. A replay cursor belongs in SQL, not in an in-memory slice of a repeatedly reloaded
   history. Workspace containment must be a render-time derivation, with state synchronization only
   preserving the user's subsequent selection.
+- **Cloudflare and Experience Rebase Integration**: The linear rebase preserved asynchronous
+  decision, reply, resume, and cancellation admission while routing every personal response through
+  the bounded redacting presenter. The first integrated async-route run exposed auto-merged calls
+  that still used the pre-presenter signature and raw activity serializer; the existing six-case
+  async acknowledgement suite reproduced the failures, and now passes 6/6 with API TypeScript
+  validation clean.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

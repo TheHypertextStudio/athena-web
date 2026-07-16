@@ -764,15 +764,16 @@
   log.
 - **Personal Experience Hardening Review**: The ambient pulse now reads compact counts without
   loading personal history; queue and detail polling activate only while their host is open.
-  Overview keeps every active row, caps terminal history at 50, and uses two bounded first/latest
-  activity projections instead of reading unbounded work logs. Canonical display labels receive a
-  final current-access recheck before disclosure. Personal activity is server-projected through a
-  recursive secret redactor and strict depth/key/item/string/byte caps; opaque provider success and
-  failure prose is replaced with application-owned copy. Workspace filters contain both initial and
-  fallback selection, contextual source/draft state resets on route and open transitions, and one
-  shared mutation hook supplies safe assertive feedback across create, message, decision, and
-  lifecycle actions. Shortcut repeat/editable-target guards, platform labels, realistic queue
-  transitions, and narrow-label containment close the adjacent review findings.
+  Overview retains exact lane counts, caps active history at 100 and terminal history at 50, and
+  uses two bounded first/latest activity projections instead of reading unbounded work logs.
+  Canonical display labels receive a final current-access recheck before disclosure. Personal
+  activity is server-projected through a recursive secret redactor and strict
+  depth/key/item/string/byte caps; opaque provider success and failure prose is replaced with
+  application-owned copy. Workspace filters contain both initial and fallback selection,
+  contextual source/draft state resets on route and open transitions, and one shared mutation hook
+  supplies safe assertive feedback across create, message, decision, and lifecycle actions.
+  Shortcut repeat/editable-target guards, platform labels, realistic queue transitions, and
+  narrow-label containment close the adjacent review findings.
 - **Personal Experience Hardening Validation**: RED runs reproduced the absent pulse contract, six
   dock/workspace behavior gaps, unbounded overview history, label-revocation disclosure window, and
   unsafe activity projection. GREEN focused runs pass shared types 7/7, web Athena/shell/action
@@ -786,6 +787,36 @@
   authorization check at the disclosure boundary, not only before their lookup. Provider payloads
   are never trustworthy presentation copy, even on successful calls, so the server must own both
   the technical allowlist and the human outcome language.
+- **Personal Experience Final Review Plan**: Bound the active overview roster while retaining exact
+  lane counts, batch canonical display metadata and current authorization across distinct contexts,
+  and prove query count does not grow with contextual session cardinality. Replace the SSE poller's
+  repeated full-history reads with a strict `(createdAt, id)` cursor query, including same-instant
+  ordering coverage. Derive the workspace-selected session synchronously so a workspace A to B
+  rerender cannot paint or fetch A's detail under B. Re-run the authenticated Chromium journey,
+  inspect desktop/mobile light/dark and below-fold captures, and close with focused API/web gates.
+- **Personal Experience Final Review Risks**: Batched display reads must preserve resource-level
+  grant inheritance and the final authorization-before-disclosure guarantee. Active roster bounds
+  must not change exact pulse/count semantics or hide the newest persistent chat. SSE resume must
+  remain deterministic when multiple rows share a timestamp and must never expose thought rows.
+- **Personal Experience Final Review Validation**: RED API coverage returned 107 active summaries
+  against the required 100-row ceiling and showed every SSE poll still issuing an unbounded ordered
+  activity read; a red pure-selection contract proved no synchronous containment helper existed.
+  GREEN personal API coverage passes 26/26, including exact 107-working counts with a bounded
+  roster, 30 distinct project contexts in at most 16 SQL calls, current-access redaction in the
+  batched overview, and a live row delivered strictly after a persisted `(createdAt, id)` cursor.
+  All ten Athena web files pass 49/49, API and web TypeScript checks exit cleanly, targeted lint
+  exits cleanly, and OpenAPI passes 1/1 when run alone after its first CPU-contended parallel run
+  exceeded the fixed 30-second ceiling. The final authenticated Chromium journey passes 1/1 in
+  49.2 seconds and regenerates five visually inspected desktop/mobile light/dark and mobile
+  below-fold captures with no Athena layout regression or horizontal overflow. The branch dev
+  stack was stopped after capture. The recurring diagnostic is local Node 24.14.0 versus the
+  required minimum 24.15.0; root-heavy test/build gates remain deferred by coordination.
+- **Personal Experience Final Review Retrospective**: Deduplicating context values is insufficient
+  when each unique value still invokes a multi-query authorization resolver; one fixed set of
+  source, actor, grant, and final-disclosure batches keeps query cost independent of queue
+  cardinality. A replay cursor belongs in SQL, not in an in-memory slice of a repeatedly reloaded
+  history. Workspace containment must be a render-time derivation, with state synchronization only
+  preserving the user's subsequent selection.
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A

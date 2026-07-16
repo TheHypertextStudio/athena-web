@@ -263,10 +263,25 @@ describe('personal Athena routes', () => {
     expect(JSON.stringify(body)).not.toContain(privateOther);
   });
 
-  it('keeps active work complete, caps finished history, and batches overview reads', async () => {
+  it('bounds active and finished history while batching many distinct display contexts', async () => {
     const seed = await seedPeople();
     const needs = await seedSession(seed, seed.owner, 'awaiting_input');
     const working = await seedSession(seed, seed.owner, 'running');
+    const historicalChat = one(
+      await db
+        .insert(schema.agentSession)
+        .values({
+          executorKind: 'athena',
+          ownerUserId: seed.owner.userId,
+          contextOrganizationId: seed.orgA,
+          kind: 'chat',
+          trigger: 'delegation',
+          status: 'pending',
+          initiatorId: seed.owner.actorIds[seed.orgA],
+          createdAt: new Date('2020-01-01T00:00:00.000Z'),
+        })
+        .returning({ id: schema.agentSession.id }),
+    ).id;
     await seedActivity(needs, { type: 'response', body: { text: 'Need input' } });
     await seedActivity(working, { type: 'response', body: { text: 'Still working' } });
     await db.insert(schema.sessionActivity).values(
@@ -275,6 +290,45 @@ describe('personal Athena routes', () => {
         organizationId: null,
         type: 'thought' as const,
         body: { text: `Unbounded activity ${index}` },
+      })),
+    );
+    const projects = await db
+      .insert(schema.project)
+      .values(
+        Array.from({ length: 30 }, (_, index) => ({
+          organizationId: seed.orgA,
+          name: `Context project ${String(index)}`,
+          status: 'active' as const,
+          createdBy: seed.owner.actorIds[seed.orgA],
+        })),
+      )
+      .returning({ id: schema.project.id });
+    const contextualSessions = await db
+      .insert(schema.agentSession)
+      .values(
+        Array.from({ length: 105 }, () => ({
+          executorKind: 'athena' as const,
+          ownerUserId: seed.owner.userId,
+          contextOrganizationId: seed.orgA,
+          kind: 'job' as const,
+          trigger: 'delegation' as const,
+          status: 'running' as const,
+          initiatorId: seed.owner.actorIds[seed.orgA],
+        })),
+      )
+      .returning({ id: schema.agentSession.id });
+    await db.insert(schema.sessionActivity).values(
+      projects.map((project, index) => ({
+        sessionId: contextualSessions[index]!.id,
+        organizationId: null,
+        type: 'response' as const,
+        body: {
+          text: `Contextual work ${String(index)}`,
+          context: {
+            workspaceId: seed.orgA,
+            source: { type: 'project' as const, id: project.id },
+          },
+        },
       })),
     );
     for (let index = 0; index < 55; index += 1) {
@@ -291,13 +345,15 @@ describe('personal Athena routes', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       counts: { needsYou: number; working: number; finished: number };
+      currentChat: { id: string } | null;
       sessions: Record<'needsYou' | 'working' | 'finished', { id: string }[]>;
     };
-    expect(body.counts).toEqual({ needsYou: 1, working: 1, finished: 55 });
-    expect(body.sessions.needsYou.map((row) => row.id)).toContain(needs);
-    expect(body.sessions.working.map((row) => row.id)).toContain(working);
+    expect(body.counts).toEqual({ needsYou: 1, working: 107, finished: 55 });
+    expect(body.currentChat?.id).toBe(historicalChat);
+    expect(body.sessions.needsYou.length + body.sessions.working.length).toBeLessThanOrEqual(100);
+    expect(body.sessions.working.map((row) => row.id)).not.toContain(historicalChat);
     expect(body.sessions.finished).toHaveLength(50);
-    expect(query.mock.calls.length).toBeLessThanOrEqual(12);
+    expect(query.mock.calls.length).toBeLessThanOrEqual(16);
   });
 
   it('returns compact pulse counts without personal session history', async () => {
@@ -572,6 +628,20 @@ describe('personal Athena routes', () => {
     expect(body.context?.source?.label).toBe('Project');
     expect(JSON.stringify(body)).not.toContain('Secret launch codename');
     expect(JSON.stringify(body)).not.toMatch(/Alpha-/);
+
+    const overview = (await (await appFor(seed.owner).request('/')).json()) as {
+      sessions: Record<'needsYou' | 'working' | 'finished', { id: string; context: unknown }[]>;
+    };
+    const overviewSession = [
+      ...overview.sessions.needsYou,
+      ...overview.sessions.working,
+      ...overview.sessions.finished,
+    ].find((session) => session.id === sessionId);
+    expect(overviewSession).toMatchObject({
+      context: { source: { type: 'project', id: projectId, label: 'Project' } },
+    });
+    expect(JSON.stringify(overviewSession)).not.toContain('Secret launch codename');
+    expect(JSON.stringify(overviewSession)).not.toMatch(/Alpha-/);
   });
 
   it('supports owner-only proposal review, edits, rejection, and elicitation replies', async () => {
@@ -1097,6 +1167,58 @@ describe('personal Athena routes', () => {
     const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`);
     const body = await stream.text();
     expect(body.indexOf('id: activity_alpha')).toBeLessThan(body.indexOf('id: activity_zulu'));
+  });
+
+  it('live-tails strictly after the persisted timestamp and id cursor', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'running');
+    const createdAt = new Date('2026-07-15T12:00:00.000Z');
+    await db.insert(schema.sessionActivity).values(
+      Array.from({ length: 100 }, (_, index) => ({
+        id: `history_${String(index).padStart(3, '0')}`,
+        sessionId,
+        organizationId: null,
+        type: 'response' as const,
+        body: { text: `Historical row ${String(index)}` },
+        createdAt,
+      })),
+    );
+    const client = Reflect.get(db, '$client') as {
+      query: (...args: unknown[]) => Promise<unknown>;
+    };
+    const query = vi.spyOn(client, 'query');
+
+    const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`, {
+      headers: { 'last-event-id': 'history_099' },
+    });
+    const bodyPromise = stream.text();
+    const freshId = await seedActivity(sessionId, {
+      id: 'live_001',
+      type: 'response',
+      body: { text: 'New live row' },
+      createdAt: new Date('2026-07-15T12:00:01.000Z'),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    await db
+      .update(schema.agentSession)
+      .set({ status: 'completed', endedAt: new Date() })
+      .where(eq(schema.agentSession.id, sessionId));
+
+    const body = await bodyPromise;
+    expect(body).toContain(`id: ${freshId}`);
+    expect(body).not.toContain('id: history_000');
+    const orderedActivityReads = query.mock.calls
+      .map(([statement]) => String(statement))
+      .filter(
+        (statement) =>
+          statement.includes('session_activity') && statement.toLowerCase().includes('order by'),
+      );
+    expect(orderedActivityReads.length).toBeGreaterThan(0);
+    expect(
+      orderedActivityReads.every(
+        (statement) => statement.includes('created_at') && statement.includes('>'),
+      ),
+    ).toBe(true);
   });
 
   it('lets the owner approve without assign while the underlying tool reauthorizes', async () => {

@@ -4,7 +4,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AthenaWorkspace } from '../../src/components/athena/athena-workspace';
+import {
+  AthenaWorkspace,
+  effectiveAthenaSelectedId,
+} from '../../src/components/athena/athena-workspace';
 import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
 import type { PersonalAthenaSessionDetail } from '../../src/lib/athena/presentation';
 import { okResponse, problemResponse } from '../support/query';
@@ -46,6 +49,11 @@ function transport(): PersonalAthenaTransport {
 }
 
 describe('AthenaWorkspace', () => {
+  it('derives a visible selection before effects can synchronize state', () => {
+    expect(effectiveAthenaSelectedId('workspace-a-session', null, [working])).toBe(working.id);
+    expect(effectiveAthenaSelectedId('workspace-a-session', null, [])).toBe('');
+  });
+
   it('composes the dense cross-workspace queue and selected workbench', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -202,6 +210,55 @@ describe('AthenaWorkspace', () => {
         context: { workspaceId: 'workspace_1' },
       });
     });
+  });
+
+  it('contains selection synchronously when the workspace filter changes', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const workspaceA = {
+      ...working,
+      id: 'workspace-a-session',
+      objective: 'Workspace A private objective',
+      workspace: { id: 'workspace_a', name: 'Workspace A' },
+    };
+    const workspaceB = {
+      ...working,
+      id: 'workspace-b-session',
+      objective: 'Workspace B private objective',
+      workspace: { id: 'workspace_b', name: 'Workspace B' },
+    };
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 0, working: 2, finished: 0 },
+        currentChat: workspaceA,
+        sessions: { needsYou: [], working: [workspaceA, workspaceB], finished: [] },
+      }),
+    );
+    vi.mocked(api.detail).mockImplementation((id) =>
+      Promise.resolve(okResponse(id === workspaceA.id ? workspaceA : workspaceB)),
+    );
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} workspaceFilter="workspace_a" />
+      </QueryClientProvider>,
+    );
+    expect(
+      await screen.findByRole('heading', { name: 'Workspace A private objective' }),
+    ).toBeVisible();
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} workspaceFilter="workspace_b" />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      screen.queryByRole('heading', { name: 'Workspace A private objective' }),
+    ).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Workspace B private objective' }),
+    ).toBeVisible();
+    expect(api.detail).toHaveBeenLastCalledWith(workspaceB.id);
   });
 
   it('announces application-owned mutation failures and clears feedback on retry success', async () => {

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { JSX } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useAthenaActions } from '../../src/components/athena/use-athena-actions';

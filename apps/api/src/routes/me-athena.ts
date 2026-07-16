@@ -15,7 +15,7 @@ import {
   SessionActivityOut,
 } from '@docket/types';
 import type { AthenaInvocationContext } from '@docket/types';
-import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, ne, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -53,7 +53,11 @@ import {
 } from './agent-session-helpers';
 import { toPersonalActivityOut } from './me-athena-activity';
 import { runSession } from './agent-session-runner';
-import { resolveAthenaDisplay, resolveAthenaInvocation } from './me-athena-context';
+import {
+  resolveAthenaDisplay,
+  resolveAthenaDisplays,
+  resolveAthenaInvocation,
+} from './me-athena-context';
 
 /** SSE live-tail poll cadence (DB-backed and restart-safe). */
 const STREAM_POLL_MS = 750;
@@ -61,6 +65,8 @@ const STREAM_POLL_MS = 750;
 const STREAM_HEARTBEAT_MS = 15_000;
 /** Maximum terminal rows returned by the non-paginated ambient overview. */
 const FINISHED_HISTORY_LIMIT = 50;
+/** Maximum active rows returned by the non-paginated ambient overview. */
+const ACTIVE_HISTORY_LIMIT = 100;
 /** Route params for proposal-group decisions. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
 /** Optional activity decision scope. */
@@ -247,16 +253,46 @@ function visibleActivities(
   return activities.filter((activity) => activity.type !== 'thought');
 }
 
-/** Resume after an exact persisted event id without assuming same-millisecond ULID randomness. */
-function activitiesAfter(
-  activities: readonly (typeof sessionActivity.$inferSelect)[],
-  lastSeen: string,
-): (typeof sessionActivity.$inferSelect)[] {
-  if (!lastSeen) return [...activities];
-  const index = activities.findIndex((activity) => activity.id === lastSeen);
-  return index >= 0
-    ? activities.slice(index + 1)
-    : activities.filter((activity) => activity.id > lastSeen);
+interface ActivityCursor {
+  readonly createdAt: Date;
+  readonly id: string;
+}
+
+/** Resolve a persisted SSE event id into its deterministic timestamp/id cursor. */
+async function activityCursor(sessionId: string, id: string): Promise<ActivityCursor | null> {
+  if (!id) return null;
+  const rows = await db
+    .select({ createdAt: sessionActivity.createdAt, id: sessionActivity.id })
+    .from(sessionActivity)
+    .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.id, id)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Read only visible activity strictly after a deterministic timestamp/id cursor. */
+async function sessionActivitiesAfter(
+  sessionId: string,
+  cursor: ActivityCursor | null,
+): Promise<(typeof sessionActivity.$inferSelect)[]> {
+  return db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        ne(sessionActivity.type, 'thought'),
+        cursor
+          ? or(
+              gt(sessionActivity.createdAt, cursor.createdAt),
+              and(
+                eq(sessionActivity.createdAt, cursor.createdAt),
+                gt(sessionActivity.id, cursor.id),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(asc(sessionActivity.createdAt), asc(sessionActivity.id));
 }
 
 /** Build one detail response after a mutation may have settled execution. */
@@ -285,7 +321,8 @@ async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverv
       .where(
         and(ownership, inArray(agentSession.status, [...NEEDS_YOU_STATUSES, ...WORKING_STATUSES])),
       )
-      .orderBy(desc(agentSession.createdAt)),
+      .orderBy(desc(agentSession.createdAt), desc(agentSession.id))
+      .limit(ACTIVE_HISTORY_LIMIT),
     db
       .select()
       .from(agentSession)
@@ -311,10 +348,15 @@ async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverv
       (row.contextOrganizationId ? { workspaceId: row.contextOrganizationId } : null);
     uniqueContexts.set(JSON.stringify(context), context);
   }
-  const contexts = new Map<string, Awaited<ReturnType<typeof resolveAthenaDisplay>>>();
-  await Promise.all(
-    [...uniqueContexts].map(async ([key, context]) => {
-      contexts.set(key, await resolveAthenaDisplay(ownerUserId, context));
+  const contextEntries = [...uniqueContexts];
+  const resolvedDisplays = await resolveAthenaDisplays(
+    ownerUserId,
+    contextEntries.map(([, context]) => context),
+  );
+  const contexts = new Map(
+    contextEntries.flatMap(([key], index) => {
+      const display = resolvedDisplays[index];
+      return display ? [[key, display] as const] : [];
     }),
   );
   const summaries = await Promise.all(
@@ -331,10 +373,12 @@ async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverv
       );
     }),
   );
+  const queueIds = new Set([...active, ...finished].map((row) => row.id));
+  const queueSummaries = summaries.filter((row) => queueIds.has(row.id));
   const sessions = {
-    needsYou: summaries.filter((row) => row.queueState === 'needs_you'),
-    working: summaries.filter((row) => row.queueState === 'working'),
-    finished: summaries.filter((row) => row.queueState === 'finished'),
+    needsYou: queueSummaries.filter((row) => row.queueState === 'needs_you'),
+    working: queueSummaries.filter((row) => row.queueState === 'working'),
+    finished: queueSummaries.filter((row) => row.queueState === 'finished'),
   };
   const current = summaries.find((row) => row.id === chats[0]?.id);
   return {
@@ -475,35 +519,32 @@ async function driveAfterMessage(session: SessionRow): Promise<'sync' | 'async' 
 
 /** Stream replay plus a DB-polled live tail until terminal state. */
 async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
-  const existing = visibleActivities(await sessionActivities(session.id));
   const lastEventId = c.req.header('last-event-id');
+  const resumedCursor = lastEventId ? await activityCursor(session.id, lastEventId) : null;
   const terminal = new Set(['completed', 'failed', 'canceled']);
   return streamSSE(c, async (stream) => {
-    let lastSeen = lastEventId ?? '';
-    const replay = activitiesAfter(existing, lastSeen);
+    let cursor = resumedCursor;
+    const replay = await sessionActivitiesAfter(session.id, cursor);
     for (const activity of replay) {
       await stream.writeSSE({
         id: activity.id,
         event: activity.type,
         data: JSON.stringify(toPersonalActivityOut(activity)),
       });
-      lastSeen = activity.id;
+      cursor = { createdAt: activity.createdAt, id: activity.id };
     }
     if (terminal.has(session.status)) return;
     let lastHeartbeat = Date.now();
     for (;;) {
       if (stream.aborted) return;
-      const fresh = activitiesAfter(
-        visibleActivities(await sessionActivities(session.id)),
-        lastSeen,
-      );
+      const fresh = await sessionActivitiesAfter(session.id, cursor);
       for (const activity of fresh) {
         await stream.writeSSE({
           id: activity.id,
           event: activity.type,
           data: JSON.stringify(toPersonalActivityOut(activity)),
         });
-        lastSeen = activity.id;
+        cursor = { createdAt: activity.createdAt, id: activity.id };
       }
       const [state] = await db
         .select({ status: agentSession.status })

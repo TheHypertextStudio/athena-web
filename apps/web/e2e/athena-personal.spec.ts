@@ -321,6 +321,11 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   releaseApproval();
   await expect(page.getByRole('heading', { name: 'Work finished' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Needs you' }).locator('..')).toContainText('0');
-  await expect(page.getByRole('heading', { name: 'Finished' }).locator('..')).toContainText('1');
+  const workQueue = page.getByRole('navigation', { name: 'Athena work queue' });
+  await expect(workQueue.getByRole('heading', { name: 'Needs you' }).locator('..')).toContainText(
+    '0',
+  );
+  await expect(workQueue.getByRole('heading', { name: 'Finished' }).locator('..')).toContainText(
+    '1',
+  );
 });

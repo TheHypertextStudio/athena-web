@@ -174,6 +174,10 @@ describe('types + enums + relations', () => {
         defaultCreateIntent: 'event',
         defaultLayerId: null,
       },
+      athena: {
+        instructions: 'Protect focus time.',
+        approvalMode: 'ask_before_acting',
+      },
     };
     const conn: AgentConnection = { endpoint: 'https://x', protocol: 'mcp', credentialsRef: 'c' };
     const routing: ApprovalRouting = { mode: 'role', approverRoleId: 'r' };

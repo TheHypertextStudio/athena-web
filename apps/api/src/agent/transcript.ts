@@ -47,11 +47,22 @@ export async function saveTranscript(
   messages: readonly TurnMessage[],
   ownerUserId: string | null = null,
 ): Promise<void> {
+  const attributedOrganizationId = ownerUserId === null ? organizationId : null;
   await handle
     .insert(agentSessionTranscript)
-    .values({ sessionId, organizationId, ownerUserId, messages: [...messages] })
+    .values({
+      sessionId,
+      organizationId: attributedOrganizationId,
+      ownerUserId,
+      messages: [...messages],
+    })
     .onConflictDoUpdate({
       target: agentSessionTranscript.sessionId,
-      set: { ownerUserId, messages: [...messages], updatedAt: sql`now()` },
+      set: {
+        organizationId: attributedOrganizationId,
+        ownerUserId,
+        messages: [...messages],
+        updatedAt: sql`now()`,
+      },
     });
 }

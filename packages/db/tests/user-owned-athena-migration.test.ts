@@ -16,144 +16,76 @@ function migrationSql(through: string): string {
     .join('\n');
 }
 
-async function legacyDatabase(): Promise<PGlite> {
-  const client = new PGlite('memory://');
-  clients.push(client);
-  await client.exec(migrationSql('0040_pink_franklin_storm.sql'));
-  await client.exec(`
-    INSERT INTO "user" (id, name, email, email_verified)
-    VALUES ('user_owner', 'Owner', 'owner@example.com', true);
-    INSERT INTO organization (id, name, slug)
-    VALUES ('org_one', 'Workspace', 'workspace');
-    INSERT INTO actor (id, organization_id, kind, display_name, user_id)
-    VALUES
-      ('actor_owner', 'org_one', 'human', 'Owner', 'user_owner'),
-      ('actor_athena', 'org_one', 'agent', 'Athena', null);
-    INSERT INTO agent (id, organization_id, actor_id)
-    VALUES ('agent_athena', 'org_one', 'actor_athena');
-  `);
-  return client;
-}
-
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((client) => client.close()));
 });
 
 describe('user-owned Athena migration', () => {
-  it('ships the next ordered migration', () => {
+  it('ships the next ordered migration without legacy ownership backfill', () => {
+    const sql = readFileSync(resolve(migrationsFolder, migrationName), 'utf8');
+
     expect(readdirSync(migrationsFolder)).toContain(migrationName);
+    expect(sql).not.toMatch(/^\s*UPDATE\s/im);
+    expect(sql).not.toContain("display_name\" = 'Athena'");
   });
 
-  it('maps only unambiguous legacy Athena jobs to their initiating user', async () => {
-    const client = await legacyDatabase();
-    await client.exec(`
-      INSERT INTO agent_session
-        (id, organization_id, agent_id, trigger, kind, initiator_id)
-      VALUES
-        ('session_owned', 'org_one', 'agent_athena', 'delegation', 'job', 'actor_owner'),
-        ('session_ambiguous', 'org_one', 'agent_athena', 'mention', 'job', null),
-        ('session_shared_chat', 'org_one', 'agent_athena', 'delegation', 'chat', 'actor_owner');
-      INSERT INTO agent_session_run
-        (id, session_id, organization_id, generation, workflow_instance_id)
-      VALUES ('run_owned', 'session_owned', 'org_one', 1, 'workflow_owned');
-      INSERT INTO agent_session_transcript (session_id, organization_id, messages)
-      VALUES
-        ('session_owned', 'org_one', '[]'),
-        ('session_shared_chat', 'org_one', '[]');
-    `);
+  it('replays the complete migration chain into the fresh executor schema', async () => {
+    const client = new PGlite('memory://');
+    clients.push(client);
 
-    await client.exec(readFileSync(resolve(migrationsFolder, migrationName), 'utf8'));
+    await client.exec(migrationSql(migrationName));
 
-    const sessions = await client.query<{
-      id: string;
-      executor_kind: string;
-      organization_id: string | null;
-      owner_user_id: string | null;
-      agent_id: string | null;
-      context_organization_id: string | null;
+    const columns = await client.query<{
+      column_name: string;
+      is_nullable: 'YES' | 'NO';
     }>(`
-      SELECT id, executor_kind, organization_id, owner_user_id, agent_id, context_organization_id
-      FROM agent_session
-      ORDER BY id
+      SELECT column_name, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = 'agent_session'
+        AND column_name IN (
+          'agent_id',
+          'context_organization_id',
+          'executor_kind',
+          'organization_id',
+          'owner_user_id'
+        )
+      ORDER BY column_name
     `);
-    expect(sessions.rows).toEqual([
-      {
-        id: 'session_ambiguous',
-        executor_kind: 'registered_agent',
-        organization_id: 'org_one',
-        owner_user_id: null,
-        agent_id: 'agent_athena',
-        context_organization_id: null,
-      },
-      {
-        id: 'session_owned',
-        executor_kind: 'athena',
-        organization_id: null,
-        owner_user_id: 'user_owner',
-        agent_id: null,
-        context_organization_id: 'org_one',
-      },
-      {
-        id: 'session_shared_chat',
-        executor_kind: 'registered_agent',
-        organization_id: 'org_one',
-        owner_user_id: null,
-        agent_id: 'agent_athena',
-        context_organization_id: null,
-      },
+    expect(columns.rows).toEqual([
+      { column_name: 'agent_id', is_nullable: 'YES' },
+      { column_name: 'context_organization_id', is_nullable: 'YES' },
+      { column_name: 'executor_kind', is_nullable: 'NO' },
+      { column_name: 'organization_id', is_nullable: 'YES' },
+      { column_name: 'owner_user_id', is_nullable: 'YES' },
     ]);
 
-    const runs = await client.query<{
-      organization_id: string | null;
-      owner_user_id: string | null;
-    }>(`SELECT organization_id, owner_user_id FROM agent_session_run WHERE id = 'run_owned'`);
-    expect(runs.rows[0]).toEqual({ organization_id: null, owner_user_id: 'user_owner' });
-    const transcripts = await client.query<{
-      session_id: string;
-      organization_id: string | null;
-      owner_user_id: string | null;
-    }>(
-      `SELECT session_id, organization_id, owner_user_id
-       FROM agent_session_transcript ORDER BY session_id`,
-    );
-    expect(transcripts.rows).toEqual([
-      { session_id: 'session_owned', organization_id: null, owner_user_id: 'user_owner' },
-      {
-        session_id: 'session_shared_chat',
-        organization_id: 'org_one',
-        owner_user_id: null,
-      },
+    const constraints = await client.query<{ constraint_name: string }>(`
+      SELECT constraint_name
+      FROM information_schema.table_constraints
+      WHERE table_name IN (
+        'agent_session',
+        'agent_session_run',
+        'agent_session_transcript'
+      )
+        AND constraint_name IN (
+          'agent_session_executor_shape_check',
+          'agent_session_run_attribution_check',
+          'agent_session_run_parent_owner_fk',
+          'agent_session_run_parent_org_fk',
+          'agent_session_transcript_attribution_check',
+          'agent_session_transcript_parent_owner_fk',
+          'agent_session_transcript_parent_org_fk'
+        )
+      ORDER BY constraint_name
+    `);
+    expect(constraints.rows.map((row) => row.constraint_name)).toEqual([
+      'agent_session_executor_shape_check',
+      'agent_session_run_attribution_check',
+      'agent_session_run_parent_org_fk',
+      'agent_session_run_parent_owner_fk',
+      'agent_session_transcript_attribution_check',
+      'agent_session_transcript_parent_org_fk',
+      'agent_session_transcript_parent_owner_fk',
     ]);
-  });
-
-  it('leaves jobs registered when a workspace has multiple matching Athena candidates', async () => {
-    const client = await legacyDatabase();
-    await client.exec(`
-      INSERT INTO actor (id, organization_id, kind, display_name, user_id)
-      VALUES ('actor_athena_two', 'org_one', 'agent', 'Athena', null);
-      INSERT INTO agent (id, organization_id, actor_id)
-      VALUES ('agent_athena_two', 'org_one', 'actor_athena_two');
-      INSERT INTO agent_session
-        (id, organization_id, agent_id, trigger, kind, initiator_id)
-      VALUES ('session_ambiguous_agent', 'org_one', 'agent_athena', 'delegation', 'job', 'actor_owner');
-    `);
-
-    await client.exec(readFileSync(resolve(migrationsFolder, migrationName), 'utf8'));
-
-    const result = await client.query<{
-      executor_kind: string;
-      organization_id: string | null;
-      owner_user_id: string | null;
-      agent_id: string | null;
-    }>(`
-      SELECT executor_kind, organization_id, owner_user_id, agent_id
-      FROM agent_session WHERE id = 'session_ambiguous_agent'
-    `);
-    expect(result.rows[0]).toEqual({
-      executor_kind: 'registered_agent',
-      organization_id: 'org_one',
-      owner_user_id: null,
-      agent_id: 'agent_athena',
-    });
   });
 });

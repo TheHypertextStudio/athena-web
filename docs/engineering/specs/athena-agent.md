@@ -86,7 +86,7 @@ _from_ its scripted message for the same reason.
 | `session_activity.proposal_group_id` | Every gated action proposed in one assistant turn shares a group id — the batch-approval handle ("approve all 40 imported tasks"). Indexed `(session_id, proposal_group_id)`.                                                                                     |
 | `agent_session.executor_kind`        | `athena` for a user-owned executor or `registered_agent` for a workspace agent. Database checks enforce the corresponding exclusive owner shape.                                                                                                                  |
 | `agent_session.owner_user_id`        | Canonical private owner for Athena sessions. `organization_id` and `agent_id` are null; `context_organization_id` is optional and never grants access.                                                                                                            |
-| `agent_session.kind`                 | `chat` \| `job` (default `job`). Athena chat lookup is personal; legacy workspace-shared chats remain registered-agent history.                                                                                                                                   |
+| `agent_session.kind`                 | `chat` \| `job` (default `job`). Athena chat lookup is personal; registered-agent chat lookup remains workspace-scoped.                                                                                                                                           |
 | `integration_credential`             | AES-256-GCM ciphertext 1:1 with an `integration` (unique-indexed, cascade). The no-token-passthrough MCP MUST as schema: agents reach remote services only with the org's own sealed credential (`CREDENTIALS_ENCRYPTION_KEY`, explicit env — no hidden default). |
 
 `SessionActivityBody.action` carries the executable payload: `toolCall {connection, tool,
@@ -183,17 +183,26 @@ remote tools `<alias>__<name>` (collision-free by construction) — and remote t
 `readOnlyHint: true` classify as writes (fail closed).
 
 Workspace-owned remote MCP connections currently load only for registered agents. Athena's toolbox
-exposes Docket tools alone until the personal connection ownership migration lands; it never
+exposes Docket tools alone until personal connection ownership lands; it never
 borrows a workspace credential as a substitute for a user-owned connection.
 
-## 9. Entitlement (slice 6 — shipped)
+## 9. Fresh-database rollout
+
+The user-owned executor model does not backfill legacy Athena data. Existing databases must be
+reset and rebuilt from the complete migration chain. Migration `0041` adds the executor columns,
+indexes, foreign keys, and exclusive-attribution checks, but contains no data updates or ownership
+heuristics. Legacy sessions, runs, transcripts, chats, Athena agent rows, and connector credentials
+are not supported by this rollout; users reconnect personal services after reset. Local development
+uses `pnpm db:reset`; deployed environments start from an empty database.
+
+## 10. Entitlement (slice 6 — shipped)
 
 `assertAgentSessionsEntitled(orgId)` at `driveSession` first-run — the single choke point
 covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Entitled =
 `organization.lifecycleState ∈ {trialing, active}` (the trial IS the funnel). Typed
 `AgentPlanRequiredError` (402, `agent_plan_required`) for the web upsell.
 
-## 10. Testing doctrine
+## 11. Testing doctrine
 
 Everything runs with `APP_MODE=test`, zero API keys: scripted mock turns drive the real
 loop; the mock Sunsama server backs the import flow; restart resilience is tested by

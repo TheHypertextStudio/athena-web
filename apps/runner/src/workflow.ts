@@ -4,11 +4,21 @@ import { signInternalRequest } from './hmac';
 import { isExecutionMessage } from './protocol';
 import type { ExecutionMessage } from './protocol';
 
-/** Application secrets intentionally omitted from generated binding interfaces. */
-type RunnerEnv = Cloudflare.Env & {
+/** Docket callback configuration shared by Workflow and scheduled requests. */
+export interface DocketWorkflowEnv {
   readonly DOCKET_API_URL: string;
   readonly CLOUDFLARE_TO_DOCKET_HMAC_SECRET: string;
-};
+}
+
+/** Application secrets intentionally omitted from generated binding interfaces. */
+export type RunnerEnv = Pick<Cloudflare.Env, 'ATHENA_RUN_QUEUE'> & DocketWorkflowEnv;
+const DEFAULT_DOCKET_REQUEST_TIMEOUT_MS = 10_000;
+
+/** Injectable Workflow-to-Docket transport. */
+export interface WorkflowHttpDependencies {
+  readonly fetch: typeof fetch;
+  readonly timeoutMs?: number;
+}
 
 /** A bounded Docket result that never includes prompts, credentials, or owner identity. */
 export type GenerationAdvance =
@@ -35,6 +45,22 @@ export interface GenerationWorkflowEffects {
 }
 
 /**
+ * Recognize only Cloudflare's event-wait timeout exception.
+ *
+ * @remarks
+ * The Workflows API documents that `waitForEvent` throws on timeout but currently exports no
+ * stable timeout class. Workers uses the platform-standard `TimeoutError` name; the message check
+ * is deliberately bounded to the documented operation so unrelated storage/RPC errors escape.
+ */
+export function isWorkflowEventTimeout(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.name === 'TimeoutError' &&
+    /^waitForEvent timed out(?:\b|$)/i.test(error.message)
+  );
+}
+
+/**
  * Advance one persisted generation, wait durably when Docket needs a person, and fan out the next.
  *
  * @remarks
@@ -55,7 +81,8 @@ export async function executeGenerationWorkflow(
         type: 'docket_wake',
         timeout: '365 days',
       });
-    } catch {
+    } catch (error) {
+      if (!isWorkflowEventTimeout(error)) throw error;
       epoch += 1;
       continue;
     }
@@ -72,10 +99,11 @@ export async function executeGenerationWorkflow(
 }
 
 /** Call Docket's protected internal generation endpoint with the Cloudflare-direction secret. */
-async function advanceDocket(
-  env: RunnerEnv,
+export async function advanceDocket(
+  env: DocketWorkflowEnv,
   message: ExecutionMessage,
   reason: 'run' | 'wake',
+  dependencies: WorkflowHttpDependencies = { fetch },
 ): Promise<GenerationAdvance> {
   const path = '/internal/athena/execution/advance';
   const body = JSON.stringify({ ...message, reason });
@@ -85,11 +113,19 @@ async function advanceDocket(
     path,
     body,
   });
-  const response = await fetch(new URL(path, env.DOCKET_API_URL), {
-    method: 'POST',
-    headers,
-    body,
-  });
+  const signal = AbortSignal.timeout(dependencies.timeoutMs ?? DEFAULT_DOCKET_REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await dependencies.fetch(new URL(path, env.DOCKET_API_URL), {
+      method: 'POST',
+      headers,
+      body,
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted) throw new Error('Docket generation advance timed out', { cause: error });
+    throw error;
+  }
   if (!response.ok)
     throw new Error(`Docket generation advance failed (${String(response.status)})`);
   const result: unknown = await response.json();

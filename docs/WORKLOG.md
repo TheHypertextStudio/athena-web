@@ -281,6 +281,50 @@
   not the URL family: the temporary org routes contain both personal and registered work. Keeping
   the discriminator at each mutation preserves legacy registered-agent behavior while preventing
   any personal production entry from bypassing the durable owner admission and fencing model.
+- **Plan (durable dispatch reliability and boundary hardening)**:
+  1. Add a run-linked Docket outbox whose unique enqueue intent commits with generation creation,
+     records delivery only after Worker `202`, and is recoverable by an idempotent bounded sweeper
+     with capped backoff after any API-to-Worker crash or failure.
+  2. Persist wake intents in the same transaction as every production personal activity/group
+     decision, reply, resume, and awaiting-input chat mutation across canonical and compatibility
+     routes; retain synchronous registered-agent and local/test behavior.
+  3. Replace unbounded request text reads at both signed ingress surfaces with canceling byte-bounded
+     stream readers, and add explicit abort timeouts to API-to-Worker, Worker nonce-claim, and
+     Workflow-to-Docket calls.
+  4. Recheck owner concurrency under the existing owner lock before exact expired-generation
+     recovery, and distinguish only the documented Workflow event-timeout exception from unrelated
+     failures so infrastructure errors retry instead of entering a wait loop.
+  5. Add real DB crash-window, duplicate-sweeper, body-stream, timeout, concurrency, and Workflow
+     error regressions; generate and validate the migration chain, update execution documentation,
+     run focused package/Wrangler gates, and commit without amend, rebase, merge, push, or deployment.
+- **Durable Dispatch Reliability**: Added a payload-free `agent_session_dispatch` outbox whose
+  enqueue intent commits with its run and whose wake intent commits with every asynchronous human
+  continuation, including decisions, replies, awaiting-input chat, resume, and cancellation. Short
+  conditional leases, fresh per-claim clocks, capped backoff, bounded 25-row sweeps, and terminal
+  attention state make delivery idempotent and crash-recoverable. Immediate transport failure now
+  returns accepted while the durable intent remains pending; retry during backoff also remains
+  accepted. Eight failed enqueue deliveries atomically fail the still-queued run and running parent
+  so abandoned transport cannot consume an owner's concurrency capacity forever.
+- **Execution Boundary Hardening**: Both signed ingress surfaces count actual streamed bytes and
+  cancel above 4 KiB without trusting `Content-Length`. API-to-Worker, nonce-claim,
+  Workflow-to-Docket, and scheduled-sweep fetches have ten-second abort deadlines. Expired exact
+  generation reclaim rechecks owner capacity under the owner lock, and only the bounded documented
+  `waitForEvent` timeout shape starts another yearly wait epoch.
+- **Automatic Recovery and Operations**: Added a signed protected Docket sweep endpoint returning
+  counts only, an exported Worker `scheduled()` handler, and the checked-in every-minute Wrangler
+  cron. The execution runbook documents automatic and manual recovery, privacy boundaries,
+  backoff/attention behavior, byte limits, and timeouts. No Cloudflare resource was created or
+  deployed.
+- **Durable Dispatch Validation**: Focused API suites passed across generation, outbox, personal and
+  compatibility continuations, and internal execution routes (31 tests in the combined matrix, plus
+  the final pending-backoff regression). Runner HTTP, Workflow, and cron suites pass (12 tests); the
+  migration regression passes; API, runner, and database typechecks pass; focused API plus full
+  runner/database lint pass; Wrangler types are current; dry-run build and startup analysis pass.
+- **Durable Dispatch Retrospective**: A durable intent changes the response contract: once the
+  product mutation and outbox row commit, transient transport is pending work rather than a failed
+  user action. Recovery clocks must be taken per lease claim, and terminal delivery exhaustion must
+  settle admission state as well as transport state so reliability machinery cannot become a
+  permanent capacity leak.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry

@@ -88,6 +88,7 @@ _from_ its scripted message for the same reason.
 | `agent_session.owner_user_id`        | Canonical private owner for Athena sessions. `organization_id` and `agent_id` are null; `context_organization_id` is optional and never grants access.                                                                                                            |
 | `agent_session.kind`                 | `chat` \| `job` (default `job`). Athena chat lookup is personal; registered-agent chat lookup remains workspace-scoped.                                                                                                                                           |
 | `agent_session_run`                  | One durable execution generation and lease claim. `(session_id, generation)` is unique, `workflow_instance_id` is constrained to `sessionId:generation`, and a fresh `lease_token` fences the only worker allowed to consume the transcript or dispatch tools.    |
+| `agent_session_dispatch`             | Payload-free enqueue/wake outbox. A unique run/action intent is transactionally persisted with generation admission or a human continuation, then short-lease claimed and retried by a bounded cron sweep until Worker `202` or operator attention.               |
 | `integration_credential`             | AES-256-GCM ciphertext 1:1 with an `integration` (unique-indexed, cascade). The no-token-passthrough MCP MUST as schema: agents reach remote services only with the org's own sealed credential (`CREDENTIALS_ENCRYPTION_KEY`, explicit env — no hidden default). |
 
 `SessionActivityBody.action` carries the executable payload: `toolCall {connection, tool,
@@ -186,10 +187,13 @@ Athena has no wall-clock or job-duration cap. `AGENT_MAX_TURNS` is one personal 
 checkpoint quantum: reaching it completes that run record and continues from the durable transcript
 without changing the session's `running` state. In the synchronous path the API claims
 `generation + 1` directly. When the production-only `ATHENA_ASYNC_RUNNER_ENABLED` flag is on,
-Docket instead persists the next queued generation and a Cloudflare Workflow dispatches its opaque
-identity; Queue and Workflow never receive prompts, users, credentials, or tool inputs. Approval
-and input waits use durable Workflow events in repeated 365-day epochs, while Postgres remains the
-source of truth. The signed boundary, resource names, recovery model, and operator commands live in
+Docket instead persists the next queued generation and its payload-free dispatch intent before a
+Cloudflare Workflow receives the opaque identity; Queue and Workflow never receive prompts, users,
+credentials, or tool inputs. Approval, reply, resume, awaiting-input chat, and waiting-session
+cancellation commit their wake intent with the human mutation. A signed every-minute Worker cron
+recovers due intents in bounded batches with short leases and capped backoff. Approval and input
+waits use durable Workflow events in repeated 365-day epochs, while Postgres remains the source of
+truth. The signed boundary, resource names, recovery model, and operator commands live in
 `docs/engineering/cloudflare-athena-execution.md`. Completion, explicit
 pause/cancel, approval/input wait, or an actual error are the only settlement boundaries. Registered
 agents retain the legacy terminal turn cap. `ATHENA_MAX_CONCURRENT_RUNS` defaults to eight and can be
@@ -255,7 +259,8 @@ random ULIDs created in the same millisecond are lexically ordered.
 Local/test execution and every registered-agent compatibility route preserve synchronous `200`
 settle responses. With the production asynchronous runner enabled, personal create, eligible chat
 message, run, approval/rejection, reply, and resume mutations persist their admission or wake first
-and return `202`; the visible parent session is `running` while its admitted generation is `queued`.
+and return `202`; delivery failure leaves a retryable outbox row rather than losing the generation.
+The visible parent session is `running` while its admitted generation is `queued`.
 The temporary organization-scoped compatibility routes follow the same executor split and owner
 privacy as `/v1/me/athena`. A chat already awaiting approval or canceled remains parked after a new
 message and returns `200` without dispatch, matching the canonical personal route.

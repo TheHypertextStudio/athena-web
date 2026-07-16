@@ -40,6 +40,10 @@ import { task } from './work';
 
 /** Directional secret boundary represented by a persisted replay nonce. */
 export type ExecutionRequestDirection = 'cloudflare_to_docket' | 'docket_to_cloudflare';
+/** Opaque Cloudflare side effect recoverable from an agent run row. */
+export type AgentSessionDispatchAction = 'enqueue' | 'wake';
+/** Delivery lifecycle for a Docket-owned execution outbox intent. */
+export type AgentSessionDispatchStatus = 'pending' | 'delivering' | 'delivered' | 'failed';
 
 /** An org-registered agent: the persistent wrapper around an ephemeral external runtime. */
 export const agent = pgTable(
@@ -173,6 +177,43 @@ export const agentSessionRun = pgTable(
     check(
       'agent_session_run_workflow_check',
       sql`${t.workflowInstanceId} = ${t.sessionId} || ':' || ${t.generation}::text`,
+    ),
+  ],
+);
+
+/**
+ * Durable outbox for the two opaque Docket-to-Cloudflare execution messages.
+ *
+ * @remarks
+ * The message is derived from the referenced run; no prompt, owner, credential, or tool payload is
+ * duplicated here. A unique action per run makes retries and duplicate sweepers idempotent.
+ */
+export const agentSessionDispatch = pgTable(
+  'agent_session_dispatch',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    runId: text('run_id')
+      .notNull()
+      .references(() => agentSessionRun.id, { onDelete: 'cascade' }),
+    action: text('action').$type<AgentSessionDispatchAction>().notNull(),
+    status: text('status').$type<AgentSessionDispatchStatus>().notNull().default('pending'),
+    attempt: integer('attempt').notNull().default(0),
+    availableAt: timestamp('available_at').notNull().defaultNow(),
+    leaseToken: text('lease_token'),
+    leaseExpiresAt: timestamp('lease_expires_at'),
+    lastError: text('last_error'),
+    deliveredAt: timestamp('delivered_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('agent_session_dispatch_run_action_uq').on(t.runId, t.action),
+    index('agent_session_dispatch_due_idx').on(t.status, t.availableAt),
+    index('agent_session_dispatch_lease_idx').on(t.status, t.leaseExpiresAt),
+    check('agent_session_dispatch_action_check', sql`${t.action} in ('enqueue', 'wake')`),
+    check(
+      'agent_session_dispatch_status_check',
+      sql`${t.status} in ('pending', 'delivering', 'delivered', 'failed')`,
     ),
   ],
 );

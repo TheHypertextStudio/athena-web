@@ -304,6 +304,26 @@ export type { TurnContentBlock, TurnMessage } from '@docket/types';
 export interface SessionActivityBody {
   /** Free text (thought/response/elicitation/error). */
   readonly text?: string;
+  /** The caller-validated focus attached to a user-authored personal Athena message. */
+  readonly context?: {
+    /** Workspace focus; context never grants authority. */
+    readonly workspaceId?: string;
+    /** Optional canonical source object that opened Athena. */
+    readonly source?: {
+      /** Supported ambient entry-point kind. */
+      readonly type:
+        | 'task'
+        | 'project'
+        | 'initiative'
+        | 'program'
+        | 'calendar_item'
+        | 'stream_event';
+      /** Canonical source row id. */
+      readonly id: string;
+    };
+  };
+  /** Application attribution for human-authored response rows. */
+  readonly author?: 'user' | 'athena';
   /** For `action` activities: the proposed change + its approval linkage. */
   readonly action?: {
     /** Action kind (e.g. `update_task`). */

@@ -54,8 +54,8 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
       discriminator: owner-only Athena access and existing workspace/capability policy for
       registered agents.
 - [x] Write failing route tests for owner-only list/detail/chat/stream/lifecycle/approval access.
-- [ ] Cover cross-workspace invocation context with the personal route surface.
-- [ ] Add `/v1/me/athena` chat, work, session, message, proposal, approval, lifecycle, and SSE routes.
+- [x] Cover cross-workspace invocation context with the personal route surface.
+- [x] Add `/v1/me/athena` chat, work, session, message, proposal, approval, lifecycle, and SSE routes.
 - [x] Make approval owner-scoped and rely on underlying tool authorization instead of unrelated
       `assign` permission.
 - [x] Preserve organization session routes for registered agents and temporary route compatibility.

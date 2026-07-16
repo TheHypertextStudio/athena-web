@@ -202,7 +202,35 @@ Workspace-owned remote MCP connections currently load only for registered agents
 exposes Docket tools alone until personal connection ownership lands; it never
 borrows a workspace credential as a substitute for a user-owned connection.
 
-## 9. Fresh-database rollout
+## 9. Personal API (shipped)
+
+`/v1/me/athena` is the permanent user boundary. Every handler derives the owner from the Better
+Auth request session and selects only `executor_kind='athena' AND owner_user_id=<caller>`; no input
+schema accepts an owner id. The root and `/sessions` reads return product-ready summaries grouped
+as `needs_you`, `working`, and `finished`, plus matching counts and the current personal chat.
+Detail, activity, proposal, lifecycle, decision, reply, and SSE paths all reuse the same owner
+predicate. Organization session routes remain compatibility doors and keep registered-agent
+behavior unchanged.
+
+`AthenaInvocationContext` supports optional workspace focus and these canonical source pointers:
+task, project, initiative, program, calendar item, and Stream event. Creation loads the source,
+derives its workspace, checks any supplied workspace for equality, and confirms the caller's active
+membership and view access at that instant. Calendar items must be caller-owned and linked/shared
+to the workspace; Stream events must concern the caller. The normalized context is stored with the
+first user activity for later summaries. It remains attribution only: tools and approval resumes
+reauthorize independently in the action's actual workspace, which may differ from the session's
+initial focus.
+
+The personal projection omits provider `thought` rows from JSON detail, activity lists, and SSE.
+The durable transcript retains provider state required for correct continuation, while product
+clients receive only user messages, application-visible progress, structured actions/results,
+elicitations, and errors. SSE resumes after the exact persisted `Last-Event-ID`; it does not assume
+random ULIDs created in the same millisecond are lexically ordered.
+
+The runner is currently in-process, so create/message/run/approval routes preserve synchronous
+settle responses. No queue, Workflow, or Cloudflare dispatcher is claimed until one exists.
+
+## 10. Fresh-database rollout
 
 The user-owned executor model does not backfill legacy Athena data. Existing databases must be
 reset and rebuilt from the complete migration chain. Migration `0041` adds the executor columns,
@@ -212,14 +240,14 @@ are not supported by this rollout; users reconnect personal services after reset
 uses `pnpm db:reset`; deployed environments start from an empty database. Migration `0042` adds the
 fenced run lease token, deterministic workflow-id check, and internal `executing` action claim.
 
-## 10. Entitlement (slice 6 — shipped)
+## 11. Entitlement (slice 6 — shipped)
 
 `assertAgentSessionsEntitled(orgId)` at `driveSession` first-run — the single choke point
 covering REST, the `trigger_agent` MCP tool, and proactive sweeps. Entitled =
 `organization.lifecycleState ∈ {trialing, active}` (the trial IS the funnel). Typed
 `AgentPlanRequiredError` (402, `agent_plan_required`) for the web upsell.
 
-## 11. Testing doctrine
+## 12. Testing doctrine
 
 Everything runs with `APP_MODE=test`, zero API keys: scripted mock turns drive the real
 loop; the mock Sunsama server backs the import flow; restart resilience is tested by

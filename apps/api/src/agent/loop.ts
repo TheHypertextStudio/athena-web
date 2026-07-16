@@ -370,13 +370,6 @@ export async function driveSession(
   if (session.executorKind === 'registered_agent' && session.organizationId !== orgId) {
     throw new NotFoundError('Session not found');
   }
-  if (
-    session.executorKind === 'athena' &&
-    session.contextOrganizationId !== null &&
-    session.contextOrganizationId !== orgId
-  ) {
-    throw new NotFoundError('Session not found');
-  }
   if (session.status !== 'pending' && session.status !== 'running') {
     throw new ConflictError('Session is not in a runnable state');
   }
@@ -755,13 +748,6 @@ export async function executeApprovedActions(
   const session = sessionRows[0];
   if (!session) throw new NotFoundError('Session not found');
   if (session.executorKind === 'registered_agent' && session.organizationId !== orgId) {
-    throw new NotFoundError('Session not found');
-  }
-  if (
-    session.executorKind === 'athena' &&
-    session.contextOrganizationId !== null &&
-    session.contextOrganizationId !== orgId
-  ) {
     throw new NotFoundError('Session not found');
   }
   const executor = toolboxExecutor(session);

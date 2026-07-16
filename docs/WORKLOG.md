@@ -327,7 +327,7 @@
   target access loss still pauses the assignment and disables every trigger.
 - **Security Review Validation**: Red network tests proved real HTTP loopback access and the absence
   of a central policy; red assignment coverage proved initiative association alone fired a run for
-  an inaccessible linked project. The integration package passes 255 tests, including 21 outbound
+  an inaccessible linked project. The integration package passes 255 tests, including 25 outbound
   policy cases. Focused connector route suites pass 17 tests, and assignment/security suites pass
   21 tests including inaccessible linked project/program, restored exact access, canonical-title
   prompts, no prompt leakage, cooldown, and assignment access-loss pausing. Root typecheck, lint,

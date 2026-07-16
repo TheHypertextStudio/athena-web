@@ -61,6 +61,19 @@ App Router, TanStack Query, Tailwind CSS, Vitest, Testing Library, Playwright.
 - [x] Preserve organization session routes for registered agents and temporary route compatibility.
 - [x] Run focused API tests and commit the green slice.
 
+### Task 3A: Durable personal execution and idempotency
+
+- [x] Make `agent_session_run` generations the fenced per-session execution mutex and checkpoint
+      record, with deterministic workflow ids, renewable leases, and safe expired-lease recovery.
+- [x] Admit initial, approval, reply, and lifecycle execution through the same owner ceiling while
+      preserving registered-agent compatibility and keeping database locks out of provider calls.
+- [x] Claim each executable action as `executing` before MCP dispatch; make concurrent decisions,
+      audits, and execution single-winner and never replay a recovered in-flight write.
+- [x] Treat `AGENT_MAX_TURNS` as Athena's generation quantum, renew healthy work indefinitely, and
+      continue across generations until a real settlement boundary.
+- [x] Cover same-session races, approval races, lease recovery/renewal, resume admission, and
+      multi-generation continuation; update schema migration, engineering spec, and work log.
+
 ### Task 4: Personal MCP connections and delegation
 
 - [ ] Write failing tests proving personal connectors are reusable across the owner's workspaces and

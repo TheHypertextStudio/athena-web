@@ -227,15 +227,15 @@ describe('POST /:id/run (agent session via the AgentRuntime port)', () => {
       body: JSON.stringify({}),
     });
     expect(approved.status).toBe(200);
-    expect(((await approved.json()) as { status: string }).status).toBe('running');
+    expect(((await approved.json()) as { status: string }).status).toBe('completed');
 
-    // The previously proposed action is now approved.
+    // The previously proposed action was claimed, applied, and the transcript resumed.
     const rows = await db
       .select()
       .from(sessionActivity)
       .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'action')))
       .limit(1);
-    expect(rows[0]?.approvalStatus).toBe('approved');
+    expect(rows[0]?.approvalStatus).toBe('applied');
   });
 
   it('GET /:id/stream replays the stored activities as SSE', async () => {

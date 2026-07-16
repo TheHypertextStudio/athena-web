@@ -131,6 +131,7 @@ export const sessionActivityType = pgEnum('session_activity_type', [
 export const approvalStatus = pgEnum('approval_status', [
   'proposed',
   'approved',
+  'executing',
   'rejected',
   'applied',
 ]);

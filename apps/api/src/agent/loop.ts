@@ -27,13 +27,12 @@ import {
   organization,
   sessionActivity,
   task,
-  user,
 } from '@docket/db';
 import type { SessionActivityBody } from '@docket/db';
 import type { AgentTurnRuntime, TurnMessage } from '@docket/agent-runtime';
 import { HubPreferences } from '@docket/types';
 import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } from '@docket/types';
-import { and, asc, count, eq, gt } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 
 import { assertAgentSessionsEntitled } from '../billing/entitlement';
 import { getContainer } from '../container';
@@ -53,80 +52,30 @@ import {
   type ToolboxResult,
 } from './toolbox';
 import { loadTranscript, saveTranscript } from './transcript';
+import {
+  assertRunGeneration,
+  checkpointRunGeneration,
+  claimRunGeneration,
+  DEFAULT_ATHENA_CONCURRENCY,
+  settleRunGeneration,
+  startRunGenerationHeartbeat,
+  type RunGenerationHeartbeat,
+  type RunGenerationLease,
+} from './run-generation';
 
 /** Injectable dependencies for the loop (tests script the turn runtime). */
 export interface LoopDeps {
   /** The provider turn runtime; defaults to the container's `agentTurn` port. */
   readonly turnRuntime?: AgentTurnRuntime;
+  /** Test seam for one durable generation's lease lifetime. */
+  readonly leaseDurationMs?: number;
+  /** Test seam for the healthy-worker lease renewal cadence. */
+  readonly heartbeatIntervalMs?: number;
+  /** Test seam for Athena's per-generation provider-turn checkpoint quantum. */
+  readonly generationTurnQuantum?: number;
 }
 
-/** Product default for simultaneously running personal Athena sessions. */
-export const DEFAULT_ATHENA_CONCURRENCY = 8;
-
-/**
- * Admit a pending session without allowing concurrent Athena runs to oversubscribe one owner.
- *
- * @remarks
- * Athena admission locks the owner's stable user row, then reloads and transitions only this
- * session inside the same short transaction. Re-entrant callers that observe the same session
- * already running continue safely; provider and tool execution always happens after commit.
- */
-async function admitSession(session: SessionRow): Promise<void> {
-  if (session.executorKind === 'registered_agent') {
-    await db
-      .update(agentSession)
-      .set({ status: 'running', startedAt: session.startedAt ?? new Date() })
-      .where(eq(agentSession.id, session.id));
-    return;
-  }
-  if (session.status === 'running') return;
-
-  const ownerUserId = requireAthenaOwner(session);
-  await db.transaction(async (tx) => {
-    const [owner] = await tx
-      .select({ id: user.id })
-      .from(user)
-      .where(eq(user.id, ownerUserId))
-      .for('update');
-    if (!owner) throw new NotFoundError('Athena owner not found');
-
-    const [current] = await tx
-      .select()
-      .from(agentSession)
-      .where(eq(agentSession.id, session.id))
-      .limit(1);
-    if (!current) throw new NotFoundError('Session not found');
-    if (current.executorKind !== 'athena' || current.ownerUserId !== ownerUserId) {
-      throw new ConflictError('Session executor changed during admission');
-    }
-    if (current.status === 'running') return;
-    if (current.status !== 'pending') {
-      throw new ConflictError('Session is not in a runnable state');
-    }
-
-    const [row] = await tx
-      .select({ value: count() })
-      .from(agentSession)
-      .where(
-        and(
-          eq(agentSession.executorKind, 'athena'),
-          eq(agentSession.ownerUserId, ownerUserId),
-          eq(agentSession.status, 'running'),
-        ),
-      );
-    const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
-    if ((row?.value ?? 0) >= limit) {
-      throw new ConflictError('Athena has reached the concurrent run limit');
-    }
-
-    const [admitted] = await tx
-      .update(agentSession)
-      .set({ status: 'running', startedAt: current.startedAt ?? new Date() })
-      .where(and(eq(agentSession.id, current.id), eq(agentSession.status, 'pending')))
-      .returning({ id: agentSession.id });
-    if (!admitted) throw new ConflictError('Session admission changed concurrently');
-  });
-}
+export { DEFAULT_ATHENA_CONCURRENCY };
 
 /** A `tool_use` block extracted from an assistant message. */
 interface ToolUse {
@@ -227,22 +176,6 @@ function summarizeToolCall(name: string, input: unknown): string {
   return title ? `${phrase}: "${title}"` : phrase;
 }
 
-/** Settle a session's status (single writer for status/endedAt consistency). */
-async function settleSession(
-  sessionId: string,
-  status: 'running' | 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed',
-): Promise<SessionRow> {
-  const terminal = status === 'completed' || status === 'failed';
-  const [row] = await db
-    .update(agentSession)
-    .set({ status, ...(terminal ? { endedAt: new Date() } : {}) })
-    .where(eq(agentSession.id, sessionId))
-    .returning();
-  /* v8 ignore next -- @preserve defensive: update always returns a row */
-  if (!row) throw new Error('session update returned no row');
-  return row;
-}
-
 /** Insert one activity row and return it. */
 async function insertActivity(
   organizationId: string | null,
@@ -325,18 +258,14 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
     ).find((p) => p.toolUseId === use.id);
     if (!prompt) return { kind: 'await_input' };
     const replies = await db
-      .select({ body: sessionActivity.body })
+      .select({ body: sessionActivity.body, createdAt: sessionActivity.createdAt })
       .from(sessionActivity)
-      .where(
-        and(
-          eq(sessionActivity.sessionId, sessionId),
-          eq(sessionActivity.type, 'response'),
-          gt(sessionActivity.createdAt, prompt.createdAt),
-        ),
-      )
-      .orderBy(asc(sessionActivity.createdAt))
-      .limit(1);
-    const reply = replies[0]?.body.text;
+      .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
+      .orderBy(asc(sessionActivity.createdAt));
+    const reply =
+      replies.find((candidate) => candidate.body['toolUseId'] === use.id)?.body.text ??
+      replies.find((candidate) => candidate.createdAt.getTime() > prompt.createdAt.getTime())?.body
+        .text;
     if (!reply) return { kind: 'await_input' };
     return { kind: 'result', result: { content: reply, isError: false } };
   }
@@ -456,7 +385,7 @@ export async function driveSession(
   const contextName = orgRows[0]?.name ?? null;
   const principalPreferences = await principalAthenaPreferences(session);
 
-  const maxTurns = env.AGENT_MAX_TURNS;
+  const maxTurns = deps.generationTurnQuantum ?? env.AGENT_MAX_TURNS;
 
   // Paid-plan gate, only on a session's FIRST run: every door (REST, the trigger_agent
   // MCP tool, the proactive sweep) funnels through here, and resumes of an
@@ -466,11 +395,25 @@ export async function driveSession(
     if (contextOrganizationId) await assertAgentSessionsEntitled(contextOrganizationId);
   }
 
-  await admitSession(session);
+  let lease = await claimRunGeneration(session, { leaseDurationMs: deps.leaseDurationMs });
+  let heartbeat: RunGenerationHeartbeat = startRunGenerationHeartbeat(
+    lease,
+    deps.heartbeatIntervalMs,
+  );
+  let generationTurns = 0;
 
   const turnRuntime = deps.turnRuntime ?? getContainer().agentTurn;
   const toolbox = await openToolbox(executor);
   try {
+    const settleOwned = async (
+      status: 'awaiting_input' | 'awaiting_approval' | 'completed' | 'failed' | 'canceled',
+      lastError?: string,
+    ): Promise<SessionRow> => {
+      heartbeat.stop();
+      await heartbeat.assertActive();
+      return settleRunGeneration(lease, status, lastError);
+    };
+
     let messages = await loadTranscript(db, sessionId);
     if (messages.length === 0) {
       messages = [
@@ -504,6 +447,11 @@ export async function driveSession(
     });
 
     for (;;) {
+      const execution = await executeApprovedActions(orgId, sessionId, lease);
+      if (execution === 'needs_attention') {
+        return await settleOwned('awaiting_approval');
+      }
+
       // ── Reconcile: answer the trailing assistant message's tool_uses from DB state.
       const last = messages.at(-1);
       if (last?.role === 'assistant') {
@@ -513,10 +461,10 @@ export async function driveSession(
           for (const use of uses) {
             const outcome = await reconcileToolUse(sessionId, use);
             if (outcome.kind === 'await_approval') {
-              return await settleSession(sessionId, 'awaiting_approval');
+              return await settleOwned('awaiting_approval');
             }
             if (outcome.kind === 'await_input') {
-              return await settleSession(sessionId, 'awaiting_input');
+              return await settleOwned('awaiting_input');
             }
             results.push({
               type: 'tool_result',
@@ -535,7 +483,7 @@ export async function driveSession(
           );
         } else {
           // A trailing assistant message with no tool calls is a finished job.
-          return await settleSession(sessionId, await finalStatus(sessionId));
+          return await settleOwned(await finalStatus(sessionId));
         }
       }
 
@@ -553,19 +501,29 @@ export async function driveSession(
           .limit(1);
         /* v8 ignore next -- @preserve defensive: the session row exists */
         if (!rows[0]) throw new Error('session vanished mid-run');
-        return rows[0];
+        const current = rows[0];
+        if (current.status === 'canceled') return await settleOwned('canceled');
+        return await settleOwned('awaiting_input');
       }
 
-      // ── Turn budget (explicit config; no hidden default).
+      // ── Turn budget: a checkpoint quantum for Athena, a legacy terminal cap otherwise.
       const assistantTurns = messages.filter((m) => m.role === 'assistant').length;
-      if (assistantTurns >= maxTurns) {
+      if (session.executorKind === 'athena' && generationTurns >= maxTurns) {
+        heartbeat.stop();
+        await heartbeat.assertActive();
+        await checkpointRunGeneration(lease);
+        lease = await claimRunGeneration(session, { leaseDurationMs: deps.leaseDurationMs });
+        heartbeat = startRunGenerationHeartbeat(lease, deps.heartbeatIntervalMs);
+        generationTurns = 0;
+      } else if (session.executorKind === 'registered_agent' && assistantTurns >= maxTurns) {
         await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
           text: `Turn budget exhausted (${String(maxTurns)} turns); stopping the session.`,
         });
-        return await settleSession(sessionId, 'failed');
+        return await settleOwned('failed', `Turn budget exhausted (${String(maxTurns)} turns)`);
       }
 
       // ── One provider turn.
+      await heartbeat.assertActive();
       let assistantMessage: TurnMessage | undefined;
       let stopReason = 'end_turn';
       for await (const event of turnRuntime.streamTurn({
@@ -574,10 +532,12 @@ export async function driveSession(
         tools: toolbox.tools,
       })) {
         if (event.type === 'thinking') {
+          await heartbeat.assertActive();
           await insertActivity(generalActivityOrganizationId(session), sessionId, 'thought', {
             text: event.text,
           });
         } else if (event.type === 'text') {
+          await heartbeat.assertActive();
           await insertActivity(generalActivityOrganizationId(session), sessionId, 'response', {
             text: event.text,
           });
@@ -586,6 +546,8 @@ export async function driveSession(
           stopReason = event.stopReason;
         }
       }
+      generationTurns += 1;
+      await heartbeat.assertActive();
       /* v8 ignore next -- @preserve defensive: every turn ends with turn_end */
       if (!assistantMessage) throw new Error('turn ended without a terminal message');
 
@@ -593,13 +555,13 @@ export async function driveSession(
         await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
           text: 'The agent declined to complete this task (model refusal).',
         });
-        return await settleSession(sessionId, 'failed');
+        return await settleOwned('failed', 'Model refusal');
       }
       if (stopReason === 'max_tokens') {
         await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
           text: 'The turn exceeded the output limit before completing.',
         });
-        return await settleSession(sessionId, 'failed');
+        return await settleOwned('failed', 'Provider output limit exceeded');
       }
 
       messages = [...messages, assistantMessage];
@@ -632,7 +594,6 @@ export async function driveSession(
             principalPreferences.approvalMode,
             classifyTool(toolbox.annotations(use.name)),
           );
-          if (decision === 'execute') continue; // executed (and recorded) below, post-commit
           const target = toolbox.resolve(use.name);
           await tx.insert(sessionActivity).values({
             sessionId,
@@ -641,7 +602,7 @@ export async function driveSession(
                 ? toolOrganizationId(use.input)
                 : session.organizationId,
             type: 'action',
-            approvalStatus: 'proposed',
+            approvalStatus: decision === 'execute' ? 'approved' : 'proposed',
             proposalGroupId,
             body: {
               action: {
@@ -659,59 +620,23 @@ export async function driveSession(
           });
         }
       });
-
-      // Execute the immediately-runnable calls (reads everywhere; writes when
-      // autonomous), recording each as an applied action with its result + audit row.
-      for (const use of uses) {
-        if (use.name === ASK_USER_TOOL) continue;
-        const decision = decideUserOwnedToolExecution(
-          agentRow.approvalPolicy,
-          principalPreferences.approvalMode,
-          classifyTool(toolbox.annotations(use.name)),
-        );
-        if (decision !== 'execute') continue;
-        const result = await toolbox.callTool(use.name, use.input);
-        const target = toolbox.resolve(use.name);
-        const actionOrganizationId =
-          session.executorKind === 'athena'
-            ? toolOrganizationId(use.input)
-            : session.organizationId;
-        const activityId = await insertActivity(
-          actionOrganizationId,
-          sessionId,
-          'action',
-          {
-            action: {
-              kind: use.name,
-              summary: summarizeToolCall(use.name, use.input),
-              toolCall: {
-                connection: target.connection,
-                tool: target.rawName,
-                input: use.input,
-                toolUseId: use.id,
-              },
-              result: { content: result.content, isError: result.isError },
-              mode: 'proposal',
-            },
-          },
-          { approvalStatus: 'applied' },
-        );
-        if (!result.isError && actionOrganizationId) {
-          await auditExecution(
-            actionOrganizationId,
-            sessionId,
-            executor,
-            agentRow.actorId,
-            session.initiatorId,
-            activityId,
-            use.name,
-          );
-        }
-      }
-      // The loop's next iteration reconciles: fully-answered turns continue; a pending
-      // proposal settles awaiting_approval; an ask_user settles awaiting_input.
+      // The loop's next iteration claims every immediately runnable action before dispatch,
+      // then reconciles results or parks on a proposal/elicitation.
     }
+  } catch (error) {
+    heartbeat.stop();
+    try {
+      await heartbeat.assertActive();
+    } catch (leaseError) {
+      throw leaseError instanceof Error
+        ? leaseError
+        : new Error('Session generation fencing check failed');
+    }
+    const lastError = error instanceof Error ? error.message : 'Agent execution failed';
+    await settleRunGeneration(lease, 'failed', lastError);
+    throw error;
   } finally {
+    heartbeat.stop();
     await toolbox.close();
   }
 }
@@ -756,18 +681,23 @@ async function deriveBrief(
 }
 
 /**
- * Execute every `approved` action of a session: run its stored `toolCall` as the agent
- * actor, stamp the row `applied` with the result, and audit it.
+ * Conditionally claim and execute every `approved` action of a session.
  *
  * @remarks
- * Approved rows without a `toolCall` (legacy narration-only actions) are stamped
- * `applied` directly. Executions run in activity order so a batch lands
- * deterministically.
+ * The `approved → executing` update is the non-repeatable dispatch boundary. Only the caller that
+ * wins that conditional update may invoke MCP. A crash or thrown dispatch leaves `executing`
+ * visible and parks the session for attention; retries never repeat the write automatically.
  *
  * @param orgId - The active organization id.
  * @param sessionId - The session whose approved actions should execute.
+ * @param lease - The fenced session generation that owns provider and tool execution.
+ * @returns `needs_attention` when an in-flight/failed claim must not be retried automatically.
  */
-export async function executeApprovedActions(orgId: string, sessionId: string): Promise<void> {
+export async function executeApprovedActions(
+  orgId: string,
+  sessionId: string,
+  lease: RunGenerationLease,
+): Promise<'settled' | 'needs_attention'> {
   const sessionRows = await db
     .select()
     .from(agentSession)
@@ -798,7 +728,20 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
       ),
     )
     .orderBy(asc(sessionActivity.createdAt));
-  if (approved.length === 0) return;
+  if (approved.length === 0) {
+    const [inFlight] = await db
+      .select({ id: sessionActivity.id })
+      .from(sessionActivity)
+      .where(
+        and(
+          eq(sessionActivity.sessionId, sessionId),
+          eq(sessionActivity.type, 'action'),
+          eq(sessionActivity.approvalStatus, 'executing'),
+        ),
+      )
+      .limit(1);
+    return inFlight ? 'needs_attention' : 'settled';
+  }
 
   const agentRows =
     session.executorKind === 'registered_agent'
@@ -814,26 +757,71 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
   const toolbox = withCalls.length > 0 ? await openToolbox(executor) : null;
   try {
     for (const action of approved) {
-      const call = action.body.action?.toolCall;
-      let body = action.body;
+      await assertRunGeneration(lease);
+      const [claimed] = await db
+        .update(sessionActivity)
+        .set({ approvalStatus: 'executing' })
+        .where(
+          and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'approved')),
+        )
+        .returning();
+      if (!claimed) continue;
+
+      const call = claimed.body.action?.toolCall;
+      let body = claimed.body;
       let executionFailed = false;
-      if (call && toolbox && action.body.action) {
-        const name =
-          call.connection === DOCKET_CONNECTION ? call.tool : `${call.connection}__${call.tool}`;
-        const result = await toolbox.callTool(name, call.input);
-        executionFailed = result.isError;
-        body = {
-          ...action.body,
-          action: {
-            ...action.body.action,
-            result: { content: result.content, isError: result.isError },
-          },
-        };
+      try {
+        if (call && toolbox && claimed.body.action) {
+          const name =
+            call.connection === DOCKET_CONNECTION ? call.tool : `${call.connection}__${call.tool}`;
+          const result = await toolbox.callTool(name, call.input);
+          executionFailed = result.isError;
+          body = {
+            ...claimed.body,
+            action: {
+              ...claimed.body.action,
+              result: { content: result.content, isError: result.isError },
+            },
+          };
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Approved action execution failed';
+        await db
+          .update(sessionActivity)
+          .set({
+            body: {
+              ...claimed.body,
+              ...(claimed.body.action
+                ? {
+                    action: {
+                      ...claimed.body.action,
+                      result: { content: message, isError: true },
+                    },
+                  }
+                : {}),
+            },
+          })
+          .where(
+            and(
+              eq(sessionActivity.id, claimed.id),
+              eq(sessionActivity.approvalStatus, 'executing'),
+            ),
+          );
+        await insertActivity(generalActivityOrganizationId(session), sessionId, 'error', {
+          text: 'An approved action needs attention and was not retried.',
+        });
+        return 'needs_attention';
       }
-      await db
+      await assertRunGeneration(lease);
+
+      const [applied] = await db
         .update(sessionActivity)
         .set({ approvalStatus: 'applied', body })
-        .where(eq(sessionActivity.id, action.id));
+        .where(
+          and(eq(sessionActivity.id, claimed.id), eq(sessionActivity.approvalStatus, 'executing')),
+        )
+        .returning({ id: sessionActivity.id });
+      if (!applied) return 'needs_attention';
       const actionOrganizationId =
         session.executorKind === 'athena'
           ? toolOrganizationId(call?.input)
@@ -845,13 +833,46 @@ export async function executeApprovedActions(orgId: string, sessionId: string): 
           executor,
           registeredAgentActorId,
           session.initiatorId,
-          action.id,
-          call?.tool ?? action.body.action?.kind ?? 'action',
+          claimed.id,
+          call?.tool ?? claimed.body.action?.kind ?? 'action',
         );
       }
     }
   } finally {
     if (toolbox) await toolbox.close();
+  }
+  return 'settled';
+}
+
+/** Execute approved actions under the same admission mutex without consuming a provider turn. */
+async function executeApprovedGeneration(
+  orgId: string,
+  session: SessionRow,
+  deps: LoopDeps,
+): Promise<SessionRow> {
+  const resumeSession = session.status === 'running' || session.status === 'pending';
+  const lease = await claimRunGeneration(session, {
+    leaseDurationMs: deps.leaseDurationMs,
+    resumeSession,
+  });
+  const heartbeat = startRunGenerationHeartbeat(lease, deps.heartbeatIntervalMs);
+  try {
+    const outcome = await executeApprovedActions(orgId, session.id, lease);
+    heartbeat.stop();
+    await heartbeat.assertActive();
+    if (outcome === 'needs_attention') {
+      return await settleRunGeneration(lease, 'awaiting_approval');
+    }
+    await checkpointRunGeneration(lease);
+    const [current] = await db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, session.id))
+      .limit(1);
+    if (!current) throw new NotFoundError('Session not found');
+    return current;
+  } finally {
+    heartbeat.stop();
   }
 }
 
@@ -889,14 +910,15 @@ export async function approveGroupAndResume(
     decision,
     activityIds,
   );
-  await executeApprovedActions(orgId, sessionId);
 
   const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
   /* v8 ignore next -- @preserve defensive: decideProposalGroup already 404'd unknown sessions */
   if (!rows[0]) throw new NotFoundError('Session not found');
-  if (rows[0].status !== 'running') return rows[0];
+  if (rows[0].status !== 'running') {
+    return executeApprovedGeneration(orgId, rows[0], deps);
+  }
   const transcript = await loadTranscript(db, sessionId);
-  if (transcript.length === 0) return rows[0];
+  if (transcript.length === 0) return executeApprovedGeneration(orgId, rows[0], deps);
   return driveSession(orgId, sessionId, deps);
 }
 
@@ -927,15 +949,16 @@ export async function approveAndResume(
   deps: LoopDeps = {},
 ): Promise<SessionRow> {
   await decideActivity(orgId, approverActorId, sessionId, activityId, decision);
-  await executeApprovedActions(orgId, sessionId);
 
   const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
   /* v8 ignore next -- @preserve defensive: decideActivity already 404'd unknown sessions */
   if (!rows[0]) throw new NotFoundError('Session not found');
-  if (rows[0].status !== 'running') return rows[0];
+  if (rows[0].status !== 'running') {
+    return executeApprovedGeneration(orgId, rows[0], deps);
+  }
   // Only sessions the loop owns (a transcript exists) resume; a hand-created session
   // with no conversation state has nothing to continue.
   const transcript = await loadTranscript(db, sessionId);
-  if (transcript.length === 0) return rows[0];
+  if (transcript.length === 0) return executeApprovedGeneration(orgId, rows[0], deps);
   return driveSession(orgId, sessionId, deps);
 }

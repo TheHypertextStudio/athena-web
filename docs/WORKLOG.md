@@ -93,6 +93,19 @@
   4. Prove an owner with contribute can decide Athena work while the underlying MCP tool still
      reauthorizes the actual write, then run focused and repository gates and commit the security
      slice without adding personal `/v1/me` routes or execution-idempotency work.
+- **Plan (durable execution and idempotency)**:
+  1. Add red schema and loop regressions for one leased run generation per session, deterministic
+     workflow ids, stale-lease recovery, heartbeat renewal, same-session serialization, and owner
+     admission on both initial work and every resume path.
+  2. Make the run-generation record the short-transaction execution mutex and durable checkpoint;
+     fence every worker with a lease token, renew healthy leases without a duration cap, and move
+     Athena across turn-budget generations without settling the personal session.
+  3. Add red concurrent approval tests, then conditionally claim approved actions as `executing`
+     before MCP dispatch so one decision, audit, execution, and applied result can occur at most
+     once; leave interrupted claims visible for human attention instead of retrying writes.
+  4. Update the Athena execution spec and reviewed plan, run focused race/retry/recovery suites and
+     every repository gate, self-review the linear diff, and commit without rebasing, merging, or
+     pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -122,6 +135,29 @@
   transitions now support workspace-neutral sessions, and owner approvals no longer require the
   unrelated `assign` capability while the stored MCP action still rechecks the owner's current
   permission before writing.
+- **Durable Execution Slice**: `agent_session_run` is now the execution mutex and checkpoint record.
+  Each generation has the deterministic workflow id `sessionId:generation`; a fresh lease rejects
+  duplicate same-session workers, an expired lease is recovered in place with a new fencing token,
+  and healthy workers renew indefinitely. Owner admission counts fresh run leases on initial work
+  and approval, reply, and lifecycle resumes, while registered agents keep their existing authority
+  model. Athena's turn budget is a generation quantum, so personal work checkpoints and continues
+  instead of failing. Every executable action is persisted, conditionally claimed as `executing`,
+  and dispatched once; interrupted claims park for attention and are never automatically repeated.
+- **Durable Execution Validation**: Red schema tests accepted non-deterministic workflow ids and
+  lacked the internal `executing` claim state. Red loop and route tests reproduced same-session
+  double entry, stale-lease duplication, missing renewal, terminal personal turn limits, concurrent
+  approval/audit races, repeated in-flight writes, duplicate elicitation replies, bounded reply
+  reconciliation, and provider failures left as running. Focused durability, privacy, approval, and
+  registered-agent compatibility suites pass. The final root gates pass: typecheck 17/17, lint
+  17/17, tests 17/17 including API 146 files and 1,284 tests, and build 3/3. `git diff --check`
+  passes; the only recurring diagnostic is local Node 24.14.0 versus the declared minimum 24.15.0.
+- **Durable Execution Retrospective**: The stable owner row was the right serialization point for
+  admission, while a per-session generation and fencing token kept that short transaction separate
+  from provider and MCP latency. Full-suite load exposed that sub-100-millisecond lease fixtures test
+  scheduler luck rather than renewal behavior, so timing seams now preserve production-like margin
+  and always release blocked providers. Self-review also showed that reply identity must be queried
+  without an arbitrary history bound; future resumable edges should prefer durable correlation ids
+  over timestamp windows from the start.
 - **Files Changed**: Agent-session DTOs and schema, migration SQL/snapshot/journal, session and
   transcript serializers, executor-aware time attribution, compile-time executor branches in
   existing API/web consumers, authenticated compatibility-route access helpers, proposal and

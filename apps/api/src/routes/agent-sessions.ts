@@ -273,7 +273,7 @@ Side effects: dispatches the executor against the runtime; each yielded activity
       response: AgentSessionOut,
       description: `Run (or resume execution of) an existing session against the agent runtime and return the **settled** {@link AgentSessionOut}. Only a session in a *runnable* state — \`pending\` (created but not yet dispatched, e.g. a proactively drafted plan) or \`running\` — may be run; any other state (terminal, or parked awaiting human input/approval) yields 409 (\`Session is not in a runnable state\`). A missing/cross-tenant id returns 404, and a session whose agent has since been deregistered returns 404 (\`Agent not found\`).
 
-Behavior & side effects: derives the task brief (a linked task's title, else the session's seed \`response\` prompt), flips the session to \`running\` (stamping \`startedAt\` on first run), then consumes the runtime's activity stream — persisting one {@link SessionActivityOut} per yielded activity and stamping \`proposed\` on gated actions. When the stream ends the session settles to \`awaiting_approval\` if any proposed action remains unresolved, otherwise \`completed\` (stamping \`endedAt\`). Activities stream live to \`GET /:id/stream\`. Personal Athena work requires its authenticated owner; registered-agent work requires \`contribute\`. The body is an empty object. Related: \`POST /\` (create-and-run from a prompt), the approve/reject routes to clear an \`awaiting_approval\` gate.`,
+Behavior & side effects: atomically claims a durable \`agent_session_run\` generation before provider work. A fresh same-session lease rejects duplicate callers; an expired lease is recovered with a new fencing token, and healthy work renews indefinitely. The loop derives the task brief, consumes the runtime stream, persists activities and transcript checkpoints, and settles only on completion, a human wait, cancellation, or an actual error. For Athena, \`AGENT_MAX_TURNS\` starts the next durable generation instead of ending personal work. Activities stream live to \`GET /:id/stream\`. Personal Athena work requires its authenticated owner; registered-agent work requires \`contribute\`.`,
     }),
     zParam(idParam),
     zJson(z.object({})),
@@ -581,14 +581,17 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       tag: 'Agents',
       summary: 'Resume an agent session',
       response: AgentSessionOut,
-      description: `Resume a session that is parked in \`awaiting_input\`, transitioning it back to \`running\` and returning the updated {@link AgentSessionOut}. Only an \`awaiting_input\` session may be resumed; any other state yields 409 (\`Session is not awaiting input\`), and missing or private work returns 404. This is the inverse of \`POST /:id/pause\`. Athena requires its authenticated owner; registered-agent work requires \`contribute\`. Note resuming does not by itself re-drive the runtime — use \`POST /:id/run\` to continue consuming the activity stream. Related: \`/pause\`, \`/cancel\`.`,
+      description: `Resume a session that is parked in \`awaiting_input\`. Transcript-backed work re-enters the same durable generation admission used by initial runs, so Athena's owner ceiling and same-session mutex apply before provider execution; legacy rows without a transcript retain the compatibility status transition. Only an \`awaiting_input\` session may be resumed; any other state yields 409, and missing or private work returns 404. Athena requires its authenticated owner; registered-agent work requires \`contribute\`.`,
     }),
     zParam(idParam),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
-      const updated = await transitionLifecycle(session, 'resume');
+      let updated = await transitionLifecycle(session, 'resume');
+      if ((await loadTranscript(db, id)).length > 0) {
+        updated = await driveSession(orgId, id);
+      }
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },
@@ -629,7 +632,10 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       await loadSessionAccess(c, id, 'assign');
-      const updated = await resolveAction(orgId, id, 'approved');
+      let updated = await resolveAction(orgId, id, 'approved');
+      if ((await loadTranscript(db, id)).length > 0) {
+        updated = await driveSession(orgId, id);
+      }
       await enqueueSearchUpsert(orgId, 'agent_session', updated.id);
       return ok(c, AgentSessionOut, toSessionOut(updated));
     },

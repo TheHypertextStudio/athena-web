@@ -138,6 +138,7 @@ export const agentSessionRun = pgTable(
     workflowInstanceId: text('workflow_instance_id').notNull(),
     status: agentSessionRunStatus('status').notNull().default('queued'),
     attempt: integer('attempt').notNull().default(0),
+    leaseToken: text('lease_token'),
     leaseExpiresAt: timestamp('lease_expires_at'),
     lastError: text('last_error'),
     queuedAt: timestamp('queued_at').notNull().defaultNow(),
@@ -163,6 +164,10 @@ export const agentSessionRun = pgTable(
       'agent_session_run_attribution_check',
       sql`(${t.ownerUserId} IS NOT NULL AND ${t.organizationId} IS NULL)
         OR (${t.ownerUserId} IS NULL AND ${t.organizationId} IS NOT NULL)`,
+    ),
+    check(
+      'agent_session_run_workflow_check',
+      sql`${t.workflowInstanceId} = ${t.sessionId} || ':' || ${t.generation}::text`,
     ),
   ],
 );

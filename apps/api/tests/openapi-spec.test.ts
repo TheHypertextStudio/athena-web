@@ -14,7 +14,18 @@ describe('openapi spec generation', () => {
     const { app } = await import('../src/app');
     const spec = (await generateSpecs(app)) as unknown as {
       openapi: string;
-      paths: Record<string, Record<string, { tags?: string[]; 'x-docket-capability'?: string }>>;
+      paths: Record<
+        string,
+        Record<
+          string,
+          {
+            tags?: string[];
+            parameters?: { name?: string; in?: string; required?: boolean }[];
+            responses?: Record<string, { content?: Record<string, unknown> }>;
+            'x-docket-capability'?: string;
+          }
+        >
+      >;
     };
 
     const paths = Object.keys(spec.paths);
@@ -37,6 +48,12 @@ describe('openapi spec generation', () => {
 
     const personalAthena = spec.paths['/v1/me/athena']?.['get'];
     expect(personalAthena?.tags).toContain('Athena');
+
+    const personalStream = spec.paths['/v1/me/athena/sessions/{id}/stream']?.['get'];
+    expect(personalStream?.parameters).toContainEqual(
+      expect.objectContaining({ name: 'Last-Event-ID', in: 'header', required: false }),
+    );
+    expect(personalStream?.responses?.['200']?.content).toHaveProperty('text/event-stream');
 
     // A guarded mutation surfaces its tag + capability extension.
     const createTask = spec.paths['/v1/orgs/{orgId}/tasks']?.['post'];

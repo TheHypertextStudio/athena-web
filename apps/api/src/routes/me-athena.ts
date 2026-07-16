@@ -28,7 +28,7 @@ import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 
-import { replyToElicitation, resolveAction } from './agent-session-approval';
+import { decideActivity, replyToElicitation } from './agent-session-approval';
 import {
   activityParam,
   idParam,
@@ -129,7 +129,7 @@ async function sessionActivities(id: string): Promise<(typeof sessionActivity.$i
     .select()
     .from(sessionActivity)
     .where(eq(sessionActivity.sessionId, id))
-    .orderBy(asc(sessionActivity.createdAt));
+    .orderBy(asc(sessionActivity.createdAt), asc(sessionActivity.id));
 }
 
 /** Personal surfaces never expose provider reasoning rows. */
@@ -265,6 +265,26 @@ function operationWorkspace(session: SessionRow, activityOrganizationId?: string
   const workspaceId = activityOrganizationId ?? session.contextOrganizationId;
   if (!workspaceId) throw new ConflictError('This operation requires a workspace context');
   return workspaceId;
+}
+
+/** Load the latest still-proposed action in deterministic activity order. */
+async function latestProposedAction(
+  sessionId: string,
+): Promise<typeof sessionActivity.$inferSelect> {
+  const rows = await db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        eq(sessionActivity.type, 'action'),
+        eq(sessionActivity.approvalStatus, 'proposed'),
+      ),
+    )
+    .orderBy(desc(sessionActivity.createdAt), desc(sessionActivity.id))
+    .limit(1);
+  if (!rows[0]) throw new ConflictError('No proposed action awaiting approval');
+  return rows[0];
 }
 
 /** Reopen eligible work after a steering message and run synchronously when safe. */
@@ -519,6 +539,21 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Stream personal Athena activity (SSE)',
       description:
         'Replay and live-tail only the caller-owned session activity as Server-Sent Events, resuming strictly after the standard Last-Event-ID header.',
+      parameters: [
+        {
+          name: 'Last-Event-ID',
+          in: 'header',
+          required: false,
+          description: 'Resume strictly after this previously received activity id.',
+          schema: { type: 'string' },
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Replay and live-tail activity as Server-Sent Events.',
+          content: { 'text/event-stream': { schema: { type: 'string' } } },
+        },
+      },
     }),
     zParam(idParam),
     async (c) =>
@@ -786,19 +821,15 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      const proposals = await db
-        .select()
-        .from(sessionActivity)
-        .where(
-          and(
-            eq(sessionActivity.sessionId, session.id),
-            eq(sessionActivity.approvalStatus, 'proposed'),
-          ),
-        )
-        .orderBy(desc(sessionActivity.createdAt))
-        .limit(1);
-      const workspaceId = operationWorkspace(session, proposals[0]?.organizationId);
-      const updated = await resolveAction(workspaceId, session.id, 'approved');
+      const action = await latestProposedAction(session.id);
+      const workspaceId = operationWorkspace(session, action.organizationId);
+      const updated = await approveAndResume(
+        workspaceId,
+        await activeAthenaActor(owner, workspaceId),
+        session.id,
+        action.id,
+        { decision: 'approve' },
+      );
       return ok(
         c,
         AthenaSessionSummaryOut,
@@ -820,19 +851,16 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
-      const proposals = await db
-        .select()
-        .from(sessionActivity)
-        .where(
-          and(
-            eq(sessionActivity.sessionId, session.id),
-            eq(sessionActivity.approvalStatus, 'proposed'),
-          ),
-        )
-        .orderBy(desc(sessionActivity.createdAt))
-        .limit(1);
-      const workspaceId = operationWorkspace(session, proposals[0]?.organizationId);
-      const updated = await resolveAction(workspaceId, session.id, 'rejected');
+      const action = await latestProposedAction(session.id);
+      const workspaceId = operationWorkspace(session, action.organizationId);
+      await decideActivity(
+        workspaceId,
+        await activeAthenaActor(owner, workspaceId),
+        session.id,
+        action.id,
+        { decision: 'reject' },
+      );
+      const updated = await transitionLifecycle(session, 'cancel');
       return ok(
         c,
         AthenaSessionSummaryOut,

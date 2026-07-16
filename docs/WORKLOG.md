@@ -130,6 +130,17 @@
   4. Update the Athena design/engineering/OpenAPI documentation, run focused and full repository
      gates, self-review privacy and linear history, and commit the slice atomically without schema,
      connector, assignment, UI, rebase, merge, or push changes.
+- **Plan (personal API spec review fix)**:
+  1. Add red regressions proving the session-level approval shortcut executes and resumes the
+     latest action in its actual workspace, session-level rejection records the owner's audited
+     decision, and same-timestamp SSE rows replay in stable `(createdAt, id)` order.
+  2. Add a red OpenAPI assertion for the stream route's `Last-Event-ID` request header and
+     `text/event-stream` success response.
+  3. Route both session shortcuts through the activity-scoped owner decision path, make every
+     personal activity query use the replay tuple order, and declare the explicit SSE contract.
+  4. Run focused red/green checks, API typecheck and lint, proportionate repository gates,
+     self-review imports and the final diff, then commit the review fix atomically without
+     rebasing, merging, or pushing.
 - **Persistence Slice**: Added the `athena | registered_agent` executor contract across Drizzle
   and Zod, optional workspace context/activity attribution, user ownership on sessions, durable
   runs, and transcripts, plus database checks and owner/context indexes. Athena sessions now carry
@@ -275,6 +286,18 @@
   build (3/3 tasks). `git diff --check` and the zero-merge history check pass. The only recurring
   diagnostic is the repository engine warning for local Node 24.14.0 versus the declared minimum
   24.15.0.
+- **Personal API Review Fix**: Red route tests proved the session-level approval shortcut only
+  changed database status without applying or resuming the stored tool, session-level rejection
+  omitted the owner's audited decision, and equal-timestamp SSE rows replayed in insertion order.
+  A red generated-spec assertion also found no `Last-Event-ID` header or `text/event-stream`
+  response. Both session shortcuts now locate the deterministic latest proposed action, resolve
+  the owner's current human Actor in that action's actual workspace, and use the activity-scoped
+  decision services; approval applies and resumes through `approveAndResume`, while rejection
+  records the same owner audit before preserving session-level cancellation. Personal activity
+  queries order by `(createdAt, id)`, and the stream contract declares its resume header and SSE
+  response. The focused personal/OpenAPI green run passes 11/11 tests, and the wider approval,
+  owner-privacy, and loop run passes 26/26. API typecheck and lint pass. Final root validation
+  passes typecheck and lint (17/17 tasks each), tests (17/17 tasks), and build (3/3 tasks).
 - **Retrospective**: Encoding exclusive attribution in both database checks and the
   transcript upsert prevents personal data from retaining an organization owner by accident.
   Composite parent keys turn attribution from a row-local shape into a durable relationship. A
@@ -292,7 +315,10 @@
   The personal API slice reinforced that invocation context must be validated at the boundary but
   never cached as authority. Exact SSE replay also has to locate the supplied event in persisted
   order rather than compare randomly generated same-millisecond ULIDs lexically, and personal
-  presentation models should filter raw provider reasoning at the server boundary.
+  presentation models should filter raw provider reasoning at the server boundary. The review fix
+  showed that timestamp-only ordering is still ambiguous even when exact replay ids are respected;
+  tests that intend distinct chronology must set distinct timestamps, while production polling
+  needs the full `(createdAt, id)` tuple on every query.
 
 ---
 

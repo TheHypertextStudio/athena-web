@@ -30,6 +30,7 @@ function transport(): PersonalAthenaTransport {
     pulse: vi.fn().mockResolvedValue(okResponse({ needsYou: 0, working: 1 })),
     queue: vi.fn(),
     detail: vi.fn(),
+    activity: vi.fn(),
     create: vi.fn().mockResolvedValue(failed('create provider secret')),
     message: vi.fn().mockResolvedValue(failed('message provider secret')),
     decide: vi.fn().mockResolvedValue(failed('decision provider secret')),

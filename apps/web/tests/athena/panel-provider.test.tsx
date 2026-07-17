@@ -37,6 +37,7 @@ function transport(): PersonalAthenaTransport {
       }),
     ),
     detail: vi.fn().mockResolvedValue(okResponse(detail)),
+    activity: vi.fn().mockResolvedValue(okResponse({ items: [] })),
     message: vi.fn().mockResolvedValue(okResponse(detail)),
     create: vi.fn().mockResolvedValue(okResponse(detail)),
     decide: vi.fn().mockResolvedValue(okResponse(detail)),
@@ -132,18 +133,51 @@ describe('AthenaPanelProvider', () => {
     input.remove();
   });
 
-  it('preserves invocation context when a surface opens the dock and expands it', async () => {
-    renderPanel();
+  it('opens contextual actions in scoped new-work mode without selecting unrelated work', async () => {
+    const api = renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
 
     expect(await screen.findByText('Athena launch')).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Start this work' })).toBeVisible();
+    expect(screen.getByLabelText('Athena objective')).toHaveValue('');
+    expect(api.detail).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.getByRole('link', { name: 'Open full Athena' })).toHaveAttribute(
         'href',
-        '/athena?workspace=workspace_1&context=project%3Aproject_1&contextLabel=Athena+launch&session=session_needs',
+        '/athena?workspace=workspace_1&context=project%3Aproject_1&contextLabel=Athena+launch&new=1',
       );
     });
+    fireEvent.change(screen.getByLabelText('Athena objective'), {
+      target: { value: 'Review this project' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({
+        prompt: 'Review this project',
+        context: {
+          workspaceId: 'workspace_1',
+          source: { type: 'project', id: 'project_1', label: 'Athena launch' },
+        },
+      });
+    });
+  });
+
+  it('shows the scoped composer for contextual actions even when the queue is empty', async () => {
+    const api = transport();
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 0, working: 0, finished: 0 },
+        currentChat: null,
+        sessions: { needsYou: [], working: [], finished: [] },
+      }),
+    );
+    renderPanel(api);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+
+    expect(await screen.findByRole('heading', { name: 'Start this work' })).toBeVisible();
+    expect(screen.getByLabelText('Athena objective')).toHaveValue('');
   });
 
   it('tracks the latest shell workspace across persistent-shell navigation', async () => {
@@ -235,6 +269,10 @@ describe('AthenaPanelProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Start contextual Athena' }));
     expect(await screen.findByRole('heading', { name: 'Start this work' })).toBeVisible();
     expect(screen.getByLabelText('Athena objective')).toHaveValue('Prepare the review');
+    expect(screen.getByRole('link', { name: 'Open full Athena' })).toHaveAttribute(
+      'href',
+      '/athena?workspace=workspace_1&new=1',
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
 
     await waitFor(() => {

@@ -88,6 +88,7 @@ export type PersonalAthenaActivity =
 export interface PersonalAthenaSessionDetail extends PersonalAthenaSessionSummary {
   readonly decision?: PersonalAthenaDecision | null;
   readonly activities: readonly PersonalAthenaActivity[];
+  readonly activityNextCursor?: string;
   readonly result?: {
     readonly title: string;
     readonly summary: string;

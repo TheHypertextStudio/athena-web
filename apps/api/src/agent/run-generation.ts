@@ -89,6 +89,46 @@ function messageOf(run: typeof agentSessionRun.$inferSelect): RunGenerationMessa
 }
 
 /**
+ * Lock one admission scope in the canonical owner → session order.
+ *
+ * @remarks
+ * The first session read is deliberately non-locking so Athena's owner id is known before any row
+ * lock is taken. After the owner lock, the session is locked and revalidated; run rows are locked
+ * only by the caller after this helper returns. Registered-agent admission has no owner row and
+ * therefore begins with the session lock.
+ */
+async function lockRunAdmissionSession(
+  tx: RunGenerationTransaction,
+  sessionId: string,
+): Promise<SessionRow> {
+  const [observed] = await tx.select().from(agentSession).where(eq(agentSession.id, sessionId));
+  if (!observed) throw new NotFoundError('Session not found');
+
+  if (observed.executorKind === 'athena') {
+    const [owner] = await tx
+      .select({ id: user.id })
+      .from(user)
+      .where(eq(user.id, ownerOf(observed)))
+      .for('update');
+    if (!owner) throw new NotFoundError('Athena owner not found');
+  }
+
+  const [current] = await tx
+    .select()
+    .from(agentSession)
+    .where(eq(agentSession.id, sessionId))
+    .for('update');
+  if (!current) throw new NotFoundError('Session not found');
+  if (
+    current.executorKind !== observed.executorKind ||
+    current.ownerUserId !== observed.ownerUserId
+  ) {
+    throw new ConflictError('Session executor changed during admission');
+  }
+  return current;
+}
+
+/**
  * Persist the next deterministic generation before dispatching it to Cloudflare.
  *
  * @remarks
@@ -105,22 +145,11 @@ export async function enqueueRunGeneration(
   const runnableStatuses = options.runnableStatuses ?? (['pending', 'running'] as const);
 
   return db.transaction(async (tx) => {
-    if (session.executorKind === 'athena') {
-      const [owner] = await tx
-        .select({ id: user.id })
-        .from(user)
-        .where(eq(user.id, ownerOf(session)))
-        .for('update');
-      if (!owner) throw new NotFoundError('Athena owner not found');
-    }
-
-    const [current] = await tx
-      .select()
-      .from(agentSession)
-      .where(eq(agentSession.id, session.id))
-      .for('update');
-    if (!current) throw new NotFoundError('Session not found');
-    if (current.executorKind !== session.executorKind) {
+    const current = await lockRunAdmissionSession(tx, session.id);
+    if (
+      current.executorKind !== session.executorKind ||
+      current.ownerUserId !== session.ownerUserId
+    ) {
       throw new ConflictError('Session executor changed during admission');
     }
     if (!runnableStatuses.includes(current.status)) {
@@ -214,22 +243,7 @@ export async function claimQueuedRunGeneration(
   const token = genId();
 
   const claimedGeneration = await db.transaction(async (tx) => {
-    const [current] = await tx
-      .select()
-      .from(agentSession)
-      .where(eq(agentSession.id, message.sessionId))
-      .for('update');
-    if (!current) throw new NotFoundError('Session not found');
-    if (current.executorKind === 'athena') {
-      const ownerUserId = current.ownerUserId;
-      if (!ownerUserId) throw new Error('Athena session is missing its owner');
-      const [owner] = await tx
-        .select({ id: user.id })
-        .from(user)
-        .where(eq(user.id, ownerUserId))
-        .for('update');
-      if (!owner) throw new NotFoundError('Athena owner not found');
-    }
+    const current = await lockRunAdmissionSession(tx, message.sessionId);
 
     const [run] = await tx
       .select()
@@ -357,22 +371,11 @@ export async function claimRunGeneration(
   const token = genId();
 
   return db.transaction(async (tx) => {
-    if (session.executorKind === 'athena') {
-      const [owner] = await tx
-        .select({ id: user.id })
-        .from(user)
-        .where(eq(user.id, ownerOf(session)))
-        .for('update');
-      if (!owner) throw new NotFoundError('Athena owner not found');
-    }
-
-    const [current] = await tx
-      .select()
-      .from(agentSession)
-      .where(eq(agentSession.id, session.id))
-      .for('update');
-    if (!current) throw new NotFoundError('Session not found');
-    if (current.executorKind !== session.executorKind) {
+    const current = await lockRunAdmissionSession(tx, session.id);
+    if (
+      current.executorKind !== session.executorKind ||
+      current.ownerUserId !== session.ownerUserId
+    ) {
       throw new ConflictError('Session executor changed during admission');
     }
     if (!runnableStatuses.includes(current.status)) {
@@ -575,6 +578,10 @@ export async function checkpointRunGeneration(lease: RunGenerationLease): Promis
 
 /**
  * Atomically settle the owned generation and its parent session.
+ *
+ * @remarks
+ * The parent session is locked before its generation, matching lifecycle transitions. Keeping this
+ * order consistent prevents settlement and pause/cancel transactions from deadlocking each other.
  */
 export async function settleRunGeneration(
   lease: RunGenerationLease,
@@ -584,6 +591,13 @@ export async function settleRunGeneration(
 ): Promise<SessionRow> {
   const now = new Date();
   return db.transaction(async (tx) => {
+    const [parent] = await tx
+      .select({ id: agentSession.id })
+      .from(agentSession)
+      .where(eq(agentSession.id, lease.sessionId))
+      .for('update');
+    if (!parent) throw new NotFoundError('Session not found');
+
     const runStatus =
       sessionStatus === 'completed'
         ? 'completed'

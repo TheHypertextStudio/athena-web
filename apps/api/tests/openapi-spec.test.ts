@@ -20,6 +20,7 @@ describe('openapi spec generation', () => {
           string,
           {
             tags?: string[];
+            description?: string;
             parameters?: { name?: string; in?: string; required?: boolean }[];
             responses?: Record<string, { content?: Record<string, unknown> }>;
             'x-docket-capability'?: string;
@@ -49,11 +50,36 @@ describe('openapi spec generation', () => {
 
     const personalAthena = spec.paths['/v1/me/athena']?.['get'];
     expect(personalAthena?.tags).toContain('Athena');
+    expect(personalAthena?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'limit', in: 'query' }),
+        expect.objectContaining({ name: 'needsYouCursor', in: 'query' }),
+        expect.objectContaining({ name: 'workingCursor', in: 'query' }),
+        expect.objectContaining({ name: 'finishedCursor', in: 'query' }),
+      ]),
+    );
+
+    const personalDetail = spec.paths['/v1/me/athena/sessions/{id}']?.['get'];
+    expect(personalDetail?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'cursor', in: 'query' }),
+        expect.objectContaining({ name: 'limit', in: 'query' }),
+      ]),
+    );
+
+    const personalActivity = spec.paths['/v1/me/athena/sessions/{id}/activity']?.['get'];
+    expect(personalActivity?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: 'cursor', in: 'query' }),
+        expect.objectContaining({ name: 'limit', in: 'query' }),
+      ]),
+    );
 
     const personalStream = spec.paths['/v1/me/athena/sessions/{id}/stream']?.['get'];
     expect(personalStream?.parameters).toContainEqual(
       expect.objectContaining({ name: 'Last-Event-ID', in: 'header', required: false }),
     );
+    expect(personalStream?.description).toContain('newest 100');
     expect(personalStream?.responses?.['200']?.content).toHaveProperty('text/event-stream');
     expect(paths).toContain('/v1/me/athena/connections');
     expect(paths).toContain('/v1/me/athena/assignments');

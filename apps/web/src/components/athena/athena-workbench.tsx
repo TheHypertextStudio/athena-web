@@ -15,6 +15,9 @@ export interface AthenaWorkbenchProps {
   readonly onDecision?: (decisionId: string, optionId: string) => void;
   readonly onLifecycle?: (action: PersonalAthenaLifecycle) => void;
   readonly onMessage?: (body: string) => void;
+  readonly onStartNewWork?: () => void;
+  readonly loadingOlder?: boolean;
+  readonly onLoadOlder?: () => void;
 }
 
 /**
@@ -32,6 +35,9 @@ export function AthenaWorkbench({
   onDecision,
   onLifecycle,
   onMessage,
+  onStartNewWork,
+  loadingOlder = false,
+  onLoadOlder,
 }: AthenaWorkbenchProps): JSX.Element {
   const view = useMemo(() => presentAthenaSession(session), [session]);
   const decision = view.decision;
@@ -154,6 +160,20 @@ export function AthenaWorkbench({
         ) : null}
 
         <section aria-label="Work log" className="px-4 py-2 @2xl:px-6">
+          {session.activityNextCursor && onLoadOlder ? (
+            <div className="border-outline-variant border-b py-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-on-surface min-h-10"
+                disabled={loadingOlder}
+                onClick={onLoadOlder}
+              >
+                {loadingOlder ? 'Loading older activity…' : 'Show older activity'}
+              </Button>
+            </div>
+          ) : null}
           {view.activity.length === 0 ? (
             <p className="text-on-surface-variant py-8 text-sm">Athena is preparing the work.</p>
           ) : (
@@ -211,29 +231,42 @@ export function AthenaWorkbench({
         ) : null}
       </div>
 
-      <form
-        aria-label={freeformQuestion ? 'Answer Athena' : 'Steer Athena'}
-        className="border-outline-variant bg-surface flex items-end gap-2 border-t p-3 @2xl:p-4"
-        onSubmit={submit}
-      >
-        <label className="min-w-0 flex-1">
-          <span className="sr-only">{commandLabel}</span>
-          <textarea
-            aria-label={commandLabel}
-            value={draft}
-            disabled={pending}
-            rows={2}
-            placeholder={`${commandLabel}…`}
-            onChange={(event) => {
-              setDraft(event.target.value);
-            }}
-            className="border-outline-variant bg-surface-container-low text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-12 w-full resize-none rounded-lg border px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 disabled:opacity-60"
-          />
-        </label>
-        <Button type="submit" className="min-h-10" disabled={pending || draft.trim().length === 0}>
-          Send
-        </Button>
-      </form>
+      {session.status === 'canceled' ? (
+        <div className="border-outline-variant bg-surface flex items-center justify-between gap-3 border-t p-3 @2xl:p-4">
+          <p className="text-on-surface-variant text-sm">This work is closed.</p>
+          <Button type="button" className="min-h-10" disabled={pending} onClick={onStartNewWork}>
+            Start new work
+          </Button>
+        </div>
+      ) : (
+        <form
+          aria-label={freeformQuestion ? 'Answer Athena' : 'Steer Athena'}
+          className="border-outline-variant bg-surface flex items-end gap-2 border-t p-3 @2xl:p-4"
+          onSubmit={submit}
+        >
+          <label className="min-w-0 flex-1">
+            <span className="sr-only">{commandLabel}</span>
+            <textarea
+              aria-label={commandLabel}
+              value={draft}
+              disabled={pending}
+              rows={2}
+              placeholder={`${commandLabel}…`}
+              onChange={(event) => {
+                setDraft(event.target.value);
+              }}
+              className="border-outline-variant bg-surface-container-low text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-12 w-full resize-none rounded-lg border px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 disabled:opacity-60"
+            />
+          </label>
+          <Button
+            type="submit"
+            className="min-h-10"
+            disabled={pending || draft.trim().length === 0}
+          >
+            Send
+          </Button>
+        </form>
+      )}
     </article>
   );
 }

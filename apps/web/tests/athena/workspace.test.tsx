@@ -41,6 +41,7 @@ function transport(): PersonalAthenaTransport {
       }),
     ),
     detail: vi.fn((id: string) => Promise.resolve(okResponse(id === 'working' ? working : needs))),
+    activity: vi.fn().mockResolvedValue(okResponse({ items: [], nextCursor: undefined })),
     message: vi.fn().mockResolvedValue(okResponse(working)),
     create: vi.fn().mockResolvedValue(okResponse(working)),
     decide: vi.fn().mockResolvedValue(okResponse(needs)),
@@ -49,6 +50,131 @@ function transport(): PersonalAthenaTransport {
 }
 
 describe('AthenaWorkspace', () => {
+  it('continues the Needs you lane without replacing its exact count', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const older = { ...needs, id: 'older-needs', objective: 'Answer an older private question' };
+    vi.mocked(api.queue)
+      .mockResolvedValueOnce(
+        okResponse({
+          counts: { needsYou: 2, working: 1, finished: 0 },
+          currentChat: working,
+          sessions: { needsYou: [needs], working: [working], finished: [] },
+          nextCursors: { needsYou: 'needs-cursor' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        okResponse({
+          counts: { needsYou: 2, working: 1, finished: 0 },
+          currentChat: working,
+          sessions: { needsYou: [older], working: [working], finished: [] },
+        }),
+      );
+
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show older Needs you' }));
+    expect(await screen.findByText('Answer an older private question')).toBeVisible();
+    expect(api.queue).toHaveBeenLastCalledWith({ needsYouCursor: 'needs-cursor' });
+  });
+
+  it.each([
+    {
+      label: 'Working',
+      cursorKey: 'workingCursor' as const,
+      responseCursor: 'working' as const,
+      cursor: 'working-cursor',
+      sessionKey: 'working' as const,
+      older: {
+        ...working,
+        id: 'older-working',
+        objective: 'Continue an older launch review',
+      },
+    },
+    {
+      label: 'Finished',
+      cursorKey: 'finishedCursor' as const,
+      responseCursor: 'finished' as const,
+      cursor: 'finished-cursor',
+      sessionKey: 'finished' as const,
+      older: {
+        ...working,
+        id: 'older-finished',
+        objective: 'Inspect an older completed review',
+        status: 'completed' as const,
+        queueState: 'finished' as const,
+      },
+    },
+  ])('continues the $label lane with its own cursor', async (scenario) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    vi.mocked(api.queue)
+      .mockResolvedValueOnce(
+        okResponse({
+          counts: { needsYou: 1, working: 2, finished: 1 },
+          currentChat: working,
+          sessions: { needsYou: [needs], working: [working], finished: [] },
+          nextCursors: { [scenario.responseCursor]: scenario.cursor },
+        }),
+      )
+      .mockResolvedValueOnce(
+        okResponse({
+          counts: { needsYou: 1, working: 2, finished: 1 },
+          currentChat: working,
+          sessions: {
+            needsYou: [],
+            working: scenario.sessionKey === 'working' ? [scenario.older] : [],
+            finished: scenario.sessionKey === 'finished' ? [scenario.older] : [],
+          },
+        }),
+      );
+
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: `Show older ${scenario.label}` }));
+    expect(await screen.findByText(scenario.older.objective)).toBeVisible();
+    expect(api.queue).toHaveBeenLastCalledWith({ [scenario.cursorKey]: scenario.cursor });
+  });
+
+  it('prepends an older activity window to the selected workbench', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    vi.mocked(api.detail).mockResolvedValue(
+      okResponse({ ...working, activityNextCursor: 'activity-cursor' }),
+    );
+    vi.mocked(api.activity).mockResolvedValue(
+      okResponse({
+        items: [
+          {
+            id: 'older-message',
+            type: 'message',
+            createdAt: '2026-07-15T14:00:00.000Z',
+            text: 'Earlier work context',
+            author: 'athena',
+          },
+        ],
+      }),
+    );
+
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} initialSessionId="working" />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show older activity' }));
+    expect(await screen.findByText('Earlier work context')).toBeVisible();
+    expect(api.activity).toHaveBeenCalledWith('working', 'activity-cursor');
+  });
+
   it('derives a visible selection before effects can synchronize state', () => {
     expect(effectiveAthenaSelectedId('workspace-a-session', null, [working])).toBe(working.id);
     expect(effectiveAthenaSelectedId('workspace-a-session', null, [])).toBe('');
@@ -133,6 +259,109 @@ describe('AthenaWorkspace', () => {
     expect(await screen.findAllByText('Hypertext Studio')).not.toHaveLength(0);
     expect(await screen.findAllByText('Athena launch')).not.toHaveLength(0);
     expect(screen.queryByText('Across workspaces')).not.toBeInTheDocument();
+  });
+
+  it('opens supplied source context as explicit new work instead of selecting queue history', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const context = {
+      workspaceId: 'workspace_1',
+      source: { type: 'project' as const, id: 'project_2', label: 'Contextual launch' },
+    };
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace
+          transport={api}
+          workspaceFilter="workspace_1"
+          invocationContext={context}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'What should Athena move forward?' }),
+    ).toBeVisible();
+    expect(api.detail).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Athena objective'), {
+      target: { value: 'Review this launch' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({ prompt: 'Review this launch', context });
+    });
+  });
+
+  it('preserves workspace-only explicit new-work intent from dock expansion', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace
+          transport={api}
+          workspaceFilter="workspace_1"
+          invocationContext={{ workspaceId: 'workspace_1' }}
+          startNewWork
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'What should Athena move forward?' }),
+    ).toBeVisible();
+    expect(api.detail).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Athena objective'), {
+      target: { value: 'Prepare this workspace review' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({
+        prompt: 'Prepare this workspace review',
+        context: { workspaceId: 'workspace_1' },
+      });
+    });
+  });
+
+  it('starts contextual new work instead of steering a canceled session', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const api = transport();
+    const canceled: PersonalAthenaSessionDetail = {
+      ...working,
+      id: 'canceled',
+      objective: 'Canceled project review',
+      status: 'canceled',
+      queueState: 'finished',
+      context: {
+        workspaceId: 'workspace_1',
+        source: { type: 'project', id: 'project_canceled', label: 'Canceled launch' },
+      },
+    };
+    vi.mocked(api.queue).mockResolvedValue(
+      okResponse({
+        counts: { needsYou: 0, working: 0, finished: 1 },
+        currentChat: null,
+        sessions: { needsYou: [], working: [], finished: [canceled] },
+      }),
+    );
+    vi.mocked(api.detail).mockResolvedValue(okResponse(canceled));
+    render(
+      <QueryClientProvider client={client}>
+        <AthenaWorkspace transport={api} initialSessionId={canceled.id} />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Start new work' }));
+    expect(screen.queryByRole('form', { name: 'Steer Athena' })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Athena objective'), {
+      target: { value: 'Try the project review again' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    await waitFor(() => {
+      expect(api.create).toHaveBeenCalledWith({
+        prompt: 'Try the project review again',
+        context: canceled.context,
+      });
+    });
+    expect(api.message).not.toHaveBeenCalled();
   });
 
   it('routes an optionless question answer through its owning session and activity', async () => {

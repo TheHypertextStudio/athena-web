@@ -121,19 +121,22 @@ export function AthenaPanelProvider({
     queue.data?.currentChat?.id ??
     '';
   useEffect(() => {
-    if (!selectedId && preferredId) setSelectedId(preferredId);
-  }, [preferredId, selectedId]);
+    if (launchDraft === null && !selectedId && preferredId) setSelectedId(preferredId);
+  }, [launchDraft, preferredId, selectedId]);
 
-  const detail = useLiveApiQuery(personalAthenaDetailDef(selectedId, transport, open), 3_000);
+  const detailId = launchDraft === null ? selectedId : '';
+  const detail = useLiveApiQuery(personalAthenaDetailDef(detailId, transport, open), 3_000);
   const selected = detail.data ?? null;
 
   const openAthena = useCallback(
     (nextContext?: PersonalAthenaContext | null, draft?: string) => {
+      const startsNewWork = nextContext !== undefined;
       setContext(nextContext === undefined ? shellContext : nextContext);
-      setLaunchDraft(draft?.trim() ? draft.trim() : null);
+      setSelectedId(startsNewWork ? '' : selectedId);
+      setLaunchDraft(startsNewWork ? (draft?.trim() ?? '') : null);
       setOpen(true);
     },
-    [shellContext],
+    [selectedId, shellContext],
   );
   const closeAthena = useCallback(() => {
     setOpen(false);
@@ -231,7 +234,14 @@ export function AthenaPanelProvider({
               ) : null}
             </div>
             <Button variant="ghost" size="sm" className="min-h-10" asChild>
-              <Link href={athenaHref(context, selectedId)} aria-label="Open full Athena">
+              <Link
+                href={athenaHref(
+                  context,
+                  launchDraft === null ? selectedId : null,
+                  launchDraft !== null,
+                )}
+                aria-label="Open full Athena"
+              >
                 Expand
               </Link>
             </Button>
@@ -252,7 +262,7 @@ export function AthenaPanelProvider({
             </p>
           ) : null}
 
-          {queue.isPending || (selectedId && detail.isPending) ? (
+          {queue.isPending || (detailId && detail.isPending) ? (
             <div className="flex flex-1 flex-col gap-3 p-4" aria-label="Loading Athena work">
               <Skeleton className="h-20 w-full" />
               <Skeleton className="h-14 w-full" />
@@ -321,6 +331,19 @@ export function AthenaPanelProvider({
               }}
               onDecision={(id, option) => {
                 actions.decide({ id, option, kind: selected.decision?.kind });
+              }}
+              onStartNewWork={() => {
+                setContext(
+                  selected.context ??
+                    (selected.workspace
+                      ? {
+                          workspaceId: selected.workspace.id,
+                          workspaceName: selected.workspace.name,
+                        }
+                      : shellContext),
+                );
+                setSelectedId('');
+                setLaunchDraft('');
               }}
             />
           ) : (

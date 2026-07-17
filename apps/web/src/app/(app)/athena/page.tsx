@@ -41,6 +41,7 @@ export default function AthenaPage(): JSX.Element {
       initialSessionId={search.get('session')}
       workspaceFilter={workspaceId}
       invocationContext={context}
+      startNewWork={search.get('new') === '1'}
     />
   );
 }

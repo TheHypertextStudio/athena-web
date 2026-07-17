@@ -12,7 +12,9 @@ import {
 } from '@/lib/athena/query-defs';
 import {
   groupAthenaQueue,
+  type PersonalAthenaActivity,
   type PersonalAthenaContext,
+  type AthenaQueueState,
   type PersonalAthenaSessionDetail,
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
@@ -26,8 +28,32 @@ export interface AthenaWorkspaceProps {
   readonly initialSessionId?: string | null;
   readonly workspaceFilter?: string | null;
   readonly invocationContext?: PersonalAthenaContext | null;
+  readonly startNewWork?: boolean;
   readonly transport?: PersonalAthenaTransport;
 }
+
+interface AthenaQueueContinuation {
+  readonly items: readonly PersonalAthenaSessionSummary[];
+  readonly nextCursor?: string;
+}
+
+const QUEUE_LANE_CONTINUATION = {
+  needs_you: {
+    inputCursor: 'needsYouCursor',
+    responseCursor: 'needsYou',
+    sessions: 'needsYou',
+  },
+  working: {
+    inputCursor: 'workingCursor',
+    responseCursor: 'working',
+    sessions: 'working',
+  },
+  finished: {
+    inputCursor: 'finishedCursor',
+    responseCursor: 'finished',
+    sessions: 'finished',
+  },
+} as const;
 
 /** Derive the selected session entirely from the currently visible workspace roster. */
 export function effectiveAthenaSelectedId(
@@ -48,21 +74,36 @@ export function AthenaWorkspace({
   initialSessionId = null,
   workspaceFilter = null,
   invocationContext = null,
+  startNewWork = false,
   transport = personalAthenaTransport,
 }: AthenaWorkspaceProps): JSX.Element {
   const queryClient = useQueryClient();
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport), 5_000);
-  const allSessions = useMemo(
-    () =>
-      queue.data
-        ? [
-            ...queue.data.sessions.needsYou,
-            ...queue.data.sessions.working,
-            ...queue.data.sessions.finished,
-          ]
-        : [],
-    [queue.data],
-  );
+  const [olderSessions, setOlderSessions] = useState<
+    Partial<Readonly<Record<AthenaQueueState, AthenaQueueContinuation>>>
+  >({});
+  const [activityHistory, setActivityHistory] = useState<{
+    readonly sessionId: string;
+    readonly items: readonly PersonalAthenaActivity[];
+    readonly nextCursor?: string;
+  } | null>(null);
+  const [loadingOlderLane, setLoadingOlderLane] = useState<AthenaQueueState | null>(null);
+  const [loadingOlderActivity, setLoadingOlderActivity] = useState(false);
+  const [historyFeedback, setHistoryFeedback] = useState<string | null>(null);
+  const allSessions = useMemo(() => {
+    if (!queue.data) return [];
+    const sessions = [
+      ...queue.data.sessions.needsYou,
+      ...(olderSessions.needs_you?.items ?? []),
+      ...queue.data.sessions.working,
+      ...(olderSessions.working?.items ?? []),
+      ...queue.data.sessions.finished,
+      ...(olderSessions.finished?.items ?? []),
+    ];
+    return sessions.filter(
+      (session, index) => sessions.findIndex((candidate) => candidate.id === session.id) === index,
+    );
+  }, [olderSessions, queue.data]);
   const visibleSessions = useMemo(
     () =>
       workspaceFilter
@@ -75,18 +116,135 @@ export function AthenaWorkspace({
     [allSessions, workspaceFilter],
   );
   const groups = useMemo(() => groupAthenaQueue(visibleSessions), [visibleSessions]);
+  const invocationSourceType = invocationContext?.source?.type;
+  const invocationSourceId = invocationContext?.source?.id;
+  const invocationSourceLabel = invocationContext?.source?.label;
+  const invocationNewWorkContext = useMemo<PersonalAthenaContext | null | undefined>(() => {
+    if (!startNewWork && (!invocationSourceType || !invocationSourceId)) return undefined;
+    if (
+      !invocationContext?.workspaceId &&
+      !invocationContext?.workspaceName &&
+      (!invocationSourceType || !invocationSourceId)
+    ) {
+      return null;
+    }
+    return {
+      ...(invocationContext.workspaceId ? { workspaceId: invocationContext.workspaceId } : {}),
+      ...(invocationContext.workspaceName
+        ? { workspaceName: invocationContext.workspaceName }
+        : {}),
+      ...(invocationSourceType && invocationSourceId
+        ? {
+            source: {
+              type: invocationSourceType,
+              id: invocationSourceId,
+              ...(invocationSourceLabel ? { label: invocationSourceLabel } : {}),
+            },
+          }
+        : {}),
+    };
+  }, [
+    invocationContext?.workspaceId,
+    invocationContext?.workspaceName,
+    invocationSourceId,
+    invocationSourceLabel,
+    invocationSourceType,
+    startNewWork,
+  ]);
   const [selectedId, setSelectedId] = useState('');
   const [newObjective, setNewObjective] = useState('');
-  const effectiveSelectedId = effectiveAthenaSelectedId(
-    selectedId,
-    initialSessionId,
-    visibleSessions,
+  const [newWorkContext, setNewWorkContext] = useState<PersonalAthenaContext | null | undefined>(
+    () => invocationNewWorkContext,
   );
+  const startsNewWork = newWorkContext !== undefined;
+  const effectiveSelectedId = startsNewWork
+    ? ''
+    : effectiveAthenaSelectedId(selectedId, initialSessionId, visibleSessions);
   useEffect(() => {
-    if (!queue.data) return;
+    setNewWorkContext(invocationNewWorkContext);
+    setSelectedId('');
+  }, [invocationNewWorkContext]);
+  useEffect(() => {
+    if (!queue.data || startsNewWork) return;
     if (selectedId !== effectiveSelectedId) setSelectedId(effectiveSelectedId);
-  }, [effectiveSelectedId, queue.data, selectedId]);
+  }, [effectiveSelectedId, queue.data, selectedId, startsNewWork]);
   const detail = useLiveApiQuery(personalAthenaDetailDef(effectiveSelectedId, transport), 3_000);
+  useEffect(() => {
+    setActivityHistory(null);
+    setHistoryFeedback(null);
+  }, [effectiveSelectedId]);
+  const workbenchSession = useMemo(() => {
+    if (!detail.data) return null;
+    const history = activityHistory?.sessionId === detail.data.id ? activityHistory : null;
+    if (!history) return detail.data;
+    const activities = [...history.items, ...detail.data.activities].filter(
+      (activity, index, items) =>
+        items.findIndex((candidate) => candidate.id === activity.id) === index,
+    );
+    return {
+      ...detail.data,
+      activities,
+      activityNextCursor: history.nextCursor,
+    };
+  }, [activityHistory, detail.data]);
+  const queueCursor = useCallback(
+    (lane: AthenaQueueState): string | undefined => {
+      const continuation = olderSessions[lane];
+      if (continuation) return continuation.nextCursor;
+      const responseCursor = QUEUE_LANE_CONTINUATION[lane].responseCursor;
+      return queue.data?.nextCursors?.[responseCursor];
+    },
+    [olderSessions, queue.data?.nextCursors],
+  );
+
+  const loadOlderLane = useCallback(
+    async (lane: AthenaQueueState): Promise<void> => {
+      const cursor = queueCursor(lane);
+      if (!cursor || loadingOlderLane !== null) return;
+      const config = QUEUE_LANE_CONTINUATION[lane];
+      setLoadingOlderLane(lane);
+      setHistoryFeedback(null);
+      try {
+        const response = await transport.queue({ [config.inputCursor]: cursor });
+        if (!response.ok) throw new Error(`older ${lane} page failed`);
+        const page = await response.json();
+        const nextCursor = page.nextCursors?.[config.responseCursor];
+        setOlderSessions((current) => ({
+          ...current,
+          [lane]: {
+            items: [...(current[lane]?.items ?? []), ...page.sessions[config.sessions]],
+            ...(nextCursor ? { nextCursor } : {}),
+          },
+        }));
+      } catch {
+        setHistoryFeedback('Could not load older Athena work.');
+      } finally {
+        setLoadingOlderLane(null);
+      }
+    },
+    [loadingOlderLane, queueCursor, transport],
+  );
+
+  const loadOlderActivity = useCallback(async (): Promise<void> => {
+    if (!workbenchSession?.activityNextCursor || loadingOlderActivity) return;
+    const sessionId = workbenchSession.id;
+    setLoadingOlderActivity(true);
+    setHistoryFeedback(null);
+    try {
+      const response = await transport.activity(sessionId, workbenchSession.activityNextCursor);
+      if (!response.ok) throw new Error('older activity page failed');
+      const page = await response.json();
+      setActivityHistory((current) => ({
+        sessionId,
+        items: [...page.items, ...(current?.sessionId === sessionId ? current.items : [])],
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
+      }));
+    } catch {
+      setHistoryFeedback('Could not load older Athena activity.');
+    } finally {
+      setLoadingOlderActivity(false);
+    }
+  }, [loadingOlderActivity, transport, workbenchSession]);
 
   const updateSelected = useCallback(
     (next: PersonalAthenaSessionDetail): void => {
@@ -100,6 +258,7 @@ export function AthenaWorkspace({
     transport,
     onSelected: updateSelected,
     onCreated: (next) => {
+      setNewWorkContext(undefined);
       updateSelected(next);
       setNewObjective('');
     },
@@ -134,6 +293,15 @@ export function AthenaWorkspace({
           {actions.feedback}
         </p>
       ) : null}
+      {historyFeedback ? (
+        <p
+          role="alert"
+          aria-live="assertive"
+          className="border-outline-variant bg-error-container text-on-error-container border-b px-4 py-3 text-sm"
+        >
+          {historyFeedback}
+        </p>
+      ) : null}
 
       {queue.isPending ? (
         <div className="grid min-h-0 flex-1 gap-0 @3xl:grid-cols-[18rem_minmax(0,1fr)]">
@@ -164,7 +332,13 @@ export function AthenaWorkspace({
                     {group.label}
                   </h2>
                   <span className="text-on-surface-variant text-xs tabular-nums">
-                    {group.items.length}
+                    {workspaceFilter
+                      ? group.items.length
+                      : group.key === 'needs_you'
+                        ? queue.data.counts.needsYou
+                        : group.key === 'working'
+                          ? queue.data.counts.working
+                          : queue.data.counts.finished}
                   </span>
                 </div>
                 {group.items.length > 0 ? (
@@ -175,11 +349,28 @@ export function AthenaWorkspace({
                         session={session}
                         selected={session.id === effectiveSelectedId}
                         onSelect={() => {
+                          setNewWorkContext(undefined);
                           setSelectedId(session.id);
                         }}
                       />
                     ))}
                   </ul>
+                ) : null}
+                {queueCursor(group.key) ? (
+                  <div className="border-outline-variant border-t p-2">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-on-surface min-h-10 w-full"
+                      disabled={loadingOlderLane !== null}
+                      onClick={() => void loadOlderLane(group.key)}
+                    >
+                      {loadingOlderLane === group.key
+                        ? 'Loading older work…'
+                        : `Show older ${group.label}`}
+                    </Button>
+                  </div>
                 ) : null}
               </section>
             ))}
@@ -191,10 +382,12 @@ export function AthenaWorkspace({
                 <Skeleton className="h-20 w-full" />
                 <Skeleton className="h-16 w-full" />
               </div>
-            ) : detail.data ? (
+            ) : workbenchSession ? (
               <AthenaWorkbench
-                session={detail.data}
+                session={workbenchSession}
                 pending={pending}
+                loadingOlder={loadingOlderActivity}
+                onLoadOlder={() => void loadOlderActivity()}
                 onMessage={(body) => {
                   actions.message(body);
                 }}
@@ -202,7 +395,21 @@ export function AthenaWorkspace({
                   actions.lifecycle(action);
                 }}
                 onDecision={(id, option) => {
-                  actions.decide({ id, option, kind: detail.data.decision?.kind });
+                  actions.decide({ id, option, kind: workbenchSession.decision?.kind });
+                }}
+                onStartNewWork={() => {
+                  setSelectedId('');
+                  setNewWorkContext(
+                    workbenchSession.context ??
+                      (workbenchSession.workspace
+                        ? {
+                            workspaceId: workbenchSession.workspace.id,
+                            workspaceName: workbenchSession.workspace.name,
+                          }
+                        : workspaceFilter
+                          ? { workspaceId: workspaceFilter }
+                          : null),
+                  );
                 }}
               />
             ) : (
@@ -215,8 +422,8 @@ export function AthenaWorkspace({
                   if (!prompt || actions.createPending) return;
                   actions.create({
                     prompt,
-                    ...(invocationContext
-                      ? { context: invocationContext }
+                    ...(newWorkContext
+                      ? { context: newWorkContext }
                       : workspaceFilter
                         ? { context: { workspaceId: workspaceFilter } }
                         : {}),
@@ -268,15 +475,23 @@ export function AthenaWorkspace({
                   {detail.data?.workspace?.name ??
                     detail.data?.context?.workspaceName ??
                     detail.data?.context?.source?.label ??
+                    newWorkContext?.workspaceName ??
+                    newWorkContext?.source?.label ??
                     invocationContext?.workspaceName ??
                     'Across workspaces'}
                 </dd>
               </div>
-              {(detail.data?.context?.source ?? invocationContext?.source) ? (
+              {(detail.data?.context?.source ??
+              newWorkContext?.source ??
+              invocationContext?.source) ? (
                 <div>
                   <dt className="text-on-surface-variant text-xs">Opened from</dt>
                   <dd className="text-on-surface mt-0.5 break-words">
-                    {(detail.data?.context?.source ?? invocationContext?.source)?.label ?? 'Work'}
+                    {(
+                      detail.data?.context?.source ??
+                      newWorkContext?.source ??
+                      invocationContext?.source
+                    )?.label ?? 'Work'}
                   </dd>
                 </div>
               ) : null}

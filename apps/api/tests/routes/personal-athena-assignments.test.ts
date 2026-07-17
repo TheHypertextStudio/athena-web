@@ -546,7 +546,14 @@ describe('personal Athena assignments', () => {
     const scheduledTrigger = (await scheduledTriggerResponse.json()) as { id: string };
     expect(eventTrigger.id).not.toBe(scheduledTrigger.id);
 
-    const firedAt = new Date('2026-07-16T20:00:00.000Z');
+    const [scheduledRow] = await db
+      .select({ nextRunAt: schema.athenaTrigger.nextRunAt })
+      .from(schema.athenaTrigger)
+      .where(eq(schema.athenaTrigger.id, scheduledTrigger.id));
+    const scheduledAt = scheduledRow?.nextRunAt;
+    if (!scheduledAt) throw new Error('scheduled trigger is missing its next run');
+    expect(scheduledAt).toBeInstanceOf(Date);
+    const firedAt = new Date();
     await handleAthenaAssignmentEvent(
       {
         organizationId: seedData.orgId,
@@ -562,7 +569,7 @@ describe('personal Athena assignments', () => {
       .where(eq(schema.athenaAssignment.id, assignment.id));
     expect(afterEvent?.activeSessionId).not.toBe(assignment.activeSessionId);
 
-    await sweepAthenaAssignmentTriggers(new Date(firedAt.getTime() + 10 * 60_000));
+    await sweepAthenaAssignmentTriggers(new Date(scheduledAt.getTime() + 1));
     const [afterSchedule] = await db
       .select({ activeSessionId: schema.athenaAssignment.activeSessionId })
       .from(schema.athenaAssignment)

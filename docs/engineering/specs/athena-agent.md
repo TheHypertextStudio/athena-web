@@ -253,8 +253,10 @@ initial focus.
 The personal projection omits provider `thought` rows from JSON detail, activity lists, and SSE.
 The durable transcript retains provider state required for correct continuation, while product
 clients receive only user messages, application-visible progress, structured actions/results,
-elicitations, and errors. SSE resumes after the exact persisted `Last-Event-ID`; it does not assume
-random ULIDs created in the same millisecond are lexically ordered.
+elicitations, and errors. A new SSE client receives the newest 100 visible activities, uses the
+paginated JSON activity route for older history, and retains the newest received id as
+`Last-Event-ID` for reconnects. SSE resume is strictly after that exact persisted activity; it does
+not assume random ULIDs created in the same millisecond are lexically ordered.
 
 Local/test execution and every registered-agent compatibility route preserve synchronous `200`
 settle responses. With the production asynchronous runner enabled, personal create, eligible chat
@@ -262,8 +264,9 @@ message, run, approval/rejection, reply, and resume mutations persist their admi
 and return `202`; delivery failure leaves a retryable outbox row rather than losing the generation.
 The visible parent session is `running` while its admitted generation is `queued`.
 The temporary organization-scoped compatibility routes follow the same executor split and owner
-privacy as `/v1/me/athena`. A chat already awaiting approval or canceled remains parked after a new
-message and returns `200` without dispatch, matching the canonical personal route.
+privacy as `/v1/me/athena`. A personal session canceled through `/v1/me/athena` rejects new messages
+before changing activity or transcript state. A compatibility chat already awaiting approval remains
+parked after a new message and returns `200` without dispatch, matching the canonical personal route.
 
 ## 10. User-owned assignments and triggers
 

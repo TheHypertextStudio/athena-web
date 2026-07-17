@@ -149,7 +149,7 @@ function appFor(person: Person) {
 async function seedSession(
   seed: Seed,
   person: Person,
-  status: 'pending' | 'running' | 'awaiting_input' | 'awaiting_approval' | 'completed',
+  status: 'pending' | 'running' | 'awaiting_input' | 'awaiting_approval' | 'completed' | 'canceled',
   kind: 'chat' | 'job' = 'job',
 ): Promise<string> {
   return one(
@@ -354,6 +354,62 @@ describe('personal Athena routes', () => {
     expect(body.sessions.working.map((row) => row.id)).not.toContain(historicalChat);
     expect(body.sessions.finished).toHaveLength(50);
     expect(query.mock.calls.length).toBeLessThanOrEqual(16);
+  });
+
+  it('keeps older Needs-you work discoverable through lane-scoped cursors', async () => {
+    const seed = await seedPeople();
+    const base = new Date('2026-07-16T12:00:00.000Z');
+    const needsYou = await Promise.all(
+      ['awaiting_input', 'awaiting_approval', 'awaiting_input'].map(async (status, index) => {
+        const id = await seedSession(
+          seed,
+          seed.owner,
+          status as 'awaiting_input' | 'awaiting_approval',
+        );
+        await db
+          .update(schema.agentSession)
+          .set({ createdAt: new Date(base.getTime() + index * 1_000) })
+          .where(eq(schema.agentSession.id, id));
+        await seedActivity(id, {
+          type: status === 'awaiting_approval' ? 'action' : 'elicitation',
+          body: { text: `Needs owner ${String(index)}` },
+        });
+        return id;
+      }),
+    );
+    await seedSession(seed, seed.owner, 'running');
+
+    const first = await appFor(seed.owner).request('/?limit=2');
+
+    expect(first.status).toBe(200);
+    const firstBody = (await first.json()) as {
+      counts: { needsYou: number; working: number; finished: number };
+      sessions: Record<'needsYou' | 'working' | 'finished', { id: string }[]>;
+      nextCursors?: { needsYou?: string; working?: string; finished?: string };
+    };
+    expect(firstBody.counts.needsYou).toBe(3);
+    expect(firstBody.sessions.needsYou.map(({ id }) => id)).toEqual([needsYou[2], needsYou[1]]);
+    expect(firstBody.nextCursors?.needsYou).toEqual(expect.any(String));
+
+    const cursor = firstBody.nextCursors?.needsYou;
+    if (!cursor) throw new Error('Needs-you page did not return a cursor');
+    const second = await appFor(seed.owner).request(
+      `/?limit=2&needsYouCursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(second.status).toBe(200);
+    const secondBody = (await second.json()) as {
+      counts: { needsYou: number };
+      sessions: { needsYou: { id: string }[] };
+      nextCursors?: { needsYou?: string };
+    };
+    expect(secondBody.counts.needsYou).toBe(3);
+    expect(secondBody.sessions.needsYou.map(({ id }) => id)).toEqual([needsYou[0]]);
+    expect(secondBody.nextCursors?.needsYou).toBeUndefined();
+
+    const wrongLane = await appFor(seed.owner).request(
+      `/?limit=2&workingCursor=${encodeURIComponent(cursor)}`,
+    );
+    expect(wrongLane.status).toBe(422);
   });
 
   it('returns compact pulse counts without personal session history', async () => {
@@ -1057,6 +1113,51 @@ describe('personal Athena routes', () => {
     expect(runs).toEqual([{ status: 'completed' }]);
   });
 
+  it('rejects canceled-session messages before mutating activity or transcript', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'canceled');
+    const existingActivityId = await seedActivity(sessionId, {
+      type: 'response',
+      body: { text: 'Existing work', author: 'user' },
+    });
+    const existingMessages = [
+      { role: 'user' as const, content: [{ type: 'text' as const, text: 'Existing work' }] },
+    ];
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: seed.owner.userId,
+      messages: existingMessages,
+    });
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ body: 'This must not be persisted' }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({
+      code: 'conflict',
+      title: 'That change conflicts with the current state.',
+      status: 409,
+    });
+    const activities = await db
+      .select({ id: schema.sessionActivity.id, body: schema.sessionActivity.body })
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.sessionId, sessionId));
+    expect(activities).toEqual([
+      expect.objectContaining({
+        id: existingActivityId,
+        body: { text: 'Existing work', author: 'user' },
+      }),
+    ]);
+    const [transcript] = await db
+      .select({ messages: schema.agentSessionTranscript.messages })
+      .from(schema.agentSessionTranscript)
+      .where(eq(schema.agentSessionTranscript.sessionId, sessionId));
+    expect(transcript?.messages).toEqual(existingMessages);
+  });
+
   it('admits transcript-free personal replies through durable generations', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
@@ -1147,6 +1248,69 @@ describe('personal Athena routes', () => {
     expect(streamBody).not.toContain('private chain of thought');
   });
 
+  it('paginates bounded activity windows that hand off exactly to SSE', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    const base = new Date('2026-07-15T12:00:00.000Z');
+    await db.insert(schema.sessionActivity).values(
+      Array.from({ length: 105 }, (_, index) => ({
+        sessionId,
+        organizationId: null,
+        type: 'response' as const,
+        body: { text: `Visible history ${String(index)}` },
+        createdAt: new Date(base.getTime() + index * 1_000),
+      })),
+    );
+    const app = appFor(seed.owner);
+
+    const detailResponse = await app.request(`/sessions/${sessionId}?limit=10`);
+    expect(detailResponse.status).toBe(200);
+    const detail = (await detailResponse.json()) as {
+      activities: { id: string; body: { text?: string } }[];
+      activityNextCursor?: string;
+    };
+    expect(detail.activities.map(({ body }) => body.text)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `Visible history ${String(index + 95)}`),
+    );
+    expect(detail.activityNextCursor).toEqual(expect.any(String));
+
+    const firstPage = (await (
+      await app.request(`/sessions/${sessionId}/activity?limit=10`)
+    ).json()) as {
+      items: { id: string; body: { text?: string } }[];
+      nextCursor?: string;
+    };
+    expect(firstPage.items).toEqual(detail.activities);
+    expect(firstPage.nextCursor).toBe(detail.activityNextCursor);
+    if (!firstPage.nextCursor) throw new Error('Activity page did not return a cursor');
+
+    const olderResponse = await app.request(
+      `/sessions/${sessionId}/activity?limit=10&cursor=${encodeURIComponent(firstPage.nextCursor)}`,
+    );
+    expect(olderResponse.status).toBe(200);
+    const older = (await olderResponse.json()) as {
+      items: { id: string; body: { text?: string } }[];
+    };
+    expect(older.items.map(({ body }) => body.text)).toEqual(
+      Array.from({ length: 10 }, (_, index) => `Visible history ${String(index + 85)}`),
+    );
+    expect(
+      (await app.request(`/sessions/${sessionId}/activity?limit=10&cursor=not-a-cursor`)).status,
+    ).toBe(422);
+
+    const liveId = await seedActivity(sessionId, {
+      type: 'response',
+      body: { text: 'Fresh incremental activity' },
+      createdAt: new Date(base.getTime() + 105_000),
+    });
+    const stream = await app.request(`/sessions/${sessionId}/stream`, {
+      headers: { 'last-event-id': detail.activities.at(-1)!.id },
+    });
+    const streamBody = await stream.text();
+    expect(streamBody).toContain(`id: ${liveId}`);
+    expect(streamBody).not.toContain('Visible history 94');
+  });
+
   it('replays same-timestamp activity in stable id order', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'completed');
@@ -1167,6 +1331,31 @@ describe('personal Athena routes', () => {
     const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`);
     const body = await stream.text();
     expect(body.indexOf('id: activity_alpha')).toBeLessThan(body.indexOf('id: activity_zulu'));
+  });
+
+  it('bounds a stream opened without Last-Event-ID to the newest activity window', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    const base = new Date('2026-07-15T12:00:00.000Z');
+    await db.insert(schema.sessionActivity).values(
+      Array.from({ length: 105 }, (_, index) => ({
+        id: `initial_${String(index).padStart(3, '0')}`,
+        sessionId,
+        organizationId: null,
+        type: 'response' as const,
+        body: { text: `Initial history ${String(index)}` },
+        createdAt: new Date(base.getTime() + index * 1_000),
+      })),
+    );
+
+    const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`);
+    const body = await stream.text();
+    const replayedIds = [...body.matchAll(/^id: (initial_\d+)$/gm)].map((match) => match[1]);
+
+    expect(replayedIds).toHaveLength(100);
+    expect(replayedIds.at(0)).toBe('initial_005');
+    expect(replayedIds.at(-1)).toBe('initial_104');
+    expect(body).not.toContain('id: initial_000');
   });
 
   it('live-tails strictly after the persisted timestamp and id cursor', async () => {

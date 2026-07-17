@@ -26,6 +26,7 @@ export type AthenaApiOverview = AthenaOverviewOut;
 /** Presentation-ready grouped queue. */
 export interface AdaptedAthenaOverview {
   readonly counts: AthenaApiOverview['counts'];
+  readonly nextCursors?: AthenaApiOverview['nextCursors'];
   readonly currentChat: PersonalAthenaSessionSummary | null;
   readonly sessions: {
     readonly needsYou: readonly PersonalAthenaSessionSummary[];
@@ -125,6 +126,7 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
 export function adaptAthenaOverview(overview: AthenaApiOverview): AdaptedAthenaOverview {
   return {
     counts: overview.counts,
+    ...(overview.nextCursors ? { nextCursors: overview.nextCursors } : {}),
     currentChat: overview.currentChat ? adaptAthenaSummary(overview.currentChat) : null,
     sessions: {
       needsYou: overview.sessions.needsYou.map(adaptAthenaSummary),
@@ -174,6 +176,7 @@ export function adaptAthenaDetail(detail: AthenaApiSessionDetail): PersonalAthen
   return {
     ...summary,
     activities,
+    ...(detail.activityNextCursor ? { activityNextCursor: detail.activityNextCursor } : {}),
     decision: pendingApproval
       ? {
           kind: 'approval',

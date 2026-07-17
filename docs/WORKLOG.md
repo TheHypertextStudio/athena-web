@@ -9,7 +9,7 @@
 
 ### [ATHENA-OWNERSHIP-001] Make Athena user-owned and ambient
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-07-15
 - **Priority**: P0
 - **Description**: Replace workspace-owned Athena agents and shared chat with one private,
@@ -22,7 +22,9 @@
   - [x] Add owner-only personal connections, assignments, and assignment triggers.
   - [x] Build the shared workbench, ambient dock, and full `/athena` workspace.
   - [x] Wire contextual entry points and validate the real application with Playwright.
-  - [ ] Complete documentation, repository gates, code review, and linear-history closeout.
+  - [x] Complete documentation, repository gates, code review, and linear-history closeout.
+  - [x] Standardize lifecycle and run-settlement row locks as parent session then generation.
+  - [x] Standardize direct and queued generation admission locks as owner, session, then run.
 - **Decisions**: Athena never receives a workspace Actor, grant, role, or independent capability.
   Workspaces are optional execution context only. Personal work logs and connectors are owner-only;
   shared results retain normal visibility. Approval never grants authority beyond the underlying
@@ -34,6 +36,22 @@
   paths stop relying on the default-agent grant model. Existing databases are intentionally
   disposable for this rollout and must be reset before the new executor constraints apply.
 - **Blockers**: None.
+- **Final Validation**: The stable integrated tree passed root `pnpm typecheck` and `pnpm lint`
+  across all 18 executable packages, serialized root `pnpm test` across all 18 test packages, and
+  `pnpm build` across API, runner, admin, and web. Focused final regressions passed 54 API tests, 61
+  Athena web tests, 25 runner tests, and 278 shared-type tests. Wrangler's production dry-run and
+  startup analysis both succeeded. The final branch dev stack then passed the authenticated
+  Chromium Athena journey 1/1 in 12.1 seconds and regenerated desktop/mobile light/dark captures
+  from the actual app. The branch remained 34 commits ahead of `origin/main`, zero behind, with
+  zero merge commits before the closeout commit.
+- **Final Retrospective**: Durable work needs bounded transfer windows rather than a job-duration
+  limit: queue lanes and activity history now paginate independently while SSE continues from a
+  persisted cursor and healthy generations can renew indefinitely. Lifecycle safety also requires
+  one row-lock order across every entry path, not just the most common settlement path. The final
+  review found that contextual intent must survive navigation explicitly, canceled work must reject
+  mutation at the API boundary, and time-sensitive tests must derive schedule assertions from the
+  persisted `nextRunAt` instead of a wall-clock fixture. Running root test packages serially avoided
+  local Cloudflare/Vitest pool contention without weakening the repository gate.
 - **Plan (persistence contracts)**:
   1. Add failing DTO and database tests for the executor union, nullable workspace attribution,
      ownership propagation, and database shape constraints.
@@ -817,6 +835,28 @@
   cardinality. A replay cursor belongs in SQL, not in an in-memory slice of a repeatedly reloaded
   history. Workspace containment must be a render-time derivation, with state synchronization only
   preserving the user's subsequent selection.
+- **Personal Athena Contextual New-Work Plan**: Treat a source-context open as explicit new-work
+  intent in both the dock and full workspace: clear unrelated selection, retain the supplied
+  workspace/source, and render the scoped objective composer even when the queue is empty. Replace
+  canceled-session steering with a `Start new work` transition that seeds the composer from that
+  session's context, then prove contextual create payloads and the absence of canceled messages in
+  focused web component tests. The implementation keeps ambient and workspace-only opens on queue
+  history while object-source opens enter an explicit composer state. Validation covered all 53
+  Athena web tests, targeted ESLint, and the web TypeScript check. The main learning is that
+  new-work intent must be modeled independently from an empty queue selection; otherwise a live
+  queue refresh silently restores unrelated history beneath a contextual action.
+- **Personal Athena Expansion and Queue Continuation Plan**: Carry explicit composer intent across
+  dock expansion with a dedicated Athena URL marker so workspace-only context cannot collapse into
+  a queue filter. Parse that marker at the full route and seed the existing new-work state without
+  changing legacy workspace-only links. Generalize the bounded queue continuation state and loader
+  across Needs you, Working, and Finished, retaining exact lane counts and deduplicating appended
+  summaries. Prove the URL handoff, workspace composer behavior, and each lane cursor with focused
+  web tests before implementation. The resulting `new=1` marker survives workspace-only expansion
+  without changing ambient or legacy filter links, and one lane-keyed loader now maps each response
+  cursor to its matching request parameter. Five focused tests failed before implementation; all 61
+  Athena web tests, targeted ESLint, and the web TypeScript check passed afterward. Keeping new-work
+  intent orthogonal to context and using separate request/response cursor names prevented both
+  behaviors from being inferred from lossy secondary state.
 - **Cloudflare and Experience Rebase Integration**: The linear rebase preserved asynchronous
   decision, reply, resume, and cancellation admission while routing every personal response through
   the bounded redacting presenter. The first integrated async-route run exposed auto-merged calls

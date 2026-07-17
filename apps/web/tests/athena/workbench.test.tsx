@@ -50,6 +50,19 @@ const session: PersonalAthenaSessionDetail = {
 };
 
 describe('AthenaWorkbench', () => {
+  it('offers an explicit continuation for older activity', () => {
+    const onLoadOlder = vi.fn();
+    render(
+      <AthenaWorkbench
+        session={{ ...session, activityNextCursor: 'older-activity' }}
+        onLoadOlder={onLoadOlder}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show older activity' }));
+    expect(onLoadOlder).toHaveBeenCalledOnce();
+  });
+
   it('renders objective, private approval, and structured tool activity without chat or reasoning', () => {
     render(<AthenaWorkbench session={session} />);
 
@@ -121,6 +134,23 @@ describe('AthenaWorkbench', () => {
     fireEvent.submit(screen.getByRole('form', { name: 'Answer Athena' }));
 
     expect(onDecision).toHaveBeenCalledWith('elicitation_1', 'Update the launch checklist.');
+    expect(onMessage).not.toHaveBeenCalled();
+  });
+
+  it('replaces canceled-session steering with an explicit new-work action', () => {
+    const onMessage = vi.fn();
+    const onStartNewWork = vi.fn();
+    render(
+      <AthenaWorkbench
+        session={{ ...session, status: 'canceled', queueState: 'finished', decision: null }}
+        onMessage={onMessage}
+        onStartNewWork={onStartNewWork}
+      />,
+    );
+
+    expect(screen.queryByRole('form', { name: 'Steer Athena' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start new work' }));
+    expect(onStartNewWork).toHaveBeenCalledOnce();
     expect(onMessage).not.toHaveBeenCalled();
   });
 

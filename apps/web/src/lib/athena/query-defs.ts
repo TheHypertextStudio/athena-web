@@ -4,8 +4,17 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, rpcErrorResponse, type RpcResponse, STALE } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 
-import { adaptAthenaDetail, adaptAthenaOverview, type AdaptedAthenaOverview } from './api-adapter';
-import type { PersonalAthenaContext, PersonalAthenaSessionDetail } from './presentation';
+import {
+  adaptAthenaActivity,
+  adaptAthenaDetail,
+  adaptAthenaOverview,
+  type AdaptedAthenaOverview,
+} from './api-adapter';
+import type {
+  PersonalAthenaActivity,
+  PersonalAthenaContext,
+  PersonalAthenaSessionDetail,
+} from './presentation';
 
 /** The grouped response from `GET /v1/me/athena`. */
 export type PersonalAthenaQueuePayload = AdaptedAthenaOverview;
@@ -13,11 +22,30 @@ export type PersonalAthenaQueuePayload = AdaptedAthenaOverview;
 /** Personal Athena lifecycle commands. */
 export type PersonalAthenaLifecycle = 'run' | 'pause' | 'resume' | 'cancel';
 
+/** Lane-specific cursor used to continue one bounded queue independently. */
+export interface PersonalAthenaQueueCursorInput {
+  readonly needsYouCursor?: string;
+  readonly workingCursor?: string;
+  readonly finishedCursor?: string;
+}
+
+/** One backwards page of application-visible activity. */
+export interface PersonalAthenaActivityPage {
+  readonly items: readonly PersonalAthenaActivity[];
+  readonly nextCursor?: string;
+}
+
 /** The isolated transport seam for the personal Athena API. */
 export interface PersonalAthenaTransport {
   readonly pulse: () => Promise<RpcResponse<AthenaPulseOut>>;
-  readonly queue: () => Promise<RpcResponse<PersonalAthenaQueuePayload>>;
+  readonly queue: (
+    input?: PersonalAthenaQueueCursorInput,
+  ) => Promise<RpcResponse<PersonalAthenaQueuePayload>>;
   readonly detail: (sessionId: string) => Promise<RpcResponse<PersonalAthenaSessionDetail>>;
+  readonly activity: (
+    sessionId: string,
+    cursor: string,
+  ) => Promise<RpcResponse<PersonalAthenaActivityPage>>;
   readonly create: (input: {
     readonly prompt: string;
     readonly context?: PersonalAthenaContext;
@@ -65,7 +93,7 @@ function apiContext(context?: PersonalAthenaContext): AthenaInvocationContext | 
 
 function detailRequest(sessionId: string): Promise<RpcResponse<PersonalAthenaSessionDetail>> {
   return adaptedResponse(
-    api.v1.me.athena.sessions[':id'].$get({ param: { id: sessionId } }),
+    api.v1.me.athena.sessions[':id'].$get({ param: { id: sessionId }, query: {} }),
     adaptAthenaDetail,
   );
 }
@@ -73,8 +101,22 @@ function detailRequest(sessionId: string): Promise<RpcResponse<PersonalAthenaSes
 /** Default transport backed by the platform's typed Hono personal-Athena contract. */
 export const personalAthenaTransport: PersonalAthenaTransport = {
   pulse: () => api.v1.me.athena.pulse.$get(),
-  queue: () => adaptedResponse(api.v1.me.athena.$get(), adaptAthenaOverview),
+  queue: (input = {}) =>
+    adaptedResponse(api.v1.me.athena.$get({ query: input }), adaptAthenaOverview),
   detail: detailRequest,
+  activity: (sessionId, cursor) =>
+    adaptedResponse(
+      api.v1.me.athena.sessions[':id'].activity.$get({
+        param: { id: sessionId },
+        query: { cursor },
+      }),
+      (page) => {
+        const items = page.items
+          .map(adaptAthenaActivity)
+          .filter((item): item is PersonalAthenaActivity => item !== null);
+        return { items, ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}) };
+      },
+    ),
   create: (input) => {
     const context = apiContext(input.context);
     return adaptedResponse(
@@ -167,10 +209,11 @@ export function personalAthenaDetailDef(
   );
 }
 
-/** Build the full personal Athena URL while retaining the invoking object and queue selection. */
+/** Build the full personal Athena URL while retaining invocation, selection, and composer intent. */
 export function athenaHref(
   context?: PersonalAthenaContext | null,
   sessionId?: string | null,
+  startNewWork = false,
 ): string {
   const search = new URLSearchParams();
   if (context?.workspaceId) search.set('workspace', context.workspaceId);
@@ -178,6 +221,7 @@ export function athenaHref(
     search.set('context', `${context.source.type}:${context.source.id}`);
     if (context.source.label) search.set('contextLabel', context.source.label);
   }
+  if (startNewWork) search.set('new', '1');
   if (sessionId) search.set('session', sessionId);
   const query = search.toString();
   return query ? `/athena?${query}` : '/athena';

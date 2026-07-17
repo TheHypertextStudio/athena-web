@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { agentSession, agentSessionRun, sessionActivity, user } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -7,6 +10,7 @@ import { admitAthenaGeneration } from '../../src/agent/async-runner';
 import {
   claimQueuedRunGeneration,
   enqueueRunGeneration,
+  settleRunGeneration,
   type RunGenerationLease,
   withRunGenerationFence,
 } from '../../src/agent/run-generation';
@@ -14,6 +18,11 @@ import { transitionLifecycle } from '../../src/routes/agent-session-helpers';
 import { getMigratedDb } from '../support/db';
 
 let dbModule: Awaited<ReturnType<typeof getMigratedDb>>;
+
+const runGenerationSource = readFileSync(
+  resolve(import.meta.dirname, '../../src/agent/run-generation.ts'),
+  'utf8',
+);
 
 beforeAll(async () => {
   dbModule = await getMigratedDb();
@@ -311,5 +320,111 @@ describe('queued Athena generations', () => {
       .from(agentSessionRun)
       .where(eq(agentSessionRun.id, first.lease.runId));
     expect(run).toMatchObject({ attempt: 1, leaseToken: first.lease.leaseToken });
+  });
+
+  it('settles while a concurrent lifecycle transition waits on the same parent-first lock order', async () => {
+    const seed = await seedPendingAthena();
+    const [pending] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(pending!);
+    const claimed = await claimQueuedRunGeneration(queued.message);
+    const [running] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    let effectEntered!: () => void;
+    const effectStarted = new Promise<void>((resolve) => {
+      effectEntered = resolve;
+    });
+    let releaseEffect!: () => void;
+    const effectReleased = new Promise<void>((resolve) => {
+      releaseEffect = resolve;
+    });
+
+    const settlement = settleRunGeneration(claimed.lease, 'completed', undefined, async () => {
+      effectEntered();
+      await effectReleased;
+    });
+    await effectStarted;
+    const lifecycle = transitionLifecycle(running!, 'cancel');
+    await Promise.resolve();
+    releaseEffect();
+
+    const [settlementResult, lifecycleResult] = await Promise.allSettled([settlement, lifecycle]);
+    // PGlite serializes transaction callbacks and cannot reproduce PostgreSQL row-lock deadlocks.
+    // Keep the real concurrent outcome above, and guard the production SQL acquisition order that
+    // makes the same race deadlock-free under PostgreSQL's independent connections.
+    const settlementSource = runGenerationSource.slice(
+      runGenerationSource.indexOf('export async function settleRunGeneration'),
+      runGenerationSource.indexOf('/** A renewable heartbeat'),
+    );
+    const sessionLockIndex = settlementSource.indexOf('.from(agentSession)');
+    const runSettlementIndex = settlementSource.indexOf('.update(agentSessionRun)');
+    expect(sessionLockIndex).toBeGreaterThanOrEqual(0);
+    expect(runSettlementIndex).toBeGreaterThan(sessionLockIndex);
+    expect(settlementResult.status).toBe('fulfilled');
+    expect(lifecycleResult.status).toBe('rejected');
+    if (lifecycleResult.status === 'rejected') {
+      expect(lifecycleResult.reason).toBeInstanceOf(Error);
+      expect((lifecycleResult.reason as Error).message).toMatch(/terminal state/i);
+    }
+  });
+
+  it('uses one owner-first admission lock order when dispatch and readmission race', async () => {
+    const seed = await seedPendingAthena();
+    const [first] = await dbModule.db
+      .select()
+      .from(agentSession)
+      .where(eq(agentSession.id, seed.sessionId));
+    const queued = await enqueueRunGeneration(first!);
+    const [second] = await dbModule.db
+      .insert(agentSession)
+      .values({
+        executorKind: 'athena',
+        ownerUserId: seed.ownerUserId,
+        trigger: 'delegation',
+        status: 'pending',
+      })
+      .returning();
+
+    const outcomes = await Promise.allSettled([
+      claimQueuedRunGeneration(queued.message),
+      enqueueRunGeneration(second!),
+    ]);
+
+    expect(outcomes.every(({ status }) => status === 'fulfilled')).toBe(true);
+    const helperStart = runGenerationSource.indexOf('async function lockRunAdmissionSession');
+    const helperEnd = runGenerationSource.indexOf(
+      '/**\n * Persist the next deterministic',
+      helperStart,
+    );
+    expect(helperStart).toBeGreaterThanOrEqual(0);
+    const helperSource = runGenerationSource.slice(helperStart, helperEnd);
+    const observedSessionIndex = helperSource.indexOf('.from(agentSession)');
+    const ownerLockIndex = helperSource.indexOf('.from(user)');
+    const lockedSessionIndex = helperSource.indexOf(
+      '.from(agentSession)',
+      observedSessionIndex + 1,
+    );
+    expect(ownerLockIndex).toBeGreaterThan(observedSessionIndex);
+    expect(lockedSessionIndex).toBeGreaterThan(ownerLockIndex);
+
+    const enqueueSource = runGenerationSource.slice(
+      runGenerationSource.indexOf('export async function enqueueRunGeneration'),
+      runGenerationSource.indexOf('/** Claim the exact queued generation'),
+    );
+    const queuedClaimSource = runGenerationSource.slice(
+      runGenerationSource.indexOf('export async function claimQueuedRunGeneration'),
+      runGenerationSource.indexOf('/**\n * Claim or recover the runnable generation'),
+    );
+    const directClaimSource = runGenerationSource.slice(
+      runGenerationSource.indexOf('export async function claimRunGeneration'),
+      runGenerationSource.indexOf('/** Renew a generation'),
+    );
+    for (const source of [enqueueSource, queuedClaimSource, directClaimSource]) {
+      expect(source).toContain('lockRunAdmissionSession');
+    }
   });
 });

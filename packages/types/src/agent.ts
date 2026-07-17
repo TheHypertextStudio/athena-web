@@ -536,7 +536,15 @@ export type AthenaSessionSummaryOut = z.infer<typeof AthenaSessionSummaryOut>;
 export const AthenaSessionDetailOut = AthenaSessionSummaryOut.extend({
   activities: z
     .array(SessionActivityOut)
-    .describe('Application-visible work-log activities ordered oldest-first.'),
+    .describe(
+      'A bounded application-visible work-log window ordered oldest-first within this page.',
+    ),
+  activityNextCursor: z
+    .string()
+    .optional()
+    .describe(
+      'Opaque cursor for the next older activity window; absent when the complete visible history is loaded.',
+    ),
 }).meta({ id: 'AthenaSessionDetailOut', description: 'Private Athena work and activity detail.' });
 /** Personal Athena detail value. */
 export type AthenaSessionDetailOut = z.infer<typeof AthenaSessionDetailOut>;
@@ -576,14 +584,33 @@ export const AthenaQueueOut = z
 /** Athena queue value. */
 export type AthenaQueueOut = z.infer<typeof AthenaQueueOut>;
 
+/** Optional continuation cursor for each independently paginated Athena queue lane. */
+export const AthenaQueueCursors = z
+  .object({
+    needsYou: z.string().optional().describe('Cursor for the next older Needs-you page.'),
+    working: z.string().optional().describe('Cursor for the next older Working page.'),
+    finished: z.string().optional().describe('Cursor for the next older Finished page.'),
+  })
+  .strict()
+  .meta({ id: 'AthenaQueueCursors', description: 'Per-lane Athena queue continuation cursors.' });
+/** Per-lane Athena queue cursor value. */
+export type AthenaQueueCursors = z.infer<typeof AthenaQueueCursors>;
+
 /** Personal Athena landing response: current chat plus grouped work and counts. */
 export const AthenaOverviewOut = z
   .object({
-    counts: AthenaQueueCounts.describe('Counts matching the grouped session arrays.'),
+    counts: AthenaQueueCounts.describe(
+      'Exact counts across all caller-owned sessions, independent of each bounded page.',
+    ),
     currentChat: AthenaSessionSummaryOut.nullable().describe(
       'The current persistent personal chat, or null before first use.',
     ),
-    sessions: AthenaQueueOut.describe('All caller-owned sessions grouped by product state.'),
+    sessions: AthenaQueueOut.describe(
+      'Bounded caller-owned session pages grouped by product state.',
+    ),
+    nextCursors: AthenaQueueCursors.optional().describe(
+      'Per-lane cursors for any older sessions omitted from the bounded arrays.',
+    ),
   })
   .meta({ id: 'AthenaOverviewOut', description: 'The private Athena operating overview.' });
 /** Personal Athena overview value. */

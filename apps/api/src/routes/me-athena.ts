@@ -15,7 +15,7 @@ import {
   SessionActivityOut,
 } from '@docket/types';
 import type { AthenaInvocationContext } from '@docket/types';
-import { and, asc, count, desc, eq, gt, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -41,7 +41,7 @@ import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 
 import { decideActivity, decideProposalGroup, replyToElicitation } from './agent-session-approval';
 import {
@@ -63,10 +63,10 @@ import {
 const STREAM_POLL_MS = 750;
 /** SSE heartbeat cadence for idle proxy connections. */
 const STREAM_HEARTBEAT_MS = 15_000;
-/** Maximum terminal rows returned by the non-paginated ambient overview. */
-const FINISHED_HISTORY_LIMIT = 50;
-/** Maximum active rows returned by the non-paginated ambient overview. */
-const ACTIVE_HISTORY_LIMIT = 100;
+/** Default and maximum number of sessions returned in each independent overview lane. */
+const OVERVIEW_LANE_LIMIT = 50;
+/** Default and maximum number of visible activities returned in one history window. */
+const ACTIVITY_HISTORY_LIMIT = 100;
 /** Route params for proposal-group decisions. */
 const groupParam = z.object({ id: z.string(), groupId: z.string() });
 /** Optional activity decision scope. */
@@ -105,6 +105,68 @@ const NEEDS_YOU_STATUSES = ['awaiting_input', 'awaiting_approval'] as const;
 const WORKING_STATUSES = ['pending', 'running'] as const;
 const FINISHED_STATUSES = ['completed', 'failed', 'canceled'] as const;
 
+type HistoryCursorScope = 'needs_you' | 'working' | 'finished' | 'activity';
+
+interface HistoryCursor {
+  readonly createdAt: Date;
+  readonly id: string;
+}
+
+/** Encode one lane-bound `(createdAt, id)` history position as an opaque token. */
+function encodeHistoryCursor(scope: HistoryCursorScope, createdAt: Date, id: string): string {
+  return Buffer.from(`${scope}|${createdAt.toISOString()}|${id}`, 'utf8').toString('base64url');
+}
+
+/** Decode only a structurally valid cursor issued for the expected history lane. */
+function decodeHistoryCursor(
+  token: string | undefined,
+  expectedScope: HistoryCursorScope,
+): HistoryCursor | null {
+  if (!token || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
+  try {
+    const parts = Buffer.from(token, 'base64url').toString('utf8').split('|');
+    if (parts.length !== 3) return null;
+    const [scope, rawCreatedAt, id] = parts;
+    if (scope !== expectedScope || !rawCreatedAt || !id) return null;
+    const createdAt = new Date(rawCreatedAt);
+    if (Number.isNaN(createdAt.getTime()) || createdAt.toISOString() !== rawCreatedAt) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
+}
+
+/** Validate that an opaque cursor belongs to the lane where it is being consumed. */
+function historyCursorSchema(scope: HistoryCursorScope) {
+  return z
+    .string()
+    .refine((token) => decodeHistoryCursor(token, scope) !== null, 'Invalid pagination cursor');
+}
+
+/** Independent cursor inputs for the three bounded overview lanes. */
+const overviewQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(OVERVIEW_LANE_LIMIT).default(OVERVIEW_LANE_LIMIT),
+  needsYouCursor: historyCursorSchema('needs_you').optional(),
+  workingCursor: historyCursorSchema('working').optional(),
+  finishedCursor: historyCursorSchema('finished').optional(),
+});
+type OverviewQuery = z.infer<typeof overviewQuery>;
+
+/** Backward-history query shared by detail and the JSON activity endpoint. */
+const activityHistoryQuery = z.object({
+  cursor: historyCursorSchema('activity').optional(),
+  limit: z.coerce.number().int().min(1).max(ACTIVITY_HISTORY_LIMIT).default(ACTIVITY_HISTORY_LIMIT),
+});
+type ActivityHistoryQuery = z.infer<typeof activityHistoryQuery>;
+
+const DEFAULT_OVERVIEW_QUERY = overviewQuery.parse({});
+const DEFAULT_ACTIVITY_QUERY = activityHistoryQuery.parse({});
+
+interface ActivityMetadata {
+  readonly objective: string | null;
+  readonly context: z.input<typeof AthenaInvocationContext> | null;
+}
+
 /** Product queue grouping for durable lifecycle states. */
 function queueState(status: SessionRow['status']): 'needs_you' | 'working' | 'finished' {
   if (status === 'awaiting_input' || status === 'awaiting_approval') return 'needs_you';
@@ -112,39 +174,11 @@ function queueState(status: SessionRow['status']): 'needs_you' | 'working' | 'fi
   return 'finished';
 }
 
-/** Read the user objective and newest persisted invocation context from activity rows. */
-function activityMetadata(activities: readonly (typeof sessionActivity.$inferSelect)[]): {
-  readonly objective: string | null;
-  readonly context: z.input<typeof AthenaInvocationContext> | null;
-} {
-  const objective = activities.find(
-    (row) =>
-      row.type === 'response' && typeof row.body.text === 'string' && row.body.text.length > 0,
-  )?.body.text;
-  const context = [...activities].reverse().find((row) => row.body.context)?.body.context ?? null;
-  return { objective: objective ?? null, context };
-}
-
-/** Convert one owned session and its activities into the personal response contract. */
-async function personalSummary(
-  ownerUserId: string,
-  session: SessionRow,
-  activities: readonly (typeof sessionActivity.$inferSelect)[],
-  resolvedDisplay?: Awaited<ReturnType<typeof resolveAthenaDisplay>>,
-): Promise<z.input<typeof AthenaSessionSummaryOut>> {
-  return personalSummaryFromMetadata(
-    ownerUserId,
-    session,
-    activityMetadata(activities),
-    resolvedDisplay,
-  );
-}
-
 /** Convert bounded overview metadata to a display-safe summary. */
 async function personalSummaryFromMetadata(
   ownerUserId: string,
   session: SessionRow,
-  metadata: ReturnType<typeof activityMetadata>,
+  metadata: ActivityMetadata,
   resolvedDisplay?: Awaited<ReturnType<typeof resolveAthenaDisplay>>,
 ): Promise<z.input<typeof AthenaSessionSummaryOut>> {
   const persistedContext =
@@ -168,7 +202,7 @@ async function personalSummaryFromMetadata(
 /** Load only the first response and latest contextual row for every overview session. */
 async function metadataBySession(
   sessionIds: readonly string[],
-): Promise<ReadonlyMap<string, ReturnType<typeof activityMetadata>>> {
+): Promise<ReadonlyMap<string, ActivityMetadata>> {
   if (sessionIds.length === 0) return new Map();
   const [briefs, contexts] = await Promise.all([
     db
@@ -202,7 +236,7 @@ async function metadataBySession(
         desc(sessionActivity.id),
       ),
   ]);
-  const grouped = new Map<string, ReturnType<typeof activityMetadata>>();
+  const grouped = new Map<string, ActivityMetadata>();
   for (const row of briefs) {
     grouped.set(row.sessionId, {
       objective:
@@ -215,6 +249,18 @@ async function metadataBySession(
     grouped.set(row.sessionId, { ...current, context: row.body.context ?? null });
   }
   return grouped;
+}
+
+/** Build one display-safe summary without loading the session's unbounded activity history. */
+async function personalSummaryForSession(
+  ownerUserId: string,
+  session: SessionRow,
+): Promise<z.input<typeof AthenaSessionSummaryOut>> {
+  const metadata = (await metadataBySession([session.id])).get(session.id) ?? {
+    objective: null,
+    context: null,
+  };
+  return personalSummaryFromMetadata(ownerUserId, session, metadata);
 }
 
 /** Count durable queue states without loading any session or activity body. */
@@ -237,20 +283,46 @@ async function pulseCounts(ownerUserId: string): Promise<
   };
 }
 
-/** Load ordered activities for one personal session. */
-async function sessionActivities(id: string): Promise<(typeof sessionActivity.$inferSelect)[]> {
-  return db
-    .select()
-    .from(sessionActivity)
-    .where(eq(sessionActivity.sessionId, id))
-    .orderBy(asc(sessionActivity.createdAt), asc(sessionActivity.id));
+interface ActivityHistoryPage {
+  readonly activities: readonly (typeof sessionActivity.$inferSelect)[];
+  readonly nextCursor?: string;
 }
 
-/** Personal surfaces never expose provider reasoning rows. */
-function visibleActivities(
-  activities: readonly (typeof sessionActivity.$inferSelect)[],
-): (typeof sessionActivity.$inferSelect)[] {
-  return activities.filter((activity) => activity.type !== 'thought');
+/** Load one newest-first keyset page, returned oldest-first for direct timeline rendering. */
+async function sessionActivityHistoryPage(
+  sessionId: string,
+  query: ActivityHistoryQuery,
+): Promise<ActivityHistoryPage> {
+  const cursor = decodeHistoryCursor(query.cursor, 'activity');
+  const rows = await db
+    .select()
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, sessionId),
+        ne(sessionActivity.type, 'thought'),
+        cursor
+          ? or(
+              lt(sessionActivity.createdAt, cursor.createdAt),
+              and(
+                eq(sessionActivity.createdAt, cursor.createdAt),
+                lt(sessionActivity.id, cursor.id),
+              ),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(sessionActivity.createdAt), desc(sessionActivity.id))
+    .limit(query.limit + 1);
+  const hasMore = rows.length > query.limit;
+  const newestFirst = hasMore ? rows.slice(0, query.limit) : rows;
+  const oldest = newestFirst.at(-1);
+  return {
+    activities: [...newestFirst].reverse(),
+    ...(hasMore && oldest
+      ? { nextCursor: encodeHistoryCursor('activity', oldest.createdAt, oldest.id) }
+      : {}),
+  };
 }
 
 interface ActivityCursor {
@@ -299,46 +371,97 @@ async function sessionActivitiesAfter(
 async function personalDetail(
   ownerUserId: string,
   id: string,
+  query: ActivityHistoryQuery = DEFAULT_ACTIVITY_QUERY,
 ): Promise<z.input<typeof AthenaSessionDetailOut>> {
   const session = await loadOwnedSession(ownerUserId, id);
-  const activities = await sessionActivities(id);
+  const [summary, page] = await Promise.all([
+    personalSummaryForSession(ownerUserId, session),
+    sessionActivityHistoryPage(id, query),
+  ]);
   return {
-    ...(await personalSummary(ownerUserId, session, activities)),
-    activities: visibleActivities(activities).map(toPersonalActivityOut),
+    ...summary,
+    activities: page.activities.map(toPersonalActivityOut),
+    ...(page.nextCursor ? { activityNextCursor: page.nextCursor } : {}),
+  };
+}
+
+interface SessionLanePage {
+  readonly sessions: readonly SessionRow[];
+  readonly nextCursor?: string;
+}
+
+/** Load one independently bounded queue lane in stable newest-first order. */
+async function sessionLanePage(
+  ownerUserId: string,
+  statuses: readonly SessionRow['status'][],
+  scope: Exclude<HistoryCursorScope, 'activity'>,
+  token: string | undefined,
+  limit: number,
+): Promise<SessionLanePage> {
+  const cursor = decodeHistoryCursor(token, scope);
+  const rows = await db
+    .select()
+    .from(agentSession)
+    .where(
+      and(
+        eq(agentSession.executorKind, 'athena'),
+        eq(agentSession.ownerUserId, ownerUserId),
+        inArray(agentSession.status, [...statuses]),
+        cursor
+          ? or(
+              lt(agentSession.createdAt, cursor.createdAt),
+              and(eq(agentSession.createdAt, cursor.createdAt), lt(agentSession.id, cursor.id)),
+            )
+          : undefined,
+      ),
+    )
+    .orderBy(desc(agentSession.createdAt), desc(agentSession.id))
+    .limit(limit + 1);
+  const hasMore = rows.length > limit;
+  const sessions = hasMore ? rows.slice(0, limit) : rows;
+  const last = sessions.at(-1);
+  return {
+    sessions,
+    ...(hasMore && last ? { nextCursor: encodeHistoryCursor(scope, last.createdAt, last.id) } : {}),
   };
 }
 
 /** Build grouped personal work and counts without exposing registered-agent rows. */
-async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverviewOut>> {
-  const ownership = and(
-    eq(agentSession.executorKind, 'athena'),
-    eq(agentSession.ownerUserId, ownerUserId),
-  );
-  const [active, finished, chats, counts] = await Promise.all([
+async function overview(
+  ownerUserId: string,
+  query: OverviewQuery = DEFAULT_OVERVIEW_QUERY,
+): Promise<z.input<typeof AthenaOverviewOut>> {
+  const [needsYou, working, finished, chats, counts] = await Promise.all([
+    sessionLanePage(
+      ownerUserId,
+      NEEDS_YOU_STATUSES,
+      'needs_you',
+      query.needsYouCursor,
+      query.limit,
+    ),
+    sessionLanePage(ownerUserId, WORKING_STATUSES, 'working', query.workingCursor, query.limit),
+    sessionLanePage(ownerUserId, FINISHED_STATUSES, 'finished', query.finishedCursor, query.limit),
     db
       .select()
       .from(agentSession)
       .where(
-        and(ownership, inArray(agentSession.status, [...NEEDS_YOU_STATUSES, ...WORKING_STATUSES])),
+        and(
+          eq(agentSession.executorKind, 'athena'),
+          eq(agentSession.ownerUserId, ownerUserId),
+          eq(agentSession.kind, 'chat'),
+        ),
       )
-      .orderBy(desc(agentSession.createdAt), desc(agentSession.id))
-      .limit(ACTIVE_HISTORY_LIMIT),
-    db
-      .select()
-      .from(agentSession)
-      .where(and(ownership, inArray(agentSession.status, [...FINISHED_STATUSES])))
-      .orderBy(desc(agentSession.createdAt))
-      .limit(FINISHED_HISTORY_LIMIT),
-    db
-      .select()
-      .from(agentSession)
-      .where(and(ownership, eq(agentSession.kind, 'chat')))
       .orderBy(desc(agentSession.createdAt))
       .limit(1),
     pulseCounts(ownerUserId),
   ]);
   const rows = [
-    ...new Map([...active, ...finished, ...chats].map((row) => [row.id, row])).values(),
+    ...new Map(
+      [...needsYou.sessions, ...working.sessions, ...finished.sessions, ...chats].map((row) => [
+        row.id,
+        row,
+      ]),
+    ).values(),
   ];
   const metadata = await metadataBySession(rows.map((row) => row.id));
   const uniqueContexts = new Map<string, z.input<typeof AthenaInvocationContext> | null>();
@@ -373,18 +496,31 @@ async function overview(ownerUserId: string): Promise<z.input<typeof AthenaOverv
       );
     }),
   );
-  const queueIds = new Set([...active, ...finished].map((row) => row.id));
-  const queueSummaries = summaries.filter((row) => queueIds.has(row.id));
+  const summariesById = new Map(summaries.map((row) => [row.id, row]));
   const sessions = {
-    needsYou: queueSummaries.filter((row) => row.queueState === 'needs_you'),
-    working: queueSummaries.filter((row) => row.queueState === 'working'),
-    finished: queueSummaries.filter((row) => row.queueState === 'finished'),
+    needsYou: needsYou.sessions.flatMap((row) => {
+      const summary = summariesById.get(row.id);
+      return summary ? [summary] : [];
+    }),
+    working: working.sessions.flatMap((row) => {
+      const summary = summariesById.get(row.id);
+      return summary ? [summary] : [];
+    }),
+    finished: finished.sessions.flatMap((row) => {
+      const summary = summariesById.get(row.id);
+      return summary ? [summary] : [];
+    }),
   };
-  const current = summaries.find((row) => row.id === chats[0]?.id);
+  const current = chats[0] ? summariesById.get(chats[0].id) : undefined;
   return {
     counts,
     currentChat: current ?? null,
     sessions,
+    nextCursors: {
+      ...(needsYou.nextCursor ? { needsYou: needsYou.nextCursor } : {}),
+      ...(working.nextCursor ? { working: working.nextCursor } : {}),
+      ...(finished.nextCursor ? { finished: finished.nextCursor } : {}),
+    },
   };
 }
 
@@ -443,6 +579,9 @@ async function appendMessage(
       .for('update');
     if (locked?.ownerUserId !== ownerUserId || locked.executorKind !== 'athena') {
       throw new NotFoundError('Session not found');
+    }
+    if (locked.status === 'canceled') {
+      throw new ConflictError('Canceled Athena work cannot accept new messages');
     }
     let current = locked;
     if (context?.workspaceId && context.workspaceId !== locked.contextOrganizationId) {
@@ -524,7 +663,9 @@ async function streamOwnedActivity(c: Context<AppEnv>, session: SessionRow) {
   const terminal = new Set(['completed', 'failed', 'canceled']);
   return streamSSE(c, async (stream) => {
     let cursor = resumedCursor;
-    const replay = await sessionActivitiesAfter(session.id, cursor);
+    const replay = cursor
+      ? await sessionActivitiesAfter(session.id, cursor)
+      : (await sessionActivityHistoryPage(session.id, DEFAULT_ACTIVITY_QUERY)).activities;
     for (const activity of replay) {
       await stream.writeSSE({
         id: activity.id,
@@ -570,9 +711,10 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Get the personal Athena overview',
       response: AthenaOverviewOut,
       description:
-        'Return only the authenticated user’s Athena work, grouped into Needs you, Working, and Finished with matching counts and the current persistent chat.',
+        'Return only the authenticated user’s Athena work as independently bounded Needs you, Working, and Finished pages with exact all-history counts, lane-specific continuation cursors, and the current persistent chat.',
     }),
-    async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c))),
+    zQuery(overviewQuery),
+    async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c), c.req.valid('query'))),
   )
   .get(
     '/pulse',
@@ -595,14 +737,15 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Get the current personal chat',
       response: AthenaSessionDetailOut,
       description:
-        'Return the caller’s newest persistent Athena chat with ordered work-log activity, lazily creating the first private chat when none exists.',
+        'Return the caller’s newest persistent Athena chat with a bounded newest activity window ordered oldest-first, lazily creating the first private chat when none exists. Use the activity cursor for older history and the newest activity id as Last-Event-ID for incremental SSE.',
     }),
+    zQuery(activityHistoryQuery),
     async (c) => {
       const owner = requestOwner(c);
       return ok(
         c,
         AthenaSessionDetailOut,
-        await personalDetail(owner, (await currentChat(owner)).id),
+        await personalDetail(owner, (await currentChat(owner)).id, c.req.valid('query')),
       );
     },
   )
@@ -650,9 +793,10 @@ const meAthena = new Hono<AppEnv>()
       summary: 'List grouped personal Athena work',
       response: AthenaOverviewOut,
       description:
-        'List every caller-owned Athena session as product-ready grouped summaries and counts; registered agents and other users never appear.',
+        'List caller-owned Athena sessions as independently paginated product lanes with exact all-history counts; lane-bound cursors cannot be reused across Needs you, Working, and Finished, and registered agents or other users never appear.',
     }),
-    async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c))),
+    zQuery(overviewQuery),
+    async (c) => ok(c, AthenaOverviewOut, await overview(requestOwner(c), c.req.valid('query'))),
   )
   .post(
     '/sessions',
@@ -708,11 +852,16 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Get personal Athena work',
       response: AthenaSessionDetailOut,
       description:
-        'Return one caller-owned Athena session and its ordered application-visible work log; ownership mismatches are hidden as not found.',
+        'Return one caller-owned Athena session and a bounded newest application-visible work-log window ordered oldest-first. Follow activityNextCursor for older windows, then use the newest loaded activity id as Last-Event-ID for incremental SSE; ownership mismatches are hidden as not found.',
     }),
     zParam(idParam),
+    zQuery(activityHistoryQuery),
     async (c) =>
-      ok(c, AthenaSessionDetailOut, await personalDetail(requestOwner(c), c.req.valid('param').id)),
+      ok(
+        c,
+        AthenaSessionDetailOut,
+        await personalDetail(requestOwner(c), c.req.valid('param').id, c.req.valid('query')),
+      ),
   )
   .post(
     '/sessions/:id/messages',
@@ -721,7 +870,7 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Steer personal Athena work',
       response: AthenaSessionDetailOut,
       description:
-        'Append an owner-authored steering message, resume eligible work through the durable transcript, and return the freshly settled private detail.',
+        'Append an owner-authored steering message, resume eligible work through the durable transcript, and return the freshly settled private detail. Canceled work rejects with an application-owned conflict before activity or transcript mutation.',
     }),
     zParam(idParam),
     zJson(AthenaMessageBody),
@@ -769,15 +918,18 @@ const meAthena = new Hono<AppEnv>()
       summary: 'List personal Athena activity',
       response: pageOf(SessionActivityOut),
       description:
-        'Return the ordered JSON work log for one caller-owned Athena session; use the sibling stream route for replayable live delivery.',
+        'Return a bounded newest JSON work-log window for one caller-owned Athena session, ordered oldest-first within the page. Follow nextCursor backward for older windows, then pass the newest loaded activity id as Last-Event-ID to the sibling stream route for incremental live delivery.',
     }),
     zParam(idParam),
+    zQuery(activityHistoryQuery),
     async (c) => {
       const owner = requestOwner(c);
       const id = c.req.valid('param').id;
       await loadOwnedSession(owner, id);
+      const page = await sessionActivityHistoryPage(id, c.req.valid('query'));
       return ok(c, pageOf(SessionActivityOut), {
-        items: visibleActivities(await sessionActivities(id)).map(toPersonalActivityOut),
+        items: page.activities.map(toPersonalActivityOut),
+        ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
       });
     },
   )
@@ -787,13 +939,14 @@ const meAthena = new Hono<AppEnv>()
       tags: ['Athena'],
       summary: 'Stream personal Athena activity (SSE)',
       description:
-        'Replay and live-tail only the caller-owned session activity as Server-Sent Events, resuming strictly after the standard Last-Event-ID header.',
+        'Replay and live-tail only the caller-owned session activity as Server-Sent Events. A new client without Last-Event-ID receives only the newest 100 visible activities and should use the newest received id on reconnect; older history remains available through the paginated JSON activity route. A recognized Last-Event-ID resumes strictly after that persisted activity.',
       parameters: [
         {
           name: 'Last-Event-ID',
           in: 'header',
           required: false,
-          description: 'Resume strictly after this previously received activity id.',
+          description:
+            'Resume strictly after this previously received activity id. Omit only for the bounded newest-100 initial replay.',
           schema: { type: 'string' },
         },
       ],
@@ -1045,11 +1198,7 @@ const meAthena = new Hono<AppEnv>()
         await loadOwnedSession(owner, c.req.valid('param').id),
         'pause',
       );
-      return ok(
-        c,
-        AthenaSessionSummaryOut,
-        await personalSummary(owner, updated, await sessionActivities(updated.id)),
-      );
+      return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
   )
   .post(
@@ -1072,15 +1221,11 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          await personalSummary(owner, current, await sessionActivities(current.id)),
+          await personalSummaryForSession(owner, current),
         );
       }
       const updated = await resumeSessionExecution(session.contextOrganizationId ?? '', session.id);
-      return ok(
-        c,
-        AthenaSessionSummaryOut,
-        await personalSummary(owner, updated, await sessionActivities(updated.id)),
-      );
+      return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
   )
   .post(
@@ -1109,14 +1254,10 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          await personalSummary(owner, updated, await sessionActivities(updated.id)),
+          await personalSummaryForSession(owner, updated),
         );
       }
-      return ok(
-        c,
-        AthenaSessionSummaryOut,
-        await personalSummary(owner, updated, await sessionActivities(updated.id)),
-      );
+      return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
   )
   .post(
@@ -1148,7 +1289,7 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          await personalSummary(owner, current, await sessionActivities(current.id)),
+          await personalSummaryForSession(owner, current),
         );
       }
       const updated = await approveLatestAndResume(
@@ -1156,11 +1297,7 @@ const meAthena = new Hono<AppEnv>()
         null,
         session.id,
       );
-      return ok(
-        c,
-        AthenaSessionSummaryOut,
-        await personalSummary(owner, updated, await sessionActivities(updated.id)),
-      );
+      return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
   )
   .post(
@@ -1195,14 +1332,10 @@ const meAthena = new Hono<AppEnv>()
         return accepted(
           c,
           AthenaSessionSummaryOut,
-          await personalSummary(owner, updated, await sessionActivities(updated.id)),
+          await personalSummaryForSession(owner, updated),
         );
       }
-      return ok(
-        c,
-        AthenaSessionSummaryOut,
-        await personalSummary(owner, updated, await sessionActivities(updated.id)),
-      );
+      return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, updated));
     },
   );
 

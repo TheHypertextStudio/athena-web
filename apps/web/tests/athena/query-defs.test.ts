@@ -41,6 +41,7 @@ function transport(): PersonalAthenaTransport {
       }),
     ),
     detail: vi.fn().mockResolvedValue(okResponse(detail)),
+    activity: vi.fn().mockResolvedValue(okResponse({ items: [] })),
     message: vi.fn(),
     create: vi.fn(),
     decide: vi.fn(),
@@ -99,6 +100,12 @@ describe('personal Athena query definitions', () => {
     );
   });
 
+  it('marks an expanded composer independently from workspace filtering', () => {
+    expect(athenaHref({ workspaceId: 'workspace_1' }, null, true)).toBe(
+      '/athena?workspace=workspace_1&new=1',
+    );
+  });
+
   it('correlates a decision with its owning session on the personal API route', async () => {
     const requested: string[] = [];
     vi.stubGlobal(
@@ -131,7 +138,7 @@ describe('personal Athena query definitions', () => {
 
     expect(requested).toEqual([
       '/v1/me/athena/sessions/session_1/activity/activity_1/approve',
-      '/v1/me/athena/sessions/session_1',
+      '/v1/me/athena/sessions/session_1?',
     ]);
   });
 

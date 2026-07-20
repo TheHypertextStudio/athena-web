@@ -1,6 +1,7 @@
 import { db } from '@docket/db';
 
 import { ConflictError } from '../error';
+import { hasSqlState } from './sql-state';
 
 /**
  * Postgres SQLSTATE codes that indicate a transaction was rolled back due to a
@@ -12,17 +13,11 @@ import { ConflictError } from '../error';
  * reachability check, but one is aborted at commit with `40001` — re-running it
  * re-reads the now-committed edge and the acyclic guard rejects it (data-model §7.4).
  */
-const SERIALIZATION_RETRY_CODES = new Set(['40001', '40P01']);
+const SERIALIZATION_RETRY_CODES = ['40001', '40P01'];
 
 /** Whether a thrown error is a retryable serialization/deadlock failure (by SQLSTATE). */
 function isSerializationFailure(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    typeof err.code === 'string' &&
-    SERIALIZATION_RETRY_CODES.has((err as { code: string }).code)
-  );
+  return SERIALIZATION_RETRY_CODES.some((code) => hasSqlState(err, code));
 }
 
 /**
@@ -48,14 +43,10 @@ export async function serializableTx<T>(
     try {
       return await db.transaction(fn, { isolationLevel: 'serializable' });
     } catch (err) {
-      /* v8 ignore start -- @preserve concurrency boundary: SQLSTATE 40001/40P01 only
-         arises under concurrent writers on real Postgres; PGlite is single-connection,
-         so the retry + give-up branches can't be hit deterministically in tests. */
       if (isSerializationFailure(err) && attempt < maxAttempts) continue;
       if (isSerializationFailure(err)) {
         throw new ConflictError('Concurrent update conflict, please retry');
       }
-      /* v8 ignore stop */
       throw err;
     }
   }

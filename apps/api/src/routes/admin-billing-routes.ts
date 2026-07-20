@@ -16,6 +16,7 @@ import { onReactivated, onTrialOrPaymentTerminal } from '../billing/lifecycle';
 import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { hasSqlState } from '../lib/sql-state';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 
@@ -33,26 +34,9 @@ import {
 /** The Postgres SQLSTATE for a unique-constraint (including unique-index) violation. */
 const UNIQUE_VIOLATION_CODE = '23505';
 
-/** The SQLSTATE code carried directly on an error, if any. */
-function sqlStateOf(err: unknown): string | undefined {
-  if (typeof err !== 'object' || err === null || !('code' in err)) return undefined;
-  const { code } = err;
-  return typeof code === 'string' ? code : undefined;
-}
-
-/**
- * Whether a thrown error is a Postgres unique-constraint violation (SQLSTATE 23505).
- *
- * @remarks
- * Drizzle wraps the driver error in a `DrizzleQueryError`, whose own `code` is
- * `undefined` — the SQLSTATE lives on `err.cause.code` instead. Check both so this
- * is robust regardless of driver (postgres-js vs. PGlite) or wrapping.
- */
+/** Whether a thrown error is a Postgres unique-constraint violation (SQLSTATE 23505). */
 function isUniqueViolation(err: unknown): boolean {
-  if (sqlStateOf(err) === UNIQUE_VIOLATION_CODE) return true;
-  const cause =
-    typeof err === 'object' && err !== null ? (err as { cause?: unknown }).cause : undefined;
-  return sqlStateOf(cause) === UNIQUE_VIOLATION_CODE;
+  return hasSqlState(err, UNIQUE_VIOLATION_CODE);
 }
 
 /**

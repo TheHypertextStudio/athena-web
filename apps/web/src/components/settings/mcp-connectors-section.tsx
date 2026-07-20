@@ -67,8 +67,8 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
 
   return (
     <section className="flex flex-col gap-3" aria-label="MCP connectors">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-start gap-4 sm:flex-nowrap sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-1">
           <h3 className="text-on-surface text-title-small">Tools for Athena</h3>
           <p className="text-on-surface-variant text-body-medium">
             Connect services you use. Athena works through them under rules you set.

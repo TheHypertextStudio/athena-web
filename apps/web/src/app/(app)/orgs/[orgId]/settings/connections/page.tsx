@@ -15,7 +15,6 @@ import { use, type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { IntegrationsTab } from '@/components/settings/integrations-tab';
-import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
 import { SectionHeader } from '@/components/settings/section-header';
 import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -40,7 +39,6 @@ export default function ConnectionsSettingsPage({
         description={section?.description ?? 'Connect tools to keep them in sync with Docket.'}
       />
       <IntegrationsTab orgId={orgId} canManage={canManage} surface="connections" />
-      <McpConnectorsSection orgId={orgId} canManage={canManage} />
     </div>
   );
 }

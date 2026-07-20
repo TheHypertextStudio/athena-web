@@ -4,7 +4,6 @@ import type { JSX } from 'react';
 
 import { IntegrationsTab } from '@/components/settings/integrations-tab';
 import { ConnectedAccountsTab } from '@/components/settings/connected-accounts-tab';
-import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
 import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
@@ -26,7 +25,6 @@ export default function GlobalConnectionsSettingsPage(): JSX.Element {
       />
       <ConnectedAccountsTab orgId={orgId} />
       <IntegrationsTab orgId={orgId} canManage={canManage} surface="connections" />
-      <McpConnectorsSection orgId={orgId} canManage={canManage} />
     </div>
   );
 }

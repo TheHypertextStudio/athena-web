@@ -4,13 +4,18 @@ import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
+import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
 import { SectionHeader } from '@/components/settings/section-header';
+import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
+import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 /** The user-owned Athena preferences destination. */
 export default function GlobalAthenaSettingsPage(): JSX.Element {
+  const orgId = usePersonalWorkspaceId();
+  const { canManage } = useCanManageOrg(orgId ?? '');
   const [instructions, setInstructions] = useState('');
   const [approvalMode, setApprovalMode] = useState<AthenaApprovalMode>('ask_before_acting');
   const [editing, setEditing] = useState(false);
@@ -131,6 +136,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
           </div>
         </section>
       )}
+      {orgId ? <McpConnectorsSection orgId={orgId} canManage={canManage} /> : null}
     </div>
   );
 }

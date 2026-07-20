@@ -101,17 +101,21 @@ function GtasksAccountRow(props: {
 
   return (
     <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
-      <div className="flex items-center gap-3 p-4">
-        <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <TaskAlt aria-hidden="true" className="size-4" />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-on-surface text-body-medium truncate font-medium">
-            {accountLabel(account)}
+      <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
+            <TaskAlt aria-hidden="true" className="size-4" />
           </span>
-          <span className="text-on-surface-variant text-xs">{resourceSummary(account)}</span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <span className="text-on-surface text-body-medium truncate font-medium">
+              {accountLabel(account)}
+            </span>
+            <span className="text-on-surface-variant truncate text-xs">
+              {resourceSummary(account)}
+            </span>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Badge variant={STATUS_LABEL[account.status].variant} className="font-normal">
             {STATUS_LABEL[account.status].label}
           </Badge>
@@ -235,7 +239,9 @@ function IdentityPicker(props: {
         return (
           <li key={identity.accountId} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
             <TaskAlt aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
-            <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{label}</span>
+            <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
+              {label}
+            </span>
             <IntegrationActionButton
               tone="primary"
               disabled={busy}

@@ -9,7 +9,9 @@
  */
 import { defineConfig } from 'drizzle-kit';
 
-const url = process.env['DATABASE_URL_UNPOOLED'] ?? process.env['DATABASE_URL'];
+import { resolveDatabaseUrl } from './drizzle-url';
+
+const url = resolveDatabaseUrl();
 if (!url) {
   throw new Error(
     'DATABASE_URL (or DATABASE_URL_UNPOOLED) is required for drizzle-kit — see .env.example.',

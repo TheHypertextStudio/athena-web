@@ -29,6 +29,31 @@ import {
   toOrgOut,
 } from './admin-serializers';
 
+/** The Postgres SQLSTATE for a unique-constraint (including unique-index) violation. */
+const UNIQUE_VIOLATION_CODE = '23505';
+
+/** The SQLSTATE code carried directly on an error, if any. */
+function sqlStateOf(err: unknown): string | undefined {
+  if (typeof err !== 'object' || err === null || !('code' in err)) return undefined;
+  const { code } = err;
+  return typeof code === 'string' ? code : undefined;
+}
+
+/**
+ * Whether a thrown error is a Postgres unique-constraint violation (SQLSTATE 23505).
+ *
+ * @remarks
+ * Drizzle wraps the driver error in a `DrizzleQueryError`, whose own `code` is
+ * `undefined` — the SQLSTATE lives on `err.cause.code` instead. Check both so this
+ * is robust regardless of driver (postgres-js vs. PGlite) or wrapping.
+ */
+function isUniqueViolation(err: unknown): boolean {
+  if (sqlStateOf(err) === UNIQUE_VIOLATION_CODE) return true;
+  const cause =
+    typeof err === 'object' && err !== null ? (err as { cause?: unknown }).cause : undefined;
+  return sqlStateOf(cause) === UNIQUE_VIOLATION_CODE;
+}
+
 /**
  * Sub-router for lifecycle-hold and billing-action routes (mounted at `/orgs`).
  * All routes require staff auth (enforced by the parent admin router's middleware).
@@ -138,8 +163,13 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           .insert(billingExemption)
           .values({ organizationId: id, reason, grantedBy: staffUserId })
           .returning();
-      } catch {
-        throw new ConflictError('An active billing exemption already exists for this organization');
+      } catch (err) {
+        if (isUniqueViolation(err)) {
+          throw new ConflictError(
+            'An active billing exemption already exists for this organization',
+          );
+        }
+        throw err;
       }
       const exemption = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */

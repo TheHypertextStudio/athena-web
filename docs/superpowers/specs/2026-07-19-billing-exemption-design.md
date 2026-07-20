@@ -35,8 +35,8 @@ Indexes: `organizationId` (lookup), and a **partial unique index** on `organizat
 
 Two routes added to `apps/api/src/routes/admin-billing-routes.ts`, mirroring the lifecycle-hold pattern:
 
-- `POST /admin/orgs/:id/billing-exemption` — body `{ reason }`, gated `requireStaffRole('finance')` (same tier as other billing-affecting actions: extend-trial, reactivate, set-lifecycle). Inserts the grant row.
-- `DELETE /admin/orgs/:id/billing-exemption` — revokes the active grant (404 if none active).
+- `POST /admin/orgs/:id/billing-exemption` — body `{ reason }`, gated `requireStaffRole('superadmin')`. Inserts the grant row. Bumped above the `finance` tier used for extend-trial/reactivate/set-lifecycle: those are time-boxed or recovery-oriented, while an exemption is an indefinite, full bypass of the revenue gate — higher blast radius, highest tier.
+- `DELETE /admin/orgs/:id/billing-exemption` — revokes the active grant via a single atomic conditional update (`UPDATE ... WHERE organizationId = id AND revokedAt IS NULL RETURNING`, mirroring the existing hold-release pattern), 404 if no row matched. The atomicity closes a TOCTOU race where two concurrent revokes could double-fire the audit event.
 
 Both write to the existing `operatorAuditEvent` table (`billing.exemption_granted` / `billing.exemption_revoked`) — reusing the audit mechanism every other admin action already uses, no new audit table.
 
@@ -52,13 +52,13 @@ Each free user signs up normally (their own personal org, same as a paying user 
 
 ## Error handling
 
-- Granting an exemption on an org that already has an active one: blocked by the partial unique index; the route should read-check first and return a clear conflict rather than a raw constraint violation.
-- Revoking when no active exemption exists: 404, matching the hold-release convention (`releasedAt IS NULL` guard).
+- Granting an exemption on an org that already has an active one: the partial unique index is the actual guard (closes the race between two concurrent grants); the route catches the constraint violation and returns a clean `409` rather than a raw DB error / `500`.
+- Revoking when no active exemption exists: 404, matching the hold-release convention (`releasedAt IS NULL` guard), via the atomic conditional update described above.
 - Org not found: 404, matching every other admin-org route (`loadOrg`).
 
 ## Testing
 
 - Unit: `assertAgentSessionsEntitled` grants access via an active exemption row even when `lifecycleState` is non-entitled (e.g. `past_due`), and stops granting it once revoked.
 - Unit: partial unique index rejects a second concurrent active grant.
-- Route tests: grant/revoke round-trip, 404s (org not found, no active exemption to revoke), `requireStaffRole('finance')` enforcement (support tier → 403), audit event written on both actions.
+- Route tests: grant/revoke round-trip, 404s (org not found, no active exemption to revoke), 409 on double-grant, `requireStaffRole('superadmin')` enforcement (support and finance tiers → 403), audit event written on both actions.
 - `AdminOrgOut.isBillingExempt` reflects grant/revoke state in list and detail responses.

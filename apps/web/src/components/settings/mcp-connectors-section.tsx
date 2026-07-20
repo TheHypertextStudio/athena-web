@@ -74,6 +74,9 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           <p className="text-on-surface-variant text-body-medium">
             Connect services you use. Athena works through them under rules you set.
           </p>
+          <p className="text-on-surface-variant text-xs">
+            Built on MCP (Model Context Protocol), the open standard for AI tool access.
+          </p>
         </div>
         {canManage ? (
           <Button
@@ -126,7 +129,10 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Add a connector</DialogTitle>
-            <DialogDescription>Give Athena access to a service you use.</DialogDescription>
+            <DialogDescription>
+              Give Athena access to a remote MCP (Model Context Protocol) server it can use as a
+              tool.
+            </DialogDescription>
           </DialogHeader>
           <AddMcpConnectorForm
             orgId={orgId}

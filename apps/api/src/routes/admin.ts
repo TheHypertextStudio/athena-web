@@ -180,7 +180,10 @@ export function createAdminRoutes<
               .offset(offset),
             db.select({ n: count() }).from(organization).where(where),
           ]);
-          return ok(c, AdminOrgPage, { items: items.map(toOrgOut), total: countOf(totals) });
+          return ok(c, AdminOrgPage, {
+            items: items.map((o) => toOrgOut(o)),
+            total: countOf(totals),
+          });
         },
       )
       .get(
@@ -230,7 +233,7 @@ export function createAdminRoutes<
           return ok(c, AdminLifecycleBoard, {
             columns: LIFECYCLE_STATES.map((state) => ({
               lifecycleState: state,
-              orgs: rows.filter((row) => row.lifecycleState === state).map(toOrgOut),
+              orgs: rows.filter((row) => row.lifecycleState === state).map((row) => toOrgOut(row)),
             })),
           });
         },

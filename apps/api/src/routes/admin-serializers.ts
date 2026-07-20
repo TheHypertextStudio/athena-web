@@ -1,9 +1,15 @@
 import type { lifecycleHold, impersonationSession, staffUser, user } from '@docket/db';
-import { type Database, db, operatorAuditEvent, organization } from '@docket/db';
-import { eq } from 'drizzle-orm';
+import { type Database, billingExemption, db, operatorAuditEvent, organization } from '@docket/db';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
-import type { AdminHoldOut, AdminImpersonationOut, AdminOrgOut, AdminStaffOut } from '../admin-dto';
+import type {
+  AdminBillingExemptionOut,
+  AdminHoldOut,
+  AdminImpersonationOut,
+  AdminOrgOut,
+  AdminStaffOut,
+} from '../admin-dto';
 import { LifecycleState } from '../admin-dto';
 import { NotFoundError } from '../error';
 
@@ -13,6 +19,8 @@ export type UserRow = typeof user.$inferSelect;
 export type OrgRow = typeof organization.$inferSelect;
 /** HoldRow is the selected database row shape consumed by these API route serializers. */
 export type HoldRow = typeof lifecycleHold.$inferSelect;
+/** ExemptionRow is the selected database row shape consumed by these API route serializers. */
+export type ExemptionRow = typeof billingExemption.$inferSelect;
 /** ImpersonationRow is the selected database row shape consumed by these API route serializers. */
 export type ImpersonationRow = typeof impersonationSession.$inferSelect;
 /** StaffRow is the selected database row shape consumed by these API route serializers. */
@@ -41,8 +49,16 @@ export function toUserOut(u: UserRow) {
   };
 }
 
-/** Serialize an org row into the admin org DTO shape. */
-export function toOrgOut(o: OrgRow): z.input<typeof AdminOrgOut> {
+/**
+ * Serialize an org row into the admin org DTO shape.
+ *
+ * @param exemptOrgIds - Org ids with a currently active billing exemption (see
+ *   {@link loadActiveExemptOrgIds}); defaults to empty when the caller has no exemption context.
+ */
+export function toOrgOut(
+  o: OrgRow,
+  exemptOrgIds: ReadonlySet<string> = new Set(),
+): z.input<typeof AdminOrgOut> {
   return {
     id: o.id,
     name: o.name,
@@ -51,6 +67,7 @@ export function toOrgOut(o: OrgRow): z.input<typeof AdminOrgOut> {
     lifecycleState: o.lifecycleState,
     exportReadyAt: o.exportReadyAt?.toISOString() ?? null,
     deleteAfterAt: o.deleteAfterAt?.toISOString() ?? null,
+    isBillingExempt: exemptOrgIds.has(o.id),
     createdAt: o.createdAt.toISOString(),
   };
 }
@@ -64,6 +81,34 @@ export function toHoldOut(h: HoldRow): z.input<typeof AdminHoldOut> {
     placedBy: h.placedBy,
     createdAt: h.createdAt.toISOString(),
     releasedAt: h.releasedAt?.toISOString() ?? null,
+  };
+}
+
+/** Load the set of org ids among `orgIds` that currently hold an active billing exemption. */
+export async function loadActiveExemptOrgIds(
+  database: Database,
+  orgIds: readonly string[],
+): Promise<Set<string>> {
+  if (orgIds.length === 0) return new Set();
+  const rows = await database
+    .select({ organizationId: billingExemption.organizationId })
+    .from(billingExemption)
+    .where(
+      and(inArray(billingExemption.organizationId, orgIds), isNull(billingExemption.revokedAt)),
+    );
+  return new Set(rows.map((r) => r.organizationId));
+}
+
+/** Serialize a billing-exemption row into its DTO shape. */
+export function toExemptionOut(e: ExemptionRow): z.input<typeof AdminBillingExemptionOut> {
+  return {
+    id: e.id,
+    organizationId: e.organizationId,
+    reason: e.reason,
+    grantedBy: e.grantedBy,
+    createdAt: e.createdAt.toISOString(),
+    revokedBy: e.revokedBy,
+    revokedAt: e.revokedAt?.toISOString() ?? null,
   };
 }
 

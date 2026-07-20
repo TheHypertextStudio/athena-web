@@ -11,6 +11,7 @@ describe('global settings sections', () => {
       'profile',
       'athena',
       'connections',
+      'automations',
       'notifications',
       'calendar',
       'security',

@@ -1,12 +1,13 @@
 'use client';
 
 import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
-import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { CardAlert, CardNote } from './card-note';
 import { relativeTime } from './format-time';
 import { IntegrationActionButton } from './integration-action-button';
-import { STATUS_LABEL, providerIcon } from './integrations-config';
+import { IntegrationRowActions } from './integration-row-actions';
+import { providerIcon } from './integrations-config';
 
 interface IntegrationProviderCardProps {
   provider: IntegrationDirectoryProvider;
@@ -16,6 +17,17 @@ interface IntegrationProviderCardProps {
   actionLabel: string;
   /** A one-line hint shown under a not-yet-connected provider (what connecting does). */
   connectHint: string;
+  /**
+   * What connecting this unlocks, in user terms (Connections surface only). Rendered as a
+   * persistent descriptor under the provider name. Omitted on surfaces (e.g. Import) that keep
+   * their own terser {@link connectHint} wording.
+   */
+  effect?: string;
+  /**
+   * Short data-flow direction phrase (Connections surface only), shown as the secondary line while
+   * the provider is not yet connected. Once connected, the status/last-synced line replaces it.
+   */
+  mechanics?: string;
   /** A connect/verify ceremony is in flight for this provider. */
   busy: boolean;
   /** A manual sync is in flight for this integration. */
@@ -44,13 +56,10 @@ interface IntegrationProviderCardProps {
 }
 
 /**
- * The status-aware subtitle. Never implies a connection that wasn't validated: an unconfigured
- * an unconnected one reads the surface hint, and only a `connected` integration reads "Connected".
+ * The status-aware subtitle for a provider that has an integration. Never implies a connection
+ * that wasn't validated: only a `connected` integration reads "Connected".
  */
-function cardSubtitle(existing: IntegrationOut | undefined, connectHint: string): string {
-  if (!existing) {
-    return connectHint;
-  }
+function statusSubtitle(existing: IntegrationOut): string {
   if (existing.status === 'pending') return 'Setup not finished';
   if (existing.status === 'error') return 'Connection needs attention';
   if (existing.status === 'disconnected') return 'Disconnected';
@@ -66,71 +75,6 @@ function connectionLabel(existing: IntegrationOut | undefined): string | null {
     (value): value is string => Boolean(value),
   );
   return [...new Set(values)].join(' · ') || null;
-}
-
-/** The re-authorize button label for a not-yet-healthy integration. */
-function reconnectLabel(status: IntegrationOut['status'], busy: boolean): string {
-  if (busy) return 'Connecting…';
-  return status === 'pending' ? 'Finish connecting' : 'Reconnect';
-}
-
-/** Right-side controls for an already-created integration (badge + manage actions). */
-function ExistingControls(props: {
-  existing: IntegrationOut;
-  canManage: boolean;
-  busy: boolean;
-  syncing: boolean;
-  disconnecting: boolean;
-  /** Whether the provider supports manual sync (observe-only signal sources do not). */
-  syncable: boolean;
-  configurable: boolean;
-  configOpen: boolean;
-  onReconnect: () => void;
-  onSync: () => void;
-  onDisconnect: () => void;
-  onToggleConfig: () => void;
-}): JSX.Element {
-  const { existing, canManage, busy, syncing, disconnecting, configurable, configOpen } = props;
-  const isConnected = existing.status === 'connected';
-  const needsConnect =
-    existing.status === 'pending' ||
-    existing.status === 'error' ||
-    existing.status === 'disconnected';
-  return (
-    <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
-      <Badge variant={STATUS_LABEL[existing.status].variant} className="font-normal">
-        {STATUS_LABEL[existing.status].label}
-      </Badge>
-      {canManage && needsConnect ? (
-        <IntegrationActionButton tone="primary" disabled={busy} onClick={props.onReconnect}>
-          {reconnectLabel(existing.status, busy)}
-        </IntegrationActionButton>
-      ) : null}
-      {canManage && isConnected && existing.pattern !== 'migration' && props.syncable ? (
-        <IntegrationActionButton tone="muted" disabled={syncing} onClick={props.onSync}>
-          {syncing ? 'Syncing…' : 'Sync'}
-        </IntegrationActionButton>
-      ) : null}
-      {canManage && configurable ? (
-        <IntegrationActionButton
-          tone="primary"
-          aria-expanded={configOpen}
-          onClick={props.onToggleConfig}
-        >
-          {configOpen ? 'Close' : 'Configure'}
-        </IntegrationActionButton>
-      ) : null}
-      {canManage ? (
-        <IntegrationActionButton
-          tone="danger"
-          disabled={disconnecting}
-          onClick={props.onDisconnect}
-        >
-          {disconnecting ? 'Disconnecting…' : 'Disconnect'}
-        </IntegrationActionButton>
-      ) : null}
-    </div>
-  );
 }
 
 /** Right-side affordance for a provider with no integration yet (connect directly — no inline choice). */
@@ -150,19 +94,6 @@ function ConnectAffordance(props: {
   );
 }
 
-/** A bordered footer row beneath the card header (an error or info notice). */
-function CardNote(props: { tone: 'error' | 'muted'; children: string }): JSX.Element {
-  const color = props.tone === 'error' ? 'text-destructive' : 'text-on-surface-variant';
-  return (
-    <p
-      {...(props.tone === 'error' ? { role: 'alert' } : {})}
-      className={`${color} bg-surface-container px-4 py-2 text-xs`}
-    >
-      {props.children}
-    </p>
-  );
-}
-
 /** IntegrationProviderCard renders one provider row whose state mirrors the server truthfully. */
 export function IntegrationProviderCard({
   provider,
@@ -170,6 +101,8 @@ export function IntegrationProviderCard({
   canManage,
   actionLabel,
   connectHint,
+  effect,
+  mechanics,
   busy,
   syncing,
   disconnecting,
@@ -185,10 +118,6 @@ export function IntegrationProviderCard({
   onToggleConfig,
 }: IntegrationProviderCardProps): JSX.Element {
   const ProviderIcon = providerIcon(provider.provider);
-  const reauthError =
-    existing?.status === 'error'
-      ? 'This connection needs attention. Reconnect it to restore syncing.'
-      : null;
   const showPendingHint = existing?.status === 'pending';
   const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
   const identityLabel = connectionLabel(existing);
@@ -201,23 +130,25 @@ export function IntegrationProviderCard({
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-body-medium font-medium">{provider.name}</span>
+          {effect ? <span className="text-on-surface-variant text-xs">{effect}</span> : null}
           {identityLabel ? (
             <span className="text-on-surface-variant truncate text-xs">{identityLabel}</span>
           ) : null}
           <span className="text-on-surface-variant text-xs">
-            {cardSubtitle(existing, connectHint)}
+            {existing ? statusSubtitle(existing) : (mechanics ?? connectHint)}
           </span>
         </div>
         {existing ? (
-          <ExistingControls
-            existing={existing}
+          <IntegrationRowActions
+            status={existing.status}
             canManage={canManage}
-            busy={busy}
-            syncing={syncing}
-            disconnecting={disconnecting}
             syncable={provider.syncable}
+            isMigration={existing.pattern === 'migration'}
             configurable={configurable}
             configOpen={configOpen}
+            busyReconnect={busy}
+            busySync={syncing}
+            busyDisconnect={disconnecting}
             onReconnect={onReconnect}
             onSync={onSync}
             onDisconnect={onDisconnect}
@@ -234,13 +165,15 @@ export function IntegrationProviderCard({
       </div>
 
       {/* Persistent connection error from the server (survives reload), never ephemeral state. */}
-      {reauthError ? (
-        <div role="alert" className="bg-surface-container px-4 py-2 text-xs">
-          <p className="text-destructive">{reauthError}</p>
-          <p className="text-on-surface-variant mt-1">
-            Use <span className="font-medium">Reconnect</span> to re-authorize and resume syncing.
-          </p>
-        </div>
+      {existing?.status === 'error' ? (
+        <CardAlert
+          message="This connection needs attention. Reconnect it to restore syncing."
+          detail={
+            <>
+              Use <span className="font-medium">Reconnect</span> to re-authorize and resume syncing.
+            </>
+          }
+        />
       ) : null}
 
       {showPendingHint ? (

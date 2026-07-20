@@ -12,6 +12,7 @@ import { use, type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import AutomationsTab from '@/components/settings/automations-tab';
+import { MailIngestSection } from '@/components/settings/mail-ingest-section';
 import { SectionHeader } from '@/components/settings/section-header';
 import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -35,6 +36,7 @@ export default function AutomationsSettingsPage({
         title={section?.label ?? 'Automations'}
         description={section?.description ?? 'Rules that act on your email suggestions and tasks.'}
       />
+      <MailIngestSection orgId={orgId} canManage={canManage} />
       <AutomationsTab orgId={orgId} canManage={canManage} />
     </div>
   );

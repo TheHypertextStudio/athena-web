@@ -2,7 +2,7 @@
 
 import type { JSX } from 'react';
 
-import { IntegrationsTab } from '@/components/settings/integrations-tab';
+import { ConnectionsPanel } from '@/components/settings/connections-panel';
 import { ConnectedAccountsTab } from '@/components/settings/connected-accounts-tab';
 import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -24,7 +24,7 @@ export default function GlobalConnectionsSettingsPage(): JSX.Element {
         description="Connect the apps Athena uses as data sources."
       />
       <ConnectedAccountsTab orgId={orgId} />
-      <IntegrationsTab orgId={orgId} canManage={canManage} surface="connections" />
+      <ConnectionsPanel orgId={orgId} canManage={canManage} />
     </div>
   );
 }

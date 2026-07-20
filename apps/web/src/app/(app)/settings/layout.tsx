@@ -9,7 +9,7 @@ export default function GlobalSettingsLayout({ children }: { children: ReactNode
       <header className="flex flex-col gap-1">
         <h1 className="text-on-surface text-title-large">Settings</h1>
         <p className="text-on-surface-variant text-body-medium">
-          Manage your relationship with Athena and Docket.
+          Your account, preferences, and connected apps.
         </p>
       </header>
 

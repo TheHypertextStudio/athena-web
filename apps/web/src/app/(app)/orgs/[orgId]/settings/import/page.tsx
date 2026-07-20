@@ -14,7 +14,7 @@
 import { use, type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { IntegrationsTab } from '@/components/settings/integrations-tab';
+import { ImportPanel } from '@/components/settings/import-panel';
 import { SectionHeader } from '@/components/settings/section-header';
 import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -40,7 +40,7 @@ export default function ImportSettingsPage({
           section?.description ?? 'Import everything from another tool into Docket, once.'
         }
       />
-      <IntegrationsTab orgId={orgId} canManage={canManage} surface="import" />
+      <ImportPanel orgId={orgId} canManage={canManage} />
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {
   Shield,
   Sparkles,
   User,
+  Workflow,
 } from '@docket/ui/icons';
 
 import type { SettingsSection } from './sections-personal';
@@ -45,6 +46,13 @@ export const GLOBAL_SETTINGS_SECTIONS: readonly SettingsSection[] = [
     description: 'Connect the apps Athena uses as data sources.',
     icon: Cable,
     href: 'connections',
+  },
+  {
+    key: 'automations',
+    label: 'Automations',
+    description: 'Rules that turn your email and tasks into action.',
+    icon: Workflow,
+    href: 'automations',
   },
   {
     key: 'notifications',

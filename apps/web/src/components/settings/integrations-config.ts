@@ -178,6 +178,59 @@ export function connectorCopy(provider: string): ConnectorCopy {
 }
 
 /**
+ * Card-level copy explaining, in user terms, what a workspace connection *does* and how it moves
+ * data.
+ *
+ * @remarks
+ * Deliberately two fields, not one blurb: `effect` answers "what does connecting this get me?"
+ * (the capability, framed around Athena/Docket), while `mechanics` answers "which way does data
+ * flow?" in a few words. Scope ("shared with your workspace") is intentionally *absent* here — the
+ * page's "This workspace" section header states it once, so cards never repeat it. Distinct from
+ * {@link ConnectorCopy}, which is config-panel wording (containers, checklists, team mapping).
+ */
+export interface ConnectionCardCopy {
+  /** What connecting this unlocks, in user terms (no provider jargon). */
+  effect: string;
+  /** Short data-flow direction phrase (e.g. "Two-way sync", "Reads new mail"). */
+  mechanics: string;
+}
+
+/** Per-provider card copy for the Connections surface. Falls back to generic wording. */
+const CONNECTION_CARD_COPY: Record<string, ConnectionCardCopy> = {
+  gtasks: {
+    effect: 'Athena keeps your Google Tasks and Docket tasks in step.',
+    mechanics: 'Two-way sync, per account',
+  },
+  calendar: {
+    effect: 'Athena sees your events to plan around them.',
+    mechanics: 'Reads your calendar',
+  },
+  gmail: {
+    effect: 'Athena reads new mail so it can suggest tasks in triage.',
+    mechanics: 'Reads new mail — nothing is sent',
+  },
+  linear: {
+    effect: 'Athena mirrors Linear issues, projects, and cycles as tasks.',
+    mechanics: 'Two-way sync',
+  },
+  github: {
+    effect: 'Athena links pull requests and issues to your work.',
+    mechanics: 'Reads your repositories',
+  },
+};
+
+/** The generic fallback shown for a provider with no dedicated card copy above. */
+const DEFAULT_CONNECTION_CARD_COPY: ConnectionCardCopy = {
+  effect: 'Athena mirrors this tool into Docket.',
+  mechanics: 'Keeps it in sync',
+};
+
+/** connectionCardCopy returns the Connections-card wording for a provider. */
+export function connectionCardCopy(provider: string): ConnectionCardCopy {
+  return CONNECTION_CARD_COPY[provider] ?? DEFAULT_CONNECTION_CARD_COPY;
+}
+
+/**
  * Which connector providers render their config panel inline on the Connections surface (a
  * "Configure" toggle on the generic {@link IntegrationProviderCard} row).
  *

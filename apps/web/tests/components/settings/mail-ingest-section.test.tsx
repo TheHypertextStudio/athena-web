@@ -12,15 +12,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { patchIntegration } = vi.hoisted(() => ({
+const { patchIntegration, getIntegrations } = vi.hoisted(() => ({
   patchIntegration: vi.fn(),
+  getIntegrations: vi.fn(),
 }));
 
 vi.mock('../../../src/lib/api', () => ({
   api: {
     v1: {
       orgs: {
-        ':orgId': { integrations: { ':id': { $patch: patchIntegration } } },
+        ':orgId': {
+          integrations: { $get: getIntegrations, ':id': { $patch: patchIntegration } },
+        },
       },
     },
   },
@@ -51,11 +54,12 @@ function gmailIntegration(over: Record<string, unknown> = {}): never {
   } as never;
 }
 
-function renderSection(integration: never): void {
+function renderSection(items: readonly never[]): void {
+  getIntegrations.mockResolvedValue(jsonResponse({ items }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <MailIngestSection orgId="org_1" canManage integrations={[integration]} />
+      <MailIngestSection orgId="org_1" canManage />
     </QueryClientProvider>,
   );
 }
@@ -68,10 +72,10 @@ afterEach(() => {
 describe('MailIngestSection', () => {
   it('enabling submits {enabled, threshold} and preserves sibling config keys', async () => {
     patchIntegration.mockResolvedValue(jsonResponse({ id: 'intg_1' }));
-    renderSection(gmailIntegration());
+    renderSection([gmailIntegration()]);
 
-    // Pick a non-default sensitivity first, then enable.
-    fireEvent.change(screen.getByLabelText('Suggestion sensitivity'), {
+    // Pick a non-default sensitivity first, then enable (the row appears once the fetch resolves).
+    fireEvent.change(await screen.findByLabelText('Suggestion sensitivity'), {
       target: { value: '70' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Turn on' }));
@@ -93,13 +97,13 @@ describe('MailIngestSection', () => {
 
   it('disabling removes the emailToTask key entirely (no enabled:false noise)', async () => {
     patchIntegration.mockResolvedValue(jsonResponse({ id: 'intg_1' }));
-    renderSection(
+    renderSection([
       gmailIntegration({
         config: { teamId: 'team_9', emailToTask: { enabled: true, threshold: 50 } },
       }),
-    );
+    ]);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn off' }));
 
     await waitFor(() => {
       expect(patchIntegration).toHaveBeenCalledTimes(1);
@@ -111,13 +115,11 @@ describe('MailIngestSection', () => {
     expect(body.json.config['teamId']).toBe('team_9'); // siblings preserved
   });
 
-  it('renders nothing when the org has no connected mail integration', () => {
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { container } = render(
-      <QueryClientProvider client={client}>
-        <MailIngestSection orgId="org_1" canManage integrations={[]} />
-      </QueryClientProvider>,
-    );
-    expect(container.firstChild).toBeNull();
+  it('guides the user to Connections when no inbox is connected', async () => {
+    renderSection([]);
+    // Not a blank void: the feature stays discoverable from where its rules live.
+    expect(await screen.findByText('No inbox connected yet')).toBeTruthy();
+    const link = screen.getByRole('link', { name: 'Connections' });
+    expect(link.getAttribute('href')).toBe('/orgs/org_1/settings/connections');
   });
 });

@@ -14,6 +14,7 @@
  * (see {@link AddMcpConnectorForm}), so a connector never has to be added from Settings alone.
  */
 import type { McpIntegrationOut } from '@docket/types';
+import { Cable } from '@docket/ui/icons';
 import {
   Badge,
   Button,
@@ -111,7 +112,14 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ))}
         </ul>
       ) : (
-        <p className="text-on-surface-variant text-body-medium">No tools yet.</p>
+        <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl border border-dashed p-4">
+          <Cable aria-hidden="true" className="size-4 shrink-0" />
+          <span>
+            {canManage
+              ? 'No tools connected yet. Add a connector so Athena can act through the services you use.'
+              : 'No tools connected yet. Ask an admin to add a connector.'}
+          </span>
+        </div>
       )}
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

@@ -139,6 +139,8 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
         </p>
       ) : null}
 
+      <h2 className="text-on-surface-variant text-xs font-medium">Linked accounts</h2>
+
       {loading ? (
         <ul className="flex flex-col gap-2">
           {[0, 1, 2].map((i) => (

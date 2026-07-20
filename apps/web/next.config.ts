@@ -64,6 +64,10 @@ const securityHeaders = [
  */
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // The dev-mode route indicator (bottom-left) is dev-only chrome that never ships to
+  // production, but it overlaps real page content in narrow-viewport design-review captures
+  // taken against `next dev` and reads as a product bug until you check the build mode.
+  devIndicators: false,
   output: 'standalone',
   outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
   transpilePackages: ['@docket/ui', '@docket/types', '@docket/env', '@docket/notifications'],

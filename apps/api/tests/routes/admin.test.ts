@@ -335,6 +335,15 @@ describe('billing exemptions', () => {
     const orgAfterGrant = await app.request(`/orgs/${orgId}`, { method: 'GET' });
     expect((await json<{ isBillingExempt: boolean }>(orgAfterGrant)).isBillingExempt).toBe(true);
 
+    const slug = (
+      await db.select().from(schema.organization).where(eq(schema.organization.id, orgId)).limit(1)
+    )[0]!.slug;
+    const listAfterGrant = await app.request(`/orgs?search=${slug}`, { method: 'GET' });
+    const listItem = (
+      await json<{ items: { id: string; isBillingExempt: boolean }[] }>(listAfterGrant)
+    ).items.find((o) => o.id === orgId);
+    expect(listItem?.isBillingExempt).toBe(true);
+
     const revoked = await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' });
     expect(revoked.status).toBe(200);
     expect((await json<{ revokedAt: string | null }>(revoked)).revokedAt).not.toBeNull();

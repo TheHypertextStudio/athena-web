@@ -23,6 +23,7 @@ import {
   audit,
   holdParam,
   idParam,
+  loadActiveExemptOrgIds,
   loadOrg,
   toExemptionOut,
   toHoldOut,
@@ -251,7 +252,8 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         days,
         previousState: org.lifecycleState,
       });
-      return ok(c, AdminOrgOut, toOrgOut(next));
+      const exemptIds = await loadActiveExemptOrgIds(db, [id]);
+      return ok(c, AdminOrgOut, toOrgOut(next, exemptIds));
     },
   )
   .post(
@@ -280,7 +282,8 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       await audit(db, staffUserId, 'billing.reactivated', 'organization', id, {
         previousState: org.lifecycleState,
       });
-      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id)));
+      const exemptIds = await loadActiveExemptOrgIds(db, [id]);
+      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id), exemptIds));
     },
   )
   .post(
@@ -319,6 +322,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         from: org.lifecycleState,
         to: lifecycleState,
       });
-      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id)));
+      const exemptIds = await loadActiveExemptOrgIds(db, [id]);
+      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id), exemptIds));
     },
   );

@@ -6,6 +6,7 @@
  * staff roles, time-boxed "View as" impersonation, lifecycle holds, and the operator
  * audit trail. Distinct from the per-org permission system.
  */
+import { sql } from 'drizzle-orm';
 import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 
 import { staffRole } from '../enums';
@@ -75,4 +76,26 @@ export const operatorAuditEvent = pgTable(
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => [index('operator_audit_event_created_idx').on(t.createdAt)],
+);
+
+/** A permanent, staff-granted billing exemption on an org (bypasses the Stripe-driven lifecycle gate). */
+export const billingExemption = pgTable(
+  'billing_exemption',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    reason: text('reason').notNull(),
+    grantedBy: text('granted_by').references(() => staffUser.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    revokedBy: text('revoked_by').references(() => staffUser.id, { onDelete: 'set null' }),
+    revokedAt: timestamp('revoked_at'),
+  },
+  (t) => [
+    index('billing_exemption_org_idx').on(t.organizationId),
+    uniqueIndex('billing_exemption_org_active_uq')
+      .on(t.organizationId)
+      .where(sql`${t.revokedAt} IS NULL`),
+  ],
 );

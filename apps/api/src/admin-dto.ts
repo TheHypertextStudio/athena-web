@@ -143,6 +143,11 @@ export const AdminOrgOut = z.object({
     .describe(
       'When the deletion sweep may advance this org (ISO-8601 = export-window open + 14 days), or null when no deletion is scheduled.',
     ),
+  isBillingExempt: z
+    .boolean()
+    .describe(
+      'True when a staff-granted billing exemption is currently active on this org — it bypasses the lifecycle-state entitlement gate entirely, independent of Stripe.',
+    ),
   createdAt: z.string().describe('Org creation timestamp (ISO-8601).'),
 });
 /** Validated admin-org value. */
@@ -173,6 +178,40 @@ export const AdminHoldOut = z.object({
 });
 /** Validated hold value. */
 export type AdminHoldOut = z.infer<typeof AdminHoldOut>;
+
+/** An active (un-revoked) billing exemption on an org. */
+export const AdminBillingExemptionOut = z.object({
+  id: z.string().describe('The billing-exemption id.'),
+  organizationId: z.string().describe('The org this exemption applies to.'),
+  reason: z.string().describe('The required free-text justification for the grant.'),
+  grantedBy: z
+    .string()
+    .nullable()
+    .describe('Staff-user id of the operator who granted the exemption, or null if unattributed.'),
+  createdAt: z.string().describe('When the exemption was granted (ISO-8601).'),
+  revokedBy: z
+    .string()
+    .nullable()
+    .describe(
+      'Staff-user id of the operator who revoked the exemption, or null while still active.',
+    ),
+  revokedAt: z
+    .string()
+    .nullable()
+    .describe('When the exemption was revoked (ISO-8601), or null while still active.'),
+});
+/** Validated billing-exemption value. */
+export type AdminBillingExemptionOut = z.infer<typeof AdminBillingExemptionOut>;
+
+/** Body for granting a billing exemption (a free-text reason is required). */
+export const GrantExemptionBody = z.object({
+  reason: z
+    .string()
+    .min(1)
+    .describe('Required free-text justification, recorded on the grant and in the audit event.'),
+});
+/** Validated grant-exemption body. */
+export type GrantExemptionBody = z.infer<typeof GrantExemptionBody>;
 
 /** One lifecycle-board column: a state and the orgs currently in it. */
 export const AdminLifecycleColumn = z.object({

@@ -1,23 +1,33 @@
-import { db, lifecycleHold, organization } from '@docket/db';
+import { billingExemption, db, lifecycleHold, organization } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import {
+  AdminBillingExemptionOut,
   AdminHoldOut,
   AdminOrgOut,
   ExtendTrialBody,
+  GrantExemptionBody,
   PlaceHoldBody,
   SetLifecycleBody,
 } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { onReactivated, onTrialOrPaymentTerminal } from '../billing/lifecycle';
-import { NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 
-import { audit, holdParam, idParam, loadOrg, toHoldOut, toOrgOut } from './admin-serializers';
+import {
+  audit,
+  holdParam,
+  idParam,
+  loadOrg,
+  toExemptionOut,
+  toHoldOut,
+  toOrgOut,
+} from './admin-serializers';
 
 /**
  * Sub-router for lifecycle-hold and billing-action routes (mounted at `/orgs`).
@@ -96,6 +106,83 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       if (!hold) throw new NotFoundError('Active hold not found');
       await audit(db, staffUserId, 'lifecycle_hold.released', 'organization', id, { holdId });
       return ok(c, AdminHoldOut, toHoldOut(hold));
+    },
+  )
+  .post(
+    '/:id/billing-exemption',
+    requireStaffRole('superadmin'),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Grant a billing exemption',
+      response: AdminBillingExemptionOut,
+      description: `Grants an organization a permanent, free, Stripe-independent bypass of the agent-session entitlement gate — the operator mechanism for comping internal or gifted accounts.
+
+**Behavior.** Verifies the org exists (else \`404 not_found\`), then inserts a \`billing_exemption\` row with the required free-text \`reason\` and \`grantedBy = \` the acting operator. A partial unique index enforces at most one active (\`revokedAt IS NULL\`) grant per org; attempting a second concurrent grant returns \`409 conflict\`. Once granted, \`assertAgentSessionsEntitled\` treats the org as entitled regardless of \`lifecycleState\`, indefinitely, until revoked.
+
+**Side effects.** Creates the exemption **and** writes a \`billing.exemption_granted\` operator audit event (subject = the org) capturing the exemption id and reason.
+
+**Access — superadmin only.** Gated by \`requireStaffRole('superadmin')\`: unlike the time-boxed \`finance\` actions (extend-trial, reactivate), this is an indefinite, full bypass of the revenue gate — the highest-blast-radius billing action, restricted to the top tier. \`support\`/\`finance\` → \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
+
+**Related.** \`DELETE /admin/orgs/{id}/billing-exemption\` to revoke; \`GET /admin/orgs/{id}\` reports \`isBillingExempt\`.`,
+    }),
+    zParam(idParam),
+    zJson(GrantExemptionBody),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const { reason } = c.req.valid('json');
+      const { staffUserId } = c.get('staffCtx');
+      await loadOrg(id);
+      let inserted;
+      try {
+        inserted = await db
+          .insert(billingExemption)
+          .values({ organizationId: id, reason, grantedBy: staffUserId })
+          .returning();
+      } catch {
+        throw new ConflictError('An active billing exemption already exists for this organization');
+      }
+      const exemption = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
+      if (!exemption) throw new NotFoundError('Exemption insert returned no row');
+      await audit(db, staffUserId, 'billing.exemption_granted', 'organization', id, {
+        exemptionId: exemption.id,
+        reason,
+      });
+      return ok(c, AdminBillingExemptionOut, toExemptionOut(exemption));
+    },
+  )
+  .delete(
+    '/:id/billing-exemption',
+    requireStaffRole('superadmin'),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Revoke a billing exemption',
+      response: AdminBillingExemptionOut,
+      description: `Revokes an organization's active billing exemption, reverting it to the normal Stripe-driven entitlement gate.
+
+**Behavior.** Atomically updates the exemption row matched by \`organizationId\` AND still active (\`revokedAt IS NULL\`), stamping \`revokedAt = now\` and \`revokedBy = \` the acting operator, in one conditional \`UPDATE\`. Returns \`404 not_found\` when no active exemption matches — including an org with no exemption at all, or one already revoked (the guard makes revoke idempotent-safe: a second call 404s rather than double-firing). Returns the now-revoked record.
+
+**Side effects.** Writes a \`billing.exemption_revoked\` operator audit event (subject = the org) referencing the exemption id.
+
+**Access — superadmin only.** Same tier as granting. \`support\`/\`finance\` → \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
+
+**Related.** \`POST /admin/orgs/{id}/billing-exemption\` to grant.`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const { staffUserId } = c.get('staffCtx');
+      const revoked = await db
+        .update(billingExemption)
+        .set({ revokedAt: new Date(), revokedBy: staffUserId })
+        .where(and(eq(billingExemption.organizationId, id), isNull(billingExemption.revokedAt)))
+        .returning();
+      const exemption = revoked[0];
+      if (!exemption) throw new NotFoundError('Active billing exemption not found');
+      await audit(db, staffUserId, 'billing.exemption_revoked', 'organization', id, {
+        exemptionId: exemption.id,
+      });
+      return ok(c, AdminBillingExemptionOut, toExemptionOut(exemption));
     },
   )
   .post(

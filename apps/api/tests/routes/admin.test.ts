@@ -316,6 +316,101 @@ describe('lifecycle holds', () => {
   });
 });
 
+describe('billing exemptions', () => {
+  it('grants (audited), then revokes (audited); double-revoke 404s', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('export_window');
+    const app = appWithSession(admin, fakeSession(userId));
+
+    const granted = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'internal free use' }),
+    });
+    expect(granted.status).toBe(200);
+    const exemption = await json<{ id: string; revokedAt: string | null }>(granted);
+    expect(exemption.revokedAt).toBeNull();
+    expect(await auditCount('billing.exemption_granted', orgId)).toBe(1);
+
+    const orgAfterGrant = await app.request(`/orgs/${orgId}`, { method: 'GET' });
+    expect((await json<{ isBillingExempt: boolean }>(orgAfterGrant)).isBillingExempt).toBe(true);
+
+    const revoked = await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' });
+    expect(revoked.status).toBe(200);
+    expect((await json<{ revokedAt: string | null }>(revoked)).revokedAt).not.toBeNull();
+    expect(await auditCount('billing.exemption_revoked', orgId)).toBe(1);
+
+    const orgAfterRevoke = await app.request(`/orgs/${orgId}`, { method: 'GET' });
+    expect((await json<{ isBillingExempt: boolean }>(orgAfterRevoke)).isBillingExempt).toBe(false);
+
+    // Revoking again 404s (no active grant).
+    expect(
+      (await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' })).status,
+    ).toBe(404);
+  });
+
+  it('403s a finance user (superadmin-only action)', async () => {
+    const { userId } = await makeStaff('finance');
+    const orgId = await makeOrg('export_window');
+    const app = appWithSession(admin, fakeSession(userId));
+    const res = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'x' }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('404s granting on an unknown org', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const app = appWithSession(admin, fakeSession(userId));
+    const res = await app.request('/orgs/missing/billing-exemption', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'x' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('422s a grant with an empty reason', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('active');
+    const app = appWithSession(admin, fakeSession(userId));
+    const res = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: '' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('409s granting a second exemption while one is already active', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('active');
+    const app = appWithSession(admin, fakeSession(userId));
+    const first = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'first' }),
+    });
+    expect(first.status).toBe(200);
+    const second = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'second' }),
+    });
+    expect(second.status).toBe(409);
+  });
+
+  it('404s revoking on an unknown org', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const app = appWithSession(admin, fakeSession(userId));
+    expect(
+      (await app.request('/orgs/missing/billing-exemption', { method: 'DELETE' })).status,
+    ).toBe(404);
+  });
+});
+
 describe('billing actions', () => {
   it('extends a trial (resets to trialing + clears window, audited)', async () => {
     const { userId } = await makeStaff('finance');

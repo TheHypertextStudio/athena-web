@@ -4,6 +4,8 @@ import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { billingExemption } from '@docket/db';
+
 const getSession = vi.fn(async () => null);
 vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 
@@ -93,6 +95,29 @@ describe('assertAgentSessionsEntitled', () => {
     await expect(assertAgentSessionsEntitled(active.orgId)).resolves.toBeUndefined();
 
     const lapsed = await seedOrg('export_window');
+    await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
+      status: 402,
+      code: 'agent_plan_required',
+    });
+  });
+
+  it('an active exemption entitles a non-entitled org; revoking it removes entitlement', async () => {
+    const lapsed = await seedOrg('export_window');
+    await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
+      status: 402,
+      code: 'agent_plan_required',
+    });
+
+    const [grant] = await db
+      .insert(billingExemption)
+      .values({ organizationId: lapsed.orgId, reason: 'internal free use' })
+      .returning({ id: billingExemption.id });
+    await expect(assertAgentSessionsEntitled(lapsed.orgId)).resolves.toBeUndefined();
+
+    await db
+      .update(billingExemption)
+      .set({ revokedAt: new Date() })
+      .where(eq(billingExemption.id, grant!.id));
     await expect(assertAgentSessionsEntitled(lapsed.orgId)).rejects.toMatchObject({
       status: 402,
       code: 'agent_plan_required',

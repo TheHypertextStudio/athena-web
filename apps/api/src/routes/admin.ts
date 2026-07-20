@@ -46,6 +46,7 @@ import {
   countOf,
   idParam,
   impersonationParam,
+  loadActiveExemptOrgIds,
   loadOrg,
   toAuditOut,
   toImpersonationOut,
@@ -180,8 +181,12 @@ export function createAdminRoutes<
               .offset(offset),
             db.select({ n: count() }).from(organization).where(where),
           ]);
+          const exemptIds = await loadActiveExemptOrgIds(
+            db,
+            items.map((i) => i.id),
+          );
           return ok(c, AdminOrgPage, {
-            items: items.map((o) => toOrgOut(o)),
+            items: items.map((i) => toOrgOut(i, exemptIds)),
             total: countOf(totals),
           });
         },
@@ -206,7 +211,8 @@ export function createAdminRoutes<
         async (c) => {
           const { id } = c.req.valid('param');
           const org = await loadOrg(id);
-          return ok(c, AdminOrgOut, toOrgOut(org));
+          const exemptIds = await loadActiveExemptOrgIds(db, [org.id]);
+          return ok(c, AdminOrgOut, toOrgOut(org, exemptIds));
         },
       )
       // ---- Lifecycle pipeline board ------------------------------------------
@@ -230,10 +236,16 @@ export function createAdminRoutes<
         }),
         async (c) => {
           const rows = await db.select().from(organization).orderBy(desc(organization.createdAt));
+          const exemptIds = await loadActiveExemptOrgIds(
+            db,
+            rows.map((r) => r.id),
+          );
           return ok(c, AdminLifecycleBoard, {
             columns: LIFECYCLE_STATES.map((state) => ({
               lifecycleState: state,
-              orgs: rows.filter((row) => row.lifecycleState === state).map((row) => toOrgOut(row)),
+              orgs: rows
+                .filter((row) => row.lifecycleState === state)
+                .map((row) => toOrgOut(row, exemptIds)),
             })),
           });
         },

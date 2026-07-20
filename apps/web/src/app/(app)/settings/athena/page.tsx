@@ -75,7 +75,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
           Athena preferences are temporarily unavailable. We&apos;ll keep checking automatically.
         </p>
       ) : (
-        <section className="border-outline-variant flex max-w-2xl flex-col gap-5 rounded-lg border p-5">
+        <section className="bg-surface-container-low flex max-w-2xl flex-col gap-5 rounded-lg p-5">
           <div>
             <h2 className="text-on-surface text-sm font-semibold">Working preferences</h2>
             <p className="text-on-surface-variant mt-1 text-sm">

@@ -112,7 +112,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           ))}
         </ul>
       ) : (
-        <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl border border-dashed p-4">
+        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl p-4">
           <Cable aria-hidden="true" className="size-4 shrink-0" />
           <span>
             {canManage
@@ -207,7 +207,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
   const busy = authorize.isPending || verify.isPending || disconnect.isPending || edit.isPending;
 
   return (
-    <li className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-lg border p-4">
+    <li className="bg-surface-container-low flex flex-col gap-4 rounded-lg p-4">
       <div className="flex flex-col gap-2">
         <span className="text-on-surface flex items-center gap-2 text-sm font-medium">
           {editing ? (
@@ -514,7 +514,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             }}
           />
         </div>
-        <details className="border-outline-variant rounded-lg border px-3 py-2">
+        <details className="bg-surface-container-low rounded-lg px-3 py-2">
           <summary className="text-on-surface cursor-pointer text-sm font-medium">
             Advanced options
           </summary>
@@ -537,7 +537,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
             </div>
           </div>
         </details>
-        <details className="border-outline-variant rounded-lg border px-3 py-2">
+        <details className="bg-surface-container-low rounded-lg px-3 py-2">
           <summary className="text-on-surface cursor-pointer text-sm font-medium">
             Other connection methods
           </summary>

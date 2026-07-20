@@ -57,7 +57,7 @@ export function ProviderGroup({
   const badge = statusBadge(accounts.length);
 
   return (
-    <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+    <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
           <Icon aria-hidden className="size-4" />

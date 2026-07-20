@@ -156,7 +156,7 @@ function CardNote(props: { tone: 'error' | 'muted'; children: string }): JSX.Ele
   return (
     <p
       {...(props.tone === 'error' ? { role: 'alert' } : {})}
-      className={`${color} border-outline-variant border-t px-4 py-2 text-xs`}
+      className={`${color} bg-surface-container px-4 py-2 text-xs`}
     >
       {props.children}
     </p>
@@ -194,7 +194,7 @@ export function IntegrationProviderCard({
   const identityLabel = connectionLabel(existing);
 
   return (
-    <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+    <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
           <ProviderIcon aria-hidden="true" className="size-4" />
@@ -235,7 +235,7 @@ export function IntegrationProviderCard({
 
       {/* Persistent connection error from the server (survives reload), never ephemeral state. */}
       {reauthError ? (
-        <div role="alert" className="border-outline-variant border-t px-4 py-2 text-xs">
+        <div role="alert" className="bg-surface-container px-4 py-2 text-xs">
           <p className="text-destructive">{reauthError}</p>
           <p className="text-on-surface-variant mt-1">
             Use <span className="font-medium">Reconnect</span> to re-authorize and resume syncing.

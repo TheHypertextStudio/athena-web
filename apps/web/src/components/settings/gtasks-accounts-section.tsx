@@ -100,7 +100,7 @@ function GtasksAccountRow(props: {
     account.status === 'pending' || account.status === 'error' || account.status === 'disconnected';
 
   return (
-    <li className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
+    <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
@@ -168,7 +168,7 @@ function GtasksAccountRow(props: {
 
       {/* Persistent connection error from the server (survives reload). */}
       {account.status === 'error' ? (
-        <div role="alert" className="border-outline-variant border-t px-4 py-2 text-xs">
+        <div role="alert" className="bg-surface-container px-4 py-2 text-xs">
           <p className="text-destructive">This account could not be synced.</p>
           <p className="text-on-surface-variant mt-1">
             Use <span className="font-medium">Reconnect</span>, or re-link this account under
@@ -178,16 +178,13 @@ function GtasksAccountRow(props: {
       ) : null}
 
       {props.error ? (
-        <p
-          role="alert"
-          className="text-destructive border-outline-variant border-t px-4 py-2 text-xs"
-        >
+        <p role="alert" className="text-destructive bg-surface-container px-4 py-2 text-xs">
           {props.error}
         </p>
       ) : null}
 
       {props.feedback ? (
-        <p className="text-on-surface-variant border-outline-variant border-t px-4 py-2 text-xs">
+        <p className="text-on-surface-variant bg-surface-container px-4 py-2 text-xs">
           {props.feedback}
         </p>
       ) : null}
@@ -213,7 +210,7 @@ function IdentityPicker(props: {
   }
   if (props.available.length === 0) {
     return (
-      <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl border border-dashed p-4">
+      <div className="bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl p-4">
         {props.hasAnyIdentity ? (
           'Every linked Google account is already connected here.'
         ) : (
@@ -232,7 +229,7 @@ function IdentityPicker(props: {
     );
   }
   return (
-    <ul className="border-outline-variant bg-surface-container-low flex flex-col gap-1 rounded-xl border p-2">
+    <ul className="bg-surface-container-low flex flex-col gap-1 rounded-xl p-2">
       {props.available.map((identity) => {
         const label = identity.email ?? identity.name ?? 'Google account';
         const busy = props.busySub === identity.accountId;
@@ -449,7 +446,7 @@ export function GtasksAccountsSection({
       {loading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
       ) : accounts.length === 0 ? (
-        <div className="border-outline-variant bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl border border-dashed p-4">
+        <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex items-center gap-3 rounded-xl p-4">
           <TaskAlt aria-hidden="true" className="size-4 shrink-0" />
           <span>
             {canManage

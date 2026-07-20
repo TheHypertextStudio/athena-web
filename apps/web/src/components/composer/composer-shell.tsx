@@ -194,7 +194,9 @@ export function ComposerShell({
         <div className="flex items-center gap-2 px-6 py-3">
           {confirmingDiscard ? (
             <>
-              <span className="text-on-surface-variant text-body-medium mr-auto">Discard this draft?</span>
+              <span className="text-on-surface-variant text-body-medium mr-auto">
+                Discard this draft?
+              </span>
               <Button
                 type="button"
                 variant="ghost"

@@ -141,7 +141,9 @@ export function DangerZoneTab(): JSX.Element {
                 className="flex items-center justify-between gap-3 px-4 py-3"
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="text-on-surface text-body-medium truncate font-medium">{b.name}</span>
+                  <span className="text-on-surface text-body-medium truncate font-medium">
+                    {b.name}
+                  </span>
                   <span className="text-on-surface-variant text-xs">
                     {b.memberCount} members · you&apos;re the only owner
                   </span>

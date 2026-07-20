@@ -15,7 +15,9 @@ export default function ProblemsPage(): JSX.Element {
     <article className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 pt-20 pb-24">
       <header>
         <p className="text-ink-muted text-sm font-medium">Support</p>
-        <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">Problem types</h1>
+        <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
+          Problem types
+        </h1>
         <p className="text-ink-muted mt-4 max-w-2xl leading-relaxed">
           Docket links errors here by stable code. These pages describe general recovery only; they
           do not contain information about a specific account, request, or item.

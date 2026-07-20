@@ -112,7 +112,9 @@ function CommentEntry({
             <span className="text-on-surface-variant text-xs">(edited)</span>
           ) : null}
         </div>
-        <p className="text-on-surface text-body-medium mt-0.5 whitespace-pre-wrap">{comment.body}</p>
+        <p className="text-on-surface text-body-medium mt-0.5 whitespace-pre-wrap">
+          {comment.body}
+        </p>
       </div>
     </li>
   );

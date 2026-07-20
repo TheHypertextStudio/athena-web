@@ -321,7 +321,9 @@ function AppShellInner({
   const mobileBrand = loading ? (
     <span className="text-body-medium font-semibold">Docket</span>
   ) : (
-    <span className="text-body-medium truncate font-semibold">{activeWorkspaceName ?? 'Docket'}</span>
+    <span className="text-body-medium truncate font-semibold">
+      {activeWorkspaceName ?? 'Docket'}
+    </span>
   );
 
   const mobileActions = loading ? (

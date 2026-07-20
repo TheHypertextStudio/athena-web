@@ -116,7 +116,9 @@ function InvitationRow({
     <li className="hover:bg-surface-container-high flex min-h-14 items-center gap-3 px-3 py-2 transition-colors">
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex items-center gap-2">
-          <span className="text-on-surface text-body-medium truncate font-medium">{invitation.email}</span>
+          <span className="text-on-surface text-body-medium truncate font-medium">
+            {invitation.email}
+          </span>
           {invitation.asGuest ? (
             <Badge variant="secondary" className="font-normal">
               Guest

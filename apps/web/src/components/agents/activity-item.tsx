@@ -126,7 +126,9 @@ export function ActivityItem({
             onReject={onReject}
           />
         ) : (
-          <p className="text-on-surface text-body-medium leading-relaxed whitespace-pre-wrap">{text}</p>
+          <p className="text-on-surface text-body-medium leading-relaxed whitespace-pre-wrap">
+            {text}
+          </p>
         )}
 
         {/* Elicitation reply affordance. */}
@@ -304,7 +306,9 @@ function ThoughtBody({ text }: { text: string }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 160;
   if (!long) {
-    return <p className="text-on-surface-variant text-body-medium leading-relaxed italic">{text}</p>;
+    return (
+      <p className="text-on-surface-variant text-body-medium leading-relaxed italic">{text}</p>
+    );
   }
   return (
     <button

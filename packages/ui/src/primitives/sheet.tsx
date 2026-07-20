@@ -165,7 +165,12 @@ export function SheetTitle({
   className,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Title>): React.JSX.Element {
-  return <DialogPrimitive.Title className={cn('text-on-surface text-title-small', className)} {...props} />;
+  return (
+    <DialogPrimitive.Title
+      className={cn('text-on-surface text-title-small', className)}
+      {...props}
+    />
+  );
 }
 
 /**

@@ -3,3 +3,4 @@ dist
 .next
 coverage
 pnpm-lock.yaml
+.claude

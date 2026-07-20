@@ -85,7 +85,9 @@ export function InitiativeRow({
       </div>
 
       {description ? (
-        <p className="text-on-surface-variant text-body-medium line-clamp-1 pl-[26px]">{description}</p>
+        <p className="text-on-surface-variant text-body-medium line-clamp-1 pl-[26px]">
+          {description}
+        </p>
       ) : null}
 
       <p className="text-on-surface-variant pl-[26px] text-xs">

@@ -246,15 +246,13 @@ const projects = new Hono<AppEnv>()
           );
         }
         if (labelIds.length > 0) {
-          await tx
-            .insert(projectLabel)
-            .values(
-              labelIds.map((labelId) => ({
-                projectId: created.id,
-                labelId,
-                organizationId: orgId,
-              })),
-            );
+          await tx.insert(projectLabel).values(
+            labelIds.map((labelId) => ({
+              projectId: created.id,
+              labelId,
+              organizationId: orgId,
+            })),
+          );
         }
         return created;
       });

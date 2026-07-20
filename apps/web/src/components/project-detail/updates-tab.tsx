@@ -127,7 +127,9 @@ export function UpdatesTab({
                 <ActorAvatar kind={author.kind} name={author.name} size={32} />
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-on-surface text-body-medium font-medium">{author.name}</span>
+                    <span className="text-on-surface text-body-medium font-medium">
+                      {author.name}
+                    </span>
                     <span className="text-on-surface-variant text-xs">
                       {relativeTime(update.createdAt)}
                     </span>

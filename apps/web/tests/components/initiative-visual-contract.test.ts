@@ -98,9 +98,7 @@ describe('Initiative visual contract', () => {
       .map((path) => `${relative(root, path)}\n${source(path)}`)
       .join('\n');
     for (const token of removed) {
-      expect(production).not.toMatch(
-        new RegExp(`(?<![A-Za-z0-9_-])${token}(?![A-Za-z0-9_-])`),
-      );
+      expect(production).not.toMatch(new RegExp(`(?<![A-Za-z0-9_-])${token}(?![A-Za-z0-9_-])`));
     }
   });
 

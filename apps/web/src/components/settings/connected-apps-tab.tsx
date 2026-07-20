@@ -117,7 +117,9 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
       {/* ── Authorized clients roster ── */}
       <section className="flex flex-col gap-4" aria-label="Authorized MCP clients">
         <div className="flex flex-col gap-1">
-          <h2 className="text-on-surface text-body-medium font-medium">Apps with access to your Docket</h2>
+          <h2 className="text-on-surface text-body-medium font-medium">
+            Apps with access to your Docket
+          </h2>
           <p className="text-on-surface-variant text-body-medium">
             Each app below can read or act on your work using the scopes you approved. Revoking
             removes all their access tokens immediately — they will need to re-authorize.
@@ -156,7 +158,9 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
                   {app.name.charAt(0).toUpperCase()}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-on-surface text-body-medium truncate font-medium">{app.name}</span>
+                  <span className="text-on-surface text-body-medium truncate font-medium">
+                    {app.name}
+                  </span>
                   <div className="flex flex-wrap gap-1">
                     {app.scopes.map((scope) => (
                       <Badge key={scope} variant="secondary" className="text-xs font-normal">

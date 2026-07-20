@@ -72,7 +72,9 @@ export function ProviderRow<Provider extends string = string>({
       </span>
 
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-on-surface text-body-medium leading-tight font-semibold">{card.name}</span>
+        <span className="text-on-surface text-body-medium leading-tight font-semibold">
+          {card.name}
+        </span>
         {connected ? (
           <span className="text-primary text-body-medium leading-snug">{mirroredLabel}</span>
         ) : phase === 'error' ? (
@@ -80,7 +82,9 @@ export function ProviderRow<Provider extends string = string>({
             {state.error}
           </span>
         ) : (
-          <span className="text-on-surface-variant text-body-medium leading-snug">{card.blurb}</span>
+          <span className="text-on-surface-variant text-body-medium leading-snug">
+            {card.blurb}
+          </span>
         )}
       </div>
 

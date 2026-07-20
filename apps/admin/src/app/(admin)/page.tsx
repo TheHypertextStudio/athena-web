@@ -91,7 +91,10 @@ export default function DashboardPage(): JSX.Element {
       ) : data ? (
         <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
           <section className="flex flex-col gap-4" aria-labelledby="metrics-heading">
-            <h2 id="metrics-heading" className="text-on-surface-variant text-body-medium font-medium">
+            <h2
+              id="metrics-heading"
+              className="text-on-surface-variant text-body-medium font-medium"
+            >
               Platform metrics
             </h2>
             <div className="grid grid-cols-2 gap-3">
@@ -110,7 +113,10 @@ export default function DashboardPage(): JSX.Element {
           </section>
 
           <section className="flex flex-col gap-4" aria-labelledby="queues-heading">
-            <h2 id="queues-heading" className="text-on-surface-variant text-body-medium font-medium">
+            <h2
+              id="queues-heading"
+              className="text-on-surface-variant text-body-medium font-medium"
+            >
               Needs attention
             </h2>
             <OrgQueue

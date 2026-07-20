@@ -120,7 +120,11 @@ interface NavRow<K extends string> {
  * (rows then start flush beneath it), matching the section-spacing rhythm.
  */
 function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
-  return <p className="text-on-surface-variant text-body-medium mt-4 mb-1 px-3 font-medium">{children}</p>;
+  return (
+    <p className="text-on-surface-variant text-body-medium mt-4 mb-1 px-3 font-medium">
+      {children}
+    </p>
+  );
 }
 
 /**

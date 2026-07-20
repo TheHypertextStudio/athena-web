@@ -83,7 +83,9 @@ function RecoveryCodesSection(): JSX.Element {
           <div className="flex flex-col gap-1">
             <p
               className={
-                lowOnCodes ? 'text-destructive text-body-medium' : 'text-on-surface-variant text-body-medium'
+                lowOnCodes
+                  ? 'text-destructive text-body-medium'
+                  : 'text-on-surface-variant text-body-medium'
               }
             >
               {status.remaining === 0

@@ -168,7 +168,10 @@ export default function UserDetailPage(): JSX.Element {
           </Card>
 
           <section className="flex flex-col gap-3" aria-labelledby="memberships-heading">
-            <h2 id="memberships-heading" className="text-on-surface-variant text-body-medium font-medium">
+            <h2
+              id="memberships-heading"
+              className="text-on-surface-variant text-body-medium font-medium"
+            >
               Organization memberships ({detail.memberships.length})
             </h2>
             {detail.memberships.length > 0 ? (
@@ -180,7 +183,9 @@ export default function UserDetailPage(): JSX.Element {
                       className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-4 py-3`}
                     >
                       <div className="min-w-0">
-                        <p className="text-body-medium truncate font-medium">{m.organizationName}</p>
+                        <p className="text-body-medium truncate font-medium">
+                          {m.organizationName}
+                        </p>
                         <p className="text-on-surface-variant truncate text-xs">
                           {m.organizationSlug}
                         </p>
@@ -215,7 +220,10 @@ function Field({
   return (
     <div className="flex flex-col gap-0.5">
       <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
-      <span className={`text-body-medium ${mono ? 'truncate font-mono text-xs' : ''}`} title={value}>
+      <span
+        className={`text-body-medium ${mono ? 'truncate font-mono text-xs' : ''}`}
+        title={value}
+      >
         {value}
       </span>
     </div>

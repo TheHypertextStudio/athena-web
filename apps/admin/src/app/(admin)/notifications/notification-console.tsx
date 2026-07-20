@@ -176,7 +176,9 @@ export function NotificationAnnouncementConsole({
                       onSelectIntent(intent.id);
                     }}
                   >
-                    <span className="text-body-medium line-clamp-2 font-medium">{intent.subject}</span>
+                    <span className="text-body-medium line-clamp-2 font-medium">
+                      {intent.subject}
+                    </span>
                     <span className="text-on-surface-variant text-xs">
                       {intent.status} · {intent.priority}
                     </span>

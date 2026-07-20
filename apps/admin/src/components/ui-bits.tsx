@@ -40,7 +40,9 @@ export function PageHeader({ title, description, actions }: PageHeaderProps): JS
     <header className="flex flex-wrap items-end justify-between gap-4">
       <div className="flex flex-col gap-1">
         <h1 className="text-on-surface text-title-large">{title}</h1>
-        {description ? <p className="text-on-surface-variant text-body-medium">{description}</p> : null}
+        {description ? (
+          <p className="text-on-surface-variant text-body-medium">{description}</p>
+        ) : null}
       </div>
       {actions ? <div className="flex items-center gap-2">{actions}</div> : null}
     </header>

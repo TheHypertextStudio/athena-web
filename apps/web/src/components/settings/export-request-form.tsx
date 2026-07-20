@@ -139,7 +139,9 @@ export function ExportRequestForm({
                       toggleWorkspace(workspace.id, event.target.checked);
                     }}
                   />
-                  <span className="text-on-surface text-body-medium break-words">{workspace.name}</span>
+                  <span className="text-on-surface text-body-medium break-words">
+                    {workspace.name}
+                  </span>
                 </label>
               );
             })}

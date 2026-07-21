@@ -413,8 +413,41 @@ export default function InitiativesListClient(): JSX.Element {
     return selfOrDescendantPredicate(parentById);
   }, [data]);
 
-  const createLink = useApiMutation({
-    mutationFn: (vars: { parentInitiativeId: string; childInitiativeId: string }) =>
+  // Optimistically move a row to a new parent (or to the root) in the overview cache so the tree
+  // re-nests the instant a drag lands, instead of waiting for the hierarchy write to round-trip.
+  // Returns the pre-move snapshot so a failed write can roll the tree back.
+  const writeParent = useCallback(
+    (childId: string, parentId: string | null): InitiativeOverviewOut | undefined => {
+      const previous = queryClient.getQueryData<InitiativeOverviewOut>(overviewKey);
+      queryClient.setQueryData<InitiativeOverviewOut>(overviewKey, (current) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === childId
+                  ? {
+                      ...item,
+                      parentInitiativeId: parentId === null ? null : InitiativeId.parse(parentId),
+                      // Detaching clears the edge; a move keeps its existing link, and a fresh
+                      // nest leaves parentLinkId null until the refetch backfills the real id.
+                      parentLinkId: parentId === null ? null : item.parentLinkId,
+                    }
+                  : item,
+              ),
+            }
+          : current,
+      );
+      return previous;
+    },
+    [queryClient, overviewKey],
+  );
+
+  const createLink = useApiMutation<
+    unknown,
+    { parentInitiativeId: string; childInitiativeId: string },
+    { previous?: InitiativeOverviewOut }
+  >({
+    mutationFn: (vars) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].initiatives['hierarchy-links'].$post({
@@ -426,10 +459,21 @@ export default function InitiativesListClient(): JSX.Element {
           }),
         `Could not nest that ${initiativeNoun.toLowerCase()}.`,
       ),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: overviewKey });
+      return { previous: writeParent(vars.childInitiativeId, vars.parentInitiativeId) };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(overviewKey, context.previous);
+    },
     invalidateKeys: [overviewKey],
   });
-  const moveLink = useApiMutation({
-    mutationFn: (vars: { linkId: string; parentInitiativeId: string }) =>
+  const moveLink = useApiMutation<
+    unknown,
+    { linkId: string; parentInitiativeId: string; childInitiativeId: string },
+    { previous?: InitiativeOverviewOut }
+  >({
+    mutationFn: (vars) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].initiatives['hierarchy-links'][':linkId'].$patch({
@@ -438,17 +482,35 @@ export default function InitiativesListClient(): JSX.Element {
           }),
         `Could not move that ${initiativeNoun.toLowerCase()}.`,
       ),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: overviewKey });
+      return { previous: writeParent(vars.childInitiativeId, vars.parentInitiativeId) };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(overviewKey, context.previous);
+    },
     invalidateKeys: [overviewKey],
   });
-  const detachLink = useApiMutation({
-    mutationFn: (linkId: string) =>
+  const detachLink = useApiMutation<
+    unknown,
+    { linkId: string; childInitiativeId: string },
+    { previous?: InitiativeOverviewOut }
+  >({
+    mutationFn: (vars) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].initiatives['hierarchy-links'][':linkId'].$delete({
-            param: { orgId, linkId },
+            param: { orgId, linkId: vars.linkId },
           }),
         `Could not move that ${initiativeNoun.toLowerCase()} to the top level.`,
       ),
+    onMutate: async (vars) => {
+      await queryClient.cancelQueries({ queryKey: overviewKey });
+      return { previous: writeParent(vars.childInitiativeId, null) };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) queryClient.setQueryData(overviewKey, context.previous);
+    },
     invalidateKeys: [overviewKey],
   });
   const reparentError =
@@ -468,9 +530,13 @@ export default function InitiativesListClient(): JSX.Element {
           childInitiativeId: plan.childInitiativeId,
         });
       } else if (plan.kind === 'move') {
-        moveLink.mutate({ linkId: plan.linkId, parentInitiativeId: plan.parentInitiativeId });
+        moveLink.mutate({
+          linkId: plan.linkId,
+          parentInitiativeId: plan.parentInitiativeId,
+          childInitiativeId: dragged.id,
+        });
       } else if (plan.kind === 'detach') {
-        detachLink.mutate(plan.linkId);
+        detachLink.mutate({ linkId: plan.linkId, childInitiativeId: dragged.id });
       }
     },
     [createLink, moveLink, detachLink, isSelfOrDescendant],

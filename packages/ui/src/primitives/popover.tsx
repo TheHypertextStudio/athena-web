@@ -58,6 +58,10 @@ PopoverAnchor.displayName = PopoverPrimitive.Anchor.displayName;
  * plain region (no `menu` semantics) so it can host arbitrary interactive content. Defaults
  * to `align="start"` so a property picker's panel left-edge lines up with its compact
  * trigger rather than centering under it.
+ *
+ * Layering: transient overlays (this, dropdown/context menus, tooltips, hover cards) sit at
+ * `z-[120]` — above the modal layer (sheets `z-[100]`, dialogs `z-[110]`) — so a picker opened
+ * from inside a dialog renders over it instead of behind the scrim.
  */
 export function PopoverContent({
   className,
@@ -71,7 +75,7 @@ export function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-[var(--radix-popover-content-available-height)] w-72 origin-[var(--radix-popover-content-transform-origin)] rounded-md border p-0 shadow-md duration-(--dur-base) ease-(--ease-out) outline-none',
+          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[120] max-h-[var(--radix-popover-content-available-height)] w-72 origin-[var(--radix-popover-content-transform-origin)] rounded-md border p-0 shadow-md duration-(--dur-base) ease-(--ease-out) outline-none',
           focusRing,
           className,
         )}

@@ -82,10 +82,11 @@ describe('Projects experience contract', () => {
     expect(document).toContain('bg-surface-container-low');
     expect(document).not.toContain('border-y');
     expect(editor).toContain('text-body-large');
-    expect(editor).toContain('[&_h1]:text-headline-medium');
-    expect(editor).toContain('[&_h2]:text-headline-small');
-    expect(editor).toContain('[&_h3]:text-title-large');
-    expect(editor).toContain('font-normal');
+    // In-document headings sit a tier below the page title (headline-large) so they never compete:
+    // the body ramp tops out at title-large and steps down from there.
+    expect(editor).toContain('[&_h1]:text-title-large');
+    expect(editor).toContain('[&_h2]:text-title-medium');
+    expect(editor).toContain('[&_h3]:text-title-small');
   });
 
   it('gives Resources a dedicated operating tab', () => {

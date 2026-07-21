@@ -9,17 +9,26 @@ import type {
   UpdateOut,
 } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
-import { EnumPicker } from '@docket/ui/components';
+import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronLeft } from '@docket/ui/icons';
-import { Badge, Button, Skeleton } from '@docket/ui/primitives';
+import {
+  Activity,
+  Calendar,
+  ChevronLeft,
+  CircleDot,
+  Flag,
+  RefreshCw,
+  User,
+} from '@docket/ui/icons';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { EntityDocument } from '@/components/editor/entity-document';
-import { InitiativePropertiesPanel } from '@/components/initiatives/properties-panel';
 import { memberActorOptions } from '@/components/property-pickers/options';
+import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
+import { formatCalendarDate } from '@/lib/format-date';
 import { UpdatesPanel } from '@/components/programs/updates-panel';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { api } from '@/lib/api';
@@ -234,7 +243,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           ) : null}
           <Button
             className="min-h-10"
-            variant="outline"
+            variant="ghost"
             size="sm"
             onClick={() => {
               window.print();
@@ -247,9 +256,6 @@ export default function InitiativeDetailPage(): JSX.Element {
 
       <header className="max-w-4xl">
         <div className="mb-3">
-          <Badge className="mb-3" variant="secondary">
-            {STATUS_LABEL[detail.status]}
-          </Badge>
           {editingHeader ? (
             <form
               className="no-print flex w-full max-w-3xl flex-col gap-3"
@@ -401,7 +407,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       >
         <div className="min-w-0 space-y-10">
           {detail.latestUpdate ? (
-            <section className="border-outline-variant bg-surface-container-low rounded-lg border px-5 py-4">
+            <section className="bg-surface-container-low rounded-xl px-5 py-4">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <h2 className="text-on-surface text-sm font-medium">Latest update</h2>
                 <span className="text-on-surface-variant text-xs">
@@ -423,63 +429,82 @@ export default function InitiativeDetailPage(): JSX.Element {
             placeholder="Add the Initiative brief…"
           />
           <section>
-            <h2 className="text-on-surface mb-3 text-lg font-semibold">Sub-initiatives</h2>
+            <h2 className="text-on-surface text-title-small mb-3">Sub-initiatives</h2>
             {children.length ? (
-              <div className="divide-outline-variant divide-y border-y">
+              <div className="bg-surface-container-low flex flex-col rounded-xl p-1">
                 {children.map((child) => (
                   <Link
                     key={child.id}
                     href={`/orgs/${child.organizationId}/initiatives/${child.id}`}
-                    className="flex items-center justify-between py-3 text-sm hover:underline"
+                    className="hover:bg-surface-container-high flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
                   >
-                    <span>{child.name}</span>
-                    <span className="text-on-surface-variant">{STATUS_LABEL[child.status]}</span>
+                    <span className="min-w-0 truncate">{child.name}</span>
+                    <span className="text-on-surface-variant shrink-0">
+                      {STATUS_LABEL[child.status]}
+                    </span>
                   </Link>
                 ))}
               </div>
             ) : (
-              <p className="text-on-surface-variant text-sm">
+              <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-6 text-center text-sm">
                 No sub-initiatives in this workspace context.
               </p>
             )}
           </section>
           <section>
-            <h2 className="text-on-surface mb-3 text-lg font-semibold">Connected work</h2>
-            <div className="divide-outline-variant divide-y border-y">
-              {detail.connectedWork.map((item) => (
-                <div
-                  key={`${item.kind}-${item.id}`}
-                  className="flex items-center justify-between py-3 text-sm"
-                >
-                  <span className="min-w-0 truncate">{item.name}</span>
-                  <span className="text-on-surface-variant ml-3 shrink-0">
-                    {item.kind === 'program' ? programNoun : projectNoun}
-                    {!item.direct ? ' · inherited' : ''}
-                  </span>
-                </div>
-              ))}
-              {detail.connectedWork.length === 0 ? (
-                <p className="text-on-surface-variant py-3 text-sm">No connected work yet.</p>
-              ) : null}
-            </div>
+            <h2 className="text-on-surface text-title-small mb-3">Connected work</h2>
+            {detail.connectedWork.length ? (
+              <div className="bg-surface-container-low flex flex-col rounded-xl p-1">
+                {detail.connectedWork.map((item) => (
+                  <div
+                    key={`${item.kind}-${item.id}`}
+                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm"
+                  >
+                    <span className="min-w-0 truncate">{item.name}</span>
+                    <span className="text-on-surface-variant ml-3 shrink-0">
+                      {item.kind === 'program' ? programNoun : projectNoun}
+                      {!item.direct ? ' · inherited' : ''}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-6 text-center text-sm">
+                No connected work yet.
+              </p>
+            )}
           </section>
         </div>
-        <aside className="initiative-properties space-y-4">
-          <InitiativePropertiesPanel
-            ownerId={detail.ownerId ?? null}
-            memberOptions={memberOptions}
-            targetDate={detail.targetDate ? detail.targetDate.slice(0, 10) : null}
-            canEdit={canEdit}
-            pending={mutations.propsPending}
-            onOwnerChange={(ownerId) => {
-              mutations.patchInitiative({ ownerId });
-            }}
-            onTargetDateChange={(targetDate) => {
-              mutations.patchInitiative({ targetDate });
-            }}
-          />
-          <div className="border-outline-variant divide-outline-variant divide-y border-y text-sm">
-            <Property label="Status">
+        <aside className="initiative-properties flex flex-col gap-4">
+          <PropertyPanel>
+            <PropertyPanelRow icon={<User className="size-4" />} label="Owner">
+              <ActorPicker
+                options={memberOptions}
+                value={detail.ownerId ?? null}
+                onChange={(ownerId) => {
+                  mutations.patchInitiative({ ownerId });
+                }}
+                placeholder="Set owner"
+                clearLabel="No owner"
+                ariaLabel="Owner"
+                readOnly={!canEdit}
+                disabled={mutations.propsPending}
+              />
+            </PropertyPanelRow>
+            <PropertyPanelRow divided icon={<Calendar className="size-4" />} label="Target date">
+              <DatePicker
+                value={detail.targetDate ? detail.targetDate.slice(0, 10) : null}
+                onChange={(targetDate) => {
+                  mutations.patchInitiative({ targetDate });
+                }}
+                placeholder="Set target date"
+                formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+                ariaLabel="Target date"
+                readOnly={!canEdit}
+                disabled={mutations.propsPending}
+              />
+            </PropertyPanelRow>
+            <PropertyPanelRow divided icon={<CircleDot className="size-4" />} label="Status">
               <EnumPicker
                 options={enumOptions(STATUS_ORDER, STATUS_LABEL)}
                 value={detail.status}
@@ -490,8 +515,12 @@ export default function InitiativeDetailPage(): JSX.Element {
                 placeholder="Choose status"
                 readOnly={!canEdit}
               />
-            </Property>
-            <Property label={`${initiativeNoun} health`}>
+            </PropertyPanelRow>
+            <PropertyPanelRow
+              divided
+              icon={<Activity className="size-4" />}
+              label={`${initiativeNoun} health`}
+            >
               <EnumPicker
                 options={HEALTH_OPTIONS}
                 value={detail.health ?? null}
@@ -503,11 +532,17 @@ export default function InitiativeDetailPage(): JSX.Element {
                 readOnly={!canEdit}
                 clearLabel="No health"
               />
-            </Property>
-            <Property label="Connected-work health">
-              <span>{detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—'}</span>
-            </Property>
-            <Property label="Priority">
+            </PropertyPanelRow>
+            <PropertyPanelRow
+              divided
+              icon={<Activity className="size-4" />}
+              label="Connected-work health"
+            >
+              <span className="capitalize">
+                {detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—'}
+              </span>
+            </PropertyPanelRow>
+            <PropertyPanelRow divided icon={<Flag className="size-4" />} label="Priority">
               <EnumPicker
                 options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
                 value={detail.priority}
@@ -518,8 +553,12 @@ export default function InitiativeDetailPage(): JSX.Element {
                 placeholder="Choose priority"
                 readOnly={!canEdit}
               />
-            </Property>
-            <Property label="Update cadence">
+            </PropertyPanelRow>
+            <PropertyPanelRow
+              divided
+              icon={<RefreshCw className="size-4" />}
+              label="Update cadence"
+            >
               <EnumPicker
                 options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
                 value={detail.updateCadence}
@@ -530,10 +569,10 @@ export default function InitiativeDetailPage(): JSX.Element {
                 placeholder="Choose cadence"
                 readOnly={!canEdit}
               />
-            </Property>
-          </div>
-          <section className="space-y-3">
-            <h3 className="text-on-surface text-title-small">Labels</h3>
+            </PropertyPanelRow>
+          </PropertyPanel>
+          <section className="bg-surface-container-low flex flex-col gap-3 rounded-xl px-4 py-3">
+            <h3 className="text-on-surface-variant text-xs font-medium">Labels</h3>
             <div className="flex flex-wrap gap-2">
               {data.labels
                 .filter((label) => label.teamId === null || label.teamId === undefined)
@@ -570,33 +609,37 @@ export default function InitiativeDetailPage(): JSX.Element {
               ) : null}
             </div>
           </section>
-          <section className="space-y-3">
-            <h3 className="text-on-surface text-title-small">Resources</h3>
-            <div className="divide-outline-variant divide-y border-y">
-              {detail.resources.map((resource) => (
-                <div key={resource.id} className="flex items-center gap-2 py-2 text-sm">
-                  <a
-                    href={resource.url ?? '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="min-w-0 flex-1 truncate hover:underline"
-                  >
-                    {resource.title}
-                  </a>
-                  {canEdit ? (
-                    <button
-                      type="button"
-                      className="text-on-surface-variant hover:text-destructive min-h-10 text-xs"
-                      onClick={() => {
-                        removeResource.mutate(resource.id);
-                      }}
+          <section className="bg-surface-container-low flex flex-col gap-3 rounded-xl px-4 py-3">
+            <h3 className="text-on-surface-variant text-xs font-medium">Resources</h3>
+            {detail.resources.length ? (
+              <div className="flex flex-col gap-1">
+                {detail.resources.map((resource) => (
+                  <div key={resource.id} className="flex items-center gap-2 text-sm">
+                    <a
+                      href={resource.url ?? '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="min-w-0 flex-1 truncate hover:underline"
                     >
-                      Remove
-                    </button>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+                      {resource.title}
+                    </a>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        className="text-on-surface-variant hover:text-destructive min-h-10 text-xs"
+                        onClick={() => {
+                          removeResource.mutate(resource.id);
+                        }}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-on-surface-variant text-xs">No resources yet.</p>
+            )}
             {canEdit ? (
               <form
                 className="no-print space-y-2"
@@ -694,15 +737,6 @@ function PrintProperty({ label, value }: { label: string; value: string }): JSX.
     <div className="flex justify-between gap-4 border-b py-1">
       <dt className="text-on-surface-variant">{label}</dt>
       <dd className="text-right capitalize">{value}</dd>
-    </div>
-  );
-}
-
-function Property({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-3 py-2">
-      <span className="text-on-surface-variant">{label}</span>
-      <div className="text-right capitalize">{children}</div>
     </div>
   );
 }

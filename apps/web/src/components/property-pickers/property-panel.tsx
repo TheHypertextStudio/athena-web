@@ -6,7 +6,7 @@
  * @remarks
  * Directive A: a detail surface's property rail must read as a complete, scannable list where
  * every property is an *interactive* affordance — never a dead "Not set" row. This is the
- * common chrome the project / program / initiative / cycle detail panels share: a calm bordered
+ * common chrome the project / program / initiative / cycle detail panels share: a calm tonal
  * card titled "Properties", a stack of {@link PropertyPanelRow}s (a muted icon + a calm field
  * label gutter, then the value), with a hairline between rows. The value slot hosts an inline picker
  * trigger (ghost weight) so an empty property renders as a calm "Set <field>" prompt that opens
@@ -32,12 +32,7 @@ export interface PropertyPanelProps {
  */
 export function PropertyPanel({ children, className }: PropertyPanelProps): JSX.Element {
   return (
-    <div
-      className={cn(
-        'border-outline-variant bg-surface-container-low flex flex-col rounded-xl border px-4 py-2',
-        className,
-      )}
-    >
+    <div className={cn('bg-surface-container-low flex flex-col rounded-xl px-4 py-2', className)}>
       <h2 className="sr-only">Properties</h2>
       {children}
     </div>

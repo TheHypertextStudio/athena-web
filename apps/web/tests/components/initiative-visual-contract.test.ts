@@ -45,14 +45,15 @@ function productionTypeSources(directory: string): string[] {
 }
 
 describe('Initiative visual contract', () => {
-  it('uses canonical MD3 headline-large for detail titles with status before the title', () => {
+  it('uses canonical MD3 headline-large for detail titles and keeps status in the properties rail', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
     expect(typography).toContain('--text-headline-large: 2rem;');
     expect(detail).toContain('text-headline-large');
-    expect(detail.indexOf('STATUS_LABEL[detail.status]')).toBeLessThan(
-      detail.indexOf('text-headline-large'),
-    );
+    // Status is no longer duplicated as an eyebrow above the title; it lives once in the rail as a
+    // labeled property row.
+    expect(detail).toContain('label="Status"');
+    expect(detail).not.toContain('variant="secondary"');
   });
 
   it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {

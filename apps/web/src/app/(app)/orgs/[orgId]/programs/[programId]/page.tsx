@@ -7,6 +7,14 @@ import { Skeleton } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
+import { EntityDocument } from '@/components/editor/entity-document';
+import {
+  DetailPageLayout,
+  PageContainer,
+  PageHeader,
+  PageHeading,
+  PageTitle,
+} from '@/components/views/page-layout';
 import { FlowSnapshot, type FlowMetrics } from '@/components/programs/flow-snapshot';
 import { HealthPill, ProgramStatusBadge } from '@/components/programs/program-status';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
@@ -141,117 +149,53 @@ export default function ProgramDetailPage(): JSX.Element {
 
   if (detailQ.isPending) {
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <PageContainer>
         <Skeleton className="h-9 w-72" />
         <Skeleton className="h-4 w-full max-w-xl" />
         <Skeleton className="h-40 w-full rounded-xl" />
         <Skeleton className="h-10 w-48" />
         <Skeleton className="h-32 w-full rounded-xl" />
-      </div>
+      </PageContainer>
     );
   }
 
   if (detailQ.isError) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p
-          role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
-        >
+      <PageContainer>
+        <p role="alert" className="text-destructive text-sm">
           {userErrorMessage(detailQ.error, 'Could not load this program.')}
         </p>
-      </div>
+      </PageContainer>
     );
   }
 
   if (!program) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
+      <PageContainer>
+        <p className="bg-surface-container-low text-on-surface-variant text-body-medium rounded-xl p-8 text-center">
           This {programLabel.toLowerCase()} could not be found.
         </p>
-      </div>
+      </PageContainer>
     );
   }
 
   const health = program.health ?? null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-on-surface text-title-large">{program.name}</h1>
-          <ProgramStatusBadge status={program.status} />
-          <HealthPill health={health} />
-        </div>
-        {program.description ? (
-          <p className="text-on-surface-variant text-body-medium max-w-2xl leading-relaxed">
-            {program.description}
-          </p>
-        ) : null}
-      </header>
-
-      <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <FlowSnapshot
-            health={health}
-            healthAsOf={healthAsOf}
-            metrics={metrics}
-            projectsLabel={projectsLabel}
-            cyclesLabel={cyclesLabel}
-          />
-
-          <ProgramTabs
-            tabs={tabs}
-            value={tab}
-            onValueChange={(id) => {
-              setTab(id as TabId);
-            }}
-            label={`${programLabel} sections`}
-          />
-
-          {tab === 'work' ? (
-            <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">
-              <WorkBoard
-                work={work}
-                loading={workQ.isPending}
-                error={
-                  workQ.isError
-                    ? userErrorMessage(workQ.error, 'Could not load this program.')
-                    : null
-                }
-                cycleLabel={cycleLabel}
-                taskNounPlural={taskNounPlural}
-                projectNoun={projectNoun}
-                onOpenTask={(taskId) => {
-                  router.push(`/orgs/${orgId}/tasks/${taskId}`);
-                }}
-              />
+    <DetailPageLayout
+      header={
+        <PageHeader>
+          <PageHeading>
+            <div className="flex flex-wrap items-center gap-3">
+              <PageTitle>{program.name}</PageTitle>
+              <ProgramStatusBadge status={program.status} />
+              <HealthPill health={health} />
             </div>
-          ) : null}
-
-          {tab === 'updates' ? (
-            <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
-              <UpdatesPanel
-                updates={updates}
-                loading={updatesQ.isPending}
-                error={
-                  updatesQ.isError
-                    ? userErrorMessage(updatesQ.error, 'Could not load this program.')
-                    : null
-                }
-                resolveActor={resolveActor}
-                posting={updatePosting}
-                postError={updateError}
-                onPost={(body, postHealth) => {
-                  postUpdate(body, postHealth);
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
-
-        <aside className="flex flex-col gap-4">
+          </PageHeading>
+        </PageHeader>
+      }
+      aside={
+        <>
           <ProgramPropertiesPanel
             ownerId={program.ownerId ?? null}
             memberOptions={memberOptions}
@@ -278,8 +222,73 @@ export default function ProgramDetailPage(): JSX.Element {
               {propsError}
             </p>
           ) : null}
-        </aside>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <EntityDocument
+        value={program.description}
+        canEdit={canEdit}
+        saving={propsPending}
+        onSave={(description) => {
+          patchProgram({ description });
+        }}
+        placeholder={`Add the ${programLabel} brief…`}
+      />
+
+      <FlowSnapshot
+        health={health}
+        healthAsOf={healthAsOf}
+        metrics={metrics}
+        projectsLabel={projectsLabel}
+        cyclesLabel={cyclesLabel}
+      />
+
+      <ProgramTabs
+        tabs={tabs}
+        value={tab}
+        onValueChange={(id) => {
+          setTab(id as TabId);
+        }}
+        label={`${programLabel} sections`}
+      />
+
+      {tab === 'work' ? (
+        <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">
+          <WorkBoard
+            work={work}
+            loading={workQ.isPending}
+            error={
+              workQ.isError ? userErrorMessage(workQ.error, 'Could not load this program.') : null
+            }
+            cycleLabel={cycleLabel}
+            taskNounPlural={taskNounPlural}
+            projectNoun={projectNoun}
+            onOpenTask={(taskId) => {
+              router.push(`/orgs/${orgId}/tasks/${taskId}`);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {tab === 'updates' ? (
+        <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
+          <UpdatesPanel
+            updates={updates}
+            loading={updatesQ.isPending}
+            error={
+              updatesQ.isError
+                ? userErrorMessage(updatesQ.error, 'Could not load this program.')
+                : null
+            }
+            resolveActor={resolveActor}
+            posting={updatePosting}
+            postError={updateError}
+            onPost={(body, postHealth) => {
+              postUpdate(body, postHealth);
+            }}
+          />
+        </div>
+      ) : null}
+    </DetailPageLayout>
   );
 }

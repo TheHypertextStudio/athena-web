@@ -1,25 +1,45 @@
 'use client';
 
+/**
+ * `editor` — a document-style body for any entity: a quiet Markdown editor with a responsive,
+ * auto-generated table of contents.
+ *
+ * @remarks
+ * Generalized from the initiative-only document so Initiatives, Programs, and any future
+ * document-first surface share one component instead of each cloning the editor + contents logic.
+ * Nothing here is entity-specific: the caller supplies the value, edit permission, save handler,
+ * and placeholder. The contents rail appears only once the body has two or more headings. Its
+ * class names (`entity-document`, `entity-contents*`) are stable hooks a page's print stylesheet
+ * can target.
+ */
 import { ExpandMoreRounded } from '@docket/ui/icons';
 import { type JSX, useEffect, useMemo, useRef, useState } from 'react';
 
 import { EditableFreeformText } from '@/components/editor/freeform-text';
-import { extractMarkdownHeadings } from './markdown-toc';
+import { extractMarkdownHeadings } from '@/components/initiatives/markdown-toc';
 
-/** Document-style Initiative body with responsive generated contents. */
-export function InitiativeDocument({
+/** Props for {@link EntityDocument}. */
+export interface EntityDocumentProps {
+  /** The Markdown body, or null/undefined when none has been written yet. */
+  value: string | null | undefined;
+  /** Whether the viewer may edit the body. */
+  canEdit: boolean;
+  /** Whether a save is in flight (disables the editor). */
+  saving: boolean;
+  /** Persist a non-empty Markdown value, or null to clear the body. */
+  onSave: (value: string | null) => void;
+  /** The quiet prompt shown before anything is written. */
+  placeholder?: string;
+}
+
+/** A document-style entity body with a responsive generated table of contents. */
+export function EntityDocument({
   value,
   canEdit,
   saving,
   onSave,
-  placeholder = 'Add the Initiative brief…',
-}: {
-  value: string | null | undefined;
-  canEdit: boolean;
-  saving: boolean;
-  onSave: (value: string | null) => void;
-  placeholder?: string;
-}): JSX.Element {
+  placeholder = 'Add a description…',
+}: EntityDocumentProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const headings = useMemo(() => extractMarkdownHeadings(value ?? ''), [value]);
   const [activeId, setActiveId] = useState(headings[0]?.id ?? null);
@@ -52,7 +72,7 @@ export function InitiativeDocument({
 
   const hasContents = headings.length >= 2;
   const renderContents = (showLabel: boolean): JSX.Element => (
-    <nav aria-label="Document contents" className="initiative-contents print:block">
+    <nav aria-label="Document contents" className="entity-contents print:block">
       {showLabel ? (
         <p className="text-on-surface-variant text-label-medium mb-2">Contents</p>
       ) : null}
@@ -88,11 +108,11 @@ export function InitiativeDocument({
       className={`grid min-w-0 gap-6 ${hasContents ? '@4xl:grid-cols-[9rem_minmax(0,1fr)]' : ''}`}
     >
       {hasContents ? (
-        <div className="initiative-contents-desktop hidden @4xl:block">{renderContents(true)}</div>
+        <div className="entity-contents-desktop hidden @4xl:block">{renderContents(true)}</div>
       ) : null}
       <div className="min-w-0">
         {hasContents ? (
-          <details className="initiative-contents-mobile bg-surface-container-low group mb-5 rounded-xl @4xl:hidden">
+          <details className="entity-contents-mobile bg-surface-container-low group mb-5 rounded-xl @4xl:hidden">
             <summary className="text-on-surface text-label-large flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 [&::-webkit-details-marker]:hidden">
               <span>Contents</span>
               <ExpandMoreRounded
@@ -103,7 +123,7 @@ export function InitiativeDocument({
             <div className="px-3 pb-2">{renderContents(false)}</div>
           </details>
         ) : null}
-        <div ref={rootRef} className="initiative-document min-h-56">
+        <div ref={rootRef} className="entity-document min-h-56">
           <EditableFreeformText
             value={value}
             placeholder={placeholder}

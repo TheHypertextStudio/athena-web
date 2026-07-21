@@ -16,7 +16,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { EditableFreeformText, FreeformText } from '@/components/editor/freeform-text';
-import { InitiativeDocument } from '@/components/initiatives/initiative-document';
+import { EntityDocument } from '@/components/editor/entity-document';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { AgentActivityFeed } from '@/components/project-detail/agent-activity-feed';
 import { AgentsStrip } from '@/components/project-detail/agents-strip';
@@ -368,7 +368,7 @@ export default function ProjectDetailPage(): JSX.Element {
           ) : null}
 
           <section aria-label="Project document">
-            <InitiativeDocument
+            <EntityDocument
               value={project.description}
               canEdit={canEdit}
               saving={propsPending}

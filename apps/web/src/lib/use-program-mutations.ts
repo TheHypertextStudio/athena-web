@@ -21,6 +21,8 @@ export interface ProgramPatch {
   status?: ProgramStatus;
   health?: Health | null;
   visibility?: Visibility;
+  /** The Markdown description/brief. `null` clears it. */
+  description?: string | null;
 }
 
 function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
@@ -31,6 +33,7 @@ function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
     ...(patch.status !== undefined ? { status: patch.status } : {}),
     ...(patch.health !== undefined ? { health: patch.health } : {}),
     ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+    ...(patch.description !== undefined ? { description: patch.description } : {}),
   };
 }
 

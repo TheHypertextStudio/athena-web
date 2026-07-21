@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
-import { InitiativeDocument } from '@/components/initiatives/initiative-document';
+import { EntityDocument } from '@/components/editor/entity-document';
 import { InitiativePropertiesPanel } from '@/components/initiatives/properties-panel';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { UpdatesPanel } from '@/components/programs/updates-panel';
@@ -413,13 +413,14 @@ export default function InitiativeDetailPage(): JSX.Element {
               </p>
             </section>
           ) : null}
-          <InitiativeDocument
+          <EntityDocument
             value={detail.description}
             canEdit={canEdit}
             saving={mutations.propsPending}
             onSave={(description) => {
               mutations.patchInitiative({ description });
             }}
+            placeholder="Add the Initiative brief…"
           />
           <section>
             <h2 className="text-on-surface mb-3 text-lg font-semibold">Sub-initiatives</h2>
@@ -661,14 +662,14 @@ export default function InitiativeDetailPage(): JSX.Element {
             display: block !important;
           }
           .no-print,
-          nav:not(.initiative-contents),
+          nav:not(.entity-contents),
           aside {
             display: none !important;
           }
-          .initiative-contents-desktop {
+          .entity-contents-desktop {
             display: block !important;
           }
-          .initiative-contents-mobile {
+          .entity-contents-mobile {
             display: none !important;
           }
           .initiative-print {
@@ -678,7 +679,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           .initiative-overview {
             display: grid !important;
           }
-          .initiative-document button {
+          .entity-document button {
             border: 0 !important;
             padding: 0 !important;
           }

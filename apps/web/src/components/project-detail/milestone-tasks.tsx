@@ -18,6 +18,8 @@
 import type { TaskOut } from '@docket/types';
 import { type EntityTableGroup } from '@docket/ui/components';
 import { Button } from '@docket/ui/primitives';
+
+import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
@@ -54,6 +56,10 @@ export interface MilestoneTasksProps {
   onOpenTask: (taskId: string) => void;
   /** Open the full task composer scoped to this Project. */
   onCreate: () => void;
+  /** Inline quick-add: create a task in this Project from a typed title. */
+  onQuickAdd: (title: string) => Promise<void>;
+  /** Whether the viewer may create tasks (gates the inline composer). */
+  canEdit: boolean;
   /** The org id, for building the per-row task-detail link target. */
   orgId: string;
 }
@@ -76,6 +82,8 @@ export function MilestoneTasks({
   taskNoun,
   onOpenTask,
   onCreate,
+  onQuickAdd,
+  canEdit,
   orgId,
 }: MilestoneTasksProps): JSX.Element {
   const prefetch = usePrefetchApi();
@@ -149,10 +157,12 @@ export function MilestoneTasks({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-end gap-3">
-        <Button type="button" onClick={onCreate}>
-          Add {taskNoun}
+        <Button type="button" variant="outline" onClick={onCreate}>
+          Add {taskNoun} with details
         </Button>
       </div>
+
+      <QuickAddTaskRow onAdd={onQuickAdd} canEdit={canEdit} placeholder={`Add a ${taskNoun}…`} />
 
       {tasks.length === 0 ? (
         <div className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">

@@ -6,7 +6,9 @@ import type {
   EntityDisplayIconKey,
   EntityDisplayOut,
   ProjectOut,
+  TaskOut,
 } from '@docket/types';
+import { ProjectId, TeamId } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Calendar, Ellipsis, Target, Trash2, TuneRounded } from '@docket/ui/icons';
@@ -184,6 +186,26 @@ export default function ProjectDetailPage(): JSX.Element {
       router.push(`/orgs/${orgId}/projects`);
     },
   });
+
+  // Inline quick-add: create a task in this project from just a typed title (no modal, no redirect).
+  const createTaskInline = useApiMutation<TaskOut, string>({
+    mutationFn: (title) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks.$post({
+            param: { orgId },
+            json: {
+              title,
+              teamId: TeamId.parse(defaultTeamId ?? ''),
+              priority: 'none',
+              projectId: ProjectId.parse(projectId),
+            },
+          }),
+        `Could not add the ${taskNoun}.`,
+      ),
+    invalidateKeys: [detailKey],
+  });
+  const canQuickAddTask = canEdit && defaultTeamId !== null;
 
   const participantIds = useMemo(() => {
     if (!project) return [];
@@ -491,6 +513,8 @@ export default function ProjectDetailPage(): JSX.Element {
             onCreate={() => {
               setTaskComposerOpen(true);
             }}
+            onQuickAdd={(title) => createTaskInline.mutateAsync(title).then(() => undefined)}
+            canEdit={canQuickAddTask}
           />
           <section className="flex flex-col gap-2">
             <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>

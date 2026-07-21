@@ -42,6 +42,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
+import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
 
 function isoDateOf(value: string): string {
@@ -121,6 +122,9 @@ export default function TaskDetailPage(): JSX.Element {
 
   const canEdit = useOrgCapability(members, roles, 'contribute');
   const canManage = useOrgCapability(members, roles, 'manage');
+  // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
+  // refreshed subtask titles flow back in.
+  const renameSubtask = useRenameTask(orgId, [detailKey]);
   const memberOptions = useMemo<readonly PickerOption[]>(
     () => memberActorOptions(members),
     [members],
@@ -324,7 +328,8 @@ export default function TaskDetailPage(): JSX.Element {
             onAdd={addSubtask}
             onToggle={(subtask, done) => toggleSubtask(subtask.id, done)}
             onOpen={openTask}
-            canEdit
+            onRename={renameSubtask}
+            canEdit={canEdit}
           />
 
           <TaskAttachments orgId={orgId} taskId={taskId} canEdit={canEdit} />

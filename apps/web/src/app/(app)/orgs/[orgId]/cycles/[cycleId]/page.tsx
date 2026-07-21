@@ -1,6 +1,7 @@
 'use client';
 
 import type { CycleTaskGroupBy, TaskOut } from '@docket/types';
+import { CycleId, TeamId } from '@docket/types';
 import { type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
@@ -15,9 +16,11 @@ import { formatWindow, windowProgress } from '@/components/cycles/format-window'
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
 import { StatsBanner } from '@/components/cycles/stats-banner';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
+import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
+import { api } from '@/lib/api';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
-import { queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
+import { queryKeys, unwrap, useApiMutation, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
@@ -80,6 +83,26 @@ export default function CycleDetailPage(): JSX.Element {
 
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
   const renameCycleTask = useRenameTask(orgId, [detailKey]);
+
+  // Inline quick-add: commit a new task to this cycle from just a typed title, on the cycle's own
+  // team. Refreshes the cycle detail so the new task drops straight into the committed list.
+  const createCycleTask = useApiMutation<TaskOut, string>({
+    mutationFn: (title) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks.$post({
+            param: { orgId },
+            json: {
+              title,
+              teamId: TeamId.parse(cycle?.teamId ?? ''),
+              priority: 'none',
+              cycleId: CycleId.parse(cycleId),
+            },
+          }),
+        `Could not add the ${cycleNounLower} task.`,
+      ),
+    invalidateKeys: [detailKey],
+  });
 
   const columns = useMemo(() => {
     const catalog = buildTaskCatalog({
@@ -295,6 +318,12 @@ export default function CycleDetailPage(): JSX.Element {
           className="min-h-[16rem] flex-1"
         />
       )}
+
+      <QuickAddTaskRow
+        canEdit={canEditCycle && !isCompleted}
+        placeholder={`Add a task to this ${cycleNounLower}…`}
+        onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
+      />
 
       <CloseCycleDialog
         open={dialogOpen}

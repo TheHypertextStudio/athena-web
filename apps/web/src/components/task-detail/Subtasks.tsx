@@ -4,8 +4,10 @@ import type { TaskRef } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
 import { Plus } from '@docket/ui/icons';
 import { Button, Input } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useMemo, useState } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** Props for {@link Subtasks}. */
@@ -18,7 +20,13 @@ interface SubtasksProps {
   onToggle: (subtask: TaskRef, done: boolean) => Promise<void>;
   /** Navigate to a subtask's own detail view. */
   onOpen: (subtaskId: string) => void;
-  /** Whether the caller may add subtasks (hides the composer when false). */
+  /**
+   * Rename a subtask in place. When provided (and {@link SubtasksProps.canEdit}), the title becomes
+   * an inline editor: a single click opens the subtask, a double-click renames it. Omitted → the
+   * title stays a plain open affordance.
+   */
+  onRename?: (subtaskId: string, title: string) => void;
+  /** Whether the caller may add or rename subtasks (hides the composer / inline rename when false). */
   canEdit: boolean;
 }
 
@@ -37,6 +45,7 @@ export function Subtasks({
   onAdd,
   onToggle,
   onOpen,
+  onRename,
   canEdit,
 }: SubtasksProps): JSX.Element {
   const [title, setTitle] = useState('');
@@ -109,17 +118,36 @@ export function Subtasks({
                 >
                   <StatusIcon type={type} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onOpen(subtask.id);
-                  }}
-                  className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
-                >
-                  <span className={done ? 'text-on-surface-variant line-through' : ''}>
-                    {subtask.title}
-                  </span>
-                </button>
+                {canEdit && onRename ? (
+                  <EditableTitle
+                    value={subtask.title}
+                    onSave={(title) => {
+                      onRename(subtask.id, title);
+                    }}
+                    canEdit
+                    activate="doubleClick"
+                    onActivate={() => {
+                      onOpen(subtask.id);
+                    }}
+                    ariaLabel="Subtask title"
+                    className={cn(
+                      'text-body-medium min-w-0 flex-1 truncate',
+                      done ? 'text-on-surface-variant line-through' : 'text-on-surface',
+                    )}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpen(subtask.id);
+                    }}
+                    className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded text-left hover:underline focus-visible:ring-1 focus-visible:outline-none"
+                  >
+                    <span className={done ? 'text-on-surface-variant line-through' : ''}>
+                      {subtask.title}
+                    </span>
+                  </button>
+                )}
               </li>
             );
           })}

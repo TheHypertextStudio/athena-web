@@ -21,6 +21,8 @@ import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
+import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** Props for {@link WorkBoard}. */
@@ -33,12 +35,24 @@ export interface WorkBoardProps {
   error: string | null;
   /** Capitalized singular noun for a cycle (vocabulary-skinned). */
   cycleLabel: string;
+  /** Lower-cased singular noun for a task (vocabulary-skinned), for the quick-add placeholder. */
+  taskNoun: string;
   /** Lower-cased plural noun for a task (vocabulary-skinned), for empty copy. */
   taskNounPlural: string;
   /** Lower-cased singular noun for a project (vocabulary-skinned), for the "no project" label. */
   projectNoun: string;
+  /** Whether the viewer may rename tasks in place and add work to a cycle column. */
+  canEdit: boolean;
   /** Open the task detail for a row. */
   onOpenTask: (taskId: string) => void;
+  /** Rename a task in place (double-click its title). Omitted → titles are read-only. */
+  onRename?: (taskId: string, title: string) => void;
+  /**
+   * Create a task in a given cycle from a typed title, resolving once persisted. When provided (and
+   * {@link WorkBoardProps.canEdit}), each real cycle column grows an inline quick-add row. Omitted
+   * (e.g. no team to attach to) → no quick-add is offered.
+   */
+  onAddTask?: (cycleId: string, title: string) => Promise<void>;
 }
 
 /**
@@ -52,9 +66,13 @@ export function WorkBoard({
   loading,
   error,
   cycleLabel,
+  taskNoun,
   taskNounPlural,
   projectNoun,
+  canEdit,
   onOpenTask,
+  onRename,
+  onAddTask,
 }: WorkBoardProps): JSX.Element {
   if (loading) {
     return (
@@ -97,7 +115,8 @@ export function WorkBoard({
   return (
     <div className="flex flex-col gap-6">
       {groups.map((group, groupIndex) => {
-        const cycleTitle = group.cycle.id
+        const cycleId = group.cycle.id;
+        const cycleTitle = cycleId
           ? (group.cycle.name ??
             (group.cycle.number != null ? `${cycleLabel} ${group.cycle.number}` : cycleLabel))
           : `No ${cycleLabel.toLowerCase()}`;
@@ -135,9 +154,17 @@ export function WorkBoard({
                           <TaskLine
                             title={task.title}
                             stateType={stateTypeOf(task.state)}
+                            canEdit={canEdit}
                             onOpen={() => {
                               onOpenTask(task.id);
                             }}
+                            {...(onRename
+                              ? {
+                                  onRename: (title: string) => {
+                                    onRename(task.id, title);
+                                  },
+                                }
+                              : {})}
                           />
                         </li>
                       ))}
@@ -146,6 +173,14 @@ export function WorkBoard({
                 );
               })}
             </div>
+
+            {cycleId && onAddTask ? (
+              <QuickAddTaskRow
+                canEdit={canEdit}
+                placeholder={`Add a ${taskNoun} to this ${cycleLabel.toLowerCase()}…`}
+                onAdd={(title) => onAddTask(cycleId, title)}
+              />
+            ) : null}
           </section>
         );
       })}
@@ -153,24 +188,54 @@ export function WorkBoard({
   );
 }
 
-/** One task row: a token-colored status glyph, the title, and keyboard activation. */
-function TaskLine({
-  title,
-  stateType,
-  onOpen,
-}: {
-  title: string;
-  stateType: WorkflowStateType;
-  onOpen: () => void;
-}): JSX.Element {
+/**
+ * One task row: a token-colored status glyph and the title, with keyboard activation.
+ *
+ * @remarks
+ * When {@link TaskLineProps.onRename} is supplied (and {@link TaskLineProps.canEdit}) the title is an
+ * inline editor — a single click opens the task, a double-click renames it — and the row is a plain
+ * container so the edit `<input>` never nests inside a `<button>`. Otherwise the whole row is a
+ * single button that opens the task on click, as before.
+ */
+function TaskLine({ title, stateType, canEdit, onOpen, onRename }: TaskLineProps): JSX.Element {
+  const rowClass =
+    'group border-outline-variant hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring flex min-h-10 w-full items-center gap-2 border-b px-3 text-left transition-colors outline-none last:border-b-0 focus-visible:ring-1 focus-visible:ring-inset';
+
+  if (canEdit && onRename) {
+    return (
+      <div className={rowClass}>
+        <StatusIcon type={stateType} className="size-4 shrink-0" />
+        <EditableTitle
+          value={title}
+          onSave={onRename}
+          canEdit
+          activate="doubleClick"
+          onActivate={onOpen}
+          ariaLabel="Task title"
+          className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
+        />
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="group border-outline-variant hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring flex min-h-10 w-full items-center gap-2 border-b px-3 text-left transition-colors outline-none last:border-b-0 focus-visible:ring-1 focus-visible:ring-inset"
-    >
+    <button type="button" onClick={onOpen} className={rowClass}>
       <StatusIcon type={stateType} className="size-4 shrink-0" />
       <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{title}</span>
     </button>
   );
+}
+
+/** Props for {@link TaskLine}. */
+interface TaskLineProps {
+  /** The task's title. */
+  title: string;
+  /** The task's canonical workflow-state type, coloring the leading glyph. */
+  stateType: WorkflowStateType;
+  /** Whether the viewer may rename the task in place. */
+  canEdit: boolean;
+  /** Open the task detail. */
+  onOpen: () => void;
+  /** Persist a renamed title. Enables the inline title editor when provided with `canEdit`. */
+  onRename?: (title: string) => void;
 }

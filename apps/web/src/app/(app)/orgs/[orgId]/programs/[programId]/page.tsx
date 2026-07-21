@@ -1,6 +1,7 @@
 'use client';
 
-import type { ProgramWorkOut, UpdateOut } from '@docket/types';
+import type { ProgramWorkOut, TaskOut, UpdateOut } from '@docket/types';
+import { CycleId, TeamId } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
@@ -33,9 +34,11 @@ import { ProgramTabs, type ProgramTabItem } from '@/components/programs/program-
 import { type ResolveActor, UpdatesPanel } from '@/components/programs/updates-panel';
 import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
+import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
+import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
@@ -49,11 +52,13 @@ export default function ProgramDetailPage(): JSX.Element {
   const params = useParams<{ orgId: string; programId: string }>();
   const { orgId, programId } = params;
 
+  const { defaultTeamId } = useActiveOrg();
   const programLabel = useVocabulary('program');
   const projectNoun = useVocabulary('project').toLowerCase();
   const projectsLabel = useVocabulary('project', { plural: true });
   const cycleLabel = useVocabulary('cycle');
   const cyclesLabel = useVocabulary('cycle', { plural: true });
+  const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const detailKey = queryKeys.program(orgId, programId);
@@ -143,6 +148,28 @@ export default function ProgramDetailPage(): JSX.Element {
     useProgramMutations(orgId, programId, programLabel, detailKey, updatesKey);
 
   const canEdit = useOrgCapability(members, roles, 'manage');
+
+  // Rename any task on the board in place, then refresh the cycle-grouped work view.
+  const renameWorkTask = useRenameTask(orgId, [workKey]);
+  // Inline quick-add: create a task committed to a given cycle from just a typed title. Attaches to
+  // the viewer's default team (the board itself is team-agnostic); disabled when there is no team.
+  const createWorkTask = useApiMutation<TaskOut, { cycleId: string; title: string }>({
+    mutationFn: ({ cycleId, title }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks.$post({
+            param: { orgId },
+            json: {
+              title,
+              teamId: TeamId.parse(defaultTeamId ?? ''),
+              priority: 'none',
+              cycleId: CycleId.parse(cycleId),
+            },
+          }),
+        `Could not add the ${taskNoun}.`,
+      ),
+    invalidateKeys: [workKey],
+  });
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const deleteProgram = useApiMutation({
@@ -324,11 +351,20 @@ export default function ProgramDetailPage(): JSX.Element {
               workQ.isError ? userErrorMessage(workQ.error, 'Could not load this program.') : null
             }
             cycleLabel={cycleLabel}
+            taskNoun={taskNoun}
             taskNounPlural={taskNounPlural}
             projectNoun={projectNoun}
+            canEdit={canEdit}
             onOpenTask={(taskId) => {
               router.push(`/orgs/${orgId}/tasks/${taskId}`);
             }}
+            onRename={renameWorkTask}
+            {...(defaultTeamId
+              ? {
+                  onAddTask: (cycleId: string, title: string) =>
+                    createWorkTask.mutateAsync({ cycleId, title }).then(() => undefined),
+                }
+              : {})}
           />
         </div>
       ) : null}

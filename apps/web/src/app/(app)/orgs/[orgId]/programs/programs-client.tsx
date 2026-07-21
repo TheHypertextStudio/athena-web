@@ -17,6 +17,7 @@ import { statusGlyphType } from '@/components/programs/program-status';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
@@ -29,8 +30,9 @@ import { userErrorMessage } from '@/lib/problem';
  * A Client Component reached at `/orgs/[orgId]/programs`. Programs are *ongoing*, so each
  * {@link EntityListRow} leads with a liveness status glyph and surfaces the program's owner,
  * its child-work scope ("N projects" + "M tasks"), and — in the trailing slot — its
- * {@link HealthDot | health} and lifecycle {@link ProgramStatusBadge}. The former card grid is
- * replaced by one clean bordered list of hairline-divided rows (design-system §5.1).
+ * {@link HealthDot | health} and lifecycle {@link ProgramStatusBadge}. The roster renders as one
+ * tonal list of rows (`EntityList` `tone="tonal"`), matching the Projects/Initiatives treatment —
+ * surface-step separation over borders (design-system §5.1).
  *
  * It composes four slices through the dynamic-data layer — programs, projects, tasks, and
  * members — so each stays live (auto-refetch on focus + after a create) without a manual refresh
@@ -181,17 +183,13 @@ export default function ProgramsListClient(): JSX.Element {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-title-large">{programsLabel}</h1>
-          <p className="text-on-surface-variant text-xs">
-            Ongoing lines of work — tracked by health, not a finish line.
-          </p>
-        </div>
+    <ListPageLayout
+      title={programsLabel}
+      subtitle="Ongoing lines of work — tracked by health, not a finish line."
+      actions={
         <Button
           type="button"
-          className="gap-1.5"
+          className="min-h-10 gap-1.5"
           onClick={() => {
             setCreateOpen(true);
           }}
@@ -199,8 +197,19 @@ export default function ProgramsListClient(): JSX.Element {
           <Plus aria-hidden="true" className="size-4" />
           New {programLabel}
         </Button>
-      </header>
-
+      }
+      toolbar={
+        !loading && !loadError && programs.length > 0 ? (
+          <FilterToolbar
+            catalog={catalog}
+            state={state}
+            onFiltersChange={setFilters}
+            onGroupByChange={setGroupBy}
+            onSortChange={setSort}
+          />
+        ) : null
+      }
+    >
       <CreateProgramDialog
         orgId={orgId}
         programNoun={programLabel}
@@ -209,23 +218,10 @@ export default function ProgramsListClient(): JSX.Element {
         onCreated={handleCreated}
       />
 
-      {!loading && !loadError && programs.length > 0 ? (
-        <FilterToolbar
-          catalog={catalog}
-          state={state}
-          onFiltersChange={setFilters}
-          onGroupByChange={setGroupBy}
-          onSortChange={setSort}
-        />
-      ) : null}
-
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
-        <p
-          role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
-        >
+        <p role="alert" className="text-destructive text-sm">
           {loadError}
         </p>
       ) : programs.length === 0 ? (
@@ -287,6 +283,6 @@ export default function ProgramsListClient(): JSX.Element {
           }}
         />
       )}
-    </div>
+    </ListPageLayout>
   );
 }

@@ -32,7 +32,7 @@ export interface ProgramRowsProps {
   onOpen: (programId: string) => void;
 }
 
-/** A bordered {@link EntityList} of program rows (shared by the flat + grouped renders). */
+/** A tonal {@link EntityList} of program rows (shared by the flat + grouped renders). */
 export function ProgramRows({
   rows,
   projectNoun,
@@ -43,7 +43,7 @@ export function ProgramRows({
   onOpen,
 }: ProgramRowsProps): JSX.Element {
   return (
-    <EntityList aria-label={ariaLabel}>
+    <EntityList aria-label={ariaLabel} tone="tonal">
       {rows.map(({ program, ownerName, projectCount, taskCount }) => {
         const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
         const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
@@ -91,19 +91,12 @@ export function ProgramRows({
   );
 }
 
-/** Loading placeholder: a bordered list of slim row skeletons. */
+/** Loading placeholder: plain row-height skeleton blocks, matching the Projects/Initiatives lists. */
 export function ListSkeleton(): JSX.Element {
   return (
-    <div
-      className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border"
-      aria-hidden="true"
-    >
-      {[0, 1, 2, 3, 4].map((i) => (
-        <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-          <Skeleton className="size-4 rounded-full" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="ml-auto h-4 w-24" />
-        </div>
+    <div className="space-y-2" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, i) => (
+        <Skeleton key={i} className="h-[72px] w-full" />
       ))}
     </div>
   );

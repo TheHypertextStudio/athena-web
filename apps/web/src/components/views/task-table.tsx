@@ -39,6 +39,7 @@ import {
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
 import { stateTypeOf } from '@/lib/work-state';
@@ -67,6 +68,12 @@ export interface TaskColumnsDeps {
   catalog: FieldCatalog<TaskOut>;
   /** Resolve a task's assignee actor id to its display name + kind for the avatar column. */
   resolveActor: (actorId: string) => TaskTableActor;
+  /** Whether the viewer may rename a task in place (double-click the title). */
+  canEdit?: boolean;
+  /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
+  onRename?: (taskId: string, title: string) => void;
+  /** Open a task — used by the inline title so a single click still navigates. */
+  onOpen?: (task: TaskOut) => void;
 }
 
 /** A short, year-less day formatter for a task's due date (e.g. "Jun 21"). */
@@ -84,7 +91,13 @@ const DUE_DATE_OPTIONS: Intl.DateTimeFormatOptions = { month: 'short', day: 'num
  * @param deps - The task catalog + the assignee resolver.
  * @returns the ordered {@link Column} spec over {@link TaskOut}.
  */
-export function buildTaskColumns({ catalog, resolveActor }: TaskColumnsDeps): Column<TaskOut>[] {
+export function buildTaskColumns({
+  catalog,
+  resolveActor,
+  canEdit,
+  onRename,
+  onOpen,
+}: TaskColumnsDeps): Column<TaskOut>[] {
   return [
     // Leading status glyph — colored by the canonical workflow-state type. Always kept.
     {
@@ -102,7 +115,28 @@ export function buildTaskColumns({ catalog, resolveActor }: TaskColumnsDeps): Co
       key: 'title',
       header: headerFor(catalog, 'title', 'Title'),
       flex: true,
-      render: (task) => <span className="text-on-surface truncate">{task.title}</span>,
+      render: (task) =>
+        canEdit && onRename ? (
+          <EditableTitle
+            value={task.title}
+            onSave={(title) => {
+              onRename(task.id, title);
+            }}
+            canEdit
+            activate="doubleClick"
+            {...(onOpen
+              ? {
+                  onActivate: () => {
+                    onOpen(task);
+                  },
+                }
+              : {})}
+            ariaLabel="Task title"
+            className="text-on-surface truncate"
+          />
+        ) : (
+          <span className="text-on-surface truncate">{task.title}</span>
+        ),
     },
     // Assignee — relation field; the avatar encodes the actor kind by shape.
     {

@@ -21,6 +21,7 @@ import { queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
+import { useRenameTask } from '@/lib/use-rename-task';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 import { userErrorMessage } from '@/lib/problem';
@@ -78,6 +79,7 @@ export default function CycleDetailPage(): JSX.Element {
   } = useCycleMutations(orgId, cycleId, cycleNounLower, tasks, otherCycles, detailKey);
 
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
+  const renameCycleTask = useRenameTask(orgId, [detailKey]);
 
   const columns = useMemo(() => {
     const catalog = buildTaskCatalog({
@@ -90,8 +92,26 @@ export default function CycleDetailPage(): JSX.Element {
       projectOptions: () => [],
       programOptions: () => [],
     });
-    return buildTaskColumns({ catalog, resolveActor: (id) => resolveActor(id) });
-  }, [projectNoun, programNoun, projectName, programName, resolveActor]);
+    return buildTaskColumns({
+      catalog,
+      resolveActor: (id) => resolveActor(id),
+      canEdit: canEditCycle,
+      onRename: renameCycleTask,
+      onOpen: (task) => {
+        router.push(`/orgs/${orgId}/tasks/${task.id}`);
+      },
+    });
+  }, [
+    projectNoun,
+    programNoun,
+    projectName,
+    programName,
+    resolveActor,
+    canEditCycle,
+    renameCycleTask,
+    router,
+    orgId,
+  ]);
 
   const orderedTasks = useMemo(() => {
     const rank = (task: TaskOut): number => STATE_GROUP_ORDER.indexOf(stateTypeOf(task.state));

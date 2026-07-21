@@ -58,7 +58,9 @@ export interface MilestoneTasksProps {
   onCreate: () => void;
   /** Inline quick-add: create a task in this Project from a typed title. */
   onQuickAdd: (title: string) => Promise<void>;
-  /** Whether the viewer may create tasks (gates the inline composer). */
+  /** Rename a task in place (double-click its title in the table). */
+  onRename: (taskId: string, title: string) => void;
+  /** Whether the viewer may create/rename tasks (gates the inline composer + title editing). */
   canEdit: boolean;
   /** The org id, for building the per-row task-detail link target. */
   orgId: string;
@@ -83,6 +85,7 @@ export function MilestoneTasks({
   onOpenTask,
   onCreate,
   onQuickAdd,
+  onRename,
   canEdit,
   orgId,
 }: MilestoneTasksProps): JSX.Element {
@@ -118,8 +121,16 @@ export function MilestoneTasks({
       projectOptions: () => [],
       programOptions: () => [],
     });
-    return buildTaskColumns({ catalog, resolveActor: (id) => resolveActor(id) });
-  }, [resolveActor]);
+    return buildTaskColumns({
+      catalog,
+      resolveActor: (id) => resolveActor(id),
+      canEdit,
+      onRename,
+      onOpen: (task) => {
+        onOpenTask(task.id);
+      },
+    });
+  }, [resolveActor, canEdit, onRename, onOpenTask]);
 
   /** Tasks bucketed into milestone sections, ordered by milestone then canonical workflow state. */
   const groups = useMemo<EntityTableGroup<TaskOut>[]>(() => {

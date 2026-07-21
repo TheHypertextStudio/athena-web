@@ -51,6 +51,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
+import { useRenameTask } from '@/lib/use-rename-task';
 import { userErrorMessage } from '@/lib/problem';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
@@ -205,7 +206,7 @@ export default function ProjectDetailPage(): JSX.Element {
       ),
     invalidateKeys: [detailKey],
   });
-  const canQuickAddTask = canEdit && defaultTeamId !== null;
+  const renameTask = useRenameTask(orgId, [detailKey]);
 
   const participantIds = useMemo(() => {
     if (!project) return [];
@@ -513,8 +514,13 @@ export default function ProjectDetailPage(): JSX.Element {
             onCreate={() => {
               setTaskComposerOpen(true);
             }}
-            onQuickAdd={(title) => createTaskInline.mutateAsync(title).then(() => undefined)}
-            canEdit={canQuickAddTask}
+            onQuickAdd={(title) =>
+              defaultTeamId
+                ? createTaskInline.mutateAsync(title).then(() => undefined)
+                : Promise.resolve()
+            }
+            onRename={renameTask}
+            canEdit={canEdit}
           />
           <section className="flex flex-col gap-2">
             <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>

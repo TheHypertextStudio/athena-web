@@ -83,6 +83,7 @@ export function CreateProjectDialog({
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
 
   const [name, setName] = useState('');
+  const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [teamOverride, setTeamOverride] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
@@ -99,6 +100,7 @@ export function CreateProjectDialog({
     (next: boolean): void => {
       if (!next) {
         setName('');
+        setSummary('');
         setBody('');
         setTeamOverride(null);
         setLeadId(null);
@@ -133,6 +135,7 @@ export function CreateProjectDialog({
         param: { orgId },
         json: {
           name: trimmed,
+          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
           ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
           ...(leadId ? { leadId: ActorId.parse(leadId) } : {}),
@@ -162,6 +165,7 @@ export function CreateProjectDialog({
     }
   }, [
     name,
+    summary,
     body,
     teamId,
     leadId,
@@ -182,6 +186,10 @@ export function CreateProjectDialog({
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${projectNoun} name`}
+      summary={summary}
+      onSummaryChange={setSummary}
+      summaryPlaceholder="One-sentence summary"
+      summaryMaxLength={280}
       body={body}
       onBodyChange={setBody}
       bodyPlaceholder="Add a description…"

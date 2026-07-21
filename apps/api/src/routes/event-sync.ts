@@ -34,6 +34,7 @@ import { routeAndWriteRecipients, type RoutableEntity } from '../consumers/routi
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { projectInboundDraft } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
+import { resolveExternalActor } from '../lib/identity/resolve-external-actor';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
 import { eventSearchReindexTarget } from '../search/event-log';
 import { asObserverProvider } from './integration-provider';
@@ -142,15 +143,29 @@ async function resolveLinkedIdentityRecipients(
   return recipients;
 }
 
-/** Lift a draft actor into a canonical {@link ActorRef} stamped with the resolved source. */
-function toActorRef(draftActor: EventDraft['actor'], source: SourceSystemKind): ActorRef | null {
+/**
+ * Lift a draft actor into a canonical {@link ActorRef} stamped with the resolved source,
+ * enriching it with the Docket actor it maps to (if any) via {@link resolveExternalActor}.
+ *
+ * @remarks
+ * `EventActorRef` (the draft shape) carries only `externalId` today, no email, so this call
+ * only ever exercises the manual-override, linked-account, and email-matched-`external_actor`
+ * rungs of {@link resolveExternalActor} — its ad-hoc email fallback activates automatically
+ * once a draft actor shape gains an email field, with no change needed here.
+ */
+async function toActorRef(
+  orgId: string,
+  draftActor: EventDraft['actor'],
+  source: SourceSystemKind,
+): Promise<ActorRef | null> {
   if (!draftActor) return null;
+  const resolved = await resolveExternalActor(orgId, { source, externalId: draftActor.externalId });
   return {
     source,
     externalId: draftActor.externalId,
     displayName: draftActor.displayName ?? null,
     avatarUrl: draftActor.avatarUrl ?? null,
-    docketActorId: null,
+    docketActorId: resolved.actorId as ActorRef['docketActorId'],
   };
 }
 
@@ -231,6 +246,12 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
       draft.participants,
       kind.data,
     );
+    // Resolved outside the transaction (like externalRecipients above): read-only Docket-actor
+    // lookups, not part of the event write's atomicity.
+    const actorRef = await toActorRef(orgId, draft.actor, source);
+    const participantRefs = (
+      await Promise.all((draft.participants ?? []).map((p) => toActorRef(orgId, p, source)))
+    ).filter((ref): ref is ActorRef => ref !== null);
 
     // Insert + fan-out in one transaction (the routing Strategy writes the recipient rows).
     const result = await db.transaction(async (tx) => {
@@ -247,13 +268,10 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
           title: draft.title,
           summary: draft.summary ?? null,
           permalink: draft.permalink ?? null,
-          actor: toActorRef(draft.actor, source),
+          actor: actorRef,
           entity: entityRef,
           entityKind,
-          participants: (draft.participants ?? []).flatMap((p) => {
-            const ref = toActorRef(p, source);
-            return ref ? [ref] : [];
-          }),
+          participants: participantRefs,
           detail: draft.detail ?? null,
           sourceEventId: ev.id,
           externalId: draft.externalId ?? null,

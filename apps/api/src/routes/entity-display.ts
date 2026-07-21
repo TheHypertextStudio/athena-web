@@ -78,6 +78,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
               subjectId,
               iconKey: row.iconKey,
               colorKey: row.colorKey,
+              customColor: row.customColor,
               customized: true,
             }
           : defaultEntityDisplay(subjectType, subjectId),
@@ -110,6 +111,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
           subjectId,
           iconKey: body.iconKey,
           colorKey: body.colorKey,
+          customColor: body.customColor,
           createdBy: actorId,
         })
         .onConflictDoUpdate({
@@ -118,7 +120,12 @@ const entityDisplayRouter = new Hono<AppEnv>()
             entityDisplay.subjectType,
             entityDisplay.subjectId,
           ],
-          set: { iconKey: body.iconKey, colorKey: body.colorKey, updatedAt: new Date() },
+          set: {
+            iconKey: body.iconKey,
+            colorKey: body.colorKey,
+            customColor: body.customColor,
+            updatedAt: new Date(),
+          },
         })
         .returning();
       /* v8 ignore next -- @preserve insert/upsert always returns one row */
@@ -128,6 +135,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
         subjectId,
         iconKey: row.iconKey,
         colorKey: row.colorKey,
+        customColor: row.customColor,
         customized: true,
       });
     },

@@ -223,6 +223,7 @@ const initiativeAggregates = new Hono<AppEnv>()
                   subjectId: row.id,
                   iconKey: display.iconKey,
                   colorKey: display.colorKey,
+                  customColor: display.customColor,
                   customized: true,
                 }
               : defaultEntityDisplay('initiative', row.id),

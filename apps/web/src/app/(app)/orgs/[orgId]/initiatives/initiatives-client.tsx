@@ -302,19 +302,24 @@ export default function InitiativesListClient(): JSX.Element {
   });
   const displayMutation = useApiMutation<
     EntityDisplayOut,
-    { initiativeId: string; iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey },
+    {
+      initiativeId: string;
+      iconKey: EntityDisplayIconKey;
+      colorKey: EntityDisplayColorKey;
+      customColor: string | null;
+    },
     { previous?: InitiativeOverviewOut }
   >({
-    mutationFn: ({ initiativeId, iconKey, colorKey }) =>
+    mutationFn: ({ initiativeId, iconKey, colorKey, customColor }) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
             param: { orgId, subjectType: 'initiative', subjectId: initiativeId },
-            json: { iconKey, colorKey },
+            json: { iconKey, colorKey, customColor },
           }),
         'Could not customize this initiative.',
       ),
-    onMutate: async ({ initiativeId, iconKey, colorKey }) => {
+    onMutate: async ({ initiativeId, iconKey, colorKey, customColor }) => {
       await queryClient.cancelQueries({ queryKey: overviewKey });
       const previous = queryClient.getQueryData<InitiativeOverviewOut>(overviewKey);
       queryClient.setQueryData<InitiativeOverviewOut>(overviewKey, (current) =>
@@ -330,6 +335,7 @@ export default function InitiativesListClient(): JSX.Element {
                         subjectId: initiativeId,
                         iconKey,
                         colorKey,
+                        customColor,
                         customized: true,
                       },
                     }
@@ -725,8 +731,13 @@ export default function InitiativesListClient(): JSX.Element {
                             initiativeName={item.name}
                             editable={item.organizationId === orgId}
                             pending={displayMutation.isPending}
-                            onChange={(iconKey, colorKey) => {
-                              displayMutation.mutate({ initiativeId: item.id, iconKey, colorKey });
+                            onChange={(iconKey, colorKey, customColor) => {
+                              displayMutation.mutate({
+                                initiativeId: item.id,
+                                iconKey,
+                                colorKey,
+                                customColor,
+                              });
                             }}
                           />
                           <div className="ml-3 min-w-0 pt-0.5">

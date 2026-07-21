@@ -170,12 +170,25 @@ export const EntityDisplayColorKey = z.enum(ENTITY_DISPLAY_COLOR_KEYS);
 /** Supported entity-display color key. */
 export type EntityDisplayColorKey = z.infer<typeof EntityDisplayColorKey>;
 
+/**
+ * A lowercase six-digit hex color (e.g. `#3b82f6`).
+ *
+ * @remarks
+ * The free-form custom-color override that supersedes {@link EntityDisplayColorKey} at render
+ * time only. Kept as a separate value so `colorKey` always stays a valid preset enum; a non-null
+ * custom color is what the renderer prefers over the resolved named/semantic token.
+ */
+export const EntityDisplayCustomColor = z.string().regex(/^#[0-9a-f]{6}$/);
+/** Validated lowercase six-digit hex custom color. */
+export type EntityDisplayCustomColor = z.infer<typeof EntityDisplayCustomColor>;
+
 /** Complete display metadata composed for a supported work entity. */
 export const EntityDisplayOut = z.object({
   subjectType: EntityDisplaySubjectType,
   subjectId: z.string().min(1),
   iconKey: EntityDisplayIconKey,
   colorKey: EntityDisplayColorKey,
+  customColor: EntityDisplayCustomColor.nullable(),
   customized: z.boolean(),
 });
 /** Composed entity-display metadata. */
@@ -185,6 +198,7 @@ export type EntityDisplayOut = z.infer<typeof EntityDisplayOut>;
 export const EntityDisplayUpdate = z.object({
   iconKey: EntityDisplayIconKey,
   colorKey: EntityDisplayColorKey,
+  customColor: EntityDisplayCustomColor.nullable(),
 });
 /** Validated entity-display update. */
 export type EntityDisplayUpdate = z.infer<typeof EntityDisplayUpdate>;
@@ -199,6 +213,7 @@ export function defaultEntityDisplay(
     subjectId,
     iconKey: subjectType === 'initiative' ? 'target' : 'folder',
     colorKey: 'neutral',
+    customColor: null,
     customized: false,
   };
 }

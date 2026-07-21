@@ -1,0 +1,2 @@
+ALTER TABLE "entity_display" ADD COLUMN "custom_color" text;--> statement-breakpoint
+ALTER TABLE "entity_display" ADD CONSTRAINT "entity_display_custom_color_check" CHECK ("entity_display"."custom_color" is null or "entity_display"."custom_color" ~ '^#[0-9a-f]{6}$');

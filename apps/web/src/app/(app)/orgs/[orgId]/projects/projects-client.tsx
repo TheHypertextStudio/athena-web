@@ -91,7 +91,11 @@ function ProjectIdentity({
   item: ProjectOverviewItem;
   orgId: string;
   pending: boolean;
-  onDisplayChange: (iconKey: EntityDisplayIconKey, colorKey: EntityDisplayColorKey) => void;
+  onDisplayChange: (
+    iconKey: EntityDisplayIconKey,
+    colorKey: EntityDisplayColorKey,
+    customColor: string | null,
+  ) => void;
   canRename: boolean;
   onRename: (projectId: string, name: string) => void;
   onOpen: (projectId: string) => void;
@@ -163,6 +167,7 @@ function ListLens({
     projectId: string,
     iconKey: EntityDisplayIconKey,
     colorKey: EntityDisplayColorKey,
+    customColor: string | null,
   ) => void;
   onPrefetch: (projectId: string) => void;
   canRename: boolean;
@@ -211,8 +216,8 @@ function ListLens({
                   item={item}
                   orgId={orgId}
                   pending={displayPending}
-                  onDisplayChange={(iconKey, colorKey) => {
-                    onDisplayChange(item.id, iconKey, colorKey);
+                  onDisplayChange={(iconKey, colorKey, customColor) => {
+                    onDisplayChange(item.id, iconKey, colorKey, customColor);
                   }}
                   canRename={canRename}
                   onRename={onRename}
@@ -396,19 +401,24 @@ export default function ProjectsListClient(): JSX.Element {
 
   const displayMutation = useApiMutation<
     EntityDisplayOut,
-    { projectId: string; iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey },
+    {
+      projectId: string;
+      iconKey: EntityDisplayIconKey;
+      colorKey: EntityDisplayColorKey;
+      customColor: string | null;
+    },
     { previous?: typeof overviewQ.data }
   >({
-    mutationFn: ({ projectId, iconKey, colorKey }) =>
+    mutationFn: ({ projectId, iconKey, colorKey, customColor }) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
             param: { orgId, subjectType: 'project', subjectId: projectId },
-            json: { iconKey, colorKey },
+            json: { iconKey, colorKey, customColor },
           }),
         'Could not customize this project.',
       ),
-    onMutate: async ({ projectId, iconKey, colorKey }) => {
+    onMutate: async ({ projectId, iconKey, colorKey, customColor }) => {
       const key = [...queryKeys.projects(orgId), 'overview'] as const;
       await queryClient.cancelQueries({ queryKey: key });
       const previous = queryClient.getQueryData<typeof overviewQ.data>(key);
@@ -425,6 +435,7 @@ export default function ProjectsListClient(): JSX.Element {
                         subjectId: projectId,
                         iconKey,
                         colorKey,
+                        customColor,
                         customized: true,
                       },
                     }
@@ -571,8 +582,8 @@ export default function ProjectsListClient(): JSX.Element {
               rows={rows}
               orgId={orgId}
               displayPending={displayMutation.isPending}
-              onDisplayChange={(projectId, iconKey, colorKey) => {
-                displayMutation.mutate({ projectId, iconKey, colorKey });
+              onDisplayChange={(projectId, iconKey, colorKey, customColor) => {
+                displayMutation.mutate({ projectId, iconKey, colorKey, customColor });
               }}
               onPrefetch={(projectId) => {
                 prefetch(projectDetailDef(orgId, projectId));

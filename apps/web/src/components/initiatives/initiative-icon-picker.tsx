@@ -127,7 +127,11 @@ export interface InitiativeIconPickerProps {
   initiativeName: string;
   editable: boolean;
   pending: boolean;
-  onChange: (iconKey: EntityDisplayIconKey, colorKey: EntityDisplayColorKey) => void;
+  onChange: (
+    iconKey: EntityDisplayIconKey,
+    colorKey: EntityDisplayColorKey,
+    customColor: string | null,
+  ) => void;
 }
 
 /** Render a stable Initiative glyph and, when editable, its anchored customization popover. */
@@ -148,15 +152,22 @@ export function InitiativeIconPicker({
       [option.label, ...option.keywords].some((value) => value.toLowerCase().includes(query)),
     );
   }, [search]);
+  const hasCustomColor = display.customColor !== null;
   const glyph = (
     <span
       data-testid="initiative-icon-circle"
       className={cn(
         'flex size-8 shrink-0 items-center justify-center rounded-full',
-        color.circleClass,
+        !hasCustomColor && color.circleClass,
       )}
+      style={hasCustomColor ? { backgroundColor: `${display.customColor}26` } : undefined}
     >
-      <Icon aria-hidden data-testid="initiative-icon" className={cn('size-4', color.iconClass)} />
+      <Icon
+        aria-hidden
+        data-testid="initiative-icon"
+        className={cn('size-4', !hasCustomColor && color.iconClass)}
+        style={display.customColor !== null ? { color: display.customColor } : undefined}
+      />
     </span>
   );
 
@@ -216,7 +227,7 @@ export function InitiativeIconPicker({
                   display.iconKey === option.key && 'bg-surface-container-highest',
                 )}
                 onClick={() => {
-                  onChange(option.key, display.colorKey);
+                  onChange(option.key, display.colorKey, display.customColor);
                 }}
               >
                 <OptionIcon aria-hidden className="size-4" />
@@ -229,23 +240,52 @@ export function InitiativeIconPicker({
         ) : null}
         <p className="text-on-surface mt-3 mb-2 text-sm font-medium">Color</p>
         <div aria-label="Initiative color" className="flex flex-wrap gap-1">
-          {COLOR_OPTIONS.map((option) => (
-            <button
-              key={option.key}
-              type="button"
-              aria-label={option.label}
-              aria-pressed={display.colorKey === option.key}
+          {COLOR_OPTIONS.map((option) => {
+            const selected = display.customColor === null && display.colorKey === option.key;
+            return (
+              <button
+                key={option.key}
+                type="button"
+                aria-label={option.label}
+                aria-pressed={selected}
+                className={cn(
+                  'hover:bg-surface-container-high focus-visible:ring-ring flex size-10 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none',
+                  selected && 'bg-surface-container-highest',
+                )}
+                onClick={() => {
+                  onChange(display.iconKey, option.key, null);
+                }}
+              >
+                <span aria-hidden className={cn('size-4 rounded-full', option.swatchClass)} />
+              </button>
+            );
+          })}
+          <label
+            className={cn(
+              'hover:bg-surface-container-high focus-within:ring-ring relative flex size-10 cursor-pointer items-center justify-center rounded-md focus-within:ring-2',
+              hasCustomColor && 'bg-surface-container-highest',
+            )}
+          >
+            <span
+              aria-hidden
               className={cn(
-                'hover:bg-surface-container-high focus-visible:ring-ring flex size-10 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none',
-                display.colorKey === option.key && 'bg-surface-container-highest',
+                'size-4 rounded-full',
+                !hasCustomColor && 'border-on-surface-variant border border-dashed',
               )}
-              onClick={() => {
-                onChange(display.iconKey, option.key);
+              style={
+                hasCustomColor ? { backgroundColor: display.customColor ?? undefined } : undefined
+              }
+            />
+            <input
+              type="color"
+              aria-label="Custom color"
+              value={display.customColor ?? '#3b82f6'}
+              onChange={(event) => {
+                onChange(display.iconKey, display.colorKey, event.target.value);
               }}
-            >
-              <span aria-hidden className={cn('size-4 rounded-full', option.swatchClass)} />
-            </button>
-          ))}
+              className="absolute inset-0 cursor-pointer opacity-0"
+            />
+          </label>
         </div>
       </PopoverContent>
     </Popover>

@@ -364,6 +364,7 @@ const projects = new Hono<AppEnv>()
                   subjectId: row.id,
                   iconKey: display.iconKey,
                   colorKey: display.colorKey,
+                  customColor: display.customColor,
                   customized: true,
                 }
               : defaultEntityDisplay('project', row.id),

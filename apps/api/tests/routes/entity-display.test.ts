@@ -28,7 +28,7 @@ describe('entity display routes', () => {
     const updated = await app.request(`/initiative/${initiative!.id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ iconKey: 'bus', colorKey: 'primary' }),
+      body: JSON.stringify({ iconKey: 'bus', colorKey: 'primary', customColor: '#3b82f6' }),
     });
     expect(updated.status).toBe(200);
     expect(await updated.json()).toMatchObject({
@@ -36,6 +36,7 @@ describe('entity display routes', () => {
       subjectId: initiative!.id,
       iconKey: 'bus',
       colorKey: 'primary',
+      customColor: '#3b82f6',
       customized: true,
     });
 
@@ -44,6 +45,7 @@ describe('entity display routes', () => {
     expect(await reset.json()).toMatchObject({
       iconKey: 'target',
       colorKey: 'neutral',
+      customColor: null,
       customized: false,
     });
   });
@@ -61,7 +63,7 @@ describe('entity display routes', () => {
     const updated = await ownerApp.request(`/project/${project!.id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ iconKey: 'sparkles', colorKey: 'success' }),
+      body: JSON.stringify({ iconKey: 'sparkles', colorKey: 'success', customColor: null }),
     });
     expect(updated.status).toBe(200);
 
@@ -69,7 +71,7 @@ describe('entity display routes', () => {
     const hidden = await attacker.request(`/project/${project!.id}`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ iconKey: 'flag', colorKey: 'danger' }),
+      body: JSON.stringify({ iconKey: 'flag', colorKey: 'danger', customColor: null }),
     });
     expect(hidden.status).toBe(404);
   });

@@ -168,6 +168,7 @@ export const entityDisplay = pgTable(
     subjectId: text('subject_id').notNull(),
     iconKey: text('icon_key').$type<EntityDisplayIconKey>().notNull(),
     colorKey: text('color_key').$type<EntityDisplayColorKey>().notNull(),
+    customColor: text('custom_color'),
     createdBy: text('created_by').references(() => actor.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
@@ -180,6 +181,10 @@ export const entityDisplay = pgTable(
     check('entity_display_subject_type_check', sql`${t.subjectType} in ('initiative', 'project')`),
     check('entity_display_icon_key_check', sql`${t.iconKey} in (${entityDisplayIconKeyList})`),
     check('entity_display_color_key_check', sql`${t.colorKey} in (${entityDisplayColorKeyList})`),
+    check(
+      'entity_display_custom_color_check',
+      sql`${t.customColor} is null or ${t.customColor} ~ '^#[0-9a-f]{6}$'`,
+    ),
   ],
 );
 

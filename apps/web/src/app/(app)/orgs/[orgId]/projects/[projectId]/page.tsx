@@ -117,7 +117,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const resourceKey = [...detailKey, 'resources'] as const;
   const displayMutation = useApiMutation<
     EntityDisplayOut,
-    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey },
+    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
     { previous?: typeof detail }
   >({
     mutationFn: (json) =>
@@ -129,7 +129,7 @@ export default function ProjectDetailPage(): JSX.Element {
           }),
         'Could not customize this project.',
       ),
-    onMutate: async ({ iconKey, colorKey }) => {
+    onMutate: async ({ iconKey, colorKey, customColor }) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const previous = queryClient.getQueryData<typeof detail>(detailKey);
       queryClient.setQueryData(detailKey, (current: typeof detail) =>
@@ -141,6 +141,7 @@ export default function ProjectDetailPage(): JSX.Element {
                 subjectId: projectId,
                 iconKey,
                 colorKey,
+                customColor,
                 customized: true,
               },
             }
@@ -267,14 +268,15 @@ export default function ProjectDetailPage(): JSX.Element {
                   subjectId: projectId,
                   iconKey: 'folder',
                   colorKey: 'neutral',
+                  customColor: null,
                   customized: false,
                 }
               }
               initiativeName={project.name}
               editable={canEdit}
               pending={displayMutation.isPending}
-              onChange={(iconKey, colorKey) => {
-                displayMutation.mutate({ iconKey, colorKey });
+              onChange={(iconKey, colorKey, customColor) => {
+                displayMutation.mutate({ iconKey, colorKey, customColor });
               }}
             />
             <h1 className="max-w-[32ch]">

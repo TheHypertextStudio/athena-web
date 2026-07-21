@@ -110,13 +110,22 @@ describe('initiatives detail roll-up', () => {
     const response = await viewer.request('/overview');
     expect(response.status).toBe(200);
     const body = await json<{
-      items: { id: string; display: { iconKey: string; colorKey: string; customized: boolean } }[];
+      items: {
+        id: string;
+        display: {
+          iconKey: string;
+          colorKey: string;
+          customColor: string | null;
+          customized: boolean;
+        };
+      }[];
     }>(response);
     expect(body.items.find((item) => item.id === id)?.display).toEqual({
       subjectType: 'initiative',
       subjectId: id,
       iconKey: 'flag',
       colorKey: 'primary',
+      customColor: null,
       customized: true,
     });
   });

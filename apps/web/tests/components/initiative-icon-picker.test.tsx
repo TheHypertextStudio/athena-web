@@ -22,6 +22,7 @@ describe('InitiativeIconPicker', () => {
           subjectId: 'initiative-1',
           iconKey: 'target',
           colorKey: 'neutral',
+          customColor: null,
           customized: false,
         }}
         initiativeName="Transit coalition"
@@ -38,9 +39,9 @@ describe('InitiativeIconPicker', () => {
     expect(screen.getByTestId('initiative-icon-circle').className).toContain('size-8');
 
     fireEvent.click(screen.getByRole('button', { name: 'Flag' }));
-    expect(onChange).toHaveBeenCalledWith('flag', 'neutral');
+    expect(onChange).toHaveBeenCalledWith('flag', 'neutral', null);
     fireEvent.click(screen.getByRole('button', { name: 'Primary' }));
-    expect(onChange).toHaveBeenCalledWith('target', 'primary');
+    expect(onChange).toHaveBeenCalledWith('target', 'primary', null);
   });
 
   it('searches the rounded icon catalog by label and keyword', () => {
@@ -51,6 +52,7 @@ describe('InitiativeIconPicker', () => {
           subjectId: 'initiative-3',
           iconKey: 'target',
           colorKey: 'neutral',
+          customColor: null,
           customized: false,
         }}
         initiativeName="Transit education"
@@ -79,6 +81,7 @@ describe('InitiativeIconPicker', () => {
           subjectId: 'initiative-2',
           iconKey: 'globe',
           colorKey: 'primary',
+          customColor: null,
           customized: true,
         }}
         initiativeName="Regional coalition"

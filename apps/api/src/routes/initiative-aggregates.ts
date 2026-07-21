@@ -145,6 +145,9 @@ const initiativeAggregates = new Hono<AppEnv>()
       const parentByChild = new Map(
         visibleLinks.map((link) => [link.childInitiativeId, link.parentInitiativeId]),
       );
+      const parentLinkByChild = new Map(
+        visibleLinks.map((link) => [link.childInitiativeId, link.id]),
+      );
       const childrenByParent = new Map<string, string[]>();
       for (const link of visibleLinks) {
         const children = childrenByParent.get(link.parentInitiativeId) ?? [];
@@ -154,12 +157,18 @@ const initiativeAggregates = new Hono<AppEnv>()
       const overviewItems: {
         row: (typeof visibleRows)[number];
         parentInitiativeId: string | null;
+        parentLinkId: string | null;
         depth: number;
       }[] = [];
       const visit = (id: string, depth: number): void => {
         const row = rowsById.get(id);
         if (!row) return;
-        overviewItems.push({ row, parentInitiativeId: parentByChild.get(id) ?? null, depth });
+        overviewItems.push({
+          row,
+          parentInitiativeId: parentByChild.get(id) ?? null,
+          parentLinkId: parentLinkByChild.get(id) ?? null,
+          depth,
+        });
         const children = childrenByParent.get(id) ?? [];
         children
           .sort((a, b) => (rowsById.get(a)?.name ?? '').localeCompare(rowsById.get(b)?.name ?? ''))
@@ -204,7 +213,7 @@ const initiativeAggregates = new Hono<AppEnv>()
         };
       });
       return ok(c, InitiativeOverviewOut, {
-        items: overviewItems.map(({ row, parentInitiativeId, depth }) => {
+        items: overviewItems.map(({ row, parentInitiativeId, parentLinkId, depth }) => {
           const display = displayByInitiative.get(row.id);
           return {
             ...toOut(row),
@@ -219,6 +228,7 @@ const initiativeAggregates = new Hono<AppEnv>()
               : defaultEntityDisplay('initiative', row.id),
             organizationName: orgNameById.get(row.organizationId) ?? '',
             parentInitiativeId,
+            parentLinkId,
             depth,
             childCount: childrenByParent.get(row.id)?.length ?? 0,
             ownerName: row.ownerId ? (ownerNameById.get(row.ownerId) ?? null) : null,

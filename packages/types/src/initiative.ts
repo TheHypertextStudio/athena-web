@@ -325,6 +325,9 @@ export const InitiativeOverviewItem = InitiativeOut.extend({
   display: EntityDisplayOut,
   organizationName: z.string(),
   parentInitiativeId: InitiativeId.nullable(),
+  parentLinkId: Id.nullable().describe(
+    'Id of the hierarchy edge tying this row to its parent, or null at the root. The client uses it to move (PATCH) or remove (DELETE) the edge when reparenting.',
+  ),
   depth: z.number().int().min(1).max(5),
   childCount: z.number().int().min(0),
   ownerName: z.string().nullable(),

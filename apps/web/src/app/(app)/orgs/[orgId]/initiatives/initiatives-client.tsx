@@ -8,6 +8,7 @@ import type {
   InitiativeOverviewItem,
   InitiativeOverviewOut,
 } from '@docket/types';
+import { InitiativeId } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
@@ -21,6 +22,13 @@ import { CreateInitiativeDialog } from '@/components/initiatives/create-initiati
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import {
+  type InitiativeDragObject,
+  planReparent,
+  readInitiativeDragObject,
+  selfOrDescendantPredicate,
+  writeInitiativeDragObject,
+} from '@/components/initiatives/hierarchy-dnd';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
@@ -238,6 +246,9 @@ export default function InitiativesListClient(): JSX.Element {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | keyof typeof STATUS_LABEL>('all');
   const [sort, setSort] = useState<'title' | 'target' | 'status'>('title');
+  // The initiative currently being dragged, and the row it is hovering as a drop (nest) target.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const overview = useApiQuery(initiativeOverviewDef(orgId));
   const data: InitiativeOverviewOut | undefined = overview.data;
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
@@ -338,6 +349,78 @@ export default function InitiativesListClient(): JSX.Element {
     return ordered.filter((item) => keep.has(item.id));
   }, [data?.items, search, sort, statusFilter]);
   const rosterRows = useMemo(() => decorateHierarchy(visibleItems), [visibleItems]);
+
+  // Reparenting reads the whole context tree (not just the filtered rows) so a cycle check and the
+  // "already the child of" no-op stay correct even while a filter hides part of the hierarchy.
+  const isSelfOrDescendant = useMemo(() => {
+    const parentById = new Map<string, string | null>(
+      (data?.items ?? []).map((entry) => [entry.id, entry.parentInitiativeId]),
+    );
+    return selfOrDescendantPredicate(parentById);
+  }, [data]);
+
+  const createLink = useApiMutation({
+    mutationFn: (vars: { parentInitiativeId: string; childInitiativeId: string }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives['hierarchy-links'].$post({
+            param: { orgId },
+            json: {
+              parentInitiativeId: InitiativeId.parse(vars.parentInitiativeId),
+              childInitiativeId: InitiativeId.parse(vars.childInitiativeId),
+            },
+          }),
+        `Could not nest that ${initiativeNoun.toLowerCase()}.`,
+      ),
+    invalidateKeys: [overviewKey],
+  });
+  const moveLink = useApiMutation({
+    mutationFn: (vars: { linkId: string; parentInitiativeId: string }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives['hierarchy-links'][':linkId'].$patch({
+            param: { orgId, linkId: vars.linkId },
+            json: { parentInitiativeId: InitiativeId.parse(vars.parentInitiativeId) },
+          }),
+        `Could not move that ${initiativeNoun.toLowerCase()}.`,
+      ),
+    invalidateKeys: [overviewKey],
+  });
+  const detachLink = useApiMutation({
+    mutationFn: (linkId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives['hierarchy-links'][':linkId'].$delete({
+            param: { orgId, linkId },
+          }),
+        `Could not move that ${initiativeNoun.toLowerCase()} to the top level.`,
+      ),
+    invalidateKeys: [overviewKey],
+  });
+  const reparentError =
+    (createLink.error ?? moveLink.error ?? detachLink.error)
+      ? userErrorMessage(
+          createLink.error ?? moveLink.error ?? detachLink.error,
+          'Could not move that initiative.',
+        )
+      : null;
+
+  const handleReparent = useCallback(
+    (dragged: InitiativeDragObject, targetId: string | null): void => {
+      const plan = planReparent({ dragged, targetId, isSelfOrDescendant });
+      if (plan.kind === 'create') {
+        createLink.mutate({
+          parentInitiativeId: plan.parentInitiativeId,
+          childInitiativeId: plan.childInitiativeId,
+        });
+      } else if (plan.kind === 'move') {
+        moveLink.mutate({ linkId: plan.linkId, parentInitiativeId: plan.parentInitiativeId });
+      } else if (plan.kind === 'detach') {
+        detachLink.mutate(plan.linkId);
+      }
+    },
+    [createLink, moveLink, detachLink, isSelfOrDescendant],
+  );
 
   const handleCreated = useCallback(
     (created: { id: string }): void => {
@@ -482,21 +565,83 @@ export default function InitiativesListClient(): JSX.Element {
                   Last update
                 </div>
               </div>
+              {draggingId !== null ? (
+                <div
+                  className={`text-on-surface-variant mb-1 flex h-9 items-center justify-center rounded-lg border border-dashed text-xs transition-colors ${dropTargetId === '__root__' ? 'border-primary text-primary bg-surface-container-high' : 'border-outline-variant'}`}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    if (dropTargetId !== '__root__') setDropTargetId('__root__');
+                  }}
+                  onDragLeave={() => {
+                    setDropTargetId((current) => (current === '__root__' ? null : current));
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const dragged = readInitiativeDragObject(event.dataTransfer);
+                    setDraggingId(null);
+                    setDropTargetId(null);
+                    if (dragged) handleReparent(dragged, null);
+                  }}
+                >
+                  Drop here to move to the top level
+                </div>
+              ) : null}
               {rosterRows.map(
                 ({ item, continuationDepths, hasVisibleChildren, isLastSibling }, rowIndex) => {
                   const targetDate = formatDate(item.targetDate);
                   const lastUpdate = formatDate(item.lastUpdateAt);
                   const hasSummary = Boolean(item.summary?.trim());
                   const itemLeft = ROSTER_CELL_INSET + (item.depth - 1) * ROSTER_INDENT_STEP;
+                  // Only workspace-owned rows can be dragged or nested under here; cross-workspace
+                  // references are read-only in this context. A row is a valid drop target while a
+                  // different, non-descendant initiative is being dragged.
+                  const canReparent = item.organizationId === orgId;
+                  const isValidDropTarget =
+                    canReparent &&
+                    draggingId !== null &&
+                    draggingId !== item.id &&
+                    !isSelfOrDescendant(draggingId, item.id);
                   return (
                     <div
                       key={item.id}
                       role="row"
                       aria-level={item.depth}
                       aria-rowindex={rowIndex + 1}
-                      className="hover:bg-surface-container-high grid h-[72px] grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors"
+                      draggable={canReparent}
+                      className={`grid h-[72px] grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
                       onMouseEnter={() => {
                         prefetch(initiativeDetailDef(item.organizationId, item.id));
+                      }}
+                      onDragStart={(event) => {
+                        if (!canReparent) return;
+                        writeInitiativeDragObject(event.dataTransfer, {
+                          id: item.id,
+                          parentInitiativeId: item.parentInitiativeId,
+                          parentLinkId: item.parentLinkId,
+                        });
+                        setDraggingId(item.id);
+                      }}
+                      onDragEnd={() => {
+                        setDraggingId(null);
+                        setDropTargetId(null);
+                      }}
+                      onDragOver={(event) => {
+                        if (!isValidDropTarget) return;
+                        event.preventDefault();
+                        event.dataTransfer.dropEffect = 'move';
+                        if (dropTargetId !== item.id) setDropTargetId(item.id);
+                      }}
+                      onDragLeave={() => {
+                        setDropTargetId((current) => (current === item.id ? null : current));
+                      }}
+                      onDrop={(event) => {
+                        if (!isValidDropTarget) return;
+                        event.preventDefault();
+                        const dragged = readInitiativeDragObject(event.dataTransfer);
+                        setDraggingId(null);
+                        setDropTargetId(null);
+                        if (dragged) handleReparent(dragged, item.id);
                       }}
                     >
                       <div role="gridcell" className="relative h-full min-w-0">
@@ -525,6 +670,8 @@ export default function InitiativesListClient(): JSX.Element {
                               <Link
                                 href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
                                 title={item.name}
+                                // The row owns dragging; keep the anchor from starting a link-drag.
+                                draggable={false}
                                 className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold hover:underline"
                               >
                                 {item.name}
@@ -603,6 +750,11 @@ export default function InitiativesListClient(): JSX.Element {
       {displayMutation.error ? (
         <p role="alert" className="text-destructive text-sm">
           {userErrorMessage(displayMutation.error, 'Could not customize this initiative.')}
+        </p>
+      ) : null}
+      {reparentError ? (
+        <p role="alert" className="text-destructive text-sm">
+          {reparentError}
         </p>
       ) : null}
     </ListPageLayout>

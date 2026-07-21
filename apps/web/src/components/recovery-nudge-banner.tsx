@@ -78,32 +78,31 @@ export function RecoveryNudgeBanner({
   }
 
   return (
-    <div className="px-4 pt-4">
-      <div
-        role="status"
-        className="bg-surface-container-high text-on-surface grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-start gap-x-2 rounded-xl px-3 py-3"
-      >
-        <span aria-hidden="true" className="flex size-10 items-center justify-center">
-          <Shield className={`size-5 ${noCodes ? 'text-destructive' : 'text-primary'}`} />
-        </span>
-        <div className="min-w-0 py-2">
-          <p className="text-body-medium">{message}</p>
-          <Link
-            href={sectionHref(personalOrgId, 'security')}
-            className="text-primary hover:text-primary/80 focus-visible:ring-ring mt-1 inline-flex min-h-10 items-center pr-3 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          >
-            {noCodes ? 'Set up' : 'Regenerate'}
-          </Link>
-        </div>
+    <div
+      role="status"
+      className="bg-surface-container-high text-on-surface mb-2 flex flex-col gap-1.5 rounded-lg p-2.5"
+    >
+      <div className="flex items-start gap-2">
+        <Shield
+          aria-hidden="true"
+          className={`mt-0.5 size-4 shrink-0 ${noCodes ? 'text-destructive' : 'text-primary'}`}
+        />
+        <p className="text-on-surface-variant min-w-0 flex-1 text-xs leading-snug">{message}</p>
         <button
           type="button"
           aria-label="Dismiss"
           onClick={dismiss}
-          className="text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className="text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface focus-visible:ring-ring -mt-0.5 -mr-0.5 flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
         >
-          <X aria-hidden="true" className="size-4" />
+          <X aria-hidden="true" className="size-3.5" />
         </button>
       </div>
+      <Link
+        href={sectionHref(personalOrgId, 'security')}
+        className="text-primary hover:text-primary/80 focus-visible:ring-ring ml-6 inline-flex w-fit items-center rounded-sm text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        {noCodes ? 'Set up' : 'Regenerate'}
+      </Link>
     </div>
   );
 }

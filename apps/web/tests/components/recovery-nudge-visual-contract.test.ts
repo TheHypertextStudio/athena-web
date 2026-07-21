@@ -11,18 +11,19 @@ function source(): string {
 }
 
 describe('Recovery nudge visual contract', () => {
-  it('groups the message and action away from the isolated dismiss control', () => {
+  it('is a compact, borderless tonal card sized for the sidebar footer', () => {
     const banner = source();
-    expect(banner).toContain('grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]');
-    expect(banner).toContain('className="min-w-0 py-2"');
-    expect(banner).toContain('className="text-body-medium"');
-    expect(banner).toContain('mt-1 inline-flex min-h-10 items-center pr-3');
-    expect(banner).not.toContain('flex items-center gap-3 rounded-xl');
+    // A tonal container (surface step, no border) rather than the old full-width 3-column strip.
+    expect(banner).toContain('bg-surface-container-high');
+    expect(banner).toContain('rounded-lg');
+    expect(banner).not.toContain('grid-cols-[2.5rem_minmax(0,1fr)_2.5rem]');
+    expect(banner).not.toContain('px-4 pt-4');
   });
 
-  it('keeps icon columns and the dismiss action aligned to 40-pixel areas', () => {
+  it('keeps the message, an isolated dismiss, and the action link', () => {
     const banner = source();
-    expect(banner).toContain('flex size-10 items-center justify-center');
-    expect(banner).toContain('flex size-10 shrink-0 items-center justify-center');
+    // A dedicated dismiss control, distinct from the action link into Security.
+    expect(banner).toContain('aria-label="Dismiss"');
+    expect(banner).toContain('sectionHref(personalOrgId,');
   });
 });

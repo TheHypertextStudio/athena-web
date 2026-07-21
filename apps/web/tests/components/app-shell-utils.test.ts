@@ -39,8 +39,15 @@ describe('object detail shell treatment', () => {
     expect(isObjectDetailPath('/today')).toBe(false);
   });
 
-  it('keeps the recovery nudge out of object-detail page flow', () => {
-    expect(shellFrame).toContain('const objectDetailSurface = isObjectDetailPath(pathname);');
-    expect(shellFrame).toContain('loading || settingsSurface || objectDetailSurface');
+  it('anchors the recovery nudge in the sidebar footer, out of every page flow', () => {
+    // The nudge moved from the top-of-content banner slot into the sidebar footer, above the
+    // account chip, so it never sits in any page's scroll flow (object-detail pages included) and
+    // needs no per-surface suppression.
+    const bannerIdx = shellFrame.indexOf('<RecoveryNudgeBanner');
+    const accountIdx = shellFrame.indexOf('<AccountMenu');
+    expect(bannerIdx).toBeGreaterThan(-1);
+    expect(accountIdx).toBeGreaterThan(bannerIdx);
+    // No top-of-content banner slot any more.
+    expect(shellFrame).not.toContain('banner={');
   });
 });

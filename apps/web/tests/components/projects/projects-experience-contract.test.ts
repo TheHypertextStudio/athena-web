@@ -23,7 +23,9 @@ describe('Projects experience contract', () => {
     expect(overview).toContain('<ListPageLayout');
     expect(overview).toContain("type Lens = 'list' | 'dependencies' | 'timeline'");
     expect(overview).toContain('<FilterToolbar');
-    expect(overview).toContain('<DependencyLens');
+    // The dependencies lens now renders the shared React Flow canvas (lazy-loaded) instead of the
+    // old hand-rolled SVG DependencyLens.
+    expect(overview).toContain('<ProjectGraphPanel');
     expect(overview).toContain('<TimelineLens');
   });
 

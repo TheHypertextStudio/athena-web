@@ -7,7 +7,6 @@
  * accounts/events while keeping the shell, routing, TanStack Query, and rendering real.
  */
 import { signUpAndOnboard } from './helpers/app';
-import { settingsHref } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
 
 const CONNECTION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -140,7 +139,10 @@ function agendaPayload(date: string) {
 
 test.describe('google calendar', () => {
   test('config is nested and feeds the agenda rail', async ({ page }) => {
-    const { orgId } = await signUpAndOnboard(page, 'Calendar');
+    // "Just me" onboarding mints a personal workspace, whose settings are canonical at
+    // `/settings/*` (a shared workspace would keep the `/orgs/<id>/settings/*` prefix). The
+    // nested Google Calendar config lives under that personal Connections route.
+    await signUpAndOnboard(page, 'Calendar');
     let selected = true;
     let patchSeen = false;
     let syncSeen = false;
@@ -174,11 +176,11 @@ test.describe('google calendar', () => {
       });
     });
 
-    await page.goto(settingsHref(orgId, 'connections'), { waitUntil: 'domcontentloaded' });
+    await page.goto('/settings/connections', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('link', { name: /Google Calendar/ })).toBeVisible();
     await page.getByRole('link', { name: /Google Calendar/ }).click();
 
-    await expect(page).toHaveURL(new RegExp(settingsHref(orgId, 'connections/google-calendar')));
+    await expect(page).toHaveURL(/\/settings\/connections\/google-calendar/);
     await expect(page.getByRole('heading', { name: 'Google Calendar' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'ada@example.com' })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: /Ada/ })).toBeChecked();

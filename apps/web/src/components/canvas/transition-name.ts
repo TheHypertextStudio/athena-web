@@ -12,3 +12,8 @@
 export function taskNodeTransitionName(taskId: string): string {
   return `task-node-${taskId}`;
 }
+
+/** The `view-transition-name` for a project node, stable across every canvas surface. */
+export function projectNodeTransitionName(projectId: string): string {
+  return `project-node-${projectId}`;
+}

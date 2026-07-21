@@ -9,11 +9,12 @@ import type {
 } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ArrowRight, FolderKanban, GanttChart, ListView, Plus, Workflow } from '@docket/ui/icons';
+import { FolderKanban, GanttChart, ListView, Plus, Workflow } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { useQueryClient } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
@@ -41,6 +42,16 @@ import {
   apiQueryOptions,
 } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
+
+/**
+ * The dependency canvas (React Flow) is lazy-loaded so its bundle stays out of the list view and
+ * only loads when the Dependencies lens is opened. Client-only (`ssr: false`) — the canvas measures
+ * the DOM and has no meaningful server render.
+ */
+const ProjectGraphPanel = dynamic(
+  () => import('@/components/canvas/project-graph-panel').then((m) => m.ProjectGraphPanel),
+  { ssr: false },
+);
 
 type Lens = 'list' | 'dependencies' | 'timeline';
 
@@ -204,124 +215,6 @@ function ListLens({
                 {item.blockedByIds.length > 0 ? `${item.blockedByIds.length} upstream` : 'Clear'}
               </div>
             </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-interface GraphPosition {
-  x: number;
-  y: number;
-}
-
-function DependencyLens({
-  rows,
-  orgId,
-}: {
-  rows: readonly ProjectOverviewItem[];
-  orgId: string;
-}): JSX.Element {
-  const rowIds = new Set<string>(rows.map((item) => item.id));
-  const byId = new Map<string, ProjectOverviewItem>(rows.map((item) => [item.id, item]));
-  const levelById = new Map<string, number>();
-  const levelOf = (id: string, visiting = new Set<string>()): number => {
-    const cached = levelById.get(id);
-    if (cached !== undefined) return cached;
-    if (visiting.has(id)) return 0;
-    visiting.add(id);
-    const item = byId.get(id);
-    const upstream = item?.blockedByIds.filter((candidate) => rowIds.has(candidate)) ?? [];
-    const level =
-      upstream.length === 0
-        ? 0
-        : Math.max(...upstream.map((candidate) => levelOf(candidate, new Set(visiting)))) + 1;
-    levelById.set(id, level);
-    return level;
-  };
-  for (const item of rows) levelOf(item.id);
-  const levels = new Map<number, ProjectOverviewItem[]>();
-  for (const item of rows) {
-    const level = levelById.get(item.id) ?? 0;
-    levels.set(level, [...(levels.get(level) ?? []), item]);
-  }
-  const positions = new Map<string, GraphPosition>();
-  for (const [level, items] of levels) {
-    items.forEach((item, index) =>
-      positions.set(item.id, { x: 32 + level * 264, y: 32 + index * 88 }),
-    );
-  }
-  const maxLevel = Math.max(0, ...levelById.values());
-  const maxRows = Math.max(1, ...[...levels.values()].map((items) => items.length));
-  const width = Math.max(880, 64 + (maxLevel + 1) * 264);
-  const height = Math.max(280, 64 + maxRows * 88);
-
-  if (rows.length === 0)
-    return <p className="text-on-surface-variant p-8 text-center text-sm">No matching projects.</p>;
-
-  return (
-    <div className="overflow-auto overscroll-contain">
-      <div className="relative" style={{ width, height }}>
-        <svg aria-hidden className="absolute inset-0" width={width} height={height}>
-          <defs>
-            <marker
-              id="project-dependency-arrow"
-              markerWidth="8"
-              markerHeight="8"
-              refX="6"
-              refY="3"
-              orient="auto"
-            >
-              <path d="M0,0 L0,6 L6,3 z" className="fill-outline" />
-            </marker>
-          </defs>
-          {rows.flatMap((item) =>
-            item.blockedByIds.map((upstreamId) => {
-              const from = positions.get(upstreamId);
-              const to = positions.get(item.id);
-              if (!from || !to) return null;
-              const x1 = from.x + 220;
-              const y1 = from.y + 28;
-              const x2 = to.x;
-              const y2 = to.y + 28;
-              const bend = Math.max(24, (x2 - x1) / 2);
-              return (
-                <path
-                  key={`${upstreamId}-${item.id}`}
-                  d={`M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`}
-                  className="stroke-outline"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  fill="none"
-                  markerEnd="url(#project-dependency-arrow)"
-                />
-              );
-            }),
-          )}
-        </svg>
-        {rows.map((item) => {
-          const nodePosition = positions.get(item.id);
-          if (!nodePosition) return null;
-          return (
-            <Link
-              key={item.id}
-              href={`/orgs/${orgId}/projects/${item.id}`}
-              className="border-outline-variant bg-surface hover:bg-surface-container-high focus-visible:ring-ring absolute flex h-14 w-[220px] items-center gap-2.5 rounded-xl border px-3 shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none"
-              style={{ left: nodePosition.x, top: nodePosition.y }}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="text-on-surface block truncate text-sm font-semibold">
-                  {item.name}
-                </span>
-                <span className="text-on-surface-variant block truncate text-xs">
-                  {item.blockedByIds.length > 0
-                    ? `Waiting on ${item.blockedByIds.length}`
-                    : 'Ready'}
-                </span>
-              </span>
-              <ArrowRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-            </Link>
           );
         })}
       </div>
@@ -626,7 +519,7 @@ export default function ProjectsListClient(): JSX.Element {
               }}
             />
           ) : lens === 'dependencies' ? (
-            <DependencyLens rows={rows} orgId={orgId} />
+            <ProjectGraphPanel rows={rows} orgId={orgId} />
           ) : (
             <TimelineLens rows={rows} orgId={orgId} />
           )}

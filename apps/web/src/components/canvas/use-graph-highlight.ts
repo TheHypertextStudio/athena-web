@@ -10,6 +10,10 @@
  * else fades; otherwise, when a persistent `highlightIds` set is supplied (e.g. the critical
  * path), everything off that set fades. Returns the (className-decorated) nodes/edges plus the two
  * hover handlers to spread onto `<ReactFlow>`.
+ *
+ * The hover/selection chain dimming is opt-out (`highlightChains`): dense task graphs benefit from
+ * it, but a small portfolio graph reads better when hovering a card leaves its neighbors alone. A
+ * persistent `highlightIds` set is still honored either way.
  */
 import { type Edge, type Node, useOnSelectionChange } from '@xyflow/react';
 import { cn } from '@docket/ui/lib/utils';
@@ -77,12 +81,15 @@ export interface GraphHighlight {
  * @param nodes - The laid-out nodes.
  * @param edges - The edges.
  * @param highlightIds - A persistent set to keep lit when nothing is hovered/selected, or null.
+ * @param highlightChains - When false, hovering/selecting a node no longer dims off its chain
+ *   (the persistent `highlightIds` set is still honored). Defaults to true.
  * @returns the decorated graph + hover handlers.
  */
 export function useGraphHighlight(
   nodes: Node[],
   edges: Edge[],
   highlightIds: Set<string> | null | undefined,
+  highlightChains = true,
 ): GraphHighlight {
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -104,7 +111,7 @@ export function useGraphHighlight(
   // Adjacency depends only on edges, so it is rebuilt on a graph change — not on every hover.
   const adjacency = useMemo(() => buildAdjacency(edges), [edges]);
 
-  const active = hoverId ?? selectedId;
+  const active = highlightChains ? (hoverId ?? selectedId) : null;
   const decorated = useMemo(() => {
     if (active !== null) {
       const related = relatedIds(active, adjacency);

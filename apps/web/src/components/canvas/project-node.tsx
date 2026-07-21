@@ -19,8 +19,10 @@
  */
 import type { Health, ProjectStatus } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
+import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
+import Link from 'next/link';
 import { memo } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
@@ -40,6 +42,8 @@ import { useLod } from './use-lod';
 export interface ProjectNodeData extends Record<string, unknown> {
   /** The project name (line-clamped in the card). */
   name: string;
+  /** The owning org id, used to build the card's explicit "open project" navigation link. */
+  orgId: string;
   /** The project's lifecycle status (drives the leading glyph + status badge). */
   status: ProjectStatus;
   /** The project's health verdict, or `null` when unset (drives the health tint). */
@@ -63,7 +67,7 @@ export function projectData(node: { data: unknown }): ProjectNodeData {
 
 /** A single project card on the canvas. */
 function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
-  const { name, status, health, progress, targetDate, waitingCount, density, isRoot } =
+  const { name, orgId, status, health, progress, targetDate, waitingCount, density, isRoot } =
     data as ProjectNodeData;
   const compact = density === 'compact';
   // Low-detail (zoomed out): show just the glyph + name, dropping the badge row and progress.
@@ -88,6 +92,19 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
         position={Position.Left}
         className="!border-outline-variant !bg-surface !size-2"
       />
+
+      {/* Explicit navigation affordance: the card itself never navigates (too easy to mis-click
+          while panning or connecting), so a deliberate corner button reveals on hover/focus. */}
+      <Link
+        href={`/orgs/${orgId}/projects/${id}`}
+        aria-label={`Open ${name}`}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+        className="nodrag nopan bg-surface-container-highest text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <ArrowRight className="size-3.5" />
+      </Link>
 
       <div className="flex min-w-0 items-center gap-2">
         <StatusIcon type={statusGlyphType(status)} />

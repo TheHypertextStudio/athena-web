@@ -52,6 +52,12 @@ export interface CanvasProps extends GraphInteractionHandlers {
   interactive?: boolean;
   /** When set, persistently dims everything off this id set (e.g. the critical path). */
   highlightIds?: Set<string> | null;
+  /**
+   * When false, hovering or selecting a node no longer dims the rest of the graph off its
+   * dependency chain (the persistent `highlightIds` set is still honored). Defaults to true; a
+   * small portfolio graph opts out so hovering a card leaves its neighbors untouched.
+   */
+  highlightChains?: boolean;
   /** When it changes, the canvas pans/zooms to fit these node ids (e.g. search matches). */
   focusOn?: readonly string[];
   /** Optional minimap node colorer; hosts inject any dataset-specific coloring. */
@@ -78,6 +84,7 @@ function CanvasInner({
   disableLayout = false,
   interactive = false,
   highlightIds,
+  highlightChains = true,
   focusOn,
   nodeColor,
   onExpand,
@@ -95,7 +102,7 @@ function CanvasInner({
   const { nodes, edges, onNodesChange, onEdgesChange } = useControlledFlow(laidOut, rawEdges);
 
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
-  const highlight = useGraphHighlight(nodes, edges, highlightIds);
+  const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
   useFitViewOnChange(focusOn);
   const lod = useLodValue();
 

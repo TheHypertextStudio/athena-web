@@ -10,6 +10,8 @@ import {
 } from '@docket/ui/components';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
+
 import { LiveSessionPill, type PillStatus } from './live-session-pill';
 
 /** The actor (assignee or agent delegate) shown on the trailing edge of a row. */
@@ -42,8 +44,12 @@ export interface AgentTaskRowProps {
   task: AgentTaskRowData;
   /** Whether the row is the active (keyboard-focused) row. */
   active?: boolean;
-  /** Activate (open) the task. */
+  /** Activate (open) the task. In `doubleClick`-edit mode a single click on the title runs this. */
   onActivate?: () => void;
+  /** Whether the viewer may rename the task in place (double-click the title). */
+  canEdit?: boolean;
+  /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
+  onRename?: (taskId: string, title: string) => void;
 }
 
 /**
@@ -59,14 +65,34 @@ export interface AgentTaskRowProps {
  * The avatar encodes the actor's kind by shape, so an agent delegate is visually distinct
  * from a human assignee without a legend.
  */
-export function AgentTaskRow({ task, active, onActivate }: AgentTaskRowProps): JSX.Element {
+export function AgentTaskRow({
+  task,
+  active,
+  onActivate,
+  canEdit,
+  onRename,
+}: AgentTaskRowProps): JSX.Element {
   return (
     <ListRow active={active} onActivate={onActivate}>
       <ListCell className="shrink-0">
         <StatusIcon type={task.stateType} />
       </ListCell>
       <ListCell className="flex-1">
-        <span className="text-on-surface truncate">{task.title}</span>
+        {canEdit && onRename ? (
+          <EditableTitle
+            value={task.title}
+            onSave={(title) => {
+              onRename(task.id, title);
+            }}
+            canEdit
+            activate="doubleClick"
+            {...(onActivate ? { onActivate } : {})}
+            ariaLabel="Task title"
+            className="text-on-surface truncate"
+          />
+        ) : (
+          <span className="text-on-surface truncate">{task.title}</span>
+        )}
       </ListCell>
       {task.session ? (
         <ListCell className="shrink-0">

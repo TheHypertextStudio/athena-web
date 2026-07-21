@@ -30,6 +30,8 @@ export default function TriagePage(): JSX.Element {
     projectDestinations,
     programDestinations,
     providerName,
+    canEdit,
+    rename,
     toRow,
     groupBy,
     sortToProject,
@@ -99,6 +101,8 @@ export default function TriagePage(): JSX.Element {
                 task={toRow(task)}
                 active={ctx.active}
                 onActivate={ctx.onActivate}
+                canEdit={canEdit}
+                onRename={rename}
                 busy={pending.has(task.id)}
                 projects={projectDestinations}
                 programs={programDestinations}

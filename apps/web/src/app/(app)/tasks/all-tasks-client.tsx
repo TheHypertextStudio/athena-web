@@ -16,14 +16,20 @@ import { StatusIcon } from '@docket/ui/components';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { OrgChip } from '@/components/org-chip';
 import { writeScheduleDragObject } from '@/components/scheduling';
+import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { myWorkDefs } from '@/lib/my-work-defs';
+import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
+import { useOrgCapability } from '@/lib/use-org-capability';
+import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** Sort modes for the unified list. */
@@ -136,10 +142,38 @@ interface TaskRowProps {
 
 /** One task row: status glyph · title · due · workspace chip, linking to the task. */
 function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
+  const router = useRouter();
+  const href = `/orgs/${task.organizationId}/tasks/${task.id}`;
   const overdue = task.dueDate != null && task.dueDate < todayISODate();
+
+  // The unified list spans every workspace, so the viewer's edit capability is resolved per row's
+  // org (React Query dedupes these by key, sharing the members fetch with the parent's own query).
+  const membersQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.members(task.organizationId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: task.organizationId } }),
+      'Could not load members.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const rolesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.roles(task.organizationId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId: task.organizationId } }),
+      'Could not load roles.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const canEdit = useOrgCapability(
+    membersQ.data?.items ?? [],
+    rolesQ.data?.items ?? [],
+    'contribute',
+  );
+  const rename = useRenameTask(task.organizationId, [queryKeys.tasks(task.organizationId)]);
+
   return (
     <Link
-      href={`/orgs/${task.organizationId}/tasks/${task.id}`}
+      href={href}
       draggable
       onDragStart={(event) => {
         writeScheduleDragObject(event.dataTransfer, {
@@ -152,7 +186,23 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
       className="hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
       <StatusIcon type={stateTypeOf(task.state)} />
-      <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{task.title}</span>
+      {canEdit ? (
+        <EditableTitle
+          value={task.title}
+          onSave={(title) => {
+            rename(task.id, title);
+          }}
+          canEdit
+          activate="doubleClick"
+          onActivate={() => {
+            router.push(href);
+          }}
+          ariaLabel="Task title"
+          className="text-on-surface min-w-0 flex-1 truncate text-sm"
+        />
+      ) : (
+        <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{task.title}</span>
+      )}
       {task.dueDate ? (
         <span
           className={

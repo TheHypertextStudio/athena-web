@@ -3,6 +3,7 @@ import type {
   AgentSessionOut,
   MemberOut,
   ProjectOut,
+  RoleOut,
   SessionStatus,
   TaskOut,
 } from '@docket/types';
@@ -12,10 +13,13 @@ import { useCallback, useMemo } from 'react';
 
 import { type AgentTaskRowData, type RowActor } from '@/components/my-work/agent-task-row';
 import { type PillStatus, pillStatusOf } from '@/components/my-work/live-session-pill';
+import { api } from './api';
 import { userErrorMessage } from './problem';
+import { useOrgCapability } from './use-org-capability';
+import { useRenameTask } from './use-rename-task';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from './work-state';
 import { myWorkDefs } from './my-work-defs';
-import { queryKeys, useApiQuery } from './query';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
 
 /** Shared frozen empty list for the slice fallbacks (stable identity, no per-render allocation). */
 const EMPTY: readonly never[] = [];
@@ -44,6 +48,10 @@ export interface MyWorkState {
   groupBy: (task: TaskOut) => GroupKey | null;
   subGroupBy: (task: TaskOut) => GroupKey;
   isDelegated: (task: TaskOut) => boolean;
+  /** Whether the viewer may rename tasks in place (the org `contribute` capability). */
+  canEdit: boolean;
+  /** Rename a task by id, reconciling the My Work task list on settle. */
+  rename: (taskId: string, title: string) => void;
 }
 
 /** useMyWork coordinates use my work state, loading, and mutations for its screen. */
@@ -59,6 +67,16 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
   const membersQ = useApiQuery(defs.members);
   const agentsQ = useApiQuery(defs.agents);
   const sessionsQ = useApiQuery(defs.sessions);
+  // Roles resolve the viewer's edit capability so an inline title rename is only offered when the
+  // server would accept it; the server still enforces `contribute` regardless.
+  const rolesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+      { staleTime: STALE.static },
+    ),
+  );
 
   // react-query keeps `data` referentially stable across renders, so `data.items` is already
   // stable; the shared frozen EMPTY keeps the fallback stable too — no useMemo needed.
@@ -67,6 +85,10 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
   const members: readonly MemberOut[] = membersQ.data?.items ?? EMPTY;
   const agents: readonly AgentOut[] = agentsQ.data?.items ?? EMPTY;
   const sessions: readonly AgentSessionOut[] = sessionsQ.data?.items ?? EMPTY;
+  const roles: readonly RoleOut[] = rolesQ.data?.items ?? EMPTY;
+
+  const canEdit = useOrgCapability(members, roles, 'contribute');
+  const rename = useRenameTask(orgId, [queryKeys.tasks(orgId)]);
 
   // Tasks gate the load (the others enrich); only a failed tasks read is fatal — the rosters
   // degrade to benign empties, exactly as the prior best-effort load did.
@@ -233,5 +255,7 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
     groupBy,
     subGroupBy,
     isDelegated,
+    canEdit,
+    rename,
   };
 }

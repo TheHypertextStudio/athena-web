@@ -44,6 +44,8 @@ import {
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
+
 import { SourceTag } from './source-tag';
 import { TriageActions, type TriageDestination } from './triage-actions';
 
@@ -69,8 +71,12 @@ export interface TriageRowProps {
   task: TriageRowData;
   /** Whether this row is the active (keyboard-focused) row. */
   active?: boolean;
-  /** Activate (open) the task detail. */
+  /** Activate (open) the task detail. In inline-edit mode a single click on the title runs this. */
   onActivate?: () => void;
+  /** Whether the viewer may rename the task in place (double-click the title). */
+  canEdit?: boolean;
+  /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
+  onRename?: (taskId: string, title: string) => void;
   /** Whether a sort/dismiss mutation for this row is in flight. */
   busy?: boolean;
   /** The org's projects, offered as move-to destinations. */
@@ -115,6 +121,8 @@ export function TriageRow({
   task,
   active,
   onActivate,
+  canEdit,
+  onRename,
   busy = false,
   projects,
   programs,
@@ -140,7 +148,21 @@ export function TriageRow({
           </ListCell>
 
           <ListCell className="min-w-0 flex-1">
-            <span className="text-on-surface truncate">{task.title}</span>
+            {canEdit && onRename ? (
+              <EditableTitle
+                value={task.title}
+                onSave={(title) => {
+                  onRename(task.id, title);
+                }}
+                canEdit
+                activate="doubleClick"
+                {...(onActivate ? { onActivate } : {})}
+                ariaLabel="Task title"
+                className="text-on-surface truncate"
+              />
+            ) : (
+              <span className="text-on-surface truncate">{task.title}</span>
+            )}
           </ListCell>
 
           <ListCell className="shrink-0">

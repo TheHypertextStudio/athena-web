@@ -50,6 +50,8 @@ export default function MyWorkClient(): JSX.Element {
     toRow,
     groupBy,
     subGroupBy,
+    canEdit,
+    rename,
   } = useMyWork(orgId, userId);
 
   const visible = visibleTasks(tab);
@@ -170,6 +172,8 @@ export default function MyWorkClient(): JSX.Element {
                 task={toRow(task, tab)}
                 active={ctx.active}
                 onActivate={ctx.onActivate}
+                canEdit={canEdit}
+                onRename={rename}
               />
             )}
             onActivateItem={(task) => {

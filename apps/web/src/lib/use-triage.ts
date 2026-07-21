@@ -6,6 +6,7 @@ import {
   type ProgramOut,
   ProjectId,
   type ProjectOut,
+  type RoleOut,
   type TaskOut,
   type TeamOut,
 } from '@docket/types';
@@ -19,6 +20,8 @@ import type { TriageRowData } from '@/components/triage/triage-row';
 import { api } from './api';
 import { userErrorMessage, readProblemError } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from './query';
+import { useOrgCapability } from './use-org-capability';
+import { useRenameTask } from './use-rename-task';
 import { stateTypeOf } from './work-state';
 
 function isUnsorted(task: TaskOut): boolean {
@@ -35,6 +38,10 @@ export interface TriageState {
   projectDestinations: readonly TriageDestination[];
   programDestinations: readonly TriageDestination[];
   providerName: (integrationId: string | null | undefined) => string;
+  /** Whether the viewer may rename queued tasks in place (the org `contribute` capability). */
+  canEdit: boolean;
+  /** Rename a task by id, reconciling the triage queue on settle. */
+  rename: (taskId: string, title: string) => void;
   toRow: (task: TaskOut) => TriageRowData;
   groupBy: (task: TaskOut) => GroupKey;
   sortToProject: (taskId: string, projectId: string) => Promise<void>;
@@ -83,6 +90,14 @@ export function useTriage(orgId: string): TriageState {
       { staleTime: STALE.static },
     ),
   );
+  const rolesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+      { staleTime: STALE.static },
+    ),
+  );
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
@@ -119,6 +134,10 @@ export function useTriage(orgId: string): TriageState {
   const tasks = useMemo<readonly TaskOut[]>(() => tasksQ.data?.items ?? [], [tasksQ.data]);
   const teams = useMemo<readonly TeamOut[]>(() => teamsQ.data?.items ?? [], [teamsQ.data]);
   const members = useMemo<readonly MemberOut[]>(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const roles = useMemo<readonly RoleOut[]>(() => rolesQ.data?.items ?? [], [rolesQ.data]);
+
+  const canEdit = useOrgCapability(members, roles, 'contribute');
+  const rename = useRenameTask(orgId, [queryKeys.tasks(orgId)]);
   const projects = useMemo<readonly ProjectOut[]>(
     () => projectsQ.data?.items ?? [],
     [projectsQ.data],
@@ -303,6 +322,8 @@ export function useTriage(orgId: string): TriageState {
     projectDestinations,
     programDestinations,
     providerName,
+    canEdit,
+    rename,
     toRow,
     groupBy,
     sortToProject,

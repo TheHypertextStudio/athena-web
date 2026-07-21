@@ -15,6 +15,12 @@ import {
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useState } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
+import { api } from '@/lib/api';
+import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
+import { useOrgCapability } from '@/lib/use-org-capability';
+import { useRenameTask } from '@/lib/use-rename-task';
+
 import { useDetachTaskFromItem } from '../calendar-mutations';
 import {
   CANCEL_CLASS,
@@ -122,20 +128,67 @@ function LinkedTaskRow({ itemId, link, onOpenTask }: LinkedTaskRowProps): JSX.El
   const detach = useDetachTaskFromItem(itemId, link.taskId);
   const [confirming, setConfirming] = useState(false);
 
+  // Linked tasks can belong to any workspace, so the viewer's edit capability is resolved per row's
+  // org; React Query dedupes these fetches by key. A rename refreshes the calendar item's cache so
+  // its linked-task titles re-render.
+  const membersQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.members(link.organizationId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId: link.organizationId } }),
+      'Could not load members.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const rolesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.roles(link.organizationId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId: link.organizationId } }),
+      'Could not load roles.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const canEdit = useOrgCapability(
+    membersQ.data?.items ?? [],
+    rolesQ.data?.items ?? [],
+    'contribute',
+  );
+  const rename = useRenameTask(link.organizationId, [queryKeys.calendarItem(itemId)]);
+
+  const titleClass = cn(
+    'min-w-0 flex-1 truncate text-left text-sm',
+    link.done ? 'text-on-surface-variant line-through' : 'text-on-surface',
+  );
+
   return (
     <div className="border-outline-variant bg-surface-container-low flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
-      <button
-        type="button"
-        onClick={() => {
-          onOpenTask(link.organizationId, link.taskId);
-        }}
-        className={cn(
-          'focus-visible:ring-ring min-w-0 flex-1 truncate rounded-sm text-left text-sm focus-visible:ring-2 focus-visible:outline-none',
-          link.done ? 'text-on-surface-variant line-through' : 'text-on-surface',
-        )}
-      >
-        {link.title}
-      </button>
+      {canEdit ? (
+        <EditableTitle
+          value={link.title}
+          onSave={(title) => {
+            rename(link.taskId, title);
+          }}
+          canEdit
+          activate="doubleClick"
+          onActivate={() => {
+            onOpenTask(link.organizationId, link.taskId);
+          }}
+          ariaLabel="Task title"
+          className={titleClass}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            onOpenTask(link.organizationId, link.taskId);
+          }}
+          className={cn(
+            'focus-visible:ring-ring rounded-sm focus-visible:ring-2 focus-visible:outline-none',
+            titleClass,
+          )}
+        >
+          {link.title}
+        </button>
+      )}
       <Button
         size="sm"
         variant="ghost"

@@ -1,11 +1,103 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-14
+> **Last Updated**: 2026-07-21
 
 ---
 
 ## Active Tasks
+
+### [LINEAR-AGENT-001] Add Linear Agent platform support for Athena
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-20
+- **Completed**: 2026-07-21
+- **Priority**: P1
+- **Description**: Let a Linear workspace member `@-mention` or delegate to `@athena` and have it
+  create a session that lives natively in both Linear (a real Linear Agent-platform
+  `AgentSession`) and Docket (a normal `agent_session`), with activity syncing in both
+  directions. Also required "consolidated identity": resolving the mentioning Linear person to a
+  real Docket actor rather than ever treating a mention as anonymous, with account linking
+  reused from the existing Better Auth Linear identity machinery.
+- **Plan** (8 sequential slices, each independently typechecked/linted/tested/committed):
+  1. Schema foundation — `agent_session_external_link` (per-provider session bookkeeping),
+     `session_activity.updated_at` (so a relay can watermark in-place updates, not just inserts),
+     `integration_pattern` gains `'agent'`.
+  2. The Linear Agent boundary adapter (`packages/integrations/src/linear-agent.ts`) — OAuth2
+     `actor=app` authorize/token-exchange, webhook signature verification, typed
+     `created`/`prompted` payload parsing, `agentActivityCreate`/`agentSessionUpdate` GraphQL
+     calls — plus an offline mock and a `LinearAgentPort` adapter so real/mock are callable
+     uniformly.
+  3. `resolveExternalActor` — a reusable "which Docket actor does this external person map to"
+     resolver (manual admin override → linked Better Auth account → connector's email match →
+     ad-hoc email fallback), wired into the event substrate's previously-unfilled
+     `docketActorId` enrichment slot.
+  4. The org-level `actor=app` OAuth install flow (admin-`manage`-gated), sealing the workspace
+     credential through the existing `integration_credential` mechanism.
+  5. The webhook receiver (`POST /internal/ingest/linear-agent`) — satisfies Linear's 5-second ACK
+     and 10-second external-URL requirements entirely synchronously, since `apps/api` runs on
+     Cloud Run with `--min-instances=0` and no `--no-cpu-throttling` (CPU throttles to near-zero
+     the instant the response is sent, so no background work started here would reliably run).
+     Creates/finds the session idempotently, resolves identity without ever blocking session
+     creation on it, and queues an `agent_session_run` row for the next slice.
+  6. The cron sweep (`POST /internal/cron/run-linear-agent-sessions`, lease-guarded, registered in
+     `scripts/scheduler-setup.ts` at `*/1 * * * *`) that actually drives the queued sessions, plus
+     the outbound relay mirroring new/changed `session_activity` rows back to Linear via a
+     compound `(updatedAt, id)` keyset-pagination watermark — the one mechanism correctly
+     covering both a fresh activity insert and `executeApprovedActions`' in-place `action`-row
+     update.
+  7. A reply-and-resume refactor (`postReplyAndResume` / `recordInboundReply` in
+     `agent-session-runner.ts`) shared by the existing chat door and the webhook's `prompted`
+     path, so both leave a session in the identical state for `driveSession` to resume from.
+  8. An admin-only "Install Athena as a Linear Agent" card in Settings → Connections, deliberately
+     separate from the generic multi-provider directory.
+- **Risks**:
+  - Linear's exact `AgentSessionEvent` webhook payload shape (nested `agentSession.issue`/
+    `.comment`/`.guidance` fields, the precise actor/email fields) is grounded in Linear's public
+    docs but has not been exercised against a real delivery — no Agent app is registered yet. The
+    parser is deliberately `.loose()` so an unanticipated field never breaks parsing; re-verify
+    against a live delivery once the app exists.
+  - The OAuth callback does not yet stamp `connection.externalWorkspaceId`/`externalWorkspaceName`
+    from a real API call (the boundary adapter has no GraphQL query for it) — documented as a
+    known gap rather than an unverified invented call.
+  - `docs/engineering/architecture.md` states "no GCP/Cloud Run, entirely Vercel," which is stale
+    relative to the actual deploy pipeline (`apps/api`/`apps/admin` deploy to Cloud Run per
+    `.github/workflows/deploy.yml`) — this was load-bearing for the webhook/cron design and is
+    worth a separate doc fix.
+  - `assignment`-triggered sessions (Linear issue delegation, as opposed to `@mention`) are not
+    implemented — the schema/architecture supports it, but it was out of the stated scope.
+  - The backend SSE endpoint for live session updates (`GET /:id/stream`) still has no frontend
+    consumer anywhere in `apps/web` — a pre-existing gap, unrelated to this feature, that means a
+    Linear-originated session's Docket-side view needs a manual refresh to show new activity.
+- **Blockers**: None for landing this branch. End-to-end verification against a real Linear
+  workspace requires registering the Agent app in Linear's developer console first (client
+  id/secret, webhook signing secret, "Agent session events" webhook category enabled) — not yet
+  done, so nothing here has been exercised against live Linear traffic, only the offline mock.
+- **Files Changed**: `packages/db/src/schema/agents.ts` + `enums.ts` + migration;
+  `packages/types/src/integration.ts`; `packages/integrations/src/linear-agent.ts` +
+  `mock-linear-agent.ts`; `apps/api/src/lib/identity/resolve-external-actor.ts`;
+  `apps/api/src/lib/linear-agent-connect.ts` + `linear-agent-credential.ts` +
+  `linear-agent-relay.ts`; `apps/api/src/routes/integrations-linear-agent.ts` +
+  `integrations-linear-agent-oauth.ts` + `ingest-linear-agent.ts` + `linear-agent-sweep.ts` +
+  `agent-session-runner.ts` + `agent-sessions.ts` + `event-sync.ts` + `cron.ts` + `orgs.ts` +
+  `server.ts` + `container.ts`; `packages/env/src/registry-vars-core.ts` + `slices.ts`;
+  `scripts/scheduler-setup.ts`; `apps/web/src/components/settings/linear-agent-install-card.tsx`
+  - `connections-panel.tsx`. Eight atomic commits on `feat/linear-agent-support`.
+- **Validation**: Root `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` all pass —
+  17/17 packages, `apps/api` at 153 test files / 1,324 tests (94 new across this branch), `@docket/db`
+  66/66. Zero merge commits (`git rev-list --merges --count origin/main..HEAD` = 0). No
+  TODOs/stubs/skipped tests anywhere in the diff.
+- **Retrospective**: Docket's own `agent_session`/`session_activity` model turned out to speak
+  almost the same vocabulary as Linear's Agent platform by coincidence of prior design
+  (`thought|action|response|elicitation|error` matches 1:1), which made this far more a bridge
+  than a new domain model — worth remembering next time a third-party "agent" platform shows up,
+  since the pattern likely repeats. The one real architectural surprise was verifying the actual
+  deploy target (Cloud Run, not the docs' claimed all-Vercel topology) before committing to a
+  fire-and-forget background-task design that would have silently failed under Cloud Run's
+  default CPU throttling — a good reminder to verify infra claims against the deploy pipeline
+  itself, not architecture docs, when the design's correctness depends on it.
+
+---
 
 ### [PROJECTS-CRAFT-003] Remove the floating Project properties band
 

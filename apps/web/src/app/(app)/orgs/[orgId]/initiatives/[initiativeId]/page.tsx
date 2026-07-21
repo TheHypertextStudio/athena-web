@@ -29,6 +29,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Skeleton,
+  Tabs,
+  type TabsItem,
 } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
@@ -432,34 +434,30 @@ export default function InitiativeDetailPage(): JSX.Element {
         ) : null}
       </section>
 
-      <div
-        className="no-print border-outline-variant flex gap-5 border-b"
-        role="tablist"
-        aria-label="Initiative sections"
-      >
-        {(['overview', 'updates'] as const).map((value) => (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={tab === value}
-            className={
-              tab === value
-                ? 'border-primary text-on-surface min-h-10 border-b-2 text-sm font-medium'
-                : 'text-on-surface-variant min-h-10 text-sm'
-            }
-            onClick={() => {
-              setTab(value);
-            }}
-          >
-            {value === 'overview'
-              ? 'Overview'
-              : `Updates${updates.length ? ` ${updates.length}` : ''}`}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        className="no-print"
+        value={tab}
+        onValueChange={(value) => {
+          setTab(value as 'overview' | 'updates');
+        }}
+        label="Initiative sections"
+        items={[
+          { value: 'overview', label: 'Overview' },
+          {
+            value: 'updates',
+            label: 'Updates',
+            ...(updates.length ? { count: updates.length } : {}),
+          } satisfies TabsItem,
+        ]}
+      />
 
       {tab === 'updates' ? (
-        <div className="no-print">
+        <div
+          className="no-print"
+          role="tabpanel"
+          id="tabpanel-updates"
+          aria-labelledby="tab-updates"
+        >
           <UpdatesPanel
             updates={updates}
             loading={updatesQ.isPending}
@@ -481,6 +479,9 @@ export default function InitiativeDetailPage(): JSX.Element {
       ) : null}
       <div
         className={`${tab === 'overview' ? 'grid' : 'hidden'} initiative-overview min-w-0 gap-10 @5xl:grid-cols-[minmax(0,1fr)_18rem]`}
+        role="tabpanel"
+        id="tabpanel-overview"
+        aria-labelledby="tab-overview"
       >
         <div className="min-w-0 space-y-10">
           {detail.latestUpdate ? (
@@ -535,7 +536,7 @@ export default function InitiativeDetailPage(): JSX.Element {
                 {detail.connectedWork.map((item) => (
                   <div
                     key={`${item.kind}-${item.id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm"
+                    className="hover:bg-surface-container-high flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors"
                   >
                     <span className="min-w-0 truncate">{item.name}</span>
                     <span className="text-on-surface-variant ml-3 shrink-0">

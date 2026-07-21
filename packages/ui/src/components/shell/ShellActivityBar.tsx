@@ -56,7 +56,7 @@ export function ShellActivityBar({
               onIconClick(panel.id);
             }}
             className={cn(
-              'focus-visible:ring-ring flex size-10 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5',
+              'focus-visible:ring-ring flex size-10 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-6',
               showsActive
                 ? 'bg-surface-container-highest text-on-surface'
                 : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',

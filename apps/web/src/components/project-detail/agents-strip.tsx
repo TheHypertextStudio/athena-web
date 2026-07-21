@@ -16,6 +16,7 @@ import type { SessionStatus } from '@docket/types';
 import { cn } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
 import { Sparkles } from '@docket/ui/icons';
+import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 /** A session targeting this project, resolved to display fields. */
@@ -77,7 +78,7 @@ export function AgentsStrip({ agents }: AgentsStripProps): JSX.Element | null {
       className="border-primary/30 bg-primary/[0.04] flex flex-col gap-3 rounded-xl border p-4"
     >
       <div className="flex items-center gap-2">
-        <Sparkles aria-hidden="true" className="text-primary size-4" />
+        <DecorativeIcon icon={Sparkles} className="bg-primary/12 text-primary" />
         <h2 className="text-on-surface text-body-medium font-semibold">Agents working here</h2>
         <span className="text-on-surface-variant text-xs tabular-nums">{agents.length}</span>
       </div>

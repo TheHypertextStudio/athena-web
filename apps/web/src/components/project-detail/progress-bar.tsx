@@ -12,6 +12,7 @@
  */
 import type { ProjectProgress } from '@docket/types';
 import { CheckCircle2 } from '@docket/ui/icons';
+import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 /** Props for {@link WeightedProgress}. */
@@ -34,7 +35,7 @@ export function WeightedProgress({ progress }: WeightedProgressProps): JSX.Eleme
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
         <div className="flex items-center gap-2">
-          <CheckCircle2 aria-hidden="true" className="text-on-surface-variant size-4" />
+          <DecorativeIcon icon={CheckCircle2} />
           <span className="text-on-surface text-body-medium font-medium">Progress</span>
         </div>
         <span className="text-on-surface text-body-medium font-semibold tabular-nums">{pct}%</span>

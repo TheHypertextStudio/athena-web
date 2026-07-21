@@ -14,7 +14,7 @@
 
 import type { EmailSuggestionOut, SuggestionAcceptBody } from '@docket/types';
 import { Sparkles } from '@docket/ui/icons';
-import { Badge, Button, Card, CardContent, Input } from '@docket/ui/primitives';
+import { Badge, Button, Card, CardContent, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { useEmailSuggestionThread, useEmailSuggestions } from '@/lib/use-email-suggestions';
@@ -276,7 +276,7 @@ export default function SuggestionsLane({
   return (
     <section aria-labelledby="suggestions-heading" className="flex flex-col gap-2">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 opacity-70" aria-hidden="true" />
+        <DecorativeIcon icon={Sparkles} />
         <h2 id="suggestions-heading" className="text-sm font-semibold">
           Suggested by Athena
         </h2>

@@ -32,7 +32,10 @@ export default function InboxClient(): JSX.Element {
     onMarkAllRead,
   } = useInboxPage();
 
-  const panelId = (id: InboxTab): string => `inbox-${id}-panel`;
+  // Match the shared Tabs primitive's wiring: it emits tab id `tab-<id>` and
+  // `aria-controls="tabpanel-<id>"`, so panels must be `tabpanel-<id>` and point back at `tab-<id>`.
+  const panelId = (id: InboxTab): string => `tabpanel-${id}`;
+  const tabId = (id: InboxTab): string => `tab-${id}`;
   const visibleInbox = orderedInbox.filter((notification) => filterNotification(tab, notification));
   const visibleUnreadCount = visibleInbox.filter((notification) => !notification.readAt).length;
   const needsAction = visibleInbox.filter(
@@ -93,7 +96,7 @@ export default function InboxClient(): JSX.Element {
       <section
         role="tabpanel"
         id={panelId(tab === 'activity' ? 'all' : tab)}
-        aria-labelledby={`${panelId(tab === 'activity' ? 'all' : tab)}-tab`}
+        aria-labelledby={tabId(tab === 'activity' ? 'all' : tab)}
         hidden={tab === 'activity'}
         className="flex min-w-0 flex-col gap-1.5"
       >
@@ -127,7 +130,7 @@ export default function InboxClient(): JSX.Element {
       <section
         role="tabpanel"
         id={panelId('activity')}
-        aria-labelledby={`${panelId('activity')}-tab`}
+        aria-labelledby={tabId('activity')}
         hidden={tab !== 'activity'}
         className="flex min-w-0 flex-col gap-1.5"
       >

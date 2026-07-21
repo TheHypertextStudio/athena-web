@@ -28,6 +28,7 @@ export {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from './context-menu';
+export { DecorativeIcon, type DecorativeIconProps } from './decorative-icon';
 export {
   Dialog,
   DialogClose,
@@ -83,4 +84,13 @@ export {
 } from './sheet';
 export { Separator } from './separator';
 export { Skeleton } from './skeleton';
+export {
+  Tab,
+  TabList,
+  type TabListProps,
+  type TabProps,
+  Tabs,
+  type TabsItem,
+  type TabsProps,
+} from './tabs';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';

@@ -1,5 +1,6 @@
 import type { TeamOut } from '@docket/types';
 import { TaskAlt } from '@docket/ui/icons';
+import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from './card-note';
@@ -38,9 +39,7 @@ export function GtasksAccountRow({
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <TaskAlt aria-hidden="true" className="size-4" />
-          </span>
+          <DecorativeIcon icon={TaskAlt} className="bg-surface-container shrink-0" />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="text-on-surface text-body-medium truncate font-medium">
               {row.label}

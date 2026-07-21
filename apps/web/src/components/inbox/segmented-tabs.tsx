@@ -1,21 +1,24 @@
 'use client';
 
 /**
- * A keyboard-navigable underline tab control for the Inbox's two feeds.
+ * The Inbox's two-feed switcher, built on the shared {@link Tabs} primitive.
  *
  * @remarks
- * The Inbox splits everything that needs a response ("Inbox") from a quieter passive
- * awareness feed ("Activity"). This renders that split as a single `tablist` in the same
- * underline style My Work and the project-detail sections use, so in-page tabs read as one
- * visual language across the app: each segment is a real `tab` with `aria-selected`, an
- * optional count badge, and roving arrow-key focus (Left/Right/Home/End) per the WAI-ARIA
- * tabs pattern, so the control is fully operable without a mouse and announces correctly to
- * assistive tech. The active segment carries a `border-primary` underline (legible even
- * without color); selection is controlled by the parent (it owns which feed is shown and the
- * panel `id`s).
+ * The Inbox splits everything that needs a response ("Inbox") from a quieter passive awareness feed
+ * ("Activity"). This renders that split as the canonical Docket tablist so the control reads as
+ * clickable: a resting `bg-surface-container` track, an inactive segment that tones up on hover via
+ * the MD3 surface state-layer, and a selected segment that fills to `bg-surface-container-highest`.
+ * Keyboard behavior (roving tabindex, Left/Right wrapping, Home/End, activation-follows-focus) and
+ * the `role="tab"` / `aria-selected` / `aria-controls={`tabpanel-${id}`}` wiring come from the
+ * primitive; the caller renders the matching `role="tabpanel"` and owns which feed is shown.
+ *
+ * Each segment keeps its count badge. Because the shared count pill has a single tint, the badge is
+ * rendered here in the segment's content so the actionable queue (`emphasis`) can escalate to the
+ * `destructive` token while quiet segments track the primitive's selected-aware surface tint.
  */
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, type KeyboardEvent as ReactKeyboardEvent, useRef } from 'react';
+import { Tab, TabList, Tabs } from '@docket/ui/primitives';
+import { type JSX } from 'react';
 
 /** One segment in the {@link SegmentedTabs} control. */
 export interface SegmentDef<TId extends string> {
@@ -39,12 +42,15 @@ export interface SegmentedTabsProps<TId extends string> {
   readonly value: TId;
   /** Select a segment. */
   readonly onChange: (id: TId) => void;
-  /** Resolve the DOM id of the panel a segment controls (for `aria-controls`). */
-  readonly panelId: (id: TId) => string;
+  /**
+   * Retained for caller compatibility. The shared {@link Tabs} primitive now owns the tab/panel ids
+   * (`tab-${id}` / `tabpanel-${id}`), so callers should label their `role="tabpanel"` with those.
+   */
+  readonly panelId?: (id: TId) => string;
 }
 
 /**
- * A roving-tabindex underline tab control.
+ * A roving-tabindex tab control for the Inbox feeds.
  *
  * @example
  * ```tsx
@@ -53,8 +59,8 @@ export interface SegmentedTabsProps<TId extends string> {
  *   segments={[{ id: 'inbox', label: 'Inbox', count: 3, emphasis: true }]}
  *   value={tab}
  *   onChange={setTab}
- *   panelId={(id) => `${id}-panel`}
  * />
+ * <div role="tabpanel" id="tabpanel-inbox" aria-labelledby="tab-inbox">…</div>
  * ```
  */
 export function SegmentedTabs<TId extends string>({
@@ -62,95 +68,41 @@ export function SegmentedTabs<TId extends string>({
   segments,
   value,
   onChange,
-  panelId,
 }: SegmentedTabsProps<TId>): JSX.Element {
-  const tabRefs = useRef<Map<TId, HTMLButtonElement>>(new Map());
-
-  /** Move selection + focus to the tab at `index` (wrapping), per the tabs pattern. */
-  const focusTab = (index: number): void => {
-    const count = segments.length;
-    const next = segments[((index % count) + count) % count];
-    if (!next) return;
-    onChange(next.id);
-    tabRefs.current.get(next.id)?.focus();
-  };
-
-  const onKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number): void => {
-    switch (event.key) {
-      case 'ArrowRight':
-      case 'ArrowDown':
-        event.preventDefault();
-        focusTab(index + 1);
-        break;
-      case 'ArrowLeft':
-      case 'ArrowUp':
-        event.preventDefault();
-        focusTab(index - 1);
-        break;
-      case 'Home':
-        event.preventDefault();
-        focusTab(0);
-        break;
-      case 'End':
-        event.preventDefault();
-        focusTab(segments.length - 1);
-        break;
-      default:
-        break;
-    }
-  };
-
   return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="border-outline-variant flex items-center gap-1 border-b"
+    <Tabs
+      value={value}
+      onValueChange={(next) => {
+        onChange(next as TId);
+      }}
     >
-      {segments.map((segment, index) => {
-        const selected = segment.id === value;
-        const showCount = typeof segment.count === 'number' && segment.count > 0;
-        return (
-          <button
-            key={segment.id}
-            ref={(node) => {
-              if (node) tabRefs.current.set(segment.id, node);
-              else tabRefs.current.delete(segment.id);
-            }}
-            type="button"
-            role="tab"
-            id={`${panelId(segment.id)}-tab`}
-            aria-selected={selected}
-            aria-controls={panelId(segment.id)}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => {
-              onChange(segment.id);
-            }}
-            onKeyDown={(event) => {
-              onKeyDown(event, index);
-            }}
-            className={cn(
-              'focus-visible:ring-ring text-body-medium -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2 font-medium transition-colors outline-none focus-visible:ring-1',
-              selected
-                ? 'border-primary text-on-surface'
-                : 'text-on-surface-variant hover:text-on-surface border-transparent',
-            )}
-          >
-            {segment.label}
-            {showCount ? (
-              <span
-                className={cn(
-                  'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums',
-                  segment.emphasis
-                    ? 'bg-destructive/10 text-destructive'
-                    : 'bg-surface-container text-on-surface-variant',
-                )}
-              >
-                {segment.count}
+      <TabList label={label} className="max-w-full overflow-x-auto">
+        {segments.map((segment) => {
+          const selected = segment.id === value;
+          const showCount = typeof segment.count === 'number' && segment.count > 0;
+          return (
+            <Tab key={segment.id} value={segment.id}>
+              <span className="inline-flex items-center gap-2">
+                {segment.label}
+                {showCount ? (
+                  <span
+                    className={cn(
+                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
+                      segment.emphasis
+                        ? 'bg-destructive/10 text-destructive'
+                        : selected
+                          ? 'bg-surface-container text-on-surface'
+                          : 'bg-surface-container-high text-on-surface-variant',
+                    )}
+                  >
+                    {segment.count}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+            </Tab>
+          );
+        })}
+      </TabList>
+    </Tabs>
   );
 }

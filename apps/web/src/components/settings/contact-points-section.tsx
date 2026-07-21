@@ -11,7 +11,7 @@
 import type { ContactPointCreate, ContactPointOut } from '@docket/notifications';
 import { cn } from '@docket/ui';
 import { CheckCircle2, Mail, MessageSquare, Trash2, X } from '@docket/ui/icons';
-import { Badge, Button, Input } from '@docket/ui/primitives';
+import { Badge, Button, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent, useState } from 'react';
 
 /** Props for {@link ContactPointsSection}. */
@@ -129,13 +129,9 @@ export function ContactPointsSection({
           <div key={point.id} className="border-outline-variant flex flex-col gap-3 border-b p-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex min-w-0 items-start gap-3">
-                <span className="bg-surface-container text-on-surface-variant mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg">
-                  {point.type === 'email' ? (
-                    <Mail aria-hidden="true" className="size-4" />
-                  ) : (
-                    <MessageSquare aria-hidden="true" className="size-4" />
-                  )}
-                </span>
+                <DecorativeIcon className="bg-surface-container mt-0.5 shrink-0">
+                  {point.type === 'email' ? <Mail /> : <MessageSquare />}
+                </DecorativeIcon>
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="text-on-surface text-body-medium truncate font-medium">
                     {point.valueMasked}

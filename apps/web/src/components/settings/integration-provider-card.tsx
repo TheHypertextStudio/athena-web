@@ -1,6 +1,7 @@
 'use client';
 
 import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
+import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from './card-note';
@@ -125,9 +126,7 @@ export function IntegrationProviderCard({
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
-        <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <ProviderIcon aria-hidden="true" className="size-4" />
-        </span>
+        <DecorativeIcon icon={ProviderIcon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-body-medium font-medium">{provider.name}</span>
           {effect ? <span className="text-on-surface-variant text-xs">{effect}</span> : null}

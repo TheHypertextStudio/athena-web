@@ -25,6 +25,7 @@ import type { TaskOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { Flag, ListChecks } from '@docket/ui/icons';
+import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
@@ -140,7 +141,7 @@ export function OverviewSummary({
     >
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <ListChecks aria-hidden="true" className="text-on-surface-variant size-4" />
+          <DecorativeIcon icon={ListChecks} />
           <h2 className="text-on-surface text-base font-semibold">Status</h2>
         </div>
 
@@ -186,7 +187,7 @@ export function OverviewSummary({
 
       <div className="border-outline-variant flex flex-col gap-3 border-t pt-4">
         <div className="flex items-center gap-2">
-          <Flag aria-hidden="true" className="text-on-surface-variant size-4" />
+          <DecorativeIcon icon={Flag} />
           <h2 className="text-on-surface text-base font-semibold">By milestone</h2>
         </div>
 

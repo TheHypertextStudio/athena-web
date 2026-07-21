@@ -104,7 +104,7 @@ export function ProjectResourcesTab({
               className="hover:bg-surface-container-high flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 transition-colors"
             >
               <span className="bg-primary-container text-on-primary-container flex size-8 shrink-0 items-center justify-center rounded-full">
-                <LinkIcon aria-hidden className="size-4" />
+                <LinkIcon aria-hidden className="size-5" />
               </span>
               <a
                 href={resource.url ?? '#'}

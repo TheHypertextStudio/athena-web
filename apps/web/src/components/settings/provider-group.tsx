@@ -11,7 +11,7 @@
  */
 import type { IdentityOut, IdentityProvider } from '@docket/types';
 import { Plus } from '@docket/ui/icons';
-import { Badge } from '@docket/ui/primitives';
+import { Badge, DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { IdentityAccountRow } from './identity-account-row';
@@ -59,9 +59,7 @@ export function ProviderGroup({
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
-        <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
-          <Icon aria-hidden className="size-4" />
-        </span>
+        <DecorativeIcon icon={Icon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-body-medium font-medium">{entry.name}</span>
         </div>

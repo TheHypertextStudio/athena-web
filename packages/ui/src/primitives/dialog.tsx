@@ -171,7 +171,7 @@ export function DialogContent({
           <DialogPrimitive.Close
             aria-label="Close"
             className={cn(
-              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-md opacity-70 transition-colors transition-opacity hover:opacity-100 disabled:pointer-events-none [&_svg]:size-4',
+              'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface absolute top-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-md opacity-70 transition-colors transition-opacity hover:opacity-100 disabled:pointer-events-none [&_svg]:size-6',
               focusRing,
             )}
           >

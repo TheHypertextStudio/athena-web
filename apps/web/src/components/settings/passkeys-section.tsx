@@ -21,6 +21,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Shield, Trash2 } from '@docket/ui/icons';
 import {
   Button,
+  DecorativeIcon,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -129,7 +130,7 @@ export function PasskeysSection(): JSX.Element {
                 key={record.id}
                 className="border-outline-variant bg-surface flex items-center gap-3 rounded-lg border p-3"
               >
-                <Shield aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
+                <DecorativeIcon icon={Shield} className="shrink-0" />
                 <div className="min-w-0 flex-1">
                   <p className="text-on-surface text-body-medium truncate font-medium">
                     {passkeyLabel(record)}

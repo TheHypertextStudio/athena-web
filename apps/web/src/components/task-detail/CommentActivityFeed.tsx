@@ -138,7 +138,7 @@ function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Elem
         aria-hidden="true"
         className="bg-surface-container-high text-primary mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg"
       >
-        <Sparkles className="size-3.5" />
+        <Sparkles className="size-5" />
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-2">

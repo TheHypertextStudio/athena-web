@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
+import { Tab, TabList, Tabs } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 /** A single tab in a {@link SplitTabs} control. */
@@ -28,16 +29,20 @@ export interface SplitTabsProps<TValue extends string> {
 }
 
 /**
- * A Linear-style segmented tab control for the My Work agent-aware split.
+ * The My Work agent-aware split, built on the shared {@link Tabs} primitive.
  *
  * @remarks
- * Renders an ARIA `tablist` of underline tabs ("Assigned to me" vs "Delegated …") with a
- * count badge per tab. Selection is roving-tabindex and arrow-key navigable per the WAI-ARIA
- * tabs pattern: only the active tab is in the tab order, and Left/Right (with Home/End) move
- * the selection. The active tab carries a `border-primary` underline and `text-on-surface`;
- * inactive tabs stay quiet on `text-on-surface-variant`. A tab whose `emphasis` is set tints
- * its badge with the `destructive` token so a "needs you" count (e.g. pending approvals)
- * draws the eye. All colors come from semantic design tokens — never hardcoded.
+ * Renders the canonical Docket tablist ("Assigned to me" vs "Delegated …") so the control reads
+ * as clickable: a resting `bg-surface-container` track, an inactive tab that tones up on hover
+ * via the MD3 surface state-layer, and a selected tab that fills to `bg-surface-container-highest`.
+ * Keyboard behavior (roving tabindex, Left/Right wrapping, Home/End, activation-follows-focus) and
+ * the `role="tab"` / `aria-selected` / `aria-controls={`tabpanel-${value}`}` wiring come from the
+ * primitive; the matching `role="tabpanel"` stays owned by the caller.
+ *
+ * Each tab keeps its count badge. Because the shared count pill has a single tint, the badge is
+ * rendered here in the tab's content so a tab whose `emphasis` is set (e.g. pending approvals) can
+ * escalate to the `destructive` token while quiet tabs track the primitive's selected-aware surface
+ * tint. All colors come from semantic design tokens — never hardcoded.
  *
  * @typeParam TValue - The union of tab value strings.
  */
@@ -47,77 +52,41 @@ export function SplitTabs<TValue extends string>({
   onChange,
   label,
 }: SplitTabsProps<TValue>): JSX.Element {
-  /** Select the tab at `index` (no-op when out of range, e.g. an empty tab set). */
-  function selectAt(index: number): void {
-    const target = tabs[index];
-    if (target) onChange(target.value);
-  }
-
-  /** Move selection by a delta (wrapping) for Left/Right arrow navigation. */
-  function moveBy(delta: number): void {
-    const index = tabs.findIndex((tab) => tab.value === value);
-    selectAt((index + delta + tabs.length) % tabs.length);
-  }
-
   return (
-    <div
-      role="tablist"
-      aria-label={label}
-      className="border-outline-variant flex items-center gap-1 overflow-x-auto border-b"
+    <Tabs
+      value={value}
+      onValueChange={(next) => {
+        onChange(next as TValue);
+      }}
     >
-      {tabs.map((tab) => {
-        const selected = tab.value === value;
-        return (
-          <button
-            key={tab.value}
-            type="button"
-            role="tab"
-            id={`tab-${tab.value}`}
-            aria-selected={selected}
-            aria-controls={`tabpanel-${tab.value}`}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => {
-              onChange(tab.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowRight') {
-                event.preventDefault();
-                moveBy(1);
-              } else if (event.key === 'ArrowLeft') {
-                event.preventDefault();
-                moveBy(-1);
-              } else if (event.key === 'Home') {
-                event.preventDefault();
-                selectAt(0);
-              } else if (event.key === 'End') {
-                event.preventDefault();
-                selectAt(tabs.length - 1);
-              }
-            }}
-            className={cn(
-              'focus-visible:ring-ring -mb-px inline-flex items-center gap-2 rounded-t-md border-b-2 px-3 py-2',
-              'text-body-medium font-medium transition-colors outline-none focus-visible:ring-1',
-              selected
-                ? 'border-primary text-on-surface'
-                : 'text-on-surface-variant hover:text-on-surface border-transparent',
-            )}
-          >
-            <span>{tab.label}</span>
-            {tab.count !== undefined ? (
-              <span
-                className={cn(
-                  'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-semibold tabular-nums',
-                  tab.emphasis && tab.count > 0
-                    ? 'bg-destructive/10 text-destructive'
-                    : 'bg-surface-container text-on-surface-variant',
-                )}
-              >
-                {tab.count}
+      <TabList label={label} className="max-w-full overflow-x-auto">
+        {tabs.map((tab) => {
+          const selected = tab.value === value;
+          const showCount = tab.count !== undefined;
+          const emphatic = tab.emphasis === true && (tab.count ?? 0) > 0;
+          return (
+            <Tab key={tab.value} value={tab.value}>
+              <span className="inline-flex items-center gap-2">
+                {tab.label}
+                {showCount ? (
+                  <span
+                    className={cn(
+                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
+                      emphatic
+                        ? 'bg-destructive/10 text-destructive'
+                        : selected
+                          ? 'bg-surface-container text-on-surface'
+                          : 'bg-surface-container-high text-on-surface-variant',
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+            </Tab>
+          );
+        })}
+      </TabList>
+    </Tabs>
   );
 }

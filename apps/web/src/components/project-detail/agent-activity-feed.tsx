@@ -4,6 +4,7 @@
 import type { SessionActivityType } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import { Sparkles } from '@docket/ui/icons';
+import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { relativeTime } from './format-time';
@@ -35,7 +36,7 @@ export function AgentActivityFeed({
   return (
     <section aria-labelledby="agent-activity-heading" className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
-        <Sparkles aria-hidden="true" className="text-primary size-4" />
+        <DecorativeIcon icon={Sparkles} className="bg-primary/12 text-primary" />
         <h2 id="agent-activity-heading" className="text-on-surface text-body-medium font-semibold">
           Agent activity
         </h2>

@@ -3,7 +3,7 @@
 /** A compact in-context Project dependency panel. */
 import { EntityPicker } from '@docket/ui/components';
 import { Link as LinkIcon, X } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
 import Link from 'next/link';
 import type { JSX } from 'react';
@@ -41,7 +41,7 @@ export function ProjectDependenciesPanel({
       className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-xl border p-4"
     >
       <div className="flex items-center gap-2">
-        <LinkIcon aria-hidden="true" className="text-on-surface-variant size-4" />
+        <DecorativeIcon icon={LinkIcon} />
         <h2 className="text-on-surface text-body-medium font-semibold">Dependencies</h2>
       </div>
       {loading ? (

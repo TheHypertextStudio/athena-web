@@ -70,7 +70,7 @@ export function PropertyPanelRow({
   return (
     <>
       {divided ? <div className="border-outline-variant border-t" /> : null}
-      <div className="flex items-start gap-3 py-2.5">
+      <div className="hover:bg-surface-container-high flex items-start gap-3 rounded-lg py-2.5 transition-colors">
         <span aria-hidden="true" className="text-on-surface-variant mt-0.5 flex size-4 shrink-0">
           {icon}
         </span>

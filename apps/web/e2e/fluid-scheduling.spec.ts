@@ -312,6 +312,13 @@ test.describe('fluid scheduling interaction contract', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(scheduleLane(page, '2026-11-01')).toBeVisible();
     const fallSchedule = scheduleViewport(page);
+    // The canvas performs a one-time auto-scroll to "now" after its ResizeObserver measures the
+    // viewport. On a fresh reload that fires asynchronously, so wait for it to land before forcing
+    // the scroll back to 0 — otherwise the late auto-scroll overrides the reset and the poll below
+    // never observes 0 (the source of a DST-block flake). Mirrors the spring block's settle wait.
+    await expect
+      .poll(() => fallSchedule.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
     await fallSchedule.evaluate((element) => {
       element.scrollTop = 0;
     });

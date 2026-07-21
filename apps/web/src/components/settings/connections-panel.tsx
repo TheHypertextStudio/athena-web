@@ -17,6 +17,7 @@ import { IntegrationsIntro } from './integrations-intro';
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationsStatus } from './integrations-status';
+import { LinearAgentInstallCard } from './linear-agent-install-card';
 import { ProviderCategorySection } from './provider-category-section';
 import { SettingsSubsection } from './settings-subsection';
 import { useConnectionsController } from './use-connections-controller';
@@ -48,6 +49,10 @@ export function ConnectionsPanel({
         />
 
         <WorkspaceScopeHeader linkedAccountsHref={c.scope.linkedAccountsHref} />
+
+        {/* Distinct from the generic multi-provider directory below: an org-wide, admin-only app
+            grant, not a "connect your account" affordance — see LinearAgentInstallCard's remarks. */}
+        <LinearAgentInstallCard orgId={c.orgId} canManage={c.canManage} />
 
         {c.gtasks ? (
           <GtasksAccountsSection

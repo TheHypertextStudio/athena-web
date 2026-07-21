@@ -32,9 +32,15 @@ import * as React from 'react';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 
-import type { EntityListProps, RowMetaProps, RowProgressProps } from './entity-list-row-slots';
-export { EntityList, RowMeta, RowProgress } from './entity-list-row-slots';
-export type { EntityListProps, RowMetaProps, RowProgressProps };
+import { EntityListToneContext } from './entity-list-row-slots';
+import type {
+  EntityListProps,
+  EntityListTone,
+  RowMetaProps,
+  RowProgressProps,
+} from './entity-list-row-slots';
+export { EntityList, EntityListToneContext, RowMeta, RowProgress } from './entity-list-row-slots';
+export type { EntityListProps, EntityListTone, RowMetaProps, RowProgressProps };
 
 /** Props for {@link EntityListRow}. */
 export interface EntityListRowProps {
@@ -111,7 +117,13 @@ export interface EntityRowRenderProps {
 }
 
 const ROW_BASE =
-  '@container/row group/row border-outline-variant relative flex min-h-(--row-h) w-full items-center gap-2 border-b px-3 py-(--row-py) text-left text-body-medium last:border-b-0';
+  '@container/row group/row relative flex min-h-(--row-h) w-full items-center gap-2 px-3 py-(--row-py) text-left text-body-medium';
+
+/** Separation classes per tone: hairline dividers when bordered, rounded rows when tonal. */
+const ROW_TONE: Record<EntityListTone, string> = {
+  bordered: 'border-outline-variant border-b last:border-b-0',
+  tonal: 'rounded-lg',
+};
 
 const ROW_INTERACTIVE = cn(
   'cursor-pointer transition-colors outline-none hover:bg-surface-container-high focus-visible:bg-surface-container-high',
@@ -156,6 +168,8 @@ export function EntityListRow({
   'aria-label': ariaLabel,
   className,
 }: EntityListRowProps): React.JSX.Element {
+  const tone = React.useContext(EntityListToneContext);
+
   const handleClick = React.useCallback(() => {
     onActivate?.();
   }, [onActivate]);
@@ -174,6 +188,7 @@ export function EntityListRow({
 
   const rowClassName = cn(
     ROW_BASE,
+    ROW_TONE[tone],
     interactive && ROW_INTERACTIVE,
     // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral.
     selected && 'bg-secondary-container',

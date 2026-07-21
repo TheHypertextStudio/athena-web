@@ -76,26 +76,49 @@ export function RowProgress({
   );
 }
 
+/**
+ * How an {@link EntityList} and its rows separate from the page.
+ *
+ * @remarks
+ * - `bordered` (default) — an outlined `bg-surface` container with hairline `border-b` row
+ *   dividers. The original chrome; Teams and Cycles keep it.
+ * - `tonal` — a borderless `bg-surface-container-low` container whose rows separate purely by the
+ *   MD3 surface step on hover (`rounded-lg`, no dividers). Matches the Projects/Initiatives list
+ *   treatment, replacing stacked borders with tonal hierarchy.
+ */
+export type EntityListTone = 'bordered' | 'tonal';
+
+/**
+ * The tone an {@link EntityListRow} inherits from its enclosing {@link EntityList}.
+ *
+ * @remarks
+ * Provided by {@link EntityList} so a row need not be told its tone at each call site; a row
+ * rendered outside a list falls back to `bordered`.
+ */
+export const EntityListToneContext = React.createContext<EntityListTone>('bordered');
+
 /** Props for {@link EntityList}. */
 export interface EntityListProps {
   children: React.ReactNode;
   'aria-label'?: string;
   className?: string;
+  /** How the list and its rows separate from the page. Defaults to `bordered`. */
+  tone?: EntityListTone;
 }
 
 /**
- * The clean, bordered container that wraps a dense column of {@link EntityListRow}s.
+ * The container that wraps a dense column of {@link EntityListRow}s, in either tone.
  *
  * @remarks
- * The spec's `rounded-xl border-outline-variant overflow-hidden` chrome; the hairline dividers
- * come from each row's own bottom border (the last row drops it via `last:border-b-0`), so the
- * container needs no per-row separators. Each row is its own focusable control, so the container
- * is a labelled `group` rather than an ARIA `list`.
+ * `bordered` renders the spec's `rounded-xl border-outline-variant` chrome, with hairline dividers
+ * coming from each row's own bottom border. `tonal` renders a `bg-surface-container-low rounded-xl`
+ * card with `p-2` padding and no border, letting rows separate by surface step alone. Each row is
+ * its own focusable control, so the container is a labelled `group` rather than an ARIA `list`.
  *
  * @example
  * ```tsx
- * <EntityList aria-label="Projects">
- *   {projects.map((p) => <EntityListRow key={p.id} title={p.name} onActivate={() => open(p.id)} />)}
+ * <EntityList aria-label="Programs" tone="tonal">
+ *   {programs.map((p) => <EntityListRow key={p.id} title={p.name} onActivate={() => open(p.id)} />)}
  * </EntityList>
  * ```
  */
@@ -103,17 +126,23 @@ export function EntityList({
   children,
   'aria-label': ariaLabel,
   className,
+  tone = 'bordered',
 }: EntityListProps): React.JSX.Element {
   return (
-    <div
-      role="group"
-      aria-label={ariaLabel}
-      className={cn(
-        'border-outline-variant bg-surface flex w-full flex-col overflow-hidden rounded-xl border',
-        className,
-      )}
-    >
-      {children}
-    </div>
+    <EntityListToneContext.Provider value={tone}>
+      <div
+        role="group"
+        aria-label={ariaLabel}
+        className={cn(
+          'flex w-full flex-col rounded-xl',
+          tone === 'bordered'
+            ? 'border-outline-variant bg-surface overflow-hidden border'
+            : 'bg-surface-container-low p-2',
+          className,
+        )}
+      >
+        {children}
+      </div>
+    </EntityListToneContext.Provider>
   );
 }

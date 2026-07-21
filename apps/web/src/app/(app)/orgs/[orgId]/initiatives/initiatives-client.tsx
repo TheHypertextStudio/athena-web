@@ -21,6 +21,7 @@ import { CreateInitiativeDialog } from '@/components/initiatives/create-initiati
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
+import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
 import { queryKeys, unwrap, useApiMutation, useApiQuery, usePrefetchApi } from '@/lib/query';
@@ -347,14 +348,10 @@ export default function InitiativesListClient(): JSX.Element {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-on-surface text-headline-medium font-medium">{initiativePlural}</h1>
-          <p className="text-on-surface-variant mt-1 text-sm">
-            Strategic direction, health, and ownership at a glance.
-          </p>
-        </div>
+    <ListPageLayout
+      title={initiativePlural}
+      subtitle="Strategic direction, health, and ownership at a glance."
+      actions={
         <Button
           className="min-h-10 gap-1.5"
           onClick={() => {
@@ -363,8 +360,8 @@ export default function InitiativesListClient(): JSX.Element {
         >
           <Plus aria-hidden className="size-4" /> New {initiativeNoun.toLowerCase()}
         </Button>
-      </header>
-
+      }
+    >
       <CreateInitiativeDialog
         orgId={orgId}
         initiativeNoun={initiativeNoun}
@@ -608,6 +605,6 @@ export default function InitiativesListClient(): JSX.Element {
           {userErrorMessage(displayMutation.error, 'Could not customize this initiative.')}
         </p>
       ) : null}
-    </main>
+    </ListPageLayout>
   );
 }

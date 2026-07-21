@@ -21,6 +21,20 @@ describe('EntityListRow', () => {
     expect(row).not.toHaveAttribute('data-selected');
   });
 
+  it('adopts the tonal tone from its enclosing list: rounded rows, no hairline divider', () => {
+    render(
+      <EntityList aria-label="Programs" tone="tonal">
+        <EntityListRow title="Ongoing ops" />
+      </EntityList>,
+    );
+    const list = screen.getByRole('group', { name: 'Programs' });
+    expect(list).toHaveClass('bg-surface-container-low', 'p-2');
+    expect(list).not.toHaveClass('border');
+    const row = screen.getByRole('button', { name: 'Ongoing ops' });
+    expect(row).toHaveClass('rounded-lg');
+    expect(row).not.toHaveClass('border-b');
+  });
+
   it('calls onActivate on click and on Enter, ignoring other keys (button mode)', () => {
     const onActivate = vi.fn();
     render(<EntityListRow title="Open me" onActivate={onActivate} />);

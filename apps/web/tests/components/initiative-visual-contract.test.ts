@@ -16,6 +16,7 @@ const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
 const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
 const iconPickerPath = join(root, 'apps/web/src/components/initiatives/initiative-icon-picker.tsx');
+const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -57,8 +58,11 @@ describe('Initiative visual contract', () => {
   it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {
     const typography = source(typographyPath);
     const overview = source(overviewPath);
+    // The canonical title token now lives once in the shared layout; the overview adopts it by
+    // composing ListPageLayout rather than restating the token or the header skeleton.
     expect(typography).toContain('--text-headline-medium: 1.75rem;');
-    expect(overview).toContain('text-headline-medium');
+    expect(source(pageLayoutPath)).toContain('text-headline-medium');
+    expect(overview).toContain('<ListPageLayout');
   });
 
   it('defines the complete MD3 type scale and removes the ad hoc application scale', () => {
@@ -113,7 +117,10 @@ describe('Initiative visual contract', () => {
 
   it('separates the page header, attention surface, and roster with grouped spacing', () => {
     const overview = source(overviewPath);
-    expect(overview).toContain('max-w-7xl flex-col gap-6');
+    // The container measure + rhythm now lives once in the shared layout; the page adopts
+    // ListPageLayout rather than restating the utility string.
+    expect(source(pageLayoutPath)).toContain('max-w-7xl flex-col gap-6');
+    expect(overview).toContain('<ListPageLayout');
     expect(overview).toContain('bg-surface-container-low mb-2 flex flex-col rounded-xl p-4');
     expect(overview).not.toContain('max-w-7xl flex-col gap-5');
   });

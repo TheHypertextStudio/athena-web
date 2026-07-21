@@ -8,6 +8,7 @@ const overviewPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/pr
 const detailPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx');
 const documentPath = join(root, 'apps/web/src/components/initiatives/initiative-document.tsx');
 const editorPath = join(root, 'apps/web/src/components/editor/freeform-text.tsx');
+const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -16,7 +17,10 @@ function source(path: string): string {
 describe('Projects experience contract', () => {
   it('keeps list, dependencies, and timeline as equal lenses over shared view state', () => {
     const overview = source(overviewPath);
-    expect(overview).toContain('text-headline-medium');
+    // The list-page arrangement + canonical title token live once in the shared layout; the page
+    // adopts ListPageLayout and supplies content, rather than restating the skeleton or the token.
+    expect(source(pageLayoutPath)).toContain('text-headline-medium');
+    expect(overview).toContain('<ListPageLayout');
     expect(overview).toContain("type Lens = 'list' | 'dependencies' | 'timeline'");
     expect(overview).toContain('<FilterToolbar');
     expect(overview).toContain('<DependencyLens');

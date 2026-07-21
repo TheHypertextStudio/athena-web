@@ -24,6 +24,7 @@ import { ProjectStatusBadge } from '@/components/projects/project-status';
 import { applyView } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
@@ -509,14 +510,10 @@ export default function ProjectsListClient(): JSX.Element {
   ];
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-on-surface text-headline-medium font-medium">{projectsNoun}</h1>
-          <p className="text-on-surface-variant mt-1 text-sm">
-            Plan, sequence, and operate bounded work.
-          </p>
-        </div>
+    <ListPageLayout
+      title={projectsNoun}
+      subtitle="Plan, sequence, and operate bounded work."
+      actions={
         <Button
           className="min-h-10 gap-1.5"
           onClick={() => {
@@ -525,8 +522,46 @@ export default function ProjectsListClient(): JSX.Element {
         >
           <Plus aria-hidden className="size-4" /> New {projectNoun.toLowerCase()}
         </Button>
-      </header>
-
+      }
+      toolbar={
+        projects.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div
+                className="bg-surface-container-low flex items-center rounded-lg p-1"
+                aria-label="Project view"
+              >
+                {lensOptions.map((option) => {
+                  const Icon = option.icon;
+                  return (
+                    <Button
+                      key={option.id}
+                      type="button"
+                      size="sm"
+                      variant={lens === option.id ? 'secondary' : 'ghost'}
+                      className="min-h-10 gap-1.5 @2xl:min-h-8"
+                      aria-pressed={lens === option.id}
+                      onClick={() => {
+                        setLens(option.id);
+                      }}
+                    >
+                      <Icon aria-hidden className="size-4" /> {option.label}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+            <FilterToolbar
+              catalog={catalog}
+              state={state}
+              onFiltersChange={setFilters}
+              onGroupByChange={setGroupBy}
+              onSortChange={setSort}
+            />
+          </div>
+        ) : null
+      }
+    >
       <CreateProjectDialog
         orgId={orgId}
         projectNoun={projectNoun}
@@ -537,43 +572,6 @@ export default function ProjectsListClient(): JSX.Element {
         onOpenChange={setCreateOpen}
         onCreated={handleCreated}
       />
-
-      {projects.length > 0 ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div
-              className="bg-surface-container-low flex items-center rounded-lg p-1"
-              aria-label="Project view"
-            >
-              {lensOptions.map((option) => {
-                const Icon = option.icon;
-                return (
-                  <Button
-                    key={option.id}
-                    type="button"
-                    size="sm"
-                    variant={lens === option.id ? 'secondary' : 'ghost'}
-                    className="min-h-10 gap-1.5 @2xl:min-h-8"
-                    aria-pressed={lens === option.id}
-                    onClick={() => {
-                      setLens(option.id);
-                    }}
-                  >
-                    <Icon aria-hidden className="size-4" /> {option.label}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
-          <FilterToolbar
-            catalog={catalog}
-            state={state}
-            onFiltersChange={setFilters}
-            onGroupByChange={setGroupBy}
-            onSortChange={setSort}
-          />
-        </div>
-      ) : null}
 
       {overviewQ.isPending ? (
         <div className="space-y-2">
@@ -632,6 +630,6 @@ export default function ProjectsListClient(): JSX.Element {
           {userErrorMessage(displayMutation.error, 'Could not customize this project.')}
         </p>
       ) : null}
-    </main>
+    </ListPageLayout>
   );
 }

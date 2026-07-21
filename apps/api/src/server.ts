@@ -28,6 +28,7 @@ import { registerOpenapi } from './openapi';
 import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
 import ingest from './routes/ingest';
+import ingestLinearAgent from './routes/ingest-linear-agent';
 import internalNotifications from './routes/internal-notifications';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
@@ -93,6 +94,11 @@ server.get('/.well-known/mcp-client.json', (c) =>
 // session-gated by `requireAuth` (which only guards the `/v1` app).
 server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
+// A separate Hono sub-app mounted at the same `/internal/ingest` prefix as `ingest` above (its
+// own dedicated handler, not a third case bolted onto `ingest.ts`'s Observer pipeline — see
+// `ingest-linear-agent.ts`'s module remarks): together they cover `/linear`, `/github`, and
+// `/linear-agent`, with no path collision.
+server.route('/internal/ingest', ingestLinearAgent);
 server.route('/internal/notifications', internalNotifications);
 server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/linear-agent', integrationsLinearAgentOAuth);

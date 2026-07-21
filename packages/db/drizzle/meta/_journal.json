@@ -316,6 +316,13 @@
       "when": 1784679596847,
       "tag": "0044_old_deathstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1784624678745,
+      "tag": "0043_naive_bulldozer",
+      "breakpoints": true
     }
   ]
 }

@@ -102,6 +102,13 @@ const JOBS: readonly CronJob[] = [
     description:
       'Docket: calendar sweep (re-syncs every connected user, drains the write outbox, renews push-notification watches).',
   },
+  {
+    name: 'docket-run-linear-agent-sessions',
+    path: '/internal/cron/run-linear-agent-sessions',
+    schedule: '*/1 * * * *',
+    description:
+      'Docket: Linear Agent session-run sweep (drives queued agent runs via driveSession and relays the resulting activity back to the Linear thread).',
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

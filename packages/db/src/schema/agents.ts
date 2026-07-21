@@ -203,7 +203,30 @@ export const agentSessionExternalLink = pgTable('agent_session_external_link', {
   externalWorkspaceId: text('external_workspace_id').notNull(),
   /** The issue/thread the session was opened on, if any. */
   externalIssueId: text('external_issue_id'),
-  /** Outbound-relay watermark: the last `session_activity.id` already pushed to the provider. */
+  /**
+   * Outbound-relay watermark, part 1 of 2: the `session_activity.id` of the last row this
+   * relay pass successfully pushed (or deliberately skipped — see
+   * {@link agentSessionExternalLink.lastRelayedActivityUpdatedAt}) to the provider.
+   *
+   * @remarks
+   * `id` alone is NOT a sufficient "what's new" cursor: `session_activity.updatedAt` exists
+   * specifically because `executeApprovedActions` updates an existing `action` row in place
+   * (its `approvalStatus`/`body`) rather than inserting a new one, so an `id > watermark`
+   * query would silently miss that transition forever. This column is paired with
+   * {@link agentSessionExternalLink.lastRelayedActivityUpdatedAt} into a single keyset-
+   * pagination cursor — `(updatedAt, id) > (watermarkUpdatedAt, watermarkId)` — so the relay
+   * catches both newly-inserted rows AND rows whose `updatedAt` was bumped by an in-place
+   * update, without ever re-relaying (and duplicating in the Linear thread) a row already
+   * seen at that exact `updatedAt`. See `lib/linear-agent-relay.ts` for the query and the
+   * full reasoning.
+   */
   lastRelayedActivityId: text('last_relayed_activity_id'),
+  /**
+   * Outbound-relay watermark, part 2 of 2: the `session_activity.updatedAt` of the row
+   * {@link agentSessionExternalLink.lastRelayedActivityId} refers to — the timestamp half of
+   * the compound cursor described there. Null exactly when `lastRelayedActivityId` is (no
+   * relay pass has run yet for this session).
+   */
+  lastRelayedActivityUpdatedAt: timestamp('last_relayed_activity_updated_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });

@@ -40,15 +40,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
-import {
-  agentSession,
-  agentSessionRun,
-  db,
-  genId,
-  integration,
-  integrationCredential,
-  task,
-} from '@docket/db';
+import { agentSession, agentSessionRun, db, genId, integration, task } from '@docket/db';
 import { parseLinearAgentWebhook, verifyLinearAgentWebhookSignature } from '@docket/integrations';
 import type {
   LinearAgentPort,
@@ -56,10 +48,9 @@ import type {
   LinearAgentSessionPrompted,
 } from '@docket/integrations';
 
-import { buildLinearAgentClient } from '../container';
-import { unsealCredential } from '../lib/credentials';
 import { webAppOrigin } from '../lib/github-app';
 import { resolveExternalActor } from '../lib/identity/resolve-external-actor';
+import { buildLinearAgentPortForIntegration } from '../lib/linear-agent-credential';
 import { linearAgentConfigFromEnv } from '../lib/linear-agent-connect';
 
 import { createLinearAgentSession, recordInboundReply } from './agent-session-runner';
@@ -85,9 +76,6 @@ const linearAgentIssueRefSchema = z
     agentSession: z.object({ issue: z.object({ id: z.string() }).loose().optional() }).loose(),
   })
   .loose();
-
-/** The unsealed credential shape this handler needs out of a `linear_agent` integration. */
-const linearAgentTokensSchema = z.object({ accessToken: z.string() }).loose();
 
 /**
  * Extract `agentSession.issue.id` from the raw webhook body, when the payload happens to expose
@@ -308,19 +296,11 @@ async function ingestLinearAgentWebhook(c: Context): Promise<Response> {
   if (!linearAgentIntegration) return c.json({ received: true, processed: false }, 200);
   const orgId = linearAgentIntegration.organizationId;
 
-  const [credentialRow] = await db
-    .select({ ciphertext: integrationCredential.ciphertext })
-    .from(integrationCredential)
-    .where(eq(integrationCredential.integrationId, linearAgentIntegration.id))
-    .limit(1);
-  // No credential yet means the install never completed OAuth — degrade the same as "unrouted".
-  if (!credentialRow) return c.json({ received: true, processed: false }, 200);
-
-  const parsedTokens = linearAgentTokensSchema.safeParse(
-    JSON.parse(unsealCredential(credentialRow.ciphertext)),
-  );
-  if (!parsedTokens.success) return c.json({ received: true, processed: false }, 200);
-  const port = buildLinearAgentClient(parsedTokens.data.accessToken);
+  // No credential (or an unparseable one) means the install never completed OAuth — degrade
+  // the same as "unrouted". See `lib/linear-agent-credential.ts` for the shared unseal/parse
+  // shape this and the outbound relay both read.
+  const port = await buildLinearAgentPortForIntegration(linearAgentIntegration.id);
+  if (!port) return c.json({ received: true, processed: false }, 200);
 
   if (event.action === 'created') {
     return handleSessionCreated(

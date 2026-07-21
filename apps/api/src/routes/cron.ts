@@ -23,6 +23,7 @@ import { sweepCalendarSync } from './calendar-sync-sweep';
 import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
+import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
@@ -116,6 +117,15 @@ const cron = new Hono()
   .post('/sync-calendars', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepCalendarSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Linear Agent session-run sweep: claims queued (or lease-abandoned) `agent_session_run`
+  // rows, drives each session's turn via `driveSession`, and relays the resulting activity
+  // back to the Linear thread. Lease-guarded (see `linear-agent-sweep.ts`), so a concurrent or
+  // retried scheduler invocation can never double-drive the same run.
+  .post('/run-linear-agent-sessions', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepLinearAgentSessions(new Date());
     return c.json({ swept: true, ...result });
   });
 

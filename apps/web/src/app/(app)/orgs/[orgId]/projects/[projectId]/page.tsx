@@ -467,7 +467,7 @@ export default function ProjectDetailPage(): JSX.Element {
         >
           <section className="flex flex-col gap-2">
             <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>
-            <div className="bg-surface-container-low h-96 overflow-hidden rounded-xl">
+            <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
               <TaskGraphPanel
                 scope={{ orgId, projectId }}
                 density="compact"

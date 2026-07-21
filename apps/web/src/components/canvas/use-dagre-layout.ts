@@ -15,8 +15,8 @@ import { useMemo } from 'react';
 
 /** Rendered node box size per density, used both for layout spacing and node CSS. */
 export const NODE_SIZE = {
-  full: { width: 248, height: 68 },
-  compact: { width: 208, height: 44 },
+  full: { width: 300, height: 84 },
+  compact: { width: 240, height: 56 },
 } as const;
 
 /** Canvas density: `compact` for small embeds, `full` for the focused view. */

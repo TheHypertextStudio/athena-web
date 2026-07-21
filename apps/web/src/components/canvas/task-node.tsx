@@ -16,7 +16,6 @@ import { cn } from '@docket/ui/lib/utils';
 import { Handle, type NodeProps, NodeToolbar, Position } from '@xyflow/react';
 import { memo } from 'react';
 
-import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import { formatCalendarDate } from '@/lib/format-date';
 import { stateTypeOf } from '@/lib/work-state';
 
@@ -84,20 +83,8 @@ export function taskData(node: { data: unknown }): TaskNodeData {
 
 /** A single task card on the canvas. */
 function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
-  const {
-    title,
-    state,
-    priority,
-    projectName,
-    assignee,
-    isBlocked,
-    isReady,
-    dueDate,
-    onCriticalPath,
-    isBottleneck,
-    density,
-    isRoot,
-  } = data as TaskNodeData;
+  const { title, state, projectName, assignee, isBlocked, isReady, dueDate, density } =
+    data as TaskNodeData;
   const compact = density === 'compact';
   const done = stateTypeOf(state) === 'completed' || stateTypeOf(state) === 'canceled';
   const overdue = !done && isOverdue(dueDate);
@@ -110,14 +97,8 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
     <div
       style={{ viewTransitionName: taskNodeTransitionName(id) }}
       className={cn(
-        'group bg-surface-container relative flex items-center gap-2 rounded-lg border shadow-sm transition-colors',
-        compact ? 'h-11 w-[208px] pr-2 pl-2.5' : 'h-[68px] w-[248px] pr-2.5 pl-3',
-        isRoot
-          ? 'border-primary'
-          : isBlocked
-            ? 'border-state-started/60'
-            : 'border-outline-variant',
-        onCriticalPath && !isRoot && 'border-primary/70',
+        'group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
+        compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
         selected && 'ring-primary ring-2',
       )}
     >
@@ -159,29 +140,21 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         </NodeToolbar>
       ) : null}
 
-      {onCriticalPath ? (
-        <span
-          aria-hidden
-          className="bg-primary absolute -top-px bottom-[-1px] left-[-1px] w-1 rounded-l-lg"
-        />
-      ) : null}
       <Handle
         type="target"
         position={Position.Left}
         className="!border-outline-variant !bg-surface !size-2"
       />
 
-      <StatusIcon type={stateTypeOf(state)} />
+      <StatusIcon type={stateTypeOf(state)} className="mt-0.5 shrink-0" />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-on-surface text-body-medium truncate font-medium">{title}</span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-on-surface text-body-medium line-clamp-2 leading-snug font-medium break-words">
+          {title}
+        </span>
         {showDetail ? (
-          <div className="text-on-surface-variant flex min-w-0 items-center gap-1.5 text-xs">
-            {projectName !== null ? (
-              <span className="bg-surface-container-high max-w-[6rem] truncate rounded px-1.5 py-0.5">
-                {projectName}
-              </span>
-            ) : null}
+          <div className="text-on-surface-variant flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+            {projectName !== null ? <span className="min-w-0 truncate">{projectName}</span> : null}
             {dueLabel !== null ? (
               <span className={cn('shrink-0', overdue && 'text-state-canceled font-medium')}>
                 {dueLabel}
@@ -196,25 +169,14 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         ) : null}
       </div>
 
-      {!lod ? (
-        <div className="flex shrink-0 items-center gap-1.5">
-          {isBottleneck ? (
-            <span
-              title="Blocks a lot of downstream work"
-              aria-label="Bottleneck"
-              className="bg-state-started size-1.5 rounded-full"
-            />
-          ) : null}
-          {priority !== 'none' ? <PriorityGlyph priority={priority} /> : null}
-          {assignee !== null ? (
-            <ActorAvatar
-              kind={assignee.kind}
-              name={assignee.name}
-              avatarUrl={assignee.avatarUrl}
-              size={compact ? 18 : 22}
-            />
-          ) : null}
-        </div>
+      {!lod && assignee !== null ? (
+        <ActorAvatar
+          kind={assignee.kind}
+          name={assignee.name}
+          avatarUrl={assignee.avatarUrl}
+          size={compact ? 18 : 22}
+          className="mt-0.5 shrink-0"
+        />
       ) : null}
 
       <Handle

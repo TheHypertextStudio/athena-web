@@ -127,8 +127,11 @@ function CanvasInner({
           proOptions={{ hideAttribution: true }}
           minZoom={0.1}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface" />
-          <Controls showInteractive={false} />
+          <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface-container" />
+          <Controls
+            showInteractive={false}
+            className="[&_button]:!border-outline-variant [&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest !shadow-none [&_button]:!border-b"
+          />
           {density === 'full' ? (
             <MiniMap
               pannable
@@ -146,7 +149,7 @@ function CanvasInner({
             type="button"
             onClick={onExpand}
             aria-label="Expand graph"
-            className="border-outline-variant bg-surface-container text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-10 inline-flex size-8 items-center justify-center rounded-md border shadow-sm transition-colors"
+            className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-10 inline-flex size-9 items-center justify-center rounded-full transition-colors"
           >
             <Maximize className="size-4" />
           </button>

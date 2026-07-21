@@ -327,7 +327,7 @@ export default function TaskDetailPage(): JSX.Element {
 
           <section className="flex flex-col gap-2">
             <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
-            <div className="border-outline-variant h-80 overflow-hidden rounded-lg border">
+            <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
               <TaskGraphPanel
                 scope={{ orgId, rootTaskId: taskId, depth: 2 }}
                 density="compact"

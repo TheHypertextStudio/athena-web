@@ -19,7 +19,12 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** CycleMutations describes the use cycle mutations data contract shared by the hook or component. */
 export interface CycleMutations {
-  patchCycle: (patch: { status?: CycleStatus; startsAt?: string; endsAt?: string }) => void;
+  patchCycle: (patch: {
+    status?: CycleStatus;
+    startsAt?: string;
+    endsAt?: string;
+    name?: string;
+  }) => void;
   propsPending: boolean;
   propsError: string | null;
   dialogOpen: boolean;
@@ -139,7 +144,7 @@ export function useCycleMutations(
 
   const patch = useApiMutation<
     CycleOut,
-    { status?: CycleStatus; startsAt?: string; endsAt?: string },
+    { status?: CycleStatus; startsAt?: string; endsAt?: string; name?: string },
     { previous?: CycleDetailData }
   >({
     mutationFn: (patchBody) =>

@@ -19,6 +19,7 @@ import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
 import { queryKeys, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { useCycleMutations } from '@/lib/use-cycle-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
@@ -174,7 +175,18 @@ export default function CycleDetailPage(): JSX.Element {
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-on-surface text-title-large">{title}</h1>
+            <h1 className="text-title-large">
+              <EditableTitle
+                value={cycle.name ?? ''}
+                onSave={(name) => {
+                  patchCycle({ name });
+                }}
+                canEdit={canEditCycle}
+                ariaLabel={`${cycleNoun} name`}
+                placeholder={`${cycleNoun} ${String(cycle.number)}`}
+                className="text-on-surface text-title-large"
+              />
+            </h1>
             {cycle.name ? (
               <span className="text-on-surface-variant text-xs tabular-nums">
                 {cycleNoun} {cycle.number}

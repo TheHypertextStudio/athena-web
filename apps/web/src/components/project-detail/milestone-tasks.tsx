@@ -148,10 +148,7 @@ export function MilestoneTasks({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-on-surface-variant text-body-medium">
-          Plan work here without leaving this project.
-        </p>
+      <div className="flex items-center justify-end gap-3">
         <Button type="button" onClick={onCreate}>
           Add {taskNoun}
         </Button>

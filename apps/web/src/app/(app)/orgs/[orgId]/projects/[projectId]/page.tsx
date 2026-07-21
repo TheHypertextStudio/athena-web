@@ -465,18 +465,6 @@ export default function ProjectDetailPage(): JSX.Element {
           aria-labelledby="tab-tasks"
           className="flex flex-col gap-6"
         >
-          <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>
-            <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
-              <TaskGraphPanel
-                scope={{ orgId, projectId }}
-                density="compact"
-                onExpand={() => {
-                  router.push(`/orgs/${orgId}/graph?projectId=${projectId}`);
-                }}
-              />
-            </div>
-          </section>
           <MilestoneTasks
             orgId={orgId}
             tasks={milestoneTasks}
@@ -494,6 +482,18 @@ export default function ProjectDetailPage(): JSX.Element {
               setTaskComposerOpen(true);
             }}
           />
+          <section className="flex flex-col gap-2">
+            <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>
+            <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
+              <TaskGraphPanel
+                scope={{ orgId, projectId }}
+                density="compact"
+                onExpand={() => {
+                  router.push(`/orgs/${orgId}/graph?projectId=${projectId}`);
+                }}
+              />
+            </div>
+          </section>
         </div>
       ) : null}
 

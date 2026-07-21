@@ -340,6 +340,8 @@ export default function TaskDetailPage(): JSX.Element {
             projectName={projectName}
             projectLabel={projectLabel}
             onOpen={openTask}
+            canEdit={canEdit}
+            onRename={renameSubtask}
           />
 
           <section className="flex flex-col gap-2">

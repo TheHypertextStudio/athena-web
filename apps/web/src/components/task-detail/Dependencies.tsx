@@ -5,6 +5,7 @@ import { StatusIcon } from '@docket/ui/components';
 import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** Props for {@link Dependencies}. */
@@ -19,6 +20,20 @@ interface DependenciesProps {
   projectLabel: string;
   /** Navigate to a dependency task's own detail view. */
   onOpen: (taskId: string) => void;
+  /** Whether the viewer may rename a dependency task in place. */
+  canEdit?: boolean;
+  /** Rename a dependency task. With `canEdit`, the title double-clicks to edit. */
+  onRename?: (taskId: string, title: string) => void;
+}
+
+/** Props for {@link DependencyRow}. */
+interface DependencyRowProps {
+  task: TaskRef;
+  projectName: (projectId: string) => string;
+  projectLabel: string;
+  onOpen: (taskId: string) => void;
+  canEdit?: boolean;
+  onRename?: (taskId: string, title: string) => void;
 }
 
 /** One dependency edge rendered as a status glyph, title, and the task's project. */
@@ -27,12 +42,46 @@ function DependencyRow({
   projectName,
   projectLabel,
   onOpen,
-}: {
-  task: TaskRef;
-  projectName: (projectId: string) => string;
-  projectLabel: string;
-  onOpen: (taskId: string) => void;
-}): JSX.Element {
+  canEdit,
+  onRename,
+}: DependencyRowProps): JSX.Element {
+  const project = (
+    <span className="text-on-surface-variant shrink-0 text-xs">
+      {task.projectId ? projectName(task.projectId) : `No ${projectLabel.toLowerCase()}`}
+    </span>
+  );
+
+  // Editable variant: a div (never a button, so the edit input isn't nested in one). A single click
+  // opens; a double-click on the title renames it in place.
+  if (canEdit && onRename) {
+    return (
+      <li>
+        <div
+          onClick={() => {
+            onOpen(task.id);
+          }}
+          className="hover:bg-surface-container-high -mx-2 flex w-[calc(100%+1rem)] cursor-pointer items-center gap-2 rounded-md px-2 py-1.5"
+        >
+          <StatusIcon type={stateTypeOf(task.state)} />
+          <EditableTitle
+            value={task.title}
+            onSave={(title) => {
+              onRename(task.id, title);
+            }}
+            canEdit
+            activate="doubleClick"
+            onActivate={() => {
+              onOpen(task.id);
+            }}
+            ariaLabel="Task title"
+            className="text-body-medium min-w-0 flex-1 truncate"
+          />
+          {project}
+        </div>
+      </li>
+    );
+  }
+
   return (
     <li>
       <button
@@ -44,9 +93,7 @@ function DependencyRow({
       >
         <StatusIcon type={stateTypeOf(task.state)} />
         <span className="text-body-medium min-w-0 flex-1 truncate">{task.title}</span>
-        <span className="text-on-surface-variant shrink-0 text-xs">
-          {task.projectId ? projectName(task.projectId) : `No ${projectLabel.toLowerCase()}`}
-        </span>
+        {project}
       </button>
     </li>
   );
@@ -68,6 +115,8 @@ export function Dependencies({
   projectName,
   projectLabel,
   onOpen,
+  canEdit,
+  onRename,
 }: DependenciesProps): JSX.Element {
   const empty = blocking.length === 0 && blockedBy.length === 0;
 
@@ -95,6 +144,8 @@ export function Dependencies({
                     projectName={projectName}
                     projectLabel={projectLabel}
                     onOpen={onOpen}
+                    canEdit={canEdit}
+                    onRename={onRename}
                   />
                 ))}
               </ul>
@@ -115,6 +166,8 @@ export function Dependencies({
                     projectName={projectName}
                     projectLabel={projectLabel}
                     onOpen={onOpen}
+                    canEdit={canEdit}
+                    onRename={onRename}
                   />
                 ))}
               </ul>

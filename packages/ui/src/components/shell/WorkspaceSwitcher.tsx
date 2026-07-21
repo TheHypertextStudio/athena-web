@@ -32,6 +32,7 @@ import {
   Skeleton,
 } from '../../primitives';
 import { useContextState } from './ContextProvider';
+import { useShellDrawer } from './ShellDrawerContext';
 import type { Workspace } from './workspaces';
 
 /** Props for {@link WorkspaceSwitcher}. */
@@ -145,6 +146,9 @@ export function WorkspaceSwitcher({
 }: WorkspaceSwitcherProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const [open, setOpen] = React.useState(false);
+  // Inside the mobile nav drawer, switching or creating must also close the drawer so the
+  // destination is visible; `null` (a no-op) on the static desktop rail.
+  const dismissDrawer = useShellDrawer();
 
   const active = React.useMemo(
     () => workspaces.find((w) => w.id === activeOrgId) ?? workspaces.at(0) ?? null,
@@ -154,9 +158,10 @@ export function WorkspaceSwitcher({
   const select = React.useCallback(
     (orgId: string): void => {
       setOpen(false);
+      dismissDrawer?.();
       onSelect(orgId);
     },
-    [onSelect],
+    [dismissDrawer, onSelect],
   );
 
   const triggerLabel = loading ? 'Loading workspaces' : (active?.name ?? 'Workspace');
@@ -213,6 +218,7 @@ export function WorkspaceSwitcher({
         <DropdownMenuItem
           onSelect={() => {
             setOpen(false);
+            dismissDrawer?.();
             onCreate();
           }}
         >

@@ -343,6 +343,32 @@ describe('Sidebar', () => {
     expect(dismiss).toHaveBeenCalledTimes(1);
   });
 
+  it('closes the drawer when creating a workspace from the switcher inside a drawer', () => {
+    // The workspace switcher navigates (create / switch) but sits outside the nav rows, so it must
+    // close the drawer itself — otherwise the destination renders behind the still-open drawer.
+    const dismiss = vi.fn();
+    const onCreateWorkspace = vi.fn();
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <ShellDrawerProvider dismiss={dismiss}>
+          <Sidebar
+            workspaces={WORKSPACES}
+            {...sidebarHrefs()}
+            onCreateWorkspace={onCreateWorkspace}
+            onSelectWorkspace={() => undefined}
+            onOpenSearch={() => undefined}
+          />
+        </ShellDrawerProvider>
+      </ContextProvider>,
+    );
+    const trigger = screen.getByRole('button', { name: /Switch workspace/ });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Create workspace' }));
+    expect(onCreateWorkspace).toHaveBeenCalledTimes(1);
+    expect(dismiss).toHaveBeenCalledTimes(1);
+  });
+
   it('does not dismiss anything when rendered as the static (non-drawer) sidebar', () => {
     // No drawer provider → `useShellDrawer()` is null → a nav click is a no-op dismissal.
     render(

@@ -1,5 +1,6 @@
 'use client';
 
+import { useShellDrawer } from '@docket/ui/components';
 import { LogOut, Plus, Settings } from '@docket/ui/icons';
 import {
   Avatar,
@@ -33,6 +34,10 @@ export default function AccountMenu({
   onCreateWorkspace: () => void;
 }): JSX.Element | null {
   const router = useRouter();
+  // When this menu is rendered inside the mobile off-canvas nav drawer, a selection must both act
+  // and close the drawer — otherwise the destination renders behind the still-open drawer. `null`
+  // on the static desktop rail (no drawer to close), so every call is a safe no-op there.
+  const dismissDrawer = useShellDrawer();
   const { data: session } = authClient.useSession();
   if (!session) return null;
 
@@ -64,12 +69,18 @@ export default function AccountMenu({
           Signed in as <span className="font-medium">{email}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={onCreateWorkspace}>
+        <DropdownMenuItem
+          onSelect={() => {
+            dismissDrawer?.();
+            onCreateWorkspace();
+          }}
+        >
           <Plus aria-hidden="true" className="size-4" />
           Create workspace
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
+            dismissDrawer?.();
             router.push('/settings');
           }}
         >
@@ -79,6 +90,7 @@ export default function AccountMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onSelect={() => {
+            dismissDrawer?.();
             void signOut().then(() => {
               router.replace('/sign-in');
             });

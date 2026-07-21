@@ -165,7 +165,7 @@ export function SchedulingItemCard({
           ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-visible rounded-md border shadow-md ring-2'
           : gesture.preview
             ? 'border-primary bg-surface-container-low ring-primary/35 group absolute z-40 overflow-visible rounded-md border shadow-lg ring-2 transition-[box-shadow,transform] motion-reduce:transition-none'
-            : 'border-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-reduce:transition-none'
+            : 'border-l-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border-l shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-reduce:transition-none'
       }
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -195,9 +195,10 @@ export function SchedulingItemCard({
         height: visibleHeight,
         transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
         borderLeftWidth: 3,
+        // The 3px left stripe is the card's single identity marker — no full border. A colored
+        // event also gets a faint color-mix fill; an uncolored one keeps the neutral stripe.
         ...(item.color && !dropActive
           ? {
-              borderColor: item.color,
               borderLeftColor: item.color,
               backgroundColor: `color-mix(in srgb, ${item.color} 12%, var(--color-surface-container-low))`,
             }

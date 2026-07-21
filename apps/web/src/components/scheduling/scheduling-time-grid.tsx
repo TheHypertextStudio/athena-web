@@ -116,7 +116,7 @@ export function SchedulingTimeGrid({
   return (
     <div className="relative flex" style={{ height: gridHeight }}>
       <div
-        className="border-outline-variant bg-surface sticky left-0 z-[50] shrink-0 border-r"
+        className="border-outline-variant/50 bg-surface sticky left-0 z-[50] shrink-0 border-r"
         style={{ width: gutterWidth }}
       >
         {ticks
@@ -142,10 +142,13 @@ export function SchedulingTimeGrid({
           <div
             key={tick.wallMinutes}
             aria-hidden="true"
+            // Only hour (major) ticks draw a visible rule, softened so the grid reads as a
+            // quiet scaffold rather than harsh banding. Half-hour (minor) ticks keep their
+            // positioned element and data attributes (geometry + e2e hooks) but no line.
             className={
               tick.kind === 'major'
-                ? 'border-outline-variant pointer-events-none absolute inset-x-0 border-t'
-                : 'border-outline-variant/40 pointer-events-none absolute inset-x-0 border-t'
+                ? 'border-outline-variant/50 pointer-events-none absolute inset-x-0 border-t'
+                : 'pointer-events-none absolute inset-x-0'
             }
             data-hour-line={tick.wallMinutes % 60 === 0 ? tick.wallMinutes / 60 : undefined}
             data-schedule-tick={tick.kind}

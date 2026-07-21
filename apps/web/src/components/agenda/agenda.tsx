@@ -71,7 +71,7 @@ function AgendaLoadingNotice(): JSX.Element {
   return (
     <div
       role="status"
-      className="border-border bg-muted/40 text-muted-foreground text-caption mb-2 rounded-lg border px-3 py-2"
+      className="bg-surface-container-low text-on-surface-variant text-caption mb-2 rounded-lg px-3 py-2"
     >
       Loading calendar…
     </div>
@@ -88,7 +88,7 @@ function AgendaDegradedNotice({ onRetry, retrying }: AgendaDegradedNoticeProps):
   return (
     <div
       role="status"
-      className="border-border bg-muted/40 text-muted-foreground text-caption mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2"
+      className="bg-surface-container-low text-on-surface-variant text-caption mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
     >
       <span>Calendar updates are temporarily unavailable. Showing what we have.</span>
       <Button

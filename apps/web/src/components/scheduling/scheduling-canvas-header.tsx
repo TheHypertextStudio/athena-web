@@ -42,9 +42,9 @@ export function SchedulingCanvasHeader({
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }): JSX.Element {
   return (
-    <header className="bg-surface-container-low sticky top-0 z-[60] flex border-b">
+    <header className="bg-surface-container-low sticky top-0 z-[60] flex">
       <div
-        className="text-on-surface-variant bg-surface-container-low sticky left-0 z-[70] shrink-0 self-stretch border-r px-2 py-3 text-[11px] font-medium"
+        className="text-on-surface-variant bg-surface-container-low border-outline-variant/50 sticky left-0 z-[70] shrink-0 self-stretch border-r px-2 py-3 text-[11px] font-medium"
         style={{ width: gutterWidth }}
       >
         All day
@@ -53,7 +53,7 @@ export function SchedulingCanvasHeader({
         {lanes.map((lane, laneIndex) => (
           <div
             key={lane.id}
-            className="border-outline-variant min-w-0 shrink-0 border-r px-2 py-2"
+            className="border-outline-variant/50 min-w-0 shrink-0 border-r px-2 py-2"
             style={{ width: laneWidth }}
           >
             <p className="text-on-surface truncate text-xs font-semibold">{lane.label}</p>

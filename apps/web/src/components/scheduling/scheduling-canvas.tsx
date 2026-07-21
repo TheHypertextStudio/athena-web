@@ -152,7 +152,7 @@ export default function SchedulingCanvas({
     <section
       ref={viewportRef}
       aria-label="Schedule"
-      className={`border-outline-variant bg-surface relative overflow-auto overscroll-contain rounded-xl border ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
+      className={`border-outline-variant/60 bg-surface relative overflow-auto overscroll-contain rounded-xl border ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
       style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
       data-lane-count={lanes.length}
       data-visible-lane-count={geometry.visibleLaneCount}
@@ -196,7 +196,7 @@ export default function SchedulingCanvas({
                 <div
                   key={lane.id}
                   aria-label={`${lane.label} time grid`}
-                  className="border-outline-variant relative shrink-0 touch-none border-r"
+                  className="border-outline-variant/50 relative shrink-0 touch-none border-r"
                   data-schedule-lane={lane.id}
                   style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
                   onPointerDown={(event) => {

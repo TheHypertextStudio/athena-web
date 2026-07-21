@@ -41,7 +41,7 @@ export function AgendaListArrangement({
     );
   }
   return (
-    <Stack as="ul" gap={1}>
+    <Stack as="ul" gap={2}>
       {ordered.map((entry) => (
         <li key={entry.id}>
           <AgendaEntryCard entry={entry} onOpenCalendarItem={onOpenCalendarItem} />

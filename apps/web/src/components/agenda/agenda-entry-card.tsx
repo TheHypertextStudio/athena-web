@@ -154,7 +154,7 @@ export default function AgendaEntryCard({
     <div
       style={{ viewTransitionName: agendaEntryTransitionName(entry.id) }}
       className={cn(
-        'border-outline-variant bg-surface-container-low hover:bg-surface-container hover:border-outline flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border px-2.5 py-2 transition-[opacity,background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
+        'bg-surface-container-low hover:bg-surface-container flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
         entry.done && 'opacity-60',
       )}
     >

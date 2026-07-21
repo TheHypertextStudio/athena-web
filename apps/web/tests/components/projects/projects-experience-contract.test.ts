@@ -69,9 +69,11 @@ describe('Projects experience contract', () => {
     expect(detail.indexOf('<InitiativeIconPicker')).toBeLessThan(detail.indexOf('<Popover open='));
     expect(detail).toContain('bg-surface-container-low hover:bg-surface-container-high');
     expect(detail).toContain('hover:bg-surface-container-high');
+    // The tab bar now adopts the shared Tabs primitive, which owns the 40px touch-target floor.
     expect(source(join(root, 'apps/web/src/components/project-detail/tabs.tsx'))).toContain(
-      'min-h-10',
+      '<Tabs',
     );
+    expect(source(join(root, 'packages/ui/src/primitives/tabs.tsx'))).toContain('min-h-10');
   });
 
   it('uses full-width heading-free documents and canonical MD3 prose hierarchy', () => {

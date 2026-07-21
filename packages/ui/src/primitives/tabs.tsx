@@ -268,7 +268,7 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         onValueChange(value);
       }}
       className={cn(
-        'text-body-medium relative inline-flex min-h-9 items-center gap-2 rounded-md px-3 py-1.5 transition-colors disabled:pointer-events-none disabled:opacity-50',
+        'text-body-medium relative inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 transition-colors disabled:pointer-events-none disabled:opacity-50',
         selected
           ? 'bg-surface-container-highest text-on-surface font-medium'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',

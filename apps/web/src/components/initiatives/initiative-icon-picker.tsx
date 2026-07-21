@@ -52,6 +52,69 @@ const COLOR_OPTIONS: readonly {
     circleClass: 'bg-destructive/15',
     swatchClass: 'bg-destructive',
   },
+  {
+    key: 'blue',
+    label: 'Blue',
+    iconClass: 'text-blue-600 dark:text-blue-300',
+    circleClass: 'bg-blue-500/15',
+    swatchClass: 'bg-blue-500',
+  },
+  {
+    key: 'sky',
+    label: 'Sky',
+    iconClass: 'text-sky-600 dark:text-sky-300',
+    circleClass: 'bg-sky-500/15',
+    swatchClass: 'bg-sky-500',
+  },
+  {
+    key: 'teal',
+    label: 'Teal',
+    iconClass: 'text-teal-600 dark:text-teal-300',
+    circleClass: 'bg-teal-500/15',
+    swatchClass: 'bg-teal-500',
+  },
+  {
+    key: 'green',
+    label: 'Green',
+    iconClass: 'text-green-600 dark:text-green-300',
+    circleClass: 'bg-green-500/15',
+    swatchClass: 'bg-green-500',
+  },
+  {
+    key: 'amber',
+    label: 'Amber',
+    iconClass: 'text-amber-600 dark:text-amber-300',
+    circleClass: 'bg-amber-500/15',
+    swatchClass: 'bg-amber-500',
+  },
+  {
+    key: 'orange',
+    label: 'Orange',
+    iconClass: 'text-orange-600 dark:text-orange-300',
+    circleClass: 'bg-orange-500/15',
+    swatchClass: 'bg-orange-500',
+  },
+  {
+    key: 'rose',
+    label: 'Rose',
+    iconClass: 'text-rose-600 dark:text-rose-300',
+    circleClass: 'bg-rose-500/15',
+    swatchClass: 'bg-rose-500',
+  },
+  {
+    key: 'purple',
+    label: 'Purple',
+    iconClass: 'text-purple-600 dark:text-purple-300',
+    circleClass: 'bg-purple-500/15',
+    swatchClass: 'bg-purple-500',
+  },
+  {
+    key: 'indigo',
+    label: 'Indigo',
+    iconClass: 'text-indigo-600 dark:text-indigo-300',
+    circleClass: 'bg-indigo-500/15',
+    swatchClass: 'bg-indigo-500',
+  },
 ];
 
 const COLOR_BY_KEY = Object.fromEntries(
@@ -165,7 +228,7 @@ export function InitiativeIconPicker({
           <p className="text-on-surface-variant py-4 text-center text-sm">No matching icons</p>
         ) : null}
         <p className="text-on-surface mt-3 mb-2 text-sm font-medium">Color</p>
-        <div aria-label="Initiative color" className="flex gap-1">
+        <div aria-label="Initiative color" className="flex flex-wrap gap-1">
           {COLOR_OPTIONS.map((option) => (
             <button
               key={option.key}

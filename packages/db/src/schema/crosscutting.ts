@@ -9,6 +9,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  ENTITY_DISPLAY_COLOR_KEYS,
   ENTITY_DISPLAY_ICON_KEYS,
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
@@ -87,6 +88,10 @@ import { actor, auditColumns, hub, organization, team } from './identity';
 
 const entityDisplayIconKeyList = sql.raw(
   ENTITY_DISPLAY_ICON_KEYS.map((key) => `'${key}'`).join(', '),
+);
+
+const entityDisplayColorKeyList = sql.raw(
+  ENTITY_DISPLAY_COLOR_KEYS.map((key) => `'${key}'`).join(', '),
 );
 
 /** A named org-level capability bundle (Owner/Admin/Member/Guest defaults + custom). */
@@ -174,10 +179,7 @@ export const entityDisplay = pgTable(
     uniqueIndex('entity_display_subject_uq').on(t.organizationId, t.subjectType, t.subjectId),
     check('entity_display_subject_type_check', sql`${t.subjectType} in ('initiative', 'project')`),
     check('entity_display_icon_key_check', sql`${t.iconKey} in (${entityDisplayIconKeyList})`),
-    check(
-      'entity_display_color_key_check',
-      sql`${t.colorKey} in ('neutral', 'primary', 'success', 'warning', 'danger')`,
-    ),
+    check('entity_display_color_key_check', sql`${t.colorKey} in (${entityDisplayColorKeyList})`),
   ],
 );
 

@@ -65,6 +65,68 @@ export const ENTITY_DISPLAY_ICON_KEYS = [
   'justice',
   'library',
   'pedestrian',
+  // Communication
+  'mail',
+  'chat',
+  'phone',
+  'inbox',
+  'send',
+  // Media
+  'camera',
+  'image',
+  'video',
+  'music',
+  'film',
+  // Finance
+  'wallet',
+  'payments',
+  'receipt',
+  'bank',
+  'savings',
+  // Science
+  'science',
+  'biotech',
+  'experiment',
+  'atom',
+  // Nature
+  'leaf',
+  'tree',
+  'flower',
+  'water',
+  'mountain',
+  'sun',
+  'cloud',
+  // Transport
+  'car',
+  'flight',
+  'rocket',
+  'bike',
+  'boat',
+  // Tools
+  'build',
+  'wrench',
+  'settings',
+  'tune',
+  'hammer',
+  // People
+  'person',
+  'group',
+  'contacts',
+  'badge',
+  // Documents
+  'note',
+  'archive',
+  'clipboard',
+  // Security
+  'lock',
+  'shield',
+  'key',
+  'fingerprint',
+  // Dev
+  'code',
+  'terminal',
+  'database',
+  'bug',
 ] as const;
 
 /** Stable icon key validated independently from any rendering library. */
@@ -72,8 +134,39 @@ export const EntityDisplayIconKey = z.enum(ENTITY_DISPLAY_ICON_KEYS);
 /** Supported entity-display icon key. */
 export type EntityDisplayIconKey = z.infer<typeof EntityDisplayIconKey>;
 
-/** Semantic color keys resolved through the Docket design tokens. */
-export const EntityDisplayColorKey = z.enum(['neutral', 'primary', 'success', 'warning', 'danger']);
+/**
+ * Stable color keys for the preset entity-display palette.
+ *
+ * @remarks
+ * The first five are the original semantic keys, kept first for backward compatibility with
+ * already-persisted rows; the renderer resolves those through the Docket semantic design tokens
+ * (`state-*`, `primary`, `destructive`). The remaining nine are a decorative named palette —
+ * Linear/Notion-style accent choices with no semantic meaning — rendered by the picker from the
+ * standard Tailwind color palette (theme-aware via explicit light/dark tints), not the semantic
+ * token set. Kept as a `const` array (mirroring {@link ENTITY_DISPLAY_ICON_KEYS}) so the
+ * persistence-layer CHECK constraint can derive its value set from a single source of truth.
+ */
+export const ENTITY_DISPLAY_COLOR_KEYS = [
+  // Original semantic keys (order preserved for backward compatibility).
+  'neutral',
+  'primary',
+  'success',
+  'warning',
+  'danger',
+  // Curated named palette.
+  'blue',
+  'sky',
+  'teal',
+  'green',
+  'amber',
+  'orange',
+  'rose',
+  'purple',
+  'indigo',
+] as const;
+
+/** The preset entity-display color key: five semantic keys plus the decorative named palette. */
+export const EntityDisplayColorKey = z.enum(ENTITY_DISPLAY_COLOR_KEYS);
 /** Supported entity-display color key. */
 export type EntityDisplayColorKey = z.infer<typeof EntityDisplayColorKey>;
 

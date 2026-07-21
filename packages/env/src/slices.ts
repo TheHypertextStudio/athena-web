@@ -104,6 +104,21 @@ export const authServer = {
   LINEAR_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
+  /**
+   * Linear **Agent** platform OAuth app client id — funds a distinct, workspace-level
+   * `actor=app` install (Settings → API → Agents), separate from the `LINEAR_CLIENT_ID` data-sync
+   * sign-in app above. Absent ⇒ the "Add to Linear" agent install is unavailable (falls back to
+   * no-op), same degrade shape as `GITHUB_APP_ID`.
+   */
+  LINEAR_AGENT_CLIENT_ID: z.string().optional(),
+  /** Linear Agent platform OAuth app client secret — paired with `LINEAR_AGENT_CLIENT_ID`. */
+  LINEAR_AGENT_CLIENT_SECRET: z.string().optional(),
+  /**
+   * Linear Agent platform webhook signing secret — verifies inbound `AgentSessionEvent`
+   * deliveries. A separate secret from `LINEAR_WEBHOOK_SECRET`: the Agent platform is a
+   * categorically different Linear feature from the data-sync webhooks that secret verifies.
+   */
+  LINEAR_AGENT_WEBHOOK_SECRET: z.string().optional(),
   /** Shared Slack app OAuth client id for the dormant user-token connect flow. */
   SLACK_CLIENT_ID: z.string().optional(),
   /** Shared Slack app OAuth client secret for the dormant user-token connect flow. */

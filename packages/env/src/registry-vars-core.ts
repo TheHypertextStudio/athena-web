@@ -279,6 +279,37 @@ export const CORE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'LINEAR_AGENT_CLIENT_ID',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.LINEAR_AGENT_CLIENT_ID,
+    where:
+      'Linear Agent platform OAuth app client id (Settings → API → Agents) — a distinct, workspace-level `actor=app` install, separate from LINEAR_CLIENT_ID. Absent → the agent install is unavailable.',
+  },
+  {
+    name: 'LINEAR_AGENT_CLIENT_SECRET',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.LINEAR_AGENT_CLIENT_SECRET,
+    where: 'Linear Agent platform OAuth app client secret',
+    sensitive: true,
+  },
+  {
+    name: 'LINEAR_AGENT_WEBHOOK_SECRET',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.LINEAR_AGENT_WEBHOOK_SECRET,
+    where:
+      'Linear Agent platform webhook signing secret — verifies inbound AgentSessionEvent deliveries (distinct from LINEAR_WEBHOOK_SECRET)',
+    sensitive: true,
+  },
+  {
     name: 'APPLE_CLIENT_ID',
     slice: 'auth',
     scope: 'server',

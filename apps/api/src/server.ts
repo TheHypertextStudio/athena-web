@@ -32,6 +32,7 @@ import internalNotifications from './routes/internal-notifications';
 import { meAccountExportDownload } from './routes/me-account';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
+import integrationsLinearAgentOAuth from './routes/integrations-linear-agent-oauth';
 import integrationsMcpOAuth from './routes/integrations-mcp-oauth';
 import webhooks from './routes/webhooks';
 
@@ -94,6 +95,7 @@ server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
 server.route('/internal/notifications', internalNotifications);
 server.route('/internal/integrations/github', integrationsGithub);
+server.route('/internal/integrations/linear-agent', integrationsLinearAgentOAuth);
 server.route('/internal/integrations/mcp', integrationsMcpOAuth);
 server.route('/internal/cron', cron);
 // Provider push-notification webhooks: NOT under `/internal` (Docket registers this exact URL

@@ -23,9 +23,12 @@ import { isRealValue } from '@docket/env';
 import {
   CapturePushSender,
   CaptureSmsSender,
+  LinearAgentClient,
+  MockLinearAgent,
   MockMcpConnector,
   MockConnector,
   MockObserver,
+  RealLinearAgentPort,
   RealMcpConnector,
   RealPushSender,
   RealConnector,
@@ -38,6 +41,7 @@ import {
 import type {
   Connector,
   ConnectorProvider,
+  LinearAgentPort,
   McpConnector,
   Observer,
   ObserverProvider,
@@ -229,6 +233,35 @@ export function buildObserver(
     default:
       throw new Error(`No active observer implementation for legacy provider: ${provider}`);
   }
+}
+
+/**
+ * Build a Linear **Agent** platform client for one workspace's install.
+ *
+ * @remarks
+ * Distinct from {@link buildConnector}'s `linear` case: that builds the data-sync connector
+ * client, this builds the app-level Agent boundary client an org's stored `linear_agent`
+ * credential authenticates. Returns the {@link LinearAgentPort} interface rather than the
+ * concrete real/mock class: the real {@link LinearAgentClient} is a thin GraphQL transport
+ * (`client.query(...)`) that the free functions `agentActivityCreate`/`agentSessionUpdate` from
+ * `@docket/integrations` wrap, while {@link MockLinearAgent} exposes those same names directly as
+ * instance methods (no `client` argument, no network) — {@link RealLinearAgentPort} adapts the
+ * former to the latter's shape so every caller (the webhook receiver, the outbound relay) calls
+ * `client.agentActivityCreate(input)`/`client.agentSessionUpdate(input)` uniformly, real or mock,
+ * with no `instanceof` branching.
+ *
+ * @param accessToken - The workspace's unsealed Agent install access token (required in
+ *   production; ignored in local/test mode, where the mock needs no credential).
+ * @param runtimeEnv - Optional runtime configuration override for tests.
+ */
+export function buildLinearAgentClient(
+  accessToken: string | undefined,
+  runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
+): LinearAgentPort {
+  if (localMode(runtimeEnv)) return new MockLinearAgent();
+  return new RealLinearAgentPort(
+    new LinearAgentClient(required('LINEAR_AGENT_ACCESS_TOKEN', accessToken)),
+  );
 }
 
 function buildMailer(runtimeEnv: AppRuntimeEnv): Mailer {

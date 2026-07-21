@@ -592,3 +592,38 @@ export async function agentSessionUpdate(
     });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Uniform port — so a caller can hold either the real or mock client without branching
+// ---------------------------------------------------------------------------
+
+/**
+ * The capability surface a session-runner/relay caller actually needs, satisfied identically
+ * by {@link RealLinearAgentPort} and `MockLinearAgent` (`./mock-linear-agent`).
+ *
+ * @remarks
+ * {@link agentActivityCreate}/{@link agentSessionUpdate} are free functions taking an explicit
+ * {@link LinearAgentClient} — the right shape for this file's own tests, which inject a fake
+ * `HttpClient` — but a composition root (`container.ts`'s `buildLinearAgentClient`) needs to
+ * hand callers ONE object usable the same way whether it resolved to the real adapter or the
+ * offline mock. This interface is that common shape; the mock already satisfies it structurally
+ * (method names/signatures match 1:1, `this` standing in for `client`), so only the real side
+ * needs an adapter.
+ */
+export interface LinearAgentPort {
+  agentActivityCreate(input: AgentActivityCreateInput): Promise<{ id: string }>;
+  agentSessionUpdate(input: AgentSessionUpdateInput): Promise<void>;
+}
+
+/** Adapts an authenticated {@link LinearAgentClient} to the {@link LinearAgentPort} shape. */
+export class RealLinearAgentPort implements LinearAgentPort {
+  constructor(private readonly client: LinearAgentClient) {}
+
+  agentActivityCreate(input: AgentActivityCreateInput): Promise<{ id: string }> {
+    return agentActivityCreate(this.client, input);
+  }
+
+  agentSessionUpdate(input: AgentSessionUpdateInput): Promise<void> {
+    return agentSessionUpdate(this.client, input);
+  }
+}

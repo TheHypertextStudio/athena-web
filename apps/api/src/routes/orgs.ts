@@ -59,6 +59,7 @@ import dependencyGraph from './dependency-graph';
 import grants from './grants';
 import initiatives from './initiatives';
 import integrations from './integrations';
+import integrationsLinearAgent from './integrations-linear-agent';
 import integrationsMcp from './integrations-mcp';
 import labels from './labels';
 import members from './members';
@@ -456,6 +457,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/display', entityDisplay)
   .route('/:orgId/automation-rules', automationRules)
   .route('/:orgId/integrations/mcp', integrationsMcp)
+  .route('/:orgId/integrations/linear-agent', integrationsLinearAgent)
   .route('/:orgId/integrations', integrations)
   .route('/:orgId/billing', billing)
   .route('/:orgId/activity', activity)

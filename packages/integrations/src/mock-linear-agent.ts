@@ -16,6 +16,7 @@ import type {
   AgentSessionUpdateInput,
   ExchangeLinearAgentCodeInput,
   LinearAgentOAuthTokens,
+  LinearAgentPort,
   RefreshLinearAgentTokenInput,
 } from './linear-agent';
 
@@ -37,7 +38,7 @@ export type RecordedLinearAgentSessionUpdate = AgentSessionUpdateInput;
  * {@link MockLinearAgent.sessionUpdateLog} and return deterministic fake ids, so a test can
  * both drive the boundary and assert what the agent runtime tried to post.
  */
-export class MockLinearAgent {
+export class MockLinearAgent implements LinearAgentPort {
   private counter = 0;
 
   /** Every `agentActivityCreate` call received, in call order (record-only, no I/O). */

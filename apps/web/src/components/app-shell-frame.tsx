@@ -2,8 +2,10 @@
 
 import {
   AppShell,
+  type AppShellAside,
   ContextProvider,
   type HomeNavKey,
+  type RailPanel,
   Sidebar,
   TabBar,
   useContextState,
@@ -11,7 +13,7 @@ import {
   type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { Calendar, Search } from '@docket/ui/icons';
+import { Calendar, ListChecks, Search } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -19,6 +21,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } f
 import AccountMenu from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import Agenda from '@/components/agenda/agenda';
+import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
@@ -91,6 +94,10 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     pathname.startsWith('/settings/') ||
     pathname.endsWith('/settings') ||
     pathname.includes('/settings/');
+  // The calendar surface (`/calendar` or `/orgs/<id>/calendar`) defaults its rail to the Tasks
+  // day-plan panel instead of the Agenda, which would just duplicate the calendar's own timeline.
+  // `(^|/)calendar$` excludes settings' `google-calendar` (preceded by `-`, not `/`).
+  const calendarSurface = /(^|\/)calendar$/.test(pathname);
   const initialOrgId = routeOrgId ?? readLastOrg(userId);
 
   return (
@@ -108,6 +115,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
             <AppShellInner
               loading={shellLoading}
               settingsSurface={settingsSurface}
+              calendarSurface={calendarSurface}
               routeOrgId={routeOrgId}
               userId={userId}
               workspaceKey={workspaceKeyFromPath(pathname)}
@@ -169,9 +177,32 @@ function AppShellAgendaSkeleton(): JSX.Element {
   );
 }
 
+/**
+ * The curated, Docket-native rail panels for a surface. Internal-only by design — the Tasks
+ * day-plan and the Agenda — never an integration add-on gallery. The calendar defaults to Tasks
+ * (its own timeline already covers the schedule); everywhere else the Agenda is the sole panel.
+ */
+function railAsideFor(loading: boolean, calendarSurface: boolean): AppShellAside {
+  const agenda: RailPanel = {
+    id: 'agenda',
+    label: 'Agenda',
+    icon: <Calendar aria-hidden="true" />,
+    node: loading ? <AppShellAgendaSkeleton /> : <Agenda />,
+  };
+  if (!calendarSurface) return { panels: [agenda], defaultPanelId: 'agenda' };
+  const tasks: RailPanel = {
+    id: 'tasks',
+    label: 'Tasks',
+    icon: <ListChecks aria-hidden="true" />,
+    node: loading ? <AppShellAgendaSkeleton /> : <DayTasksPanel />,
+  };
+  return { panels: [tasks, agenda], defaultPanelId: 'tasks' };
+}
+
 interface AppShellInnerProps {
   loading: boolean;
   settingsSurface: boolean;
+  calendarSurface: boolean;
   routeOrgId: string | null;
   userId: string | null;
   workspaceKey?: WorkspaceNavKey;
@@ -192,6 +223,7 @@ interface AppShellInnerProps {
 function AppShellInner({
   loading,
   settingsSurface,
+  calendarSurface,
   routeOrgId,
   userId,
   workspaceKey,
@@ -345,15 +377,7 @@ function AppShellInner({
           tabBar={tabBar}
           mobileBrand={mobileBrand}
           mobileActions={mobileActions}
-          aside={
-            settingsSurface
-              ? undefined
-              : {
-                  node: loading ? <AppShellAgendaSkeleton /> : <Agenda />,
-                  label: 'Agenda',
-                  icon: <Calendar aria-hidden="true" />,
-                }
-          }
+          aside={settingsSurface ? undefined : railAsideFor(loading, calendarSurface)}
         >
           {loading ? <AppShellContentSkeleton /> : children}
         </AppShell>

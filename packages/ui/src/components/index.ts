@@ -85,7 +85,7 @@ export {
 } from './views/ListRow';
 export { ListSubGroup, type ListSubGroupProps } from './views/ListSubGroup';
 export { AppShell, type AppShellProps } from './shell/AppShell';
-export { type ShellAsidePanel } from './shell/ShellAside';
+export { type AppShellAside, type RailPanel } from './shell/ShellAside';
 export {
   ContextProvider,
   type ContextProviderProps,

@@ -73,8 +73,8 @@ test('moves and resizes a writable all-day range from its true edges', async ({
   });
   await installCalendarRoutes(page, state);
   await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: 'Collapse Agenda' }).click();
-  await expect(page.getByRole('button', { name: 'Show Agenda' })).toBeVisible();
+  // No agenda canvas to hide any more — the calendar rail defaults to the Tasks panel, which has
+  // no schedule region, so the all-day segments below are unambiguous without collapsing anything.
 
   const startSegment = allDaySegments(page, item.id).first();
   const endSegment = allDaySegments(page, item.id).last();

@@ -73,6 +73,9 @@ test('drags an Agenda task into a timebox and a calendar event into another even
   await installCalendarRoutes(page, state);
   await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
 
+  // The calendar rail defaults to the Tasks panel now; switch to the Agenda panel via the
+  // activity bar to reach its draggable agenda items.
+  await page.getByRole('button', { name: 'Agenda' }).click();
   const agenda = page.getByRole('complementary', { name: 'Agenda' });
   const agendaTaskDrag = agenda.getByRole('button', {
     name: `Create relationship from ${taskTitle}`,

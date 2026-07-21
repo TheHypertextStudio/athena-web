@@ -42,12 +42,47 @@
 import * as React from 'react';
 
 import { useMediaQuery } from '../../hooks/useMediaQuery';
-import { ChevronLeft, Menu } from '../../icons';
+import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
+import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
-import { SHELL_ASIDE_ID, ShellAside, type ShellAsidePanel } from './ShellAside';
+import { SHELL_ASIDE_ID, ShellAside, type AppShellAside } from './ShellAside';
 import { ShellDrawerProvider } from './ShellDrawerContext';
+
+/** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
+const RAIL_ACTIVE_KEY = 'docket.rail.active';
+const RAIL_COLLAPSED_KEY = 'docket.rail.collapsed';
+
+/** The persisted active-panel id, or null when unset / unavailable (SSR). */
+function readRailActive(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return window.localStorage.getItem(RAIL_ACTIVE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** The persisted collapsed flag (defaults to expanded). */
+function readRailCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Persist a rail-state value, ignoring storage failures (private mode, quota). */
+function writeRailState(key: string, value: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
@@ -80,12 +115,13 @@ export interface AppShellProps {
    */
   mobileActions?: React.ReactNode;
   /**
-   * The optional right-hand **rail** — a floating sibling surface to the main panel (like
-   * {@link sidebar}, a host-wired slot, not page content). Shown by default on `lg` and up
-   * (collapsible to a strip); below `lg` it's a right-anchored {@link Sheet} opened from the mobile
-   * top bar. Omit it and no rail renders.
+   * The optional right-hand **rail** — a curated set of Docket-native supplemental panels plus a
+   * default. On `lg` and up it renders as a thin always-visible {@link ShellActivityBar} switcher
+   * on the far edge plus a collapsible {@link ShellAside} panel host beside it; below `lg` the same
+   * panels are presented in a right-anchored {@link Sheet} opened from the mobile top bar. Omit it
+   * (or pass no panels) and no rail renders.
    */
-  aside?: ShellAsidePanel;
+  aside?: AppShellAside;
   /** Extra class names for the root shell element. */
   className?: string;
   /** The main-area content. */
@@ -122,11 +158,40 @@ export function AppShell({
   const { orgAccent, density, activeOrgId } = useContextState();
   const isLgUp = useMediaQuery('(min-width: 64rem)');
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  // Two states because the two rail presentations have opposite defaults and different interactions:
-  // the desktop rail is a collapsible inline surface (shown by default), the mobile sheet is a modal
-  // (hidden by default, opened from the top-bar trigger).
-  const [railCollapsed, setRailCollapsed] = React.useState(false);
   const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
+
+  // Rail state is shell-owned and persisted across sessions: which native panel is active, and
+  // whether the panel host is collapsed (the activity bar always stays visible). The persisted
+  // active id may name a panel not present on the current route, so it is *resolved* against the
+  // available panels below rather than clobbered — switching to Agenda on one page shouldn't lose
+  // the Tasks default on the calendar.
+  const panels = aside?.panels ?? [];
+  const [activePanelId, setActivePanelId] = React.useState<string | null>(readRailActive);
+  const [railCollapsed, setRailCollapsed] = React.useState<boolean>(readRailCollapsed);
+
+  const activePanel =
+    panels.find((panel) => panel.id === activePanelId) ??
+    panels.find((panel) => panel.id === aside?.defaultPanelId) ??
+    panels[0] ??
+    null;
+  const activePanelIdResolved = activePanel?.id ?? '';
+
+  // Click a panel icon: collapse if it is the already-active, visible panel; otherwise switch to it
+  // and expand. Only explicit clicks persist, so passive resolution never overwrites a real choice.
+  const handlePanelIconClick = React.useCallback(
+    (id: string) => {
+      if (id === activePanelIdResolved && !railCollapsed) {
+        setRailCollapsed(true);
+        writeRailState(RAIL_COLLAPSED_KEY, '1');
+        return;
+      }
+      setActivePanelId(id);
+      setRailCollapsed(false);
+      writeRailState(RAIL_ACTIVE_KEY, id);
+      writeRailState(RAIL_COLLAPSED_KEY, '0');
+    },
+    [activePanelIdResolved, railCollapsed],
+  );
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
   // drawer (the static desktop rail sits under a `null` provider, so it never closes anything).
@@ -193,12 +258,11 @@ export function AppShell({
           {mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>}
         </div>
         {mobileActions}
-        {/* Mobile rail trigger — opens the rail slot as a right sheet. Uses the slot's glyph
-            (falling back to a chevron). */}
-        {aside ? (
+        {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
+        {activePanel ? (
           <button
             type="button"
-            aria-label={`Show ${aside.label}`}
+            aria-label={`Show ${activePanel.label}`}
             aria-controls={SHELL_ASIDE_ID}
             aria-expanded={mobileSheetOpen}
             onClick={() => {
@@ -206,7 +270,7 @@ export function AppShell({
             }}
             className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
           >
-            {aside.icon ?? <ChevronLeft aria-hidden="true" className="size-5" />}
+            {activePanel.icon}
           </button>
         ) : null}
       </div>
@@ -251,23 +315,26 @@ export function AppShell({
         </main>
       </div>
 
-      {/* Right-hand rail (desktop): a floating sibling surface to the main panel, shown by default
-          at `lg` and up and collapsible to a strip. */}
-      {aside && isLgUp ? (
-        <ShellAside
-          panel={aside}
-          collapsed={railCollapsed}
-          onToggle={() => {
-            setRailCollapsed((c) => !c);
-          }}
-        />
+      {/* Right-hand rail (desktop): the collapsible panel host beside the always-visible activity
+          bar on the far edge, at `lg` and up. The bar stays put and is the peek/reopen affordance. */}
+      {activePanel && isLgUp ? (
+        <>
+          <ShellAside panel={activePanel} collapsed={railCollapsed} />
+          <ShellActivityBar
+            panels={panels}
+            activeId={activePanelIdResolved}
+            collapsed={railCollapsed}
+            onIconClick={handlePanelIconClick}
+          />
+        </>
       ) : null}
 
-      {/* The same rail slot as a right-anchored modal Sheet below `lg`, opened from the top-bar
-          trigger. Mutually exclusive with the inline rail (the `isLgUp` gate), so the shared id stays
-          unique and the slot mounts in exactly one place. Escape/backdrop dismiss closes it. */}
+      {/* The same panels as a right-anchored modal Sheet below `lg`, opened from the top-bar trigger.
+          Mutually exclusive with the inline rail (the `isLgUp` gate), so the shared id stays unique.
+          A compact horizontal switcher stands in for the desktop activity bar when there's more than
+          one panel. Escape/backdrop dismiss closes it. */}
       <Sheet
-        open={aside != null && !isLgUp && mobileSheetOpen}
+        open={activePanel != null && !isLgUp && mobileSheetOpen}
         onOpenChange={(next) => {
           if (!next) setMobileSheetOpen(false);
         }}
@@ -275,12 +342,40 @@ export function AppShell({
         <SheetContent
           side="right"
           id={SHELL_ASIDE_ID}
-          aria-label={aside?.label}
+          aria-label={activePanel?.label}
           aria-describedby={undefined}
-          className="@container w-[22rem] max-w-[90vw] overflow-auto lg:hidden"
+          className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden lg:hidden"
         >
-          <SheetTitle className="sr-only">{aside?.label}</SheetTitle>
-          {aside?.node}
+          <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
+          {panels.length > 1 ? (
+            <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 px-2 pb-2">
+              {panels.map((panel) => {
+                const isActive = panel.id === activePanelIdResolved;
+                return (
+                  <button
+                    key={panel.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => {
+                      setActivePanelId(panel.id);
+                      writeRailState(RAIL_ACTIVE_KEY, panel.id);
+                    }}
+                    className={cn(
+                      'focus-visible:ring-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4',
+                      isActive
+                        ? 'bg-surface-container-highest text-on-surface'
+                        : 'text-on-surface-variant hover:bg-surface-container-high',
+                    )}
+                  >
+                    {panel.icon}
+                    {panel.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-auto">{activePanel?.node}</div>
         </SheetContent>
       </Sheet>
     </div>

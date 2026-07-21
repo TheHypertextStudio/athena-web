@@ -335,6 +335,9 @@ test.describe('fluid scheduling interaction contract', () => {
         }),
       )
       .toBe(true);
+    // The calendar rail defaults to the Tasks panel; switch to the Agenda panel to assert its
+    // own degraded-state notice alongside the calendar's.
+    await page.getByRole('button', { name: 'Agenda' }).click();
     const agenda = page.getByRole('complementary', { name: 'Agenda' });
     await expect(agenda).toBeVisible();
     await expect(agenda.getByRole('region', { name: 'Schedule' })).toBeVisible();

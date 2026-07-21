@@ -1,109 +1,76 @@
 'use client';
 
 /**
- * `@docket/ui` — the desktop rail chrome for the shell's right-hand aside.
+ * `@docket/ui` — the desktop **panel host** for the shell's right-hand rail.
  *
  * @remarks
- * A single animated flex item — one panel whose width transitions between a thin collapsed strip and
- * the full rail — so the `flex-1` main panel reflows in one continuous motion. Nothing mounts/unmounts
- * in the flex flow on toggle: the reopen control is an **absolute overlay** over the collapsed strip,
- * so there is no one-frame layout jump at the main panel's edge. The panel chrome (surface, border,
- * shadow) lives on the animating wrapper so it reads identically open and collapsed; the inner content
- * keeps a fixed width and is clipped, so it never reflows mid-animation.
+ * The right rail is a Sunsama-style pair: a thin, always-visible {@link ShellActivityBar} on the far
+ * edge that switches which supplemental panel is active, plus this wider **panel host** beside it that
+ * renders the active panel. The host is a single width-animated surface — expanded it is the full rail,
+ * collapsed it animates to zero width — so the `flex-1` main panel reflows in one continuous motion.
+ * The activity bar stays put and is the peek/reopen affordance, so the host needs no collapse chrome
+ * of its own.
  *
- * The content + label/glyph come from {@link AppShellProps.aside} as a plain slot; the collapse state
- * is shell-owned and passed in. {@link AppShell} renders this only on `lg` and up; below `lg` the same
- * slot is presented by the shell's right {@link Sheet}.
+ * Each panel owns its **own** header (the Agenda its day navigator, the Tasks panel its day + progress
+ * header), so the host renders no title row — that avoids the double-header the old single-panel rail
+ * had. Which panel is active, and the collapsed state, are shell-owned and passed in; {@link AppShell}
+ * renders this only on `lg` and up. Below `lg` the same panels are presented by the shell's right
+ * {@link Sheet}. The activity bar is deliberately **internal-only** — a curated set of Docket-native
+ * panels, never a gallery of third-party integration add-ons.
  */
 import * as React from 'react';
 
-import { ChevronLeft, ChevronRight } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Button, Row, Stack } from '../../primitives';
 
-/** Stable id for the rail, referenced by the collapse/reopen controls' `aria-controls`. */
+/** Stable id for the panel host, referenced by the activity bar / mobile trigger `aria-controls`. */
 export const SHELL_ASIDE_ID = 'shell-aside';
 
-/** A right-rail panel: its content plus the label/glyph the rail chrome needs. */
-export interface ShellAsidePanel {
-  /** The rail body (e.g. the agenda). */
-  readonly node: React.ReactNode;
-  /** Accessible name shown in the rail header + on the collapse/reopen controls. */
+/** One supplemental panel the rail can show: its content plus the activity-bar switcher metadata. */
+export interface RailPanel {
+  /** Stable id (also the persisted "active panel" key). */
+  readonly id: string;
+  /** Accessible name — the activity-bar button label + the host landmark label. */
   readonly label: string;
-  /** Optional glyph for the reopen control (and the mobile trigger); falls back to a chevron. */
-  readonly icon?: React.ReactNode;
+  /** The activity-bar glyph (and the mobile trigger icon when active). */
+  readonly icon: React.ReactNode;
+  /** The panel body (owns its own header). */
+  readonly node: React.ReactNode;
+}
+
+/** The right rail: the ordered set of native panels plus the one shown by default. */
+export interface AppShellAside {
+  /** The curated, Docket-native panels (e.g. Tasks, Agenda) — never an integration add-on list. */
+  readonly panels: readonly RailPanel[];
+  /** Which panel is active until the user picks another (falls back to the first). */
+  readonly defaultPanelId?: string;
 }
 
 /** Props for {@link ShellAside}. */
 export interface ShellAsideProps {
-  /** The panel to render. */
-  readonly panel: ShellAsidePanel;
-  /** Whether the rail is collapsed to its strip. */
+  /** The currently active panel to render. */
+  readonly panel: RailPanel;
+  /** Whether the host is collapsed to zero width (the activity bar stays visible). */
   readonly collapsed: boolean;
-  /** Toggle the collapsed state. */
-  readonly onToggle: () => void;
 }
 
-/** The desktop rail: an animated panel with a collapse header and a reopen overlay when collapsed. */
-export function ShellAside({ panel, collapsed, onToggle }: ShellAsideProps): React.JSX.Element {
+/** The desktop panel host: a width-animated surface rendering the active panel; the bar handles toggling. */
+export function ShellAside({ panel, collapsed }: ShellAsideProps): React.JSX.Element {
   const open = !collapsed;
   return (
-    <div
+    <aside
+      id={SHELL_ASIDE_ID}
+      aria-label={panel.label}
+      inert={open ? undefined : true}
       className={cn(
-        // The panel chrome lives here so it's identical open vs collapsed; width is the only thing
-        // that animates, and it's the sole flex item, so the main panel reflows smoothly. `ease-in-out`
-        // (the gentler symmetric curve) rather than the default snappy decelerate, since the rail
-        // slides both open and closed.
-        'bg-surface border-outline-variant @container relative flex h-full min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border shadow-sm transition-[width] duration-(--dur-slow) ease-in-out',
-        open ? 'w-[22rem]' : 'w-12',
+        // Tonal surface (no border — the surface step off the canvas carries the separation); width is
+        // the only animated property, and it's a flex sibling of `<main>`, so the panel reflows in one
+        // continuous motion. Collapsed → zero width; the always-visible activity bar is the reopen.
+        'bg-surface @container h-full min-h-0 shrink-0 overflow-hidden rounded-xl shadow-sm transition-[width] duration-(--dur-slow) ease-in-out',
+        open ? 'w-[22rem]' : 'w-0',
       )}
     >
-      {/* Full content, fixed-width so it never reflows as the wrapper clips it. `inert` while
-          collapsed keeps the clipped controls out of the tab order (the overlay handles reopen). */}
-      <Stack
-        as="aside"
-        id={SHELL_ASIDE_ID}
-        aria-label={panel.label}
-        inert={open ? undefined : true}
-        className="h-full min-h-0 w-[22rem]"
-      >
-        <Row
-          as="header"
-          justify="between"
-          className="border-outline-variant h-11 shrink-0 border-b pr-2 pl-3"
-        >
-          <span className="text-on-surface truncate text-sm font-semibold">{panel.label}</span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggle}
-            aria-expanded={open}
-            aria-controls={SHELL_ASIDE_ID}
-            aria-label={`Collapse ${panel.label}`}
-            title={`Collapse ${panel.label}`}
-            className="text-on-surface-variant shrink-0"
-          >
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </Row>
-        <div className="min-h-0 flex-1 overflow-hidden">{panel.node}</div>
-      </Stack>
-
-      {/* Reopen overlay — covers the thin collapsed strip (absolute, so toggling it shifts no
-          layout). Fills the strip so the whole collapsed rail is the click target. */}
-      {open ? null : (
-        <button
-          type="button"
-          onClick={onToggle}
-          aria-expanded={open}
-          aria-controls={SHELL_ASIDE_ID}
-          aria-label={`Show ${panel.label}`}
-          title={`Show ${panel.label}`}
-          className="bg-surface text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring absolute inset-0 flex items-center justify-center transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
-        >
-          {panel.icon ?? <ChevronLeft aria-hidden="true" />}
-        </button>
-      )}
-    </div>
+      {/* Fixed-width inner so the content never reflows while the wrapper animates its width. */}
+      <div className="h-full min-h-0 w-[22rem] overflow-hidden">{panel.node}</div>
+    </aside>
   );
 }

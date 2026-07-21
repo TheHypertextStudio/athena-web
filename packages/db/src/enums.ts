@@ -64,8 +64,17 @@ export const syncTrigger = pgEnum('sync_trigger', ['manual', 'scheduled']);
  * history; the purpose keeps their runs distinguishable in the UI and in scheduling logic.
  */
 export const syncRunPurpose = pgEnum('sync_run_purpose', ['task_sync', 'email_ingest']);
-/** Integration pattern: replace (migration) vs complement (connector). */
-export const integrationPattern = pgEnum('integration_pattern', ['migration', 'connector']);
+/**
+ * Integration pattern: replace (migration), complement (connector), or an installed
+ * app-actor front door (agent) — e.g. Linear's Agent platform, which authenticates as a
+ * workspace-level `actor=app` grant rather than proxying a connecting user's own OAuth token,
+ * and carries no `syncMode`/`writeBack` semantics.
+ */
+export const integrationPattern = pgEnum('integration_pattern', [
+  'migration',
+  'connector',
+  'agent',
+]);
 /** What an integration contributes: work, context, signal, time, or code. */
 export const integrationRole = pgEnum('integration_role', [
   'work',

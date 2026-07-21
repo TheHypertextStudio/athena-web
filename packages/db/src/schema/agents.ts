@@ -135,6 +135,19 @@ export const sessionActivity = pgTable(
      */
     proposalGroupId: text('proposal_group_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
+    /**
+     * Last-modified stamp, distinct from `createdAt`.
+     *
+     * @remarks
+     * Most activity rows are write-once, but `executeApprovedActions` updates an existing
+     * `action` row's `approvalStatus`/`body` in place on approve/reject rather than inserting a
+     * new row — so a relay or consumer watermarking "what's new" purely off `createdAt` would
+     * silently miss that transition. This column lets any such consumer cursor correctly.
+     */
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
   },
   (t) => [
     index('session_activity_session_idx').on(t.sessionId, t.createdAt),
@@ -162,4 +175,35 @@ export const agentSessionTranscript = pgTable('agent_session_transcript', {
     .references(() => organization.id, { onDelete: 'cascade' }),
   messages: jsonb('messages').$type<TurnMessage[]>().notNull().default([]),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+/**
+ * Per-provider bookkeeping for one agent session that also lives as a native session on an
+ * external "front door" (one row per session, one provider today: Linear's Agent platform).
+ *
+ * @remarks
+ * `agent_session.externalRunRef` stays a single opaque idempotency string (its one job); the
+ * richer per-provider fields a relay actually needs — the workspace id for outbound GraphQL
+ * calls, the originating issue, and the outbound-sync watermark — live here instead, adjacent
+ * to `agent_session` the same way {@link agentSessionTranscript} is, never woven into the
+ * core row or the event substrate.
+ */
+export const agentSessionExternalLink = pgTable('agent_session_external_link', {
+  sessionId: text('session_id')
+    .primaryKey()
+    .references(() => agentSession.id, { onDelete: 'cascade' }),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organization.id, { onDelete: 'cascade' }),
+  /** The external front-door provider this session is mirrored to (`'linear'` today). */
+  provider: text('provider').notNull(),
+  /** The provider's own session id (Linear's `AgentSession.id`). */
+  externalSessionId: text('external_session_id').notNull(),
+  /** The provider workspace this session belongs to, for routing outbound calls. */
+  externalWorkspaceId: text('external_workspace_id').notNull(),
+  /** The issue/thread the session was opened on, if any. */
+  externalIssueId: text('external_issue_id'),
+  /** Outbound-relay watermark: the last `session_activity.id` already pushed to the provider. */
+  lastRelayedActivityId: text('last_relayed_activity_id'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });

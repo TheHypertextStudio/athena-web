@@ -22,7 +22,7 @@
  * (`surface-container-high`); structure comes from the borderless tonal property pills, not from
  * extra surfaces or outlines.
  */
-import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
+import { Button, Dialog, DialogContent, DialogTitle, Separator } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, useId, useState } from 'react';
 
@@ -48,6 +48,20 @@ export interface ComposerShellProps {
   onTitleChange: (title: string) => void;
   /** Accessible label + placeholder for the title field. */
   titlePlaceholder: string;
+  /**
+   * The current one-line summary text, rendered as an inline document subtitle directly beneath the
+   * title. Only shown when {@link ComposerShellProps.onSummaryChange} is supplied.
+   */
+  summary?: string;
+  /**
+   * Report a changed summary. Providing this handler opts the composer into the inline subtitle line
+   * between the title and the body; omit it and no summary field renders (backward compatible).
+   */
+  onSummaryChange?: (summary: string) => void;
+  /** Placeholder ghost text for the summary subtitle line. */
+  summaryPlaceholder?: string;
+  /** Max character length for the summary field, matching the entity's DTO limit (e.g. 280). */
+  summaryMaxLength?: number;
   /** The current description text. */
   body: string;
   /** Report a changed description. */
@@ -83,6 +97,10 @@ export function ComposerShell({
   title,
   onTitleChange,
   titlePlaceholder,
+  summary,
+  onSummaryChange,
+  summaryPlaceholder,
+  summaryMaxLength,
   body,
   onBodyChange,
   bodyPlaceholder,
@@ -98,7 +116,8 @@ export function ComposerShell({
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
 
   // A draft worth protecting is one with typed text; bare default property picks are not.
-  const isDirty = title.trim().length > 0 || body.trim().length > 0;
+  const isDirty =
+    title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0;
 
   /** Gate every dismiss path (Esc, backdrop, X) so a dirty draft is never silently discarded. */
   const requestClose = (): void => {
@@ -152,31 +171,54 @@ export function ComposerShell({
             event.preventDefault();
             if (canSubmit && !creating) onSubmit();
           }}
-          className="flex flex-col gap-2 px-6 pt-3"
+          className="flex flex-col px-6 pt-3"
         >
-          <input
-            aria-label={titlePlaceholder}
-            placeholder={titlePlaceholder}
-            value={title}
-            disabled={creating}
-            autoFocus
-            onChange={(event) => {
-              onTitleChange(event.target.value);
-            }}
-            className="placeholder:text-on-surface-variant text-on-surface w-full bg-transparent text-lg font-medium tracking-tight outline-none disabled:opacity-50"
-          />
-          {bodyPlaceholder !== undefined ? (
-            <FreeformTextEditor
-              value={body}
+          {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
+          <div className="flex flex-col gap-1 pb-3">
+            <input
+              aria-label={titlePlaceholder}
+              placeholder={titlePlaceholder}
+              value={title}
               disabled={creating}
-              onChange={onBodyChange}
-              placeholder={bodyPlaceholder}
-              ariaLabel={bodyPlaceholder}
-              onSubmit={() => {
-                if (canSubmit && !creating) onSubmit();
+              autoFocus
+              onChange={(event) => {
+                onTitleChange(event.target.value);
               }}
-              className="max-h-[40vh] min-h-28 overflow-y-auto py-1"
+              className="placeholder:text-on-surface-variant text-on-surface w-full bg-transparent text-lg font-medium tracking-tight outline-none disabled:opacity-50"
             />
+            {onSummaryChange ? (
+              <input
+                aria-label={summaryPlaceholder ?? 'Summary'}
+                placeholder={summaryPlaceholder}
+                maxLength={summaryMaxLength}
+                value={summary ?? ''}
+                disabled={creating}
+                onChange={(event) => {
+                  onSummaryChange(event.target.value);
+                }}
+                className="placeholder:text-on-surface-variant text-on-surface-variant w-full bg-transparent text-base outline-none disabled:opacity-50"
+              />
+            ) : null}
+          </div>
+
+          {bodyPlaceholder !== undefined ? (
+            <>
+              {/* Divide the header from the body so the title reads as a distinct document heading. */}
+              <Separator />
+              <div className="bg-surface-container-low mt-3 rounded-lg px-3 py-2">
+                <FreeformTextEditor
+                  value={body}
+                  disabled={creating}
+                  onChange={onBodyChange}
+                  placeholder={bodyPlaceholder}
+                  ariaLabel={bodyPlaceholder}
+                  onSubmit={() => {
+                    if (canSubmit && !creating) onSubmit();
+                  }}
+                  className="max-h-[40vh] min-h-28 overflow-y-auto py-1"
+                />
+              </div>
+            </>
           ) : null}
         </form>
 

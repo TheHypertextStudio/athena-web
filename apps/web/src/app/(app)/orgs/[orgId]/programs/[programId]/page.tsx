@@ -10,6 +10,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Separator,
   Skeleton,
 } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
@@ -273,6 +274,8 @@ export default function ProgramDetailPage(): JSX.Element {
         </>
       }
     >
+      <Separator className="my-6" />
+
       <EntityDocument
         value={program.description}
         canEdit={canEdit}

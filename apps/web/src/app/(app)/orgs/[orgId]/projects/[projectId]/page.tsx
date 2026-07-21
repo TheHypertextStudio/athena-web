@@ -19,6 +19,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Separator,
   Skeleton,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
@@ -390,6 +391,8 @@ export default function ProjectDetailPage(): JSX.Element {
           </PopoverContent>
         </Popover>
       </header>
+
+      <Separator className="my-6" />
 
       <ProjectTabs
         tabs={tabs}

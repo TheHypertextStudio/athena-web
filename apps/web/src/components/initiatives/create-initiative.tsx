@@ -219,6 +219,10 @@ export function CreateInitiativeDialog({
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${initiativeNoun} name`}
+      summary={summary}
+      onSummaryChange={setSummary}
+      summaryPlaceholder="One-sentence summary"
+      summaryMaxLength={280}
       body={body}
       onBodyChange={setBody}
       bodyPlaceholder="Add a description…"
@@ -228,37 +232,25 @@ export function CreateInitiativeDialog({
       onSubmit={() => void submit()}
       submitLabel={`Create ${initiativeNoun}`}
     >
-      <div className="flex w-full flex-col gap-2">
-        <input
-          value={summary}
-          maxLength={280}
-          onChange={(event) => {
-            setSummary(event.target.value);
-          }}
-          placeholder="One-sentence summary"
-          aria-label="Summary"
-          className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant h-8 w-full rounded-md border px-2 text-sm"
-        />
-        <div className="flex flex-wrap gap-1" aria-label="Document template">
-          {(['blank', 'strategic', 'objective'] as const).map((value) => (
-            <Button
-              key={value}
-              type="button"
-              size="sm"
-              variant={template === value ? 'secondary' : 'ghost'}
-              onClick={() => {
-                setTemplate(value);
-                setBody(value === 'blank' ? '' : GUIDED_DOCUMENT);
-              }}
-            >
-              {value === 'blank'
-                ? 'Blank'
-                : value === 'strategic'
-                  ? 'Strategic initiative'
-                  : 'Objective'}
-            </Button>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-1" aria-label="Document template">
+        {(['blank', 'strategic', 'objective'] as const).map((value) => (
+          <Button
+            key={value}
+            type="button"
+            size="sm"
+            variant={template === value ? 'secondary' : 'ghost'}
+            onClick={() => {
+              setTemplate(value);
+              setBody(value === 'blank' ? '' : GUIDED_DOCUMENT);
+            }}
+          >
+            {value === 'blank'
+              ? 'Blank'
+              : value === 'strategic'
+                ? 'Strategic initiative'
+                : 'Objective'}
+          </Button>
+        ))}
       </div>
       <ActorPicker
         options={options.actorOptions}

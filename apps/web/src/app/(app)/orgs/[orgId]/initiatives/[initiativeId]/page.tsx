@@ -28,6 +28,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Separator,
   Skeleton,
   Tabs,
   type TabsItem,
@@ -395,6 +396,8 @@ export default function InitiativeDetailPage(): JSX.Element {
           </p>
         ) : null}
       </header>
+
+      <Separator className="no-print my-6 max-w-4xl" />
 
       <section className="print-only border-outline-variant border-y py-4">
         <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">

@@ -125,7 +125,10 @@ export function EntityDocument({
             <div className="px-3 pb-2">{renderContents(false)}</div>
           </details>
         ) : null}
-        <div ref={rootRef} className="entity-document min-h-56">
+        <div
+          ref={rootRef}
+          className="entity-document bg-surface-container-low min-h-56 rounded-xl px-4 py-3 print:bg-transparent print:p-0"
+        >
           <EditableFreeformText
             value={value}
             placeholder={placeholder}

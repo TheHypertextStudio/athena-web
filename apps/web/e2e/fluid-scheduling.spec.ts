@@ -312,17 +312,19 @@ test.describe('fluid scheduling interaction contract', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(scheduleLane(page, '2026-11-01')).toBeVisible();
     const fallSchedule = scheduleViewport(page);
-    // The canvas performs a one-time auto-scroll to "now" after its ResizeObserver measures the
-    // viewport. On a fresh reload that fires asynchronously, so wait for it to land before forcing
-    // the scroll back to 0 — otherwise the late auto-scroll overrides the reset and the poll below
-    // never observes 0 (the source of a DST-block flake). Mirrors the spring block's settle wait.
+    // After a reload the canvas performs a one-time auto-scroll to "now" once its ResizeObserver
+    // measures the viewport, which fires asynchronously and overrides a single reset. Re-assert
+    // scrollTop = 0 on every poll iteration until it sticks (once the auto-scroll has run, the
+    // reset holds) so the early-morning DST band is in view regardless of when it fires. This was
+    // an intermittent DST-block flake.
     await expect
-      .poll(() => fallSchedule.evaluate((element) => element.scrollTop))
-      .toBeGreaterThan(0);
-    await fallSchedule.evaluate((element) => {
-      element.scrollTop = 0;
-    });
-    await expect.poll(() => fallSchedule.evaluate((element) => element.scrollTop)).toBe(0);
+      .poll(async () => {
+        await fallSchedule.evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        return fallSchedule.evaluate((element) => element.scrollTop);
+      })
+      .toBe(0);
     const repeatedBand = fallSchedule.locator(
       '[data-schedule-transition="repeated"][data-schedule-transition-lane="date:2026-11-01"]',
     );

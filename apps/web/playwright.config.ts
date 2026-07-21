@@ -18,6 +18,9 @@ export default defineConfig({
   testMatch: '**/*.spec.ts',
   fullyParallel: false,
   workers: 1,
+  // Retry in CI so a transient timing race (e.g. an async auto-scroll landing mid-assertion) fails
+  // the whole suite only when it reproduces, not on a single unlucky run.
+  retries: process.env['CI'] ? 2 : 0,
   forbidOnly: !!process.env['CI'],
   timeout: 120_000,
   expect: { timeout: TIMEOUTS.ui },

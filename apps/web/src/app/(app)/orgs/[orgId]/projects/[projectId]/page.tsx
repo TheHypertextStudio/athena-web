@@ -5,16 +5,28 @@ import type {
   EntityDisplayColorKey,
   EntityDisplayIconKey,
   EntityDisplayOut,
+  ProjectOut,
 } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Calendar, Target, TuneRounded } from '@docket/ui/icons';
-import { Popover, PopoverContent, PopoverTrigger, Skeleton } from '@docket/ui/primitives';
+import { Calendar, Ellipsis, Target, Trash2, TuneRounded } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Skeleton,
+} from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableFreeformText, FreeformText } from '@/components/editor/freeform-text';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
@@ -33,6 +45,7 @@ import { CreateTaskDialog } from '@/components/tasks/create-task';
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
+import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -60,6 +73,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const [tab, setTab] = useState<TabId>('overview');
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const {
     detailKey,
@@ -90,6 +104,10 @@ export default function ProjectDetailPage(): JSX.Element {
     updatePosting,
     updateError,
   } = useProjectDetailPage(orgId, projectId);
+
+  // Deleting a project hits `capabilityGuard('manage')` server-side, so the affordance is gated on
+  // `manage` — a strictly stronger bar than the `contribute`-level `canEdit` used for field edits.
+  const canDelete = useOrgCapability(detail?.members ?? [], detail?.roles ?? [], 'manage');
 
   const resourceKey = [...detailKey, 'resources'] as const;
   const displayMutation = useApiMutation<
@@ -153,6 +171,17 @@ export default function ProjectDetailPage(): JSX.Element {
       ),
     invalidateKeys: [resourceKey],
   });
+  const deleteProject = useApiMutation<ProjectOut, undefined>({
+    mutationFn: () =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].projects[':id'].$delete({ param: { orgId, id: projectId } }),
+        'Could not delete this project.',
+      ),
+    invalidateKeys: [queryKeys.projects(orgId)],
+    onSuccess: () => {
+      router.push(`/orgs/${orgId}/projects`);
+    },
+  });
 
   const participantIds = useMemo(() => {
     if (!project) return [];
@@ -204,27 +233,54 @@ export default function ProjectDetailPage(): JSX.Element {
   return (
     <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
-        <div className="flex flex-col items-start gap-2">
-          <InitiativeIconPicker
-            display={
-              detail?.display ?? {
-                subjectType: 'project',
-                subjectId: projectId,
-                iconKey: 'folder',
-                colorKey: 'neutral',
-                customized: false,
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col items-start gap-2">
+            <InitiativeIconPicker
+              display={
+                detail?.display ?? {
+                  subjectType: 'project',
+                  subjectId: projectId,
+                  iconKey: 'folder',
+                  colorKey: 'neutral',
+                  customized: false,
+                }
               }
-            }
-            initiativeName={project.name}
-            editable={canEdit}
-            pending={displayMutation.isPending}
-            onChange={(iconKey, colorKey) => {
-              displayMutation.mutate({ iconKey, colorKey });
-            }}
-          />
-          <h1 className="text-headline-large text-on-surface max-w-[32ch] font-medium">
-            {project.name}
-          </h1>
+              initiativeName={project.name}
+              editable={canEdit}
+              pending={displayMutation.isPending}
+              onChange={(iconKey, colorKey) => {
+                displayMutation.mutate({ iconKey, colorKey });
+              }}
+            />
+            <h1 className="text-headline-large text-on-surface max-w-[32ch] font-medium">
+              {project.name}
+            </h1>
+          </div>
+          {canDelete ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label={`${projectNoun} actions`}
+                >
+                  <Ellipsis className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    deleteProject.reset();
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
 
         <EditableFreeformText
@@ -492,6 +548,33 @@ export default function ProjectDetailPage(): JSX.Element {
           {userErrorMessage(displayMutation.error, 'Could not customize this project.')}
         </p>
       ) : null}
+
+      <ConfirmDeleteDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(next) => {
+          // Clear a prior failure's message so it never lingers on the next open (or after close).
+          if (!next) deleteProject.reset();
+          setConfirmDeleteOpen(next);
+        }}
+        title={`Delete this ${projectNoun.toLowerCase()}?`}
+        description={`This permanently removes “${project.name}” along with its milestones and tasks. This can't be undone.`}
+        confirmLabel={`Delete ${projectNoun.toLowerCase()}`}
+        pending={deleteProject.isPending}
+        error={
+          deleteProject.error
+            ? userErrorMessage(deleteProject.error, 'Could not delete this project.')
+            : null
+        }
+        onConfirm={() => {
+          // Keep the dialog open on failure so the in-dialog error stays visible; the mutation's
+          // own onSuccess navigates away, so only close here after a confirmed success.
+          deleteProject.mutate(undefined, {
+            onSuccess: () => {
+              setConfirmDeleteOpen(false);
+            },
+          });
+        }}
+      />
     </main>
   );
 }

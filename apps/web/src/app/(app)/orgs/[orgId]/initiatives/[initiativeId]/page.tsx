@@ -16,15 +16,25 @@ import {
   Calendar,
   ChevronLeft,
   CircleDot,
+  Ellipsis,
   Flag,
   RefreshCw,
+  Trash2,
   User,
 } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Skeleton,
+} from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useParams, useSearchParams } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
@@ -32,10 +42,10 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { UpdatesPanel } from '@/components/programs/updates-panel';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { api } from '@/lib/api';
-import { useSession } from '@/lib/auth-client';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { queryKeys, apiQueryOptions, useApiMutation, useApiQuery, unwrap } from '@/lib/query';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
+import { useOrgCapability } from '@/lib/use-org-capability';
 import { userErrorMessage } from '@/lib/problem';
 
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
@@ -70,6 +80,7 @@ const CADENCE_ORDER: readonly InitiativeUpdateCadence[] = [
 /** Printable, document-first Initiative detail. */
 export default function InitiativeDetailPage(): JSX.Element {
   const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId: string }>();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<'overview' | 'updates'>(
     searchParams.get('tab') === 'updates' ? 'updates' : 'overview',
@@ -77,13 +88,13 @@ export default function InitiativeDetailPage(): JSX.Element {
   const [resourceTitle, setResourceTitle] = useState('');
   const [resourceUrl, setResourceUrl] = useState('');
   const [editingHeader, setEditingHeader] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [titleDraft, setTitleDraft] = useState('');
   const [summaryDraft, setSummaryDraft] = useState('');
   const initiativeNoun = useVocabulary('initiative');
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const programNoun = useVocabulary('program');
   const projectNoun = useVocabulary('project');
-  const { data: authSession } = useSession();
   const detailQ = useApiQuery(initiativeDetailDef(orgId, initiativeId));
   const data = detailQ.data;
   const detail = data?.detail;
@@ -109,14 +120,8 @@ export default function InitiativeDetailPage(): JSX.Element {
 
   const members = data?.members ?? [];
   const roles = data?.roles ?? [];
-  const me = members.find((member) => member.userId === authSession?.user.id);
-  const myRole = roles.find((role) => role.id === me?.roleId);
-  const canEdit =
-    myRole?.capabilities.some(
-      (capability) => capability === 'contribute' || capability === 'manage',
-    ) === true ||
-    myRole?.baseCapability === 'contribute' ||
-    myRole?.baseCapability === 'manage';
+  const canEdit = useOrgCapability(members, roles, 'contribute');
+  const canManage = useOrgCapability(members, roles, 'manage');
   const memberOptions = useMemo<readonly PickerOption[]>(
     () => memberActorOptions(members),
     [members],
@@ -165,6 +170,20 @@ export default function InitiativeDetailPage(): JSX.Element {
     onSuccess: () => {
       setResourceTitle('');
       setResourceUrl('');
+    },
+  });
+  const deleteInitiative = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].$delete({
+            param: { orgId, id: initiativeId },
+          }),
+        'Could not delete this initiative.',
+      ),
+    invalidateKeys: [queryKeys.initiatives(orgId)],
+    onSuccess: () => {
+      router.push(`/orgs/${orgId}/initiatives`);
     },
   });
   const removeResource = useApiMutation<{ id: string; removed: true }, string>({
@@ -251,8 +270,66 @@ export default function InitiativeDetailPage(): JSX.Element {
           >
             Print
           </Button>
+          {canManage ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  className="min-h-10"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`${initiativeNoun} actions`}
+                >
+                  <Ellipsis className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="size-4" />
+                  Delete {initiativeNoun.toLowerCase()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
       </div>
+
+      <ConfirmDeleteDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(next) => {
+          // Clear any prior failure so a stale message never shows on reopen.
+          deleteInitiative.reset();
+          setConfirmDeleteOpen(next);
+        }}
+        title={`Delete this ${initiativeNoun.toLowerCase()}?`}
+        description={
+          <>
+            This permanently deletes &ldquo;{detail.name}&rdquo; and unlinks any connected work from
+            it. The linked projects and programs themselves are kept. This can&rsquo;t be undone.
+          </>
+        }
+        error={
+          deleteInitiative.error
+            ? userErrorMessage(
+                deleteInitiative.error,
+                `Could not delete this ${initiativeNoun.toLowerCase()}.`,
+              )
+            : null
+        }
+        confirmLabel={`Delete ${initiativeNoun.toLowerCase()}`}
+        pending={deleteInitiative.isPending}
+        onConfirm={() => {
+          deleteInitiative.mutate(undefined, {
+            onSuccess: () => {
+              setConfirmDeleteOpen(false);
+            },
+          });
+        }}
+      />
 
       <header className="max-w-4xl">
         <div className="mb-3">

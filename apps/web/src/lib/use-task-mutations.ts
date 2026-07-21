@@ -14,6 +14,7 @@ import {
   type Priority,
   ProgramId,
   ProjectId,
+  type TaskArchived,
   type TaskDetail,
   type TaskOut,
 } from '@docket/types';
@@ -43,10 +44,25 @@ export interface TaskMutations {
   addSubtask: (title: string) => Promise<void>;
   toggleSubtask: (subtaskId: string, done: boolean) => Promise<void>;
   addComment: (body: string) => Promise<void>;
+  /**
+   * Archive (soft-delete) the task. Fires the DELETE mutation and invalidates the org task list;
+   * the caller supplies `onSuccess` to close its confirm dialog and navigate away.
+   */
+  deleteTask: (options?: { onSuccess?: () => void }) => void;
   actionError: string | null;
   propsPending: boolean;
   statusPending: boolean;
   priorityPending: boolean;
+  /** Whether the delete/archive request is in flight (disables the confirm affordance). */
+  deletePending: boolean;
+  /**
+   * User-facing message for a failed delete/archive, or `null` when there is none. Surfaced inside
+   * the confirm dialog so the failure stays visible while the dialog remains open; kept out of
+   * {@link actionError} to avoid double-rendering the same failure in the page header.
+   */
+  deleteError: string | null;
+  /** Clears any prior delete failure so a reopened confirm dialog never shows a stale message. */
+  resetDelete: () => void;
 }
 
 /**
@@ -244,6 +260,15 @@ export function useTaskMutations(
     invalidateKeys: [commentsKey],
   });
 
+  const deleteMutation = useApiMutation<TaskArchived, undefined>({
+    mutationFn: () =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].tasks[':id'].$delete({ param: { orgId, id: taskId } }),
+        'Could not delete this task.',
+      ),
+    invalidateKeys: [queryKeys.tasks(orgId)],
+  });
+
   const setState = useCallback(
     (stateKey: string): Promise<void> => stateMutation.mutateAsync(stateKey).then(() => undefined),
     [stateMutation],
@@ -272,6 +297,15 @@ export function useTaskMutations(
     (body: string): Promise<void> => commentMutation.mutateAsync(body).then(() => undefined),
     [commentMutation],
   );
+  const deleteTask = useCallback(
+    (options?: { onSuccess?: () => void }): void => {
+      deleteMutation.mutate(undefined, options);
+    },
+    [deleteMutation],
+  );
+  const resetDelete = useCallback((): void => {
+    deleteMutation.reset();
+  }, [deleteMutation]);
 
   const actionError = patchMutation.error
     ? userErrorMessage(patchMutation.error, 'Could not update this task.')
@@ -287,6 +321,10 @@ export function useTaskMutations(
               ? userErrorMessage(commentMutation.error, 'Could not post that comment.')
               : null;
 
+  const deleteError = deleteMutation.error
+    ? userErrorMessage(deleteMutation.error, 'Could not delete this task.')
+    : null;
+
   return {
     setState,
     setPriority,
@@ -294,9 +332,13 @@ export function useTaskMutations(
     addSubtask,
     toggleSubtask,
     addComment,
+    deleteTask,
+    resetDelete,
     actionError,
     propsPending: patchMutation.isPending,
     statusPending: stateMutation.isPending,
     priorityPending: priorityMutation.isPending,
+    deletePending: deleteMutation.isPending,
+    deleteError,
   };
 }

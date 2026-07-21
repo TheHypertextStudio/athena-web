@@ -9,11 +9,21 @@ import {
   type PickerOption,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Separator, Skeleton } from '@docket/ui/primitives';
+import { Ellipsis, Trash2 } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Separator,
+  Skeleton,
+} from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useMemo } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
@@ -75,11 +85,17 @@ export default function TaskDetailPage(): JSX.Element {
     patchTask,
     addSubtask,
     toggleSubtask,
+    deleteTask,
+    resetDelete,
     actionError,
     propsPending,
     statusPending,
     priorityPending,
+    deletePending,
+    deleteError,
   } = useTaskMutations(orgId, taskId, detailKey, detailKey);
+
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const resolveActor = useCallback(
     (actorId: string | null | undefined): TaskFeedActor => {
@@ -103,6 +119,7 @@ export default function TaskDetailPage(): JSX.Element {
   );
 
   const canEdit = useOrgCapability(members, roles, 'contribute');
+  const canManage = useOrgCapability(members, roles, 'manage');
   const memberOptions = useMemo<readonly PickerOption[]>(
     () => memberActorOptions(members),
     [members],
@@ -132,6 +149,15 @@ export default function TaskDetailPage(): JSX.Element {
       router.push(`/orgs/${orgId}/tasks/${id}`);
     },
     [router, orgId],
+  );
+
+  const changeConfirmDeleteOpen = useCallback(
+    (open: boolean): void => {
+      // Clear any prior failure so a reopened dialog never shows a stale error.
+      resetDelete();
+      setConfirmDeleteOpen(open);
+    },
+    [resetDelete],
   );
 
   if (isPending) {
@@ -232,6 +258,31 @@ export default function TaskDetailPage(): JSX.Element {
             readOnly={!canEdit}
             disabled={propsPending}
           />
+          {canManage ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="ml-auto h-8 w-8"
+                  aria-label="Task actions"
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    changeConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete task
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </div>
 
         {actionError ? (
@@ -302,6 +353,24 @@ export default function TaskDetailPage(): JSX.Element {
           onPatch={patchTask}
         />
       </div>
+
+      <ConfirmDeleteDialog
+        open={confirmDeleteOpen}
+        onOpenChange={changeConfirmDeleteOpen}
+        title="Delete this task?"
+        description="This removes the task from your lists and boards, along with its subtasks and dependency links. You can't undo this."
+        confirmLabel="Delete task"
+        pending={deletePending}
+        error={deleteError}
+        onConfirm={() => {
+          deleteTask({
+            onSuccess: () => {
+              setConfirmDeleteOpen(false);
+              router.push(`/orgs/${orgId}/my-work`);
+            },
+          });
+        }}
+      />
     </div>
   );
 }

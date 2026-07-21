@@ -3,10 +3,19 @@
 import type { ProgramWorkOut, UpdateOut } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Skeleton } from '@docket/ui/primitives';
+import { Ellipsis, Trash2 } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Skeleton,
+} from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
+import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EntityDocument } from '@/components/editor/entity-document';
 import {
   DetailPageLayout,
@@ -23,7 +32,7 @@ import { type ResolveActor, UpdatesPanel } from '@/components/programs/updates-p
 import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { stateTypeOf } from '@/lib/work-state';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
@@ -132,6 +141,20 @@ export default function ProgramDetailPage(): JSX.Element {
     useProgramMutations(orgId, programId, programLabel, detailKey, updatesKey);
 
   const canEdit = useOrgCapability(members, roles, 'manage');
+
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const deleteProgram = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].programs[':id'].$delete({ param: { orgId, id: programId } }),
+        `Could not delete this ${programLabel.toLowerCase()}.`,
+      ),
+    invalidateKeys: [queryKeys.programs(orgId)],
+    onSuccess: () => {
+      router.push(`/orgs/${orgId}/programs`);
+    },
+  });
+
   const memberOptions = useMemo<readonly PickerOption[]>(
     () => memberActorOptions(members),
     [members],
@@ -192,6 +215,31 @@ export default function ProgramDetailPage(): JSX.Element {
               <HealthPill health={health} />
             </div>
           </PageHeading>
+          {canEdit ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                  aria-label={`${programLabel} actions`}
+                >
+                  <Ellipsis className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete {programLabel.toLowerCase()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
         </PageHeader>
       }
       aside={
@@ -289,6 +337,34 @@ export default function ProgramDetailPage(): JSX.Element {
           />
         </div>
       ) : null}
+
+      <ConfirmDeleteDialog
+        open={confirmDeleteOpen}
+        onOpenChange={(next) => {
+          // Clear any prior failure so a stale message never shows on reopen.
+          deleteProgram.reset();
+          setConfirmDeleteOpen(next);
+        }}
+        title={`Delete this ${programLabel.toLowerCase()}?`}
+        description={`This permanently removes "${program.name}" and unlinks its projects and work. This can't be undone.`}
+        error={
+          deleteProgram.error
+            ? userErrorMessage(
+                deleteProgram.error,
+                `Could not delete this ${programLabel.toLowerCase()}.`,
+              )
+            : null
+        }
+        confirmLabel={`Delete ${programLabel.toLowerCase()}`}
+        pending={deleteProgram.isPending}
+        onConfirm={() => {
+          deleteProgram.mutate(undefined, {
+            onSuccess: () => {
+              setConfirmDeleteOpen(false);
+            },
+          });
+        }}
+      />
     </DetailPageLayout>
   );
 }

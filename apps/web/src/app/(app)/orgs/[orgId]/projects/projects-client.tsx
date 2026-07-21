@@ -20,6 +20,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { CreateProjectDialog } from '@/components/projects/create-project';
 import { buildProjectCatalog } from '@/components/projects/project-catalog';
@@ -42,6 +43,7 @@ import {
   apiQueryOptions,
 } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
+import { useOrgCapability } from '@/lib/use-org-capability';
 
 /**
  * The dependency canvas (React Flow) is lazy-loaded so its bundle stays out of the list view and
@@ -82,11 +84,17 @@ function ProjectIdentity({
   orgId,
   pending,
   onDisplayChange,
+  canRename,
+  onRename,
+  onOpen,
 }: {
   item: ProjectOverviewItem;
   orgId: string;
   pending: boolean;
   onDisplayChange: (iconKey: EntityDisplayIconKey, colorKey: EntityDisplayColorKey) => void;
+  canRename: boolean;
+  onRename: (projectId: string, name: string) => void;
+  onOpen: (projectId: string) => void;
 }): JSX.Element {
   return (
     <div className="flex min-w-0 items-center gap-3">
@@ -100,15 +108,34 @@ function ProjectIdentity({
         />
       </span>
       <div className="min-w-0">
-        <Link
-          href={`/orgs/${orgId}/projects/${item.id}`}
-          className={cn(
-            'text-on-surface line-clamp-1 text-sm leading-5 font-semibold hover:underline',
-            STRETCHED_LINK,
-          )}
-        >
-          {item.name}
-        </Link>
+        {canRename ? (
+          // Editable rows: the title double-clicks to rename and single-clicks to open. It can't
+          // also be the row's stretched navigation link, so opening comes through onActivate.
+          <EditableTitle
+            value={item.name}
+            onSave={(name) => {
+              onRename(item.id, name);
+            }}
+            canEdit
+            activate="doubleClick"
+            onActivate={() => {
+              onOpen(item.id);
+            }}
+            ariaLabel="Project name"
+            className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold"
+          />
+        ) : (
+          // Read-only rows keep the whole-row stretched navigation link.
+          <Link
+            href={`/orgs/${orgId}/projects/${item.id}`}
+            className={cn(
+              'text-on-surface line-clamp-1 text-sm leading-5 font-semibold hover:underline',
+              STRETCHED_LINK,
+            )}
+          >
+            {item.name}
+          </Link>
+        )}
         {item.summary ? (
           <p className="text-on-surface-variant mt-0.5 line-clamp-2 max-w-[52ch] text-xs leading-4">
             {item.summary}
@@ -125,6 +152,9 @@ function ListLens({
   displayPending,
   onDisplayChange,
   onPrefetch,
+  canRename,
+  onRename,
+  onOpen,
 }: {
   rows: readonly ProjectOverviewItem[];
   orgId: string;
@@ -135,6 +165,9 @@ function ListLens({
     colorKey: EntityDisplayColorKey,
   ) => void;
   onPrefetch: (projectId: string) => void;
+  canRename: boolean;
+  onRename: (projectId: string, name: string) => void;
+  onOpen: (projectId: string) => void;
 }): JSX.Element {
   return (
     <div className="overflow-x-auto overscroll-x-contain pb-1">
@@ -181,6 +214,9 @@ function ListLens({
                   onDisplayChange={(iconKey, colorKey) => {
                     onDisplayChange(item.id, iconKey, colorKey);
                   }}
+                  canRename={canRename}
+                  onRename={onRename}
+                  onOpen={onOpen}
                 />
               </div>
               <div role="gridcell" className="px-3">
@@ -320,8 +356,19 @@ export default function ProjectsListClient(): JSX.Element {
       'Could not load members.',
     ),
   );
+  const rolesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+    ),
+  );
   const projects = useMemo(() => overviewQ.data?.items ?? [], [overviewQ.data]);
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const roles = useMemo(() => rolesQ.data?.items ?? [], [rolesQ.data]);
+  // A Project PATCH requires `contribute` server-side, so the inline-rename affordance is gated on
+  // that same capability (the server still enforces it regardless).
+  const canRename = useOrgCapability(members, roles, 'contribute');
   const leadNameById = useMemo(
     () => new Map<string, string>(members.map((member) => [member.actorId, member.displayName])),
     [members],
@@ -392,6 +439,19 @@ export default function ProjectsListClient(): JSX.Element {
       if (context?.previous)
         queryClient.setQueryData([...queryKeys.projects(orgId), 'overview'], context.previous);
     },
+    invalidateKeys: [[...queryKeys.projects(orgId), 'overview']],
+  });
+
+  const renameMutation = useApiMutation<ProjectOut, { projectId: string; name: string }>({
+    mutationFn: ({ projectId, name }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].$patch({
+            param: { orgId, id: projectId },
+            json: { name },
+          }),
+        `Could not rename this ${projectNoun.toLowerCase()}.`,
+      ),
     invalidateKeys: [[...queryKeys.projects(orgId), 'overview']],
   });
 
@@ -516,6 +576,13 @@ export default function ProjectsListClient(): JSX.Element {
               }}
               onPrefetch={(projectId) => {
                 prefetch(projectDetailDef(orgId, projectId));
+              }}
+              canRename={canRename}
+              onRename={(projectId, name) => {
+                renameMutation.mutate({ projectId, name });
+              }}
+              onOpen={(projectId) => {
+                router.push(`/orgs/${orgId}/projects/${projectId}`);
               }}
             />
           ) : lens === 'dependencies' ? (

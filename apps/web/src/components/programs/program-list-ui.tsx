@@ -6,6 +6,7 @@ import { FolderKanban, ListChecks } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import {
   HealthDot,
   ProgramStatusBadge,
@@ -30,6 +31,10 @@ export interface ProgramRowsProps {
   taskNounPlural: string;
   ariaLabel: string;
   onOpen: (programId: string) => void;
+  /** Whether the viewer may rename a program in place (double-click the title). */
+  canRename?: boolean;
+  /** Persist a renamed program name. Enables inline rename when provided with `canRename`. */
+  onRename?: (programId: string, name: string) => void;
 }
 
 /** A tonal {@link EntityList} of program rows (shared by the flat + grouped renders). */
@@ -41,6 +46,8 @@ export function ProgramRows({
   taskNounPlural,
   ariaLabel,
   onOpen,
+  canRename,
+  onRename,
 }: ProgramRowsProps): JSX.Element {
   return (
     <EntityList aria-label={ariaLabel} tone="tonal">
@@ -56,7 +63,25 @@ export function ProgramRows({
                 label={STATUS_LABEL[program.status]}
               />
             }
-            title={program.name}
+            title={
+              canRename && onRename ? (
+                <EditableTitle
+                  value={program.name}
+                  onSave={(name) => {
+                    onRename(program.id, name);
+                  }}
+                  canEdit
+                  activate="doubleClick"
+                  onActivate={() => {
+                    onOpen(program.id);
+                  }}
+                  ariaLabel="Program name"
+                  className="text-on-surface truncate"
+                />
+              ) : (
+                program.name
+              )
+            }
             onActivate={() => {
               onOpen(program.id);
             }}

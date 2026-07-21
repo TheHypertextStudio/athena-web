@@ -5,6 +5,7 @@ import type {
   EntityDisplayIconKey,
   EntityDisplayOut,
   InitiativeAttentionItem,
+  InitiativeOut,
   InitiativeOverviewItem,
   InitiativeOverviewOut,
 } from '@docket/types';
@@ -18,6 +19,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
@@ -32,9 +34,18 @@ import {
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
-import { queryKeys, unwrap, useApiMutation, useApiQuery, usePrefetchApi } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  unwrap,
+  useApiListQuery,
+  useApiMutation,
+  useApiQuery,
+  usePrefetchApi,
+} from '@/lib/query';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { userErrorMessage } from '@/lib/problem';
+import { useOrgCapability } from '@/lib/use-org-capability';
 
 const STATUS_LABEL = {
   proposed: 'Proposed',
@@ -255,6 +266,40 @@ export default function InitiativesListClient(): JSX.Element {
   const overview = useApiQuery(initiativeOverviewDef(orgId));
   const data: InitiativeOverviewOut | undefined = overview.data;
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
+
+  // Members + roles resolve whether the caller can rename an initiative inline. An Initiative PATCH
+  // requires `contribute` server-side, so the affordance is gated on that same capability (the
+  // server still enforces it regardless); cross-workspace reference rows stay read-only.
+  const membersQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
+  );
+  const rolesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+    ),
+  );
+  const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const roles = useMemo(() => rolesQ.data?.items ?? [], [rolesQ.data]);
+  const canContribute = useOrgCapability(members, roles, 'contribute');
+
+  const renameInitiative = useApiMutation<InitiativeOut, { id: string; name: string }>({
+    mutationFn: ({ id, name }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id'].$patch({
+            param: { orgId, id },
+            json: { name },
+          }),
+        `Could not rename this ${initiativeNoun.toLowerCase()}.`,
+      ),
+    invalidateKeys: [overviewKey],
+  });
   const displayMutation = useApiMutation<
     EntityDisplayOut,
     { initiativeId: string; iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey },
@@ -686,15 +731,33 @@ export default function InitiativesListClient(): JSX.Element {
                           />
                           <div className="ml-3 min-w-0 pt-0.5">
                             <div className="flex min-w-0 items-center">
-                              <Link
-                                href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
-                                title={item.name}
-                                // The row owns dragging; keep the anchor from starting a link-drag.
-                                draggable={false}
-                                className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold hover:underline"
-                              >
-                                {item.name}
-                              </Link>
+                              {canReparent && canContribute ? (
+                                <EditableTitle
+                                  value={item.name}
+                                  onSave={(name) => {
+                                    renameInitiative.mutate({ id: item.id, name });
+                                  }}
+                                  canEdit
+                                  activate="doubleClick"
+                                  onActivate={() => {
+                                    router.push(
+                                      `/orgs/${item.organizationId}/initiatives/${item.id}`,
+                                    );
+                                  }}
+                                  ariaLabel="Initiative name"
+                                  className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
+                                />
+                              ) : (
+                                <Link
+                                  href={`/orgs/${item.organizationId}/initiatives/${item.id}`}
+                                  title={item.name}
+                                  // The row owns dragging; keep the anchor from starting a link-drag.
+                                  draggable={false}
+                                  className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold hover:underline"
+                                >
+                                  {item.name}
+                                </Link>
+                              )}
                               {item.organizationId !== orgId ? (
                                 <Badge className="ml-2 shrink-0" variant="outline">
                                   {item.organizationName}

@@ -28,7 +28,7 @@ import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { RefreshCw } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -41,8 +41,17 @@ import { useViewState } from '@/components/views/use-view-state';
 import { isEmptyViewState } from '@/components/views/view-state-url';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
 import { fetchCyclesWithStats } from '@/lib/fetch-cycles-with-stats';
-import { apiQueryOptions, queryKeys, useApiListQuery, usePrefetchApi } from '@/lib/query';
+import { api } from '@/lib/api';
+import {
+  apiQueryOptions,
+  queryKeys,
+  unwrap,
+  useApiListQuery,
+  useApiMutation,
+  usePrefetchApi,
+} from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
+import { useOrgCapability } from '@/lib/use-org-capability';
 
 /** The default view applied when the URL carries none: group by status (the legacy segments). */
 const DEFAULT_VIEW: ViewState = {
@@ -64,6 +73,7 @@ export default function CyclesClient(): JSX.Element {
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
   const prefetch = usePrefetchApi();
+  const router = useRouter();
 
   const { teams } = useActiveOrg();
 
@@ -83,6 +93,36 @@ export default function CyclesClient(): JSX.Element {
       'Could not load your cycles.',
     ),
   );
+
+  // Members + roles resolve whether the caller can rename a cycle inline. A Cycle PATCH requires
+  // `contribute` server-side, so the affordance is gated on that same capability (the server still
+  // enforces it regardless).
+  const membersQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load members.',
+    ),
+  );
+  const rolesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+    ),
+  );
+  const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const roles = useMemo(() => rolesQ.data?.items ?? [], [rolesQ.data]);
+  const canRename = useOrgCapability(members, roles, 'contribute');
+
+  const renameCycle = useApiMutation<CycleOut, { id: string; name: string }>({
+    mutationFn: ({ id, name }) =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].cycles[':id'].$patch({ param: { orgId, id }, json: { name } }),
+        `Could not rename this ${cycleNoun.toLowerCase()}.`,
+      ),
+    invalidateKeys: [queryKeys.cycles(orgId)],
+  });
 
   // react-query keeps `data` referentially stable, so these read straight off it; the frozen
   // empties keep the fallbacks stable too — no useMemo needed.
@@ -134,9 +174,16 @@ export default function CyclesClient(): JSX.Element {
         onPrefetch={() => {
           prefetch(cycleDetailDef(orgId, cycle.id));
         }}
+        canRename={canRename}
+        onRename={(id, name) => {
+          renameCycle.mutate({ id, name });
+        }}
+        onOpen={() => {
+          router.push(`/orgs/${orgId}/cycles/${cycle.id}`);
+        }}
       />
     ),
-    [cycleNoun, orgId, statsById, prefetch],
+    [cycleNoun, orgId, statsById, prefetch, canRename, renameCycle, router],
   );
 
   return (

@@ -20,8 +20,9 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
+import { useOrgCapability } from '@/lib/use-org-capability';
 
 /**
  * The org Programs list — the roster of ongoing operational lines of work (§8.4), as dense rows.
@@ -96,11 +97,34 @@ export default function ProgramsListClient(): JSX.Element {
       'Could not load members.',
     ),
   );
+  const rolesQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+    ),
+  );
 
   const programs = useMemo(() => programsQ.data?.items ?? [], [programsQ.data]);
   const projects = useMemo(() => projectsQ.data?.items ?? [], [projectsQ.data]);
   const tasks = useMemo(() => tasksQ.data?.items ?? [], [tasksQ.data]);
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
+  const roles = useMemo(() => rolesQ.data?.items ?? [], [rolesQ.data]);
+
+  // A Program PATCH requires `manage` server-side (see the capability guard on the programs
+  // router), so the inline-rename affordance is gated on that same capability — the server still
+  // enforces it regardless, so this is purely a UX gate.
+  const canRename = useOrgCapability(members, roles, 'manage');
+
+  const renameProgram = useApiMutation<ProgramOut, { id: string; name: string }>({
+    mutationFn: ({ id, name }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].programs[':id'].$patch({ param: { orgId, id }, json: { name } }),
+        `Could not rename this ${programLabel.toLowerCase()}.`,
+      ),
+    invalidateKeys: [queryKeys.programs(orgId)],
+  });
 
   const loading = programsQ.isPending;
   const loadError = programsQ.isError
@@ -266,6 +290,10 @@ export default function ProgramsListClient(): JSX.Element {
                 onOpen={(id) => {
                   router.push(`/orgs/${orgId}/programs/${id}`);
                 }}
+                canRename={canRename}
+                onRename={(id, name) => {
+                  renameProgram.mutate({ id, name });
+                }}
               />
             </section>
           ))}
@@ -280,6 +308,10 @@ export default function ProgramsListClient(): JSX.Element {
           ariaLabel={programsLabel}
           onOpen={(id) => {
             router.push(`/orgs/${orgId}/programs/${id}`);
+          }}
+          canRename={canRename}
+          onRename={(id, name) => {
+            renameProgram.mutate({ id, name });
           }}
         />
       )}

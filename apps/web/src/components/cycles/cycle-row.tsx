@@ -20,6 +20,8 @@ import { Badge, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
+
 import { formatWindow } from './format-window';
 import { STATUS_LABEL, statusBadgeVariant, statusGlyphType } from './cycle-status';
 
@@ -35,6 +37,12 @@ export interface CycleRowProps {
   href: string;
   /** Warm the cycle-detail cache on hover/focus so the row opens instantly (prefetch-on-intent). */
   onPrefetch?: () => void;
+  /** Whether the viewer may rename this cycle in place (double-click the title). */
+  canRename?: boolean;
+  /** Persist a renamed cycle name. Enables inline rename when provided with `canRename`. */
+  onRename?: (cycleId: string, name: string) => void;
+  /** Open the cycle — used by the inline title so a single click still navigates. */
+  onOpen?: () => void;
 }
 
 /**
@@ -51,8 +59,12 @@ export function CycleRow({
   cycleNoun,
   href,
   onPrefetch,
+  canRename,
+  onRename,
+  onOpen,
 }: CycleRowProps): JSX.Element {
-  const title = cycle.name ?? `${cycleNoun} ${String(cycle.number)}`;
+  const numberLabel = `${cycleNoun} ${String(cycle.number)}`;
+  const title = cycle.name ?? numberLabel;
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 
@@ -77,7 +89,22 @@ export function CycleRow({
       }
       title={
         <span className="flex min-w-0 items-center gap-2">
-          <span className="text-on-surface truncate font-medium">{title}</span>
+          {canRename && onRename ? (
+            <EditableTitle
+              value={cycle.name ?? ''}
+              onSave={(name) => {
+                onRename(cycle.id, name);
+              }}
+              canEdit
+              activate="doubleClick"
+              {...(onOpen ? { onActivate: onOpen } : {})}
+              ariaLabel="Cycle name"
+              placeholder={numberLabel}
+              className="text-on-surface truncate font-medium"
+            />
+          ) : (
+            <span className="text-on-surface truncate font-medium">{title}</span>
+          )}
           {cycle.name ? (
             <span className="text-on-surface-variant shrink-0 text-xs font-normal tabular-nums">
               {cycleNoun} {cycle.number}

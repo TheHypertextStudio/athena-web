@@ -3,8 +3,10 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import { driveSession } from '../agent/loop';
+import { loadTranscript, saveTranscript } from '../agent/transcript';
 import { ensureDefaultAgent } from '../lib/default-agent';
 
+import { loadSession } from './agent-session-helpers';
 import type { SessionRow } from './agent-session-helpers';
 
 /**
@@ -138,5 +140,64 @@ export async function createSessionFromObservation(
  * @returns the settled session row.
  */
 export async function runSession(orgId: string, sessionId: string): Promise<SessionRow> {
+  return driveSession(orgId, sessionId);
+}
+
+/**
+ * Append a human reply to an already-open session and resume the agentic loop to
+ * answer it.
+ *
+ * @remarks
+ * The shared "human replied, keep the turn going" sequence. It exists as its own
+ * function because more than one door lands a human message on an existing session
+ * and then wants the identical resume behavior — today the chat thread
+ * (`POST /chat/messages`); a future front door that relays a reply from an external
+ * conversation surface back onto its mirrored Docket session is expected to reuse it
+ * too, which is why `actorId` is nullable (an external reply's author may not yet
+ * resolve to a Docket identity).
+ *
+ * The reply lands as a visible `response` activity tagged `author: 'user'` — the
+ * load-bearing marker downstream consumers use to tell a human (not the agent) wrote
+ * it — AND as the next user turn of the durable transcript, so the loop resumes from
+ * the exact conversation a human would see. A session is never "done" from a reply's
+ * perspective: any non-`pending`/`running` status (parked or terminal) is nudged back
+ * to `running` first so {@link driveSession} accepts it instead of conflicting.
+ *
+ * `actorId` is not read by this sequence today — nothing it writes has an actor-id
+ * column — but is threaded through the signature so every caller can pass what it
+ * actually knows about the reply's author without a later signature change.
+ *
+ * @param orgId - The active organization id.
+ * @param sessionId - The org-scoped session to reply to and resume.
+ * @param actorId - The reply's human author, or `null` when the caller cannot resolve one.
+ * @param text - The reply's freeform text.
+ * @returns the settled session row after the loop runs.
+ * @throws {NotFoundError} When the session is not found in the org.
+ */
+export async function postReplyAndResume(
+  orgId: string,
+  sessionId: string,
+  actorId: string | null,
+  text: string,
+): Promise<SessionRow> {
+  const session = await loadSession(orgId, sessionId);
+
+  await db.insert(sessionActivity).values({
+    sessionId,
+    organizationId: orgId,
+    type: 'response',
+    body: { text, author: 'user' },
+  });
+  const messages = await loadTranscript(db, sessionId);
+  await saveTranscript(db, sessionId, orgId, [
+    ...messages,
+    { role: 'user', content: [{ type: 'text', text }] },
+  ]);
+  // A session is never "done" from a reply's perspective: terminal statuses just mean
+  // idle, so a new message re-opens it for the loop (pending stays pending — first run
+  // gates entitlement there).
+  if (session.status !== 'pending' && session.status !== 'running') {
+    await db.update(agentSession).set({ status: 'running' }).where(eq(agentSession.id, sessionId));
+  }
   return driveSession(orgId, sessionId);
 }

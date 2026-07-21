@@ -34,12 +34,12 @@ import {
   transitionLifecycle,
   loadActivity,
 } from './agent-session-helpers';
-import { createAndRunFromPrompt, runSession } from './agent-session-runner';
+import { createAndRunFromPrompt, postReplyAndResume, runSession } from './agent-session-runner';
 import { replyToElicitation, resolveAction } from './agent-session-approval';
 import { approveAndResume, approveGroupAndResume, driveSession } from '../agent/loop';
 import { ensureDefaultAgent } from '../lib/default-agent';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
-import { loadTranscript, saveTranscript } from '../agent/transcript';
+import { loadTranscript } from '../agent/transcript';
 
 /**
  * Get — or lazily create — the org's ONE persistent chat session (`kind: 'chat'`),
@@ -172,28 +172,7 @@ Side effects: dispatches the agent against the runtime; each yielded activity (t
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
       const session = await getOrCreateChatSession(orgId, actorId);
-
-      await db.insert(sessionActivity).values({
-        sessionId: session.id,
-        organizationId: orgId,
-        type: 'response',
-        body: { text: body.body, author: 'user' },
-      });
-      const messages = await loadTranscript(db, session.id);
-      await saveTranscript(db, session.id, orgId, [
-        ...messages,
-        { role: 'user', content: [{ type: 'text', text: body.body }] },
-      ]);
-      // A chat thread is never "done": terminal statuses just mean idle, so a new
-      // message re-opens it for the loop (pending stays pending — first run gates
-      // entitlement there).
-      if (session.status !== 'pending' && session.status !== 'running') {
-        await db
-          .update(agentSession)
-          .set({ status: 'running' })
-          .where(eq(agentSession.id, session.id));
-      }
-      const settled = await driveSession(orgId, session.id);
+      const settled = await postReplyAndResume(orgId, session.id, actorId, body.body);
 
       const activities = await db
         .select()

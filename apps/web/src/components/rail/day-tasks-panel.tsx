@@ -16,6 +16,7 @@
  */
 import type { HubTaskItem } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
+import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -92,7 +93,7 @@ function DayTaskRow({
           title: task.title,
         });
       }}
-      className="bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className={`${DRAGGABLE} bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
     >
       <StatusIcon type={stateTypeOf(task.state)} />
       {canEdit ? (

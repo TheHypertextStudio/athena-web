@@ -11,6 +11,7 @@
     "./lib/utils": "./src/lib/utils.ts",
     "./lib/org-accent": "./src/lib/org-accent.ts",
     "./lib/stretched-link": "./src/lib/stretched-link.ts",
+    "./lib/draggable": "./src/lib/draggable.ts",
     "./primitives": "./src/primitives/index.ts",
     "./icons": "./src/icons/index.ts",
     "./components": "./src/components/index.ts",

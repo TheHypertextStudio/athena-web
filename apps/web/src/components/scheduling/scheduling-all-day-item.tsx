@@ -1,5 +1,6 @@
 'use client';
 
+import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
 
 import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
@@ -93,10 +94,10 @@ export function SchedulingAllDayItem({
     <div
       className={
         dropActive
-          ? `ring-primary bg-primary-container group relative flex max-w-full items-center rounded ring-2 ${edgePadding}`
+          ? `${DRAGGABLE} ring-primary bg-primary-container group relative flex max-w-full items-center rounded ring-2 ${edgePadding}`
           : gesture.preview
-            ? `border-primary bg-primary-container ring-primary/40 group relative z-40 flex max-w-full items-center rounded border shadow-lg ring-2 ${edgePadding}`
-            : `bg-secondary-container group relative flex max-w-full items-center rounded ${edgePadding}`
+            ? `${DRAGGABLE} border-primary bg-primary-container ring-primary/40 group relative z-40 flex max-w-full items-center rounded border shadow-lg ring-2 ${edgePadding}`
+            : `${DRAGGABLE} bg-secondary-container group relative flex max-w-full items-center rounded ${edgePadding}`
       }
       data-schedule-all-day-item={item.id}
       data-schedule-all-day-preview={gesture.preview ? gesture.previewMode : undefined}

@@ -13,6 +13,7 @@
  */
 import type { Priority, TaskOut } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
+import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -183,7 +184,7 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
           title: task.title,
         });
       }}
-      className="hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className={`${DRAGGABLE} hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
     >
       <StatusIcon type={stateTypeOf(task.state)} />
       {canEdit ? (

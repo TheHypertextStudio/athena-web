@@ -2,6 +2,8 @@
 
 import type { JSX, ReactNode } from 'react';
 
+import { DRAGGABLE } from '@docket/ui/lib/draggable';
+
 import { writeScheduleDragObject } from './scheduling-drag-object';
 import type { ScheduleDragObject, ScheduleItem, ScheduleLane } from './scheduling-types';
 import type { SchedulingRelationshipMode } from './use-scheduling-relationship-mode';
@@ -38,7 +40,7 @@ export function SchedulingRelationshipSourceControl({
           : `Drag ${item.title} to create a relationship`
       }
       aria-pressed={mode.enabled ? active : undefined}
-      className={`${className} ${active ? activeClassName : inactiveClassName}`}
+      className={`${DRAGGABLE} ${className} ${active ? activeClassName : inactiveClassName}`}
       onPointerDown={(event) => {
         event.stopPropagation();
       }}

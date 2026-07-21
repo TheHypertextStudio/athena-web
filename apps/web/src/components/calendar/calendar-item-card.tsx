@@ -36,6 +36,7 @@ import {
   TaskAlt,
   XCircle,
 } from '@docket/ui/icons';
+import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type PointerEvent as ReactPointerEvent } from 'react';
 
@@ -166,6 +167,7 @@ export default function CalendarItemCard({
     <div
       style={{ viewTransitionName: calendarItemTransitionName(item.id) }}
       className={cn(
+        DRAGGABLE,
         'border-outline-variant bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
         block ? 'py-2' : 'py-1.5',
         item.hasConflict && 'border-destructive',

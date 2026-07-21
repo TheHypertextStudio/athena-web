@@ -1,5 +1,6 @@
 'use client';
 
+import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
 
 import {
@@ -160,13 +161,13 @@ export function SchedulingItemCard({
 
   return (
     <article
-      className={
+      className={`${DRAGGABLE} ${
         dropActive
           ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-visible rounded-md border shadow-md ring-2'
           : gesture.preview
             ? 'border-primary bg-surface-container-low ring-primary/35 group absolute z-40 overflow-visible rounded-md border shadow-lg ring-2 transition-[box-shadow,transform] motion-reduce:transition-none'
             : 'border-l-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border-l shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-reduce:transition-none'
-      }
+      }`}
       data-item-density={density}
       data-layout-column={placement.columnIndex}
       data-layout-column-count={placement.columnCount}

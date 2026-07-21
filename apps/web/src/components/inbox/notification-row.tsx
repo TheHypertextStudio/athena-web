@@ -20,6 +20,7 @@
 import { notificationDeliveryHintsFromBody } from '@docket/notifications';
 import type { NotificationOut } from '@docket/types';
 import { Check, Mail, MessageSquare } from '@docket/ui/icons';
+import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
@@ -68,7 +69,7 @@ export function NotificationRow({
   return (
     <div
       className={cn(
-        'border-outline-variant flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors',
+        'border-outline-variant relative flex items-start gap-3 rounded-lg border px-3 py-3 transition-colors',
         unread ? 'bg-surface-container-low' : 'bg-transparent',
       )}
     >
@@ -142,6 +143,7 @@ export function NotificationRow({
           {approval ? (
             <Button
               size="sm"
+              className="relative z-10"
               disabled={pending}
               onClick={() => {
                 onApprove(notification.id);
@@ -153,6 +155,7 @@ export function NotificationRow({
           <Button
             variant="ghost"
             size="sm"
+            className="relative z-10"
             disabled={pending}
             aria-label="Mark read"
             title="Mark read"
@@ -197,7 +200,10 @@ function TitleLine({ href, children }: { href: string | null; children: ReactNod
   return (
     <Link
       href={href}
-      className="focus-visible:ring-ring block min-w-0 truncate rounded-sm transition-colors hover:underline focus-visible:ring-2 focus-visible:outline-none"
+      className={cn(
+        'focus-visible:ring-ring block min-w-0 truncate rounded-sm transition-colors hover:underline focus-visible:ring-2 focus-visible:outline-none',
+        STRETCHED_LINK,
+      )}
     >
       {children}
     </Link>

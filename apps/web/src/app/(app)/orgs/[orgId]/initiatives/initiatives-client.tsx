@@ -16,7 +16,7 @@ import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
 import { formatDate } from '@/components/initiatives/format-date';
@@ -249,6 +249,9 @@ export default function InitiativesListClient(): JSX.Element {
   // The initiative currently being dragged, and the row it is hovering as a drop (nest) target.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+  // Set while a drag is in flight so the click some browsers synthesize after a drop does not
+  // trigger row navigation; cleared on the next tick after the drag ends.
+  const dragOccurredRef = useRef(false);
   const overview = useApiQuery(initiativeOverviewDef(orgId));
   const data: InitiativeOverviewOut | undefined = overview.data;
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
@@ -609,9 +612,18 @@ export default function InitiativesListClient(): JSX.Element {
                       aria-level={item.depth}
                       aria-rowindex={rowIndex + 1}
                       draggable={canReparent}
-                      className={`grid h-[72px] grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
+                      className={`grid h-[72px] cursor-pointer grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
                       onMouseEnter={() => {
                         prefetch(initiativeDetailDef(item.organizationId, item.id));
+                      }}
+                      onClick={(event) => {
+                        // The name Link owns real-link semantics (new-tab, focus). This row-level
+                        // click is a mouse convenience: skip it when the click landed on an
+                        // interactive control (icon picker button, the name anchor, any button) or
+                        // when a drag just finished.
+                        if (dragOccurredRef.current) return;
+                        if ((event.target as HTMLElement).closest('a, button')) return;
+                        router.push(`/orgs/${item.organizationId}/initiatives/${item.id}`);
                       }}
                       onDragStart={(event) => {
                         if (!canReparent) return;
@@ -620,11 +632,18 @@ export default function InitiativesListClient(): JSX.Element {
                           parentInitiativeId: item.parentInitiativeId,
                           parentLinkId: item.parentLinkId,
                         });
+                        dragOccurredRef.current = true;
                         setDraggingId(item.id);
                       }}
                       onDragEnd={() => {
                         setDraggingId(null);
                         setDropTargetId(null);
+                        // Clear on the next tick so the post-drop synthesized click (dispatched
+                        // before this macrotask) is still suppressed, while later genuine clicks
+                        // navigate normally.
+                        window.setTimeout(() => {
+                          dragOccurredRef.current = false;
+                        }, 0);
                       }}
                       onDragOver={(event) => {
                         if (!isValidDropTarget) return;

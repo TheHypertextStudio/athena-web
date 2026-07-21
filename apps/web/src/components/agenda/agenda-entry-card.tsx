@@ -24,6 +24,7 @@ import {
   TaskAlt,
 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
+import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import Link from 'next/link';
 import { type JSX, useRef } from 'react';
 
@@ -154,7 +155,7 @@ export default function AgendaEntryCard({
     <div
       style={{ viewTransitionName: agendaEntryTransitionName(entry.id) }}
       className={cn(
-        'bg-surface-container-low hover:bg-surface-container flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
+        'bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
         entry.done && 'opacity-60',
       )}
     >
@@ -165,7 +166,7 @@ export default function AgendaEntryCard({
           aria-pressed={entry.done}
           aria-label={entry.done ? 'Mark not done' : 'Mark done'}
           onClick={onToggle}
-          className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring mt-0.5 shrink-0 rounded-full transition-[color,transform] duration-(--dur-fast) hover:scale-110 focus-visible:ring-2 focus-visible:outline-none active:scale-90 [&_svg]:size-4"
+          className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring relative z-10 mt-0.5 shrink-0 rounded-full transition-[color,transform] duration-(--dur-fast) hover:scale-110 focus-visible:ring-2 focus-visible:outline-none active:scale-90 [&_svg]:size-4"
         >
           {entry.done ? <CheckCircle2 className="text-primary" /> : <Circle />}
         </button>
@@ -189,6 +190,7 @@ export default function AgendaEntryCard({
           href={`/orgs/${taskOrgId}/tasks/${taskId}`}
           className={cn(
             'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm focus-visible:ring-2 focus-visible:outline-none',
+            STRETCHED_LINK,
             block ? 'flex-col gap-0.5' : 'flex-row items-start gap-3',
           )}
         >
@@ -226,7 +228,11 @@ export default function AgendaEntryCard({
           {content}
         </div>
       )}
-      {entry.planItemId && isTask ? <AgendaEntryActions entry={entry} /> : null}
+      {entry.planItemId && isTask ? (
+        <span className="relative z-10 flex shrink-0">
+          <AgendaEntryActions entry={entry} />
+        </span>
+      ) : null}
     </div>
   );
 }

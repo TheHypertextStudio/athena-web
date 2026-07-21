@@ -11,6 +11,8 @@ import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ArrowRight, FolderKanban, GanttChart, ListView, Plus, Workflow } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -77,17 +79,22 @@ function ProjectIdentity({
 }): JSX.Element {
   return (
     <div className="flex min-w-0 items-center gap-3">
-      <InitiativeIconPicker
-        display={item.display}
-        initiativeName={item.name}
-        editable
-        pending={pending}
-        onChange={onDisplayChange}
-      />
+      <span className="relative z-10 shrink-0">
+        <InitiativeIconPicker
+          display={item.display}
+          initiativeName={item.name}
+          editable
+          pending={pending}
+          onChange={onDisplayChange}
+        />
+      </span>
       <div className="min-w-0">
         <Link
           href={`/orgs/${orgId}/projects/${item.id}`}
-          className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold hover:underline"
+          className={cn(
+            'text-on-surface line-clamp-1 text-sm leading-5 font-semibold hover:underline',
+            STRETCHED_LINK,
+          )}
         >
           {item.name}
         </Link>
@@ -150,7 +157,7 @@ function ListLens({
             <div
               key={item.id}
               role="row"
-              className="hover:bg-surface-container-high grid min-h-[72px] grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors"
+              className="hover:bg-surface-container-high relative grid min-h-[72px] grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors"
               onMouseEnter={() => {
                 onPrefetch(item.id);
               }}

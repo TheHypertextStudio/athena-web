@@ -12,11 +12,11 @@ import { z } from 'zod';
 import { ActorId, IntegrationId, OrganizationId } from './primitives';
 import { CONNECTOR_PROVIDER_IDS, DIRECTORY_PROVIDER_IDS } from './provider-catalog';
 
-/** Integration pattern: replace (migration) vs complement (connector). */
+/** Integration pattern: replace (migration), complement (connector), or an app-actor front door (agent). */
 export const IntegrationPattern = z
-  .enum(['migration', 'connector'])
+  .enum(['migration', 'connector', 'agent'])
   .describe(
-    'How the integration relates to Docket: `migration` — a one-time **replace**, importing work *into* Docket so Docket becomes the source of truth; `connector` — an ongoing **complement**, mirroring an external tool (read-only, or two-way when `writeBack`) while the source of truth stays partly external.',
+    "How the integration relates to Docket: `migration` — a one-time **replace**, importing work *into* Docket so Docket becomes the source of truth; `connector` — an ongoing **complement**, mirroring an external tool (read-only, or two-way when `writeBack`) while the source of truth stays partly external; `agent` — an installed app-actor front door (e.g. Linear's Agent platform) authenticating as a workspace-level grant rather than a connecting user's token, carrying no `syncMode`/`writeBack` semantics.",
   );
 /** Integration-pattern value. */
 export type IntegrationPattern = z.infer<typeof IntegrationPattern>;

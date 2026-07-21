@@ -91,19 +91,47 @@ export async function dragLocatorToLocator(
 ): Promise<void> {
   await target.scrollIntoViewIfNeeded();
   await source.scrollIntoViewIfNeeded();
-  const [sourceBox, targetBox] = await Promise.all([source.boundingBox(), target.boundingBox()]);
-  if (!sourceBox || !targetBox) throw new Error('Relationship drag has no browser geometry.');
-  const from = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
-  const to = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
-  const activationDelta = {
-    x: Math.min(6, sourceBox.width / 4),
-    y: Math.min(4, sourceBox.height / 4),
-  };
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x + activationDelta.x, from.y + activationDelta.y, { steps: 3 });
-  await page.mouse.move(to.x, to.y, { steps: 12 });
-  await page.mouse.up();
+  const [sourceHandle, targetHandle] = await Promise.all([
+    source.elementHandle(),
+    target.elementHandle(),
+  ]);
+  if (!sourceHandle || !targetHandle) throw new Error('Relationship drag has no browser geometry.');
+  try {
+    // The scheduling relationship drag is native HTML5 drag-and-drop (a `draggable` source that
+    // writes `dataTransfer` on `dragstart`, and a target with `onDragOver`/`onDrop`). Chromium only
+    // synthesizes that sequence from raw mouse moves unreliably — fine locally, but the source of
+    // the CI-only flake where the drop never fired. Drive it deterministically instead: dispatch
+    // the real drag events with one shared `DataTransfer`, exactly as the browser would, so the
+    // source's `onDragStart` payload is the same object the target's `onDrop` reads back.
+    await page.evaluate(
+      ([src, tgt]) => {
+        const dataTransfer = new DataTransfer();
+        const pointOf = (el: Element): { clientX: number; clientY: number } => {
+          const rect = el.getBoundingClientRect();
+          return { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
+        };
+        const fire = (el: Element, type: string, from: Element): void => {
+          el.dispatchEvent(
+            new DragEvent(type, {
+              bubbles: true,
+              cancelable: true,
+              composed: true,
+              dataTransfer,
+              ...pointOf(from),
+            }),
+          );
+        };
+        fire(src, 'dragstart', src);
+        fire(tgt, 'dragenter', tgt);
+        fire(tgt, 'dragover', tgt);
+        fire(tgt, 'drop', tgt);
+        fire(src, 'dragend', tgt);
+      },
+      [sourceHandle, targetHandle] as const,
+    );
+  } finally {
+    await Promise.all([sourceHandle.dispose(), targetHandle.dispose()]);
+  }
 }
 
 /** Return the rendered text/background contrast ratio for one visible element. */

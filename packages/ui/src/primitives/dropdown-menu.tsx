@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * `@docket/ui` — DropdownMenu primitive family (MD3-expressive, shadcn "new-york" lineage).
  *

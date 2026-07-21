@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * `@docket/ui` — ContextMenu primitive family (MD3-expressive, shadcn "new-york" lineage).
  *

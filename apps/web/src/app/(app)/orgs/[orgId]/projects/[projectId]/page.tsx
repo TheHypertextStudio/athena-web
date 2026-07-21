@@ -29,6 +29,7 @@ import { type JSX, useMemo, useState } from 'react';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableFreeformText, FreeformText } from '@/components/editor/freeform-text';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { AgentActivityFeed } from '@/components/project-detail/agent-activity-feed';
@@ -253,8 +254,17 @@ export default function ProjectDetailPage(): JSX.Element {
                 displayMutation.mutate({ iconKey, colorKey });
               }}
             />
-            <h1 className="text-headline-large text-on-surface max-w-[32ch] font-medium">
-              {project.name}
+            <h1 className="max-w-[32ch]">
+              <EditableTitle
+                value={project.name}
+                onSave={(name) => {
+                  patchProject({ name });
+                }}
+                canEdit={canEdit}
+                saving={propsPending}
+                ariaLabel={`${projectNoun} name`}
+                className="text-headline-large text-on-surface font-medium"
+              />
             </h1>
           </div>
           {canDelete ? (

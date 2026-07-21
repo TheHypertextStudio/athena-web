@@ -35,9 +35,11 @@ import {
 } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { EditableFreeformText } from '@/components/editor/freeform-text';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
@@ -90,10 +92,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   );
   const [resourceTitle, setResourceTitle] = useState('');
   const [resourceUrl, setResourceUrl] = useState('');
-  const [editingHeader, setEditingHeader] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const [titleDraft, setTitleDraft] = useState('');
-  const [summaryDraft, setSummaryDraft] = useState('');
   const initiativeNoun = useVocabulary('initiative');
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const programNoun = useVocabulary('program');
@@ -101,12 +100,6 @@ export default function InitiativeDetailPage(): JSX.Element {
   const detailQ = useApiQuery(initiativeDetailDef(orgId, initiativeId));
   const data = detailQ.data;
   const detail = data?.detail;
-  useEffect(() => {
-    if (!detail || editingHeader) return;
-    setTitleDraft(detail.name);
-    setSummaryDraft(detail.summary ?? '');
-  }, [detail, editingHeader]);
-
   const updatesKey = [...queryKeys.initiative(orgId, initiativeId), 'updates'] as const;
   const updatesQ = useApiQuery(
     apiQueryOptions(
@@ -251,18 +244,6 @@ export default function InitiativeDetailPage(): JSX.Element {
           ) : null}
         </nav>
         <div className="flex items-center gap-2">
-          {canEdit ? (
-            <Button
-              className="min-h-10"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setEditingHeader(true);
-              }}
-            >
-              Edit
-            </Button>
-          ) : null}
           <Button
             className="min-h-10"
             variant="ghost"
@@ -336,65 +317,29 @@ export default function InitiativeDetailPage(): JSX.Element {
 
       <header className="max-w-4xl">
         <div className="mb-3">
-          {editingHeader ? (
-            <form
-              className="no-print flex w-full max-w-3xl flex-col gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (!titleDraft.trim()) return;
-                mutations.patchInitiative({
-                  name: titleDraft.trim(),
-                  summary: summaryDraft.trim() || null,
-                });
-                setEditingHeader(false);
+          <h1 className="text-headline-large text-on-surface">
+            <EditableTitle
+              value={detail.name}
+              onSave={(name) => {
+                mutations.patchInitiative({ name });
               }}
-            >
-              <input
-                value={titleDraft}
-                onChange={(event) => {
-                  setTitleDraft(event.target.value);
-                }}
-                aria-label="Initiative title"
-                className="border-outline-variant text-headline-large text-on-surface border-b bg-transparent outline-none"
-              />
-              <textarea
-                value={summaryDraft}
-                onChange={(event) => {
-                  setSummaryDraft(event.target.value.slice(0, 280));
-                }}
-                aria-label="Initiative summary"
-                placeholder="Add a concise strategic summary"
-                rows={2}
-                className="border-outline-variant text-on-surface-variant resize-none border-b bg-transparent text-lg outline-none"
-              />
-              <div className="flex gap-2">
-                <Button size="sm" disabled={mutations.propsPending}>
-                  Save
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setEditingHeader(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          ) : null}
-          <h1
-            className={`${editingHeader ? 'print-only' : ''} text-headline-large text-on-surface`}
-          >
-            {detail.name}
+              canEdit={canEdit}
+              saving={mutations.propsPending}
+              ariaLabel={`${initiativeNoun} name`}
+              className="text-headline-large text-on-surface"
+            />
           </h1>
         </div>
-        {detail.summary ? (
-          <p className="text-on-surface-variant max-w-3xl text-lg leading-relaxed">
-            {detail.summary}
-          </p>
-        ) : null}
+        <EditableFreeformText
+          value={detail.summary}
+          placeholder="Add a concise strategic summary"
+          canEdit={canEdit}
+          saving={mutations.propsPending}
+          onSave={(summary) => {
+            mutations.patchInitiative({ summary });
+          }}
+          className="text-on-surface-variant max-w-3xl text-lg leading-relaxed"
+        />
       </header>
 
       <Separator className="no-print my-6 max-w-4xl" />

@@ -26,6 +26,8 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** The unbranded properties-panel patch surface. */
 export interface ProjectPatch {
+  /** New name. Non-empty; the name cannot be cleared. */
+  name?: string;
   summary?: string | null;
   description?: string | null;
   health?: Health | null;
@@ -39,6 +41,7 @@ export interface ProjectPatch {
 
 function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
   return {
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
     ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
     ...(patch.description !== undefined ? { description: patch.description } : {}),
     ...(patch.health !== undefined ? { health: patch.health } : {}),

@@ -17,6 +17,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import {
   DetailPageLayout,
@@ -211,7 +212,18 @@ export default function ProgramDetailPage(): JSX.Element {
         <PageHeader>
           <PageHeading>
             <div className="flex flex-wrap items-center gap-3">
-              <PageTitle>{program.name}</PageTitle>
+              <PageTitle>
+                <EditableTitle
+                  value={program.name}
+                  onSave={(name) => {
+                    patchProgram({ name });
+                  }}
+                  canEdit={canEdit}
+                  saving={propsPending}
+                  ariaLabel={`${programLabel} name`}
+                  className="text-headline-medium text-on-surface font-medium"
+                />
+              </PageTitle>
               <ProgramStatusBadge status={program.status} />
               <HealthPill health={health} />
             </div>

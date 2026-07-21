@@ -28,6 +28,8 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** Fields accepted by the task patch mutation. All are optional; `null` clears the field. */
 export interface TaskPatch {
+  /** New title. Non-empty; titles cannot be cleared. */
+  title?: string;
   assigneeId?: string | null;
   projectId?: string | null;
   programId?: string | null;
@@ -158,6 +160,7 @@ export function useTaskMutations(
   const patchMutation = useApiMutation<TaskOut, TaskPatch, { previous?: TaskDetail }>({
     mutationFn: (patch) => {
       const body = {
+        ...(patch.title !== undefined ? { title: patch.title } : {}),
         ...(patch.assigneeId !== undefined
           ? { assigneeId: patch.assigneeId === null ? null : ActorId.parse(patch.assigneeId) }
           : {}),

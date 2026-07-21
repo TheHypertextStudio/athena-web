@@ -17,6 +17,8 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 
 /** ProgramPatch describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramPatch {
+  /** New name. Non-empty; the name cannot be cleared. */
+  name?: string;
   ownerId?: string | null;
   status?: ProgramStatus;
   health?: Health | null;
@@ -27,6 +29,7 @@ export interface ProgramPatch {
 
 function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
   return {
+    ...(patch.name !== undefined ? { name: patch.name } : {}),
     ...(patch.ownerId !== undefined
       ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
       : {}),

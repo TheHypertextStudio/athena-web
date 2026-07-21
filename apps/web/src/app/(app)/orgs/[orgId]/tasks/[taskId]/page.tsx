@@ -24,6 +24,7 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
+import { EditableTitle } from '@/components/editor/editable-title';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
@@ -201,7 +202,18 @@ export default function TaskDetailPage(): JSX.Element {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
-        <h1 className="text-on-surface text-title-large leading-tight">{task.title}</h1>
+        <h1 className="leading-tight">
+          <EditableTitle
+            value={task.title}
+            onSave={(title) => {
+              patchTask({ title });
+            }}
+            canEdit={canEdit}
+            saving={propsPending}
+            ariaLabel="Task title"
+            className="text-on-surface text-title-large leading-tight"
+          />
+        </h1>
 
         <div className="flex flex-wrap items-center gap-2">
           <StatusPicker

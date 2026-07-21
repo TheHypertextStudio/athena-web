@@ -5,17 +5,24 @@
  *
  * @remarks
  * The counterpart to {@link EditableFreeformText} for one-line strings (titles/names), not bodies:
- * there is no Markdown editor, no toolbar, and no separate "Edit" mode chrome. The display text and
- * the edit input share the same `className`, so entering edit swaps a `<span>` for an identically
- * styled `<input>` with no layout shift — the caret simply appears in the same glyphs, honoring the
- * app's no-hard-swap rule. `Enter`/blur saves, `Escape` reverts, and an empty value reverts (titles
- * cannot be emptied), so `onSave` never fires with an empty string. When `canEdit` is false it is
- * plain, non-interactive text. On a detail heading nothing competes for the click, so `activate`
- * defaults to `click`; inside a navigable row pass `doubleClick` (single click still opens the row)
- * and `F2` triggers edit from the keyboard.
+ * no Markdown editor, no toolbar, no separate "Edit" mode chrome. The display text and the edit
+ * input share the same `className`, so entering edit swaps a `<span>` for an identically styled
+ * `<input>` with no layout shift. `Enter`/blur saves, `Escape` reverts, and an empty value reverts
+ * (titles cannot be emptied), so `onSave` never fires with an empty string. When `canEdit` is false
+ * it is plain, non-interactive text.
+ *
+ * Two activation modes:
+ * - `click` (default, for detail headings): a single click enters edit — nothing competes for it.
+ * - `doubleClick` (for navigable list rows): a **double-click** enters edit, while a **single**
+ *   click runs the row's {@link EditableTitleProps.onActivate} (open) — after a short delay so the
+ *   double-click can pre-empt the open. The element `stopPropagation`s so the row's own click never
+ *   double-fires. This is what lets a row both open on click and rename on double-click.
  */
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useEffect, useRef, useState } from 'react';
+
+/** Delay before a single click on a `doubleClick`-mode title opens the row, so a double-click wins. */
+const OPEN_AFTER_SINGLE_CLICK_MS = 220;
 
 /** Props for {@link EditableTitle}. */
 export interface EditableTitleProps {
@@ -29,6 +36,8 @@ export interface EditableTitleProps {
   saving?: boolean;
   /** How editing begins — `click` for headings, `doubleClick` inside a navigable row. */
   activate?: 'click' | 'doubleClick';
+  /** The row's open action; in `doubleClick` mode a single click runs this. Ignored in `click` mode. */
+  onActivate?: () => void;
   /** Accessible label for the edit field, e.g. `"Task title"`. */
   ariaLabel: string;
   /** Type-scale + color classes applied to BOTH the text and the input so they look identical. */
@@ -44,6 +53,7 @@ export function EditableTitle({
   canEdit,
   saving = false,
   activate = 'click',
+  onActivate,
   ariaLabel,
   className,
   placeholder = 'Untitled',
@@ -51,6 +61,7 @@ export function EditableTitle({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep the draft in sync with external updates while not actively editing.
   useEffect(() => {
@@ -66,6 +77,21 @@ export function EditableTitle({
     input.select();
   }, [editing]);
 
+  // Never leave a pending single-click open timer behind.
+  useEffect(
+    () => () => {
+      if (openTimer.current) clearTimeout(openTimer.current);
+    },
+    [],
+  );
+
+  const clearOpenTimer = (): void => {
+    if (openTimer.current) {
+      clearTimeout(openTimer.current);
+      openTimer.current = null;
+    }
+  };
+
   const commit = (): void => {
     const next = draft.trim();
     if (next.length > 0 && next !== value) onSave(next);
@@ -74,6 +100,10 @@ export function EditableTitle({
   const cancel = (): void => {
     setDraft(value);
     setEditing(false);
+  };
+  const enter = (): void => {
+    clearOpenTimer();
+    setEditing(true);
   };
 
   if (editing) {
@@ -87,6 +117,10 @@ export function EditableTitle({
           setDraft(event.target.value);
         }}
         onBlur={commit}
+        onClick={(event) => {
+          // Inside a row, keep the click from bubbling to the row's open handler while editing.
+          event.stopPropagation();
+        }}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
             event.preventDefault();
@@ -105,33 +139,45 @@ export function EditableTitle({
     return <span className={className}>{value.length > 0 ? value : placeholder}</span>;
   }
 
-  const enter = (): void => {
-    setEditing(true);
-  };
+  if (activate === 'doubleClick') {
+    return (
+      <span
+        onClick={(event) => {
+          // Own the title's click so the row can't open behind us; defer the open so a double-click
+          // (edit) can cancel it. Clicks elsewhere on the row open immediately via the row itself.
+          if (!onActivate) return;
+          // stopPropagation blocks a row's onClick; preventDefault blocks an <a href> ancestor's
+          // navigation — so the title owns the gesture whether the row opens via handler or link.
+          event.stopPropagation();
+          event.preventDefault();
+          clearOpenTimer();
+          openTimer.current = setTimeout(() => {
+            openTimer.current = null;
+            onActivate();
+          }, OPEN_AFTER_SINGLE_CLICK_MS);
+        }}
+        onDoubleClick={(event) => {
+          event.stopPropagation();
+          enter();
+        }}
+        className={cn('cursor-text', className)}
+      >
+        {value.length > 0 ? value : placeholder}
+      </span>
+    );
+  }
+
   return (
     <span
       role="button"
       tabIndex={0}
       aria-label={`${ariaLabel}: ${value}. Edit.`}
-      onClick={
-        activate === 'click'
-          ? (event) => {
-              // Inside a navigable row this also keeps the row's own handler from firing.
-              event.stopPropagation();
-              enter();
-            }
-          : undefined
-      }
-      onDoubleClick={
-        activate === 'doubleClick'
-          ? (event) => {
-              event.stopPropagation();
-              enter();
-            }
-          : undefined
-      }
+      onClick={(event) => {
+        event.stopPropagation();
+        enter();
+      }}
       onKeyDown={(event) => {
-        if (event.key === 'F2' || (activate === 'click' && event.key === 'Enter')) {
+        if (event.key === 'F2' || event.key === 'Enter') {
           event.preventDefault();
           enter();
         }

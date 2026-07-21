@@ -74,20 +74,45 @@ describe('EditableTitle', () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it('opens on double-click (not single click) in doubleClick mode', () => {
+  it('in doubleClick mode a single click opens the row after a short delay', () => {
+    vi.useFakeTimers();
+    const onActivate = vi.fn();
     render(
       <EditableTitle
         value="Row"
         onSave={vi.fn()}
         canEdit
         activate="doubleClick"
+        onActivate={onActivate}
         ariaLabel="Task title"
       />,
     );
-    const trigger = screen.getByRole('button');
-    fireEvent.click(trigger);
-    expect(screen.queryByLabelText('Task title')).toBeNull();
-    fireEvent.doubleClick(trigger);
+    fireEvent.click(screen.getByText('Row'));
+    expect(onActivate).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(250);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('in doubleClick mode a double click edits and cancels the pending open', () => {
+    vi.useFakeTimers();
+    const onActivate = vi.fn();
+    render(
+      <EditableTitle
+        value="Row"
+        onSave={vi.fn()}
+        canEdit
+        activate="doubleClick"
+        onActivate={onActivate}
+        ariaLabel="Task title"
+      />,
+    );
+    const el = screen.getByText('Row');
+    fireEvent.click(el);
+    fireEvent.doubleClick(el);
+    vi.advanceTimersByTime(250);
+    expect(onActivate).not.toHaveBeenCalled();
     expect(screen.getByLabelText('Task title')).toBeTruthy();
+    vi.useRealTimers();
   });
 });

@@ -191,7 +191,7 @@ export function PropertiesPanel({
           })}
           {(readOnly ? labels : availableLabels).length === 0 ? (
             <span className="text-on-surface-variant text-xs">
-              {readOnly ? '—' : 'No workspace labels'}
+              {readOnly ? '—' : 'No labels yet'}
             </span>
           ) : null}
         </div>

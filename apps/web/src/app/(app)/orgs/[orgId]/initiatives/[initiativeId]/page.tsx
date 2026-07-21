@@ -447,7 +447,7 @@ export default function InitiativeDetailPage(): JSX.Element {
               </div>
             ) : (
               <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-6 text-center text-sm">
-                No sub-initiatives in this workspace context.
+                Nothing's nested under this one yet.
               </p>
             )}
           </section>
@@ -470,7 +470,7 @@ export default function InitiativeDetailPage(): JSX.Element {
               </div>
             ) : (
               <p className="bg-surface-container-low text-on-surface-variant rounded-xl px-4 py-6 text-center text-sm">
-                No connected work yet.
+                No projects or programs linked to this yet.
               </p>
             )}
           </section>
@@ -605,7 +605,7 @@ export default function InitiativeDetailPage(): JSX.Element {
                 })}
               {data.labels.filter((label) => label.teamId === null || label.teamId === undefined)
                 .length === 0 ? (
-                <span className="text-on-surface-variant text-xs">No workspace labels.</span>
+                <span className="text-on-surface-variant text-xs">No labels yet.</span>
               ) : null}
             </div>
           </section>

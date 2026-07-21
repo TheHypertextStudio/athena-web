@@ -77,7 +77,10 @@ describe('Projects experience contract', () => {
   it('uses full-width heading-free documents and canonical MD3 prose hierarchy', () => {
     const document = source(documentPath);
     const editor = source(editorPath);
-    expect(document).toContain("hasContents ? '@4xl:grid-cols-[9rem_minmax(0,1fr)]' : ''");
+    // The contents rail sits in a right-hand column and the body is the first column, so the body
+    // stays flush with the masthead instead of being indented by a left rail.
+    expect(document).toContain('@4xl:grid-cols-[minmax(0,1fr)_11rem]');
+    expect(document).not.toContain('grid-cols-[9rem');
     expect(document).toContain('ExpandMoreRounded');
     expect(document).toContain('bg-surface-container-low');
     expect(document).not.toContain('border-y');

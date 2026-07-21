@@ -105,14 +105,16 @@ export function EntityDocument({
 
   return (
     <div
-      className={`grid min-w-0 gap-6 ${hasContents ? '@4xl:grid-cols-[9rem_minmax(0,1fr)]' : ''}`}
+      className={`grid min-w-0 gap-8 ${hasContents ? '@4xl:grid-cols-[minmax(0,1fr)_11rem]' : ''}`}
     >
-      {hasContents ? (
-        <div className="entity-contents-desktop hidden @4xl:block">{renderContents(true)}</div>
-      ) : null}
+      {/*
+       * The body is the first (left) column, so its edge stays flush with the masthead and the
+       * sibling sections — the contents live in their own column to the *right*, never indenting
+       * the body. Below @4xl the rail collapses into a compact disclosure above the body.
+       */}
       <div className="min-w-0">
         {hasContents ? (
-          <details className="entity-contents-mobile bg-surface-container-low group mb-5 rounded-xl @4xl:hidden">
+          <details className="entity-contents-mobile bg-surface-container-low group mb-6 w-fit max-w-full min-w-56 rounded-xl @4xl:hidden">
             <summary className="text-on-surface text-label-large flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-3 [&::-webkit-details-marker]:hidden">
               <span>Contents</span>
               <ExpandMoreRounded
@@ -134,6 +136,11 @@ export function EntityDocument({
           />
         </div>
       </div>
+      {hasContents ? (
+        <div className="entity-contents-desktop hidden @4xl:block">
+          <div className="sticky top-4 self-start">{renderContents(true)}</div>
+        </div>
+      ) : null}
     </div>
   );
 }

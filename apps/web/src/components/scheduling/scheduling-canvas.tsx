@@ -6,7 +6,8 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import { SchedulingCanvasHeader } from './scheduling-canvas-header';
 import { arrangeDenseScheduleItems } from './scheduling-dense-overflow';
 import { SchedulingDenseOverflow } from './scheduling-dense-overflow-ui';
-import { deriveSnapMinutes } from './scheduling-geometry';
+import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
+import { deriveSnapMinutes, pixelsToMinutes } from './scheduling-geometry';
 import { deriveInitialScheduleScrollMinutes } from './scheduling-initial-scroll';
 import { SchedulingItemCard } from './scheduling-item-card';
 import { positionScheduleLaneItems } from './scheduling-overlap-layout';
@@ -48,6 +49,7 @@ export default function SchedulingCanvas({
   onMoveAllDayItem,
   onResizeAllDayItem,
   onDropObjectOnItem,
+  onDropObjectOnGrid,
 }: SchedulingCanvasProps): JSX.Element {
   const [gestureAnnouncement, setGestureAnnouncement] = useState('');
   const usesCoarsePointer = useMediaQuery('(pointer: coarse)');
@@ -204,6 +206,34 @@ export default function SchedulingCanvas({
                     regionSelection.onPointerDown(lane, event);
                   }}
                   onClickCapture={regionSelection.onClickCapture}
+                  // Accept a native drag object dropped onto empty grid time and schedule it there.
+                  // Drops onto an item are handled by the card (which stops propagation), so this
+                  // fires only for empty-time drops.
+                  onDragOver={
+                    onDropObjectOnGrid
+                      ? (event) => {
+                          if (!event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME)) return;
+                          event.preventDefault();
+                          event.dataTransfer.dropEffect = 'copy';
+                        }
+                      : undefined
+                  }
+                  onDrop={
+                    onDropObjectOnGrid
+                      ? (event) => {
+                          const object = readScheduleDragObject(event.dataTransfer);
+                          if (!object) return;
+                          event.preventDefault();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          const startMinutes = pixelsToMinutes(
+                            event.clientY - rect.top,
+                            effectivePixelsPerHour,
+                            snapMinutes,
+                          );
+                          onDropObjectOnGrid({ object, lane, startMinutes });
+                        }
+                      : undefined
+                  }
                 >
                   {selectedRegion?.lane.id === lane.id && selectedRegionPresentation ? (
                     <SchedulingRegionPreview

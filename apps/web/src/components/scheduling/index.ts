@@ -71,5 +71,6 @@ export type {
   ScheduleLane,
   ScheduleDragObject,
   ScheduleObjectDrop,
+  ScheduleObjectGridDrop,
   ScheduleRegionSelection,
 } from './scheduling-types';

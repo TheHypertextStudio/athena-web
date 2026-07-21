@@ -4,6 +4,7 @@ import type { CalendarItemOut } from '@docket/types';
 import { type JSX, useCallback, useEffect } from 'react';
 
 import {
+  useCreateCalendarItem,
   useLinkTaskToCalendarItem,
   useRelateCalendarItems,
   useUpdateCalendarItemById,
@@ -14,6 +15,7 @@ import {
   type ScheduleItemMove,
   type ScheduleItemResize,
   type ScheduleLane,
+  type ScheduleObjectGridDrop,
   type ScheduleRegionSelection,
   SchedulingCanvas,
 } from '@/components/scheduling';
@@ -45,6 +47,11 @@ const RELATIONSHIP_TARGET_KINDS: ReadonlySet<CalendarItemOut['kind']> = new Set(
   'timebox',
 ]);
 
+/** Default length of a timebox created by dropping a task onto empty grid time. */
+const DROPPED_TASK_TIMEBOX_MINUTES = 30;
+/** Minutes in a day — clamps a dropped timebox so it never spills past midnight. */
+const MINUTES_PER_DAY = 24 * 60;
+
 /**
  * Render the always-mounted scheduling grid and translate gestures into calendar mutations.
  *
@@ -74,6 +81,7 @@ export function CalendarSchedulingSurface({
   const updateItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
   const relateItems = useRelateCalendarItems();
+  const createItem = useCreateCalendarItem();
   const minLaneWidth = preferences?.minLaneWidth ?? 240;
   const resetUpdateItem = updateItem.reset;
   const resetLinkTask = linkTask.reset;
@@ -233,6 +241,32 @@ export function CalendarSchedulingSurface({
                   },
                   onResizeAllDayItem: ({ item, startDate, endDate }) => {
                     persistAllDayBounds(item.id, startDate, endDate);
+                  },
+                  // Drop a task from the rail onto empty grid time: create a timebox at that
+                  // moment titled after the task, then link the task into it.
+                  onDropObjectOnGrid: ({ object, lane, startMinutes }: ScheduleObjectGridDrop) => {
+                    if (object.kind !== 'task') return;
+                    const endMinutes = Math.min(
+                      startMinutes + DROPPED_TASK_TIMEBOX_MINUTES,
+                      MINUTES_PER_DAY,
+                    );
+                    const startsAt = resolveWallInstant(lane.date, startMinutes);
+                    const endsAt = resolveWallInstant(lane.date, endMinutes);
+                    if (!startsAt || !endsAt) return;
+                    clearInlineFailures();
+                    createItem.mutate(
+                      { intent: 'timebox', title: object.title, startsAt, endsAt },
+                      {
+                        onSuccess: (created) => {
+                          linkTask.mutate({
+                            itemId: created.id,
+                            taskId: object.taskId,
+                            organizationId: object.organizationId,
+                            role: 'contained',
+                          });
+                        },
+                      },
+                    );
                   },
                 }
               : {})}

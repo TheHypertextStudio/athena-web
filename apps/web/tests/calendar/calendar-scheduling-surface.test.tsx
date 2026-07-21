@@ -19,6 +19,7 @@ const mutationState = vi.hoisted(() => ({
   update: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
   link: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
   relate: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
+  create: { mutate: vi.fn(), reset: vi.fn(), isError: false, error: null as Error | null },
 }));
 const axisRetry = {
   dates: vi.fn(),
@@ -51,6 +52,7 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
   useUpdateCalendarItemById: () => mutationState.update,
   useLinkTaskToCalendarItem: () => mutationState.link,
   useRelateCalendarItems: () => mutationState.relate,
+  useCreateCalendarItem: () => mutationState.create,
 }));
 
 vi.mock('../../src/components/calendar/calendar-layer-panel', () => ({

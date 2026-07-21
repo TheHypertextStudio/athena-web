@@ -32,6 +32,7 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
   useUpdateCalendarItemById: () => update,
   useLinkTaskToCalendarItem: () => ({ reset: vi.fn(), isError: false, mutate: vi.fn() }),
   useRelateCalendarItems: () => ({ reset: vi.fn(), isError: false, mutate: vi.fn() }),
+  useCreateCalendarItem: () => ({ reset: vi.fn(), isError: false, mutate: vi.fn() }),
 }));
 
 vi.mock('../../src/components/calendar/calendar-layer-panel', () => ({

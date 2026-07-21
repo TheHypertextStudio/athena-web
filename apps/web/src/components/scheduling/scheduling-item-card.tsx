@@ -185,6 +185,8 @@ export function SchedulingItemCard({
         setDropActive(false);
         if (!acceptsDrop(event) || !onDropObjectOnItem) return;
         event.preventDefault();
+        // Consume the drop here so it doesn't also bubble to the lane's grid-drop handler.
+        event.stopPropagation();
         const object = readScheduleDragObject(event.dataTransfer);
         if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });

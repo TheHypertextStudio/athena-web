@@ -43,6 +43,14 @@ export interface ScheduleObjectDrop {
   readonly targetLane: ScheduleLane;
 }
 
+/** One object dropped onto empty grid time (not onto an existing item) — schedule it there. */
+export interface ScheduleObjectGridDrop {
+  readonly object: ScheduleDragObject;
+  readonly lane: ScheduleLane;
+  /** Snapped minute-of-day of the drop position (the new block's start). */
+  readonly startMinutes: number;
+}
+
 /** An arbitrary date/resource lane accepted by the fluid scheduling canvas. */
 export interface ScheduleLane {
   /** Stable consumer-owned lane identifier. */
@@ -198,4 +206,6 @@ export interface SchedulingCanvasProps {
   readonly onResizeAllDayItem?: (request: ScheduleAllDayItemResize) => void;
   /** Associate a cross-surface task/event with an item target. */
   readonly onDropObjectOnItem?: (request: ScheduleObjectDrop) => void;
+  /** Schedule a cross-surface object dropped onto empty grid time as a new block at that time. */
+  readonly onDropObjectOnGrid?: (request: ScheduleObjectGridDrop) => void;
 }

@@ -218,7 +218,6 @@ export function EditableFreeformText({
         onChange={setDraft}
         placeholder={placeholder}
         ariaLabel="Description"
-        disabled={saving}
         className="min-h-28"
       />
       <span className="text-on-surface-variant text-xs">{saving ? 'Saving…' : ''}</span>

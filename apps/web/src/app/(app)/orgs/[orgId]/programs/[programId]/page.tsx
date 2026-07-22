@@ -278,7 +278,6 @@ export default function ProgramDetailPage(): JSX.Element {
               health={health}
               visibility={program.visibility}
               canEdit={canEdit}
-              pending={propsPending}
               onOwnerChange={(ownerId) => {
                 patchProgram({ ownerId });
               }}

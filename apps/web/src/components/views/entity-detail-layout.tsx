@@ -6,10 +6,11 @@
  * Every strategic-work detail page used to hand-roll its own masthead: some put the status chip
  * inline with the title, some hid properties behind a popover, some floated them in a right rail,
  * and the title size drifted between surfaces. {@link EntityDetailLayout} fixes the *arrangement*
- * once — identity pair (icon inline-left of the title, subtitle beneath), a metadata slot for the
- * full inline property row, then the tab bar with a separator beneath it and the active panel — so
- * a page only supplies content through slots. The canonical title token
- * (`text-headline-medium font-medium`) is owned here so no page can diverge from it.
+ * once — the icon sits above the title + subtitle pair, and the title fills the available width
+ * instead of being clipped to a fixed measure — a metadata slot for the full inline property row,
+ * then the tab bar with a separator beneath it and the active panel — so a page only supplies
+ * content through slots. The canonical title token (`text-headline-medium font-medium`) is owned
+ * here so no page can diverge from it.
  */
 import type { JSX, ReactNode } from 'react';
 
@@ -21,7 +22,7 @@ import { PageContainer } from './page-layout';
 export interface EntityDetailLayoutProps {
   /** A rare band above the masthead — e.g. the Initiative breadcrumb + Print action. */
   eyebrow?: ReactNode;
-  /** The entity icon rendered inline-left of the title (an editable picker or a static glyph, ~40px). */
+  /** The entity icon rendered above the title (an editable picker or a static glyph, ~40px). */
   icon: ReactNode;
   /** The title content (e.g. an inline-editable title); the layout owns the canonical token. */
   title: ReactNode;
@@ -43,10 +44,10 @@ export interface EntityDetailLayoutProps {
  * The standard entity-detail arrangement.
  *
  * @remarks
- * Renders (top to bottom): the optional eyebrow, a masthead whose identity pair places the icon
- * inline-left of the title with the subtitle beneath and any actions right-aligned, the metadata
- * row, then the tab bar with a separator under it, then the active panel. Status/health and every
- * other property live in the metadata slot, never inline with the title.
+ * Renders (top to bottom): the optional eyebrow, a masthead whose identity pair stacks the icon
+ * above the title + subtitle (title filling the available width) with any actions right-aligned,
+ * the metadata row, then the tab bar with a separator under it, then the active panel. Status/health
+ * and every other property live in the metadata slot, never inline with the title.
  *
  * @param props - The {@link EntityDetailLayoutProps}.
  * @returns the composed detail page.
@@ -67,15 +68,13 @@ export function EntityDetailLayout({
       {eyebrow}
       <header className="flex flex-col gap-4">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            <div className="flex min-w-0 items-center gap-3">
-              {icon}
-              <h1 className="text-on-surface text-headline-medium max-w-[32ch] min-w-0 font-medium">
-                {title}
-              </h1>
-            </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <div className="shrink-0">{icon}</div>
+            <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
+              {title}
+            </h1>
             {subtitle ? (
-              <div className="text-on-surface-variant text-body-large max-w-4xl">{subtitle}</div>
+              <div className="text-on-surface-variant text-body-large w-full">{subtitle}</div>
             ) : null}
           </div>
           {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}

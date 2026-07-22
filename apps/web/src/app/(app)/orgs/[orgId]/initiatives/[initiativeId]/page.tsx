@@ -321,7 +321,6 @@ export default function InitiativeDetailPage(): JSX.Element {
               labels={detail.labels}
               availableLabels={availableLabels}
               canEdit={canEdit}
-              pending={mutations.propsPending}
               onStatusChange={(status) => {
                 mutations.patchInitiative({ status });
               }}

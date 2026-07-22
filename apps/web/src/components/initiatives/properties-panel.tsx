@@ -67,7 +67,6 @@ export interface InitiativePropertiesPanelProps {
   labels: readonly LabelOut[];
   availableLabels: readonly LabelOut[];
   canEdit: boolean;
-  pending: boolean;
   onStatusChange: (status: InitiativeStatus) => void;
   onHealthChange: (health: Health | null) => void;
   onTargetChange: (targetDate: string | null) => void;
@@ -105,7 +104,6 @@ export function InitiativePropertiesPanel({
   labels,
   availableLabels,
   canEdit,
-  pending,
   onStatusChange,
   onHealthChange,
   onTargetChange,
@@ -129,7 +127,6 @@ export function InitiativePropertiesPanel({
         placeholder="Choose status"
         ariaLabel="Status"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <EnumPicker<Health>
@@ -140,7 +137,6 @@ export function InitiativePropertiesPanel({
         clearLabel="No health"
         ariaLabel="Initiative health"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <RolledUpHealthPill health={rolledUpHealth} className="min-h-10 px-3" />
@@ -151,7 +147,6 @@ export function InitiativePropertiesPanel({
         formatLabel={(value) => formatCalendarDate(value) ?? undefined}
         ariaLabel="Target date"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <ActorPicker
@@ -162,7 +157,6 @@ export function InitiativePropertiesPanel({
         clearLabel="No owner"
         ariaLabel="Owner"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <EnumPicker<InitiativePriority>
@@ -174,7 +168,6 @@ export function InitiativePropertiesPanel({
         placeholder="Choose priority"
         ariaLabel="Priority"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <EnumPicker<InitiativeUpdateCadence>
@@ -186,7 +179,6 @@ export function InitiativePropertiesPanel({
         placeholder="Choose cadence"
         ariaLabel="Update cadence"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <LabelsPicker
@@ -203,7 +195,6 @@ export function InitiativePropertiesPanel({
         emptyText="No labels"
         ariaLabel="Labels"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
     </>

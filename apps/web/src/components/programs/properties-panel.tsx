@@ -43,7 +43,6 @@ export interface ProgramPropertiesPanelProps {
   /** Whether the actor may edit (holds `manage`); chips are read-only when false. */
   canEdit: boolean;
   /** Whether a mutation is in flight (disables every picker). */
-  pending: boolean;
   /** Assign the owner (or `null` to clear). */
   onOwnerChange: (ownerId: string | null) => void;
   /** Set the program status. */
@@ -67,7 +66,6 @@ export function ProgramPropertiesPanel({
   health,
   visibility,
   canEdit,
-  pending,
   onOwnerChange,
   onStatusChange,
   onHealthChange,
@@ -86,7 +84,6 @@ export function ProgramPropertiesPanel({
         placeholder="Set status"
         ariaLabel="Status"
         readOnly={readOnly}
-        disabled={pending}
         triggerVariant="ghost"
         triggerClassName={ENTITY_METADATA_CHIP_CLASS}
       />
@@ -98,7 +95,6 @@ export function ProgramPropertiesPanel({
         clearLabel="No health"
         ariaLabel="Health"
         readOnly={readOnly}
-        disabled={pending}
         triggerVariant="ghost"
         triggerClassName={ENTITY_METADATA_CHIP_CLASS}
       />
@@ -110,7 +106,6 @@ export function ProgramPropertiesPanel({
         clearLabel="No owner"
         ariaLabel="Owner"
         readOnly={readOnly}
-        disabled={pending}
         triggerVariant="ghost"
         triggerClassName={ENTITY_METADATA_CHIP_CLASS}
       />
@@ -123,7 +118,6 @@ export function ProgramPropertiesPanel({
         placeholder="Set visibility"
         ariaLabel="Visibility"
         readOnly={readOnly}
-        disabled={pending}
         triggerVariant="ghost"
         triggerClassName={ENTITY_METADATA_CHIP_CLASS}
       />

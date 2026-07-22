@@ -47,7 +47,6 @@ function renderPanel(overrides: Partial<React.ComponentProps<typeof PropertiesPa
       labels={[]}
       availableLabels={LABELS}
       canEdit
-      pending={false}
       {...callbacks}
       {...overrides}
     />,
@@ -116,14 +115,5 @@ describe('Project PropertiesPanel', () => {
     expect(screen.getByText('On track')).toBeTruthy();
     expect(screen.getByText('Platform')).toBeTruthy();
     expect(screen.getByText('North Star')).toBeTruthy();
-  });
-
-  it('disables every picker while a mutation is pending', () => {
-    renderPanel({ pending: true });
-
-    const trigger = screen.getByRole('button', { name: 'Health — not set' });
-    expect(trigger.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(trigger);
-    expect(screen.queryByRole('option')).toBeNull();
   });
 });

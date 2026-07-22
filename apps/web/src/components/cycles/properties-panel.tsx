@@ -36,7 +36,6 @@ export interface CyclePropertiesPanelProps {
   /** Whether the actor may edit (holds `contribute`); rows are read-only when false. */
   canEdit: boolean;
   /** Whether a mutation is in flight (disables every picker). */
-  pending: boolean;
   /** Set the cycle status. */
   onStatusChange: (status: CycleStatus) => void;
   /** Set the window (both bounds are required by the create DTO; the host enforces it). */
@@ -54,7 +53,6 @@ export function CyclePropertiesPanel({
   startsAt,
   endsAt,
   canEdit,
-  pending,
   onStatusChange,
   onWindowChange,
 }: CyclePropertiesPanelProps): JSX.Element {
@@ -77,7 +75,6 @@ export function CyclePropertiesPanel({
           placeholder="Set status"
           ariaLabel="Status"
           readOnly={readOnly}
-          disabled={pending}
         />
       </PropertyPanelRow>
 
@@ -91,7 +88,6 @@ export function CyclePropertiesPanel({
           startLabel="Starts"
           endLabel="Ends"
           readOnly={readOnly}
-          disabled={pending}
         />
       </PropertyPanelRow>
     </PropertyPanel>

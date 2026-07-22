@@ -46,7 +46,6 @@ function renderPanel(
       health={null}
       visibility="public"
       canEdit
-      pending={false}
       onOwnerChange={onOwnerChange}
       onStatusChange={onStatusChange}
       onHealthChange={onHealthChange}

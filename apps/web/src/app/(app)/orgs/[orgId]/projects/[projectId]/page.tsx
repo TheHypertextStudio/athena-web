@@ -301,7 +301,6 @@ export default function ProjectDetailPage(): JSX.Element {
               labels={labels}
               availableLabels={availableLabels}
               canEdit={canEdit}
-              pending={propsPending}
               onHealthChange={(next) => {
                 patchProject({ health: next });
               }}

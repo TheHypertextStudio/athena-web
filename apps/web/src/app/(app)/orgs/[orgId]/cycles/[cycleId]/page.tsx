@@ -67,7 +67,6 @@ export default function CycleDetailPage(): JSX.Element {
 
   const {
     patchCycle,
-    propsPending,
     propsError,
     dialogOpen,
     setDialogOpen,
@@ -254,7 +253,6 @@ export default function CycleDetailPage(): JSX.Element {
           startsAt={cycle.startsAt.slice(0, 10)}
           endsAt={cycle.endsAt.slice(0, 10)}
           canEdit={canEditCycle && !isCompleted}
-          pending={propsPending}
           onStatusChange={(status) => {
             patchCycle({ status });
           }}

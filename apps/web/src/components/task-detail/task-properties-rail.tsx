@@ -33,7 +33,6 @@ export interface TaskPropertiesRailProps {
   milestoneOptions: readonly PickerOption[];
   cycleOptions: readonly PickerOption[];
   canEdit: boolean;
-  propsPending: boolean;
   onPatch: (patch: TaskPatch) => void;
 }
 
@@ -52,7 +51,6 @@ export function TaskPropertiesRail({
   milestoneOptions,
   cycleOptions,
   canEdit,
-  propsPending,
   onPatch,
 }: TaskPropertiesRailProps): JSX.Element {
   const provenance = task.provenance;
@@ -78,7 +76,6 @@ export function TaskPropertiesRail({
             searchPlaceholder={`Search ${projectLabel.toLowerCase()}s…`}
             ariaLabel={projectLabel}
             readOnly={!canEdit}
-            disabled={propsPending}
           />
         </PropertyRow>
 
@@ -94,7 +91,6 @@ export function TaskPropertiesRail({
             searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
             ariaLabel={programLabel}
             readOnly={!canEdit}
-            disabled={propsPending}
           />
         </PropertyRow>
 
@@ -117,7 +113,6 @@ export function TaskPropertiesRail({
             }
             ariaLabel="Milestone"
             readOnly={!canEdit || !task.projectId}
-            disabled={propsPending}
           />
         </PropertyRow>
 
@@ -133,7 +128,6 @@ export function TaskPropertiesRail({
             searchPlaceholder={`Search ${cycleLabel.toLowerCase()}s…`}
             ariaLabel={cycleLabel}
             readOnly={!canEdit}
-            disabled={propsPending}
           />
         </PropertyRow>
 

@@ -31,7 +31,6 @@ export interface PropertiesPanelProps {
   labels: readonly LabelOut[];
   availableLabels: readonly LabelOut[];
   canEdit: boolean;
-  pending: boolean;
   onHealthChange: (health: Health | null) => void;
   onStatusChange: (status: ProjectStatus) => void;
   onTimelineChange: (range: { start: string | null; end: string | null }) => void;
@@ -67,7 +66,6 @@ export function PropertiesPanel({
   labels,
   availableLabels,
   canEdit,
-  pending,
   onHealthChange,
   onStatusChange,
   onTimelineChange,
@@ -107,7 +105,6 @@ export function PropertiesPanel({
         placeholder="Set status"
         ariaLabel="Status"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <EnumPicker<Health>
@@ -118,7 +115,6 @@ export function PropertiesPanel({
         clearLabel="No health"
         ariaLabel="Health"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <DateRangePicker
@@ -130,7 +126,6 @@ export function PropertiesPanel({
         startLabel="Start"
         endLabel="Target"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <EntityPicker
@@ -142,7 +137,6 @@ export function PropertiesPanel({
         searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
         ariaLabel={programLabel}
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <EntityMultiPicker
@@ -161,7 +155,6 @@ export function PropertiesPanel({
         emptyText={`No ${initiativeLabel.toLowerCase()}s`}
         ariaLabel={`${initiativeLabel}s`}
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
       <LabelsPicker
@@ -178,7 +171,6 @@ export function PropertiesPanel({
         emptyText="No labels"
         ariaLabel="Labels"
         readOnly={readOnly}
-        disabled={pending}
         {...CHIP}
       />
     </>

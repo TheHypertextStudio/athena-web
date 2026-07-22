@@ -25,7 +25,6 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
@@ -220,18 +219,6 @@ export default function TaskDetailPage(): JSX.Element {
           />
         </h1>
 
-        <EditableFreeformText
-          value={task.summary}
-          placeholder="Add a concise summary…"
-          canEdit={canEdit}
-          saving={propsPending}
-          onSave={(summary) => {
-            // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
-            patchTask({ summary: summary ?? '' });
-          }}
-          className="text-on-surface-variant text-body-large max-w-4xl font-normal"
-        />
-
         <div className="flex flex-wrap items-center gap-2">
           <StatusPicker
             current={task.state}
@@ -261,7 +248,6 @@ export default function TaskDetailPage(): JSX.Element {
             ariaLabel="Assignee"
             triggerVariant="outline"
             readOnly={!canEdit}
-            disabled={propsPending}
           />
           {delegate ? (
             <span className="text-body-medium flex items-center gap-1.5">
@@ -285,7 +271,6 @@ export default function TaskDetailPage(): JSX.Element {
             ariaLabel="Due date"
             triggerVariant="outline"
             readOnly={!canEdit}
-            disabled={propsPending}
           />
           {canManage ? (
             <DropdownMenu>
@@ -381,7 +366,6 @@ export default function TaskDetailPage(): JSX.Element {
           milestoneOptions={milestoneOptions}
           cycleOptions={cycleOptions}
           canEdit={canEdit}
-          propsPending={propsPending}
           onPatch={patchTask}
         />
       </div>

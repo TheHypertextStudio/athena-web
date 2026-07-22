@@ -89,7 +89,7 @@ async function seedPendingOAuth(): Promise<{ orgId: string; integrationId: strin
 }
 
 describe('remote MCP OAuth callback', () => {
-  it('exchanges a signed approval, verifies tools/list, and returns to Connections as connected', async () => {
+  it('exchanges a signed approval, verifies tools/list, and returns to Athena settings as connected', async () => {
     const seeded = await seedPendingOAuth();
     completeMcpOAuthAuthorization.mockResolvedValue({
       kind: 'mcp_oauth',
@@ -126,9 +126,7 @@ describe('remote MCP OAuth callback', () => {
         ),
       );
     expect(stored?.lastError).toBeNull();
-    expect(response.headers.get('location')).toContain(
-      `/orgs/${seeded.orgId}/settings/connections?mcp=connected`,
-    );
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=connected');
     expect(stored?.status).toBe('connected');
     expect(unsealCredential(stored!.ciphertext)).toContain('mcp_oauth');
     expect(completeMcpOAuthAuthorization).toHaveBeenCalledWith(
@@ -140,7 +138,7 @@ describe('remote MCP OAuth callback', () => {
     const app = new Hono().route('/', integrationsMcpOauth);
     const response = await app.request('/callback?code=approval-code&state=not-signed');
     expect(response.status).toBe(302);
-    expect(response.headers.get('location')).toContain('/?mcp=error');
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
     expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();
   });
 });

@@ -22,12 +22,10 @@ interface McpConfig {
   readonly authMode?: 'oauth' | 'bearer' | 'none';
 }
 
-/** Return to the org-scoped Connections screen with only application-owned status copy. */
-function settingsRedirect(orgId: string | null, status: 'connected' | 'error'): string {
+/** Return to the Athena settings screen (where MCP connectors now live) with status copy. */
+function settingsRedirect(status: 'connected' | 'error'): string {
   const base = webAppOrigin();
-  return orgId
-    ? `${base}/orgs/${orgId}/settings/connections?mcp=${status}`
-    : `${base}/?mcp=${status}`;
+  return `${base}/settings/athena?mcp=${status}`;
 }
 
 /** The same callback URL supplied when the approval was initiated. */
@@ -42,7 +40,7 @@ const integrationsMcpOAuth = new Hono().get('/callback', async (c) => {
   const integrationId = decoded?.['integrationId'];
   const orgId = decoded?.['orgId'];
   if (typeof integrationId !== 'string' || typeof orgId !== 'string') {
-    return c.redirect(settingsRedirect(null, 'error'));
+    return c.redirect(settingsRedirect('error'));
   }
 
   const [row] = await db
@@ -56,7 +54,7 @@ const integrationsMcpOAuth = new Hono().get('/callback', async (c) => {
       ),
     )
     .limit(1);
-  if (!row) return c.redirect(settingsRedirect(orgId, 'error'));
+  if (!row) return c.redirect(settingsRedirect('error'));
 
   const code = c.req.query('code');
   if (!code) {
@@ -68,7 +66,7 @@ const integrationsMcpOAuth = new Hono().get('/callback', async (c) => {
         lastErrorAt: new Date(),
       })
       .where(eq(integration.id, row.id));
-    return c.redirect(settingsRedirect(orgId, 'error'));
+    return c.redirect(settingsRedirect('error'));
   }
 
   try {
@@ -96,9 +94,7 @@ const integrationsMcpOAuth = new Hono().get('/callback', async (c) => {
       .set({ ciphertext: sealCredential(JSON.stringify(approved)) })
       .where(eq(integrationCredential.integrationId, row.id));
     const verified = await verifyIntegration(row);
-    return c.redirect(
-      settingsRedirect(orgId, verified.status === 'connected' ? 'connected' : 'error'),
-    );
+    return c.redirect(settingsRedirect(verified.status === 'connected' ? 'connected' : 'error'));
   } catch (cause) {
     await db
       .update(integration)
@@ -108,7 +104,7 @@ const integrationsMcpOAuth = new Hono().get('/callback', async (c) => {
         lastErrorAt: new Date(),
       })
       .where(eq(integration.id, row.id));
-    return c.redirect(settingsRedirect(orgId, 'error'));
+    return c.redirect(settingsRedirect('error'));
   }
 });
 

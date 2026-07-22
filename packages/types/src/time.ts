@@ -260,7 +260,7 @@ export const TimeContextCreate = z
   .object({
     role: TimeContextRole,
     entityRef: EntityRef,
-    organizationId: OrganizationId.nullable().optional(),
+    organizationId: OrganizationId.optional(),
   })
   .meta({ id: 'TimeContextCreate', description: 'Attach typed context to a Time Record.' });
 /** Time-context-create value. */
@@ -274,7 +274,7 @@ export const TimeAllocationReplace = z
         z.object({
           targetKind: TimeAllocationTargetKind,
           targetId: z.string().min(1),
-          organizationId: OrganizationId.nullable().optional(),
+          organizationId: OrganizationId.optional(),
           basisPoints: z.number().int().min(0).max(10_000),
         }),
       )
@@ -379,8 +379,8 @@ export type TimeCategoryListOut = z.infer<typeof TimeCategoryListOut>;
 export const TimeCategoryCreate = z
   .object({
     name: z.string().trim().min(1).max(80),
-    color: z.string().trim().max(32).nullable().optional(),
-    parentId: TimeCategoryId.nullable().optional(),
+    color: z.string().trim().max(32).optional(),
+    parentId: TimeCategoryId.optional(),
     sort: z.number().int().optional(),
   })
   .meta({ id: 'TimeCategoryCreate', description: 'Create a Hub-owned time category.' });
@@ -482,7 +482,7 @@ export type TimeSubmissionRecipientListOut = z.infer<typeof TimeSubmissionRecipi
 /** Body for creating an immutable submitted time-report snapshot. */
 export const TimeSubmissionCreate = z
   .object({
-    organizationId: OrganizationId.nullable().optional(),
+    organizationId: OrganizationId.optional(),
     periodStartsAt: z.iso.datetime(),
     periodEndsAt: z.iso.datetime(),
     timezone: z.string().trim().min(1).max(100),

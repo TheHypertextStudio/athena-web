@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
@@ -71,7 +72,7 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
         orgId: z.string().min(1),
         projectId: z.string().min(1),
         name: z.string().min(1).optional(),
-        description: z.string().nullable().optional(),
+        description: z.string().optional(),
         status: z.enum(['planned', 'active', 'completed', 'canceled']).optional(),
         leadId: z.string().nullable().optional(),
         programId: z.string().nullable().optional(),
@@ -98,7 +99,7 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
 
         const patch = {
           ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...clearableTextPatch('description', input.description),
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.leadId !== undefined ? { leadId: input.leadId } : {}),
           ...(input.programId !== undefined ? { programId: input.programId } : {}),

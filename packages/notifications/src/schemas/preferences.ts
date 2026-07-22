@@ -63,7 +63,7 @@ export const NotificationPreferenceOut = z
   .object({
     userId: z.string().min(1),
     timezone: z.string().min(1),
-    quietHours: NotificationQuietHours.nullable().optional(),
+    quietHours: NotificationQuietHours.nullable(),
     categories: NotificationCategoryPreferences,
     organizations: NotificationOrganizationPreferences,
     updatedAt: NotificationInstant,

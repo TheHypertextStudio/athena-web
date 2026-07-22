@@ -25,7 +25,7 @@ export const NotificationRecipientOut = z
     id: Id,
     notificationId: Id,
     userId: z.string().min(1),
-    organizationId: OrganizationId.nullable().optional(),
+    organizationId: OrganizationId.nullable(),
     reason: NotificationRecipientReason,
     suppressions: z.array(NotificationSuppression).default([]),
     createdAt: NotificationInstant,

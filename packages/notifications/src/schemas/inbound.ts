@@ -8,11 +8,11 @@ import { NotificationInstant } from './shared';
 export const NotificationInboundEventOut = z
   .object({
     id: Id,
-    notificationId: Id.nullable().optional(),
-    deliveryId: Id.nullable().optional(),
+    notificationId: Id.nullable(),
+    deliveryId: Id.nullable(),
     channel: NotificationChannel,
     kind: NotificationInboundEventKind,
-    from: z.string().nullable().optional(),
+    from: z.string().nullable(),
     payload: z.record(z.string(), z.unknown()),
     receivedAt: NotificationInstant,
   })

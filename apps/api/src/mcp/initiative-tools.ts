@@ -12,6 +12,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
@@ -148,8 +149,8 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         orgId: z.string().min(1),
         initiativeId: z.string().min(1),
         name: z.string().min(1).optional(),
-        summary: z.string().max(280).nullable().optional(),
-        description: z.string().nullable().optional(),
+        summary: z.string().max(280).optional(),
+        description: z.string().optional(),
         ownerId: z.string().nullable().optional(),
         status: z.enum(['proposed', 'active', 'completed', 'canceled']).optional(),
         health: z.enum(['on_track', 'at_risk', 'off_track']).nullable().optional(),
@@ -175,8 +176,8 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         await assertRefInOrg(actor, input.orgId, input.ownerId ?? undefined, 'Owner not found');
         const patch: Partial<typeof initiative.$inferInsert> = {
           ...(input.name !== undefined ? { name: input.name } : {}),
-          ...(input.summary !== undefined ? { summary: input.summary } : {}),
-          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...clearableTextPatch('summary', input.summary),
+          ...clearableTextPatch('description', input.description),
           ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.health !== undefined ? { health: input.health } : {}),

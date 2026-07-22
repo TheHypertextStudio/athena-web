@@ -33,8 +33,8 @@ export const ContactPointOut = z
     valueMasked: z.string().min(1),
     status: ContactPointStatus,
     primary: z.boolean(),
-    verifiedAt: NotificationInstant.nullable().optional(),
-    disabledAt: NotificationInstant.nullable().optional(),
+    verifiedAt: NotificationInstant.nullable(),
+    disabledAt: NotificationInstant.nullable(),
     createdAt: NotificationInstant,
   })
   .meta({

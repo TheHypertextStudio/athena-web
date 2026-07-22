@@ -18,14 +18,14 @@ export const NotificationIntentCreate = z
   .object({
     senderType: NotificationSenderType,
     senderId: z.string().min(1).optional(),
-    organizationId: OrganizationId.nullable().optional(),
+    organizationId: OrganizationId.optional(),
     category: NotificationCategory,
     priority: NotificationPriority,
     audience: NotificationAudience,
     channels: z.array(NotificationChannel).min(1),
     subject: z.string().trim().min(1),
     body: NotificationContent,
-    scheduledAt: NotificationInstant.nullable().optional(),
+    scheduledAt: NotificationInstant.optional(),
     replyPolicy: NotificationReplyPolicy.default('none'),
     idempotencyKey: z.string().trim().min(1).optional(),
   })
@@ -38,8 +38,8 @@ export const NotificationIntentOut = z
   .object({
     id: Id,
     senderType: NotificationSenderType,
-    senderId: z.string().nullable().optional(),
-    organizationId: OrganizationId.nullable().optional(),
+    senderId: z.string().nullable(),
+    organizationId: OrganizationId.nullable(),
     category: NotificationCategory,
     priority: NotificationPriority,
     audience: NotificationAudience,
@@ -48,7 +48,7 @@ export const NotificationIntentOut = z
     body: NotificationContent,
     replyPolicy: NotificationReplyPolicy,
     status: NotificationIntentStatus,
-    scheduledAt: NotificationInstant.nullable().optional(),
+    scheduledAt: NotificationInstant.nullable(),
     createdAt: NotificationInstant,
     createdBy: z.string().min(1),
   })

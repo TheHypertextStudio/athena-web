@@ -67,8 +67,8 @@ export const SearchRoute = z.discriminatedUnion('type', [
     type: z.literal('activity'),
     organizationId: OrganizationId.nullable(),
     eventId: z.string(),
-    href: z.string().nullable().optional(),
-    externalUrl: z.string().nullable().optional(),
+    href: z.string().nullable(),
+    externalUrl: z.string().nullable(),
   }),
   z.object({
     type: z.literal('calendar_event'),

@@ -189,7 +189,7 @@ export const ProjectOut = z
     leadId: ActorId.nullable()
       .optional()
       .describe('The accountable lead Actor, or `null` when unassigned.'),
-    teamId: TeamId.nullable().optional().describe('The owning Team, or `null` when none.'),
+    teamId: TeamId.nullable().describe('The owning Team, or `null` when none.'),
     programId: ProgramId.nullable()
       .optional()
       .describe('The Program this project is filed under, or `null` when unfiled.'),

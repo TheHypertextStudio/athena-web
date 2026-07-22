@@ -188,7 +188,7 @@ export function makeNotificationPreferenceOutFixture(
   return {
     userId: notificationFixtureIds.userId,
     timezone: 'America/Los_Angeles',
-    quietHours: makeNotificationPreferencePatchFixture().quietHours,
+    quietHours: makeNotificationPreferencePatchFixture().quietHours ?? null,
     categories: {
       security: { web: true, email: true, sms: true, push: true, locked: true },
     },

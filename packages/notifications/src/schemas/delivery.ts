@@ -42,13 +42,13 @@ export const NotificationDeliveryOut = z
     channel: NotificationChannel,
     destination: NotificationDestination,
     status: NotificationDeliveryStatus,
-    providerMessageId: z.string().nullable().optional(),
-    errorCode: z.string().nullable().optional(),
-    errorMessage: z.string().nullable().optional(),
-    sentAt: NotificationInstant.nullable().optional(),
-    deliveredAt: NotificationInstant.nullable().optional(),
-    readAt: NotificationInstant.nullable().optional(),
-    actedAt: NotificationInstant.nullable().optional(),
+    providerMessageId: z.string().nullable(),
+    errorCode: z.string().nullable(),
+    errorMessage: z.string().nullable(),
+    sentAt: NotificationInstant.nullable(),
+    deliveredAt: NotificationInstant.nullable(),
+    readAt: NotificationInstant.nullable(),
+    actedAt: NotificationInstant.nullable(),
   })
   .meta({ id: 'NotificationDeliveryOut', description: 'One per-channel delivery attempt.' });
 /** Notification-delivery representation value. */

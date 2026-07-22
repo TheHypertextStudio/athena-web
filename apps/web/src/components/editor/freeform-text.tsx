@@ -11,11 +11,11 @@ import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@docket/ui/lib/utils';
+import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -163,19 +163,19 @@ export function FreeformText({ value, emptyText, className }: FreeformTextProps)
 export interface EditableFreeformTextProps {
   /** Persisted Markdown value, or null for no description. */
   value: string | null | undefined;
-  /** Empty-state prompt used before editing begins. */
+  /** Empty-state prompt shown while the field is empty. */
   placeholder: string;
-  /** Whether the viewer may enter editing mode. */
+  /** Whether the viewer may edit the body. */
   canEdit: boolean;
-  /** Disable controls while the host save is in flight. */
+  /** Whether the host's autosave mutation is currently in flight. */
   saving?: boolean;
-  /** Persist a non-empty Markdown value or null to clear the description. */
+  /** Persist a non-empty Markdown value or null to clear the description. Called on autosave. */
   onSave: (value: string | null) => void;
   /** Additional wrapper styling. */
   className?: string;
 }
 
-/** A description that reads as normal text until someone chooses to edit it. */
+/** A document body that autosaves on a debounce instead of exposing a Save button. */
 export function EditableFreeformText({
   value,
   placeholder,
@@ -184,74 +184,44 @@ export function EditableFreeformText({
   onSave,
   className,
 }: EditableFreeformTextProps): JSX.Element {
-  const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value ?? '');
+  const [focused, setFocused] = useState(false);
 
   useEffect(() => {
-    if (!editing) setDraft(value ?? '');
-  }, [value, editing]);
+    if (!focused) setDraft(value ?? '');
+  }, [value, focused]);
 
-  const save = (): void => {
-    const next = draft.trim();
-    onSave(next.length > 0 ? next : null);
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <div className={cn('flex flex-col gap-2', className)}>
-        <FreeformTextEditor
-          value={draft}
-          onChange={setDraft}
-          placeholder={placeholder}
-          ariaLabel="Description"
-          disabled={saving}
-          onSubmit={save}
-          onCancel={() => {
-            setDraft(value ?? '');
-            setEditing(false);
-          }}
-          className="min-h-28"
-        />
-        <div className="flex items-center gap-2">
-          <span className="text-on-surface-variant mr-auto text-xs">
-            ⌘↵ to save · Esc to discard
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={saving}
-            onClick={() => {
-              setDraft(value ?? '');
-              setEditing(false);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button type="button" size="sm" disabled={saving} onClick={save}>
-            Save
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  useDebouncedAutosave({
+    value: draft,
+    baseline: value ?? '',
+    save: (next) => {
+      const trimmed = next.trim();
+      onSave(trimmed.length > 0 ? trimmed : null);
+    },
+  });
 
   if (!canEdit)
     return <FreeformText value={value ?? ''} emptyText={placeholder} className={className} />;
 
   return (
-    <button
-      type="button"
-      onClick={() => {
-        setEditing(true);
+    <div
+      className={cn('flex flex-col gap-1', className)}
+      onFocus={() => {
+        setFocused(true);
       }}
-      className={cn(
-        'hover:bg-surface-container-low focus-visible:ring-ring -mx-2 rounded-md px-2 py-1 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
-        className,
-      )}
+      onBlur={() => {
+        setFocused(false);
+      }}
     >
-      <FreeformText value={value ?? ''} emptyText={placeholder} />
-    </button>
+      <FreeformTextEditor
+        value={draft}
+        onChange={setDraft}
+        placeholder={placeholder}
+        ariaLabel="Description"
+        disabled={saving}
+        className="min-h-28"
+      />
+      <span className="text-on-surface-variant text-xs">{saving ? 'Saving…' : ''}</span>
+    </div>
   );
 }

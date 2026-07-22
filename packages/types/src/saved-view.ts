@@ -129,12 +129,12 @@ export const SavedViewOut = z
     organizationId: OrganizationId.describe('Owning org id (the tenant key).'),
     name: z.string().describe('Human label for the view.'),
     scope: ViewScope.describe("Sharing scope: 'personal' | 'team' | 'organization'."),
-    ownerActorId: ActorId.nullable().optional().describe('Owning actor; null when ownerless.'),
+    ownerActorId: ActorId.nullable().describe('Owning actor; null when ownerless.'),
     teamId: TeamId.nullable()
       .optional()
       .describe('Team the view belongs to; null for personal/org-wide views.'),
     filters: z.array(ViewFilter).describe('Filter predicates (ANDed) the view applies.'),
-    grouping: ViewGrouping.nullable().optional().describe('Grouping config; null for a flat list.'),
+    grouping: ViewGrouping.nullable().describe('Grouping config; null for a flat list.'),
     sort: z.array(ViewSort).describe('Ordered sort terms the view applies.'),
     createdAt: z.string().describe('Creation timestamp (ISO 8601).'),
   })

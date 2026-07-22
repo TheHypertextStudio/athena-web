@@ -90,7 +90,6 @@ export default function TaskDetailPage(): JSX.Element {
     deleteTask,
     resetDelete,
     actionError,
-    propsPending,
     statusPending,
     priorityPending,
     deletePending,
@@ -213,7 +212,6 @@ export default function TaskDetailPage(): JSX.Element {
               patchTask({ title });
             }}
             canEdit={canEdit}
-            saving={propsPending}
             ariaLabel="Task title"
             className="text-on-surface text-title-large leading-tight"
           />

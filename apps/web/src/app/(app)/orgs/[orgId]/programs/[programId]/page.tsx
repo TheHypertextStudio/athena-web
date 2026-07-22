@@ -20,7 +20,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
-import { EditableFreeformText } from '@/components/editor/freeform-text';
+import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { EntityIconGlyph } from '@/components/initiatives/initiative-icon-picker';
 import { PageContainer } from '@/components/views/page-layout';
@@ -138,8 +138,13 @@ export default function ProgramDetailPage(): JSX.Element {
     };
   }, [work, program]);
 
-  const { patchProgram, postUpdate, propsPending, propsError, updatePosting, updateError } =
-    useProgramMutations(orgId, programId, programLabel, detailKey, updatesKey);
+  const { patchProgram, postUpdate, propsError, updatePosting, updateError } = useProgramMutations(
+    orgId,
+    programId,
+    programLabel,
+    detailKey,
+    updatesKey,
+  );
 
   const canEdit = useOrgCapability(members, roles, 'manage');
 
@@ -250,22 +255,21 @@ export default function ProgramDetailPage(): JSX.Element {
             patchProgram({ name });
           }}
           canEdit={canEdit}
-          saving={propsPending}
           ariaLabel={`${programLabel} name`}
           className="text-headline-medium text-on-surface font-medium"
         />
       }
       subtitle={
-        <EditableFreeformText
+        <EditableSubtitle
           value={program.summary}
           placeholder="Add a concise summary…"
           canEdit={canEdit}
-          saving={propsPending}
+          ariaLabel={`${programLabel} summary`}
           onSave={(summary) => {
             // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
             patchProgram({ summary: summary ?? '' });
           }}
-          className="text-on-surface-variant text-body-large max-w-4xl font-normal"
+          className="text-on-surface-variant text-body-large font-normal"
         />
       }
       metadata={
@@ -342,7 +346,6 @@ export default function ProgramDetailPage(): JSX.Element {
           <EntityDocument
             value={program.description}
             canEdit={canEdit}
-            saving={propsPending}
             onSave={(description) => {
               patchProgram({ description });
             }}

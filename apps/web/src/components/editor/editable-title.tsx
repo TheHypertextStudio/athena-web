@@ -35,8 +35,6 @@ export interface EditableTitleProps {
   onSave: (next: string) => void;
   /** Whether the viewer may edit; false renders plain, non-interactive text. */
   canEdit: boolean;
-  /** Disable the field while a save is in flight. */
-  saving?: boolean;
   /** How editing begins — `click` for headings, `doubleClick` inside a navigable row. */
   activate?: 'click' | 'doubleClick';
   /** The row's open action; in `doubleClick` mode a single click runs this. Ignored in `click` mode. */

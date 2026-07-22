@@ -14,8 +14,6 @@
  */
 import type { JSX, ReactNode } from 'react';
 
-import { Separator } from '@docket/ui/primitives';
-
 import { PageContainer } from './page-layout';
 
 /** Props for {@link EntityDetailLayout}. */
@@ -45,8 +43,8 @@ export interface EntityDetailLayoutProps {
  *
  * @remarks
  * Renders (top to bottom): the optional eyebrow, a masthead whose identity pair stacks the icon
- * above the title + subtitle (title filling the available width) with any actions right-aligned,
- * the metadata row, then the tab bar with a separator under it, then the active panel. Status/health
+ * above the title + subtitle (title filling the available width, subtitle a single line) with any
+ * actions right-aligned, the metadata row, then the tab bar, then the active panel. Status/health
  * and every other property live in the metadata slot, never inline with the title.
  *
  * @param props - The {@link EntityDetailLayoutProps}.
@@ -66,25 +64,24 @@ export function EntityDetailLayout({
   return (
     <PageContainer className={className}>
       {eyebrow}
-      <header className="flex flex-col gap-4">
+      <header className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="shrink-0">{icon}</div>
             <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
               {title}
             </h1>
             {subtitle ? (
-              <div className="text-on-surface-variant text-body-large w-full">{subtitle}</div>
+              <div className="text-on-surface-variant text-body-large w-full truncate">
+                {subtitle}
+              </div>
             ) : null}
           </div>
           {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
         </div>
         {metadata}
       </header>
-      <div className="flex flex-col gap-2">
-        {tabs}
-        <Separator />
-      </div>
+      {tabs}
       {children}
     </PageContainer>
   );

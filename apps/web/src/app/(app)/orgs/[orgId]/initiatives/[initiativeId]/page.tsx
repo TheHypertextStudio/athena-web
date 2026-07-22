@@ -27,7 +27,7 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { EditableFreeformText } from '@/components/editor/freeform-text';
+import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
@@ -289,21 +289,20 @@ export default function InitiativeDetailPage(): JSX.Element {
             mutations.patchInitiative({ name });
           }}
           canEdit={canEdit}
-          saving={mutations.propsPending}
           ariaLabel={`${initiativeNoun} name`}
           className="text-on-surface"
         />
       }
       subtitle={
-        <EditableFreeformText
+        <EditableSubtitle
           value={detail.summary}
           placeholder="Add a concise strategic summary"
           canEdit={canEdit}
-          saving={mutations.propsPending}
+          ariaLabel={`${initiativeNoun} summary`}
           onSave={(summary) => {
             mutations.patchInitiative({ summary });
           }}
-          className="text-on-surface-variant text-body-large leading-relaxed"
+          className="text-on-surface-variant text-body-large"
         />
       }
       metadata={
@@ -559,7 +558,6 @@ export default function InitiativeDetailPage(): JSX.Element {
         <EntityDocument
           value={detail.description}
           canEdit={canEdit}
-          saving={mutations.propsPending}
           onSave={(description) => {
             mutations.patchInitiative({ description });
           }}

@@ -111,7 +111,6 @@ function RuleRow({
               value={rule.name}
               onSave={(next) => void saveName(next)}
               canEdit={canManage}
-              saving={status === 'saving'}
               ariaLabel={`Automation name for ${rule.name}`}
               className="truncate text-sm font-medium"
             />
@@ -121,9 +120,7 @@ function RuleRow({
               </span>
             ) : null}
             {!rule.enabled ? <span className="text-muted-foreground text-[10px]">off</span> : null}
-            {status === 'saving' ? (
-              <span className="text-on-surface-variant text-xs">Saving…</span>
-            ) : status === 'saved' ? (
+            {status === 'saved' ? (
               <span className="text-on-surface-variant text-xs">Saved</span>
             ) : status === 'error' ? (
               <span className="text-destructive text-xs" role="alert">

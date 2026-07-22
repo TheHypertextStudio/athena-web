@@ -248,7 +248,6 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
               value={mcp.label}
               onSave={saveLabel}
               canEdit={canManage}
-              saving={edit.isPending}
               ariaLabel="Connector name"
               className="text-on-surface text-sm font-medium"
               placeholder="Connector name"
@@ -257,9 +256,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           <Badge variant={badgeVariant} className="shrink-0">
             {connectorReadinessLabel(mcp.status)}
           </Badge>
-          {edit.isPending ? (
-            <span className="text-on-surface-variant text-xs font-normal">Saving…</span>
-          ) : edit.isSuccess ? (
+          {edit.isSuccess ? (
             <span className="text-on-surface-variant text-xs font-normal">Saved</span>
           ) : null}
         </div>

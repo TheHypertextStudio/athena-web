@@ -167,8 +167,6 @@ export interface EditableFreeformTextProps {
   placeholder: string;
   /** Whether the viewer may edit the body. */
   canEdit: boolean;
-  /** Whether the host's autosave mutation is currently in flight. */
-  saving?: boolean;
   /** Persist a non-empty Markdown value or null to clear the description. Called on autosave. */
   onSave: (value: string | null) => void;
   /** Additional wrapper styling. */
@@ -180,7 +178,6 @@ export function EditableFreeformText({
   value,
   placeholder,
   canEdit,
-  saving = false,
   onSave,
   className,
 }: EditableFreeformTextProps): JSX.Element {
@@ -205,7 +202,7 @@ export function EditableFreeformText({
 
   return (
     <div
-      className={cn('flex flex-col gap-1', className)}
+      className={className}
       onFocus={() => {
         setFocused(true);
       }}
@@ -220,7 +217,6 @@ export function EditableFreeformText({
         ariaLabel="Description"
         className="min-h-28"
       />
-      <span className="text-on-surface-variant text-xs">{saving ? 'Saving…' : ''}</span>
     </div>
   );
 }

@@ -81,10 +81,10 @@ describe('Projects experience contract', () => {
     expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
     // Every chip reads as the same calm pill, wired once through the shell's shared chip class.
     expect(layout).toContain('bg-surface-container-low hover:bg-surface-container-high');
-    // The tab bar adopts the shared Tabs primitive (which owns the 40px touch-target floor), and
-    // the shell renders a Separator directly beneath the tab bar.
+    // The tab bar adopts the shared Tabs primitive (which owns the 40px touch-target floor and its
+    // own track styling), so the shell doesn't also draw a Separator beneath it.
     expect(detail).toContain('<Tabs');
-    expect(layout.indexOf('{tabs}')).toBeLessThan(layout.indexOf('<Separator'));
+    expect(layout).not.toContain('<Separator');
     expect(source(join(root, 'packages/ui/src/primitives/tabs.tsx'))).toContain('min-h-10');
   });
 

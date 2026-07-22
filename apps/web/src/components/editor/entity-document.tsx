@@ -24,8 +24,6 @@ export interface EntityDocumentProps {
   value: string | null | undefined;
   /** Whether the viewer may edit the body. */
   canEdit: boolean;
-  /** Whether a save is in flight (disables the editor). */
-  saving: boolean;
   /** Persist a non-empty Markdown value, or null to clear the body. */
   onSave: (value: string | null) => void;
   /** The quiet prompt shown before anything is written. */
@@ -36,7 +34,6 @@ export interface EntityDocumentProps {
 export function EntityDocument({
   value,
   canEdit,
-  saving,
   onSave,
   placeholder = 'Add a description…',
 }: EntityDocumentProps): JSX.Element {
@@ -133,7 +130,6 @@ export function EntityDocument({
             value={value}
             placeholder={placeholder}
             canEdit={canEdit}
-            saving={saving}
             onSave={onSave}
             className="max-w-none"
           />

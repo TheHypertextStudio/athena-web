@@ -9,7 +9,7 @@
  * Auth `passkey.listUserPasskeys()` client method), lets them **add** a passkey to the current
  * device/authenticator from an already-authenticated session (`passkey.addPasskey`) — the correct,
  * session-bound home for enrollment that replaces the removed unauthenticated registration path —
- * **rename** one in place (`passkey.updatePasskey`, blur-to-save via {@link EditableTitle} — no Save
+ * **rename** one in place (`passkey.updatePasskey`, autosaved via {@link EditableTitle} — no Save
  * button), and **remove** one (`passkey.deletePasskey`).
  *
  * Removing the *last* passkey would leave the account reachable only through recovery codes (or a
@@ -269,12 +269,12 @@ const SAVED_HINT_MS = 2000;
  * A single passkey row whose name renames in place: no Rename button, no dialog.
  *
  * @remarks
- * The name is an {@link EditableTitle}, so a click enters edit and blur/Enter saves. That primitive
- * owns the dirty guard — it only calls `onSave` when the trimmed value is non-empty *and* changed
- * from what's persisted, so a rename never fires on mount, on an unchanged blur, or on an emptied
- * field (which reverts). The save runs the same `passkey.updatePasskey` mutation the old dialog's
- * Save button used, now triggered by the field commit. A quiet inline word next to the name reports
- * the mutation state — "Saving…", a brief "Saved", or an inline error that keeps the field editable.
+ * The name is an {@link EditableTitle}, always an editable field that autosaves on a debounce (or
+ * immediately on Enter). That primitive owns the dirty guard — it only calls `onSave` when the
+ * trimmed value is non-empty *and* changed from what's persisted, so a rename never fires on mount
+ * or on an emptied field (which reverts). The save runs the same `passkey.updatePasskey` mutation
+ * the old dialog's Save button used, now triggered by the autosave. A quiet inline word next to the
+ * name reports the mutation state — a brief "Saved", or an inline error that keeps the field editable.
  */
 function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Element {
   const [showSaved, setShowSaved] = useState(false);
@@ -311,14 +311,11 @@ function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Eleme
               rename.mutate(next);
             }}
             canEdit
-            saving={rename.isPending}
             ariaLabel="Passkey name"
             placeholder="Unnamed passkey"
             className="text-on-surface text-body-medium min-w-0 truncate font-medium"
           />
-          {rename.isPending ? (
-            <span className="text-on-surface-variant shrink-0 text-xs">Saving…</span>
-          ) : rename.isError ? (
+          {rename.isError ? (
             <span role="alert" className="text-destructive shrink-0 text-xs">
               {userErrorMessage(rename.error, 'Could not update your passkeys.')}
             </span>

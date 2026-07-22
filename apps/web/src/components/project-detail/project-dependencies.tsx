@@ -36,25 +36,22 @@ export function ProjectDependenciesPanel({
   );
 
   return (
-    <section
-      aria-label="Project dependencies"
-      className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-xl border p-4"
-    >
+    <section aria-label="Project dependencies" className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <DecorativeIcon icon={LinkIcon} />
         <h2 className="text-on-surface text-body-medium font-semibold">Dependencies</h2>
       </div>
       {loading ? (
-        <div className="flex flex-col gap-2">
-          <Skeleton className="h-6 w-36" />
-          <Skeleton className="h-6 w-48" />
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-24 w-full rounded-xl" />
+          <Skeleton className="h-24 w-full rounded-xl" />
         </div>
       ) : error ? (
         <p role="alert" className="text-destructive text-body-medium">
           {error}
         </p>
       ) : (
-        <div className="grid gap-4 @2xl:grid-cols-2">
+        <div className="flex flex-col gap-3">
           <DependencyColumn
             title="Blocked by"
             emptyText="Nothing is blocking this project."
@@ -120,9 +117,9 @@ function DependencyColumn({
   onRemove,
 }: DependencyColumnProps): JSX.Element {
   return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-on-surface-variant text-sm font-medium">{title}</h3>
+    <div className="border-outline-variant bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl border p-3">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <h3 className="text-on-surface text-body-medium min-w-0 truncate font-medium">{title}</h3>
         {canEdit ? (
           <EntityPicker
             options={pickerOptions}
@@ -134,6 +131,8 @@ function DependencyColumn({
             searchPlaceholder="Search projects…"
             ariaLabel={pickerLabel}
             disabled={disabled}
+            triggerVariant="outline"
+            triggerClassName="shrink-0"
           />
         ) : null}
       </div>

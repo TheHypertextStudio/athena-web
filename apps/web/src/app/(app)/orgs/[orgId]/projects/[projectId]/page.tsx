@@ -28,7 +28,8 @@ import { type JSX, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
-import { EditableFreeformText, FreeformText } from '@/components/editor/freeform-text';
+import { FreeformText } from '@/components/editor/freeform-text';
+import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
@@ -89,7 +90,6 @@ export default function ProjectDetailPage(): JSX.Element {
     patchProject,
     setInitiatives,
     postUpdate,
-    propsPending,
     propsError,
     updatePosting,
     updateError,
@@ -270,20 +270,19 @@ export default function ProjectDetailPage(): JSX.Element {
             patchProject({ name });
           }}
           canEdit={canEdit}
-          saving={propsPending}
           ariaLabel={`${projectNoun} name`}
         />
       }
       subtitle={
-        <EditableFreeformText
+        <EditableSubtitle
           value={project.summary}
           placeholder="Add a concise outcome summary…"
           canEdit={canEdit}
-          saving={propsPending}
+          ariaLabel={`${projectNoun} summary`}
           onSave={(summary) => {
             patchProject({ summary });
           }}
-          className="text-on-surface-variant text-body-large max-w-4xl font-normal"
+          className="text-on-surface-variant text-body-large font-normal"
         />
       }
       metadata={
@@ -402,7 +401,6 @@ export default function ProjectDetailPage(): JSX.Element {
             <EntityDocument
               value={project.description}
               canEdit={canEdit}
-              saving={propsPending}
               onSave={(description) => {
                 patchProject({ description });
               }}
@@ -410,23 +408,20 @@ export default function ProjectDetailPage(): JSX.Element {
             />
           </section>
 
-          <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="flex min-w-0 flex-col gap-6">
-              {progress ? (
-                <section className="bg-surface-container-low rounded-xl p-4" aria-label="Progress">
-                  <WeightedProgress progress={progress} />
-                </section>
-              ) : null}
-              <AgentsStrip agents={agentsHere} />
-              <AgentActivityFeed activities={agentActivity} />
-            </div>
-            <ProjectDependenciesPanel
-              orgId={orgId}
-              projectId={projectId}
-              projectDetailKey={detailKey}
-              canEdit={canEdit}
-            />
-          </div>
+          {progress ? (
+            <section className="bg-surface-container-low rounded-xl p-4" aria-label="Progress">
+              <WeightedProgress progress={progress} />
+            </section>
+          ) : null}
+          <AgentsStrip agents={agentsHere} />
+          <AgentActivityFeed activities={agentActivity} />
+
+          <ProjectDependenciesPanel
+            orgId={orgId}
+            projectId={projectId}
+            projectDetailKey={detailKey}
+            canEdit={canEdit}
+          />
         </div>
       ) : null}
 

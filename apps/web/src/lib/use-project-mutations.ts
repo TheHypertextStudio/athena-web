@@ -17,7 +17,7 @@ import {
   ProjectId,
 } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
 import { api } from './api';
 import type { ProjectDetailData } from './fetch-project-detail';
@@ -128,13 +128,18 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
     invalidateKeys: [detailKey, queryKeys.projects(orgId)],
   });
 
+  // The initiative set immediately before the in-flight toggle's optimistic write, so the
+  // mutation diffs against what the server actually has — not the cache, which onMutate has
+  // already overwritten with `nextInitiativeIds` by the time mutationFn runs.
+  const initiativeIdsBeforeMutate = useRef<readonly string[]>([]);
+
   const initiativeM = useApiMutation<
     undefined,
     readonly string[],
     { previous?: ProjectDetailData }
   >({
     mutationFn: async (nextInitiativeIds) => {
-      const current = queryClient.getQueryData<ProjectDetailData>(detailKey)?.initiativeIds ?? [];
+      const current = initiativeIdsBeforeMutate.current;
       const nextSet = new Set(nextInitiativeIds);
       const currentSet = new Set(current);
       const removed = current.filter((initiativeId) => !nextSet.has(initiativeId));
@@ -163,6 +168,7 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
     onMutate: async (nextInitiativeIds) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const previous = queryClient.getQueryData<ProjectDetailData>(detailKey);
+      initiativeIdsBeforeMutate.current = previous?.initiativeIds ?? [];
       queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
         cur ? { ...cur, initiativeIds: [...nextInitiativeIds].sort() } : cur,
       );

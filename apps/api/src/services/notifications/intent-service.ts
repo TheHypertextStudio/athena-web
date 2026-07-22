@@ -160,7 +160,7 @@ export class NotificationIntentService {
     const testIntent = NotificationIntentCreate.parse({
       senderType: intent.senderType,
       ...(intent.senderId ? { senderId: intent.senderId } : {}),
-      organizationId: intent.organizationId,
+      ...(intent.organizationId ? { organizationId: intent.organizationId } : {}),
       category: intent.category,
       priority: intent.priority,
       audience: { type: 'user', userId: callerUserId },

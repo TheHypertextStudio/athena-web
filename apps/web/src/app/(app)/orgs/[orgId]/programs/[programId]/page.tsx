@@ -11,7 +11,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Separator,
   Skeleton,
 } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
@@ -28,7 +27,7 @@ import {
   PageHeading,
   PageTitle,
 } from '@/components/views/page-layout';
-import { FlowSnapshot, type FlowMetrics } from '@/components/programs/flow-snapshot';
+import { type FlowMetrics } from '@/components/programs/flow-snapshot';
 import { HealthPill, ProgramStatusBadge } from '@/components/programs/program-status';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramTabs, type ProgramTabItem } from '@/components/programs/program-tabs';
@@ -56,9 +55,7 @@ export default function ProgramDetailPage(): JSX.Element {
   const { defaultTeamId } = useActiveOrg();
   const programLabel = useVocabulary('program');
   const projectNoun = useVocabulary('project').toLowerCase();
-  const projectsLabel = useVocabulary('project', { plural: true });
   const cycleLabel = useVocabulary('cycle');
-  const cyclesLabel = useVocabulary('cycle', { plural: true });
   const taskNoun = useVocabulary('task').toLowerCase();
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
@@ -198,8 +195,6 @@ export default function ProgramDetailPage(): JSX.Element {
     [metrics, updates.length],
   );
 
-  const healthAsOf = updates[0]?.createdAt ?? null;
-
   if (detailQ.isPending) {
     return (
       <PageContainer>
@@ -255,6 +250,17 @@ export default function ProgramDetailPage(): JSX.Element {
               <ProgramStatusBadge status={program.status} />
               <HealthPill health={health} />
             </div>
+            <EditableFreeformText
+              value={program.summary}
+              placeholder="Add a concise summary…"
+              canEdit={canEdit}
+              saving={propsPending}
+              onSave={(summary) => {
+                // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
+                patchProgram({ summary: summary ?? '' });
+              }}
+              className="text-on-surface-variant text-body-large max-w-4xl font-normal"
+            />
           </PageHeading>
           {canEdit ? (
             <DropdownMenu>
@@ -314,20 +320,6 @@ export default function ProgramDetailPage(): JSX.Element {
         </>
       }
     >
-      <EditableFreeformText
-        value={program.summary}
-        placeholder="Add a concise summary…"
-        canEdit={canEdit}
-        saving={propsPending}
-        onSave={(summary) => {
-          // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
-          patchProgram({ summary: summary ?? '' });
-        }}
-        className="text-on-surface-variant text-body-large max-w-4xl font-normal"
-      />
-
-      <Separator className="my-6" />
-
       <EntityDocument
         value={program.description}
         canEdit={canEdit}
@@ -338,22 +330,17 @@ export default function ProgramDetailPage(): JSX.Element {
         placeholder={`Add the ${programLabel} brief…`}
       />
 
-      <FlowSnapshot
-        health={health}
-        healthAsOf={healthAsOf}
-        metrics={metrics}
-        projectsLabel={projectsLabel}
-        cyclesLabel={cyclesLabel}
-      />
-
-      <ProgramTabs
-        tabs={tabs}
-        value={tab}
-        onValueChange={(id) => {
-          setTab(id as TabId);
-        }}
-        label={`${programLabel} sections`}
-      />
+      {/* Work sections: the tab bar sits above the divider, its panel below. */}
+      <div className="border-outline-variant -mb-2 border-b pb-2">
+        <ProgramTabs
+          tabs={tabs}
+          value={tab}
+          onValueChange={(id) => {
+            setTab(id as TabId);
+          }}
+          label={`${programLabel} sections`}
+        />
+      </div>
 
       {tab === 'work' ? (
         <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">

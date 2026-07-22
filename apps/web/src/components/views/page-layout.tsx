@@ -42,7 +42,9 @@ export function PageContainer({
   return (
     <Element
       className={cn(
-        'mx-auto flex w-full max-w-7xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8',
+        // Vertical padding is deliberately tighter than horizontal so the page content starts near
+        // the top instead of floating in dead space.
+        'mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 @2xl:px-6 @2xl:py-5 @4xl:px-8 @4xl:py-6',
         className,
       )}
     >
@@ -176,7 +178,7 @@ export function DetailPageLayout({
     <PageContainer className={className}>
       {header}
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="flex min-w-0 flex-col gap-6">{children}</div>
+        <div className="flex min-w-0 flex-col gap-4">{children}</div>
         {aside ? <aside className="flex flex-col gap-4">{aside}</aside> : null}
       </div>
     </PageContainer>

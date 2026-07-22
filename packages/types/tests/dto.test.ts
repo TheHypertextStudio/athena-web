@@ -583,9 +583,12 @@ describe('entity display DTOs', () => {
     expect(EntityDisplayIconKey.parse('bus')).toBe('bus');
     expect(EntityDisplayIconKey.parse('library')).toBe('library');
     expect(EntityDisplayColorKey.parse('primary')).toBe('primary');
-    expect(EntityDisplayUpdate.parse({ iconKey: 'flag', colorKey: 'warning' })).toEqual({
+    expect(
+      EntityDisplayUpdate.parse({ iconKey: 'flag', colorKey: 'warning', customColor: '#ff8800' }),
+    ).toEqual({
       iconKey: 'flag',
       colorKey: 'warning',
+      customColor: '#ff8800',
     });
   });
 
@@ -598,6 +601,7 @@ describe('entity display DTOs', () => {
         subjectId: ID,
         iconKey: 'target',
         colorKey: 'neutral',
+        customColor: null,
         customized: false,
       }).customized,
     ).toBe(false);

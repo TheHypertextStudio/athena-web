@@ -42,9 +42,9 @@ export function PageContainer({
   return (
     <Element
       className={cn(
-        // Vertical padding is deliberately tighter than horizontal so the page content starts near
-        // the top instead of floating in dead space.
-        'mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 @2xl:px-6 @2xl:py-5 @4xl:px-8 @4xl:py-6',
+        // Symmetric, minimal padding so the page content starts near the top and reads with even
+        // margins on every side.
+        'mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8',
         className,
       )}
     >
@@ -143,44 +143,6 @@ export function ListPageLayout({
       </PageHeader>
       {toolbar}
       {children}
-    </PageContainer>
-  );
-}
-
-/** Props for {@link DetailPageLayout}. */
-export interface DetailPageLayoutProps {
-  /** The masthead, composed by the page (e.g. a {@link PageHeader} with a title and status chips). */
-  header: ReactNode;
-  /** The right-hand properties rail. Omit for a single-column detail. */
-  aside?: ReactNode;
-  /** The main content column. */
-  children: ReactNode;
-  /** Extra container classes (e.g. a print scope). */
-  className?: string;
-}
-
-/**
- * The standard entity-detail arrangement: container → header → a two-column grid of a flexible
- * content column beside a fixed properties rail.
- *
- * @remarks
- * Separates the two-column detail *arrangement* — shared by every entity detail page — from the
- * page-specific content that fills it. The page composes its own header and passes its body and
- * rail as slots; the column widths, gaps, and stacking behavior live here once.
- */
-export function DetailPageLayout({
-  header,
-  aside,
-  children,
-  className,
-}: DetailPageLayoutProps): JSX.Element {
-  return (
-    <PageContainer className={className}>
-      {header}
-      <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="flex min-w-0 flex-col gap-4">{children}</div>
-        {aside ? <aside className="flex flex-col gap-4">{aside}</aside> : null}
-      </div>
     </PageContainer>
   );
 }

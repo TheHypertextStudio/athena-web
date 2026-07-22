@@ -1,21 +1,21 @@
 'use client';
 
-/** Progressive Project property controls used inside the anchored information disclosure. */
+/** Progressive Project property controls rendered as an inline chip row in the entity masthead. */
 import type { Health, LabelOut, ProjectStatus } from '@docket/types';
 import {
   DateRangePicker,
   EntityMultiPicker,
   EntityPicker,
   EnumPicker,
+  LabelsPicker,
   type PickerOption,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Activity, FolderKanban, LayoutGrid, RefreshCw, Tag, Target } from '@docket/ui/icons';
-import type { JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
 import { HEALTH_OPTIONS } from '@/components/pickers/options';
-import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
 import { projectStatusOptions } from '@/components/property-pickers/options';
+import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
 /** Props for {@link PropertiesPanel}. */
@@ -40,7 +40,21 @@ export interface PropertiesPanelProps {
   onLabelsChange: (labelIds: readonly string[]) => void;
 }
 
-/** Render secondary Project metadata without promoting every field into the page header. */
+/** Shared chip trigger wiring so every property in the metadata row reads as the same pill. */
+const CHIP = { triggerVariant: 'ghost', triggerClassName: ENTITY_METADATA_CHIP_CLASS } as const;
+
+/**
+ * Render the full Project property set as inline chip pickers.
+ *
+ * @remarks
+ * Returns the property chips directly (no wrapper) so the caller can drop them into an
+ * {@link EntityMetadataRow}. Order follows the canonical matrix: Status → Health → Timeline →
+ * Program → Initiatives → Labels. Label editing runs through {@link LabelsPicker} rather than a
+ * hand-rolled toggle strip.
+ *
+ * @param props - The {@link PropertiesPanelProps}.
+ * @returns the inline property chips.
+ */
 export function PropertiesPanel({
   health,
   status,
@@ -65,137 +79,108 @@ export function PropertiesPanel({
   const initiativeLabel = useVocabulary('initiative');
   const readOnly = !canEdit;
 
+  const labelOptions = useMemo<readonly PickerOption[]>(
+    () =>
+      availableLabels.map((label) => ({
+        value: label.id,
+        label: label.name,
+        icon: (
+          <span
+            aria-hidden
+            className="size-2 rounded-full"
+            style={{ backgroundColor: label.color }}
+          />
+        ),
+      })),
+    [availableLabels],
+  );
+  const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
+
   return (
-    <PropertyPanel className="border-0 bg-transparent px-0 py-0">
-      <PropertyPanelRow icon={<Target className="size-4" />} label="Health">
-        <EnumPicker<Health>
-          options={HEALTH_OPTIONS}
-          value={health}
-          onChange={onHealthChange}
-          placeholder="Set health"
-          clearLabel="No health"
-          ariaLabel="Health"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-      <PropertyPanelRow divided icon={<Activity className="size-4" />} label="Status">
-        <EnumPicker<ProjectStatus>
-          options={projectStatusOptions()}
-          value={status}
-          onChange={(next) => {
-            if (next) onStatusChange(next);
-          }}
-          placeholder="Set status"
-          ariaLabel="Status"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-      <PropertyPanelRow divided icon={<RefreshCw className="size-4" />} label="Timeline">
-        <DateRangePicker
-          value={{ start: startDate, end: targetDate }}
-          onChange={onTimelineChange}
-          placeholder="Set timeline"
-          formatLabel={(value) => formatCalendarDate(value) ?? undefined}
-          ariaLabel="Timeline"
-          startLabel="Start"
-          endLabel="Target"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-      <PropertyPanelRow divided icon={<FolderKanban className="size-4" />} label={programLabel}>
-        <EntityPicker
-          options={programOptions}
-          value={programId}
-          onChange={onProgramChange}
-          placeholder={`Set ${programLabel.toLowerCase()}`}
-          clearLabel={`No ${programLabel.toLowerCase()}`}
-          searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
-          ariaLabel={programLabel}
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-      <PropertyPanelRow
-        divided
-        icon={<LayoutGrid className="size-4" />}
-        label={`${initiativeLabel}s`}
-      >
-        <EntityMultiPicker
-          options={initiativeOptions}
-          value={initiativeIds}
-          onToggle={(initiativeId) => {
-            const next = initiativeIds.includes(initiativeId)
-              ? initiativeIds.filter((id) => id !== initiativeId)
-              : [...initiativeIds, initiativeId];
-            onInitiativesChange(next);
-          }}
-          placeholder={`Add ${initiativeLabel.toLowerCase()}s`}
-          singularLabel={initiativeLabel.toLowerCase()}
-          pluralLabel={`${initiativeLabel.toLowerCase()}s`}
-          searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}
-          emptyText={`No ${initiativeLabel.toLowerCase()}s`}
-          ariaLabel={`${initiativeLabel}s`}
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-      <PropertyPanelRow divided icon={<Tag className="size-4" />} label="Labels">
-        <div className="flex flex-wrap justify-end gap-1">
-          {(readOnly ? labels : availableLabels).map((label) => {
-            const selected = labels.some((item) => item.id === label.id);
-            if (readOnly) {
-              return (
-                <span
-                  key={label.id}
-                  className="bg-secondary-container text-on-secondary-container flex min-h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium"
-                >
-                  <span
-                    aria-hidden
-                    className="size-2 rounded-full"
-                    style={{ backgroundColor: label.color }}
-                  />
-                  {label.name}
-                </span>
-              );
-            }
-            return (
-              <button
-                key={label.id}
-                type="button"
-                disabled={pending}
-                aria-pressed={selected}
-                onClick={() => {
-                  onLabelsChange(
-                    selected
-                      ? labels.filter((item) => item.id !== label.id).map((item) => item.id)
-                      : [...labels.map((item) => item.id), label.id],
-                  );
-                }}
-                className={`flex min-h-10 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
-                  selected
-                    ? 'bg-secondary-container text-on-secondary-container'
-                    : 'text-on-surface-variant hover:bg-surface-container-high'
-                }`}
-              >
-                <span
-                  aria-hidden
-                  className="size-2 rounded-full"
-                  style={{ backgroundColor: label.color }}
-                />
-                {label.name}
-              </button>
-            );
-          })}
-          {(readOnly ? labels : availableLabels).length === 0 ? (
-            <span className="text-on-surface-variant text-xs">
-              {readOnly ? '—' : 'No labels yet'}
-            </span>
-          ) : null}
-        </div>
-      </PropertyPanelRow>
-    </PropertyPanel>
+    <>
+      <EnumPicker<ProjectStatus>
+        options={projectStatusOptions()}
+        value={status}
+        onChange={(next) => {
+          if (next) onStatusChange(next);
+        }}
+        placeholder="Set status"
+        ariaLabel="Status"
+        readOnly={readOnly}
+        disabled={pending}
+        {...CHIP}
+      />
+      <EnumPicker<Health>
+        options={HEALTH_OPTIONS}
+        value={health}
+        onChange={onHealthChange}
+        placeholder="Set health"
+        clearLabel="No health"
+        ariaLabel="Health"
+        readOnly={readOnly}
+        disabled={pending}
+        {...CHIP}
+      />
+      <DateRangePicker
+        value={{ start: startDate, end: targetDate }}
+        onChange={onTimelineChange}
+        placeholder="Set timeline"
+        formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+        ariaLabel="Timeline"
+        startLabel="Start"
+        endLabel="Target"
+        readOnly={readOnly}
+        disabled={pending}
+        {...CHIP}
+      />
+      <EntityPicker
+        options={programOptions}
+        value={programId}
+        onChange={onProgramChange}
+        placeholder={`Set ${programLabel.toLowerCase()}`}
+        clearLabel={`No ${programLabel.toLowerCase()}`}
+        searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
+        ariaLabel={programLabel}
+        readOnly={readOnly}
+        disabled={pending}
+        {...CHIP}
+      />
+      <EntityMultiPicker
+        options={initiativeOptions}
+        value={initiativeIds}
+        onToggle={(initiativeId) => {
+          const next = initiativeIds.includes(initiativeId)
+            ? initiativeIds.filter((id) => id !== initiativeId)
+            : [...initiativeIds, initiativeId];
+          onInitiativesChange(next);
+        }}
+        placeholder={`Add ${initiativeLabel.toLowerCase()}s`}
+        singularLabel={initiativeLabel.toLowerCase()}
+        pluralLabel={`${initiativeLabel.toLowerCase()}s`}
+        searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}
+        emptyText={`No ${initiativeLabel.toLowerCase()}s`}
+        ariaLabel={`${initiativeLabel}s`}
+        readOnly={readOnly}
+        disabled={pending}
+        {...CHIP}
+      />
+      <LabelsPicker
+        options={labelOptions}
+        value={labelIds}
+        onToggle={(labelId) => {
+          const next = labelIds.includes(labelId)
+            ? labelIds.filter((id) => id !== labelId)
+            : [...labelIds, labelId];
+          onLabelsChange(next);
+        }}
+        placeholder="Add labels"
+        searchPlaceholder="Filter labels…"
+        emptyText="No labels"
+        ariaLabel="Labels"
+        readOnly={readOnly}
+        disabled={pending}
+        {...CHIP}
+      />
+    </>
   );
 }

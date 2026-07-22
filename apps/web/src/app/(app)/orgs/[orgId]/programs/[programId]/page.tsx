@@ -12,6 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Skeleton,
+  Tabs,
+  type TabsItem,
 } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
@@ -20,18 +22,12 @@ import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { EntityDocument } from '@/components/editor/entity-document';
-import {
-  DetailPageLayout,
-  PageContainer,
-  PageHeader,
-  PageHeading,
-  PageTitle,
-} from '@/components/views/page-layout';
+import { EntityIconGlyph } from '@/components/initiatives/initiative-icon-picker';
+import { PageContainer } from '@/components/views/page-layout';
+import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { type FlowMetrics } from '@/components/programs/flow-snapshot';
-import { HealthPill, ProgramStatusBadge } from '@/components/programs/program-status';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
-import { ProgramTabs, type ProgramTabItem } from '@/components/programs/program-tabs';
-import { type ResolveActor, UpdatesPanel } from '@/components/programs/updates-panel';
+import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { useActiveOrg } from '@/components/active-org';
@@ -44,7 +40,7 @@ import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 
-type TabId = 'work' | 'updates';
+type TabId = 'overview' | 'work' | 'updates';
 
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
@@ -63,7 +59,7 @@ export default function ProgramDetailPage(): JSX.Element {
   const workKey = useMemo(() => [...detailKey, 'work'] as const, [detailKey]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
-  const [tab, setTab] = useState<TabId>('work');
+  const [tab, setTab] = useState<TabId>('overview');
 
   const detailQ = useApiQuery(
     apiQueryOptions(
@@ -187,10 +183,21 @@ export default function ProgramDetailPage(): JSX.Element {
     [members],
   );
 
-  const tabs: readonly ProgramTabItem[] = useMemo(
+  const tabs: readonly TabsItem[] = useMemo(
     () => [
-      { id: 'work', label: 'Work', count: metrics.inFlight + metrics.queued + metrics.done },
-      { id: 'updates', label: 'Updates', count: updates.length },
+      { value: 'overview', label: 'Overview' },
+      {
+        value: 'work',
+        label: 'Work',
+        ...(metrics.inFlight + metrics.queued + metrics.done
+          ? { count: metrics.inFlight + metrics.queued + metrics.done }
+          : {}),
+      },
+      {
+        value: 'updates',
+        label: 'Updates',
+        ...(updates.length ? { count: updates.length } : {}),
+      },
     ],
     [metrics, updates.length],
   );
@@ -230,117 +237,120 @@ export default function ProgramDetailPage(): JSX.Element {
   const health = program.health ?? null;
 
   return (
-    <DetailPageLayout
-      header={
-        <PageHeader>
-          <PageHeading>
-            <div className="flex flex-wrap items-center gap-3">
-              <PageTitle>
-                <EditableTitle
-                  value={program.name}
-                  onSave={(name) => {
-                    patchProgram({ name });
-                  }}
-                  canEdit={canEdit}
-                  saving={propsPending}
-                  ariaLabel={`${programLabel} name`}
-                  className="text-headline-medium text-on-surface font-medium"
-                />
-              </PageTitle>
-              <ProgramStatusBadge status={program.status} />
-              <HealthPill health={health} />
-            </div>
-            <EditableFreeformText
-              value={program.summary}
-              placeholder="Add a concise summary…"
-              canEdit={canEdit}
-              saving={propsPending}
-              onSave={(summary) => {
-                // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
-                patchProgram({ summary: summary ?? '' });
-              }}
-              className="text-on-surface-variant text-body-large max-w-4xl font-normal"
-            />
-          </PageHeading>
-          {canEdit ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0"
-                  aria-label={`${programLabel} actions`}
-                >
-                  <Ellipsis className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[12rem]">
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => {
-                    setConfirmDeleteOpen(true);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete {programLabel.toLowerCase()}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </PageHeader>
+    <EntityDetailLayout
+      icon={
+        <span className="flex size-10 shrink-0 items-center justify-center">
+          <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} />
+        </span>
       }
-      aside={
-        <>
-          <ProgramPropertiesPanel
-            ownerId={program.ownerId ?? null}
-            memberOptions={memberOptions}
-            status={program.status}
-            health={health}
-            visibility={program.visibility}
-            canEdit={canEdit}
-            pending={propsPending}
-            onOwnerChange={(ownerId) => {
-              patchProgram({ ownerId });
-            }}
-            onStatusChange={(status) => {
-              patchProgram({ status });
-            }}
-            onHealthChange={(next) => {
-              patchProgram({ health: next });
-            }}
-            onVisibilityChange={(visibility) => {
-              patchProgram({ visibility });
-            }}
-          />
+      title={
+        <EditableTitle
+          value={program.name}
+          onSave={(name) => {
+            patchProgram({ name });
+          }}
+          canEdit={canEdit}
+          saving={propsPending}
+          ariaLabel={`${programLabel} name`}
+          className="text-headline-medium text-on-surface font-medium"
+        />
+      }
+      subtitle={
+        <EditableFreeformText
+          value={program.summary}
+          placeholder="Add a concise summary…"
+          canEdit={canEdit}
+          saving={propsPending}
+          onSave={(summary) => {
+            // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
+            patchProgram({ summary: summary ?? '' });
+          }}
+          className="text-on-surface-variant text-body-large max-w-4xl font-normal"
+        />
+      }
+      metadata={
+        <div className="flex flex-col gap-2">
+          <EntityMetadataRow ariaLabel={`${programLabel} properties`}>
+            <ProgramPropertiesPanel
+              ownerId={program.ownerId ?? null}
+              memberOptions={memberOptions}
+              status={program.status}
+              health={health}
+              visibility={program.visibility}
+              canEdit={canEdit}
+              pending={propsPending}
+              onOwnerChange={(ownerId) => {
+                patchProgram({ ownerId });
+              }}
+              onStatusChange={(status) => {
+                patchProgram({ status });
+              }}
+              onHealthChange={(next) => {
+                patchProgram({ health: next });
+              }}
+              onVisibilityChange={(visibility) => {
+                patchProgram({ visibility });
+              }}
+            />
+          </EntityMetadataRow>
           {propsError ? (
             <p role="alert" className="text-destructive text-body-medium px-1">
               {propsError}
             </p>
           ) : null}
-        </>
+        </div>
       }
-    >
-      <EntityDocument
-        value={program.description}
-        canEdit={canEdit}
-        saving={propsPending}
-        onSave={(description) => {
-          patchProgram({ description });
-        }}
-        placeholder={`Add the ${programLabel} brief…`}
-      />
-
-      {/* Work sections: the tab bar sits above the divider, its panel below. */}
-      <div className="border-outline-variant -mb-2 border-b pb-2">
-        <ProgramTabs
-          tabs={tabs}
+      actions={
+        canEdit ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                aria-label={`${programLabel} actions`}
+              >
+                <Ellipsis className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[12rem]">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => {
+                  setConfirmDeleteOpen(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete {programLabel.toLowerCase()}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null
+      }
+      tabs={
+        <Tabs
           value={tab}
-          onValueChange={(id) => {
-            setTab(id as TabId);
+          onValueChange={(value) => {
+            setTab(value as TabId);
           }}
           label={`${programLabel} sections`}
+          items={tabs}
         />
-      </div>
+      }
+    >
+      {tab === 'overview' ? (
+        <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
+          <EntityDocument
+            value={program.description}
+            canEdit={canEdit}
+            saving={propsPending}
+            onSave={(description) => {
+              patchProgram({ description });
+            }}
+            placeholder={`Add the ${programLabel} brief…`}
+          />
+        </div>
+      ) : null}
 
       {tab === 'work' ? (
         <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">
@@ -416,6 +426,6 @@ export default function ProgramDetailPage(): JSX.Element {
           });
         }}
       />
-    </DetailPageLayout>
+    </EntityDetailLayout>
   );
 }

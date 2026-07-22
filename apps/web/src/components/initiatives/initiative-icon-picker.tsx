@@ -121,6 +121,66 @@ const COLOR_BY_KEY = Object.fromEntries(
   COLOR_OPTIONS.map((option) => [option.key, option]),
 ) as Record<EntityDisplayColorKey, (typeof COLOR_OPTIONS)[number]>;
 
+/** Props for {@link EntityIconGlyph}. */
+export interface EntityIconGlyphProps {
+  /** The strategic-work icon to render. */
+  iconKey: EntityDisplayIconKey;
+  /** The preset color key (ignored when {@link customColor} is set). */
+  colorKey: EntityDisplayColorKey;
+  /** A custom hex color that overrides the preset, or `null` to use the preset. */
+  customColor: string | null;
+  /** The circle diameter in pixels (the icon renders at half this). Defaults to 32. */
+  size?: number;
+}
+
+/**
+ * The stable, non-interactive entity glyph: a tinted circle wrapping a strategic-work icon.
+ *
+ * @remarks
+ * The presentational core shared by {@link InitiativeIconPicker}'s read-only branch and by any
+ * surface (e.g. Program) that shows an entity glyph without an editing affordance. A custom hex
+ * color, when present, wins over the preset color key.
+ *
+ * @param props - The {@link EntityIconGlyphProps}.
+ * @returns the rendered glyph.
+ */
+export function EntityIconGlyph({
+  iconKey,
+  colorKey,
+  customColor,
+  size = 32,
+}: EntityIconGlyphProps): JSX.Element {
+  const Icon = STRATEGIC_WORK_ROUNDED_ICON_BY_KEY[iconKey];
+  const color = COLOR_BY_KEY[colorKey];
+  const hasCustomColor = customColor !== null;
+  const iconSize = Math.round(size * 0.5);
+  return (
+    <span
+      data-testid="initiative-icon-circle"
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-full',
+        !hasCustomColor && color.circleClass,
+      )}
+      style={{
+        width: size,
+        height: size,
+        ...(hasCustomColor ? { backgroundColor: `${customColor}26` } : {}),
+      }}
+    >
+      <Icon
+        aria-hidden
+        data-testid="initiative-icon"
+        className={cn(!hasCustomColor && color.iconClass)}
+        style={{
+          width: iconSize,
+          height: iconSize,
+          ...(hasCustomColor ? { color: customColor } : {}),
+        }}
+      />
+    </span>
+  );
+}
+
 /** Props for the anchored Initiative icon and color picker. */
 export interface InitiativeIconPickerProps {
   display: EntityDisplayOut;
@@ -143,8 +203,6 @@ export function InitiativeIconPicker({
   onChange,
 }: InitiativeIconPickerProps): JSX.Element {
   const [search, setSearch] = useState('');
-  const Icon = STRATEGIC_WORK_ROUNDED_ICON_BY_KEY[display.iconKey];
-  const color = COLOR_BY_KEY[display.colorKey];
   const filteredOptions = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return STRATEGIC_WORK_ROUNDED_ICON_OPTIONS;
@@ -154,21 +212,11 @@ export function InitiativeIconPicker({
   }, [search]);
   const hasCustomColor = display.customColor !== null;
   const glyph = (
-    <span
-      data-testid="initiative-icon-circle"
-      className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-full',
-        !hasCustomColor && color.circleClass,
-      )}
-      style={hasCustomColor ? { backgroundColor: `${display.customColor}26` } : undefined}
-    >
-      <Icon
-        aria-hidden
-        data-testid="initiative-icon"
-        className={cn('size-4', !hasCustomColor && color.iconClass)}
-        style={display.customColor !== null ? { color: display.customColor } : undefined}
-      />
-    </span>
+    <EntityIconGlyph
+      iconKey={display.iconKey}
+      colorKey={display.colorKey}
+      customColor={display.customColor}
+    />
   );
 
   if (!editable) {

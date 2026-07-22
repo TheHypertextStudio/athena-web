@@ -1,15 +1,17 @@
 'use client';
 
 /**
- * The Program updates panel — status posts about this program.
+ * The shared entity updates panel — status posts about a program, initiative, or project.
  *
  * @remarks
- * Renders the program's status updates newest-first, each carrying its author, a relative
+ * Renders the entity's status updates newest-first, each carrying its author, a relative
  * timestamp, the health verdict it set, and its body. A composer at the top posts a new
- * update via `POST …/updates`; the newest update's health also becomes the program's current
- * health (api-rpc-contract §3.9), so the page lifts the posted update back up to refresh the
- * flow snapshot. The health picker is a styled `@docket/ui` {@link DropdownMenu} (never a
- * bare `<select>`): a calm bordered trigger showing the chosen verdict with its token dot.
+ * update via `POST …/updates`; where the health composer is shown, the newest update's health
+ * also becomes the entity's current health (api-rpc-contract §3.9), so the page lifts the
+ * posted update back up to refresh the flow snapshot. The health picker is a styled
+ * `@docket/ui` {@link DropdownMenu} (never a bare `<select>`): a calm bordered trigger showing
+ * the chosen verdict with its token dot. Surfaces where health is not update-driven (e.g.
+ * Project) pass `showHealthComposer={false}` to hide it.
  *
  * Loading uses {@link Skeleton} rows; the empty state invites the first post; a failed load
  * is announced via `role="alert"`.
@@ -30,8 +32,8 @@ import {
 import type { JSX } from 'react';
 import { useState } from 'react';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from './health';
-import { relativeTime } from './format-time';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '../programs/health';
+import { relativeTime } from '../programs/format-time';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {
@@ -71,6 +73,11 @@ export interface UpdatesPanelProps {
   postError: string | null;
   /** Post a new update with an optional health verdict. */
   onPost: (body: string, health: Health | undefined) => void;
+  /**
+   * Show the "Set health" composer control. Defaults to `true`; pass `false` on surfaces where
+   * health is not update-driven (e.g. Project) so the composer posts a plain update.
+   */
+  showHealthComposer?: boolean;
 }
 
 /**
@@ -87,6 +94,7 @@ export function UpdatesPanel({
   posting,
   postError,
   onPost,
+  showHealthComposer = true,
 }: UpdatesPanelProps): JSX.Element {
   const [body, setBody] = useState('');
   const [health, setHealth] = useState<HealthChoice>('');
@@ -122,45 +130,52 @@ export function UpdatesPanel({
           className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium min-h-20 w-full resize-y rounded-md border px-3 py-2 shadow-sm outline-none focus-visible:ring-1"
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-on-surface-variant text-body-medium">Set health</span>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5">
-                  {health !== '' ? (
-                    <span
-                      aria-hidden="true"
-                      className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[health])}
-                    />
-                  ) : null}
-                  <span>{choiceLabel(health)}</span>
-                  <ChevronDown className="h-4 w-4 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[12rem]">
-                <DropdownMenuRadioGroup
-                  value={health}
-                  onValueChange={(next) => {
-                    setHealth(next as HealthChoice);
-                  }}
-                >
-                  {HEALTH_OPTIONS.map((option) => (
-                    <DropdownMenuRadioItem key={option.value || 'none'} value={option.value}>
-                      <span className="flex items-center gap-2">
-                        {option.value !== '' ? (
-                          <span
-                            aria-hidden="true"
-                            className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[option.value])}
-                          />
-                        ) : null}
-                        {option.label}
-                      </span>
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {showHealthComposer ? (
+            <div className="flex items-center gap-2">
+              <span className="text-on-surface-variant text-body-medium">Set health</span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    {health !== '' ? (
+                      <span
+                        aria-hidden="true"
+                        className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[health])}
+                      />
+                    ) : null}
+                    <span>{choiceLabel(health)}</span>
+                    <ChevronDown className="h-4 w-4 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[12rem]">
+                  <DropdownMenuRadioGroup
+                    value={health}
+                    onValueChange={(next) => {
+                      setHealth(next as HealthChoice);
+                    }}
+                  >
+                    {HEALTH_OPTIONS.map((option) => (
+                      <DropdownMenuRadioItem key={option.value || 'none'} value={option.value}>
+                        <span className="flex items-center gap-2">
+                          {option.value !== '' ? (
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                'size-1.5 rounded-full',
+                                HEALTH_DOT_CLASS[option.value],
+                              )}
+                            />
+                          ) : null}
+                          {option.label}
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : (
+            <span />
+          )}
           <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
             {posting ? 'Posting…' : 'Post update'}
           </Button>

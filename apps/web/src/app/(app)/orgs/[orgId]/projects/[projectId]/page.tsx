@@ -11,18 +11,16 @@ import type {
 import { ProjectId, TeamId } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Calendar, Ellipsis, Target, Trash2, TuneRounded } from '@docket/ui/icons';
+import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Separator,
   Skeleton,
+  Tabs,
+  type TabsItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
@@ -40,14 +38,13 @@ import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { WeightedProgress } from '@/components/project-detail/progress-bar';
-import { ProjectResourcesTab } from '@/components/project-detail/resources-tab';
+import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { projectStatusOf } from '@/components/project-detail/project-config';
-import { type TabItem, ProjectTabs } from '@/components/project-detail/tabs';
-import { UpdatesTab } from '@/components/project-detail/updates-tab';
+import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useActiveOrg } from '@/components/active-org';
 import { CreateTaskDialog } from '@/components/tasks/create-task';
 import { api } from '@/lib/api';
-import { formatCalendarDate } from '@/lib/format-date';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
@@ -56,18 +53,7 @@ import { userErrorMessage } from '@/lib/problem';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
-const HEALTH_LABEL = {
-  on_track: 'On track',
-  at_risk: 'At risk',
-  off_track: 'Off track',
-} as const;
-const HEALTH_CLASS = {
-  on_track: 'text-state-completed',
-  at_risk: 'text-state-canceled',
-  off_track: 'text-destructive',
-} as const;
-
-/** Operational Project detail with progressive properties and dedicated working tabs. */
+/** Operational Project detail composed from the shared entity-detail shell. */
 export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -77,7 +63,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const taskNoun = useVocabulary('task').toLowerCase();
   const [tab, setTab] = useState<TabId>('overview');
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const {
@@ -224,12 +209,12 @@ export default function ProjectDetailPage(): JSX.Element {
     [participantIds, resolveActor],
   );
   const latestUpdate = updates[0];
-  const tabs: readonly TabItem[] = useMemo(
+  const tabItems = useMemo<readonly TabsItem[]>(
     () => [
-      { id: 'overview', label: 'Overview' },
-      { id: 'tasks', label: 'Tasks', count: milestoneTasks.length },
-      { id: 'updates', label: 'Updates', count: updates.length },
-      { id: 'resources', label: 'Resources', count: resources.length },
+      { value: 'overview', label: 'Overview' },
+      { value: 'tasks', label: 'Tasks', count: milestoneTasks.length },
+      { value: 'updates', label: 'Updates', count: updates.length },
+      { value: 'resources', label: 'Resources', count: resources.length },
     ],
     [milestoneTasks.length, resources.length, updates.length],
   );
@@ -257,68 +242,39 @@ export default function ProjectDetailPage(): JSX.Element {
   const health = project.health ?? null;
 
   return (
-    <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col items-start gap-2">
-            <InitiativeIconPicker
-              display={
-                detail?.display ?? {
-                  subjectType: 'project',
-                  subjectId: projectId,
-                  iconKey: 'folder',
-                  colorKey: 'neutral',
-                  customColor: null,
-                  customized: false,
-                }
-              }
-              initiativeName={project.name}
-              editable={canEdit}
-              pending={displayMutation.isPending}
-              onChange={(iconKey, colorKey, customColor) => {
-                displayMutation.mutate({ iconKey, colorKey, customColor });
-              }}
-            />
-            <h1 className="max-w-[32ch]">
-              <EditableTitle
-                value={project.name}
-                onSave={(name) => {
-                  patchProject({ name });
-                }}
-                canEdit={canEdit}
-                saving={propsPending}
-                ariaLabel={`${projectNoun} name`}
-                className="text-headline-large text-on-surface font-medium"
-              />
-            </h1>
-          </div>
-          {canDelete ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0"
-                  aria-label={`${projectNoun} actions`}
-                >
-                  <Ellipsis className="size-5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onSelect={() => {
-                    deleteProject.reset();
-                    setConfirmDeleteOpen(true);
-                  }}
-                >
-                  <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
-        </div>
-
+    <EntityDetailLayout
+      icon={
+        <InitiativeIconPicker
+          display={
+            detail?.display ?? {
+              subjectType: 'project',
+              subjectId: projectId,
+              iconKey: 'folder',
+              colorKey: 'neutral',
+              customColor: null,
+              customized: false,
+            }
+          }
+          initiativeName={project.name}
+          editable={canEdit}
+          pending={displayMutation.isPending}
+          onChange={(iconKey, colorKey, customColor) => {
+            displayMutation.mutate({ iconKey, colorKey, customColor });
+          }}
+        />
+      }
+      title={
+        <EditableTitle
+          value={project.name}
+          onSave={(name) => {
+            patchProject({ name });
+          }}
+          canEdit={canEdit}
+          saving={propsPending}
+          ariaLabel={`${projectNoun} name`}
+        />
+      }
+      subtitle={
         <EditableFreeformText
           value={project.summary}
           placeholder="Add a concise outcome summary…"
@@ -329,65 +285,10 @@ export default function ProjectDetailPage(): JSX.Element {
           }}
           className="text-on-surface-variant text-body-large max-w-4xl font-normal"
         />
-
-        <Popover open={propertiesOpen} onOpenChange={setPropertiesOpen}>
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-            {participants.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
-                {participants.map((participant) => (
-                  <span key={participant.actorId} className="flex h-8 items-center gap-1.5 pr-2">
-                    <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
-                    <span className="text-on-surface text-label-medium">{participant.name}</span>
-                  </span>
-                ))}
-              </div>
-            ) : null}
-            {health ? (
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Edit project health"
-                  className={`${HEALTH_CLASS[health]} bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
-                >
-                  <Target aria-hidden className="size-4" /> {HEALTH_LABEL[health]}
-                </button>
-              </PopoverTrigger>
-            ) : project.targetDate ? (
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  aria-label="Edit project target date"
-                  className="text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  <Calendar aria-hidden className="size-4" />{' '}
-                  {formatCalendarDate(project.targetDate)}
-                </button>
-              </PopoverTrigger>
-            ) : (
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="text-on-surface-variant hover:bg-surface-container-low focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  <TuneRounded aria-hidden className="size-4" /> Add health or target
-                </button>
-              </PopoverTrigger>
-            )}
-            {health && project.targetDate ? (
-              <button
-                type="button"
-                aria-label="Edit project target date"
-                onClick={() => {
-                  setPropertiesOpen(true);
-                }}
-                className="text-on-surface-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring text-label-large flex min-h-10 items-center gap-1.5 rounded-full px-3 tabular-nums transition-colors focus-visible:ring-2 focus-visible:outline-none"
-              >
-                <Calendar aria-hidden className="size-4" /> {formatCalendarDate(project.targetDate)}
-              </button>
-            ) : null}
-          </div>
-          <PopoverContent align="start" className="w-[min(21rem,calc(100vw-2rem))] p-4">
-            <h2 className="text-on-surface text-title-medium mb-2">Properties</h2>
+      }
+      metadata={
+        <>
+          <EntityMetadataRow ariaLabel="Project properties">
             <PropertiesPanel
               health={health}
               status={projectStatusOf(project.status)}
@@ -418,26 +319,52 @@ export default function ProjectDetailPage(): JSX.Element {
                 patchProject({ labelIds });
               }}
             />
-            {propsError ? (
-              <p role="alert" className="text-destructive mt-2 text-sm">
-                {propsError}
-              </p>
-            ) : null}
-          </PopoverContent>
-        </Popover>
-      </header>
-
-      <Separator className="my-6" />
-
-      <ProjectTabs
-        tabs={tabs}
-        value={tab}
-        onValueChange={(id) => {
-          setTab(id as TabId);
-        }}
-        label="Project sections"
-      />
-
+          </EntityMetadataRow>
+          {propsError ? (
+            <p role="alert" className="text-destructive text-sm">
+              {propsError}
+            </p>
+          ) : null}
+        </>
+      }
+      actions={
+        canDelete ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0"
+                aria-label={`${projectNoun} actions`}
+              >
+                <Ellipsis className="size-5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => {
+                  deleteProject.reset();
+                  setConfirmDeleteOpen(true);
+                }}
+              >
+                <Trash2 className="size-4" /> Delete {projectNoun.toLowerCase()}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null
+      }
+      tabs={
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            setTab(value as TabId);
+          }}
+          label="Project sections"
+          items={tabItems}
+        />
+      }
+    >
       {tab === 'overview' ? (
         <div
           role="tabpanel"
@@ -445,6 +372,17 @@ export default function ProjectDetailPage(): JSX.Element {
           aria-labelledby="tab-overview"
           className="flex flex-col gap-8"
         >
+          {participants.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1.5" aria-label="Project people">
+              {participants.map((participant) => (
+                <span key={participant.actorId} className="flex h-8 items-center gap-1.5 pr-2">
+                  <ActorAvatar kind={participant.kind} name={participant.name} size={24} />
+                  <span className="text-on-surface text-label-medium">{participant.name}</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           {latestUpdate ? (
             <section className="bg-surface-container-low rounded-xl p-4" aria-label="Latest update">
               <div className="mb-2 flex items-center justify-between gap-3">
@@ -541,7 +479,7 @@ export default function ProjectDetailPage(): JSX.Element {
 
       {tab === 'updates' ? (
         <div role="tabpanel" id="tabpanel-updates" aria-labelledby="tab-updates">
-          <UpdatesTab
+          <UpdatesPanel
             updates={updates}
             loading={updatesQ.isPending}
             error={
@@ -550,14 +488,17 @@ export default function ProjectDetailPage(): JSX.Element {
             resolveActor={resolveActor}
             posting={updatePosting}
             postError={updateError}
-            onPost={postUpdate}
+            onPost={(body) => {
+              postUpdate(body);
+            }}
+            showHealthComposer={false}
           />
         </div>
       ) : null}
 
       {tab === 'resources' ? (
         <div role="tabpanel" id="tabpanel-resources" aria-labelledby="tab-resources">
-          <ProjectResourcesTab
+          <ResourcesTab
             resources={resources}
             canEdit={canEdit}
             pending={addResource.isPending || removeResource.isPending}
@@ -620,6 +561,6 @@ export default function ProjectDetailPage(): JSX.Element {
           });
         }}
       />
-    </main>
+    </EntityDetailLayout>
   );
 }

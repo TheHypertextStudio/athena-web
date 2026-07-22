@@ -21,6 +21,10 @@ export interface EntityMultiPickerProps<TValue extends string = string> {
   ariaLabel: string;
   disabled?: boolean;
   readOnly?: boolean;
+  /** Trigger weight: `ghost` (panel rows) or `outline` (composer strip). */
+  triggerVariant?: 'ghost' | 'outline';
+  /** Extra classes for the trigger. */
+  triggerClassName?: string;
 }
 
 /**
@@ -41,6 +45,8 @@ export function EntityMultiPicker<TValue extends string = string>({
   ariaLabel,
   disabled,
   readOnly,
+  triggerVariant = 'ghost',
+  triggerClassName,
 }: EntityMultiPickerProps<TValue>): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
   const summary =
@@ -56,6 +62,8 @@ export function EntityMultiPicker<TValue extends string = string>({
       ariaLabel={`${ariaLabel} — ${summary ?? 'none'}`}
       disabled={disabled}
       readOnly={readOnly}
+      variant={triggerVariant}
+      className={triggerClassName}
     />
   );
 

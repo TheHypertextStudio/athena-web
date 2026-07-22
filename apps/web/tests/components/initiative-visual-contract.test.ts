@@ -17,6 +17,7 @@ const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
 const iconPickerPath = join(root, 'apps/web/src/components/initiatives/initiative-icon-picker.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
+const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -45,14 +46,21 @@ function productionTypeSources(directory: string): string[] {
 }
 
 describe('Initiative visual contract', () => {
-  it('uses canonical MD3 headline-large for detail titles and keeps status in the properties rail', () => {
+  it('uses the canonical MD3 headline for detail titles and keeps status in the properties rail', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
-    expect(typography).toContain('--text-headline-large: 2rem;');
-    expect(detail).toContain('text-headline-large');
-    // Status is no longer duplicated as an eyebrow above the title; it lives once in the rail as a
-    // labeled property row.
-    expect(detail).toContain('label="Status"');
+    const layout = source(entityDetailLayoutPath);
+    // The detail title adopts the shared shell, whose canonical token is headline-medium; the page
+    // composes the shell and never restates the token or diverges to headline-large.
+    expect(typography).toContain('--text-headline-medium: 1.75rem;');
+    expect(layout).toContain('text-headline-medium');
+    expect(detail).toContain('<EntityDetailLayout');
+    expect(detail).toContain('<EntityMetadataRow');
+    expect(detail).not.toContain('text-headline-large');
+    // Status is no longer duplicated as an eyebrow/chip above the title; it lives once in the rail
+    // through the properties panel that fills the metadata slot.
+    expect(detail).toContain('<InitiativePropertiesPanel');
+    expect(detail).toContain('status={detail.status}');
     expect(detail).not.toContain('variant="secondary"');
   });
 

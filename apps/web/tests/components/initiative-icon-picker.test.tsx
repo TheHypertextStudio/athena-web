@@ -36,7 +36,12 @@ describe('InitiativeIconPicker', () => {
     expect(screen.getByLabelText('Initiative icon')).toBeTruthy();
     expect(screen.getByLabelText('Initiative color')).toBeTruthy();
     expect(screen.getAllByTestId('initiative-icon-option').length).toBeGreaterThan(40);
-    expect(screen.getByTestId('initiative-icon-circle').className).toContain('size-8');
+    // The glyph is a stable 32px circle sized through EntityIconGlyph's numeric `size` prop (inline
+    // style) — nested inside the 40px customization tap target — rather than a Tailwind size class.
+    const iconCircle = screen.getByTestId('initiative-icon-circle');
+    expect(iconCircle.className).toContain('rounded-full');
+    expect(iconCircle.style.width).toBe('32px');
+    expect(iconCircle.style.height).toBe('32px');
 
     fireEvent.click(screen.getByRole('button', { name: 'Flag' }));
     expect(onChange).toHaveBeenCalledWith('flag', 'neutral', null);

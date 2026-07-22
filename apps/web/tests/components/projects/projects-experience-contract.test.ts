@@ -9,6 +9,7 @@ const detailPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/[pro
 const documentPath = join(root, 'apps/web/src/components/editor/entity-document.tsx');
 const editorPath = join(root, 'apps/web/src/components/editor/freeform-text.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
+const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
 
 function source(path: string): string {
   return readFileSync(path, 'utf8');
@@ -46,13 +47,22 @@ describe('Projects experience contract', () => {
 
   it('keeps Project identity and work ahead of progressive metadata', () => {
     const detail = source(detailPath);
-    expect(detail).toContain('text-headline-large');
+    const layout = source(entityDetailLayoutPath);
+    // Identity + arrangement come from the one shared shell; the page composes it and never
+    // hand-rolls its own masthead or restates the canonical title token.
+    expect(detail).toContain('<EntityDetailLayout');
+    expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
+    expect(detail).toContain('<PropertiesPanel');
+    expect(detail).toContain('<InitiativeIconPicker');
     expect(detail).toContain('aria-label="Project people"');
-    expect(detail).toContain('Properties');
-    expect(detail.indexOf('<PopoverContent')).toBeLessThan(detail.indexOf('<PropertiesPanel'));
-    expect(detail.indexOf('<InitiativeIconPicker')).toBeLessThan(
-      detail.indexOf('text-headline-large'),
-    );
+    // The canonical title token lives once in the shell as headline-medium; no detail page may
+    // diverge to headline-large or restate the token.
+    expect(layout).toContain('text-headline-medium');
+    expect(detail).not.toContain('text-headline-large');
+    // In the shell the property chips render in the metadata slot below the subtitle — never inline
+    // with the <h1> — and the identity block precedes the metadata row.
+    expect(layout.indexOf('</h1>')).toBeLessThan(layout.indexOf('{metadata}'));
+    expect(layout.indexOf('{subtitle}')).toBeLessThan(layout.indexOf('{metadata}'));
     expect(detail).not.toContain('Project lead');
     expect(detail).not.toContain('Contributor');
     expect(detail).not.toContain('No people yet');
@@ -60,21 +70,21 @@ describe('Projects experience contract', () => {
     expect(detail).not.toContain('Print');
   });
 
-  it('makes visible properties operate the anchored disclosure', () => {
+  it('operates properties as an inline metadata chip row, not an anchored disclosure', () => {
     const detail = source(detailPath);
-    expect(detail).toContain('const [propertiesOpen, setPropertiesOpen]');
-    expect(detail).toContain('open={propertiesOpen}');
+    const layout = source(entityDetailLayoutPath);
+    // Properties are the inline chip row in the masthead, not a popover the user must open first.
+    expect(detail).not.toContain('propertiesOpen');
+    expect(detail).not.toContain('<Popover open=');
+    expect(detail).not.toContain('<PopoverContent');
     expect(detail).not.toContain('aria-label="Open project properties"');
-    expect(detail).toContain('Add health or target');
-    expect(detail).toContain('aria-label="Edit project health"');
-    expect(detail).toContain('aria-label="Edit project target date"');
-    expect(detail.indexOf('<InitiativeIconPicker')).toBeLessThan(detail.indexOf('<Popover open='));
-    expect(detail).toContain('bg-surface-container-low hover:bg-surface-container-high');
-    expect(detail).toContain('hover:bg-surface-container-high');
-    // The tab bar now adopts the shared Tabs primitive, which owns the 40px touch-target floor.
-    expect(source(join(root, 'apps/web/src/components/project-detail/tabs.tsx'))).toContain(
-      '<Tabs',
-    );
+    expect(detail).toContain('<EntityMetadataRow ariaLabel="Project properties">');
+    // Every chip reads as the same calm pill, wired once through the shell's shared chip class.
+    expect(layout).toContain('bg-surface-container-low hover:bg-surface-container-high');
+    // The tab bar adopts the shared Tabs primitive (which owns the 40px touch-target floor), and
+    // the shell renders a Separator directly beneath the tab bar.
+    expect(detail).toContain('<Tabs');
+    expect(layout.indexOf('{tabs}')).toBeLessThan(layout.indexOf('<Separator'));
     expect(source(join(root, 'packages/ui/src/primitives/tabs.tsx'))).toContain('min-h-10');
   });
 
@@ -98,7 +108,7 @@ describe('Projects experience contract', () => {
 
   it('gives Resources a dedicated operating tab', () => {
     const detail = source(detailPath);
-    expect(detail).toContain("{ id: 'resources', label: 'Resources'");
-    expect(detail).toContain('<ProjectResourcesTab');
+    expect(detail).toContain("{ value: 'resources', label: 'Resources'");
+    expect(detail).toContain('<ResourcesTab');
   });
 });

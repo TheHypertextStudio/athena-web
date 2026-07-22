@@ -1,28 +1,27 @@
 'use client';
 
 /**
- * The program properties panel — owner, status, health, and visibility.
+ * The program properties chips — status, health, owner, and visibility.
  *
  * @remarks
  * A Program is an *ongoing* line of work, so its editable metadata is operational rather than
- * scheduled: who owns it, its lifecycle status (`active`/`paused`/`archived`), its current
- * health verdict, and its visibility. Per directive A each row is an interactive picker that
- * assigns the property through the program PATCH RPC (the host page owns the optimistic mutation
- * + rollback); an unset owner/health reads as a calm "Set <field>" affordance rather than a dead
- * row. A Program PATCH requires `manage`, so the host gates `canEdit` on that capability and the
- * rows render read-only otherwise.
+ * scheduled: its lifecycle status (`active`/`paused`/`archived`), its current health verdict, who
+ * owns it, and its visibility. Each property is an interactive chip picker that assigns the value
+ * through the program PATCH RPC (the host page owns the optimistic mutation + rollback); an unset
+ * owner/health reads as a calm "Set <field>" affordance rather than a dead row. A Program PATCH
+ * requires `manage`, so the host gates `canEdit` on that capability and the chips render read-only
+ * otherwise.
  *
- * Presentational + controlled: it takes pre-resolved {@link PickerOption}s and current values,
- * and reports each change through a typed `onChange`. The host resolves members into options and
- * owns the PATCH.
+ * Presentational + controlled: it renders a *fragment* of chip pickers (the host wraps them in an
+ * {@link EntityMetadataRow}) laid out in the canonical order Status → Health → Owner → Visibility.
+ * It takes pre-resolved {@link PickerOption}s and current values, and reports each change through a
+ * typed `onChange`. The host resolves members into options and owns the PATCH.
  */
 import { type Health, type ProgramStatus, type Visibility } from '@docket/types';
 import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
-import { useVocabulary } from '@docket/ui/hooks';
-import { Activity, Globe, Heart, User } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
-import { PropertyPanel, PropertyPanelRow } from '@/components/property-pickers/property-panel';
+import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
 import {
   healthOptions,
   programStatusOptions,
@@ -41,7 +40,7 @@ export interface ProgramPropertiesPanelProps {
   health: Health | null;
   /** The current visibility. */
   visibility: Visibility;
-  /** Whether the actor may edit (holds `manage`); rows are read-only when false. */
+  /** Whether the actor may edit (holds `manage`); chips are read-only when false. */
   canEdit: boolean;
   /** Whether a mutation is in flight (disables every picker). */
   pending: boolean;
@@ -56,10 +55,10 @@ export interface ProgramPropertiesPanelProps {
 }
 
 /**
- * The interactive program properties panel.
+ * The interactive program properties chips.
  *
  * @param props - The {@link ProgramPropertiesPanelProps}.
- * @returns the rendered panel.
+ * @returns the fragment of chip pickers.
  */
 export function ProgramPropertiesPanel({
   ownerId,
@@ -74,68 +73,60 @@ export function ProgramPropertiesPanel({
   onHealthChange,
   onVisibilityChange,
 }: ProgramPropertiesPanelProps): JSX.Element {
-  const programLabel = useVocabulary('program');
   const readOnly = !canEdit;
 
   return (
-    <PropertyPanel>
-      <h3 className="text-on-surface-variant px-1 pt-1 text-xs font-medium">
-        {programLabel} properties
-      </h3>
-
-      <PropertyPanelRow icon={<User className="size-4" />} label="Owner">
-        <ActorPicker
-          options={memberOptions}
-          value={ownerId}
-          onChange={onOwnerChange}
-          placeholder="Set owner"
-          clearLabel="No owner"
-          ariaLabel="Owner"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-
-      <PropertyPanelRow divided icon={<Activity className="size-4" />} label="Status">
-        <EnumPicker<ProgramStatus>
-          options={programStatusOptions()}
-          value={status}
-          onChange={(next) => {
-            if (next) onStatusChange(next);
-          }}
-          placeholder="Set status"
-          ariaLabel="Status"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-
-      <PropertyPanelRow divided icon={<Heart className="size-4" />} label="Health">
-        <EnumPicker<Health>
-          options={healthOptions()}
-          value={health}
-          onChange={onHealthChange}
-          placeholder="Set health"
-          clearLabel="No health"
-          ariaLabel="Health"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-
-      <PropertyPanelRow divided icon={<Globe className="size-4" />} label="Visibility">
-        <EnumPicker<Visibility>
-          options={visibilityOptions()}
-          value={visibility}
-          onChange={(next) => {
-            if (next) onVisibilityChange(next);
-          }}
-          placeholder="Set visibility"
-          ariaLabel="Visibility"
-          readOnly={readOnly}
-          disabled={pending}
-        />
-      </PropertyPanelRow>
-    </PropertyPanel>
+    <>
+      <EnumPicker<ProgramStatus>
+        options={programStatusOptions()}
+        value={status}
+        onChange={(next) => {
+          if (next) onStatusChange(next);
+        }}
+        placeholder="Set status"
+        ariaLabel="Status"
+        readOnly={readOnly}
+        disabled={pending}
+        triggerVariant="ghost"
+        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+      />
+      <EnumPicker<Health>
+        options={healthOptions()}
+        value={health}
+        onChange={onHealthChange}
+        placeholder="Set health"
+        clearLabel="No health"
+        ariaLabel="Health"
+        readOnly={readOnly}
+        disabled={pending}
+        triggerVariant="ghost"
+        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+      />
+      <ActorPicker
+        options={memberOptions}
+        value={ownerId}
+        onChange={onOwnerChange}
+        placeholder="Set owner"
+        clearLabel="No owner"
+        ariaLabel="Owner"
+        readOnly={readOnly}
+        disabled={pending}
+        triggerVariant="ghost"
+        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+      />
+      <EnumPicker<Visibility>
+        options={visibilityOptions()}
+        value={visibility}
+        onChange={(next) => {
+          if (next) onVisibilityChange(next);
+        }}
+        placeholder="Set visibility"
+        ariaLabel="Visibility"
+        readOnly={readOnly}
+        disabled={pending}
+        triggerVariant="ghost"
+        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+      />
+    </>
   );
 }

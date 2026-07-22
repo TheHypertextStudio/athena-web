@@ -97,7 +97,10 @@ describe('Project PropertiesPanel', () => {
   it('treats labels as selectable workspace objects', () => {
     const callbacks = renderPanel();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Legislative' }));
+    // Labels are edited through the shared LabelsPicker: open its trigger, then toggle the label
+    // option — rather than a hand-rolled per-label toggle button in the row.
+    fireEvent.click(screen.getByRole('button', { name: 'Labels — none' }));
+    choosePickerOption(/Legislative/);
     expect(callbacks.onLabelsChange).toHaveBeenCalledWith([LABELS[0]!.id]);
   });
 

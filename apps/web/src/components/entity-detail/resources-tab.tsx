@@ -1,14 +1,14 @@
 'use client';
 
-/** Project resources tab: linked documents and URLs as first-class operating context. */
+/** Entity resources tab: linked documents and URLs as first-class operating context. */
 import type { AttachmentOut } from '@docket/types';
 import { Link as LinkIcon, Plus, Trash2 } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
-/** Props for {@link ProjectResourcesTab}. */
-export interface ProjectResourcesTabProps {
+/** Props for {@link ResourcesTab}. */
+export interface ResourcesTabProps {
   resources: readonly AttachmentOut[];
   canEdit: boolean;
   pending: boolean;
@@ -18,14 +18,14 @@ export interface ProjectResourcesTabProps {
 }
 
 /** Render URL resources in a dedicated, dense tab rather than burying them in metadata. */
-export function ProjectResourcesTab({
+export function ResourcesTab({
   resources,
   canEdit,
   pending,
   error,
   onAdd,
   onRemove,
-}: ProjectResourcesTabProps): JSX.Element {
+}: ResourcesTabProps): JSX.Element {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');

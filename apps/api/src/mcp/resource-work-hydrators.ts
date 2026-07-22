@@ -86,6 +86,7 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
   return {
     id: t.id,
     title: t.title,
+    summary: t.summary,
     description: t.description,
     teamId: t.teamId,
     state: t.state,
@@ -143,6 +144,7 @@ export async function hydrateProject(orgId: string, id: string): Promise<unknown
   return {
     id: p.id,
     name: p.name,
+    summary: p.summary,
     description: p.description,
     status: p.status,
     health: p.health,
@@ -201,6 +203,7 @@ export async function hydrateProgram(orgId: string, id: string): Promise<unknown
   return {
     id: p.id,
     name: p.name,
+    summary: p.summary,
     description: p.description,
     status: p.status,
     health: p.health,
@@ -248,6 +251,7 @@ export async function hydrateInitiative(orgId: string, id: string): Promise<unkn
   return {
     id: i.id,
     name: i.name,
+    summary: i.summary,
     description: i.description,
     status: i.status,
     health: i.health,

@@ -55,6 +55,7 @@ const TEAMS: readonly TeamOut[] = [
     organizationId: OrganizationId.parse(ORG_ID),
     name: 'General',
     key: 'GEN',
+    summary: null,
     triageEnabled: true,
   },
 ];

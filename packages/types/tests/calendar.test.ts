@@ -374,6 +374,7 @@ describe('CalendarItemTaskLinkResultOut', () => {
         id: TASK_ID,
         organizationId: ORG_ID,
         title: 'Follow up',
+        summary: null,
         teamId: '01BX5ZZKBKACTAV9WEVGEMMVS4',
         state: 'backlog',
         priority: 'none',

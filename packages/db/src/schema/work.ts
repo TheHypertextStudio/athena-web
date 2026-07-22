@@ -51,6 +51,7 @@ export const program = pgTable(
     ...auditColumns(),
     name: text('name').notNull(),
     description: text('description'),
+    summary: text('summary'),
     ownerId: text('owner_id').references(() => actor.id, { onDelete: 'set null' }),
     status: programStatus('status').notNull().default('active'),
     health: health('health'),
@@ -159,6 +160,7 @@ export const task = pgTable(
     ...auditColumns(),
     title: text('title').notNull(),
     description: text('description'),
+    summary: text('summary'),
     teamId: text('team_id')
       .notNull()
       .references(() => team.id, { onDelete: 'cascade' }),

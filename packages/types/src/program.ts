@@ -24,6 +24,11 @@ export const ProgramCreate = z
       .string()
       .optional()
       .describe('Optional free-text description of the program’s mission/scope.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('Optional plain-text summary, limited to 280 characters.'),
     ownerId: ActorId.optional().describe(
       'Optional owning Actor (the accountable person). Must reference an Actor in the caller’s org.',
     ),
@@ -52,6 +57,11 @@ export const ProgramUpdate = z
       .nullable()
       .optional()
       .describe('New description. Omit to leave unchanged; pass `null` to clear it.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('New plain-text summary. Omit to leave unchanged; send an empty string to clear.'),
     ownerId: ActorId.nullable()
       .optional()
       .describe(
@@ -82,6 +92,7 @@ export const ProgramOut = z
       .nullable()
       .optional()
       .describe('Free-text description, or `null`/absent when none.'),
+    summary: z.string().nullable().describe('Plain-text summary, or `null` when none.'),
     ownerId: ActorId.nullable()
       .optional()
       .describe('The owning Actor (accountable person), or `null` when unowned.'),

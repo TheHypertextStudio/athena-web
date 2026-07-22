@@ -196,6 +196,7 @@ export const team = pgTable(
     name: text('name').notNull(),
     key: text('key').notNull(),
     description: text('description'),
+    summary: text('summary'),
     workflowStates: jsonb('workflow_states')
       .$type<WorkflowState[]>()
       .notNull()

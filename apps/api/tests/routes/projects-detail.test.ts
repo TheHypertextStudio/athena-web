@@ -173,12 +173,14 @@ describe('projects detail router', () => {
     expect(after.teamId).toBe(team2!.id);
     expect(after.leadId).toBe(humanActorId);
 
-    // Second patch: clear the nullable columns (the `null` branches).
+    // Second patch: clear the columns. Nullable references/dates clear via `null`;
+    // `summary`/`description` are optional-not-nullable, so they clear via an empty string.
     const cleared = await writer.request(`/${id}`, {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        description: null,
+        summary: '',
+        description: '',
         leadId: null,
         programId: null,
         teamId: null,
@@ -189,12 +191,14 @@ describe('projects detail router', () => {
     });
     expect(cleared.status).toBe(200);
     const clearedBody = await json<{
+      summary: string | null;
       description: string | null;
       startDate: string | null;
       targetDate: string | null;
       programId: string | null;
       health: string | null;
     }>(cleared);
+    expect(clearedBody.summary).toBeNull();
     expect(clearedBody.description).toBeNull();
     expect(clearedBody.startDate).toBeNull();
     expect(clearedBody.targetDate).toBeNull();

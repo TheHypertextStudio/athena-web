@@ -30,6 +30,11 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 export interface TaskPatch {
   /** New title. Non-empty; titles cannot be cleared. */
   title?: string;
+  /**
+   * New plain-text summary/subtitle. Optional-not-nullable on the wire: send an empty string to
+   * clear it (never `null`); omit to leave it unchanged.
+   */
+  summary?: string;
   assigneeId?: string | null;
   projectId?: string | null;
   programId?: string | null;
@@ -161,6 +166,7 @@ export function useTaskMutations(
     mutationFn: (patch) => {
       const body = {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
         ...(patch.assigneeId !== undefined
           ? { assigneeId: patch.assigneeId === null ? null : ActorId.parse(patch.assigneeId) }
           : {}),

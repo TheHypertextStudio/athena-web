@@ -42,8 +42,10 @@ export interface ProjectPatch {
 function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
   return {
     ...(patch.name !== undefined ? { name: patch.name } : {}),
-    ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
-    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    // The editor emits `null` on clear; the Update DTO is optional-not-nullable, so a cleared
+    // field travels as an empty string (the server normalizes `''` back to NULL).
+    ...(patch.summary !== undefined ? { summary: patch.summary ?? '' } : {}),
+    ...(patch.description !== undefined ? { description: patch.description ?? '' } : {}),
     ...(patch.health !== undefined ? { health: patch.health } : {}),
     ...(patch.leadId !== undefined
       ? { leadId: patch.leadId === null ? null : ActorId.parse(patch.leadId) }

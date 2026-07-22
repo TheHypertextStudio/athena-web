@@ -97,6 +97,11 @@ export const TeamCreate = z
       .nullable()
       .optional()
       .describe('Optional free-text description of the team. Pass null to leave unset.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('Optional plain-text summary, limited to 280 characters.'),
     workflowStates: z
       .array(WorkflowState)
       .min(1)
@@ -154,6 +159,11 @@ export const TeamUpdate = z
       .nullable()
       .optional()
       .describe('New description, or null to clear it. Optional; omit to leave unchanged.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('New plain-text summary. Omit to leave unchanged; send an empty string to clear.'),
     workflowStates: z
       .array(WorkflowState)
       .min(1)
@@ -192,6 +202,7 @@ export const TeamOut = z
       .nullable()
       .optional()
       .describe('Free-text description of the team; null when unset.'),
+    summary: z.string().nullable().describe('Plain-text summary, or `null` when none.'),
     workflowStates: z
       .array(WorkflowState)
       .optional()

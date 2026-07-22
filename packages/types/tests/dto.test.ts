@@ -390,6 +390,7 @@ describe('task DTOs', () => {
       organizationId: ID2,
       title: 'T',
       description: null,
+      summary: null,
       teamId: ID,
       state: 'todo',
       priority: 'none',
@@ -466,8 +467,14 @@ describe('actor + team DTOs', () => {
 
   it('TeamOut parses and rejects a missing triageEnabled', () => {
     expect(
-      TeamOut.parse({ id: ID, organizationId: ID2, name: 'Eng', key: 'ENG', triageEnabled: true })
-        .triageEnabled,
+      TeamOut.parse({
+        id: ID,
+        organizationId: ID2,
+        name: 'Eng',
+        key: 'ENG',
+        summary: null,
+        triageEnabled: true,
+      }).triageEnabled,
     ).toBe(true);
     expect(
       TeamOut.safeParse({ id: ID, organizationId: ID2, name: 'Eng', key: 'ENG' }).success,
@@ -512,12 +519,13 @@ describe('initiative DTOs', () => {
   it('InitiativeUpdate parses nullable fields', () => {
     const parsed = InitiativeUpdate.parse({
       name: 'I',
-      description: null,
       ownerId: null,
       targetDate: null,
       health: null,
     });
-    expect(parsed.description).toBeNull();
+    expect(parsed.ownerId).toBeNull();
+    expect(parsed.targetDate).toBeNull();
+    expect(parsed.health).toBeNull();
   });
 
   it('InitiativeUpdate rejects empty name', () => {
@@ -660,6 +668,7 @@ describe('program DTOs', () => {
         organizationId: ID2,
         name: 'P',
         description: null,
+        summary: null,
         ownerId: null,
         status: 'active',
         health: null,

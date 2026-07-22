@@ -121,6 +121,7 @@ describe('picker option mappers', () => {
       id: IDS.program,
       organizationId: IDS.org,
       name: 'Platform',
+      summary: null,
       description: null,
       ownerId: null,
       status: 'active',

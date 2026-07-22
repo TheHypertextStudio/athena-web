@@ -23,6 +23,11 @@ export interface ProgramPatch {
   status?: ProgramStatus;
   health?: Health | null;
   visibility?: Visibility;
+  /**
+   * The plain-text summary/subtitle. Optional-not-nullable on the wire: send an empty string to
+   * clear it (never `null`); omit to leave it unchanged.
+   */
+  summary?: string;
   /** The Markdown description/brief. `null` clears it. */
   description?: string | null;
 }
@@ -30,6 +35,7 @@ export interface ProgramPatch {
 function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
   return {
     ...(patch.name !== undefined ? { name: patch.name } : {}),
+    ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
     ...(patch.ownerId !== undefined
       ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
       : {}),

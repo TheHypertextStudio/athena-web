@@ -19,6 +19,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { EntityDocument } from '@/components/editor/entity-document';
 import {
   DetailPageLayout,
@@ -313,6 +314,18 @@ export default function ProgramDetailPage(): JSX.Element {
         </>
       }
     >
+      <EditableFreeformText
+        value={program.summary}
+        placeholder="Add a concise summary…"
+        canEdit={canEdit}
+        saving={propsPending}
+        onSave={(summary) => {
+          // Optional-not-nullable on the wire: an empty draft clears by sending '' (never null).
+          patchProgram({ summary: summary ?? '' });
+        }}
+        className="text-on-surface-variant text-body-large max-w-4xl font-normal"
+      />
+
       <Separator className="my-6" />
 
       <EntityDocument

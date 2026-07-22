@@ -27,6 +27,11 @@ export const TaskCreate = z
       .string()
       .optional()
       .describe('Optional long-form body for the task (markdown). Omit for a title-only task.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('Optional plain-text summary, limited to 280 characters.'),
     teamId: TeamId.describe(
       "The owning team. Required — a task always belongs to exactly one team, and the team's `workflow_states` define the states this task may occupy. Must reference a team in the caller's org.",
     ),
@@ -129,6 +134,7 @@ export const TaskOut = z
       .nullable()
       .optional()
       .describe('Long-form body (markdown); null when unset.'),
+    summary: z.string().nullable().describe('Plain-text summary, or `null` when none.'),
     teamId: TeamId.describe(
       "The owning team, whose `workflow_states` define this task's allowed states.",
     ),
@@ -187,6 +193,11 @@ export const TaskUpdate = z
       .string()
       .optional()
       .describe('New long-form body (markdown). Omit to leave unchanged.'),
+    summary: z
+      .string()
+      .max(280)
+      .optional()
+      .describe('New plain-text summary. Omit to leave unchanged; send an empty string to clear.'),
     state: z
       .string()
       .optional()

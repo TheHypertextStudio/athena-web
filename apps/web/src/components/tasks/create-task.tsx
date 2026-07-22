@@ -92,6 +92,7 @@ export function CreateTaskDialog({
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
 
   const [title, setTitle] = useState('');
+  const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [teamOverride, setTeamOverride] = useState<string | null>(null);
   const [state, setState] = useState<string | null>(null);
@@ -142,6 +143,7 @@ export function CreateTaskDialog({
     (next: boolean): void => {
       if (!next) {
         setTitle('');
+        setSummary('');
         setBody('');
         setTeamOverride(null);
         setState(null);
@@ -181,6 +183,7 @@ export function CreateTaskDialog({
           title: trimmed,
           teamId: TeamId.parse(teamId),
           priority,
+          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
           ...(state ? { state } : {}),
           ...(assigneeId ? { assigneeId: ActorId.parse(assigneeId) } : {}),
@@ -209,6 +212,7 @@ export function CreateTaskDialog({
     }
   }, [
     title,
+    summary,
     body,
     teamId,
     priority,
@@ -233,6 +237,10 @@ export function CreateTaskDialog({
       title={title}
       onTitleChange={setTitle}
       titlePlaceholder="Task title"
+      summary={summary}
+      onSummaryChange={setSummary}
+      summaryPlaceholder="One-sentence summary"
+      summaryMaxLength={280}
       body={body}
       onBodyChange={setBody}
       bodyPlaceholder="Add a description…"

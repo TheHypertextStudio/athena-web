@@ -17,6 +17,7 @@ import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { ok } from '../lib/ok';
 import { setTaskState } from '../lib/task-state';
 import { pageResult, seekAfter } from '../lib/list-cursor';
@@ -104,6 +105,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
         .values({
           organizationId: orgId,
           title: body.title,
+          summary: body.summary,
           description: body.description,
           teamId: body.teamId,
           state,
@@ -290,6 +292,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
 
       const patch = {
         ...(body.title !== undefined ? { title: body.title } : {}),
+        ...clearableTextPatch('summary', body.summary),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(statePatch !== undefined
           ? {

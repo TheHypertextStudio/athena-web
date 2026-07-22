@@ -36,8 +36,10 @@ export interface InitiativePatch {
 function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
   return {
     ...(patch.name !== undefined ? { name: patch.name } : {}),
-    ...(patch.summary !== undefined ? { summary: patch.summary } : {}),
-    ...(patch.description !== undefined ? { description: patch.description } : {}),
+    // The editor emits `null` on clear; the Update DTO is optional-not-nullable, so a cleared
+    // field travels as an empty string (the server normalizes `''` back to NULL).
+    ...(patch.summary !== undefined ? { summary: patch.summary ?? '' } : {}),
+    ...(patch.description !== undefined ? { description: patch.description ?? '' } : {}),
     ...(patch.ownerId !== undefined
       ? { ownerId: patch.ownerId === null ? null : ActorId.parse(patch.ownerId) }
       : {}),

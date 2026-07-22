@@ -98,14 +98,14 @@ export const ProjectUpdate = z
     summary: z
       .string()
       .max(280)
-      .nullable()
       .optional()
-      .describe('New concise outcome summary. Omit to leave unchanged; `null` clears it.'),
+      .describe(
+        'New concise outcome summary. Omit to leave unchanged; send an empty string to clear.',
+      ),
     description: z
       .string()
-      .nullable()
       .optional()
-      .describe('New description. Omit to leave unchanged; `null` clears it.'),
+      .describe('New description. Omit to leave unchanged; send an empty string to clear.'),
     leadId: ActorId.nullable()
       .optional()
       .describe(

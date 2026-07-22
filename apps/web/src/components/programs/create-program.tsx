@@ -82,6 +82,7 @@ export function CreateProgramDialog({
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
 
   const [name, setName] = useState('');
+  const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const [status, setStatus] = useState<ProgramStatus>('active');
@@ -95,6 +96,7 @@ export function CreateProgramDialog({
     (next: boolean): void => {
       if (!next) {
         setName('');
+        setSummary('');
         setBody('');
         setOwnerId(null);
         setStatus('active');
@@ -123,6 +125,7 @@ export function CreateProgramDialog({
           name: trimmed,
           status,
           visibility,
+          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
           ...(ownerId ? { ownerId: ActorId.parse(ownerId) } : {}),
           ...(health ? { health } : {}),
@@ -147,6 +150,7 @@ export function CreateProgramDialog({
     }
   }, [
     name,
+    summary,
     body,
     status,
     visibility,
@@ -166,6 +170,10 @@ export function CreateProgramDialog({
       title={name}
       onTitleChange={setName}
       titlePlaceholder={`${programNoun} name`}
+      summary={summary}
+      onSummaryChange={setSummary}
+      summaryPlaceholder="One-sentence summary"
+      summaryMaxLength={280}
       body={body}
       onBodyChange={setBody}
       bodyPlaceholder="Add a description…"

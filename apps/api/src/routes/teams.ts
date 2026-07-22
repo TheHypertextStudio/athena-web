@@ -23,6 +23,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -38,6 +39,7 @@ function toOut(t: TeamRow): z.input<typeof TeamDetail> {
     organizationId: t.organizationId,
     name: t.name,
     key: t.key,
+    summary: t.summary ?? null,
     description: t.description ?? null,
     workflowStates: t.workflowStates,
     triageEnabled: t.triageEnabled,
@@ -115,6 +117,7 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
           organizationId: orgId,
           name: body.name,
           key: body.key,
+          summary: body.summary ?? null,
           description: body.description ?? null,
           workflowStates: body.workflowStates ?? [...defaultWorkflowStates],
           triageEnabled: body.triageEnabled ?? true,
@@ -173,6 +176,7 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
       const patch = {
         ...(body.name !== undefined ? { name: body.name } : {}),
         ...(body.key !== undefined ? { key: body.key } : {}),
+        ...clearableTextPatch('summary', body.summary),
         ...(body.description !== undefined ? { description: body.description } : {}),
         ...(body.workflowStates !== undefined ? { workflowStates: body.workflowStates } : {}),
         ...(body.triageEnabled !== undefined ? { triageEnabled: body.triageEnabled } : {}),

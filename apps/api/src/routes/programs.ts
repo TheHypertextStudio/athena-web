@@ -19,6 +19,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -36,6 +37,7 @@ function toOut(p: ProgramRow): z.input<typeof ProgramOut> {
     id: p.id,
     organizationId: p.organizationId,
     name: p.name,
+    summary: p.summary,
     description: p.description,
     ownerId: p.ownerId,
     status: p.status,
@@ -53,6 +55,7 @@ function taskToOut(
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,
+    summary: t.summary,
     description: t.description,
     teamId: t.teamId,
     state: t.state,
@@ -134,6 +137,7 @@ const programs = new Hono<AppEnv>()
         .values({
           organizationId: orgId,
           name: body.name,
+          summary: body.summary,
           description: body.description,
           ownerId: body.ownerId,
           status: body.status ?? 'active',
@@ -218,6 +222,7 @@ const programs = new Hono<AppEnv>()
         .update(program)
         .set({
           ...(body.name !== undefined ? { name: body.name } : {}),
+          ...clearableTextPatch('summary', body.summary),
           ...(body.description !== undefined ? { description: body.description } : {}),
           ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),

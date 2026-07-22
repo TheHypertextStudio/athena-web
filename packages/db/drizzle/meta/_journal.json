@@ -309,6 +309,13 @@
       "when": 1784676304651,
       "tag": "0043_great_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1784679596847,
+      "tag": "0044_old_deathstrike",
+      "breakpoints": true
     }
   ]
 }

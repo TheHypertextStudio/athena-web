@@ -31,6 +31,7 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -427,8 +428,8 @@ const projects = new Hono<AppEnv>()
 
       const patch = {
         ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.summary !== undefined ? { summary: body.summary } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
+        ...clearableTextPatch('summary', body.summary),
+        ...clearableTextPatch('description', body.description),
         ...(body.leadId !== undefined ? { leadId: body.leadId } : {}),
         ...(body.programId !== undefined ? { programId: body.programId } : {}),
         ...(body.teamId !== undefined ? { teamId: body.teamId } : {}),

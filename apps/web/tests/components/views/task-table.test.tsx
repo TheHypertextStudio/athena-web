@@ -79,6 +79,7 @@ function task(fixture: TaskFixture): TaskOut {
     organizationId: OrganizationId.parse(ORG_ID),
     teamId: TeamId.parse(TEAM_ID),
     title: fixture.title,
+    summary: null,
     state: fixture.state ?? 'in_progress',
     priority: 'none',
     ...(fixture.assigneeId ? { assigneeId: ActorId.parse(fixture.assigneeId) } : {}),

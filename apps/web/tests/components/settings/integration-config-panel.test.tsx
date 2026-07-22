@@ -71,8 +71,22 @@ const TEAM_ENG_ID = TeamId.parse('TEAM0000000000000000000002');
 const TEAM_OPS_ID = TeamId.parse('TEAM0000000000000000000003');
 
 const ORG_TEAMS: readonly TeamOut[] = [
-  { id: TEAM_ENG_ID, organizationId: ORG_ID, name: 'Engineering', key: 'ENG', triageEnabled: true },
-  { id: TEAM_OPS_ID, organizationId: ORG_ID, name: 'Ops', key: 'OPS', triageEnabled: true },
+  {
+    id: TEAM_ENG_ID,
+    organizationId: ORG_ID,
+    name: 'Engineering',
+    key: 'ENG',
+    summary: null,
+    triageEnabled: true,
+  },
+  {
+    id: TEAM_OPS_ID,
+    organizationId: ORG_ID,
+    name: 'Ops',
+    key: 'OPS',
+    summary: null,
+    triageEnabled: true,
+  },
 ];
 
 const LINEAR_TEAMS = [

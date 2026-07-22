@@ -68,6 +68,7 @@ export function CreateTeamDialog({
   const [key, setKey] = useState('');
   // Once the user edits the key directly we stop deriving it from the name.
   const [keyDirty, setKeyDirty] = useState(false);
+  const [summary, setSummary] = useState('');
   const [description, setDescription] = useState('');
   const [triageEnabled, setTriageEnabled] = useState(true);
   const [agentGuidance, setAgentGuidance] = useState('');
@@ -92,6 +93,7 @@ export function CreateTeamDialog({
         setName('');
         setKey('');
         setKeyDirty(false);
+        setSummary('');
         setDescription('');
         setTriageEnabled(true);
         setAgentGuidance('');
@@ -116,6 +118,7 @@ export function CreateTeamDialog({
           name: name.trim(),
           key: key.trim().toUpperCase(),
           triageEnabled,
+          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
           ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
           ...(trimmedGuidance.length > 0 ? { agentGuidance: trimmedGuidance } : {}),
         },
@@ -142,6 +145,7 @@ export function CreateTeamDialog({
     name,
     key,
     triageEnabled,
+    summary,
     description,
     agentGuidance,
     orgId,
@@ -157,6 +161,10 @@ export function CreateTeamDialog({
       title={name}
       onTitleChange={onNameChange}
       titlePlaceholder="Team name"
+      summary={summary}
+      onSummaryChange={setSummary}
+      summaryPlaceholder="One-sentence summary"
+      summaryMaxLength={280}
       body={description}
       onBodyChange={setDescription}
       bodyPlaceholder="What does this team own? (optional)"

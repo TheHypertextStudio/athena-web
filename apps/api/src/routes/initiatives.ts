@@ -39,6 +39,7 @@ import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
+import { clearableTextPatch } from '../lib/clearable-text';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -234,8 +235,8 @@ const initiatives = new Hono<AppEnv>()
       const row = await db.transaction(async (tx) => {
         const values: Partial<typeof initiative.$inferInsert> = {
           ...(body.name !== undefined ? { name: body.name } : {}),
-          ...(body.summary !== undefined ? { summary: body.summary } : {}),
-          ...(body.description !== undefined ? { description: body.description } : {}),
+          ...clearableTextPatch('summary', body.summary),
+          ...clearableTextPatch('description', body.description),
           ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),

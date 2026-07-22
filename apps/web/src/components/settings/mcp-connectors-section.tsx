@@ -27,8 +27,9 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import { useSearchParams } from 'next/navigation';
-import { type JSX, useId, useState } from 'react';
+import { type JSX, useEffect, useId, useState } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import {
   connectorReadinessLabel,
   deriveMcpConnectorDraft,
@@ -155,24 +156,50 @@ interface McpConnectorRowProps {
 
 /** One connected (or errored) MCP server, with verify/disconnect actions. */
 function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.Element {
-  const [editing, setEditing] = useState(false);
-  const [label, setLabel] = useState(mcp.label);
-  const [alias, setAlias] = useState(mcp.alias);
+  // Tool prefix (alias) autosaves on blur. Keep a local draft so we can sanitize keystrokes and
+  // hold onto an invalid value the user is mid-fixing without clobbering the persisted alias.
+  const [aliasDraft, setAliasDraft] = useState(mcp.alias);
+  const [aliasFocused, setAliasFocused] = useState(false);
+  const [aliasError, setAliasError] = useState<string | null>(null);
+  // Re-sync the draft with the persisted value whenever it changes externally and the field isn't
+  // being actively edited (e.g. after a successful save invalidates + refetches the list).
+  useEffect(() => {
+    if (!aliasFocused) setAliasDraft(mcp.alias);
+  }, [mcp.alias, aliasFocused]);
+
   const edit = useApiMutation({
-    mutationFn: () =>
+    mutationFn: (vars: { label: string; alias: string }) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].integrations.mcp[':id'].$patch({
             param: { orgId, id: mcp.id },
-            json: { label: label.trim(), alias: alias.trim() },
+            json: { label: vars.label.trim(), alias: vars.alias.trim() },
           }),
         'Could not save this connector.',
       ),
     invalidateKeys: [queryKeys.mcpIntegrations(orgId)],
-    onSuccess: () => {
-      setEditing(false);
-    },
   });
+
+  /** Persist a renamed label (from {@link EditableTitle}) alongside the persisted alias. */
+  const saveLabel = (nextLabel: string): void => {
+    edit.mutate({ label: nextLabel, alias: mcp.alias });
+  };
+
+  /** Autosave the tool prefix on blur — dirty-guarded and validated, never on mount or unchanged. */
+  const commitAlias = (): void => {
+    setAliasFocused(false);
+    const next = aliasDraft.trim();
+    if (next === mcp.alias) {
+      setAliasError(null);
+      return;
+    }
+    if (!/^[a-z][a-z0-9_]{1,20}$/.test(next)) {
+      setAliasError('Use 2–21 lowercase letters, numbers, or underscores, starting with a letter.');
+      return;
+    }
+    setAliasError(null);
+    edit.mutate({ label: mcp.label, alias: next });
+  };
   const authorize = useApiMutation({
     mutationFn: () =>
       unwrap(
@@ -215,24 +242,27 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
   return (
     <li className="bg-surface-container-low flex flex-col gap-4 rounded-lg p-4">
       <div className="flex flex-col gap-2">
-        <span className="text-on-surface flex items-center gap-2 text-sm font-medium">
-          {editing ? (
-            <Input
-              value={label}
-              maxLength={80}
-              aria-label="Connector name"
-              className="h-8 max-w-xs"
-              onChange={(event) => {
-                setLabel(event.target.value);
-              }}
+        <div className="text-on-surface flex items-center gap-2 text-sm font-medium">
+          <span className="max-w-xs min-w-0 flex-1">
+            <EditableTitle
+              value={mcp.label}
+              onSave={saveLabel}
+              canEdit={canManage}
+              saving={edit.isPending}
+              ariaLabel="Connector name"
+              className="text-on-surface text-sm font-medium"
+              placeholder="Connector name"
             />
-          ) : (
-            mcp.label
-          )}
+          </span>
           <Badge variant={badgeVariant} className="shrink-0">
             {connectorReadinessLabel(mcp.status)}
           </Badge>
-        </span>
+          {edit.isPending ? (
+            <span className="text-on-surface-variant text-xs font-normal">Saving…</span>
+          ) : edit.isSuccess ? (
+            <span className="text-on-surface-variant text-xs font-normal">Saved</span>
+          ) : null}
+        </div>
         {mcp.status === 'connected' && mcp.toolCount !== null ? (
           <span className="text-on-surface-variant text-xs">
             {String(mcp.toolCount)} tool{mcp.toolCount === 1 ? '' : 's'} available
@@ -242,19 +272,6 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           <span role="alert" className="text-destructive text-xs">
             This server could not be reached.
           </span>
-        ) : null}
-        {editing ? (
-          <label className="text-on-surface flex max-w-xs flex-col gap-1 text-xs font-medium">
-            Tool prefix
-            <Input
-              value={alias}
-              maxLength={21}
-              className="h-8 font-mono"
-              onChange={(event) => {
-                setAlias(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
-              }}
-            />
-          </label>
         ) : null}
       </div>
       <details className="text-on-surface-variant text-xs">
@@ -266,53 +283,40 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           </div>
           <div>
             <dt className="font-medium">Tool prefix</dt>
-            <dd className="mt-0.5 font-mono">{mcp.alias}__*</dd>
+            <dd className="mt-0.5">
+              {canManage ? (
+                <>
+                  <span className="flex items-center gap-1">
+                    <Input
+                      value={aliasDraft}
+                      maxLength={21}
+                      aria-label="Tool prefix"
+                      className="h-8 max-w-[10rem] font-mono"
+                      onFocus={() => {
+                        setAliasFocused(true);
+                      }}
+                      onChange={(event) => {
+                        setAliasDraft(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '_'));
+                      }}
+                      onBlur={commitAlias}
+                    />
+                    <span className="font-mono">__*</span>
+                  </span>
+                  {aliasError ? (
+                    <span role="alert" className="text-destructive mt-1 block text-xs">
+                      {aliasError}
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="font-mono break-all">{mcp.alias}__*</span>
+              )}
+            </dd>
           </div>
         </dl>
       </details>
       {canManage ? (
         <div className="flex flex-wrap gap-2">
-          {editing ? (
-            <>
-              <Button
-                size="sm"
-                disabled={
-                  busy ||
-                  !label.trim() ||
-                  !/^[a-z][a-z0-9_]{1,20}$/.test(alias.trim()) ||
-                  (label.trim() === mcp.label && alias.trim() === mcp.alias)
-                }
-                onClick={() => {
-                  edit.mutate(undefined);
-                }}
-              >
-                {edit.isPending ? 'Saving…' : 'Save details'}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={busy}
-                onClick={() => {
-                  setLabel(mcp.label);
-                  setAlias(mcp.alias);
-                  setEditing(false);
-                }}
-              >
-                Cancel
-              </Button>
-            </>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => {
-                setEditing(true);
-              }}
-            >
-              Edit details
-            </Button>
-          )}
           {mcp.authMode === 'oauth' ? (
             <Button
               variant="outline"

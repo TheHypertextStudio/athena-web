@@ -10,9 +10,16 @@
 
 import type { ActionSpec, AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
 import { Button, Card, CardContent, Input } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import { type JSX, useEffect, useRef, useState } from 'react';
 
+import { EditableTitle } from '@/components/editor/editable-title';
 import { useAutomationRules } from '@/lib/use-automation-rules';
+
+/** Transient persistence status for an in-place autosave field. */
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
+
+/** How long the quiet "Saved" acknowledgement lingers before fading back to idle. */
+const SAVED_LINGER_MS = 2000;
 
 /** Supported guided templates for creating a rule without exposing the rule grammar. */
 export type AutomationTemplate = 'archive_completed_email' | 'dismiss_promotions';
@@ -52,7 +59,7 @@ function ruleSummary(rule: AutomationRuleOut): string {
   return `on ${on} → ${actions}`;
 }
 
-/** One rule row: name + summary + enable/disable + delete. */
+/** One rule row: name (autosaves in place) + summary + enable/disable + delete. */
 function RuleRow({
   rule,
   canManage,
@@ -66,23 +73,32 @@ function RuleRow({
   onDelete: () => void;
   onRename: (name: string) => Promise<void>;
 }): JSX.Element {
-  const [editing, setEditing] = useState(false);
-  const [name, setName] = useState(rule.name);
-  const [savingName, setSavingName] = useState(false);
+  const [status, setStatus] = useState<SaveStatus>('idle');
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function saveName(): Promise<void> {
-    const next = name.trim();
-    if (!next || next === rule.name) {
-      setName(rule.name);
-      setEditing(false);
-      return;
-    }
-    setSavingName(true);
+  // Never leave a pending "Saved → idle" timer behind on unmount.
+  useEffect(
+    () => () => {
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+    },
+    [],
+  );
+
+  // Autosave the rename the moment the field is committed (blur / Enter). `EditableTitle` only
+  // fires this with a non-empty value that actually differs from the persisted name, so the dirty
+  // guard is intrinsic — mounting or re-committing the unchanged name never triggers a save.
+  async function saveName(next: string): Promise<void> {
+    if (savedTimer.current) clearTimeout(savedTimer.current);
+    setStatus('saving');
     try {
       await onRename(next);
-      setEditing(false);
-    } finally {
-      setSavingName(false);
+      setStatus('saved');
+      savedTimer.current = setTimeout(() => {
+        setStatus('idle');
+      }, SAVED_LINGER_MS);
+    } catch {
+      // The rule is unchanged server-side; surface a quiet inline error and let the user retry.
+      setStatus('error');
     }
   }
 
@@ -91,69 +107,34 @@ function RuleRow({
       <CardContent className="flex items-center justify-between gap-3 p-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            {editing ? (
-              <Input
-                value={name}
-                aria-label={`Automation name for ${rule.name}`}
-                autoFocus
-                maxLength={160}
-                className="h-8 max-w-sm"
-                onChange={(event) => {
-                  setName(event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void saveName();
-                  if (event.key === 'Escape') {
-                    setName(rule.name);
-                    setEditing(false);
-                  }
-                }}
-              />
-            ) : (
-              <span className="truncate text-sm font-medium">{rule.name}</span>
-            )}
+            <EditableTitle
+              value={rule.name}
+              onSave={(next) => void saveName(next)}
+              canEdit={canManage}
+              saving={status === 'saving'}
+              ariaLabel={`Automation name for ${rule.name}`}
+              className="truncate text-sm font-medium"
+            />
             {rule.isSeed ? (
               <span className="text-muted-foreground bg-muted rounded px-1 text-[10px]">
                 default
               </span>
             ) : null}
             {!rule.enabled ? <span className="text-muted-foreground text-[10px]">off</span> : null}
+            {status === 'saving' ? (
+              <span className="text-on-surface-variant text-xs">Saving…</span>
+            ) : status === 'saved' ? (
+              <span className="text-on-surface-variant text-xs">Saved</span>
+            ) : status === 'error' ? (
+              <span className="text-destructive text-xs" role="alert">
+                Couldn’t save
+              </span>
+            ) : null}
           </div>
           <span className="text-muted-foreground truncate text-xs">{ruleSummary(rule)}</span>
         </div>
         {canManage ? (
           <div className="flex shrink-0 gap-1.5">
-            {editing ? (
-              <>
-                <Button
-                  size="sm"
-                  disabled={savingName || !name.trim()}
-                  onClick={() => void saveName()}
-                >
-                  {savingName ? 'Saving…' : 'Save name'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setName(rule.name);
-                    setEditing(false);
-                  }}
-                >
-                  Cancel
-                </Button>
-              </>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setEditing(true);
-                }}
-              >
-                Rename
-              </Button>
-            )}
             <Button variant="outline" size="sm" onClick={onToggle}>
               {rule.enabled ? 'Disable' : 'Enable'}
             </Button>

@@ -1,7 +1,7 @@
 'use client';
 
 import type { WorkspaceSettingsOut } from '@docket/types';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import { use, useEffect, useState, type JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
@@ -84,9 +84,14 @@ export default function WorkStructureSettingsPage({
                 key={value}
                 type="button"
                 aria-pressed={depth === value}
-                disabled={permissionLoading || !canManage}
+                disabled={permissionLoading || !canManage || save.isPending}
                 onClick={() => {
                   setDepth(value);
+                  // Autosave immediately, but only when the choice actually differs from
+                  // what's persisted — never re-save an unchanged value.
+                  if (value !== settingsQ.data.initiativeMaxDepth) {
+                    save.mutate(value);
+                  }
                 }}
                 className={`focus-visible:ring-ring size-10 rounded-md border text-sm font-medium focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
                   depth === value
@@ -99,29 +104,21 @@ export default function WorkStructureSettingsPage({
             ))}
           </fieldset>
 
-          <div className="flex items-center gap-3">
-            <Button
-              disabled={
-                permissionLoading ||
-                !canManage ||
-                save.isPending ||
-                depth === settingsQ.data.initiativeMaxDepth
-              }
-              onClick={() => {
-                save.mutate(depth);
-              }}
-            >
-              {save.isPending ? 'Saving…' : 'Save'}
-            </Button>
-            <span className="text-on-surface-variant text-xs">
-              Current maximum: {settingsQ.data.initiativeMaxDepth}
-            </span>
+          <div className="flex min-h-5 items-center gap-2 text-xs" aria-live="polite">
+            {save.isPending ? (
+              <span className="text-on-surface-variant">Saving…</span>
+            ) : save.error ? (
+              <span role="alert" className="text-destructive">
+                {userErrorMessage(save.error, 'Could not save work structure settings.')}
+              </span>
+            ) : save.isSuccess ? (
+              <span className="text-on-surface-variant">Saved</span>
+            ) : (
+              <span className="text-on-surface-variant">
+                Current maximum: {settingsQ.data.initiativeMaxDepth}
+              </span>
+            )}
           </div>
-          {save.error ? (
-            <p role="alert" className="text-destructive text-sm">
-              {userErrorMessage(save.error, 'Could not save work structure settings.')}
-            </p>
-          ) : null}
         </section>
       )}
     </div>

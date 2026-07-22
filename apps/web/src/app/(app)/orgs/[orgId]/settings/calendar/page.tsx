@@ -8,7 +8,6 @@ import type {
   CalendarPreferences,
   HubPreferences,
 } from '@docket/types';
-import { Button } from '@docket/ui/primitives';
 import { type JSX, use, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -24,6 +23,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
+import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 
 const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
   defaultLayerId: null;
@@ -112,6 +112,40 @@ export default function CalendarSettingsPage({
   );
   const loading = preferencesQ.isPending || layersQ.isPending;
   const loadFailed = preferencesQ.isError || layersQ.isError;
+
+  // The persisted server values the drafts diff against, normalized to the same shape as each draft
+  // so a freshly-loaded (untouched) form never counts as dirty.
+  const persistedPreferences = preferencesQ.data
+    ? { ...DEFAULTS, ...preferencesQ.data.calendar }
+    : undefined;
+  const persistedShares = sharesQ.data
+    ? Object.fromEntries(sharesQ.data.items.map((share) => [share.layerId, share.access]))
+    : undefined;
+
+  // Autosave replaces the former "Save defaults" / "Save sharing" buttons: edits persist on a quiet
+  // debounce, firing the very same mutations, and never on mount or for an unchanged value.
+  useDebouncedAutosave({
+    value: draft,
+    baseline: persistedPreferences,
+    ready: preferencesQ.isSuccess,
+    save: (calendar) => {
+      savePreferences.mutate(calendar);
+    },
+  });
+  useDebouncedAutosave({
+    value: shareDraft,
+    baseline: persistedShares,
+    ready: Boolean(workspaceId) && sharesQ.isSuccess && !sharesQ.isFetching,
+    save: (next) => {
+      replaceShares.mutate({
+        organizationId: workspaceId,
+        shares: layers.flatMap((layer) => {
+          const access = next[layer.id];
+          return access ? [{ layerId: layer.id, access }] : [];
+        }),
+      });
+    },
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -211,20 +245,15 @@ export default function CalendarSettingsPage({
             />
           </label>
 
-          <Button
-            className="self-start"
-            disabled={savePreferences.isPending}
-            onClick={() => {
-              savePreferences.mutate(draft);
-            }}
-          >
-            {savePreferences.isPending ? 'Saving…' : 'Save defaults'}
-          </Button>
           {savePreferences.isError ? (
             <p role="alert" className="text-destructive text-xs">
               Could not save these preferences.
             </p>
-          ) : null}
+          ) : (
+            <p aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+              {savePreferences.isPending ? 'Saving…' : savePreferences.isSuccess ? 'Saved' : ''}
+            </p>
+          )}
         </section>
       )}
 
@@ -304,26 +333,15 @@ export default function CalendarSettingsPage({
               })}
             </div>
 
-            <Button
-              className="self-start"
-              disabled={!workspaceId || replaceShares.isPending}
-              onClick={() => {
-                replaceShares.mutate({
-                  organizationId: workspaceId,
-                  shares: layers.flatMap((layer) => {
-                    const access = shareDraft[layer.id];
-                    return access ? [{ layerId: layer.id, access }] : [];
-                  }),
-                });
-              }}
-            >
-              {replaceShares.isPending ? 'Saving…' : 'Save sharing'}
-            </Button>
             {sharesQ.isError || replaceShares.isError ? (
               <p role="alert" className="text-destructive text-xs">
                 Calendar sharing is temporarily unavailable.
               </p>
-            ) : null}
+            ) : (
+              <p aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+                {replaceShares.isPending ? 'Saving…' : replaceShares.isSuccess ? 'Saved' : ''}
+              </p>
+            )}
           </>
         )}
       </section>

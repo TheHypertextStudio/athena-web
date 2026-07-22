@@ -1,8 +1,8 @@
 'use client';
 
 import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
-import { Button, Skeleton } from '@docket/ui/primitives';
-import { useEffect, useState, type JSX } from 'react';
+import { Skeleton } from '@docket/ui/primitives';
+import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -18,8 +18,6 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
   const { canManage } = useCanManageOrg(orgId ?? '');
   const [instructions, setInstructions] = useState('');
   const [approvalMode, setApprovalMode] = useState<AthenaApprovalMode>('ask_before_acting');
-  const [editing, setEditing] = useState(false);
-  const [saved, setSaved] = useState(false);
   const preferencesQ = useLiveApiQuery(
     apiQueryOptions(
       queryKeys.hubPreferences(),
@@ -29,39 +27,50 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
     15_000,
   );
 
-  useEffect(() => {
-    if (!preferencesQ.data) return;
-    const nextInstructions = preferencesQ.data.athena?.instructions ?? '';
-    const nextApproval = preferencesQ.data.athena?.approvalMode ?? 'ask_before_acting';
-    if (editing) {
-      if (instructions === nextInstructions && approvalMode === nextApproval) {
-        setEditing(false);
-      }
-      return;
-    }
-    setInstructions(nextInstructions);
-    setApprovalMode(nextApproval);
-  }, [approvalMode, editing, instructions, preferencesQ.data]);
+  const persistedInstructions = preferencesQ.data?.athena?.instructions ?? '';
+  const persistedApproval = preferencesQ.data?.athena?.approvalMode ?? 'ask_before_acting';
 
   const save = useApiMutation<HubPreferences, HubPreferences>({
     mutationFn: (json) =>
       unwrap(() => api.v1.hub.preferences.$patch({ json }), 'Could not save Athena preferences.'),
     invalidateKeys: [queryKeys.hubPreferences()],
-    onSuccess: (preferences) => {
-      setInstructions(preferences.athena?.instructions ?? '');
-      setApprovalMode(preferences.athena?.approvalMode ?? 'ask_before_acting');
-      setEditing(false);
-      setSaved(true);
-    },
   });
 
-  const currentInstructions = preferencesQ.data?.athena?.instructions ?? '';
-  const currentApproval = preferencesQ.data?.athena?.approvalMode ?? 'ask_before_acting';
-  const changed = instructions !== currentInstructions || approvalMode !== currentApproval;
+  // Read the live drafts at reconcile time without making the effect re-run on every keystroke.
+  const instructionsRef = useRef(instructions);
+  instructionsRef.current = instructions;
+  const approvalRef = useRef(approvalMode);
+  approvalRef.current = approvalMode;
+  // The server values we last mirrored into each field; `null` until the first load seeds them.
+  const syncedInstructionsRef = useRef<string | null>(null);
+  const syncedApprovalRef = useRef<AthenaApprovalMode | null>(null);
 
-  function savePreferences(): void {
+  // Mirror persisted values into the editable fields on the initial load and whenever the server
+  // value genuinely changes — but only while the field still holds what we last showed from the
+  // server. A local edit that diverged (a save in flight, or one that just failed) is preserved
+  // rather than clobbered with the stale persisted value. This also removes the old→new flicker on
+  // the success path: the typed value already differs from the pre-refetch persisted value, so we
+  // skip re-seeding it. Keyed on server data only — never on `save.isPending`, whose true→false
+  // flip on a failed save was what discarded the user's text.
+  useEffect(() => {
+    if (!preferencesQ.data) return;
+    if (
+      syncedInstructionsRef.current === null ||
+      instructionsRef.current === syncedInstructionsRef.current
+    ) {
+      setInstructions(persistedInstructions);
+    }
+    syncedInstructionsRef.current = persistedInstructions;
+    if (syncedApprovalRef.current === null || approvalRef.current === syncedApprovalRef.current) {
+      setApprovalMode(persistedApproval);
+    }
+    syncedApprovalRef.current = persistedApproval;
+  }, [persistedApproval, persistedInstructions, preferencesQ.data]);
+
+  /** Persist the whole Athena preference slice — the same PATCH the Save button used to fire. */
+  function persist(next: { instructions: string; approvalMode: AthenaApprovalMode }): void {
     save.mutate({
-      athena: { instructions: instructions.trim(), approvalMode },
+      athena: { instructions: next.instructions.trim(), approvalMode: next.approvalMode },
     });
   }
 
@@ -87,53 +96,46 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
             Instructions for Athena
             <textarea
               value={instructions}
-              disabled={save.isPending}
               onChange={(event) => {
                 setInstructions(event.target.value);
-                setEditing(true);
-                setSaved(false);
+              }}
+              onBlur={() => {
+                if (instructions.trim() !== persistedInstructions) {
+                  persist({ instructions, approvalMode });
+                }
               }}
               rows={5}
               placeholder="For example: keep updates concise and flag anything that needs my approval."
-              className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="border-outline-variant bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring w-full resize-y rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2"
             />
           </label>
           <label className="text-on-surface flex max-w-md flex-col gap-1.5 text-sm font-medium">
             Approval behavior
             <select
               value={approvalMode}
-              disabled={save.isPending}
               onChange={(event) => {
-                setApprovalMode(event.target.value as AthenaApprovalMode);
-                setEditing(true);
-                setSaved(false);
+                const next = event.target.value as AthenaApprovalMode;
+                setApprovalMode(next);
+                if (next !== persistedApproval) {
+                  persist({ instructions, approvalMode: next });
+                }
               }}
-              className="border-outline-variant bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
+              className="border-outline-variant bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
             >
               <option value="ask_before_acting">Ask before acting</option>
               <option value="routine_autonomy">Act on routine work</option>
               <option value="suggest_only">Suggest only</option>
             </select>
           </label>
-          {save.error ? (
+          {save.isError ? (
             <p role="alert" className="text-destructive text-sm">
               {userErrorMessage(save.error, 'Could not save Athena preferences.')}
             </p>
-          ) : null}
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              disabled={!changed || save.isPending || saved}
-              onClick={savePreferences}
-            >
-              {save.isPending ? 'Saving…' : 'Save Athena preferences'}
-            </Button>
-            {saved ? (
-              <span className="text-on-surface-variant text-xs" role="status">
-                Athena preferences saved.
-              </span>
-            ) : null}
-          </div>
+          ) : (
+            <p role="status" aria-live="polite" className="text-on-surface-variant h-4 text-xs">
+              {save.isPending ? 'Saving…' : save.isSuccess ? 'Saved' : ''}
+            </p>
+          )}
         </section>
       )}
       {orgId ? <McpConnectorsSection orgId={orgId} canManage={canManage} /> : null}

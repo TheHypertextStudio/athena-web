@@ -370,18 +370,14 @@ describe('CalendarItemDrawer', () => {
     expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-02T01:00');
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
 
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Hydrated review' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    const title = screen.getByLabelText('Title');
+    fireEvent.change(title, { target: { value: 'Hydrated review' } });
+    // Text fields autosave on blur — there is no Save button.
+    fireEvent.blur(title);
     await waitFor(() => {
       expect(itemPatch).toHaveBeenCalledWith({
         param: { id: ITEM_ID },
-        json: {
-          title: 'Hydrated review',
-          description: '',
-          location: '',
-          startsAt: '2026-07-01T16:00:00.000Z',
-          endsAt: '2026-07-01T17:00:00.000Z',
-        },
+        json: { title: 'Hydrated review' },
       });
     });
   });
@@ -415,15 +411,12 @@ describe('CalendarItemDrawer', () => {
       target: { value: '2026-11-01T01:30' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Later · PST' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
+    // The schedule fields autosave on their debounce.
     await waitFor(() => {
       expect(itemPatch).toHaveBeenCalledWith({
         param: { id: ITEM_ID },
         json: {
-          title: 'Design review',
-          description: '',
-          location: '',
           startsAt: '2026-11-01T09:30:00Z',
           endsAt: '2026-11-01T10:30:00.000Z',
         },
@@ -436,19 +429,15 @@ describe('CalendarItemDrawer', () => {
 
     expect(await screen.findByLabelText('Starts')).toHaveValue('2026-07-02T01:00');
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-02T02:00');
-    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Updated review' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    const title = screen.getByLabelText('Title');
+    fireEvent.change(title, { target: { value: 'Updated review' } });
+    // Editing another (text) field autosaves only that field; the untouched instants are not resent.
+    fireEvent.blur(title);
 
     await waitFor(() => {
       expect(itemPatch).toHaveBeenCalledWith({
         param: { id: ITEM_ID },
-        json: {
-          title: 'Updated review',
-          description: '',
-          location: '',
-          startsAt: '2026-07-01T16:00:00.000Z',
-          endsAt: '2026-07-01T17:00:00.000Z',
-        },
+        json: { title: 'Updated review' },
       });
     });
   });
@@ -578,16 +567,13 @@ describe('CalendarItemDrawer', () => {
     // The end input shows the last included day (inclusive), one day before the exclusive wire date.
     expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-10');
 
+    // The all-day date fields autosave on their debounce.
     fireEvent.change(screen.getByLabelText('Ends'), { target: { value: '2026-07-12' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
 
     await waitFor(() => {
       expect(itemPatch).toHaveBeenCalledWith({
         param: { id: ITEM_ID },
         json: {
-          title: 'Design review',
-          description: '',
-          location: '',
           allDayStartDate: '2026-07-10',
           allDayEndDate: '2026-07-13',
         },

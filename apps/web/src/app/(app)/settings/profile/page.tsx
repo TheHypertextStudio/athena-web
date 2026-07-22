@@ -9,7 +9,7 @@ import { SettingsImagePicker } from '@/components/settings/settings-image-picker
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { unwrap, useApiMutation } from '@/lib/query';
-import { Button, Input } from '@docket/ui/primitives';
+import { Input } from '@docket/ui/primitives';
 
 /** The signed-in user's profile destination. */
 export default function GlobalProfileSettingsPage(): JSX.Element {
@@ -17,7 +17,8 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
   const [name, setName] = useState('');
   const [image, setImage] = useState('');
   const [baseline, setBaseline] = useState({ name: '', image: '' });
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session?.user) return;
@@ -35,20 +36,30 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
       setName(next.name);
       setImage(next.image);
       setBaseline(next);
-      setFeedback('Profile saved.');
+      setSaved(true);
       void refetch();
     },
   });
 
-  function saveProfile(): void {
-    if (!name.trim()) return;
-    setFeedback(null);
-    save.mutate({
-      ...(name.trim() !== baseline.name ? { name: name.trim() } : {}),
-      ...(image.trim() !== baseline.image
-        ? { image: image.startsWith('data:image/') ? image : null }
-        : {}),
-    });
+  /**
+   * Persist a single changed field on blur/change. Skips the save when the value
+   * is unchanged from what's loaded (dirty guard) so mount and no-op edits never
+   * write, and surfaces name validation inline without discarding the input.
+   */
+  function commitName(): void {
+    const trimmed = name.trim();
+    if (trimmed === baseline.name) return;
+    if (!trimmed) {
+      setNameError('Your name cannot be empty.');
+      return;
+    }
+    setNameError(null);
+    save.mutate({ name: trimmed });
+  }
+
+  function commitImage(next: string): void {
+    if (next.trim() === baseline.image) return;
+    save.mutate({ image: next.startsWith('data:image/') ? next : null });
   }
 
   return (
@@ -63,53 +74,54 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
         </p>
       ) : session ? (
         <section className="border-outline-variant flex max-w-2xl flex-col gap-5 rounded-lg border p-5">
-          <div>
-            <h2 className="text-on-surface text-sm font-semibold">Your identity</h2>
-            <p className="text-on-surface-variant text-sm">
-              This is the identity Athena uses when working across your connected services.
-            </p>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-on-surface text-sm font-semibold">Your identity</h2>
+              <p className="text-on-surface-variant text-sm">
+                This is the identity Athena uses when working across your connected services.
+              </p>
+            </div>
+            {save.isPending ? (
+              <p className="text-on-surface-variant shrink-0 text-xs" role="status">
+                Saving…
+              </p>
+            ) : saved ? (
+              <p className="text-on-surface-variant shrink-0 text-xs" role="status">
+                Saved
+              </p>
+            ) : null}
           </div>
           <label className="text-on-surface flex max-w-md flex-col gap-1.5 text-sm font-medium">
             Name
             <Input
               value={name}
-              disabled={save.isPending}
               maxLength={120}
+              aria-invalid={nameError ? true : undefined}
               onChange={(event) => {
                 setName(event.target.value);
-                setFeedback(null);
+                setSaved(false);
+                setNameError(null);
+              }}
+              onBlur={() => {
+                commitName();
               }}
             />
+            {nameError ? (
+              <span className="text-destructive text-xs font-normal" role="alert">
+                {nameError}
+              </span>
+            ) : null}
           </label>
           <SettingsImagePicker
             label="Profile photo"
             value={image}
-            disabled={save.isPending}
             fallback={(name.trim()[0] ?? session.user.email[0] ?? '?').toUpperCase()}
             onChange={(value) => {
               setImage(value);
-              setFeedback(null);
+              setSaved(false);
+              commitImage(value);
             }}
           />
-          <div className="flex items-center gap-3">
-            <Button
-              disabled={
-                save.isPending ||
-                !name.trim() ||
-                (name.trim() === baseline.name && image.trim() === baseline.image)
-              }
-              onClick={() => {
-                saveProfile();
-              }}
-            >
-              {save.isPending ? 'Saving…' : 'Save profile'}
-            </Button>
-            {feedback ? (
-              <p className="text-on-surface-variant text-xs" role="status">
-                {feedback}
-              </p>
-            ) : null}
-          </div>
           {save.error ? (
             <p className="text-destructive text-sm" role="alert">
               {userErrorMessage(save.error, 'Could not save your profile.')}

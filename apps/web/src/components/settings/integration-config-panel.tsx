@@ -23,7 +23,7 @@
 import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -70,6 +70,22 @@ export interface IntegrationConfigPanelProps {
 /** The cached shape of the integrations list read (`GET /integrations`), for optimistic writes. */
 interface IntegrationsCache {
   items: IntegrationOut[];
+}
+
+/**
+ * One autosave write — the exact `PATCH /:id` body a field change persists.
+ *
+ * @remarks
+ * Carried as the mutation's variables (rather than closed over from component state) so each field
+ * handler computes the payload from its OWN just-changed value synchronously and hands it in. That
+ * sidesteps the stale-closure trap of reading not-yet-flushed `useState` values inside `mutationFn`,
+ * and lets the dirty guard compare a concrete payload against the persisted one.
+ */
+interface SavePayload {
+  /** Sync direction — `true` is two-way write-back. */
+  writeBack: boolean;
+  /** The wholesale-replace `config` (spreads the current config so unmanaged keys survive). */
+  config: ConnectorConfig;
 }
 
 /** Capitalize the first letter of a lowercase copy string (for legend text). */
@@ -121,42 +137,21 @@ export function IntegrationConfigPanel({
   );
   const lists = listsQ.data?.resources ?? [];
 
-  const save = useApiMutation<IntegrationOut, undefined, { rollback: () => void }>({
-    mutationFn: () =>
+  const save = useApiMutation<IntegrationOut, SavePayload, { rollback: () => void }>({
+    mutationFn: (payload) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].integrations[':id'].$patch({
             param: { orgId, id: integration.id },
-            json: {
-              writeBack: twoWay,
-              // Wholesale-replace endpoint: spread the CURRENT config so unmanaged keys survive.
-              config: copy.usesTeamMapping
-                ? { ...cfg, teamMappings: toTeamMappings(teamMap) }
-                : {
-                    ...cfg,
-                    ...(teamId ? { teamId } : {}),
-                    // "All lists" = absent listIds; an explicit subset stores the chosen ids.
-                    listIds: allMode ? undefined : listIds,
-                  },
-            },
+            json: { writeBack: payload.writeBack, config: payload.config },
           }),
         'Could not save settings.',
       ),
-    onMutate: () =>
+    onMutate: (payload) =>
       optimisticPatch<IntegrationsCache>(queryClient, queryKeys.integrations(orgId), (prev) => ({
         items: prev.items.map((i) =>
           i.id === integration.id
-            ? {
-                ...i,
-                writeBack: twoWay,
-                config: copy.usesTeamMapping
-                  ? { ...cfg, teamMappings: toTeamMappings(teamMap) }
-                  : {
-                      ...cfg,
-                      ...(teamId ? { teamId } : {}),
-                      listIds: allMode ? undefined : listIds,
-                    },
-              }
+            ? { ...i, writeBack: payload.writeBack, config: payload.config }
             : i,
         ),
       })),
@@ -168,7 +163,7 @@ export function IntegrationConfigPanel({
         setSaved(false);
       }, 4000);
     },
-    onError: (e: Error, _vars, context) => {
+    onError: (e: Error, payload, context) => {
       context?.rollback();
       setError(userErrorMessage(e, 'Could not save integration settings.'));
       // Only the write-scope problem (see `hasLinearWriteScope` on the
@@ -181,10 +176,69 @@ export function IntegrationConfigPanel({
         e instanceof ApiRequestError &&
         e.status === 409 &&
         e.code === 'linear_write_scope_required';
-      setReauthNeeded(integration.provider === 'linear' && twoWay && isWriteScopeConflict);
+      setReauthNeeded(
+        integration.provider === 'linear' && payload.writeBack && isWriteScopeConflict,
+      );
     },
     invalidateKeys: [queryKeys.integrations(orgId)],
   });
+
+  /**
+   * Build the autosave payload from an explicit snapshot of every managed field.
+   *
+   * @remarks
+   * Callers pass the field values they're about to render (with the one just-changed value already
+   * updated), so the payload reflects the change even though the corresponding `setState` hasn't
+   * flushed yet. Mirrors the wholesale-replace rule: spread the CURRENT `config` so keys this panel
+   * doesn't manage survive the write.
+   */
+  const buildPayload = (next: {
+    twoWay: boolean;
+    teamId: string;
+    allMode: boolean;
+    listIds: string[];
+    teamMap: Record<string, string>;
+  }): SavePayload => ({
+    writeBack: next.twoWay,
+    config: copy.usesTeamMapping
+      ? { ...cfg, teamMappings: toTeamMappings(next.teamMap) }
+      : {
+          ...cfg,
+          ...(next.teamId ? { teamId: next.teamId } : {}),
+          // "All lists" = absent listIds; an explicit subset stores the chosen ids.
+          listIds: next.allMode ? undefined : next.listIds,
+        },
+  });
+
+  // The payload that matches what's already persisted — the dirty-guard baseline. Built from the
+  // same initial values the state was seeded with, so a field returned to its loaded value is a
+  // no-op (and mount never fires a write).
+  const persistedPayload = buildPayload({
+    twoWay: integration.writeBack,
+    teamId: cfg.teamId ?? '',
+    allMode: !(cfg.listIds && cfg.listIds.length > 0),
+    listIds: cfg.listIds ?? [],
+    teamMap: Object.fromEntries((cfg.teamMappings ?? []).map((m) => [m.externalTeamId, m.teamId])),
+  });
+
+  /**
+   * Autosave a field change: persist the payload unless it's unchanged or would sync nothing.
+   *
+   * @remarks
+   * The dirty guard compares against {@link persistedPayload} — both payloads are built by the same
+   * {@link buildPayload}, so their JSON encodings share key order and a stable equality check holds.
+   * A flat-checklist subset that selects nothing is held back (it would sync nothing); the inline
+   * hint asks the user to pick a container, and their selection stays on screen and editable.
+   */
+  const commit = (payload: SavePayload): void => {
+    if (JSON.stringify(payload) === JSON.stringify(persistedPayload)) return;
+    const syncsNothing =
+      !copy.usesTeamMapping &&
+      Array.isArray(payload.config.listIds) &&
+      payload.config.listIds.length === 0;
+    if (syncsNothing) return;
+    save.mutate(payload);
+  };
 
   /**
    * Clear the re-auth notice once a reconnect attempt (from the button below) completes.
@@ -207,11 +261,15 @@ export function IntegrationConfigPanel({
   };
 
   const toggleList = (id: string): void => {
-    setListIds((prev) => (prev.includes(id) ? prev.filter((l) => l !== id) : [...prev, id]));
+    const nextListIds = listIds.includes(id) ? listIds.filter((l) => l !== id) : [...listIds, id];
+    setListIds(nextListIds);
+    commit(buildPayload({ twoWay, teamId, allMode, listIds: nextListIds, teamMap }));
   };
 
   const setTeamMapping = (externalTeamId: string, mappedTeamId: string): void => {
-    setTeamMap((prev) => ({ ...prev, [externalTeamId]: mappedTeamId }));
+    const nextTeamMap = { ...teamMap, [externalTeamId]: mappedTeamId };
+    setTeamMap(nextTeamMap);
+    commit(buildPayload({ twoWay, teamId, allMode, listIds, teamMap: nextTeamMap }));
   };
 
   // A subset that selects nothing would sync nothing — block the save until at least one is chosen.
@@ -241,6 +299,7 @@ export function IntegrationConfigPanel({
                 aria-checked={isSelected}
                 onClick={() => {
                   setTwoWay(d.twoWay);
+                  commit(buildPayload({ twoWay: d.twoWay, teamId, allMode, listIds, teamMap }));
                 }}
                 className={cn(
                   'focus-visible:ring-ring bg-surface-container-low relative flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors outline-none focus-visible:ring-2',
@@ -298,7 +357,9 @@ export function IntegrationConfigPanel({
                 className="accent-primary size-4"
                 checked={allMode}
                 onChange={(e) => {
-                  setAllMode(e.target.checked);
+                  const nextAllMode = e.target.checked;
+                  setAllMode(nextAllMode);
+                  commit(buildPayload({ twoWay, teamId, allMode: nextAllMode, listIds, teamMap }));
                 }}
               />
               <span className="text-on-surface text-body-medium font-medium">
@@ -348,7 +409,9 @@ export function IntegrationConfigPanel({
             id={`team-${integration.id}`}
             value={teamId}
             onChange={(e) => {
-              setTeamId(e.target.value);
+              const nextTeamId = e.target.value;
+              setTeamId(nextTeamId);
+              commit(buildPayload({ twoWay, teamId: nextTeamId, allMode, listIds, teamMap }));
             }}
             className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
           >
@@ -387,16 +450,10 @@ export function IntegrationConfigPanel({
         </div>
       ) : null}
 
-      <div className="flex items-center gap-3">
-        <Button
-          disabled={save.isPending || emptySubset}
-          onClick={() => {
-            save.mutate(undefined);
-          }}
-        >
-          {save.isPending ? 'Saving…' : 'Save settings'}
-        </Button>
-        {saved ? <span className="text-on-surface-variant text-xs">Saved.</span> : null}
+      {/* Autosave status — every field persists on change, so there is no Save button. Kept quiet
+          (text-on-surface-variant, xs); the generic-error and re-auth notices above own failures. */}
+      <div className="text-on-surface-variant flex h-4 items-center text-xs" aria-live="polite">
+        {save.isPending ? 'Saving…' : saved ? 'Saved' : null}
       </div>
     </div>
   );

@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
 import { CalendarItemId, type CalendarItemOut, CalendarLayerId } from '@docket/types';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { mutate } = vi.hoisted(() => ({ mutate: vi.fn() }));
 
@@ -54,9 +54,15 @@ function calendarItem(overrides: Partial<CalendarItemOut> = {}): CalendarItemOut
 afterEach(() => {
   cleanup();
   mutate.mockReset();
+  vi.useRealTimers();
 });
 
 describe('CoreFieldsForm range validation', () => {
+  // The schedule fields autosave on a 600ms debounce (no Save button); drive that clock explicitly.
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
   it('requires and persists an explicit occurrence for an edited repeated start', () => {
     render(
       <CoreFieldsForm
@@ -81,19 +87,21 @@ describe('CoreFieldsForm range validation', () => {
       'false',
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    // Debounced autosave fires but can't resolve the ambiguous start without an occurrence.
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
     expect(screen.getByRole('alert')).toHaveTextContent(
       'Choose Earlier or Later for the repeated start time.',
     );
     expect(mutate).not.toHaveBeenCalled();
 
     fireEvent.click(within(occurrence).getByRole('button', { name: 'Later · PST' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
 
     expect(mutate).toHaveBeenCalledWith({
-      title: 'Design review',
-      description: '',
-      location: '',
       startsAt: '2026-11-01T09:30:00Z',
       endsAt: '2026-11-01T10:30:00.000Z',
     });
@@ -109,7 +117,9 @@ describe('CoreFieldsForm range validation', () => {
 
     fireEvent.change(startInput, { target: { value: start } });
     fireEvent.change(endInput, { target: { value: end } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
 
     const error = screen.getByRole('alert');
     expect(error).toHaveTextContent('End must be after start.');
@@ -140,7 +150,9 @@ describe('CoreFieldsForm range validation', () => {
 
     fireEvent.change(startInput, { target: { value: start } });
     fireEvent.change(endInput, { target: { value: end } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
 
     const error = screen.getByRole('alert');
     expect(error).toHaveTextContent('End must be after start.');

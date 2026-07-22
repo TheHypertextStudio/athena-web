@@ -187,9 +187,8 @@ describe('IntegrationConfigPanel — Linear team-mapping picker', () => {
     );
 
     const engSelect = await screen.findByLabelText('Docket team for Engineering');
+    // The mapping change autosaves — there is no Save button.
     fireEvent.change(engSelect, { target: { value: TEAM_ENG_ID } });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     await waitFor(() => {
       expect(integrationPatch).toHaveBeenCalledTimes(1);
@@ -208,9 +207,8 @@ describe('IntegrationConfigPanel — Linear team-mapping picker', () => {
     renderPanel(linearIntegration());
 
     const engSelect = await screen.findByLabelText('Docket team for Engineering');
+    // Changing Engineering autosaves; Ops stays unmapped.
     fireEvent.change(engSelect, { target: { value: TEAM_ENG_ID } });
-    // Ops stays unmapped.
-    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     await waitFor(() => {
       expect(integrationPatch).toHaveBeenCalledTimes(1);
@@ -241,10 +239,9 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     integrationPatch.mockResolvedValue(jsonResponse(false, { detail: 'Something else broke.' }));
     renderPanel(linearIntegration());
 
-    await waitFor(() => {
-      expect(listsGet).toHaveBeenCalled();
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+    // A read-only field change autosaves; this save fails for an unrelated reason (still writeBack: false).
+    const engSelect = await screen.findByLabelText('Docket team for Engineering');
+    fireEvent.change(engSelect, { target: { value: TEAM_ENG_ID } });
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Could not save settings.');
@@ -272,9 +269,8 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
       expect(listsGet).toHaveBeenCalled();
     });
 
-    // Flip to Two-way, then save.
+    // Flipping to Two-way autosaves the writeBack: true attempt.
     fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain(
@@ -316,9 +312,8 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
       expect(listsGet).toHaveBeenCalled();
     });
 
-    // Flip to Two-way, then save — same trigger as the 409 test above, different server outcome.
+    // Flipping to Two-way autosaves — same trigger as the 409 test above, different server outcome.
     fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
 
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('Could not save settings.');
@@ -359,7 +354,6 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
     });
 
     fireEvent.click(screen.getByRole('radio', { name: /Two-way/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
     const reauthButton = await screen.findByRole('button', { name: 'Re-authorize Linear' });
 
     fireEvent.click(reauthButton);

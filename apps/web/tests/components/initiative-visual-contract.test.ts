@@ -120,10 +120,10 @@ describe('Initiative visual contract', () => {
     const overview = source(overviewPath);
     // The container measure + rhythm now lives once in the shared layout; the page adopts
     // ListPageLayout rather than restating the utility string.
-    expect(source(pageLayoutPath)).toContain('max-w-7xl flex-col gap-6');
+    expect(source(pageLayoutPath)).toContain('max-w-7xl flex-col gap-5');
     expect(overview).toContain('<ListPageLayout');
     expect(overview).toContain('bg-surface-container-low mb-2 flex flex-col rounded-xl p-4');
-    expect(overview).not.toContain('max-w-7xl flex-col gap-5');
+    expect(overview).not.toContain('max-w-7xl flex-col gap-6');
   });
 
   it('keeps the complete padded roster scrollable without wrapping metadata', () => {

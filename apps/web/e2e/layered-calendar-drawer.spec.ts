@@ -67,18 +67,13 @@ test.describe('layered calendar drawer', () => {
     await body.click();
     const drawer = page.getByRole('dialog');
     await drawer.getByLabel('Title').fill('Design review (revised)');
-    await drawer.getByRole('button', { name: 'Save changes' }).click();
+    // Editing a text field autosaves on blur (no Save button), scoped to just that field.
+    await drawer.getByLabel('Title').blur();
 
     await expect.poll(() => state.itemPatches.length).toBe(1);
     expect(state.itemPatches[0]).toEqual({
       itemId: item.id,
-      patch: {
-        title: 'Design review (revised)',
-        description: '',
-        location: '',
-        startsAt: item.startsAt,
-        endsAt: item.endsAt,
-      },
+      patch: { title: 'Design review (revised)' },
     });
     expect(state.items.find((candidate) => candidate.id === item.id)?.title).toBe(
       'Design review (revised)',

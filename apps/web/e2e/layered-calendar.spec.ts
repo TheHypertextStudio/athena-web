@@ -200,7 +200,8 @@ test.describe('layered calendar', () => {
     await body.click();
     const drawer = page.getByRole('dialog');
     await drawer.getByLabel('Title').fill('Deep focus block');
-    await drawer.getByRole('button', { name: 'Save changes' }).click();
+    // Editing a text field autosaves on blur; there is no Save button.
+    await drawer.getByLabel('Title').blur();
     await expect(drawer.getByRole('heading', { name: 'Deep focus block' })).toBeVisible();
 
     await drawer.getByRole('button', { name: 'Delete', exact: true }).click();

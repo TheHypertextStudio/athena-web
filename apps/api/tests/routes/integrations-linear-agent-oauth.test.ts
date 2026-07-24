@@ -122,7 +122,10 @@ describe('Linear Agent install callback', () => {
       );
     expect(stored?.status).toBe('connected');
     expect(stored?.lastError).toBeNull();
-    expect(JSON.parse(unsealCredential(stored!.ciphertext))).toEqual(tokens);
+    expect(JSON.parse(unsealCredential(stored!.ciphertext))).toEqual({
+      ...tokens,
+      obtainedAt: expect.any(String),
+    });
     expect(exchangeLinearAgentCode).toHaveBeenCalledWith(
       expect.objectContaining({
         clientId: 'agent-client-id',
@@ -131,6 +134,40 @@ describe('Linear Agent install callback', () => {
         code: 'approval-code',
       }),
     );
+  });
+
+  it('replaying a completed callback is idempotent and does not flip a healthy connection to error', async () => {
+    const seeded = await seedPendingLinearAgent();
+    const tokens = {
+      accessToken: 'linear-agent-access',
+      tokenType: 'Bearer',
+      expiresIn: 86_400,
+      scope: 'app:mentionable,app:assignable',
+      refreshToken: 'linear-agent-refresh',
+    };
+    exchangeLinearAgentCode.mockResolvedValue(tokens);
+    const state = signLinearAgentInstallState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+    });
+    const app = new Hono().route('/', integrationsLinearAgentOauth);
+    const url = `/callback?code=approval-code&state=${encodeURIComponent(state)}`;
+
+    const first = await app.request(url);
+    expect(first.status).toBe(302);
+    expect(first.headers.get('location')).toContain('linear_agent=connected');
+
+    const replay = await app.request(url);
+    expect(replay.status).toBe(302);
+    expect(replay.headers.get('location')).toContain('linear_agent=connected');
+
+    const [row] = await db
+      .select({ status: schema.integration.status, lastError: schema.integration.lastError })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, seeded.integrationId));
+    expect(row?.status).toBe('connected');
+    expect(row?.lastError).toBeNull();
+    expect(exchangeLinearAgentCode).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a callback whose state is missing or invalid without touching an integration', async () => {

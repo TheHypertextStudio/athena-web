@@ -310,6 +310,12 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
               )}
             </dd>
           </div>
+          {mcp.authMode === 'oauth' && mcp.oauthScope ? (
+            <div>
+              <dt className="font-medium">Granted scope</dt>
+              <dd className="mt-0.5 font-mono break-all">{mcp.oauthScope}</dd>
+            </div>
+          ) : null}
         </dl>
       </details>
       {canManage ? (

@@ -4,13 +4,18 @@
  * error recording. (The authorize-URL/exchange internals are unit-tested in slack-app.test.ts.)
  */
 import { and, eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
 import { getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
+import { unsealCredential } from '../../src/lib/credentials';
 import type * as SlackApp from '../../src/lib/slack-app';
+
+vi.hoisted(() => {
+  process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
+});
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -128,7 +133,7 @@ describe('GET /internal/integrations/slack/callback', () => {
           ),
         ),
     );
-    expect(acct.accessToken).toBe('mock');
+    expect(unsealCredential(acct.accessToken!)).toBe('mock');
     expect(acct.scope).toContain('im:history');
   });
 

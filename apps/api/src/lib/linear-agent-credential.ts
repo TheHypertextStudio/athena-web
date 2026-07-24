@@ -15,13 +15,35 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db, integration, integrationCredential } from '@docket/db';
-import type { LinearAgentPort } from '@docket/integrations';
+import {
+  linearAgentTokenNeedsRefresh,
+  refreshLinearAgentToken,
+  type LinearAgentPort,
+  type StoredLinearAgentTokens,
+} from '@docket/integrations';
 
 import { buildLinearAgentClient } from '../container';
-import { unsealCredential } from './credentials';
+import { sealCredential, unsealCredential } from './credentials';
+import { linearAgentConfigFromEnv } from './linear-agent-connect';
 
-/** The unsealed credential shape a `linear_agent` integration's ciphertext decodes to. */
-const linearAgentTokensSchema = z.object({ accessToken: z.string() }).loose();
+/**
+ * The unsealed credential shape a `linear_agent` integration's ciphertext decodes to.
+ *
+ * @remarks
+ * Only `accessToken` is required — a credential sealed before {@link StoredLinearAgentTokens} was
+ * introduced won't have the rest, and must still degrade to "use the token as-is, skip the refresh
+ * check" rather than fail to parse.
+ */
+const linearAgentTokensSchema = z
+  .object({
+    accessToken: z.string(),
+    tokenType: z.string().optional(),
+    scope: z.string().optional(),
+    refreshToken: z.string().optional(),
+    expiresIn: z.number().optional(),
+    obtainedAt: z.string().optional(),
+  })
+  .loose();
 
 /**
  * Find an org's `linear_agent` integration row, if one exists.
@@ -55,6 +77,13 @@ export async function findLinearAgentIntegration(
  * throws out of {@link unsealCredential} — that is a genuine fault worth surfacing, not silently
  * swallowed.
  *
+ * Refreshes the access token before use when it's due (mirrors the remote-MCP toolbox's
+ * refresh-before-use in `agent/toolbox.ts`) — Linear's Agent access tokens expire in 24h, so
+ * without this every install would silently start failing a day after connecting. A refresh
+ * failure (revoked grant, app reconfigured) degrades the integration to `status: 'error'` with a
+ * clear reason, same as a first-connect failure, and this still returns `null` rather than
+ * throwing into the caller's sweep/webhook path.
+ *
  * @param integrationId - The `linear_agent` integration's id.
  */
 export async function buildLinearAgentPortForIntegration(
@@ -71,5 +100,50 @@ export async function buildLinearAgentPortForIntegration(
     JSON.parse(unsealCredential(credentialRow.ciphertext)),
   );
   if (!parsedTokens.success) return null;
-  return buildLinearAgentClient(parsedTokens.data.accessToken);
+
+  const { accessToken, tokenType, scope, refreshToken, expiresIn, obtainedAt } = parsedTokens.data;
+  if (refreshToken && tokenType && scope && expiresIn !== undefined && obtainedAt) {
+    const stored: StoredLinearAgentTokens = {
+      accessToken,
+      tokenType,
+      scope,
+      refreshToken,
+      expiresIn,
+      obtainedAt,
+    };
+    if (linearAgentTokenNeedsRefresh(stored)) {
+      const config = linearAgentConfigFromEnv();
+      if (!config) return null;
+      try {
+        const refreshed = await refreshLinearAgentToken({
+          clientId: config.clientId,
+          clientSecret: config.clientSecret,
+          refreshToken: stored.refreshToken,
+        });
+        const next: StoredLinearAgentTokens = {
+          ...refreshed,
+          obtainedAt: new Date().toISOString(),
+        };
+        await db
+          .update(integrationCredential)
+          .set({ ciphertext: sealCredential(JSON.stringify(next)) })
+          .where(eq(integrationCredential.integrationId, integrationId));
+        return buildLinearAgentClient(next.accessToken);
+      } catch (cause) {
+        await db
+          .update(integration)
+          .set({
+            status: 'error',
+            lastError:
+              cause instanceof Error
+                ? cause.message
+                : 'Linear Agent token refresh failed; reconnect required',
+            lastErrorAt: new Date(),
+          })
+          .where(eq(integration.id, integrationId));
+        return null;
+      }
+    }
+  }
+  return buildLinearAgentClient(accessToken);
 }

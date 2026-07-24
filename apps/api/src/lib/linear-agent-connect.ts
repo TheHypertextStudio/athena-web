@@ -78,6 +78,14 @@ export interface LinearAgentConfig {
  * build a working authorize URL nor verify inbound webhooks, so it degrades to "unavailable" the
  * same way {@link import('./github-app').githubAppConfigFromEnv} does for the GitHub App: return
  * `null` rather than throw, so the caller can offer/hide the connect action cleanly.
+ *
+ * Known gap: `redirectUri` here is always this environment's own `API_URL`, unlike Better Auth's
+ * social-provider flows (Google et al.), which get an `oAuthProxy`-relayed callback so a
+ * preview/branch deployment (whose URL can't be pre-registered with the provider) can still
+ * complete OAuth through one pinned, registered anchor. Slack's equivalent has the same limitation.
+ * Neither has an `oAuthProxy` equivalent today — there's no current evidence this app runs
+ * OAuth-integration testing against preview environments for either provider, so building that
+ * relay infrastructure now would be speculative. Revisit if that need ever materializes.
  */
 export function linearAgentConfigFromEnv(): LinearAgentConfig | null {
   if (

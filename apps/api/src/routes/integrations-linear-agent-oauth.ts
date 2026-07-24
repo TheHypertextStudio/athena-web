@@ -31,7 +31,7 @@
  * flag so the UI can surface a retry, and the integration is left `error` with a real reason.
  */
 import { db, integration, integrationCredential } from '@docket/db';
-import { exchangeLinearAgentCode } from '@docket/integrations';
+import { exchangeLinearAgentCode, type StoredLinearAgentTokens } from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -75,6 +75,16 @@ const integrationsLinearAgentOAuth = new Hono().get('/callback', async (c) => {
     .limit(1);
   if (!row) return c.redirect(settingsRedirect(decoded.orgId, 'error'));
 
+  // `/install` always resets `status` to `pending` on every call (see
+  // `findOrCreateLinearAgentIntegration`'s own remarks), so a `connected` row here means no fresh
+  // `/install` has run since this integration last completed — this hit is a stale replay (e.g. a
+  // browser back-button resubmit), not a new attempt. Redirect idempotently rather than re-running
+  // `exchangeLinearAgentCode` (which would fail against Linear's server, since the code was already
+  // consumed) and flipping an already-healthy connection to `error`.
+  if (row.status === 'connected') {
+    return c.redirect(settingsRedirect(decoded.orgId, 'connected'));
+  }
+
   const code = c.req.query('code');
   if (!code) {
     await db
@@ -96,7 +106,8 @@ const integrationsLinearAgentOAuth = new Hono().get('/callback', async (c) => {
       code,
     });
 
-    const ciphertext = sealCredential(JSON.stringify(tokens));
+    const stored: StoredLinearAgentTokens = { ...tokens, obtainedAt: new Date().toISOString() };
+    const ciphertext = sealCredential(JSON.stringify(stored));
     await db.transaction(async (tx) => {
       await tx
         .insert(integrationCredential)

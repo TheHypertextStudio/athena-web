@@ -667,6 +667,12 @@ export const McpIntegrationOut = z
       .describe('Tools advertised at the last successful check; null when never verified.'),
     lastError: z.string().nullable().describe('Why the last check failed; null when healthy.'),
     createdAt: z.string().describe('ISO-8601 timestamp the server was connected.'),
+    oauthScope: z
+      .string()
+      .nullable()
+      .describe(
+        'The scope actually granted by the remote server on its last OAuth approval (comma/space-separated, provider-defined); null for a `bearer`/`none` connector or before the first OAuth approval completes. Visibility only — Docket does not request or enforce a specific scope, since arbitrary remote MCP servers define their own scope vocabulary.',
+      ),
   })
   .meta({ id: 'McpIntegrationOut', description: 'A connected remote MCP server.' });
 /** MCP-integration representation value. */

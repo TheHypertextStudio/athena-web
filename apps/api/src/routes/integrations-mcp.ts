@@ -21,16 +21,18 @@ import { capabilityGuard } from '../permissions/capability-guard';
 type IntegrationRow = typeof integration.$inferSelect;
 
 /** The `config` shape an `provider='mcp'` integration row carries. */
-interface McpConfig {
+export interface McpConfig {
   readonly url: string;
   readonly label: string;
   readonly alias: string;
   readonly toolCount?: number;
   readonly authMode?: 'oauth' | 'bearer' | 'none';
+  /** The scope granted on the last successful OAuth approval (visibility only, never enforced). */
+  readonly oauthScope?: string | null;
 }
 
 /** Read the MCP config off a row (rows this router creates always carry it). */
-function mcpConfig(row: IntegrationRow): McpConfig {
+export function mcpConfig(row: IntegrationRow): McpConfig {
   return row.config as unknown as McpConfig;
 }
 
@@ -48,6 +50,7 @@ function toMcpOut(row: IntegrationRow): z.input<typeof McpIntegrationOut> {
     toolCount: typeof config.toolCount === 'number' ? config.toolCount : null,
     lastError: row.lastError,
     createdAt: row.createdAt.toISOString(),
+    oauthScope: config.oauthScope ?? null,
   };
 }
 
@@ -271,7 +274,16 @@ const router = new Hono<AppEnv>()
       if (config.authMode !== 'oauth')
         throw new ConflictError('This MCP server is not configured for OAuth');
 
-      const state = signConnectState({ integrationId: row.id, orgId, userId: actorId });
+      // `authUserId` (the Better Auth session's user id, distinct from `userId`/`actorId` above)
+      // lets the callback softly bind this approval to the browser session that started it — see
+      // its check in `integrations-mcp-oauth.ts` for why this is optional rather than required.
+      const authUserId = c.get('session')?.user.id;
+      const state = signConnectState({
+        integrationId: row.id,
+        orgId,
+        userId: actorId,
+        ...(authUserId ? { authUserId } : {}),
+      });
       try {
         const begun = await beginMcpOAuthAuthorization({
           serverUrl: config.url,

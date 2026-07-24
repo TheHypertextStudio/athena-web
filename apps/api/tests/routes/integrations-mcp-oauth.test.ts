@@ -13,6 +13,7 @@ import type {
   unsealCredential as UnsealCredential,
 } from '../../src/lib/credentials';
 import type { signConnectState as SignConnectState } from '../../src/lib/oauth-state';
+import { getSession, resetAuthMocks } from '../support/auth-mock';
 
 const { completeMcpOAuthAuthorization } = vi.hoisted(() => ({
   completeMcpOAuthAuthorization: vi.fn(),
@@ -55,6 +56,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  resetAuthMocks();
 });
 
 async function seedPendingOAuth(): Promise<{ orgId: string; integrationId: string }> {
@@ -93,7 +95,7 @@ describe('remote MCP OAuth callback', () => {
     const seeded = await seedPendingOAuth();
     completeMcpOAuthAuthorization.mockResolvedValue({
       kind: 'mcp_oauth',
-      tokens: { access_token: 'access', token_type: 'Bearer' },
+      tokens: { access_token: 'access', token_type: 'Bearer', scope: 'tools:read tools:write' },
       obtainedAt: new Date().toISOString(),
     });
     const state = signConnectState({
@@ -112,6 +114,7 @@ describe('remote MCP OAuth callback', () => {
       .select({
         status: schema.integration.status,
         lastError: schema.integration.lastError,
+        config: schema.integration.config,
         ciphertext: schema.integrationCredential.ciphertext,
       })
       .from(schema.integration)
@@ -128,15 +131,96 @@ describe('remote MCP OAuth callback', () => {
     expect(stored?.lastError).toBeNull();
     expect(response.headers.get('location')).toContain('/settings/athena?mcp=connected');
     expect(stored?.status).toBe('connected');
+    expect((stored!.config as { oauthScope?: string }).oauthScope).toBe('tools:read tools:write');
     expect(unsealCredential(stored!.ciphertext)).toContain('mcp_oauth');
     expect(completeMcpOAuthAuthorization).toHaveBeenCalledWith(
       expect.objectContaining({ authorizationCode: 'approval-code' }),
     );
   });
 
+  it('replaying a completed callback is idempotent and does not flip a healthy connection to error', async () => {
+    const seeded = await seedPendingOAuth();
+    completeMcpOAuthAuthorization.mockResolvedValue({
+      kind: 'mcp_oauth',
+      tokens: { access_token: 'access', token_type: 'Bearer' },
+      obtainedAt: new Date().toISOString(),
+    });
+    const state = signConnectState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+      userId: 'actor_test',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+    const url = `/callback?code=approval-code&state=${encodeURIComponent(state)}`;
+
+    const first = await app.request(url);
+    expect(first.status).toBe(302);
+    expect(first.headers.get('location')).toContain('/settings/athena?mcp=connected');
+
+    const replay = await app.request(url);
+    expect(replay.status).toBe(302);
+    expect(replay.headers.get('location')).toContain('/settings/athena?mcp=connected');
+
+    const [stored] = await db
+      .select({ status: schema.integration.status, lastError: schema.integration.lastError })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, seeded.integrationId));
+    expect(stored?.status).toBe('connected');
+    expect(stored?.lastError).toBeNull();
+    expect(completeMcpOAuthAuthorization).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects a callback whose state is missing or invalid without touching an integration', async () => {
     const app = new Hono().route('/', integrationsMcpOauth);
     const response = await app.request('/callback?code=approval-code&state=not-signed');
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
+    expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('completes normally when the browser carries a session matching the signed authUserId', async () => {
+    const seeded = await seedPendingOAuth();
+    completeMcpOAuthAuthorization.mockResolvedValue({
+      kind: 'mcp_oauth',
+      tokens: { access_token: 'access', token_type: 'Bearer' },
+      obtainedAt: new Date().toISOString(),
+    });
+    getSession.mockResolvedValue({
+      user: { id: 'user_actual', name: 'Ada', email: 'ada@example.com' },
+    });
+    const state = signConnectState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+      userId: 'actor_test',
+      authUserId: 'user_actual',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+
+    const response = await app.request(
+      `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=connected');
+  });
+
+  it('rejects a callback whose browser session belongs to someone other than the signed authUserId', async () => {
+    const seeded = await seedPendingOAuth();
+    getSession.mockResolvedValue({
+      user: { id: 'someone_else', name: 'Eve', email: 'eve@example.com' },
+    });
+    const state = signConnectState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+      userId: 'actor_test',
+      authUserId: 'user_actual',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+
+    const response = await app.request(
+      `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+    );
+
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
     expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();

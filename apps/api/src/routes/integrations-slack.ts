@@ -9,11 +9,13 @@
  * connecting user) arrives in the tamper-proof `state` — the callback itself has no session.
  *
  * The handler verifies the state, exchanges the code for the **user** grant (`xoxp-` token via
- * `oauth.v2.access`; short-circuited to fixtures in local/test), stores the token as a Better
- * Auth `account` row (`providerId='slack'`, credential by reference only), and records the
- * workspace on the integration: `connection.externalWorkspaceId = team_id` is the routing key
- * `/internal/ingest/slack` matches inbound events against, and `externalAccountId = U…` is the
- * identity the relevance resolver matches mentions/DMs/threads against.
+ * `oauth.v2.access`; short-circuited to fixtures in local/test), stores the token — sealed via
+ * `sealCredential` (this raw Drizzle write bypasses Better Auth's own `encryptOAuthTokens`, so it
+ * must encrypt itself) — as a Better Auth `account` row (`providerId='slack'`, credential by
+ * reference only), and records the workspace on the integration:
+ * `connection.externalWorkspaceId = team_id` is the routing key `/internal/ingest/slack` matches
+ * inbound events against, and `externalAccountId = U…` is the identity the relevance resolver
+ * matches mentions/DMs/threads against.
  *
  * Failures never 500 a browser redirect: they bounce back to settings with `?slack=error` and
  * the integration is left `error` with a real reason.
@@ -22,6 +24,7 @@ import { account, db, integration } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
+import { sealCredential } from '../lib/credentials';
 import { webAppOrigin } from '../lib/github-app';
 import { exchangeSlackCode, verifySlackConnectState } from '../lib/slack-app';
 
@@ -82,6 +85,12 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
 
     // Store the xoxp- user token as a Better Auth account row (credential by reference —
     // the integration carries only a credentialsRef). One row per (user, slack account).
+    // Sealed (AES-256-GCM, `credentials.ts`) before it ever touches the DB: writing here bypasses
+    // Better Auth's own `encryptOAuthTokens` (that only fires inside Better Auth's own handlers),
+    // so this raw Drizzle write must encrypt itself rather than land the token in plaintext. Any
+    // future reader of `account.accessToken` for `providerId: 'slack'` MUST call
+    // `unsealCredential` first — there is no current production reader to keep in sync with.
+    const sealedAccessToken = sealCredential(grant.accessToken);
     const [existing] = await db
       .select({ id: account.id })
       .from(account)
@@ -96,14 +105,14 @@ const integrationsSlack = new Hono().get('/callback', async (c) => {
     if (existing) {
       await db
         .update(account)
-        .set({ accessToken: grant.accessToken, scope: grant.scope })
+        .set({ accessToken: sealedAccessToken, scope: grant.scope })
         .where(eq(account.id, existing.id));
     } else {
       await db.insert(account).values({
         accountId: grant.slackUserId,
         providerId: 'slack',
         userId: decoded.userId,
-        accessToken: grant.accessToken,
+        accessToken: sealedAccessToken,
         scope: grant.scope,
       });
     }

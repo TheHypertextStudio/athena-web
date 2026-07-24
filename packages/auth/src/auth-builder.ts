@@ -365,6 +365,15 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   if (appleCreds !== undefined) {
     // Apple's client secret is a short-lived ES256 JWT minted from the .p8 key at boot (not a
     // static env string) — see `generateAppleClientSecret`.
+    //
+    // Known upstream gap: Better Auth 1.6.14's built-in Apple provider never sends a
+    // `code_challenge` (unlike Google, where PKCE is mandatory in the same version) — verified
+    // directly in `social-providers/apple.ts`, which doesn't destructure `codeVerifier` when
+    // building the authorize URL. Not something this config opts into or out of; not fixable here
+    // without patching/upgrading Better Auth or moving Apple onto the `generic-oauth` plugin (which
+    // supports `pkce`, but would mean hand-reimplementing Apple's `id_token` verification and
+    // `response_mode=form_post`/client-secret-as-JWT handling that the built-in provider already
+    // does correctly). Revisit on a future Better Auth upgrade.
     socialProviders.apple = {
       clientId: appleCreds.clientId,
       clientSecret: generateAppleClientSecret(appleCreds),

@@ -256,6 +256,31 @@ export async function refreshLinearAgentToken(
   );
 }
 
+/**
+ * The persisted shape of a `linear_agent` integration's sealed credential: the token pair plus
+ * when it was obtained, so a reader can tell whether it's due for {@link refreshLinearAgentToken}
+ * before use (mirrors {@link import('./mcp-oauth').McpOAuthCredential}'s `obtainedAt`).
+ */
+export interface StoredLinearAgentTokens extends LinearAgentOAuthTokens {
+  /** ISO timestamp of when this token pair was obtained (initial exchange or last refresh). */
+  readonly obtainedAt: string;
+}
+
+/** How much earlier than the token's real expiry to treat it as due for refresh. */
+const LINEAR_AGENT_REFRESH_MARGIN_MS = 60_000;
+
+/** Whether a stored Agent install token is due for {@link refreshLinearAgentToken} before use. */
+export function linearAgentTokenNeedsRefresh(
+  credential: StoredLinearAgentTokens,
+  nowMs: number = Date.now(),
+): boolean {
+  const obtainedAt = Date.parse(credential.obtainedAt);
+  return (
+    !Number.isFinite(obtainedAt) ||
+    obtainedAt + credential.expiresIn * 1_000 - LINEAR_AGENT_REFRESH_MARGIN_MS <= nowMs
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Webhook signature verification
 // ---------------------------------------------------------------------------

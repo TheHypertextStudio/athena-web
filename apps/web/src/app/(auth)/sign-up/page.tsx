@@ -10,7 +10,6 @@ import { userErrorMessage } from '@/lib/problem';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
-import { OAuthButtons } from '../_components/oauth-buttons';
 import { passkeyErrorMessage } from '../_lib/passkey-error';
 import { isWebAuthnSupported } from '../_lib/webauthn';
 
@@ -92,10 +91,10 @@ async function verifySignupCode(
  *
  * Robustness:
  * - WebAuthn support is feature-detected; unsupported browsers see a clear message and the passkey
- *   step is disabled (OAuth, when configured, remains available).
+ *   step is disabled. Passkeys are the only sign-up method — there is deliberately no OAuth/social
+ *   fallback.
  * - Submission is disabled until hydration so a pre-hydration native submit cannot post the form.
  * - Errors are surfaced in an assertive `role="alert"` region; a user-cancelled ceremony is a no-op.
- * - Secondary OAuth buttons render only when their providers are configured (env-gated).
  */
 export default function SignUpPage(): JSX.Element {
   const router = useRouter();
@@ -290,8 +289,8 @@ export default function SignUpPage(): JSX.Element {
 
         {!passkeySupported && hydrated ? (
           <p className="text-on-surface-variant text-body-medium" role="status">
-            This browser does not support passkeys. You can still continue with one of the options
-            below if available.
+            This browser does not support passkeys. Try a different browser or device to create an
+            account.
           </p>
         ) : null}
 
@@ -313,10 +312,6 @@ export default function SignUpPage(): JSX.Element {
           key to Docket.
         </p>
       </form>
-
-      {step === 'collect' ? (
-        <OAuthButtons callbackURL={POST_SIGNUP_DESTINATION} disabled={pending} onError={setError} />
-      ) : null}
     </AuthShell>
   );
 }

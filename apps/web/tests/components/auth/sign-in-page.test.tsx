@@ -29,17 +29,6 @@ vi.mock('../../../src/lib/auth-client', () => ({
   authClient: { signIn: { passkey: signInPasskey } },
 }));
 
-const { oauthButtonsSpy } = vi.hoisted(() => ({
-  oauthButtonsSpy: vi.fn(),
-}));
-
-vi.mock('../../../src/app/(auth)/_components/oauth-buttons', () => ({
-  OAuthButtons: (props: { callbackURL: string }) => {
-    oauthButtonsSpy(props);
-    return null;
-  },
-}));
-
 vi.mock('../../../src/app/(auth)/_lib/webauthn', () => ({
   isConditionalMediationSupported: async () => false,
   isWebAuthnSupported: () => true,
@@ -72,7 +61,6 @@ beforeEach(() => {
   orgsGet.mockReset();
   push.mockReset();
   signInPasskey.mockReset();
-  oauthButtonsSpy.mockReset();
   window.history.replaceState(null, '', '/sign-in');
 });
 
@@ -144,39 +132,49 @@ describe('SignInPage', () => {
     });
   });
 
-  it('passes a safe ?callbackURL= return path through to the OAuth buttons', () => {
+  it('honors a safe ?callbackURL= return path after a successful passkey sign-in', async () => {
     window.history.replaceState(
       null,
       '',
       `/sign-in?callbackURL=${encodeURIComponent('/settings/athena?mcp=connected')}`,
     );
+    signInPasskey.mockResolvedValue({ error: null });
+    orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
 
     render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
-    expect(oauthButtonsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ callbackURL: '/settings/athena?mcp=connected' }),
-    );
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/settings/athena?mcp=connected');
+    });
   });
 
-  it('falls back to /today for the OAuth buttons when there is no ?callbackURL=', () => {
+  it('falls back to /today when there is no ?callbackURL=', async () => {
+    signInPasskey.mockResolvedValue({ error: null });
+    orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
+
     render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
-    expect(oauthButtonsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ callbackURL: '/today' }),
-    );
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/today');
+    });
   });
 
-  it('falls back to /today for the OAuth buttons when ?callbackURL= is an open redirect', () => {
+  it('falls back to /today when ?callbackURL= is an open redirect', async () => {
     window.history.replaceState(
       null,
       '',
       `/sign-in?callbackURL=${encodeURIComponent('//evil.example')}`,
     );
+    signInPasskey.mockResolvedValue({ error: null });
+    orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
 
     render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
-    expect(oauthButtonsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ callbackURL: '/today' }),
-    );
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/today');
+    });
   });
 });

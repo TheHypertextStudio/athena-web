@@ -18,10 +18,6 @@ vi.mock('../../../src/lib/auth-client', () => ({
   signIn: { passkey: signInPasskey },
 }));
 
-vi.mock('../../../src/app/(auth)/_components/oauth-buttons', () => ({
-  OAuthButtons: () => null,
-}));
-
 vi.mock('../../../src/app/(auth)/_lib/webauthn', () => ({
   isWebAuthnSupported: () => true,
 }));

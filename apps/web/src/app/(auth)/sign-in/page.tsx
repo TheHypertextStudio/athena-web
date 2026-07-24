@@ -10,7 +10,6 @@ import { authClient } from '@/lib/auth-client';
 
 import { AuthError, Spinner } from '../_components/auth-feedback';
 import { AuthShell } from '../_components/auth-shell';
-import { OAuthButtons } from '../_components/oauth-buttons';
 import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
 import {
   isConditionalMediationSupported,
@@ -93,7 +92,8 @@ async function loadOrgsAfterSignIn(): Promise<OrgsResponse> {
  *
  * Robustness:
  * - WebAuthn support is feature-detected; unsupported browsers see a clear message and the
- *   passkey button is disabled (OAuth, when configured, remains available).
+ *   passkey button is disabled. Passkeys are the only sign-in method — there is deliberately no
+ *   OAuth/social fallback.
  * - The conditional-UI prompt is armed at most once and only when supported.
  * - Errors are surfaced in an assertive `role="alert"` region; a user-cancelled ceremony is
  *   treated as a no-op rather than an error.
@@ -231,8 +231,7 @@ export default function SignInPage(): JSX.Element {
 
         {!passkeySupported && hydrated ? (
           <p className="text-on-surface-variant text-body-medium" role="status">
-            This browser does not support passkeys. You can still continue with one of the options
-            below if available.
+            This browser does not support passkeys. Try a different browser or device to sign in.
           </p>
         ) : null}
 
@@ -253,12 +252,6 @@ export default function SignInPage(): JSX.Element {
           )}
         </Button>
       </div>
-
-      <OAuthButtons
-        callbackURL={safeCallbackPath() ?? HOME_DESTINATION}
-        disabled={pending}
-        onError={setError}
-      />
 
       <p className="text-on-surface-variant text-body-medium text-center">
         Can&apos;t sign in?{' '}

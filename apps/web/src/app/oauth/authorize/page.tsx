@@ -39,6 +39,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, Suspense, useCallback, useEffect, useState } from 'react';
 
+import { signInReturnPath } from '@/components/app-shell-utils';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 
@@ -110,12 +111,14 @@ function ConsentPage(): JSX.Element {
     void fetchClientMetadata(clientId).then(setClientMeta);
   }, [clientId]);
 
-  // Redirect unauthenticated users to sign-in, preserving the consent params so Better Auth
-  // can resume the flow after authentication (via the oidc_login_prompt cookie path).
+  // Redirect unauthenticated users to sign-in, then back to this exact consent screen (params
+  // and all) once they authenticate. Must go through `signInReturnPath`'s `?callbackURL=`
+  // wrapper - a bare `/sign-in${currentSearch}` puts `consent_code`/`client_id`/`scope` on
+  // `/sign-in`'s own query string, which the sign-in page never reads (it only honors
+  // `callbackURL`), so it falls back to the home destination and the OAuth grant is lost.
   useEffect(() => {
     if (!sessionPending && !session) {
-      const currentSearch = window.location.search;
-      router.replace(`/sign-in${currentSearch}`);
+      router.replace(signInReturnPath(`${window.location.pathname}${window.location.search}`));
     }
   }, [session, sessionPending, router]);
 

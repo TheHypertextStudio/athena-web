@@ -108,6 +108,7 @@ export default function SignInPage(): JSX.Element {
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
   const conditionalArmed = useRef(false);
+  const initialSessionChecked = useRef(false);
   const { data: existingSession, isPending: sessionPending } = authClient.useSession();
 
   /** Route into the cockpit, or onboarding when the user has no organization yet. */
@@ -188,8 +189,15 @@ export default function SignInPage(): JSX.Element {
   // or have a fresh passkey ceremony triggered — redirect immediately. This is also what stops the
   // conditional-mediation autofill below from silently minting a redundant session every time a
   // signed-in user's browser happens to land on `/sign-in`.
+  //
+  // Runs exactly once, the first time the session read resolves after mount — it must NOT stay
+  // reactive for the component's whole lifetime. `useSession()` also reports the session this
+  // very page's own passkey ceremony just minted, so a live-for-the-lifetime effect races
+  // `routeAfterSignIn`'s deliberate navigation with a second, less-informed one.
   useEffect(() => {
-    if (!sessionPending && existingSession) {
+    if (sessionPending || initialSessionChecked.current) return;
+    initialSessionChecked.current = true;
+    if (existingSession) {
       router.push(safeCallbackPath() ?? HOME_DESTINATION);
     }
   }, [existingSession, router, sessionPending]);

@@ -111,6 +111,27 @@ describe('SignInPage', () => {
     });
   });
 
+  it('does not race the ceremony->onboarding push when useSession reports the just-minted session', async () => {
+    // Regression test: the initial-session redirect must not stay reactive for the component's
+    // whole lifetime, or it re-fires once the page's own ceremony mints a session and races
+    // routeAfterSignIn's own push with a wrong one straight to /today.
+    signInPasskey.mockResolvedValue({ error: null });
+    orgsGet.mockResolvedValue(jsonResponse(200, { items: [] }));
+
+    const { rerender } = render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/onboarding');
+    });
+    push.mockClear();
+
+    useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
+    rerender(<SignInPage />);
+
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('waits for the session cookie to become readable before routing', async () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet

@@ -96,6 +96,37 @@ describe('SignUpPage', () => {
     expect(signInPasskey).toHaveBeenCalledTimes(1);
   });
 
+  it('does not race the ceremony->onboarding push when useSession reports the just-minted session', async () => {
+    // Regression test: the initial-session redirect must not stay reactive for the component's
+    // whole lifetime, or it re-fires once signIn.passkey() mints a session and races the
+    // ceremony's own push to /onboarding with a wrong one to /today.
+    authFetch.mockImplementation((path: string) => {
+      if (path === '/sign-up/request-code') return Promise.resolve({ data: { status: true } });
+      if (path === '/sign-up/verify-code')
+        return Promise.resolve({ data: { intent: 'signup-intent:tok' } });
+      return Promise.resolve({});
+    });
+    addPasskey.mockResolvedValue({ error: null });
+    signInPasskey.mockResolvedValue({ error: null });
+
+    const { rerender } = render(<SignUpPage />);
+    submitEmailStep();
+
+    const codeInput = await screen.findByLabelText('Verification code');
+    fireEvent.change(codeInput, { target: { value: '123456' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Verify and create account' }));
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/onboarding');
+    });
+    push.mockClear();
+
+    useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
+    rerender(<SignUpPage />);
+
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('does not claim an email was sent when the request-code endpoint fails', async () => {
     authFetch.mockResolvedValue({ error: { status: 508, message: 'Infinite loop detected' } });
 

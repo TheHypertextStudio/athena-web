@@ -25,6 +25,13 @@ test.describe('passkey signal', () => {
     // 1. Register a passkey via the real sign-up ceremony (warm-up + retries handled by signUp).
     await signUp(page, newUser('PasskeySignal'));
 
+    // Deleting a user's only passkey is blocked server-side unless another recovery path exists
+    // (see the `/passkey/delete-passkey` guard in `packages/auth`) — generate recovery codes so
+    // this test's deletion represents a real, allowed account state rather than a lockout attempt.
+    // The just-completed sign-up ceremony leaves the session fresh enough for this step-up route.
+    const codes = await apiFetch(page, '/v1/me/recovery-codes', { method: 'POST' });
+    expect(codes.status, 'recovery-code generation should succeed').toBe(200);
+
     // 2. Capture the registered credential, then delete the passkey server-side.
     const before = await apiJson<PasskeyRow[]>(page, '/api/auth/passkey/list-user-passkeys');
     expect(before.length, 'expected a registered passkey').toBeGreaterThan(0);

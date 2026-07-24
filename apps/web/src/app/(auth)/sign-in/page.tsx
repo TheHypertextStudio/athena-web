@@ -91,6 +91,9 @@ async function loadOrgsAfterSignIn(): Promise<OrgsResponse> {
  * lookup rides the freshly-set session cookie through the typed RPC client.
  *
  * Robustness:
+ * - An already-authenticated browser is redirected away immediately (see the session-check effect)
+ *   rather than rendering the form or arming a fresh passkey ceremony — this is also what stops a
+ *   signed-in user from silently minting a redundant session every time they land on `/sign-in`.
  * - WebAuthn support is feature-detected; unsupported browsers see a clear message and the
  *   passkey button is disabled. Passkeys are the only sign-in method — there is deliberately no
  *   OAuth/social fallback.
@@ -105,6 +108,7 @@ export default function SignInPage(): JSX.Element {
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
   const conditionalArmed = useRef(false);
+  const { data: existingSession, isPending: sessionPending } = authClient.useSession();
 
   /** Route into the cockpit, or onboarding when the user has no organization yet. */
   const routeAfterSignIn = useCallback(async (): Promise<void> => {
@@ -179,13 +183,26 @@ export default function SignInPage(): JSX.Element {
     [routeAfterSignIn],
   );
 
+  // An already-authenticated browser landing here (a stale bookmark, a tab left open, a
+  // session-expiry redirect that resolved before this mounted) should never see the sign-in form
+  // or have a fresh passkey ceremony triggered — redirect immediately. This is also what stops the
+  // conditional-mediation autofill below from silently minting a redundant session every time a
+  // signed-in user's browser happens to land on `/sign-in`.
+  useEffect(() => {
+    if (!sessionPending && existingSession) {
+      router.push(safeCallbackPath() ?? HOME_DESTINATION);
+    }
+  }, [existingSession, router, sessionPending]);
+
   // After hydration, reflect real WebAuthn capability and, where supported, arm the
-  // conditional-UI autofill prompt exactly once.
+  // conditional-UI autofill prompt exactly once — only once we're sure there's no existing
+  // session to redirect away with instead (see the effect above).
   useEffect(() => {
     setHydrated(true);
     const supported = isWebAuthnSupported();
     setPasskeySupported(supported);
     if (!supported) return;
+    if (sessionPending || existingSession) return;
     void (async () => {
       if (conditionalArmed.current) return;
       if (await isConditionalMediationSupported()) {
@@ -193,7 +210,7 @@ export default function SignInPage(): JSX.Element {
         void authenticate(true);
       }
     })();
-  }, [authenticate]);
+  }, [authenticate, existingSession, sessionPending]);
 
   const canSubmit = hydrated && passkeySupported && !pending;
 

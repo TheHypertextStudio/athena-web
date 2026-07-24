@@ -16,6 +16,9 @@ import { isWebAuthnSupported } from '../_lib/webauthn';
 /** Where a new account lands once its passkey is registered. */
 const POST_SIGNUP_DESTINATION = '/onboarding';
 
+/** Where an already-authenticated browser is sent instead of the account-creation form. */
+const HOME_DESTINATION = '/today';
+
 const SIGNUP_SESSION_ERROR = 'Your account was created. Please try again to finish signing in.';
 
 /** Shown when a challenge endpoint returns 429 (rate-limited). */
@@ -106,6 +109,15 @@ export default function SignUpPage(): JSX.Element {
   const [pending, setPending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
+  const { data: existingSession, isPending: sessionPending } = authClient.useSession();
+
+  // An already-authenticated browser has no business on the account-creation form — redirect
+  // away instead of letting them submit into a confusing second-account flow.
+  useEffect(() => {
+    if (!sessionPending && existingSession) {
+      router.push(HOME_DESTINATION);
+    }
+  }, [existingSession, router, sessionPending]);
 
   // After hydration, enable submission and reflect real WebAuthn capability. Until then the
   // button stays disabled so a native submit cannot fire before the handler is attached.

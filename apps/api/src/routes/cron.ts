@@ -25,6 +25,7 @@ import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
+import { sweepExpiredSessions } from './session-sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -126,6 +127,14 @@ const cron = new Hono()
   .post('/run-linear-agent-sessions', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepLinearAgentSessions(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Expired-session sweep: deletes every `session` row past its `expiresAt` — Better Auth itself
+  // only prunes a row lazily (when that exact expired cookie comes back), so an abandoned browser
+  // profile's row would otherwise sit in the table forever. Plain stateless delete, safe to retry.
+  .post('/expired-sessions-sweep', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepExpiredSessions(new Date());
     return c.json({ swept: true, ...result });
   });
 

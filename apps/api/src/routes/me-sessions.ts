@@ -15,7 +15,7 @@
  */
 import { db, session as sessionTable } from '@docket/db';
 import { SessionListOut, SessionOut } from '@docket/types';
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, gt, ne } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
 import { z } from 'zod';
 
@@ -42,6 +42,7 @@ function toOut(row: SessionRow, currentToken: string): z.input<typeof SessionOut
     userAgent: row.userAgent ?? null,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    expiresAt: row.expiresAt.toISOString(),
   };
 }
 
@@ -58,7 +59,13 @@ const meSessions = new Hono<AppEnv>()
     }),
     async (c) => {
       const { user, session } = requireSession(c);
-      const rows = await db.select().from(sessionTable).where(eq(sessionTable.userId, user.id));
+      // Expired rows are never pruned proactively by Better Auth (it only deletes a row when that
+      // exact expired cookie is presented again), so without this filter a stale session from a
+      // long-abandoned browser profile would render here looking exactly like an active one.
+      const rows = await db
+        .select()
+        .from(sessionTable)
+        .where(and(eq(sessionTable.userId, user.id), gt(sessionTable.expiresAt, new Date())));
       const items = rows
         .map((row) => toOut(row, session.token))
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -109,7 +116,7 @@ const meSessions = new Hono<AppEnv>()
       const remaining = await db
         .select()
         .from(sessionTable)
-        .where(eq(sessionTable.userId, user.id));
+        .where(and(eq(sessionTable.userId, user.id), gt(sessionTable.expiresAt, new Date())));
       const items = remaining.map((row) => toOut(row, session.token));
       return ok(c, SessionListOut, { items });
     },

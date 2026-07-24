@@ -109,6 +109,13 @@ const JOBS: readonly CronJob[] = [
     description:
       'Docket: Linear Agent session-run sweep (drives queued agent runs via driveSession and relays the resulting activity back to the Linear thread).',
   },
+  {
+    name: 'docket-expired-sessions-sweep',
+    path: '/internal/cron/expired-sessions-sweep',
+    schedule: '0 4 * * *',
+    description:
+      'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

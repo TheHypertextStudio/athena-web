@@ -36,6 +36,8 @@ export const SessionOut = z
     createdAt: z.string().describe('ISO-8601 instant the session was created (signed in).'),
     /** ISO-8601 timestamp the session was last refreshed. */
     updatedAt: z.string().describe('ISO-8601 instant the session was last refreshed.'),
+    /** ISO-8601 timestamp the session expires (rolling — extends on activity). */
+    expiresAt: z.string().describe('ISO-8601 instant the session expires unless refreshed again.'),
   })
   .meta({ id: 'SessionOut', description: 'A signed-in device/browser session.' });
 /** Session value. */

@@ -1,11 +1,15 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { addPasskey, authFetch, push, signInPasskey } = vi.hoisted(() => ({
+const { addPasskey, authFetch, push, signInPasskey, useSession } = vi.hoisted(() => ({
   addPasskey: vi.fn(),
   authFetch: vi.fn(),
   push: vi.fn(),
   signInPasskey: vi.fn(),
+  useSession: vi.fn((): { data: { user: { id: string } } | null; isPending: boolean } => ({
+    data: null,
+    isPending: false,
+  })),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -13,7 +17,10 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../../../src/lib/auth-client', () => ({
-  authClient: { $fetch: authFetch },
+  authClient: {
+    $fetch: authFetch,
+    useSession,
+  },
   passkey: { addPasskey },
   signIn: { passkey: signInPasskey },
 }));
@@ -36,6 +43,8 @@ beforeEach(() => {
   authFetch.mockReset();
   push.mockReset();
   signInPasskey.mockReset();
+  useSession.mockReset();
+  useSession.mockReturnValue({ data: null, isPending: false });
 });
 
 afterEach(() => {
@@ -43,6 +52,17 @@ afterEach(() => {
 });
 
 describe('SignUpPage', () => {
+  it('redirects an already-authenticated browser away from the account-creation form', async () => {
+    useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
+
+    render(<SignUpPage />);
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/today');
+    });
+    expect(authFetch).not.toHaveBeenCalled();
+  });
+
   it('verifies the email before registering the passkey, then signs in', async () => {
     authFetch.mockImplementation((path: string) => {
       if (path === '/sign-up/request-code') return Promise.resolve({ data: { status: true } });

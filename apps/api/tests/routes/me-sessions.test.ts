@@ -33,14 +33,14 @@ async function seedSessionRow(
   db: Awaited<ReturnType<typeof setup>>['db'],
   schema: Awaited<ReturnType<typeof setup>>['schema'],
   userId: string,
-  overrides: Partial<{ token: string; ipAddress: string; userAgent: string }> = {},
+  overrides: Partial<{ token: string; ipAddress: string; userAgent: string; expiresAt: Date }> = {},
 ): Promise<string> {
   const [row] = await db
     .insert(schema.session)
     .values({
       userId,
       token: overrides.token ?? `tok-${Math.random().toString(36).slice(2)}`,
-      expiresAt: new Date(Date.now() + 3600_000),
+      expiresAt: overrides.expiresAt ?? new Date(Date.now() + 3600_000),
       ipAddress: overrides.ipAddress ?? '203.0.113.5',
       userAgent: overrides.userAgent ?? 'Mozilla/5.0 (Macintosh) Chrome/120.0 Safari/537.36',
     })
@@ -82,6 +82,23 @@ describe('GET /me/sessions', () => {
     const { meSessions } = await setup();
     const app = appWithSession(meSessions, null);
     expect((await app.request('/', { method: 'GET' })).status).toBe(401);
+  });
+
+  it('excludes an expired session — never shows a stale row as if it were still active', async () => {
+    const { db, schema, meSessions } = await setup();
+    const userId = await seedUserWithHub(db, schema, 'stale-viewer');
+    const current = currentSession(userId);
+    await seedSessionRow(db, schema, userId, { token: current.session.token });
+    const expiredId = await seedSessionRow(db, schema, userId, {
+      expiresAt: new Date(Date.now() - 3600_000),
+    });
+
+    const app = appWithSession(meSessions, current);
+    const res = await app.request('/', { method: 'GET' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { items: { id: string }[] };
+    expect(body.items.map((s) => s.id)).not.toContain(expiredId);
+    expect(body.items).toHaveLength(1);
   });
 });
 

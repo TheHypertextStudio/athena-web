@@ -11,10 +11,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { orgsGet, push, signInPasskey } = vi.hoisted(() => ({
+const { orgsGet, push, signInPasskey, useSession } = vi.hoisted(() => ({
   orgsGet: vi.fn(),
   push: vi.fn(),
   signInPasskey: vi.fn(),
+  useSession: vi.fn((): { data: { user: { id: string } } | null; isPending: boolean } => ({
+    data: null,
+    isPending: false,
+  })),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -26,7 +30,10 @@ vi.mock('../../../src/lib/api', () => ({
 }));
 
 vi.mock('../../../src/lib/auth-client', () => ({
-  authClient: { signIn: { passkey: signInPasskey } },
+  authClient: {
+    signIn: { passkey: signInPasskey },
+    useSession,
+  },
 }));
 
 vi.mock('../../../src/app/(auth)/_lib/webauthn', () => ({
@@ -61,6 +68,8 @@ beforeEach(() => {
   orgsGet.mockReset();
   push.mockReset();
   signInPasskey.mockReset();
+  useSession.mockReset();
+  useSession.mockReturnValue({ data: null, isPending: false });
   window.history.replaceState(null, '', '/sign-in');
 });
 
@@ -69,6 +78,27 @@ afterEach(() => {
 });
 
 describe('SignInPage', () => {
+  it('redirects an already-authenticated browser away without rendering the passkey form', async () => {
+    useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
+
+    render(<SignInPage />);
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/today');
+    });
+    expect(signInPasskey).not.toHaveBeenCalled();
+  });
+
+  it('does not redirect while the session check is still pending', () => {
+    useSession.mockReturnValue({ data: null, isPending: true });
+
+    render(<SignInPage />);
+
+    expect(push).not.toHaveBeenCalled();
+    // Throws if the passkey form isn't rendered — the assertion IS that this doesn't throw.
+    screen.getByRole('button', { name: 'Sign in with a passkey' });
+  });
+
   it('routes a signed-in user with no workspaces to onboarding', async () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(jsonResponse(200, { items: [] }));

@@ -1,10 +1,12 @@
 'use client';
 
+import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
 import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
+import { safeSameOriginPath } from '@/components/app-shell-utils';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 
@@ -37,22 +39,13 @@ const SESSION_COOKIE_ERROR = 'We could not finish signing you in. Please try aga
  * @remarks
  * A mid-session expiry redirect (see `providers.tsx`) sends the user to
  * `/sign-in?callbackURL=<where they were>`; honoring it lands them back on that surface after
- * re-authenticating instead of always dumping them at {@link HOME_DESTINATION}. Resolving the raw
- * value against the current origin with the native `URL` parser — rather than hand-rolled prefix
- * checks — rejects protocol-relative and cross-origin values by comparing the resolved `origin`,
- * so this can never become an open redirect.
+ * re-authenticating instead of always dumping them at {@link HOME_DESTINATION}. Open-redirect
+ * safety comes from {@link safeSameOriginPath}, the one implementation every auth-adjacent return
+ * path shares.
  */
 function safeCallbackPath(): string | null {
   if (typeof window === 'undefined') return null;
-  const raw = new URLSearchParams(window.location.search).get('callbackURL');
-  if (!raw) return null;
-  try {
-    const resolved = new URL(raw, window.location.origin);
-    if (resolved.origin !== window.location.origin) return null;
-    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
-  } catch {
-    return null;
-  }
+  return safeSameOriginPath(new URLSearchParams(window.location.search).get('callbackURL'));
 }
 
 type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
@@ -108,7 +101,6 @@ export default function SignInPage(): JSX.Element {
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
   const conditionalArmed = useRef(false);
-  const initialSessionChecked = useRef(false);
   const { data: existingSession, isPending: sessionPending } = authClient.useSession();
 
   /** Route into the cockpit, or onboarding when the user has no organization yet. */
@@ -190,17 +182,18 @@ export default function SignInPage(): JSX.Element {
   // conditional-mediation autofill below from silently minting a redundant session every time a
   // signed-in user's browser happens to land on `/sign-in`.
   //
-  // Runs exactly once, the first time the session read resolves after mount — it must NOT stay
-  // reactive for the component's whole lifetime. `useSession()` also reports the session this
-  // very page's own passkey ceremony just minted, so a live-for-the-lifetime effect races
-  // `routeAfterSignIn`'s deliberate navigation with a second, less-informed one.
-  useEffect(() => {
-    if (sessionPending || initialSessionChecked.current) return;
-    initialSessionChecked.current = true;
-    if (existingSession) {
-      router.push(safeCallbackPath() ?? HOME_DESTINATION);
-    }
-  }, [existingSession, router, sessionPending]);
+  // `useRedirectIfAuthenticated` checks exactly once, not for the component's whole lifetime —
+  // `useSession()` also reports the session this very page's own passkey ceremony just minted, so
+  // a live-for-the-lifetime effect would race `routeAfterSignIn`'s deliberate navigation with a
+  // second, less-informed one.
+  useRedirectIfAuthenticated(
+    existingSession,
+    sessionPending,
+    (destination) => {
+      router.push(destination);
+    },
+    () => safeCallbackPath() ?? HOME_DESTINATION,
+  );
 
   // After hydration, reflect real WebAuthn capability and, where supported, arm the
   // conditional-UI autofill prompt exactly once — only once we're sure there's no existing

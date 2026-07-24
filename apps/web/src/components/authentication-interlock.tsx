@@ -13,7 +13,7 @@ import { createContext, type JSX, type ReactNode, useCallback, useContext, useSt
 
 import { AuthenticationRequiredError } from '@/lib/query-core';
 
-import { signInReturnPath } from './app-shell-utils';
+import { safeSameOriginPath, signInReturnPath } from './app-shell-utils';
 
 interface AuthenticationInterlockValue {
   /** Block the current surface until the person explicitly continues to sign-in. */
@@ -24,26 +24,6 @@ const AuthenticationInterlockContext = createContext<AuthenticationInterlockValu
 
 /** A foreground action that resolves with its successful result or rethrows its original error. */
 export type AuthenticationRecoveryAction = <T>(action: () => Promise<T>) => Promise<T>;
-
-/**
- * Keep an auth return target on this origin; never turn an error payload into an open redirect.
- *
- * @remarks
- * Resolves `value` against the current origin with the native `URL` parser rather than hand-rolled
- * prefix checks — it rejects protocol-relative and cross-origin values (including the backslash and
- * unicode tricks browsers normalize before a manual `startsWith` check would ever see them) by
- * comparing the resolved `origin`, not by pattern-matching the raw string.
- */
-function safeReturnPath(value: string | undefined): string {
-  if (!value) return '/today';
-  try {
-    const resolved = new URL(value, window.location.origin);
-    if (resolved.origin !== window.location.origin) return '/today';
-    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
-  } catch {
-    return '/today';
-  }
-}
 
 /** Read the current same-origin location for an action that does not supply its own target. */
 function currentReturnPath(): string {
@@ -68,7 +48,7 @@ export function AuthenticationInterlockProvider({
   const [open, setOpen] = useState(false);
 
   const requireAuthentication = useCallback((nextPath?: string): void => {
-    setReturnPath(safeReturnPath(nextPath ?? currentReturnPath()));
+    setReturnPath(safeSameOriginPath(nextPath ?? currentReturnPath()) ?? '/today');
     setOpen(true);
   }, []);
 

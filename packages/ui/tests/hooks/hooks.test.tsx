@@ -6,6 +6,7 @@ import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type ListKeyboardEvent, useListKeyboard } from '../../src/hooks/useListKeyboard';
+import { useRedirectIfAuthenticated } from '../../src/hooks/useRedirectIfAuthenticated';
 import { useVocabulary, VocabularyProvider } from '../../src/hooks/useVocabulary';
 
 /** Minimal KeyboardEvent stand-in for the hook's handler (only `key` + `preventDefault`). */
@@ -206,5 +207,71 @@ describe('useVocabulary', () => {
       wrapper: wrap(skin),
     });
     expect(plural.current).toBe('Accounts');
+  });
+});
+
+describe('useRedirectIfAuthenticated', () => {
+  it('does not redirect while the session read is still pending', () => {
+    const onRedirect = vi.fn();
+    renderHook(() => {
+      useRedirectIfAuthenticated(null, true, onRedirect, '/home');
+    });
+    expect(onRedirect).not.toHaveBeenCalled();
+  });
+
+  it('redirects once a session is present on the first resolve', () => {
+    const onRedirect = vi.fn();
+    renderHook(() => {
+      useRedirectIfAuthenticated({ user: { id: '1' } }, false, onRedirect, '/home');
+    });
+    expect(onRedirect).toHaveBeenCalledWith('/home');
+    expect(onRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  it('never redirects when no session is ever present', () => {
+    const onRedirect = vi.fn();
+    const { rerender } = renderHook(
+      ({ session }) => {
+        useRedirectIfAuthenticated(session, false, onRedirect, '/home');
+      },
+      { initialProps: { session: null as { user: { id: string } } | null } },
+    );
+    rerender({ session: null });
+    expect(onRedirect).not.toHaveBeenCalled();
+  });
+
+  it('evaluates a function destination lazily, at redirect time', () => {
+    const onRedirect = vi.fn();
+    let live = '/first';
+    renderHook(() => {
+      useRedirectIfAuthenticated({ user: { id: '1' } }, false, onRedirect, () => live);
+    });
+    expect(onRedirect).toHaveBeenCalledWith('/first');
+    live = '/second';
+  });
+
+  it('regression: does not race a session that appears AFTER the initial resolve', () => {
+    // This is the exact production incident: a page's own sign-in/sign-up ceremony mints a
+    // session partway through the component's life, reactively flipping `session` from null to
+    // present. A naive effect watching `session` for the component's whole lifetime would fire a
+    // second, wrong redirect right as the ceremony's own navigation resolves. This hook must only
+    // ever act on the FIRST resolve.
+    const onRedirect = vi.fn();
+    const { rerender } = renderHook(
+      ({ session, isPending }) => {
+        useRedirectIfAuthenticated(session, isPending, onRedirect, '/home');
+      },
+      {
+        initialProps: {
+          session: null as { user: { id: string } } | null,
+          isPending: false,
+        },
+      },
+    );
+    expect(onRedirect).not.toHaveBeenCalled();
+
+    // The page's own ceremony mints a session later in the component's life.
+    rerender({ session: { user: { id: '1' } }, isPending: false });
+    expect(onRedirect).not.toHaveBeenCalled();
   });
 });

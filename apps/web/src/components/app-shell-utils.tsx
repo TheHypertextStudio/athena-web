@@ -81,6 +81,28 @@ export function signInReturnPath(returnPath: string): string {
   return `/sign-in?${new URLSearchParams({ callbackURL: returnPath }).toString()}`;
 }
 
+/**
+ * Resolve `value` against the current origin, rejecting anything that would leave it — the one
+ * open-redirect-safe check every auth-adjacent return-path reader shares.
+ *
+ * @remarks
+ * Uses the native `URL` parser instead of hand-rolled prefix checks — it rejects protocol-relative
+ * and cross-origin values (including the backslash/unicode tricks a browser normalizes before a
+ * manual `startsWith` check would ever see them) by comparing the resolved `origin`, not by
+ * pattern-matching the raw string. Returns `null` for a missing/invalid/cross-origin value so each
+ * caller picks its own fallback destination rather than this baking one in.
+ */
+export function safeSameOriginPath(value: string | null | undefined): string | null {
+  if (!value || typeof window === 'undefined') return null;
+  try {
+    const resolved = new URL(value, window.location.origin);
+    if (resolved.origin !== window.location.origin) return null;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 /** lastOrgStorageKey derives a stable app shell storage or navigation key. */
 export function lastOrgStorageKey(userId: string): string {
   return `docket:last-org:${userId}`;

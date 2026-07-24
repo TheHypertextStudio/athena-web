@@ -1,9 +1,10 @@
 'use client';
 
+import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
 import { Button, Input } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useEffect, useState } from 'react';
 
 import { authClient, passkey, signIn } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
@@ -109,24 +110,24 @@ export default function SignUpPage(): JSX.Element {
   const [pending, setPending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
-  const initialSessionChecked = useRef(false);
   const { data: existingSession, isPending: sessionPending } = authClient.useSession();
 
   // An already-authenticated browser has no business on the account-creation form — redirect
   // away instead of letting them submit into a confusing second-account flow.
   //
-  // Runs exactly once, the first time the session read resolves after mount — it must NOT stay
-  // reactive for the component's whole lifetime. `useSession()` also reports the session
-  // `verifyAndRegister`'s own `signIn.passkey()` just minted, so a live-for-the-lifetime effect
-  // races that handler's deliberate `router.push(POST_SIGNUP_DESTINATION)` with a second, wrong
-  // one back to {@link HOME_DESTINATION}.
-  useEffect(() => {
-    if (sessionPending || initialSessionChecked.current) return;
-    initialSessionChecked.current = true;
-    if (existingSession) {
-      router.push(HOME_DESTINATION);
-    }
-  }, [existingSession, router, sessionPending]);
+  // `useRedirectIfAuthenticated` checks exactly once, not for the component's whole lifetime —
+  // `useSession()` also reports the session `verifyAndRegister`'s own `signIn.passkey()` just
+  // minted, so a live-for-the-lifetime effect would race that handler's deliberate
+  // `router.push(POST_SIGNUP_DESTINATION)` with a second, wrong one back to
+  // {@link HOME_DESTINATION}.
+  useRedirectIfAuthenticated(
+    existingSession,
+    sessionPending,
+    (destination) => {
+      router.push(destination);
+    },
+    HOME_DESTINATION,
+  );
 
   // After hydration, enable submission and reflect real WebAuthn capability. Until then the
   // button stays disabled so a native submit cannot fire before the handler is attached.

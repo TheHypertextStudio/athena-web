@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   AuthenticationInterlockProvider,
@@ -24,6 +24,21 @@ function ProtectedAction(): JSX.Element {
       }}
     >
       Download export
+    </button>
+  );
+}
+
+/** A user-intent control that requests authentication for an unsafe, cross-origin return path. */
+function ProtectedActionWithUnsafeReturn(): JSX.Element {
+  const { requireAuthentication } = useAuthenticationInterlock();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        requireAuthentication('//evil.example');
+      }}
+    >
+      Trigger unsafe redirect
     </button>
   );
 }
@@ -84,6 +99,23 @@ function DirectProtectedAction(): JSX.Element {
   );
 }
 
+const originalLocation = window.location;
+
+/** Replace `window.location` with a stub whose `assign` is spy-able (jsdom's own is not). */
+function stubLocationAssign(): ReturnType<typeof vi.fn> {
+  const assign = vi.fn();
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { origin: originalLocation.origin, assign },
+  });
+  return assign;
+}
+
+/** Restore the real `window.location` after a test that called {@link stubLocationAssign}. */
+function restoreLocation(): void {
+  Object.defineProperty(window, 'location', { configurable: true, value: originalLocation });
+}
+
 afterEach(cleanup);
 
 describe('AuthenticationInterlockProvider', () => {
@@ -103,6 +135,40 @@ describe('AuthenticationInterlockProvider', () => {
     fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
 
     expect(screen.getByRole('dialog')).toBeVisible();
+  });
+
+  it('continues to sign-in with the exact protected path preserved', () => {
+    const assign = stubLocationAssign();
+
+    render(
+      <AuthenticationInterlockProvider>
+        <ProtectedAction />
+      </AuthenticationInterlockProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to continue' }));
+
+    expect(assign).toHaveBeenCalledWith(
+      '/sign-in?callbackURL=%2Fexports%2F01JEXPORT%3Ffrom%3Demail',
+    );
+    restoreLocation();
+  });
+
+  it('falls back to /today rather than following a cross-origin return path', () => {
+    const assign = stubLocationAssign();
+
+    render(
+      <AuthenticationInterlockProvider>
+        <ProtectedActionWithUnsafeReturn />
+      </AuthenticationInterlockProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger unsafe redirect' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to continue' }));
+
+    expect(assign).toHaveBeenCalledWith('/sign-in?callbackURL=%2Ftoday');
+    restoreLocation();
   });
 
   it('opens for a user-initiated mutation with code unauthorized', async () => {

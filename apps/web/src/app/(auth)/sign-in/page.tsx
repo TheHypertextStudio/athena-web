@@ -33,21 +33,27 @@ const SESSION_SETTLE_DELAY_MS = 125;
 const SESSION_COOKIE_ERROR = 'We could not finish signing you in. Please try again.';
 
 /**
- * The safe `?next=` return-to path, or `null`.
+ * The safe `?callbackURL=` return-to path, or `null`.
  *
  * @remarks
- * A mid-session expiry redirect (see `providers.tsx`) sends the user to `/sign-in?next=<where they
- * were>`; honoring it lands them back on that surface after re-authenticating instead of always
- * dumping them at {@link HOME_DESTINATION}. Only a **same-origin absolute path** is accepted — it
- * must start with a single `/` (a leading `//` or `/\` is a protocol-relative URL that could send
- * the user off-site, and anything else is not a path) — so this can never become an open redirect.
+ * A mid-session expiry redirect (see `providers.tsx`) sends the user to
+ * `/sign-in?callbackURL=<where they were>`; honoring it lands them back on that surface after
+ * re-authenticating instead of always dumping them at {@link HOME_DESTINATION}. Resolving the raw
+ * value against the current origin with the native `URL` parser — rather than hand-rolled prefix
+ * checks — rejects protocol-relative and cross-origin values by comparing the resolved `origin`,
+ * so this can never become an open redirect.
  */
-function safeNextPath(): string | null {
+function safeCallbackPath(): string | null {
   if (typeof window === 'undefined') return null;
-  const next = new URLSearchParams(window.location.search).get('next');
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\'))
+  const raw = new URLSearchParams(window.location.search).get('callbackURL');
+  if (!raw) return null;
+  try {
+    const resolved = new URL(raw, window.location.origin);
+    if (resolved.origin !== window.location.origin) return null;
+    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
+  } catch {
     return null;
-  return next;
+  }
 }
 
 type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
@@ -111,7 +117,7 @@ export default function SignInPage(): JSX.Element {
           return;
         }
         // Honor a safe return-to from a session-expiry redirect; otherwise land in the cockpit.
-        router.push(safeNextPath() ?? HOME_DESTINATION);
+        router.push(safeCallbackPath() ?? HOME_DESTINATION);
         return;
       }
       if (res.status === 401) {
@@ -248,7 +254,11 @@ export default function SignInPage(): JSX.Element {
         </Button>
       </div>
 
-      <OAuthButtons callbackURL={HOME_DESTINATION} disabled={pending} onError={setError} />
+      <OAuthButtons
+        callbackURL={safeCallbackPath() ?? HOME_DESTINATION}
+        disabled={pending}
+        onError={setError}
+      />
 
       <p className="text-on-surface-variant text-body-medium text-center">
         Can&apos;t sign in?{' '}

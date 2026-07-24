@@ -29,8 +29,15 @@ vi.mock('../../../src/lib/auth-client', () => ({
   authClient: { signIn: { passkey: signInPasskey } },
 }));
 
+const { oauthButtonsSpy } = vi.hoisted(() => ({
+  oauthButtonsSpy: vi.fn(),
+}));
+
 vi.mock('../../../src/app/(auth)/_components/oauth-buttons', () => ({
-  OAuthButtons: () => null,
+  OAuthButtons: (props: { callbackURL: string }) => {
+    oauthButtonsSpy(props);
+    return null;
+  },
 }));
 
 vi.mock('../../../src/app/(auth)/_lib/webauthn', () => ({
@@ -65,6 +72,8 @@ beforeEach(() => {
   orgsGet.mockReset();
   push.mockReset();
   signInPasskey.mockReset();
+  oauthButtonsSpy.mockReset();
+  window.history.replaceState(null, '', '/sign-in');
 });
 
 afterEach(() => {
@@ -133,5 +142,41 @@ describe('SignInPage', () => {
     await waitFor(() => {
       expect(signInPasskey).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('passes a safe ?callbackURL= return path through to the OAuth buttons', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/sign-in?callbackURL=${encodeURIComponent('/settings/athena?mcp=connected')}`,
+    );
+
+    render(<SignInPage />);
+
+    expect(oauthButtonsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ callbackURL: '/settings/athena?mcp=connected' }),
+    );
+  });
+
+  it('falls back to /today for the OAuth buttons when there is no ?callbackURL=', () => {
+    render(<SignInPage />);
+
+    expect(oauthButtonsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ callbackURL: '/today' }),
+    );
+  });
+
+  it('falls back to /today for the OAuth buttons when ?callbackURL= is an open redirect', () => {
+    window.history.replaceState(
+      null,
+      '',
+      `/sign-in?callbackURL=${encodeURIComponent('//evil.example')}`,
+    );
+
+    render(<SignInPage />);
+
+    expect(oauthButtonsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ callbackURL: '/today' }),
+    );
   });
 });

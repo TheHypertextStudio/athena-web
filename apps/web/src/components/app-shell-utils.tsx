@@ -69,16 +69,16 @@ export function isObjectDetailPath(pathname: string): boolean {
 }
 
 /**
- * Build a Docket sign-in URL that returns to the current same-origin app path.
+ * Build a Docket sign-in URL that returns to the given same-origin app path.
  *
  * @remarks
- * `pathname` and `search` come from Next's routing hooks, not an externally supplied URL. The
- * sign-in page independently accepts only an absolute same-origin path for `next`, so this helper
- * preserves a protected deep link without creating an open redirect.
+ * `returnPath` must already be a same-origin absolute path (from Next's routing hooks or
+ * `window.location`), not an externally supplied URL — the sign-in page independently re-validates
+ * it before use. `URLSearchParams` owns the query-string encoding so this never has to hand-roll
+ * `encodeURIComponent` (and can't drift from how the sign-in page decodes it back out).
  */
-export function signInReturnPath(pathname: string, search = ''): string {
-  const next = `${pathname}${search ? `?${search}` : ''}`;
-  return `/sign-in?next=${encodeURIComponent(next)}`;
+export function signInReturnPath(returnPath: string): string {
+  return `/sign-in?${new URLSearchParams({ callbackURL: returnPath }).toString()}`;
 }
 
 /** lastOrgStorageKey derives a stable app shell storage or navigation key. */

@@ -5,6 +5,7 @@ import { CaptureMailer } from '@docket/mail';
 import { and, eq } from 'drizzle-orm';
 
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
+import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import './auth-mock';
 import { getMigratedDb } from './db';
@@ -13,9 +14,18 @@ type Db = typeof DbModule.db;
 
 let dbmod: typeof DbModule | undefined;
 
-/** Load (once), migrate, and return the shared `@docket/db` module + in-memory PGlite. */
+/**
+ * Load (once), migrate, and return the shared `@docket/db` module + in-memory PGlite.
+ *
+ * @remarks
+ * Also touches {@link getContainer} once — building the container is what registers this
+ * process's mailer/SMS/push transports with `@docket/notifications/dispatch`
+ * (`configureNotificationTransports`), which every notification-dispatching test needs even if
+ * it never otherwise reads from the container.
+ */
 export async function getDb(): Promise<typeof DbModule> {
   dbmod ??= await getMigratedDb();
+  getContainer();
   return dbmod;
 }
 

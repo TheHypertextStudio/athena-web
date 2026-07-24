@@ -500,6 +500,9 @@ importers:
       '@docket/mail':
         specifier: workspace:*
         version: link:../mail
+      '@docket/notifications':
+        specifier: workspace:*
+        version: link:../notifications
       '@docket/types':
         specifier: workspace:*
         version: link:../types
@@ -730,9 +733,21 @@ importers:
 
   packages/notifications:
     dependencies:
+      '@docket/db':
+        specifier: workspace:*
+        version: link:../db
+      '@docket/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@docket/mail':
+        specifier: workspace:*
+        version: link:../mail
       '@docket/types':
         specifier: workspace:*
         version: link:../types
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@electric-sql/pglite@0.5.1)(@neondatabase/serverless@1.1.0)(@prisma/client@5.22.0)(@types/pg@8.20.0)(better-sqlite3@12.10.0)(kysely@0.29.2)(pg@8.21.0)(postgres@3.4.9)
       zod:
         specifier: 'catalog:'
         version: 4.4.3

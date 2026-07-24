@@ -15,6 +15,10 @@
  */
 import { generateRecoveryCodes, getRecoveryCodeStatus } from '@docket/auth';
 import { db } from '@docket/db';
+import {
+  dispatchNotificationIntent,
+  ensureAccountEmailContactPoint,
+} from '@docket/notifications/dispatch';
 import { RecoveryCodesOut, RecoveryCodesStatusOut } from '@docket/types';
 import { type Context, Hono } from 'hono';
 import type { z } from 'zod';
@@ -24,8 +28,6 @@ import type { AppEnv, AuthSession } from '../context';
 import { AuthError, ReauthRequiredError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { ensureAccountEmailContactPoint } from '../services/notifications/contact-point-service';
-import { dispatchNotificationIntent } from '../services/notifications/dispatcher';
 
 /** Seconds a session stays "fresh" for high-risk actions (generating recovery codes). */
 const FRESH_SESSION_MAX_AGE_S = 300;

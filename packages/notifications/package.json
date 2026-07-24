@@ -7,6 +7,7 @@
   "description": "Docket notifications domain — schemas, policy, delivery orchestration, inbox state, and provider event handling.",
   "exports": {
     ".": "./src/index.ts",
+    "./dispatch": "./src/dispatch/index.ts",
     "./schemas": "./src/schemas/index.ts",
     "./testing": "./src/testing/index.ts"
   },
@@ -21,7 +22,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@docket/db": "workspace:*",
+    "@docket/integrations": "workspace:*",
+    "@docket/mail": "workspace:*",
     "@docket/types": "workspace:*",
+    "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

@@ -99,3 +99,29 @@ export function changeEmailConfirmationEmail(params: {
     },
   ]);
 }
+
+/**
+ * The security notice sent when a recovery code is used to sign in.
+ *
+ * @remarks
+ * The one gap this closes: regenerating recovery codes already sends a security notice
+ * ({@link import('@docket/api/account/emails').recoveryCodesRegeneratedEmail} — actually USING a
+ * code to get in did not, so a stolen/leaked code let someone in silently. Fires unconditionally
+ * (not just "this looks suspicious") since a recovery-code sign-in is inherently the account's
+ * secondary/break-glass path — the account holder should always know it was used, whether or not
+ * it was really them, since it bypasses their normal passkey.
+ *
+ * @param params - The recipient's name (or null).
+ */
+export function recoveryCodeUsedEmail(params: { name: string | null }): AuthEmail {
+  return buildEmail(params.name, 'A recovery code was just used to sign in to Docket', [
+    {
+      text: 'A recovery code was just used to sign in to your Docket account. All of your other active sessions have been signed out as a precaution.',
+      html: 'A recovery code was just used to sign in to your Docket account. All of your other active sessions have been signed out as a precaution.',
+    },
+    {
+      text: "If this was you, you're all set — consider adding a passkey on this device from Settings → Security so you don't need a recovery code next time. If this wasn't you, review your active sessions and passkeys in Settings → Security right away.",
+      html: "If this was you, you're all set — consider adding a passkey on this device from Settings &rarr; Security so you don't need a recovery code next time. If this <strong>wasn't</strong> you, review your active sessions and passkeys in Settings &rarr; Security right away.",
+    },
+  ]);
+}

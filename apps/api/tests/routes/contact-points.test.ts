@@ -2,7 +2,7 @@ import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { resolveNotificationPreferences } from '../../src/services/notifications/preferences';
+import { resolveNotificationPreferences } from '@docket/notifications/dispatch';
 import {
   appWithSession,
   fakeSession,

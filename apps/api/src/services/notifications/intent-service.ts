@@ -9,16 +9,16 @@ import {
   type NotificationIntentCreate as NotificationIntentCreateInput,
   type NotificationIntentOut,
 } from '@docket/notifications';
+import {
+  dispatchNotificationIntent,
+  dispatchPersistedNotificationIntent,
+  type DispatchNotificationResult,
+} from '@docket/notifications/dispatch';
 import { NotificationOut } from '@docket/types';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { CapabilityError, ConflictError, NotFoundError } from '../../error';
-import {
-  dispatchNotificationIntent,
-  dispatchPersistedNotificationIntent,
-  type DispatchNotificationResult,
-} from './dispatcher';
 import { toNotificationOut } from './inbox';
 import {
   getNotificationIntent,

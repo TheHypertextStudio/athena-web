@@ -366,6 +366,85 @@ describe('auth config', () => {
     expect(replay.status).not.toBe(200);
   });
 
+  it('recovery: a successful backup-code sign-in revokes other sessions and notifies the account holder', async () => {
+    // The `hooks.after` gate on `/two-factor/verify-backup-code` (auth-builder.ts) only fires on
+    // the branch that actually MINTS a session (`ctx.context.newSession`) — i.e. genuine recovery,
+    // not an already-authenticated session doing step-up 2FA. Proves both side effects it owns:
+    // every OTHER session for the account is revoked (the lost-device scenario recovery exists
+    // for), and a security notice is dispatched through `@docket/notifications/dispatch` — which
+    // has no DI container of its own in this standalone package test, so this configures its
+    // module-level transports directly (mirrors what `apps/api/src/container.ts` does for real).
+    const { configureNotificationTransports } = await import('@docket/notifications/dispatch');
+    const dispatchedMail: OutboundMessage[] = [];
+    configureNotificationTransports({
+      mailer: () => ({
+        send: async (message) => {
+          dispatchedMail.push(message);
+        },
+      }),
+      sms: () => {
+        throw new Error('not used by this hook');
+      },
+      push: () => {
+        throw new Error('not used by this hook');
+      },
+    });
+
+    const { auth, generateRecoveryCodes } = await import('../src/index');
+    const { db, session: sessionTable, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+
+    const email = 'multi-session-recovery@example.com';
+    const [u] = await db.insert(user).values({ name: 'Ada', email }).returning();
+    const codes = await generateRecoveryCodes(u!.id);
+
+    // A session from the device/browser that's now lost — this is exactly what recovery should
+    // revoke, since the account holder has no way to reach it themselves anymore.
+    const ctx = await auth.$context;
+    const lostDeviceSession = await ctx.internalAdapter.createSession(u!.id);
+
+    const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
+      auth.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'http://localhost:4000',
+            ...(cookie ? { cookie } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    const armed = await post('/two-factor/recovery-challenge', { email });
+    const challengeCookie = armed.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const verified = await post(
+      '/two-factor/verify-backup-code',
+      { code: codes[0] },
+      challengeCookie,
+    );
+    expect(verified.status).toBe(200);
+
+    // The lost device's session is gone...
+    const stillThere = await db
+      .select({ id: sessionTable.id })
+      .from(sessionTable)
+      .where(eq(sessionTable.id, lostDeviceSession.id));
+    expect(stillThere).toHaveLength(0);
+    // ...but the freshly-minted recovery session survives (only OTHERS are revoked).
+    const remaining = await db
+      .select({ id: sessionTable.id })
+      .from(sessionTable)
+      .where(eq(sessionTable.userId, u!.id));
+    expect(remaining).toHaveLength(1);
+
+    expect(dispatchedMail).toHaveLength(1);
+    expect(dispatchedMail[0]?.subject).toContain('recovery code was just used');
+  });
+
   /**
    * Build a live auth instance whose mailer is the capturing test mailer, so the emitted sign-up
    * code can be read out of `sentEmails`. Shares the migrated `@docket/db`, so verification rows and
@@ -569,6 +648,136 @@ describe('auth config', () => {
     } finally {
       vi.resetModules();
     }
+  });
+});
+
+describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () => {
+  beforeAll(async () => {
+    // The preceding describe block's last test calls `vi.resetModules()`, which wipes the
+    // migrated `@docket/db` module state for anything that runs after it in this file — re-migrate
+    // so this describe is self-contained regardless of ordering/resets elsewhere in the file.
+    const { db } = await import('@docket/db');
+    await migrate(db as never, {
+      migrationsFolder: resolve(import.meta.dirname, '../../db/drizzle'),
+    });
+  });
+
+  /**
+   * Sign a fresh user in via the recovery-code flow (real HTTP round trip, same as the recovery
+   * tests above) to get a genuinely valid session cookie — there's no simple way to fabricate one
+   * for a manually-created session, and this reuses already-proven, real infrastructure instead of
+   * hand-rolling cookie signing. Also seeds exactly one passkey owned by that user.
+   */
+  async function signedInUserWithOnePasskey(email: string) {
+    const { auth, generateRecoveryCodes } = await import('../src/index');
+    const { db, passkey, user } = await import('@docket/db');
+
+    const [u] = await db.insert(user).values({ name: 'Guarded', email }).returning();
+    const codes = await generateRecoveryCodes(u!.id);
+    const [pk] = await db
+      .insert(passkey)
+      .values({
+        publicKey: 'test-public-key',
+        userId: u!.id,
+        credentialID: `cred-${Math.random().toString(36).slice(2)}`,
+        counter: 0,
+        deviceType: 'singleDevice',
+        backedUp: false,
+      })
+      .returning();
+
+    const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
+      auth.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'http://localhost:4000',
+            ...(cookie ? { cookie } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    const armed = await post('/two-factor/recovery-challenge', { email });
+    const challengeCookie = armed.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const verified = await post(
+      '/two-factor/verify-backup-code',
+      { code: codes[0] },
+      challengeCookie,
+    );
+    const sessionCookie = verified.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+
+    return { userId: u!.id, passkeyId: pk!.id, sessionCookie, post };
+  }
+
+  it('blocks removing the last passkey when the account has no other recovery path', async () => {
+    const { db, twoFactor } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    const { userId, passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
+      'lockout-blocked@example.com',
+    );
+    // Simulate "no recovery codes" — generateRecoveryCodes (in the helper above) is only there to
+    // get a signed-in session; remove its row so the guard sees exactly what it's meant to block.
+    await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
+
+    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
+
+    expect(res.status).not.toBe(200);
+    const body = (await res.json()) as { message?: string };
+    expect(body.message).toContain('recovery code');
+  });
+
+  it('allows removing the last passkey when recovery codes exist', async () => {
+    const { passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
+      'lockout-has-codes@example.com',
+    );
+    // The helper's own generateRecoveryCodes call leaves the two_factor row in place (using one
+    // code during sign-in doesn't delete it), so hasRecoveryCodes() is already true here.
+
+    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
+
+    expect(res.status).toBe(200);
+  });
+
+  it('allows removing the last passkey when a linked sign-in provider exists', async () => {
+    const { db, account, twoFactor } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    const { userId, passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
+      'lockout-has-provider@example.com',
+    );
+    await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
+    await db.insert(account).values({ userId, providerId: 'google', accountId: 'google-lockout' });
+
+    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
+
+    expect(res.status).toBe(200);
+  });
+
+  it('allows removing a passkey when it is not the last one', async () => {
+    const { db, passkey, twoFactor } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    const { userId, passkeyId, sessionCookie, post } = await signedInUserWithOnePasskey(
+      'lockout-has-second-passkey@example.com',
+    );
+    await db.delete(twoFactor).where(eq(twoFactor.userId, userId));
+    await db.insert(passkey).values({
+      publicKey: 'test-public-key-2',
+      userId,
+      credentialID: `cred-${Math.random().toString(36).slice(2)}`,
+      counter: 0,
+      deviceType: 'singleDevice',
+      backedUp: false,
+    });
+
+    const res = await post('/passkey/delete-passkey', { id: passkeyId }, sessionCookie);
+
+    expect(res.status).toBe(200);
   });
 });
 

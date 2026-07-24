@@ -3,7 +3,7 @@ import type { CapturePushSender, CaptureSmsSender } from '@docket/integrations';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { dispatchNotificationIntent } from '../../../src/services/notifications/dispatcher';
+import { dispatchNotificationIntent } from '@docket/notifications/dispatch';
 import { recordNotificationProviderEvent } from '../../../src/services/notifications/inbound';
 import { getDb, one, seedUserWithHub } from '../../support/routes-harness';
 

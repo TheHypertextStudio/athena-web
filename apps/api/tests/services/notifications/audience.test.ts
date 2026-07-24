@@ -2,7 +2,7 @@ import type * as DbModule from '@docket/db';
 import { NotificationAudience } from '@docket/notifications';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { expandNotificationAudience } from '../../../src/services/notifications/audience';
+import { expandNotificationAudience } from '@docket/notifications/dispatch';
 import { addMember, getDb, seedOrg, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;

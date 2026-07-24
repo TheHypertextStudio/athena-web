@@ -18,16 +18,21 @@ import {
 } from '@docket/db';
 import { isRealValue } from '@docket/env';
 import type { Mailer } from '@docket/mail';
+import {
+  dispatchNotificationIntent,
+  ensureAccountEmailContactPoint,
+} from '@docket/notifications/dispatch';
 import { PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
 import { mcp, oAuthProxy, oidcProvider, twoFactor } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
-import { changeEmailConfirmationEmail } from './emails';
+import { hasRecoveryCodes } from './backup-codes';
+import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
 import { recoveryChallenge } from './recovery-challenge';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
@@ -532,6 +537,31 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     disabledPaths: ['/unlink-account'],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/passkey/delete-passkey') {
+          const currentSession = await getSessionFromCtx(ctx);
+          if (!currentSession) return;
+          const userId = currentSession.user.id;
+          const remaining = await db
+            .select({ id: passkeyTable.id })
+            .from(passkeyTable)
+            .where(eq(passkeyTable.userId, userId));
+          // Only the LAST passkey is at risk — with two or more, deleting one always leaves
+          // another way in.
+          if (remaining.length > 1) return;
+          const [hasCodes, linkedAccounts] = await Promise.all([
+            hasRecoveryCodes(userId),
+            db.select({ id: account.id }).from(account).where(eq(account.userId, userId)).limit(1),
+          ]);
+          // Docket is passwordless-only (no credential provider), so any `account` row is by
+          // construction an OAuth sign-in method — its existence alone means another way in.
+          if (!hasCodes && linkedAccounts.length === 0) {
+            throw new APIError('FORBIDDEN', {
+              message:
+                'Add a recovery code or a linked sign-in provider before removing your last passkey.',
+            });
+          }
+          return;
+        }
         const provider = (ctx.body as { provider?: unknown } | undefined)?.provider;
         if (provider !== 'google') return;
         if (ctx.path === '/sign-in/social' && !canUseGoogleOAuth(e, null)) {
@@ -546,6 +576,52 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
               message: 'Google connections are currently limited to production test users.',
             });
           }
+        }
+      }),
+      after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path !== '/two-factor/verify-backup-code') return;
+        // `ctx.context.newSession` is only populated when this call actually MINTED a session —
+        // i.e. the real recovery path, not an already-authenticated session doing step-up 2FA (the
+        // twoFactor plugin never calls `setSessionCookie` on that branch). This is the same signal
+        // Better Auth's own `anonymous`/`multi-session` plugins read for the same purpose.
+        const newSession = ctx.context.newSession;
+        if (!newSession) return;
+        const userId = newSession.user.id;
+        const keepToken = newSession.session.token;
+
+        // The account holder already proved their identity with a valid code — a failure below
+        // (mailer down, transports never configured, a transient DB error) must never undo that
+        // grant by failing the response, so every side effect here is best-effort.
+        try {
+          // Revoke every other session — a recovery-code sign-in means the account holder lost
+          // whatever device/browser held their passkey, so anything else that's still "logged in"
+          // (including that lost device) should not stay trusted on their say-so alone.
+          await db
+            .delete(session)
+            .where(and(eq(session.userId, userId), ne(session.token, keepToken)));
+        } catch {
+          // Best-effort — see remark above.
+        }
+
+        try {
+          // Notify the account holder a recovery code was used — the one gap regenerating codes
+          // already closed (that sends its own security notice) but actually USING one to sign in
+          // did not, so a stolen/leaked code got in silently.
+          await ensureAccountEmailContactPoint(db, userId, newSession.user.email);
+          const notice = recoveryCodeUsedEmail({ name: newSession.user.name });
+          await dispatchNotificationIntent(db, {
+            senderType: 'system',
+            category: 'security',
+            priority: 'high',
+            audience: { type: 'user', userId },
+            channels: ['web', 'email'],
+            subject: notice.subject,
+            body: { html: notice.html, text: notice.text },
+            replyPolicy: 'none',
+            createdBy: 'system',
+          });
+        } catch {
+          // Best-effort — see remark above.
         }
       }),
     },

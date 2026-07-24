@@ -23,6 +23,7 @@
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",
     "@docket/mail": "workspace:*",
+    "@docket/notifications": "workspace:*",
     "@docket/types": "workspace:*",
     "@simplewebauthn/server": "catalog:",
     "better-auth": "catalog:",

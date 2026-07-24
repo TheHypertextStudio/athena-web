@@ -1,7 +1,7 @@
 import type * as DbModule from '@docket/db';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { resolveNotificationPreferences } from '../../../src/services/notifications/preferences';
+import { resolveNotificationPreferences } from '@docket/notifications/dispatch';
 import { getDb, one, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;

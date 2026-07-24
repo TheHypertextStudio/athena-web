@@ -1,19 +1,23 @@
 import { createHash, randomInt } from 'node:crypto';
 
 import type { Database } from '@docket/db';
-import { contactPoint, user as userTable } from '@docket/db';
+import { contactPoint } from '@docket/db';
 import type {
   ContactPointCreate,
   ContactPointOut,
   ContactPointVerify,
 } from '@docket/notifications';
+import {
+  ensureAccountEmailContactPoint,
+  findContactPointByNormalizedValue,
+  maskContactPointValue,
+  normalizeContactPointValue,
+  type ContactPointRow,
+} from '@docket/notifications/dispatch';
 import { and, desc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../../error';
-
-/** Persisted notification contact destination row. */
-export type ContactPointRow = typeof contactPoint.$inferSelect;
 
 const TEST_VERIFICATION_CODE = '000000';
 
@@ -148,83 +152,6 @@ export class NotificationContactPointService {
   }
 }
 
-/**
- * Ensure the user's account email exists as a contact point.
- *
- * @remarks
- * Routes that already have an authenticated account email can pass it directly; ordinary contact
- * point reads fall back to the persisted user email. New rows are active and verified; existing
- * rows are preserved so bounced/unsubscribed states still suppress delivery through the preference
- * resolver.
- */
-export async function ensureAccountEmailContactPoint(
-  db: Database,
-  userId: string,
-  email?: string,
-): Promise<ContactPointRow> {
-  const accountEmail = await resolveAccountEmail(db, userId, email);
-  const normalized = normalizeContactPointValue('email', accountEmail);
-  const existing = await findContactPointByNormalizedValue(db, userId, 'email', normalized);
-  if (existing) return existing;
-
-  await db
-    .update(contactPoint)
-    .set({ primary: false })
-    .where(and(eq(contactPoint.userId, userId), eq(contactPoint.type, 'email')));
-  const [created] = await db
-    .insert(contactPoint)
-    .values({
-      userId,
-      type: 'email',
-      value: accountEmail,
-      valueNormalized: normalized,
-      valueMasked: maskContactPointValue('email', normalized),
-      status: 'active',
-      primary: true,
-      verifiedAt: new Date(),
-    })
-    .returning();
-  if (!created) throw new Error('Failed to create account email contact point');
-  return created;
-}
-
-async function resolveAccountEmail(
-  db: Database,
-  userId: string,
-  email: string | undefined,
-): Promise<string> {
-  const trimmed = email?.trim();
-  if (trimmed) return trimmed;
-
-  const [account] = await db
-    .select({ id: userTable.id, email: userTable.email })
-    .from(userTable)
-    .where(eq(userTable.id, userId))
-    .limit(1);
-  if (!account) throw new NotFoundError('User not found');
-  return account.email;
-}
-
-async function findContactPointByNormalizedValue(
-  db: Database,
-  userId: string,
-  type: ContactPointRow['type'],
-  valueNormalized: string,
-): Promise<ContactPointRow | undefined> {
-  const [row] = await db
-    .select()
-    .from(contactPoint)
-    .where(
-      and(
-        eq(contactPoint.userId, userId),
-        eq(contactPoint.type, type),
-        eq(contactPoint.valueNormalized, valueNormalized),
-      ),
-    )
-    .limit(1);
-  return row;
-}
-
 function toContactPointOut(row: ContactPointRow): z.input<typeof ContactPointOut> {
   return {
     id: row.id,
@@ -237,30 +164,6 @@ function toContactPointOut(row: ContactPointRow): z.input<typeof ContactPointOut
     disabledAt: row.disabledAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
   };
-}
-
-function normalizeContactPointValue(type: ContactPointRow['type'], value: string): string {
-  const trimmed = value.trim();
-  if (type === 'email') return trimmed.toLowerCase();
-  if (type === 'phone') return normalizePhoneNumber(trimmed);
-  return trimmed;
-}
-
-function normalizePhoneNumber(value: string): string {
-  const hasPlus = value.trim().startsWith('+');
-  const digits = value.replace(/\D/g, '');
-  return `${hasPlus ? '+' : ''}${digits}`;
-}
-
-function maskContactPointValue(type: ContactPointRow['type'], value: string): string {
-  if (type === 'email') {
-    const [local = '', domain = ''] = value.split('@');
-    return `${local.slice(0, 1) || '*'}***@${domain}`;
-  }
-  if (type === 'phone') {
-    return `${value.startsWith('+') ? '+' : ''}*******${value.slice(-4)}`;
-  }
-  return `${value.slice(0, 4)}...${value.slice(-4)}`;
 }
 
 function issueVerificationCode(): string {

@@ -6,10 +6,12 @@ import type {
   NotificationPriority,
   NotificationReplyPolicy,
 } from '@docket/notifications';
-
-import { ensureAccountEmailContactPoint } from './contact-point-service';
-import { dispatchNotificationIntent, type DispatchNotificationResult } from './dispatcher';
-import type { NotificationPreferenceMode } from './preferences';
+import {
+  dispatchNotificationIntent,
+  ensureAccountEmailContactPoint,
+  type DispatchNotificationResult,
+  type NotificationPreferenceMode,
+} from '@docket/notifications/dispatch';
 
 /** Input for a system-authored notification to one user. */
 export interface DispatchSystemUserNotificationInput {

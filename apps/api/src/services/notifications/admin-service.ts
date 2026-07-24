@@ -11,15 +11,17 @@ import {
   type NotificationPreviewOut,
   type NotificationSuppressionReason,
 } from '@docket/notifications';
+import {
+  expandNotificationAudience,
+  resolveNotificationPreferences,
+} from '@docket/notifications/dispatch';
 import { and, desc, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import type { AdminAuditOut } from '../../admin-dto';
 import { ConflictError, NotFoundError } from '../../error';
-import { expandNotificationAudience } from './audience';
 import type { NotificationIntentService } from './intent-service';
 import { toNotificationIntentOut } from './intents';
-import { resolveNotificationPreferences } from './preferences';
 
 /** Staff-facing notification monitoring and approval service. */
 export class AdminNotificationService {

@@ -5,7 +5,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   dispatchNotificationIntent,
   type DispatchNotificationIntentInput,
-} from '../../../src/services/notifications/dispatcher';
+} from '@docket/notifications/dispatch';
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../../support/routes-harness';
 
 let schema!: typeof DbModule;

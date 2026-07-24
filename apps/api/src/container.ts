@@ -50,6 +50,7 @@ import type {
 } from '@docket/integrations';
 import { buildMailerFromEnv } from '@docket/mail';
 import type { Mailer } from '@docket/mail';
+import { configureNotificationTransports } from '@docket/notifications/dispatch';
 
 import { env } from './env';
 
@@ -346,7 +347,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
         }),
   );
 
-  return {
+  const built: AppContainer = {
     get billing() {
       return billing();
     },
@@ -378,6 +379,14 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
       return blob();
     },
   };
+
+  // `@docket/notifications/dispatch`'s adapters have no DI container of their own — register this
+  // container's own lazy mailer/sms/push accessors once so a dispatch from ANY caller in this
+  // process (this app's routes, or `@docket/auth`'s recovery hooks) resolves the same transports
+  // this container itself would, without forcing early construction of ones nothing uses yet.
+  configureNotificationTransports({ mailer, sms, push });
+
+  return built;
 }
 
 function lazyValue<T>(create: () => T): () => T {

@@ -64,6 +64,29 @@ async function expectSessionRecoveryError(): Promise<void> {
   );
 }
 
+const ORIGINAL_LOCATION_DESCRIPTOR = Object.getOwnPropertyDescriptor(window, 'location');
+
+/**
+ * Swap `window.location` for a plain object that records `href` assignments instead of letting
+ * jsdom attempt a real (unsupported) navigation. Restored by `afterEach` below.
+ */
+function mockLocationForHrefCapture(pathname: string, search: string): string[] {
+  const assignments: string[] = [];
+  const origin = window.location.origin;
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: {
+      origin,
+      pathname,
+      search,
+      set href(value: string) {
+        assignments.push(value);
+      },
+    },
+  });
+  return assignments;
+}
+
 beforeEach(() => {
   orgsGet.mockReset();
   push.mockReset();
@@ -75,6 +98,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  if (ORIGINAL_LOCATION_DESCRIPTOR) {
+    Object.defineProperty(window, 'location', ORIGINAL_LOCATION_DESCRIPTOR);
+  }
 });
 
 describe('SignInPage', () => {
@@ -227,5 +253,44 @@ describe('SignInPage', () => {
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith('/today');
     });
+  });
+
+  it('resumes an in-flight MCP/OAuth authorization instead of routing to /today', async () => {
+    // Regression test: Better Auth's oidc-provider plugin redirects an unauthenticated visitor
+    // here with the raw OAuth request query (response_type/client_id/…), not ?callbackURL=. Its
+    // own server-side auto-resume never fires because our ceremony completes via fetch(), not a
+    // top-level navigation — so this page must detect that shape itself and hard-navigate back to
+    // Better Auth's own endpoint, never falling through to the normal org-lookup routing.
+    const search =
+      '?response_type=code&client_id=mcp-client&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&scope=work%3Aread&state=xyz';
+    window.history.replaceState(null, '', `/sign-in${search}`);
+    const origin = window.location.origin;
+    const assignments = mockLocationForHrefCapture('/sign-in', search);
+    signInPasskey.mockResolvedValue({ error: null });
+
+    render(<SignInPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
+
+    await waitFor(() => {
+      expect(assignments).toContain(`${origin}/api/auth/oauth2/authorize${search}`);
+    });
+    expect(orgsGet).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('resumes an in-flight MCP/OAuth authorization for an already-authenticated visitor', async () => {
+    const search =
+      '?response_type=code&client_id=mcp-client&redirect_uri=https%3A%2F%2Fclient.example%2Fcb';
+    const origin = window.location.origin;
+    const assignments = mockLocationForHrefCapture('/sign-in', search);
+    useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
+
+    render(<SignInPage />);
+
+    await waitFor(() => {
+      expect(assignments).toContain(`${origin}/api/auth/oauth2/authorize${search}`);
+    });
+    expect(push).not.toHaveBeenCalled();
+    expect(signInPasskey).not.toHaveBeenCalled();
   });
 });

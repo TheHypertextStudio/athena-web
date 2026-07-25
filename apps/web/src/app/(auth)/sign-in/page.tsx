@@ -48,6 +48,46 @@ function safeCallbackPath(): string | null {
   return safeSameOriginPath(new URLSearchParams(window.location.search).get('callbackURL'));
 }
 
+/**
+ * The full same-origin URL to resume an in-flight MCP/OAuth authorization, or `null`.
+ *
+ * @remarks
+ * Better Auth's `oidc-provider` plugin redirects an unauthenticated visitor here directly from
+ * its own `/api/auth/oauth2/authorize` endpoint (see `loginPage` in `packages/auth`) - and does
+ * so by appending the *original* OAuth request's raw query string verbatim (`response_type`,
+ * `client_id`, `redirect_uri`, `scope`, `state`, …), not our `?callbackURL=` convention. That
+ * plugin also arms a signed cookie meant to auto-resume the flow server-side once a new session
+ * cookie appears - but that mechanism only fires on a real top-level navigation, and our sign-in
+ * ceremony completes via `fetch()` (`authClient.signIn.passkey()`), which never moves the address
+ * bar. Left alone, the ceremony "succeeds" from the browser's perspective while the OAuth request
+ * it was answering is silently abandoned, and the user lands wherever `routeAfterSignIn` would
+ * otherwise send them.
+ *
+ * Detecting Better Auth's own `response_type`/`client_id` params and replaying the exact same
+ * query against `/api/auth/oauth2/authorize` - now with a valid session - sidesteps that gap
+ * entirely: Better Auth's server-side `authorize()` re-runs for real and issues its own correct
+ * redirect to the consent screen (`/oauth/authorize?consent_code=…`).
+ */
+function oidcAuthorizeResumeUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  if (!params.has('response_type') || !params.has('client_id')) return null;
+  return `${window.location.origin}/api/auth/oauth2/authorize${window.location.search}`;
+}
+
+/**
+ * Navigate to `destination`. A `/api/auth/...` target is Better Auth's server handler, not a
+ * Next.js route - it needs a real page load (not client-side routing) so the fresh session
+ * cookie is actually sent and `authorize()` re-runs for real.
+ */
+function navigateAfterSignIn(router: ReturnType<typeof useRouter>, destination: string): void {
+  if (destination.includes('/api/auth/')) {
+    window.location.href = destination;
+    return;
+  }
+  router.push(destination);
+}
+
 type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
 
 /** Wait briefly for the browser/proxy cookie path to settle. */
@@ -105,6 +145,13 @@ export default function SignInPage(): JSX.Element {
 
   /** Route into the cockpit, or onboarding when the user has no organization yet. */
   const routeAfterSignIn = useCallback(async (): Promise<void> => {
+    // An in-flight MCP/OAuth authorization takes priority over the normal landing logic - it
+    // must resume against Better Auth's own endpoint, not our org-membership routing below.
+    const resumeUrl = oidcAuthorizeResumeUrl();
+    if (resumeUrl) {
+      window.location.href = resumeUrl;
+      return;
+    }
     try {
       const res = await loadOrgsAfterSignIn();
       if (res.ok) {
@@ -190,9 +237,9 @@ export default function SignInPage(): JSX.Element {
     existingSession,
     sessionPending,
     (destination) => {
-      router.push(destination);
+      navigateAfterSignIn(router, destination);
     },
-    () => safeCallbackPath() ?? HOME_DESTINATION,
+    () => oidcAuthorizeResumeUrl() ?? safeCallbackPath() ?? HOME_DESTINATION,
   );
 
   // After hydration, reflect real WebAuthn capability and, where supported, arm the

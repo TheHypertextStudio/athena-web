@@ -15,7 +15,7 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type * as ScopeModule from '../../src/mcp/scope';
 import type * as ServerModule from '../../src/mcp/server';
 import type * as AuthModule from '../../src/mcp/auth';
-import { getMcpSession, getSession, resetAuthMocks } from '../support/auth-mock';
+import { getSession, resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 
 let schema!: typeof DbModule;
@@ -271,44 +271,36 @@ describe('resolveMcpContext — Bearer (OAuth RS) path', () => {
   }
 
   it('resolves an audience-bound token to its exact verified scope set', async () => {
-    getMcpSession.mockResolvedValueOnce({
-      accessToken: 'tok-1',
-      userId: 'u-bearer',
-      scopes: 'work:read work:write',
-    });
-    getSession.mockResolvedValueOnce({ user: { id: 'u-bearer', name: 'Grace', email: 'g@e.com' } });
+    const s = await seedOrg([]);
+    await db.update(schema.user).set({ name: 'Grace' }).where(eq(schema.user.id, s.userId));
+    verifyAccessToken.mockResolvedValueOnce({ sub: s.userId, scope: 'work:read work:write' });
     const ctx = await authMod.resolveMcpContext(bearer('tok-1'));
     expect(ctx.principal).toEqual({
       kind: 'user',
-      userId: 'u-bearer',
+      userId: s.userId,
       userName: 'Grace',
-      userEmail: 'g@e.com',
+      userEmail: s.email,
     });
     expect(ctx.scopes).toEqual(['work:read', 'work:write']);
-    expect(getMcpSession).toHaveBeenCalledOnce();
+    expect(verifyAccessToken).toHaveBeenCalledOnce();
   });
 
-  it('rejects a token that does not resolve (foreign audience / invalid) → 401', async () => {
-    getMcpSession.mockResolvedValueOnce(null);
+  it('rejects a token that fails verification (foreign audience / invalid / expired) → 401', async () => {
+    verifyAccessToken.mockRejectedValueOnce(new Error('signature verification failed'));
     await expect(authMod.resolveMcpContext(bearer('foreign'))).rejects.toMatchObject({
       status: 401,
     });
   });
 
-  it('rejects when the resolved token string does not match the presented one → 401', async () => {
-    getMcpSession.mockResolvedValueOnce({ accessToken: 'other', userId: 'u', scopes: 'work:read' });
+  it('rejects a verified token whose payload carries no subject → 401', async () => {
+    verifyAccessToken.mockResolvedValueOnce({ sub: '', scope: 'work:read' });
     await expect(authMod.resolveMcpContext(bearer('presented'))).rejects.toMatchObject({
       status: 401,
     });
   });
 
-  it('defaults name/email to null/empty when no user session backs the token', async () => {
-    getMcpSession.mockResolvedValueOnce({
-      accessToken: 'tok-2',
-      userId: 'u2',
-      scopes: 'work:read',
-    });
-    getSession.mockResolvedValueOnce(null);
+  it('defaults name/email to null/empty when the token subject has no user row', async () => {
+    verifyAccessToken.mockResolvedValueOnce({ sub: 'no-such-user', scope: 'work:read' });
     const ctx = await authMod.resolveMcpContext(bearer('tok-2'));
     expect(ctx.principal.kind === 'user' ? ctx.principal.userName : 'x').toBeNull();
     expect(ctx.principal.kind === 'user' ? ctx.principal.userEmail : 'x').toBe('');
@@ -385,7 +377,6 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
   });
 
   it('emits the full §2.6 401 challenge with resource_metadata + scope when no token', async () => {
-    getMcpSession.mockResolvedValue(null);
     getSession.mockResolvedValue(null);
     const res = await mcpApp().request('/mcp', {
       method: 'POST',
@@ -405,8 +396,7 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
   it('returns a 403 insufficient_scope step-up for a tools/call the token cannot satisfy', async () => {
     const s = await seedOrg(['contribute']);
     // A real, audience-bound read-only token (Bearer path) → the handler resolves scopes.
-    getMcpSession.mockResolvedValue({ accessToken: 'ro', userId: s.userId, scopes: 'work:read' });
-    getSession.mockResolvedValue({ user: { id: s.userId, name: 'Ada', email: s.email } });
+    verifyAccessToken.mockResolvedValue({ sub: s.userId, scope: 'work:read' });
     const body = JSON.stringify({
       jsonrpc: '2.0',
       id: 2,
@@ -434,12 +424,7 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
 
   it('does not step-up a tools/call the token can satisfy (proceeds to the transport)', async () => {
     const s = await seedOrg(['contribute']);
-    getMcpSession.mockResolvedValue({
-      accessToken: 'rw',
-      userId: s.userId,
-      scopes: 'work:read work:write',
-    });
-    getSession.mockResolvedValue({ user: { id: s.userId, name: 'Ada', email: s.email } });
+    verifyAccessToken.mockResolvedValue({ sub: s.userId, scope: 'work:read work:write' });
     const body = JSON.stringify({
       jsonrpc: '2.0',
       id: 3,

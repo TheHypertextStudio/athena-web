@@ -19,6 +19,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@better-auth/oauth-provider": "catalog:",
     "@better-auth/passkey": "catalog:",
     "@docket/db": "workspace:*",
     "@docket/env": "workspace:*",

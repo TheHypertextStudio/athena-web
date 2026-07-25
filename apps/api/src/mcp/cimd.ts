@@ -2,16 +2,18 @@
  * `@docket/api` — Client ID Metadata Document (CIMD) registration for MCP OAuth.
  *
  * @remarks
- * Better Auth's MCP authorize endpoint resolves clients by exact `client_id` before
- * consent. MCP clients that use a URL-form `client_id` therefore need a small,
- * server-side preflight: fetch and validate the client metadata document, then upsert
- * a public PKCE OAuth application row before Better Auth continues the authorize flow.
+ * Better Auth's `oauthProvider` authorize endpoint resolves clients by exact `client_id`
+ * before consent (confirmed against the plugin's own compiled source - it has no native
+ * URL-form-`client_id` resolution). MCP clients that use a URL-form `client_id` therefore
+ * need a small, server-side preflight: fetch and validate the client metadata document,
+ * then upsert a public PKCE OAuth client row before Better Auth continues the authorize
+ * flow.
  */
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { request } from 'node:https';
 import { isIP, type LookupFunction } from 'node:net';
 
-import { db, oauthApplication } from '@docket/db';
+import { db, oauthClient } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import type { Context, Next } from 'hono';
 
@@ -333,68 +335,59 @@ export async function resolveCimdClient(
   return validateMetadata(url.href, metadata);
 }
 
-function isOwnedCimdMetadata(value: string | null, clientId: string): boolean {
-  if (!value) return false;
-  try {
-    const parsed = asRecord(JSON.parse(value) as unknown);
-    return parsed['cimd'] === true && parsed['cimdDocumentUrl'] === clientId;
-  } catch {
-    return false;
-  }
+function isOwnedCimdMetadata(value: unknown, clientId: string): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return record['cimd'] === true && record['cimdDocumentUrl'] === clientId;
 }
 
 /**
- * Upsert a validated CIMD client into Better Auth's OAuth application table.
+ * Upsert a validated CIMD client into Better Auth's OAuth client table.
+ *
+ * @remarks
+ * Not routed through `auth.api.adminCreateOAuthClient` — that endpoint always generates its
+ * own `client_id` server-side with no way to force a caller-specified value, and CIMD's whole
+ * premise is that `client_id` IS the metadata document's own URL. A direct upsert against the
+ * plugin's own table remains the only way to satisfy that constraint; the table shape below
+ * was captured from the plugin's own `generate` output, not hand-transcribed.
  *
  * @param client - The validated CIMD client metadata.
  */
 export async function upsertCimdClient(client: CimdClient): Promise<void> {
   const existing = await db
-    .select({ metadata: oauthApplication.metadata })
-    .from(oauthApplication)
-    .where(eq(oauthApplication.clientId, client.clientId))
+    .select({ metadata: oauthClient.metadata })
+    .from(oauthClient)
+    .where(eq(oauthClient.clientId, client.clientId))
     .limit(1);
   const first = existing[0];
   if (first && !isOwnedCimdMetadata(first.metadata, client.clientId)) {
     throw new CimdError('invalid_client', 'client_id is already registered');
   }
 
+  const shared = {
+    name: client.name,
+    icon: client.logoUri,
+    metadata: {
+      cimd: true,
+      cimdDocumentUrl: client.clientId,
+      raw: client.metadata,
+    },
+    clientSecret: '',
+    redirectUris: [...client.redirectUris],
+    type: 'public' as const,
+    public: true,
+    tokenEndpointAuthMethod: 'none' as const,
+    grantTypes: ['authorization_code'],
+    responseTypes: ['code'],
+    disabled: false,
+    userId: null,
+    updatedAt: new Date(),
+  };
+
   await db
-    .insert(oauthApplication)
-    .values({
-      name: client.name,
-      icon: client.logoUri,
-      metadata: JSON.stringify({
-        cimd: true,
-        cimdDocumentUrl: client.clientId,
-        raw: client.metadata,
-      }),
-      clientId: client.clientId,
-      clientSecret: '',
-      redirectUrls: client.redirectUris.join(','),
-      type: 'public',
-      disabled: false,
-      userId: null,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: oauthApplication.clientId,
-      set: {
-        name: client.name,
-        icon: client.logoUri,
-        metadata: JSON.stringify({
-          cimd: true,
-          cimdDocumentUrl: client.clientId,
-          raw: client.metadata,
-        }),
-        clientSecret: '',
-        redirectUrls: client.redirectUris.join(','),
-        type: 'public',
-        disabled: false,
-        userId: null,
-        updatedAt: new Date(),
-      },
-    });
+    .insert(oauthClient)
+    .values({ ...shared, clientId: client.clientId })
+    .onConflictDoUpdate({ target: oauthClient.clientId, set: shared });
 }
 
 function isUrlFormClientId(clientId: string | null): clientId is string {
@@ -441,8 +434,8 @@ export function createCimdAuthorizeMiddleware(deps: CimdDeps = defaultDeps) {
 }
 
 /**
- * The production CIMD preflight, mounted ahead of `/api/auth/mcp/authorize` so URL-form
- * client ids are registered in the OAuth application table before Better Auth's exact
+ * The production CIMD preflight, mounted ahead of `/api/auth/oauth2/authorize` so URL-form
+ * client ids are registered in the OAuth client table before Better Auth's exact
  * `client_id` lookup runs.
  *
  * @param c - The authorize request context.

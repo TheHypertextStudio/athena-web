@@ -1,3 +1,4 @@
+import { oauthProvider } from '@better-auth/oauth-provider';
 import { passkey } from '@better-auth/passkey';
 import {
   account,
@@ -6,9 +7,11 @@ import {
   genId,
   hub,
   integration,
+  jwks as jwksTable,
   oauthAccessToken,
-  oauthApplication,
+  oauthClient,
   oauthConsent,
+  oauthRefreshToken,
   passkey as passkeyTable,
   rateLimit as rateLimitTable,
   session,
@@ -26,7 +29,7 @@ import { PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
-import { mcp, oAuthProxy, oidcProvider, twoFactor } from 'better-auth/plugins';
+import { oAuthProxy, twoFactor, jwt } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
@@ -460,32 +463,45 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     }),
   ];
 
+  // The OAuth 2.1 / MCP authorization server. `oauthProvider()` is the single supported
+  // successor to the deprecated `mcp()`/`oidcProvider()` pair Docket ran before — it absorbs
+  // MCP support natively (audience binding via `validAudiences`, no separate `mcp()` plugin
+  // needed) rather than requiring both plugins mounted together. `MCP_RESOURCE_URL` is always
+  // derived from `API_URL` whenever `API_URL` is set (see `@docket/env`) — real environments
+  // always take the `validAudiences` branch; only a deliberately minimal env (e.g. isolated
+  // unit tests) mounts the provider without it.
   if (isRealValue(e.OIDC_LOGIN_PAGE_URL)) {
-    if (isRealValue(e.MCP_RESOURCE_URL)) {
-      let consentPage: string | undefined;
-      try {
-        consentPage = new URL('/oauth/authorize', new URL(e.OIDC_LOGIN_PAGE_URL).origin).toString();
-      } catch {
-        consentPage = undefined;
-      }
-      plugins.push(
-        mcp({
-          loginPage: e.OIDC_LOGIN_PAGE_URL,
-          resource: e.MCP_RESOURCE_URL,
-          oidcConfig: {
-            loginPage: e.OIDC_LOGIN_PAGE_URL,
-            scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link'],
-            defaultScope: 'work:read',
-            accessTokenExpiresIn: 60 * 15,
-            refreshTokenExpiresIn: 60 * 60 * 24 * 30,
-            ...(consentPage ? { consentPage } : {}),
-          },
-        }),
-      );
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-deprecated -- successor pkg not installed; see remarks in index.ts
-      plugins.push(oidcProvider({ loginPage: e.OIDC_LOGIN_PAGE_URL }));
-    }
+    const consentPage = new URL(
+      '/oauth/authorize',
+      new URL(e.OIDC_LOGIN_PAGE_URL).origin,
+    ).toString();
+    plugins.push(
+      // Required by oauthProvider() (unless `disableJwtPlugin` is set, which Docket does not
+      // set): issues the JWT-formatted, locally-verifiable access tokens the MCP resource
+      // server checks via `verifyAccessToken` — no DB round-trip per tool call.
+      jwt(),
+      oauthProvider({
+        loginPage: e.OIDC_LOGIN_PAGE_URL,
+        consentPage,
+        // `offline_access` must be an explicit scope for oauthProvider() to ever issue a
+        // refresh token (unlike the deprecated mcp() plugin, which issued one unconditionally)
+        // — included in the client's default scopes so a dynamically-registered MCP client
+        // gets a refresh token without needing to know to ask for it by name, preserving the
+        // 30-day long-lived-connection behavior Docket already has today.
+        scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link', 'offline_access'],
+        clientRegistrationDefaultScopes: ['work:read', 'offline_access'],
+        clientRegistrationAllowedScopes: ['work:write', 'agents:run', 'connectors:link'],
+        accessTokenExpiresIn: 60 * 15,
+        refreshTokenExpiresIn: 60 * 60 * 24 * 30,
+        ...(isRealValue(e.MCP_RESOURCE_URL) ? { validAudiences: [e.MCP_RESOURCE_URL] } : {}),
+        // MCP clients (Claude Desktop, Cursor, …) register themselves before any user session
+        // exists — dynamic client registration necessarily happens unauthenticated. This is
+        // the same capability the deprecated mcp() plugin's registration endpoint already
+        // allowed unconditionally; oauthProvider() makes it an explicit, opt-in flag instead.
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+      }),
+    );
   }
   // oAuthProxy lets preview/branch deployments run social OAuth through production: only prod's
   // callback URL is registered with the provider, and previews (whose URL can't be pre-registered)
@@ -635,11 +651,14 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         passkey: passkeyTable,
         twoFactor: twoFactorTable,
         rateLimit: rateLimitTable,
-        // The mcp()/oidcProvider OAuth AS models — without these, dynamic client
-        // registration and token issuance 500 at the adapter layer.
-        oauthApplication,
+        // The oauthProvider OAuth AS models — without these, dynamic client registration and
+        // token issuance 500 at the adapter layer. jwks backs the `jwt()` plugin oauthProvider
+        // requires (signing keypairs), not the OAuth flow directly.
+        oauthClient,
         oauthAccessToken,
+        oauthRefreshToken,
         oauthConsent,
+        jwks: jwksTable,
       },
     }),
     // Brute-force / abuse protection. Better Auth enables the limiter in production only (dev/test
@@ -656,7 +675,8 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         '/sign-in/passkey': { window: 60, max: 20 },
         '/passkey/verify-authentication': { window: 60, max: 20 },
         '/oauth2/consent': { window: 60, max: 20 },
-        '/mcp/token': { window: 60, max: 30 },
+        '/oauth2/token': { window: 60, max: 30 },
+        '/oauth2/register': { window: 60, max: 5 },
       },
     },
     advanced: {

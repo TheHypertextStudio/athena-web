@@ -10,8 +10,8 @@
  * {@link canActor} before touching data. Nothing here bypasses the permission engine;
  * it only establishes *who* is asking, exactly like {@link orgContextMiddleware}.
  */
-import { auth } from '@docket/auth';
-import { actor, db } from '@docket/db';
+import { auth, verifyAccessToken } from '@docket/auth';
+import { actor, db, user as userTable } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 
 import { env } from '../env';
@@ -74,23 +74,6 @@ export interface McpContext {
    */
   readonly scopes: readonly string[];
 }
-
-/** The minimal `getMcpSession` result shape the RS reads (Better Auth `OAuthAccessToken`). */
-interface McpSession {
-  /** The bearer access token string. */
-  readonly accessToken: string;
-  /** The subject (Better Auth user id) the token was minted for. */
-  readonly userId: string;
-  /** The space-separated scope string the token carries. */
-  readonly scopes: string;
-}
-
-/** The slice of `auth.api` the Bearer path uses (present only once `mcp()` is mounted). */
-interface McpAuthApi {
-  getMcpSession?: (args: { headers: Headers }) => Promise<McpSession | null>;
-}
-
-type GetMcpSession = NonNullable<McpAuthApi['getMcpSession']>;
 
 /**
  * The caller's resolved Actor within one organization, for {@link canActor} checks.
@@ -161,38 +144,25 @@ function bearerToken(headers: Headers): string | null {
   return match ? (match[1]?.trim() ?? null) : null;
 }
 
-function getMcpSessionApi(): GetMcpSession | null {
-  const descriptor: PropertyDescriptor | undefined = Object.getOwnPropertyDescriptor(
-    auth.api,
-    'getMcpSession',
-  );
-  const candidate: unknown = descriptor?.value;
-  return typeof candidate === 'function' ? (candidate as GetMcpSession) : null;
-}
-
 /**
  * Resolve an OAuth Bearer access token into an {@link McpContext}, enforcing the RS
  * checks (audience + issuer binding + scope availability) of mcp-surface.md §2.5.
  *
  * @remarks
- * Uses Better Auth's `auth.api.getMcpSession`, which is mounted only when the `mcp()`
- * plugin is configured (real `MCP_RESOURCE_URL` + `OIDC_LOGIN_PAGE_URL`). The plugin
- * resolves the token **bound to the configured `resource`** (the canonical RS URI), which
- * IS the RFC 8707 audience binding: a token minted for any other resource does not resolve
- * here. We additionally require the RS to be configured for OAuth (`MCP_RESOURCE_URL` +
- * `MCP_ISSUER_URL`) so a deploy that never advertised an issuer cannot silently accept
- * bearer tokens. The token's granted scopes (a space-separated string) become the caller's
- * verified scope set; **no scope is granted that the token did not carry** — and the token
- * itself is never forwarded downstream (no passthrough; connector calls use Integration
- * credentials).
+ * Verifies the token as a locally-checkable JWT via Better Auth's `verifyAccessToken`
+ * (`jose`-based signature check against the AS's own `/jwks` endpoint, cached — no DB
+ * round-trip per call). `audience`/`issuer` are checked against `MCP_RESOURCE_URL`/
+ * `MCP_ISSUER_URL` — a token minted for any other resource or by any other issuer fails
+ * verification outright, which IS the RFC 8707 audience binding. The token's `scope` claim
+ * becomes the caller's verified scope set; **no scope is granted that the token did not
+ * carry** — and the token itself is never forwarded downstream (no passthrough; connector
+ * calls use Integration credentials).
  *
- * @param headers - The incoming request headers (carrying the Bearer token).
  * @param token - The extracted bearer token string.
  * @returns the resolved {@link McpContext} with the token's verified scopes.
- * @throws {AuthError} When OAuth is not configured, the helper is unavailable, or the
- *   token does not resolve to an audience-bound session.
+ * @throws {AuthError} When OAuth is not configured or the token fails verification.
  */
-async function resolveBearerContext(headers: Headers, token: string): Promise<McpContext> {
+async function resolveBearerContext(token: string): Promise<McpContext> {
   // Issuer binding (§2.5 item 3): the RS only accepts tokens once it advertises an issuer
   // + canonical resource. Absent that config, a Bearer token is rejected outright (it
   // cannot have been minted by *this* AS for *this* resource).
@@ -200,32 +170,42 @@ async function resolveBearerContext(headers: Headers, token: string): Promise<Mc
     throw new AuthError('Bearer tokens are not accepted on this resource');
   }
 
-  const getMcpSession = getMcpSessionApi();
-  /* v8 ignore next -- @preserve defensive: getMcpSession exists whenever mcp() is mounted, which the issuer guard above requires */
-  if (!getMcpSession) {
-    throw new AuthError('Bearer tokens are not accepted on this resource');
+  let payload: Awaited<ReturnType<typeof verifyAccessToken>>;
+  try {
+    payload = await verifyAccessToken(token, {
+      verifyOptions: { audience: env.MCP_RESOURCE_URL, issuer: env.MCP_ISSUER_URL },
+      jwksUrl: `${env.MCP_ISSUER_URL}/api/auth/jwks`,
+    });
+  } catch {
+    throw new AuthError();
   }
 
-  // `getMcpSession` validates the token AND its audience binding to the configured
-  // `resource` (RFC 8707) — a mismatched/foreign-audience token resolves to null here.
-  const session = await getMcpSession({ headers });
-  if (session?.accessToken !== token) throw new AuthError();
+  const userId = typeof payload.sub === 'string' ? payload.sub : null;
+  if (!userId) throw new AuthError();
 
-  const scopes = session.scopes
+  const scopeClaim = payload['scope'];
+  const scopes = (typeof scopeClaim === 'string' ? scopeClaim : '')
     .split(/\s+/)
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // The user record backs the display name/email the prompts/resources surface.
-  const user = await auth.api.getSession({ headers });
-  const name = user?.user.name ?? '';
+  // The user record backs the display name/email the prompts/resources surface — read
+  // directly by the token's `sub`, independent of any session cookie (there may be none).
+  const rows = await db
+    .select({ name: userTable.name, email: userTable.email })
+    .from(userTable)
+    .where(eq(userTable.id, userId))
+    .limit(1);
+  const row = rows[0];
+  const name = row?.name ?? '';
+
   return {
     principal: {
       kind: 'user',
-      userId: session.userId,
-      // An empty display name normalizes to null, exactly like the cookie path.
+      userId,
+      // An empty display name normalizes to null (not the literal `''`).
       userName: name === '' ? null : name,
-      userEmail: user?.user.email ?? '',
+      userEmail: row?.email ?? '',
     },
     scopes,
   };
@@ -254,7 +234,7 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
   if (!isOriginAllowed(headers)) throw new AuthError('Origin not allowed');
 
   const token = bearerToken(headers);
-  if (token) return resolveBearerContext(headers, token);
+  if (token) return resolveBearerContext(token);
 
   const session = await auth.api.getSession({ headers });
   if (!session?.user) throw new AuthError();

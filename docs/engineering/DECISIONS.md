@@ -522,6 +522,14 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 
 ### §2.1 / §2.4 / engineering-plan §4 / RECONCILIATION line 38: 'verify Better Auth 1.6.14 emits client_id_metadata_document_supported (CIMD), honors RFC 8707 resource->aud stamping, and surfaces getMcpSession().scopes — if absent add a thin RS shim.'
 
+> **Superseded 2026-07-24:** the "oauthProvider() together with mcp()" wiring below was never actually
+> built — Docket shipped on the plain `mcp()` plugin alone, which Better Auth has since deprecated in
+> favor of `oauthProvider()` as the sole plugin (no separate `mcp()` mount; MCP support is absorbed).
+> A production incident (MCP OAuth authorize always landing on `/today`) triggered the real migration
+> off both deprecated plugins. See `## oauth-provider migration (2026-07-24)` below for what actually
+> shipped, including the `getMcpSession()`→JWT-verification, CIMD, and consent-gating outcomes this
+> entry only speculated about.
+
 **Decision.** Adopt the current Better Auth OAuth-provider stack with a concrete, verified wiring: use oauthProvider() (the dedicated OAuth 2.1 provider plugin, which the docs confirm carries validAudiences for RFC 8707 audience binding and exposes verifyAccessToken from better-auth/oauth2) together with mcp(). Pin: (a) AUDIENCE BINDING is handled natively via oauthProvider({ validAudiences: [MCP_RESOURCE_URL] }) — the AS stamps/validates aud against the RFC 8707 resource param; the RS independently re-asserts aud == MCP_RESOURCE_URL using verifyAccessToken({ verifyOptions: { issuer: MCP_ISSUER_URL, audience: MCP_RESOURCE_URL }, scopes: [<tool scope>] }) on EVERY call as a defense-in-depth check layered on top of getMcpSession. (b) SCOPES are read from getMcpSession() (docs confirm the returned session record contains scopes + user id); if a build of the pinned version returns scopes only on the underlying access-token record, the RS reads them from verifyAccessToken's returned payload.scope instead — both paths are wired, payload.scope is canonical when present. (c) CIMD: if the pinned Better Auth build does NOT emit client_id_metadata_document_supported in AS metadata, the RS adds a thin, mandatory shim — it (i) injects client_id_metadata_document_supported: true into the /.well-known/oauth-authorization-server and /.well-known/openid-configuration responses it serves, and (ii) implements CIMD resolution in a pre-token RS/AS hook: when an authorize request presents an https:// URL-form client_id, fetch that document, assert client_id === document URL exactly, validate redirect_uris, and apply the SSRF guard + domain-trust allowlist before honoring it. This shim is NET-NEW code owned by this area and is built unconditionally (it is a no-op layer if the upstream gains native support). DCR stays enabled as a MAY-level fallback via oauthProvider({ allowDynamicClientRegistration: true, allowUnauthenticatedClientRegistration: false }).
 
 **Why.** Current Better Auth docs (fetched 2026-06-05 via ctx7) confirm the OAuth-provider plugin natively supports validAudiences (RFC 8707, default baseURL, example explicitly lists '.../mcp'), verifyAccessToken with issuer+audience+scopes verification, and getMcpSession returning a session record 'with scopes and user ID.' This collapses the deferred verification into a verified-true for audience+scopes and a build-unconditional shim for CIMD, eliminating any 'TBD.' RECONCILIATION line 22 keeps the single AS in apps/api; engineering plan §4 (line 343, 446) mandates the shim-if-absent posture, which this makes concrete and unconditional rather than runtime-branched.
@@ -713,3 +721,54 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 **Decision.** Only the recovery-codes-regenerated notification shipped (`recoveryCodesRegeneratedEmail`, fired from `me-recovery.ts`'s `POST` handler via `getContainer().mailer`). The other two notifications the plan named — a new passkey being added, and a locked-out account being recovered via a backup code — did NOT ship this pass.
 
 **Why.** Recovery-code regeneration is an `apps/api` REST route that already holds the container, so wiring its notification was a direct, low-risk extension of an existing, tested pattern (`me-account.ts` already does the same for deletion emails). Passkey-add, by contrast, happens entirely inside the `@better-auth/passkey` plugin's own endpoint (`/passkey/add-passkey`) — the plugin exposes no post-registration hook, and the passkey table isn't a core Better Auth model, so it isn't reachable via the core `databaseHooks` config either. The correct mechanism is almost certainly a global `hooks.after` middleware matching on `ctx.path`, but that pattern is unused anywhere in this codebase and shipping it unverified — on the credential-management surface this whole effort exists to harden — was judged worse than shipping nothing. Account-recovery notification has the same shape (the completion happens inside Better Auth's `twoFactor.verifyBackupCode`, not an `apps/api` route). Flagging both explicitly here rather than letting the plan's checkbox silently go unaddressed.
+
+## oauth-provider migration (2026-07-24)
+
+> Triggered by a production incident: MCP OAuth authorize always landed on `/today` instead of
+> finishing. Root-caused to Docket running Better Auth's `mcp()` plugin, which Better Auth has since
+> deprecated in favor of `@better-auth/oauth-provider`'s `oauthProvider()` as the sole, actively
+> maintained plugin (it fully absorbs MCP support — no separate `mcp()` mount). This section
+> supersedes the `## mcp-surface` §2.1 entry above, which assumed `oauthProvider()` would run
+> _alongside_ `mcp()`; that pairing was never built, and is not what current Better Auth docs describe.
+
+### Single plugin, not a pair: `oauthProvider()` replaces both `mcp()` and the `oidcProvider()` fallback branch.
+
+**Decision.** `packages/auth/src/auth-builder.ts` mounts exactly one plugin pair — `jwt()` (required by `oauthProvider()` unless `disableJwtPlugin: true`) plus `oauthProvider({ loginPage, consentPage, scopes, clientRegistrationDefaultScopes, clientRegistrationAllowedScopes, accessTokenExpiresIn, refreshTokenExpiresIn, validAudiences: [MCP_RESOURCE_URL], allowDynamicClientRegistration: true, allowUnauthenticatedClientRegistration: true })` — whenever `OIDC_LOGIN_PAGE_URL` is set. The old if/else branch that chose between `mcp()` and a bare `oidcProvider()` fallback is gone; there is exactly one code path. Endpoints move from `/mcp/*` to `/oauth2/*` (`authorize`, `token`, `register`, `consent`) — every hardcoded path reference (`server.ts`'s CIMD middleware mount, `openapi.ts`'s `mcpOAuth` security scheme, `mcp/server.ts`'s discovery-metadata fallback, rate-limit `customRules` keys) was updated to match.
+
+**Why.** Current Better Auth docs are unambiguous that `mcp()` is deprecated and `oauthProvider()` is its replacement, not a co-plugin. Running a single plugin also removes the entire class of bug the original incident came from: two plugins independently reasoning about the same `/oauth2` vs `/mcp` endpoint namespace, discovered only by reading each plugin's compiled source rather than trusting either's docs.
+
+### Resource-server verification model: JWT + JWKS, not opaque-token DB lookup.
+
+**Decision.** `apps/api/src/mcp/auth.ts`'s `resolveBearerContext()` now calls `verifyAccessToken(token, { verifyOptions: { audience: MCP_RESOURCE_URL, issuer: MCP_ISSUER_URL }, jwksUrl: \`${MCP_ISSUER_URL}/api/auth/jwks\` })`(re-exported from`better-auth/oauth2`via`@docket/auth`so`apps/api`never imports`better-auth`directly) — a local,`jose`-based signature check against the AS's own JWKS endpoint, no DB round-trip per call. The old code reflected onto `auth.api.getMcpSession`via`Object.getOwnPropertyDescriptor`(untyped — TypeScript could not have caught its removal) to do a DB row lookup by literal access-token string; that reflection path and its`McpSession`/`McpAuthApi` types are deleted entirely.
+
+**Why.** This is the model `oauthProvider()`'s docs actually describe (`verifyAccessToken`), and it is strictly better for a resource server serving every MCP tool call: no DB hit on the hot path, and the token itself carries its own expiry/audience/issuer proof. The reflection-based old code was flagged during planning as the single highest-risk change in this migration precisely because a silent runtime break here would have been invisible to `tsc` — proactively rewired rather than left to fail in production, with new unit coverage in `apps/api/tests/mcp/mcp-scope.test.ts` covering the valid, expired/invalid, wrong-audience, and no-subject-row cases.
+
+### `consent-guard.ts` deleted: `oauthProvider()` gates on stored consent by default.
+
+**Decision.** `apps/api/src/mcp/consent-guard.ts` (a middleware that force-appended `prompt=consent` to authorize requests) and its test are deleted. `server.ts` no longer mounts anything on the authorize path beyond the CIMD preflight.
+
+**Why.** The old guard existed only because `mcp()`'s authorize handler — confirmed by reading its compiled source directly, not assumed — skipped the consent page unless the client explicitly sent `prompt=consent`. Reading `oauthProvider()`'s compiled `authorize.mjs` this migration confirmed the new plugin checks for prior stored consent by default on every authorize request; the force-`prompt=consent` shim has no remaining purpose.
+
+### CIMD stays a custom shim; `adminCreateOAuthClient` cannot replace it.
+
+**Decision.** `apps/api/src/mcp/cimd.ts`'s `upsertCimdClient()` remains a raw Drizzle `insert().onConflictDoUpdate()` against the new `oauthClient` table (rewritten for the new column shapes — native Postgres arrays for `redirectUris`/`scopes`, `jsonb` for `metadata`), rather than being routed through Better Auth's own `adminCreateOAuthClient` server API as originally hoped.
+
+**Why.** Inspecting `adminCreateOAuthClient`'s Zod body schema found no `client_id` override field — the server always auto-generates `client_id`. CIMD's entire mechanism requires the opposite: the client_id **is** the metadata document's URL, so the server must be able to write a caller-specified `client_id`. This is a deliberate, documented exception to "use the official API," not an oversight.
+
+### `allowUnauthenticatedClientRegistration: true` — a first connect has no session yet.
+
+**Decision.** `oauthProvider()` is configured with `allowDynamicClientRegistration: true` and `allowUnauthenticatedClientRegistration: true`.
+
+**Why.** An MCP client's first connection (Claude Desktop, Cursor, etc. registering itself via DCR before the user has ever signed in) has no Better Auth session to authenticate the registration call with — requiring authentication here would break the cold-start connect flow this same incident-response arc already added regression coverage for (`apps/web/e2e/mcp-connect-cold-start.spec.ts`). This explicitly reverses the posture the superseded `## mcp-surface` §2.1 entry stated (`allowUnauthenticatedClientRegistration: false`), which predates this migration and was never built against the real plugin's registration flow.
+
+### `offline_access` must be an explicit granted scope, or refresh tokens silently stop being issued.
+
+**Decision.** `clientRegistrationDefaultScopes` includes `offline_access` alongside `work:read`, and the full `scopes` list includes it too.
+
+**Why.** Unlike the deprecated `mcp()` plugin (which issued refresh tokens unconditionally), `oauthProvider()` only mints a refresh token when the client's granted scope set explicitly contains `offline_access`. Missing this would have silently downgraded every MCP client to access-token-only sessions — a real regression this migration's research phase caught before it shipped, not one dug out of a production report.
+
+### Schema cutover: clean drop + recreate, not a data migration; schema captured via real codegen.
+
+**Decision.** `packages/db/drizzle/0046_oauth_provider_drop_deprecated.sql` drops `oauth_access_token`, `oauth_application`, `oauth_consent`; `0047_oauth_provider_create_tables.sql` creates `oauth_client` (renamed from `oauth_application`), a new `oauth_refresh_token` table (split out of the old combined access-token table), the redefined `oauth_access_token`, `oauth_consent`, and a new `jwks` table. No token/consent data is carried across. The shapes were captured by running `@better-auth/cli`'s `generate` against a scratch `betterAuth()` config (PGlite + the real plugin set) — not hand-transcribed from documentation, which is how the original `oauthApplication`/`oauthAccessToken`/`oauthConsent` tables' endpoint-path mismatches were introduced in the first place.
+
+**Why.** The JWT verification model makes the old DB-driven opaque-token rows meaningless regardless of migration strategy, and every currently-connected MCP client is a pre-paying-customer/early connection — reconnecting once after a token rejection is normal, expected OAuth client behavior (re-run discovery + DCR), not a breaking incident. This is explicitly the moment to take that one-time cost, before real paying users exist. Real codegen (rather than hand-authoring again) is a direct, structural fix for the bug class that caused this whole incident: `oauthClient` keeps both a `public: boolean` field AND a `type: text` field (not a replacement, as initially assumed from docs alone), and `redirectUris`/`scopes`/`contacts` are native Postgres arrays, not the comma/space-joined strings the old hand-authored schema used — differences that only surfaced by generating the schema from the real package.

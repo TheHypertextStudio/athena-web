@@ -17,11 +17,11 @@ describe('GET /oauth/clients/:clientId/metadata', () => {
   it("returns the client's server-persisted name and icon", async () => {
     const { db, schema, oauthClients } = await setup();
     const userId = await seedUserWithHub(db, schema, 'consenter');
-    await db.insert(schema.oauthApplication).values({
+    await db.insert(schema.oauthClient).values({
       name: 'Claude Desktop',
       icon: 'https://example.test/icon.png',
       clientId: 'https://claude.test/.well-known/oauth-client',
-      redirectUrls: 'https://claude.test/callback',
+      redirectUris: ['https://claude.test/callback'],
       type: 'public',
     });
 
@@ -38,10 +38,10 @@ describe('GET /oauth/clients/:clientId/metadata', () => {
   it('returns null icon when the client registered none', async () => {
     const { db, schema, oauthClients } = await setup();
     const userId = await seedUserWithHub(db, schema, 'no-icon');
-    await db.insert(schema.oauthApplication).values({
+    await db.insert(schema.oauthClient).values({
       name: 'Some MCP Client',
       clientId: 'no-icon-client',
-      redirectUrls: 'https://client.test/callback',
+      redirectUris: ['https://client.test/callback'],
       type: 'public',
     });
 

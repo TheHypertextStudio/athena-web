@@ -270,8 +270,8 @@ function buildDocumentation() {
           type: 'oauth2' as const,
           flows: {
             authorizationCode: {
-              authorizationUrl: `${env.API_URL}/api/auth/mcp/authorize`,
-              tokenUrl: `${env.API_URL}/api/auth/mcp/token`,
+              authorizationUrl: `${env.API_URL}/api/auth/oauth2/authorize`,
+              tokenUrl: `${env.API_URL}/api/auth/oauth2/token`,
               scopes: {},
             },
           },

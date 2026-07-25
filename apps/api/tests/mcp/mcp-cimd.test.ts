@@ -1,4 +1,4 @@
-import { db, oauthApplication } from '@docket/db';
+import { db, oauthClient } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -105,7 +105,7 @@ describe('CIMD client metadata validation', () => {
     ).rejects.toMatchObject({ code: 'invalid_client' });
   });
 
-  it('upserts a validated public CIMD client into oauth_application', async () => {
+  it('upserts a validated public CIMD client into oauth_client', async () => {
     const client = await cimd.resolveCimdClient(
       'https://allowed.example/client.json',
       deps({
@@ -121,19 +121,20 @@ describe('CIMD client metadata validation', () => {
 
     const rows = await db
       .select()
-      .from(oauthApplication)
-      .where(eq(oauthApplication.clientId, 'https://allowed.example/client.json'));
+      .from(oauthClient)
+      .where(eq(oauthClient.clientId, 'https://allowed.example/client.json'));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       name: 'Allowed Client',
       icon: 'https://allowed.example/logo.png',
       clientId: 'https://allowed.example/client.json',
       clientSecret: '',
-      redirectUrls: 'https://allowed.example/callback',
+      redirectUris: ['https://allowed.example/callback'],
       type: 'public',
+      public: true,
       disabled: false,
     });
-    expect(JSON.parse(rows[0]!.metadata ?? '{}')).toMatchObject({
+    expect(rows[0]!.metadata).toMatchObject({
       cimd: true,
       cimdDocumentUrl: 'https://allowed.example/client.json',
     });
@@ -145,8 +146,8 @@ describe('CIMD authorize preflight middleware', () => {
   function authorizeApp(d?: CimdDeps): { app: Hono; downstream: ReturnType<typeof vi.fn> } {
     const downstream = vi.fn((c: { text: (s: string) => Response }) => c.text('authorize'));
     const app = new Hono();
-    app.use('/api/auth/mcp/authorize', cimd.createCimdAuthorizeMiddleware(d));
-    app.get('/api/auth/mcp/authorize', (c) => downstream(c));
+    app.use('/api/auth/oauth2/authorize', cimd.createCimdAuthorizeMiddleware(d));
+    app.get('/api/auth/oauth2/authorize', (c) => downstream(c));
     return { app, downstream };
   }
 
@@ -162,15 +163,15 @@ describe('CIMD authorize preflight middleware', () => {
     );
 
     const res = await app.request(
-      `/api/auth/mcp/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code`,
+      `/api/auth/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code`,
     );
 
     expect(res.status).toBe(200);
     expect(downstream).toHaveBeenCalledTimes(1);
     const rows = await db
-      .select({ type: oauthApplication.type })
-      .from(oauthApplication)
-      .where(eq(oauthApplication.clientId, clientId));
+      .select({ type: oauthClient.type })
+      .from(oauthClient)
+      .where(eq(oauthClient.clientId, clientId));
     expect(rows).toEqual([{ type: 'public' }]);
   });
 
@@ -179,7 +180,7 @@ describe('CIMD authorize preflight middleware', () => {
     const { app, downstream } = authorizeApp();
 
     const res = await app.request(
-      `/api/auth/mcp/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code`,
+      `/api/auth/oauth2/authorize?client_id=${encodeURIComponent(clientId)}&response_type=code`,
     );
 
     expect(res.status).toBe(400);
@@ -190,7 +191,7 @@ describe('CIMD authorize preflight middleware', () => {
   it('passes opaque client_id values straight through untouched', async () => {
     const { app, downstream } = authorizeApp();
 
-    const res = await app.request('/api/auth/mcp/authorize?client_id=abc123&response_type=code');
+    const res = await app.request('/api/auth/oauth2/authorize?client_id=abc123&response_type=code');
 
     expect(res.status).toBe(200);
     expect(downstream).toHaveBeenCalledTimes(1);
@@ -205,8 +206,10 @@ describe('MCP authorization server metadata', () => {
     } as never);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['client_id_metadata_document_supported']).toBe(true);
-    expect(body['authorization_endpoint']).toBe('https://api.docket.test/api/auth/mcp/authorize');
-    expect(body['registration_endpoint']).toBe('https://api.docket.test/api/auth/mcp/register');
+    expect(body['authorization_endpoint']).toBe(
+      'https://api.docket.test/api/auth/oauth2/authorize',
+    );
+    expect(body['registration_endpoint']).toBe('https://api.docket.test/api/auth/oauth2/register');
     expect(body['code_challenge_methods_supported']).toEqual(['S256']);
   });
 });

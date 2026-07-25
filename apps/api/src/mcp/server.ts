@@ -178,9 +178,9 @@ export function authorizationServerMetadata(c: Context): Response {
   }
   return c.json({
     issuer,
-    authorization_endpoint: `${issuer}/api/auth/mcp/authorize`,
-    token_endpoint: `${issuer}/api/auth/mcp/token`,
-    registration_endpoint: `${issuer}/api/auth/mcp/register`,
+    authorization_endpoint: `${issuer}/api/auth/oauth2/authorize`,
+    token_endpoint: `${issuer}/api/auth/oauth2/token`,
+    registration_endpoint: `${issuer}/api/auth/oauth2/register`,
     code_challenge_methods_supported: ['S256'],
     scopes_supported: [...MCP_SCOPES],
     token_endpoint_auth_methods_supported: ['none'],

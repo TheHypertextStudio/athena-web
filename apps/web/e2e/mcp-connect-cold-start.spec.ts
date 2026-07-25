@@ -3,9 +3,10 @@
  * authorize request lands.
  *
  * @remarks
- * Regression coverage for a real production incident: Better Auth's `mcp()` plugin redirects an
- * unauthenticated visitor from its `/mcp/authorize` endpoint straight to `/sign-in`, appending the
- * original OAuth request's raw query string (not `?callbackURL=`). Docket's sign-in ceremony
+ * Regression coverage for a real production incident: Better Auth's `oauthProvider` plugin
+ * redirects an unauthenticated visitor from its `/oauth2/authorize` endpoint straight to
+ * `/sign-in`, appending the original OAuth request's raw query string (not `?callbackURL=`).
+ * Docket's sign-in ceremony
  * completes via `fetch()`, not a top-level navigation, so Better Auth's own server-side auto-resume
  * (a signed cookie + a global `hooks.after` middleware) never fires — nothing else in this suite
  * exercised that path, since `mcp-connect.spec.ts`'s interactive leg always runs in an
@@ -41,7 +42,7 @@ test('an unauthenticated MCP authorize request resumes to consent after sign-in,
 
   await page.goto(`${authorizePath}?${params.toString()}`);
 
-  // No session -> Better Auth's mcp() plugin bounces to sign-in with the raw OAuth query intact.
+  // No session -> Better Auth's oauthProvider plugin bounces to sign-in with the raw OAuth query intact.
   await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toBeVisible({
     timeout: TIMEOUTS.ceremony,
   });

@@ -272,7 +272,7 @@ describe('SignInPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
-      expect(assignments).toContain(`${origin}/api/auth/mcp/authorize${search}`);
+      expect(assignments).toContain(`${origin}/api/auth/oauth2/authorize${search}`);
     });
     expect(orgsGet).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
@@ -288,7 +288,7 @@ describe('SignInPage', () => {
     render(<SignInPage />);
 
     await waitFor(() => {
-      expect(assignments).toContain(`${origin}/api/auth/mcp/authorize${search}`);
+      expect(assignments).toContain(`${origin}/api/auth/oauth2/authorize${search}`);
     });
     expect(push).not.toHaveBeenCalled();
     expect(signInPasskey).not.toHaveBeenCalled();

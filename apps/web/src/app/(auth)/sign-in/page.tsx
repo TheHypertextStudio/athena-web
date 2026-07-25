@@ -52,7 +52,7 @@ function safeCallbackPath(): string | null {
  * The full same-origin URL to resume an in-flight MCP/OAuth authorization, or `null`.
  *
  * @remarks
- * Better Auth's `oidc-provider` plugin redirects an unauthenticated visitor here directly from
+ * Better Auth's `oauthProvider` plugin redirects an unauthenticated visitor here directly from
  * its own `/api/auth/oauth2/authorize` endpoint (see `loginPage` in `packages/auth`) - and does
  * so by appending the *original* OAuth request's raw query string verbatim (`response_type`,
  * `client_id`, `redirect_uri`, `scope`, `state`, …), not our `?callbackURL=` convention. That
@@ -67,20 +67,12 @@ function safeCallbackPath(): string | null {
  * query against the *same authorize endpoint*, now with a valid session, sidesteps that gap
  * entirely: Better Auth's server-side handler re-runs for real and issues its own correct
  * redirect to the consent screen (`/oauth/authorize?consent_code=…`).
- *
- * Which endpoint, precisely: Docket configures Better Auth's `mcp()` plugin (see
- * `packages/auth/src/auth-builder.ts`), which - despite internally constructing an `oidcProvider`
- * instance - only ever *registers* `/mcp/authorize` (`/api/auth/oauth2/authorize` does not
- * exist in this configuration; confirmed against the plugin's own endpoint list). The plain
- * `oidcProvider()` plugin (which *would* use `/oauth2/authorize`) is a mutually-exclusive
- * fallback for an environment with no `MCP_RESOURCE_URL` configured - not the case in any
- * environment Docket actually runs today - so `/mcp/authorize` is the one real target.
  */
 function oidcAuthorizeResumeUrl(): string | null {
   if (typeof window === 'undefined') return null;
   const params = new URLSearchParams(window.location.search);
   if (!params.has('response_type') || !params.has('client_id')) return null;
-  return `${window.location.origin}/api/auth/mcp/authorize${window.location.search}`;
+  return `${window.location.origin}/api/auth/oauth2/authorize${window.location.search}`;
 }
 
 /**

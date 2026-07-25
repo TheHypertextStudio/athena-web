@@ -8,9 +8,10 @@
  * the always-mounted `@better-auth/passkey` 1.6.14 plugin — email/password is removed, so
  * `account.password` is only ever written by social-provider linking. Social providers
  * (Google/GitHub/Linear) and account linking reuse the core `account` table (no new
- * tables). The `oidcProvider` + `mcp` plugins share three additive oauth tables
- * ({@link oauthApplication}, {@link oauthAccessToken}, {@link oauthConsent}), mounted
- * env-gated in `@docket/auth`. The `twoFactor` plugin adds the {@link twoFactor} table plus a
+ * tables). The `oauthProvider` plugin (Docket's OAuth 2.1 / MCP authorization server) adds
+ * five additive tables ({@link oauthClient}, {@link oauthAccessToken},
+ * {@link oauthRefreshToken}, {@link oauthConsent}, {@link jwks}), mounted env-gated in
+ * `@docket/auth`. The `twoFactor` plugin adds the {@link twoFactor} table plus a
  * `user.twoFactorEnabled` flag — used backup-codes-only for passwordless account recovery. sso /
  * scim / stripe better-auth plugins are not installed and are deliberately skipped. The drizzle property keys match Better Auth's model field
  * names (camelCase) so the adapter maps correctly; SQL column names are snake_case. IDs
@@ -21,6 +22,7 @@ import {
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -189,79 +191,137 @@ export const twoFactor = pgTable(
 );
 
 /**
- * An OAuth/OIDC client application registered with Docket as an OpenID Provider.
+ * An OAuth 2.1 client application registered with Docket as an OAuth/OIDC provider.
  *
  * @remarks
- * Shared by the Better Auth `oidcProvider` + `mcp` plugins (mounted env-gated in
- * `@docket/auth`). `clientId` is unique because the access-token + consent tables
- * reference it as their foreign key target. `userId` is the optional registering owner
- * (cascades from `user`). Mirrors the plugins' `oauthApplication` model exactly.
+ * Backs the Better Auth `oauthProvider` plugin (mounted env-gated in `@docket/auth`) — the
+ * successor to the deprecated `mcp()`/`oidcProvider()` pair this table used to serve (see
+ * `oauth_client_deprecated` for that generation's data, kept for one release as a rollback
+ * window). `clientId` is unique because the token/consent tables reference it as their
+ * foreign key target; `userId` is the optional registering owner (cascades from `user`).
+ * Captured field-for-field from the plugin's own `@better-auth/cli generate` output (not
+ * hand-transcribed from docs), including which fields the plugin models as native Postgres
+ * arrays (`scopes`, `redirectUris`, `contacts`, …) rather than joined strings.
  */
-export const oauthApplication = pgTable(
-  'oauth_application',
+export const oauthClient = pgTable(
+  'oauth_client',
   {
     id: text('id').primaryKey().$defaultFn(genId),
-    name: text('name').notNull(),
-    icon: text('icon'),
-    metadata: text('metadata'),
-    clientId: text('client_id').notNull().unique('oauth_application_client_id_uq'),
+    clientId: text('client_id').notNull().unique('oauth_client_client_id_uq'),
     clientSecret: text('client_secret'),
-    redirectUrls: text('redirect_urls').notNull(),
-    type: text('type').notNull(),
     disabled: boolean('disabled').default(false),
+    skipConsent: boolean('skip_consent'),
+    enableEndSession: boolean('enable_end_session'),
+    subjectType: text('subject_type'),
+    scopes: text('scopes').array(),
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
+    createdAt: timestamp('created_at'),
+    updatedAt: timestamp('updated_at'),
+    name: text('name'),
+    uri: text('uri'),
+    icon: text('icon'),
+    contacts: text('contacts').array(),
+    tos: text('tos'),
+    policy: text('policy'),
+    softwareId: text('software_id'),
+    softwareVersion: text('software_version'),
+    softwareStatement: text('software_statement'),
+    redirectUris: text('redirect_uris').array().notNull(),
+    postLogoutRedirectUris: text('post_logout_redirect_uris').array(),
+    tokenEndpointAuthMethod: text('token_endpoint_auth_method'),
+    grantTypes: text('grant_types').array(),
+    responseTypes: text('response_types').array(),
+    public: boolean('public'),
+    type: text('type'),
+    requirePKCE: boolean('require_pkce'),
+    referenceId: text('reference_id'),
+    metadata: jsonb('metadata'),
   },
-  (t) => [index('oauth_application_user_id_idx').on(t.userId)],
+  (t) => [index('oauth_client_user_id_idx').on(t.userId)],
 );
 
 /**
- * An OAuth/OIDC access + refresh token pair issued to an {@link oauthApplication}.
+ * An OAuth refresh token issued to an {@link oauthClient}.
  *
  * @remarks
- * Used by the `oidcProvider` + `mcp` plugins for bearer/token flows. `accessToken` and
- * `refreshToken` are each unique; `clientId` references {@link oauthApplication.clientId}
- * (its unique column) and `userId` references the resource owner. Mirrors the plugins'
- * `oauthAccessToken` model exactly.
+ * The `oauthProvider` plugin models refresh tokens as their own table — unlike the
+ * deprecated `mcp()`/`oidcProvider()` pair, whose refresh token lived as a field directly on
+ * the access-token row. `revoked` is a soft-revoke timestamp (the row survives revocation
+ * for audit/introspection), not a delete. Mirrors the plugin's `oauthRefreshToken` model
+ * exactly.
+ */
+export const oauthRefreshToken = pgTable(
+  'oauth_refresh_token',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    token: text('token').notNull().unique('oauth_refresh_token_token_uq'),
+    clientId: text('client_id')
+      .notNull()
+      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
+    sessionId: text('session_id').references(() => session.id, { onDelete: 'set null' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    referenceId: text('reference_id'),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at'),
+    revoked: timestamp('revoked'),
+    authTime: timestamp('auth_time'),
+    scopes: text('scopes').array().notNull(),
+  },
+  (t) => [
+    index('oauth_refresh_token_client_id_idx').on(t.clientId),
+    index('oauth_refresh_token_session_id_idx').on(t.sessionId),
+    index('oauth_refresh_token_user_id_idx').on(t.userId),
+  ],
+);
+
+/**
+ * An OAuth access token issued to an {@link oauthClient}, optionally tied to the
+ * {@link oauthRefreshToken} that minted it.
+ *
+ * @remarks
+ * Mirrors the `oauthProvider` plugin's `oauthAccessToken` model exactly. `token` is
+ * nullable: with the `jwt` plugin mounted (Docket's configuration — `oauthProvider`
+ * requires it unless `disableJwtPlugin` is set, which Docket does not set), the default
+ * access token is a self-contained, locally-JWT-verifiable token that is never written
+ * here at all; only an opaque-token issuance gets a row with `token` set.
  */
 export const oauthAccessToken = pgTable(
   'oauth_access_token',
   {
     id: text('id').primaryKey().$defaultFn(genId),
-    accessToken: text('access_token').notNull(),
-    refreshToken: text('refresh_token').notNull(),
-    accessTokenExpiresAt: timestamp('access_token_expires_at').notNull(),
-    refreshTokenExpiresAt: timestamp('refresh_token_expires_at').notNull(),
+    token: text('token').unique('oauth_access_token_token_uq'),
     clientId: text('client_id')
       .notNull()
-      .references(() => oauthApplication.clientId, { onDelete: 'cascade' }),
+      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
+    sessionId: text('session_id').references(() => session.id, { onDelete: 'set null' }),
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
-    scopes: text('scopes').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
+    referenceId: text('reference_id'),
+    refreshId: text('refresh_id').references(() => oauthRefreshToken.id, {
+      onDelete: 'cascade',
+    }),
+    expiresAt: timestamp('expires_at'),
+    createdAt: timestamp('created_at'),
+    scopes: text('scopes').array().notNull(),
   },
   (t) => [
-    uniqueIndex('oauth_access_token_access_token_uq').on(t.accessToken),
-    uniqueIndex('oauth_access_token_refresh_token_uq').on(t.refreshToken),
     index('oauth_access_token_client_id_idx').on(t.clientId),
+    index('oauth_access_token_session_id_idx').on(t.sessionId),
     index('oauth_access_token_user_id_idx').on(t.userId),
+    index('oauth_access_token_refresh_id_idx').on(t.refreshId),
   ],
 );
 
 /**
- * A user's recorded consent grant for an {@link oauthApplication}'s requested scopes.
+ * A user's recorded consent grant for an {@link oauthClient}'s requested scopes.
  *
  * @remarks
- * Written by the `oidcProvider` consent screen so a returning user skips re-prompting.
- * `clientId` references {@link oauthApplication.clientId}; `userId` references the
- * consenting `user`. Mirrors the plugins' `oauthConsent` model exactly.
+ * Written by the `oauthProvider` plugin's consent flow so a returning user with the same
+ * (client, scope) combination skips re-prompting. Mirrors the plugin's `oauthConsent` model
+ * exactly — notably `userId` is nullable (a `referenceId`-only grant, e.g. an
+ * organization-scoped consent, is possible) and `scopes` is a native array, not the
+ * space-joined string the deprecated plugins used.
  */
 export const oauthConsent = pgTable(
   'oauth_consent',
@@ -269,23 +329,37 @@ export const oauthConsent = pgTable(
     id: text('id').primaryKey().$defaultFn(genId),
     clientId: text('client_id')
       .notNull()
-      .references(() => oauthApplication.clientId, { onDelete: 'cascade' }),
-    userId: text('user_id')
-      .notNull()
-      .references(() => user.id, { onDelete: 'cascade' }),
-    scopes: text('scopes').notNull(),
-    consentGiven: boolean('consent_given').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-    updatedAt: timestamp('updated_at')
-      .notNull()
-      .defaultNow()
-      .$onUpdate(() => new Date()),
+      .references(() => oauthClient.clientId, { onDelete: 'cascade' }),
+    userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
+    referenceId: text('reference_id'),
+    scopes: text('scopes').array().notNull(),
+    createdAt: timestamp('created_at'),
+    updatedAt: timestamp('updated_at'),
   },
   (t) => [
     index('oauth_consent_client_id_idx').on(t.clientId),
     index('oauth_consent_user_id_idx').on(t.userId),
   ],
 );
+
+/**
+ * Signing keypairs for Better Auth's `jwt` plugin.
+ *
+ * @remarks
+ * New table this migration introduces — Docket's previous `mcp()`/`oidcProvider()`
+ * configuration never issued JWTs, so nothing existed here before. The `oauthProvider`
+ * plugin requires the `jwt` plugin (Docket does not set `disableJwtPlugin`) to issue and
+ * locally verify JWT-formatted OAuth access/id tokens. Docket never reads or writes this
+ * table directly — only Better Auth does, for key rotation and its `/jwks` discovery
+ * endpoint. Mirrors the plugin's `jwks` model exactly.
+ */
+export const jwks = pgTable('jwks', {
+  id: text('id').primaryKey().$defaultFn(genId),
+  publicKey: text('public_key').notNull(),
+  privateKey: text('private_key').notNull(),
+  createdAt: timestamp('created_at').notNull(),
+  expiresAt: timestamp('expires_at'),
+});
 
 /**
  * Better Auth's request rate-limit counter (one row per limiter key).

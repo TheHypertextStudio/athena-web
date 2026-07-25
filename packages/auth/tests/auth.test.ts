@@ -616,11 +616,12 @@ describe('auth config', () => {
     );
   });
 
-  it('mounts passkey + twoFactor + recoveryChallenge + mcp + nextCookies with placeholder env (passwordless baseline)', async () => {
+  it('mounts passkey + twoFactor + recoveryChallenge + jwt + oauth-provider + nextCookies with placeholder env (passwordless baseline)', async () => {
     // The live `auth` is built from the test env (optional SOCIAL gates unset) → no social
-    // providers/account-linking. The MCP AS/RS is core functionality, not deploy-specific
-    // config (see `@docket/env/api`'s derivation doc): it auto-derives from API_URL + WEB_URL,
-    // both of which are always required, so `mcp` (which bundles oidcProvider) is always on.
+    // providers/account-linking. The OAuth AS/RS is core functionality, not deploy-specific
+    // config (see `@docket/env/api`'s derivation doc): OIDC_LOGIN_PAGE_URL auto-derives from
+    // WEB_URL, always required, so `oauth-provider` (with its required `jwt` plugin) is
+    // always on.
     const { auth } = await import('../src/index');
     expect(auth.options.socialProviders).toBeUndefined();
     expect(auth.options.account).toBeUndefined();
@@ -630,7 +631,8 @@ describe('auth config', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
-      'mcp',
+      'jwt',
+      'oauth-provider',
       'next-cookies',
     ]);
   });
@@ -883,7 +885,8 @@ describe('buildAuthOptions env-gating', () => {
     // Sensitive surfaces get their own tighter ceilings.
     const rules = opts.rateLimit?.customRules ?? {};
     expect(rules['/sign-in/passkey']).toEqual({ window: 60, max: 20 });
-    expect(rules['/mcp/token']).toEqual({ window: 60, max: 30 });
+    expect(rules['/oauth2/token']).toEqual({ window: 60, max: 30 });
+    expect(rules['/oauth2/register']).toEqual({ window: 60, max: 5 });
   });
 
   it('configures change-email to send the confirmation to the CURRENT address, not the new one', async () => {
@@ -1153,41 +1156,33 @@ describe('buildAuthOptions env-gating', () => {
     });
   });
 
-  it('mounts oidcProvider (before nextCookies) when OIDC_LOGIN_PAGE_URL is real but MCP_RESOURCE_URL is not', async () => {
+  it('mounts jwt + oauth-provider (before nextCookies) when OIDC_LOGIN_PAGE_URL is real but MCP_RESOURCE_URL is not', async () => {
+    // oauthProvider() absorbs MCP support natively (no separate mcp() plugin) - the plugin set
+    // mounted is identical whether or not MCP_RESOURCE_URL is set; only the internal
+    // `validAudiences` option differs (not inspectable from the plugin id list).
     const { buildAuthOptions } = await import('../src/index');
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    let opts!: ReturnType<typeof buildAuthOptions>;
-    try {
-      opts = buildAuthOptions(
-        {
-          ...baseEnv,
-          OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
-        },
-        MAILER_DEPS,
-      );
-    } finally {
-      warn.mockRestore();
-      error.mockRestore();
-    }
-    // passkey + oidcProvider + nextCookies (no mcp).
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
+      },
+      MAILER_DEPS,
+    );
     const ids = (opts.plugins ?? []).map((p) => p.id);
     expect(ids).toEqual([
       'passkey',
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
-      'oidc-provider',
+      'jwt',
+      'oauth-provider',
       'next-cookies',
     ]);
-    expect(ids).not.toContain('mcp');
     // nextCookies MUST remain last.
     expect(ids[ids.length - 1]).toBe('next-cookies');
   });
 
-  it('mounts mcp ONLY (before nextCookies) when both OIDC + MCP_RESOURCE_URL are real', async () => {
-    // `mcp` internally bundles `oidcProvider`, so the standalone provider is NOT mounted
-    // separately — passkey + mcp + nextCookies is the full set.
+  it('mounts jwt + oauth-provider (before nextCookies) when both OIDC + MCP_RESOURCE_URL are real', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions(
       {
@@ -1203,11 +1198,19 @@ describe('buildAuthOptions env-gating', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
-      'mcp',
+      'jwt',
+      'oauth-provider',
       'next-cookies',
     ]);
-    expect(ids).not.toContain('oidc-provider');
     expect(ids[ids.length - 1]).toBe('next-cookies');
+  });
+
+  it('does not mount jwt/oauth-provider when OIDC_LOGIN_PAGE_URL is not set', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
+    const ids = (opts.plugins ?? []).map((p) => p.id);
+    expect(ids).not.toContain('jwt');
+    expect(ids).not.toContain('oauth-provider');
   });
 
   it('mounts oAuthProxy (before nextCookies) only when both OAUTH_PROXY_* are real', async () => {

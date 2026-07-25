@@ -39,6 +39,7 @@ import {
   initiativeProject,
   integration,
   invitation,
+  jwks,
   label,
   lifecycleHold,
   milestone,
@@ -49,8 +50,9 @@ import {
   notificationPreference,
   notificationRecipient,
   oauthAccessToken,
-  oauthApplication,
+  oauthClient,
   oauthConsent,
+  oauthRefreshToken,
   operatorAuditEvent,
   organization,
   passkey,
@@ -216,9 +218,11 @@ describe('schema foreign-key references (covers every `.references(() => …)` c
     account,
     verification,
     passkey,
-    oauthApplication,
+    oauthClient,
     oauthAccessToken,
+    oauthRefreshToken,
     oauthConsent,
+    jwks,
     hub,
     organization,
     actor,
@@ -352,18 +356,31 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
         })
         .returning()
     )[0]!.id;
-    // oidc/mcp oauth island: application → access-token + consent (FK on clientId).
+    // oauthProvider island: client → refresh-token → access-token, + consent (FK on clientId;
+    // access-token's refreshId FKs the refresh-token row).
     const oauthClientId = 'docket-mcp-client';
-    ids['oauthApplication'] = (
+    ids['oauthClient'] = (
       await db
-        .insert(oauthApplication)
+        .insert(oauthClient)
         .values({
           name: 'Docket MCP',
           clientId: oauthClientId,
           clientSecret: 'sec',
-          redirectUrls: 'https://docket.example/callback',
+          redirectUris: ['https://docket.example/callback'],
           type: 'web',
           userId: ids['user'],
+        })
+        .returning()
+    )[0]!.id;
+    ids['oauthRefreshToken'] = (
+      await db
+        .insert(oauthRefreshToken)
+        .values({
+          token: 'rt-1',
+          clientId: oauthClientId,
+          userId: ids['user'],
+          expiresAt: new Date(Date.now() + 8.64e7),
+          scopes: ['openid', 'profile'],
         })
         .returning()
     )[0]!.id;
@@ -371,13 +388,12 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       await db
         .insert(oauthAccessToken)
         .values({
-          accessToken: 'at-1',
-          refreshToken: 'rt-1',
-          accessTokenExpiresAt: new Date(Date.now() + 3.6e6),
-          refreshTokenExpiresAt: new Date(Date.now() + 8.64e7),
+          token: 'at-1',
           clientId: oauthClientId,
           userId: ids['user'],
-          scopes: 'openid profile',
+          refreshId: ids['oauthRefreshToken'],
+          expiresAt: new Date(Date.now() + 3.6e6),
+          scopes: ['openid', 'profile'],
         })
         .returning()
     )[0]!.id;
@@ -387,9 +403,14 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
         .values({
           clientId: oauthClientId,
           userId: ids['user'],
-          scopes: 'openid profile',
-          consentGiven: true,
+          scopes: ['openid', 'profile'],
         })
+        .returning()
+    )[0]!.id;
+    ids['jwks'] = (
+      await db
+        .insert(jwks)
+        .values({ publicKey: 'pub-1', privateKey: 'priv-1', createdAt: new Date() })
         .returning()
     )[0]!.id;
 
@@ -742,18 +763,22 @@ describe('schema inserts + updates (covers $defaultFn + $onUpdate callbacks)', (
       .update(verification)
       .set({ value: 'v2' })
       .where(eq(verification.id, ids['verification']!));
-    // oidc/mcp oauth tables ($onUpdate on updated_at).
+    // oauthProvider tables.
     await db
-      .update(oauthApplication)
+      .update(oauthClient)
       .set({ name: 'Docket MCP v2' })
-      .where(eq(oauthApplication.id, ids['oauthApplication']!));
+      .where(eq(oauthClient.id, ids['oauthClient']!));
+    await db
+      .update(oauthRefreshToken)
+      .set({ revoked: new Date() })
+      .where(eq(oauthRefreshToken.id, ids['oauthRefreshToken']!));
     await db
       .update(oauthAccessToken)
-      .set({ scopes: 'openid' })
+      .set({ scopes: ['openid'] })
       .where(eq(oauthAccessToken.id, ids['oauthAccessToken']!));
     await db
       .update(oauthConsent)
-      .set({ consentGiven: false })
+      .set({ scopes: ['openid'] })
       .where(eq(oauthConsent.id, ids['oauthConsent']!));
     await db.update(role).set({ name: 'Owner v2' }).where(eq(role.id, ids['role']!));
     await db

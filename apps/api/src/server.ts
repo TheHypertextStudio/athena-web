@@ -22,7 +22,6 @@ import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
 import { cimdAuthorizeMiddleware } from './mcp/cimd';
-import { mcpConsentGuard } from './mcp/consent-guard';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import calendarWebhook from './routes/calendar-webhook';
@@ -57,13 +56,14 @@ server.use(
 server.use('*', sessionMiddleware);
 // CIMD preflight (mcp-surface.md §2.6): Better Auth resolves authorize clients by exact
 // `client_id`, so URL-form MCP client ids must be fetched/validated/upserted into the OAuth
-// application table BEFORE the authorize handler runs. Registered ahead of `/api/auth/*` so
-// it wraps only the MCP authorize route; non-URL client ids pass straight through.
-server.use('/api/auth/mcp/authorize', cimdAuthorizeMiddleware);
-// Consent gate (mcp-surface.md §2.2): Better Auth's mcp() authorize only shows the consent
-// page when the client sends `prompt=consent`; this guard 302s consent-less authorize
-// requests back with it set unless a stored oauth_consent already covers the scopes.
-server.use('/api/auth/mcp/authorize', mcpConsentGuard);
+// client table BEFORE the authorize handler runs. Registered ahead of `/api/auth/*` so it
+// wraps only the OAuth authorize route; non-URL client ids pass straight through.
+//
+// No separate consent-forcing guard is needed here (unlike the deprecated `mcp()` plugin,
+// which only routed to the consent page when the client sent `prompt=consent`):
+// `oauthProvider()`'s authorize handler checks for prior consent by default and always
+// prompts when none covers the requested scopes.
+server.use('/api/auth/oauth2/authorize', cimdAuthorizeMiddleware);
 server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC

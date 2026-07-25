@@ -4,7 +4,7 @@
  * OAuth 2.1 consent page — the user-facing gate for MCP client authorization.
  *
  * @remarks
- * Better Auth's `mcp()` / `oidcProvider()` plugin redirects authenticated users here when
+ * Better Auth's `oauthProvider()` plugin redirects authenticated users here when
  * an external MCP client (Claude Desktop, Cursor, …) requests scopes. The URL carries three
  * query params set by Better Auth's authorize handler (authorize.mjs `consentPage` branch):
  *

@@ -10,6 +10,7 @@
 import { env } from '@docket/env/api';
 import { buildMailerFromEnv } from '@docket/mail';
 import { betterAuth } from 'better-auth';
+import { verifyAccessToken } from 'better-auth/oauth2';
 
 import { buildAuthOptions } from './auth-builder';
 
@@ -19,6 +20,13 @@ export {
   hasRecoveryCodes,
   type RecoveryCodeStatus,
 } from './backup-codes';
+/**
+ * Locally verify an OAuth Bearer access token (JWT, `jose`-based signature check against
+ * the AS's own `/jwks` endpoint — no DB round-trip). Re-exported so callers outside this
+ * package (the MCP resource server in `apps/api`) never import `better-auth` directly —
+ * `@docket/auth` stays the single boundary around the Better Auth configuration.
+ */
+export { verifyAccessToken };
 export { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
 export type { AuthDeps, AuthEnv, PasskeyUserAdapter } from './auth-builder';
 export {

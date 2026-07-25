@@ -112,7 +112,7 @@ const JOBS: readonly CronJob[] = [
   {
     name: 'docket-expired-sessions-sweep',
     path: '/internal/cron/expired-sessions-sweep',
-    schedule: '0 4 * * *',
+    schedule: '0 * * * *',
     description:
       'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
   },

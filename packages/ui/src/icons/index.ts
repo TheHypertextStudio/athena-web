@@ -35,6 +35,7 @@ export { default as Command } from '@mui/icons-material/KeyboardCommandKey';
 export { default as CornerDownLeft } from '@mui/icons-material/SubdirectoryArrowLeft';
 export { default as CreditCard } from '@mui/icons-material/CreditCardOutlined';
 export { default as Download } from '@mui/icons-material/FileDownloadOutlined';
+export { default as Edit } from '@mui/icons-material/EditOutlined';
 export { default as Ellipsis } from '@mui/icons-material/MoreHoriz';
 export { default as ExpandMoreRounded } from '@mui/icons-material/ExpandMoreRounded';
 export { default as Filter } from '@mui/icons-material/FilterList';

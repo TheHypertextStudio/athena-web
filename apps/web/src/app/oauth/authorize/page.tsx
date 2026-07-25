@@ -28,7 +28,11 @@
  * Unauthenticated users are redirected to `/sign-in` with the current search params preserved
  * so Better Auth can resume the flow after the user signs in.
  */
+import { Cable, Edit, Link as LinkIcon, Sparkles, TaskAlt } from '@docket/ui/icons';
 import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   Button,
   Card,
   CardContent,
@@ -36,30 +40,38 @@ import {
   CardHeader,
   CardTitle,
 } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { type JSX, Suspense, useCallback, useEffect, useState } from 'react';
+import { type ComponentType, type JSX, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { signInReturnPath } from '@/components/app-shell-utils';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 
-/** Human-readable label + description for each Docket MCP scope. */
-const SCOPE_LABELS: Record<string, { label: string; detail: string }> = {
+/** Human-readable label, description, and icon for each Docket MCP scope. */
+const SCOPE_INFO: Record<
+  string,
+  { label: string; detail: string; icon: ComponentType<{ className?: string }> }
+> = {
   'work:read': {
     label: 'Read your work',
     detail: 'View your tasks, projects, programs, initiatives, and cycles.',
+    icon: TaskAlt,
   },
   'work:write': {
     label: 'Create and update work',
     detail: 'Create tasks, update projects, post comments and status updates.',
+    icon: Edit,
   },
   'agents:run': {
     label: 'Manage agent sessions',
     detail: 'Trigger agent sessions, approve or reject proposed actions.',
+    icon: Sparkles,
   },
   'connectors:link': {
     label: 'Link external items',
     detail: 'Connect external tools and link items from integrated services.',
+    icon: Cable,
   },
 };
 
@@ -84,6 +96,57 @@ function clientDisplayName(clientId: string, metadata: { name: string } | null):
   } catch {
     return clientId;
   }
+}
+
+/** Up to two initials for a display name, used as the avatar fallback (e.g. "Claude" → "C"). */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? '';
+  const second = words.length > 1 ? (words[words.length - 1]?.[0] ?? '') : '';
+  return `${first}${second}`.toUpperCase() || '?';
+}
+
+/** The centered card chrome every state of this screen shares: wordmark + warm backdrop. */
+function ConsentShell({ children }: { children: JSX.Element }): JSX.Element {
+  return (
+    <main className="dark:bg-surface flex min-h-screen flex-col items-center justify-center gap-8 bg-[oklch(0.985_0.008_85)] px-6 py-12">
+      <Link
+        href="/"
+        className="text-foreground wonk text-3xl font-semibold tracking-tight"
+        style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
+      >
+        Docket
+      </Link>
+      {children}
+    </main>
+  );
+}
+
+/** The two-mark "X connects to Docket" hero: the requesting client's icon, linked to Docket's. */
+function ConnectionHero({
+  displayName,
+  clientIcon,
+}: {
+  displayName: string;
+  clientIcon: string | null | undefined;
+}): JSX.Element {
+  return (
+    <div className="mb-2 flex items-center justify-center gap-3" aria-hidden="true">
+      <Avatar className="border-outline-variant size-12 border">
+        {clientIcon ? <AvatarImage src={clientIcon} alt="" /> : null}
+        <AvatarFallback className="text-body-medium font-medium">
+          {initials(displayName)}
+        </AvatarFallback>
+      </Avatar>
+      <LinkIcon className="text-on-surface-variant size-5" />
+      <span
+        className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-full text-lg font-semibold"
+        style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
+      >
+        D
+      </span>
+    </div>
+  );
 }
 
 /** The inner consent page that reads searchParams and renders the form. */
@@ -154,22 +217,22 @@ function ConsentPage(): JSX.Element {
 
   if (sessionPending) {
     return (
-      <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
+      <ConsentShell>
         <div className="text-on-surface-variant text-body-medium">Loading…</div>
-      </main>
+      </ConsentShell>
     );
   }
 
   if (!session) {
     // The useEffect redirect is running; show nothing to avoid flash.
-    return <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12" />;
+    return <ConsentShell>{<></>}</ConsentShell>;
   }
 
   if (!consentCode) {
     return (
-      <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
+      <ConsentShell>
         <Card className="w-full max-w-sm">
-          <CardHeader className="text-center">
+          <CardHeader className="items-center text-center">
             <CardTitle>Invalid request</CardTitle>
             <CardDescription>
               This authorization link is missing required parameters. Please try connecting your app
@@ -177,16 +240,17 @@ function ConsentPage(): JSX.Element {
             </CardDescription>
           </CardHeader>
         </Card>
-      </main>
+      </ConsentShell>
     );
   }
 
   const displayName = clientDisplayName(clientId, clientMeta);
 
   return (
-    <main className="bg-surface flex min-h-screen items-center justify-center px-6 py-12">
+    <ConsentShell>
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
+        <CardHeader className="items-center text-center">
+          <ConnectionHero displayName={displayName} clientIcon={clientMeta?.icon} />
           <CardTitle className="text-title-large">Authorize access</CardTitle>
           <CardDescription>
             <span className="text-on-surface font-medium">{displayName}</span> wants permission to
@@ -203,15 +267,24 @@ function ConsentPage(): JSX.Element {
               </p>
               <ul className="flex flex-col gap-3">
                 {requestedScopes.map((scope) => {
-                  const info = SCOPE_LABELS[scope];
+                  const info = SCOPE_INFO[scope];
+                  const Icon = info?.icon ?? Cable;
                   return (
-                    <li key={scope} className="flex flex-col gap-0.5">
-                      <span className="text-on-surface text-body-medium font-medium">
-                        {info?.label ?? scope}
+                    <li key={scope} className="flex items-start gap-3">
+                      <span
+                        className="bg-surface-container-high text-on-surface-variant mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
+                        aria-hidden="true"
+                      >
+                        <Icon className="size-4" />
                       </span>
-                      {info?.detail ? (
-                        <span className="text-on-surface-variant text-xs">{info.detail}</span>
-                      ) : null}
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-on-surface text-body-medium font-medium">
+                          {info?.label ?? scope}
+                        </span>
+                        {info?.detail ? (
+                          <span className="text-on-surface-variant text-xs">{info.detail}</span>
+                        ) : null}
+                      </div>
                     </li>
                   );
                 })}
@@ -252,7 +325,7 @@ function ConsentPage(): JSX.Element {
           </p>
         </CardContent>
       </Card>
-    </main>
+    </ConsentShell>
   );
 }
 

@@ -37,7 +37,7 @@ const SESSION_COOKIE_ERROR = 'We could not finish signing you in. Please try aga
  * The safe `?callbackURL=` return-to path, or `null`.
  *
  * @remarks
- * A mid-session expiry redirect (see `providers.tsx`) sends the user to
+ * A mid-session expiry redirect (see `authentication-interlock.tsx`) sends the user to
  * `/sign-in?callbackURL=<where they were>`; honoring it lands them back on that surface after
  * re-authenticating instead of always dumping them at {@link HOME_DESTINATION}. Open-redirect
  * safety comes from {@link safeSameOriginPath}, the one implementation every auth-adjacent return

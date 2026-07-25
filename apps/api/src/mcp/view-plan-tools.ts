@@ -7,10 +7,10 @@ import type { McpContext } from './auth';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
-import { runEntityQuery, searchEntities } from './tools-shared';
+import { orgIdParam, runEntityQuery, searchEntities } from './tools-shared';
 
 const runViewInputSchema = {
-  orgId: z.string().min(1),
+  orgId: orgIdParam,
   entity: z.enum(['task', 'project', 'program', 'initiative']),
   limit: z.number().int().min(1).max(200).default(50),
   cursor: z.string().optional(),
@@ -73,7 +73,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       title: 'Search',
       description: "Fused title search across the caller's tasks, projects, and programs.",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         query: z.string().min(1),
         limit: z.number().int().min(1).max(50).default(20),
         cursor: z.string().optional(),
@@ -110,7 +110,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       description:
         "Pull a task into the caller's Hub Daily Plan for a date (Hub-scoped, cross-org).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         taskId: z.string().min(1),
         date: z.iso.date(),
       },

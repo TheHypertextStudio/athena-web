@@ -17,7 +17,7 @@ import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { assertRefInOrg } from './tools-shared';
+import { assertRefInOrg, orgIdParam } from './tools-shared';
 
 /** Register Initiative and Program mutation tools on `server`. */
 export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): void {
@@ -28,7 +28,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       description:
         'Create an ongoing program (status active/paused/archived; programs never complete).',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         name: z.string().min(1),
         description: z.string().optional(),
         ownerId: z.string().optional(),
@@ -77,7 +77,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       description:
         'Create a cross-cutting theme (associates with programs/projects; holds no work).',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         name: z.string().min(1),
         summary: z.string().max(280).optional(),
         description: z.string().optional(),
@@ -146,7 +146,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       title: 'Update initiative',
       description: 'Update an Initiative document or its independently owned strategic state.',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         initiativeId: z.string().min(1),
         name: z.string().min(1).optional(),
         summary: z.string().max(280).optional(),
@@ -245,7 +245,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       title: 'Link initiative',
       description: 'Link or unlink an initiative to/from a project or program (m2m theme link).',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         initiativeId: z.string().min(1),
         targetType: z.enum(['project', 'program']),
         targetId: z.string().min(1),

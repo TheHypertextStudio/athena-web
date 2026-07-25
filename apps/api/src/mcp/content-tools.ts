@@ -8,7 +8,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { subjectTable } from './tools-shared';
+import { orgIdParam, subjectTable } from './tools-shared';
 
 /** Register add_comment, post_update, link_external on `server`. */
 export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
@@ -18,7 +18,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
       title: 'Add comment',
       description: "Post a comment on a task/project/program/initiative (the caller's own actor).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         subjectType: z.enum(['task', 'project', 'program', 'initiative']),
         subjectId: z.string().min(1),
         body: z.string().min(1),
@@ -104,7 +104,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
       description:
         "Post a status update on a project/program/initiative; the latest health also sets the subject's current health.",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         subjectType: z.enum(['project', 'program', 'initiative']),
         subjectId: z.string().min(1),
         body: z.string().min(1),
@@ -165,7 +165,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
       description:
         'Materialize an external item as a linked task carrying its provenance, idempotently.',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         integrationId: z.string().min(1),
         teamId: z.string().min(1),
         title: z.string().min(1),

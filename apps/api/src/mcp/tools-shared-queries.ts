@@ -11,6 +11,21 @@ import { createCursorCodec } from './cursors';
 export const subjectTable = { project, program, initiative } as const;
 
 /**
+ * The `orgId` parameter every org-scoped MCP tool takes.
+ *
+ * @remarks
+ * A caller with no prior context (a fresh conversation, a first tool call) has no way to know
+ * an org id ahead of time - the description points function-calling models directly at the
+ * `docket://orgs` resource instead of leaving them to guess a slug or name as the id.
+ */
+export const orgIdParam = z
+  .string()
+  .min(1)
+  .describe(
+    "The organization id. If you don't already have it, read the docket://orgs resource first — it lists the organizations the caller belongs to.",
+  );
+
+/**
  * Validate a workflow-state transition for a task against its team's `workflow_states`.
  *
  * @throws {NotFoundError} When the team is missing.

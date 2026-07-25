@@ -2,6 +2,7 @@ export type { ViewItem } from './tools-shared-queries';
 export {
   assertRefInOrg,
   loadTask,
+  orgIdParam,
   resolveStateTransition,
   runEntityQuery,
   searchEntities,

@@ -7,7 +7,7 @@ import { NotFoundError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { assertRefInOrg, loadTask, resolveStateTransition } from './tools-shared';
+import { assertRefInOrg, loadTask, orgIdParam, resolveStateTransition } from './tools-shared';
 
 /** Register assign_task, set_task_delegate, set_task_state, add_subtask on `server`. */
 export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): void {
@@ -17,7 +17,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
       title: 'Assign task',
       description: "Set or clear a task's assignee (pass a null assigneeId to unassign).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         taskId: z.string().min(1),
         assigneeId: z.string().nullable(),
       },
@@ -61,7 +61,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
       description:
         'Hand the doing of a task to an agent while ownership stays (pass null to clear).',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         taskId: z.string().min(1),
         delegateId: z.string().nullable(),
       },
@@ -102,7 +102,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
       description:
         "Transition a task to a workflow state (validated against the team's workflow_states).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         taskId: z.string().min(1),
         state: z.string().min(1),
       },
@@ -147,7 +147,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
       title: 'Add subtask',
       description: "Create a subtask under a parent task (inherits the parent's team + project).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         parentTaskId: z.string().min(1),
         title: z.string().min(1),
       },

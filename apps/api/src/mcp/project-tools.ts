@@ -8,7 +8,7 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { assertRefInOrg } from './tools-shared';
+import { assertRefInOrg, orgIdParam } from './tools-shared';
 
 /** Register create_project and update_project on `server`. */
 export function registerProjectTools(server: McpRegistrar, ctx: McpContext): void {
@@ -18,7 +18,7 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
       title: 'Create project',
       description: 'Create a project within an organization.',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         name: z.string().min(1),
         description: z.string().optional(),
         leadId: z.string().optional(),
@@ -69,7 +69,7 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
       title: 'Update project',
       description: 'Partially update a project (name, description, status, lead, dates).',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         projectId: z.string().min(1),
         name: z.string().min(1).optional(),
         description: z.string().optional(),

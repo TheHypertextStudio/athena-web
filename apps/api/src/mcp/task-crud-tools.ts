@@ -8,7 +8,7 @@ import { NotFoundError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { assertRefInOrg, loadTask, resolveStateTransition } from './tools-shared';
+import { assertRefInOrg, loadTask, orgIdParam, resolveStateTransition } from './tools-shared';
 
 /** Register create_task, update_task, move_task on `server`. */
 export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): void {
@@ -19,7 +19,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
       description:
         "Create a task in an organization (state defaults to the team's first workflow state).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         teamId: z.string().min(1),
         title: z.string().min(1),
         description: z.string().optional(),
@@ -97,7 +97,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
       title: 'Update task',
       description: "Update a task's fields (title, description, state, priority, due date).",
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         taskId: z.string().min(1),
         title: z.string().min(1).optional(),
         description: z.string().optional(),
@@ -164,7 +164,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
       title: 'Move task',
       description: 'Reparent a task onto a different team and/or project.',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         taskId: z.string().min(1),
         teamId: z.string().optional(),
         projectId: z.string().nullable().optional(),

@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { CycleError, NotFoundError, ValidationError } from '../error';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { loadTask, wouldCreateCycle } from './tools-shared';
+import { loadTask, orgIdParam, wouldCreateCycle } from './tools-shared';
 
 /** Register add_task_dependency and remove_task_dependency on `server`. */
 export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): void {
@@ -17,7 +17,7 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
       description:
         'Add a directed blocks edge (blocking → blocked); cross-project, acyclic, no self-loops.',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         blockingTaskId: z.string().min(1),
         blockedTaskId: z.string().min(1),
       },
@@ -88,7 +88,7 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
       title: 'Remove task dependency',
       description: 'Drop a blocks edge between two tasks (removable from either endpoint).',
       inputSchema: {
-        orgId: z.string().min(1),
+        orgId: orgIdParam,
         blockingTaskId: z.string().min(1),
         blockedTaskId: z.string().min(1),
       },

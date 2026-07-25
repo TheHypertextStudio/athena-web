@@ -126,9 +126,14 @@ describe('Initiative visual contract', () => {
 
   it('separates the page header, attention surface, and roster with grouped spacing', () => {
     const overview = source(overviewPath);
-    // The container measure + rhythm now lives once in the shared layout; the page adopts
-    // ListPageLayout rather than restating the utility string.
-    expect(source(pageLayoutPath)).toContain('max-w-7xl flex-col gap-5');
+    // The container measure + rhythm still live once in the shared layout; the page adopts
+    // ListPageLayout rather than restating the utility string. Two things have become conditional
+    // since: the rhythm is a container-query step (a phone gives up gutter and gap so the surface's
+    // own content keeps the width), and the reading measure applies only to *document* pages — a
+    // canvas surface fills instead. Both are still declared exactly once, here.
+    expect(source(pageLayoutPath)).toContain('flex w-full flex-col gap-4');
+    expect(source(pageLayoutPath)).toContain('@2xl:gap-5');
+    expect(source(pageLayoutPath)).toContain("'max-w-7xl'");
     expect(overview).toContain('<ListPageLayout');
     expect(overview).toContain('bg-surface-container-low mb-2 flex flex-col rounded-xl p-4');
     expect(overview).not.toContain('max-w-7xl flex-col gap-6');

@@ -89,6 +89,70 @@ export interface ViewState {
 /** The empty starting view state (no filters / grouping / sort). */
 export const EMPTY_VIEW_STATE: ViewState = { filters: [], groupBy: null, sort: [] };
 
+/**
+ * The geometry token a display option is allowed to affect.
+ *
+ * @remarks
+ * Timeline rendering keeps three dimensions deliberately independent — the uniform row track, the
+ * visual bar drawn inside it, and the (larger) pointer target around that bar. Declaring which one
+ * an option moves is what stops a new toggle from silently re-coupling them: an option tagged
+ * `bar` may never change row height, and an option tagged `row` changes it for *every* row at
+ * once. Heterogeneous row heights within a single render are not representable by design.
+ */
+export type DisplayGeometryToken = 'row' | 'bar' | 'axis';
+
+/** The time-axis granularity a temporal lens renders at; `auto` derives it from the visible span. */
+export type ViewScale = 'auto' | 'day' | 'week' | 'month' | 'quarter';
+
+/** Row density — the only display option permitted to change row height. */
+export type ViewDensity = 'comfortable' | 'compact';
+
+/**
+ * Presentation toggles that change how rows are *drawn*, not which rows are shown.
+ *
+ * @remarks
+ * Deliberately separate from {@link ViewState}: that models the **query** (which rows, in what
+ * order, bucketed how) and is what saved views persist. This models **presentation**, which is a
+ * per-viewer preference rather than part of a shared view definition. Both are persisted to the
+ * URL by the same codec so a configured lens stays shareable and reload-stable, but neither
+ * concern leaks into the other.
+ *
+ * Non-temporal lenses ignore the options that do not apply to them; an option is never
+ * interpreted differently by different lenses.
+ */
+export interface ViewDisplayState {
+  /** Row density. Affects the `row` token — i.e. the uniform row height, for every row at once. */
+  density: ViewDensity;
+  /** Whether bars carry a completion fill. Affects the `bar` token only. */
+  progress: boolean;
+  /** Whether dated checkpoint markers are drawn. Affects the `bar` token only. */
+  markers: boolean;
+  /** The requested time-axis granularity. Affects the `axis` token only. */
+  scale: ViewScale;
+}
+
+/**
+ * Which geometry token each display option is permitted to move.
+ *
+ * @remarks
+ * Exhaustive over {@link ViewDisplayState} by construction, so adding an option without declaring
+ * its token is a type error rather than a silent re-coupling of the geometry model.
+ */
+export const DISPLAY_GEOMETRY_TOKEN: Record<keyof ViewDisplayState, DisplayGeometryToken> = {
+  density: 'row',
+  progress: 'bar',
+  markers: 'bar',
+  scale: 'axis',
+};
+
+/** The default presentation: comfortable rows, progress and markers shown, auto-scaled axis. */
+export const DEFAULT_VIEW_DISPLAY: ViewDisplayState = {
+  density: 'comfortable',
+  progress: true,
+  markers: true,
+  scale: 'auto',
+};
+
 /** One choosable value for an enum/relation field (a stable id + its display label). */
 export interface FieldOption {
   /** The stored value (an enum value, or an entity id). */

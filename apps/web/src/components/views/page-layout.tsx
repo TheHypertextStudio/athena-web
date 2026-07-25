@@ -23,6 +23,16 @@ export interface PageContainerProps {
   className?: string;
   /** The landmark element to render — `main` for a route's primary content (the default). */
   as?: 'main' | 'div';
+  /**
+   * Let the page fill the viewport instead of being a centred, measured document.
+   *
+   * @remarks
+   * A list is a document: it wants a comfortable reading measure and grows downward. A canvas — a
+   * timeline, a graph — is the opposite: every pixel of width is more time on screen and every
+   * pixel of height is another row, so capping it at a reading measure wastes the display. In fill
+   * mode the container drops `max-w-7xl`, takes the full height, and lets its last child flex.
+   */
+  fill?: boolean;
 }
 
 /**
@@ -37,14 +47,18 @@ export function PageContainer({
   children,
   className,
   as = 'main',
+  fill = false,
 }: PageContainerProps): JSX.Element {
   const Element = as;
   return (
     <Element
       className={cn(
         // Symmetric, minimal padding so the page content starts near the top and reads with even
-        // margins on every side.
-        'mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8',
+        // margins on every side. The narrow step is deliberately tighter than the rest: on a phone
+        // the content container is the scarce resource, and 16px of gutter on each side plus a
+        // card's own inset was costing a tenth of the usable width before any content was drawn.
+        'mx-auto flex w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8',
+        fill ? 'h-full min-h-0' : 'max-w-7xl',
         className,
       )}
     >
@@ -96,9 +110,20 @@ export function PageTitle({ children, className }: SlotProps): JSX.Element {
   );
 }
 
-/** The one-line description under a {@link PageTitle}. */
+/**
+ * The one-line description under a {@link PageTitle}.
+ *
+ * @remarks
+ * Hidden on narrow containers. A subtitle is orientation for a first-time visitor, and on a phone
+ * that orientation costs two wrapped lines of the very space the surface's actual content needs —
+ * a poor trade on every visit after the first.
+ */
 export function PageSubtitle({ children, className }: SlotProps): JSX.Element {
-  return <p className={cn('text-on-surface-variant mt-1 text-sm', className)}>{children}</p>;
+  return (
+    <p className={cn('text-on-surface-variant mt-1 hidden text-sm @2xl:block', className)}>
+      {children}
+    </p>
+  );
 }
 
 /** Props for {@link ListPageLayout}. */
@@ -113,6 +138,13 @@ export interface ListPageLayoutProps {
   toolbar?: ReactNode;
   /** The page body: the list itself plus its loading / empty / error states. */
   children: ReactNode;
+  /**
+   * Render as a full-bleed, full-height canvas rather than a centred document.
+   *
+   * @remarks
+   * Set by surfaces whose content is a chart rather than prose — see {@link PageContainerProps.fill}.
+   */
+  fill?: boolean;
 }
 
 /**
@@ -131,9 +163,10 @@ export function ListPageLayout({
   actions,
   toolbar,
   children,
+  fill = false,
 }: ListPageLayoutProps): JSX.Element {
   return (
-    <PageContainer>
+    <PageContainer fill={fill}>
       <PageHeader>
         <PageHeading>
           <PageTitle>{title}</PageTitle>
@@ -142,7 +175,7 @@ export function ListPageLayout({
         {actions}
       </PageHeader>
       {toolbar}
-      {children}
+      {fill ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : children}
     </PageContainer>
   );
 }

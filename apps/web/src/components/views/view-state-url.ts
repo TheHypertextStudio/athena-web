@@ -22,8 +22,12 @@
  * are preserved by the hook, so persisting view state never clobbers other URL state.
  */
 import {
+  DEFAULT_VIEW_DISPLAY,
   type FilterOperator,
+  type ViewDensity,
+  type ViewDisplayState,
   type ViewFilterTerm,
+  type ViewScale,
   type ViewSortTerm,
   type ViewState,
 } from './field-catalog';
@@ -34,9 +38,16 @@ export const FILTER_PARAM = 'filter';
 export const GROUP_PARAM = 'group';
 /** The search-param key carrying sort terms (repeated, one per term). */
 export const SORT_PARAM = 'sort';
+/** The search-param key carrying presentation toggles (repeated, one per non-default option). */
+export const DISPLAY_PARAM = 'display';
 
 /** The set of param keys this codec owns (so the hook can clear/replace only these). */
-export const VIEW_PARAM_KEYS: readonly string[] = [FILTER_PARAM, GROUP_PARAM, SORT_PARAM];
+export const VIEW_PARAM_KEYS: readonly string[] = [
+  FILTER_PARAM,
+  GROUP_PARAM,
+  SORT_PARAM,
+  DISPLAY_PARAM,
+];
 
 /** The recognized filter operators, for validating a parsed token. */
 const OPERATORS = new Set<FilterOperator>(['eq', 'neq', 'in', 'nin', 'gt', 'lt', 'contains']);
@@ -187,4 +198,65 @@ export function serializeViewState(
 /** Whether a {@link ViewState} carries no filters / grouping / sort (the empty state). */
 export function isEmptyViewState(state: ViewState): boolean {
   return state.filters.length === 0 && state.groupBy === null && state.sort.length === 0;
+}
+
+/** The recognized {@link ViewScale} values, for validating a parsed token. */
+const SCALES = new Set<ViewScale>(['auto', 'day', 'week', 'month', 'quarter']);
+/** The recognized {@link ViewDensity} values, for validating a parsed token. */
+const DENSITIES = new Set<ViewDensity>(['comfortable', 'compact']);
+
+/**
+ * Parse a {@link ViewDisplayState} out of URL search params.
+ *
+ * @remarks
+ * Encoded as repeated `display=<option>:<value>` tokens, and **only** for options that differ from
+ * {@link DEFAULT_VIEW_DISPLAY} — so a default presentation emits nothing and the URL stays clean.
+ * An absent option therefore means "the declared default", never "unset": there is no third state
+ * to reason about downstream. Unrecognized options and unparseable values are dropped rather than
+ * thrown on, matching the tolerance of the filter codec.
+ *
+ * @param params - The URL search params (e.g. from `useSearchParams`).
+ * @returns the parsed display state, defaulted per option.
+ */
+export function parseViewDisplay(params: URLSearchParams): ViewDisplayState {
+  const display: ViewDisplayState = { ...DEFAULT_VIEW_DISPLAY };
+  for (const token of params.getAll(DISPLAY_PARAM)) {
+    const idx = token.indexOf(':');
+    if (idx <= 0) continue;
+    const option = safeDecode(token.slice(0, idx));
+    const raw = safeDecode(token.slice(idx + 1));
+    if (option === 'density' && DENSITIES.has(raw as ViewDensity)) {
+      display.density = raw as ViewDensity;
+    } else if (option === 'scale' && SCALES.has(raw as ViewScale)) {
+      display.scale = raw as ViewScale;
+    } else if ((option === 'progress' || option === 'markers') && (raw === '0' || raw === '1')) {
+      display[option] = raw === '1';
+    }
+  }
+  return display;
+}
+
+/**
+ * Serialize a {@link ViewDisplayState} onto a params object, emitting only non-default options.
+ *
+ * @remarks
+ * Mutates the passed params in place (the caller has already stripped this codec's keys), so it
+ * composes with {@link serializeViewState} over the same object.
+ *
+ * @param display - The display state to encode.
+ * @param into - The params to append the display tokens to.
+ */
+export function serializeViewDisplay(display: ViewDisplayState, into: URLSearchParams): void {
+  if (display.density !== DEFAULT_VIEW_DISPLAY.density) {
+    into.append(DISPLAY_PARAM, `density:${display.density}`);
+  }
+  if (display.scale !== DEFAULT_VIEW_DISPLAY.scale) {
+    into.append(DISPLAY_PARAM, `scale:${display.scale}`);
+  }
+  if (display.progress !== DEFAULT_VIEW_DISPLAY.progress) {
+    into.append(DISPLAY_PARAM, `progress:${display.progress ? '1' : '0'}`);
+  }
+  if (display.markers !== DEFAULT_VIEW_DISPLAY.markers) {
+    into.append(DISPLAY_PARAM, `markers:${display.markers ? '1' : '0'}`);
+  }
 }

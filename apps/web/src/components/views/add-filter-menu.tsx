@@ -30,9 +30,15 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1.5">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5 px-2.5 @2xl:px-3"
+          aria-label="Add filter"
+        >
           <Plus className="size-3.5" aria-hidden="true" />
-          Add filter
+          {/* The label is shed on narrow containers so the whole toolbar stays one row. */}
+          <span className="hidden @2xl:inline">Add filter</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="min-w-[14rem]">

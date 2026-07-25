@@ -25,8 +25,14 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { CreateProjectDialog } from '@/components/projects/create-project';
 import { buildProjectCatalog } from '@/components/projects/project-catalog';
+import { buildProjectTimelineCatalog } from '@/components/projects/project-timeline-catalog';
 import { ProjectStatusBadge } from '@/components/projects/project-status';
-import { applyView } from '@/components/views/apply-view';
+import TimelineCanvas from '@/components/timeline/timeline-canvas';
+import TimelineDisplaySections from '@/components/timeline/timeline-display-sections';
+import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport';
+import type { ScheduleChange } from '@/components/timeline/cascade';
+import type { TimelineSpan } from '@/components/timeline/timeline-catalog';
+import { type AppliedView, applyView } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
@@ -79,6 +85,18 @@ function formatDate(value: string | null | undefined): string {
 
 function progressPercent(item: ProjectOverviewItem): number {
   return item.taskCount === 0 ? 0 : Math.round((item.completedTaskCount / item.taskCount) * 100);
+}
+
+/**
+ * Format an epoch-ms instant as the `YYYY-MM-DD` the Project date fields accept.
+ *
+ * @remarks
+ * Formatted in UTC to match how the timeline snaps drags. Going through a local-time formatter
+ * here would shift the date by a day for viewers west of UTC — the same class of bug the old
+ * timeline shipped when it parsed date-only strings as local time.
+ */
+function toWireDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
 }
 
 function ProjectIdentity({
@@ -153,7 +171,7 @@ function ProjectIdentity({
 }
 
 function ListLens({
-  rows,
+  applied,
   orgId,
   displayPending,
   onDisplayChange,
@@ -162,7 +180,7 @@ function ListLens({
   onRename,
   onOpen,
 }: {
-  rows: readonly ProjectOverviewItem[];
+  applied: AppliedView<ProjectOverviewItem>;
   orgId: string;
   displayPending: boolean;
   onDisplayChange: (
@@ -176,6 +194,81 @@ function ListLens({
   onRename: (projectId: string, name: string) => void;
   onOpen: (projectId: string) => void;
 }): JSX.Element {
+  // Render one project row. Shared by the flat and grouped renders so a group band never diverges
+  // from an ungrouped row.
+  const renderRow = (item: ProjectOverviewItem): JSX.Element => {
+    const percent = progressPercent(item);
+    // The row is the drag source for the whole Project: pressing anywhere inside it — the icon,
+    // the title, any metadata cell — starts the same drag.
+    const dragProps = dragSourceProps(
+      entityDragSource({
+        kind: 'project',
+        id: item.id,
+        organizationId: item.organizationId,
+        title: item.name,
+      }),
+    );
+    return (
+      <div
+        key={item.id}
+        role="row"
+        {...dragProps}
+        className={cn(
+          'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors',
+          dragProps?.className,
+        )}
+        onMouseEnter={() => {
+          onPrefetch(item.id);
+        }}
+      >
+        <div role="gridcell" className="min-w-0 px-2 py-2">
+          <ProjectIdentity
+            item={item}
+            orgId={orgId}
+            pending={displayPending}
+            onDisplayChange={(iconKey, colorKey, customColor) => {
+              onDisplayChange(item.id, iconKey, colorKey, customColor);
+            }}
+            canRename={canRename}
+            onRename={onRename}
+            onOpen={onOpen}
+          />
+        </div>
+        <div role="gridcell" className="px-3">
+          <ProjectStatusBadge status={item.status} />
+        </div>
+        <div role="gridcell" className="px-3 whitespace-nowrap">
+          {item.health ? (
+            <span className={`${HEALTH_CLASS[item.health]} font-medium`}>
+              {HEALTH_LABEL[item.health]}
+            </span>
+          ) : (
+            <span className="text-on-surface-variant">—</span>
+          )}
+        </div>
+        <div role="gridcell" className="px-3 whitespace-nowrap tabular-nums">
+          {formatDate(item.targetDate)}
+        </div>
+        <div role="gridcell" className="px-3">
+          <span className="tabular-nums">{percent}%</span>
+          <div className="bg-surface-container-highest mt-1 h-1 w-14 overflow-hidden rounded-full">
+            <span
+              className="bg-primary block h-full rounded-full"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+        </div>
+        <div
+          role="gridcell"
+          className="text-on-surface-variant flex items-center gap-1 px-3 tabular-nums"
+        >
+          <Workflow aria-hidden className="size-4" />
+          {item.blockedByIds.length > 0 ? `${item.blockedByIds.length} upstream` : 'Clear'}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="overflow-x-auto overscroll-x-contain pb-1">
       <div role="grid" aria-label="Projects" className="min-w-[61rem] text-sm">
@@ -202,167 +295,27 @@ function ListLens({
             Dependencies
           </div>
         </div>
-        {rows.map((item) => {
-          const percent = progressPercent(item);
-          // The row is the drag source for the whole Project: pressing anywhere inside it — the
-          // icon, the title, any metadata cell — starts the same drag.
-          const dragProps = dragSourceProps(
-            entityDragSource({
-              kind: 'project',
-              id: item.id,
-              organizationId: item.organizationId,
-              title: item.name,
-            }),
-          );
-          return (
-            <div
-              key={item.id}
-              role="row"
-              {...dragProps}
-              className={cn(
-                'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors',
-                dragProps?.className,
-              )}
-              onMouseEnter={() => {
-                onPrefetch(item.id);
-              }}
-            >
-              <div role="gridcell" className="min-w-0 px-2 py-2">
-                <ProjectIdentity
-                  item={item}
-                  orgId={orgId}
-                  pending={displayPending}
-                  onDisplayChange={(iconKey, colorKey, customColor) => {
-                    onDisplayChange(item.id, iconKey, colorKey, customColor);
-                  }}
-                  canRename={canRename}
-                  onRename={onRename}
-                  onOpen={onOpen}
-                />
-              </div>
-              <div role="gridcell" className="px-3">
-                <ProjectStatusBadge status={item.status} />
-              </div>
-              <div role="gridcell" className="px-3 whitespace-nowrap">
-                {item.health ? (
-                  <span className={`${HEALTH_CLASS[item.health]} font-medium`}>
-                    {HEALTH_LABEL[item.health]}
+        {/*
+          Grouping is rendered, not discarded. This lens previously flattened `applied.groups` into
+          bare rows, so choosing "Group by → Team" changed nothing on screen and the toolbar quietly
+          lied about the state of the list.
+        */}
+        {applied.groups
+          ? applied.groups.map((group) => (
+              <div key={group.id} role="rowgroup">
+                <div
+                  role="row"
+                  className="bg-surface-container mt-2 flex h-9 items-center gap-2 rounded-md px-3 first:mt-0"
+                >
+                  <span className="text-on-surface text-xs font-semibold">{group.label}</span>
+                  <span className="text-on-surface-variant text-[11px] tabular-nums">
+                    {group.rows.length}
                   </span>
-                ) : (
-                  <span className="text-on-surface-variant">—</span>
-                )}
-              </div>
-              <div role="gridcell" className="px-3 whitespace-nowrap tabular-nums">
-                {formatDate(item.targetDate)}
-              </div>
-              <div role="gridcell" className="px-3">
-                <span className="tabular-nums">{percent}%</span>
-                <div className="bg-surface-container-highest mt-1 h-1 w-14 overflow-hidden rounded-full">
-                  <span
-                    className="bg-primary block h-full rounded-full"
-                    style={{ width: `${percent}%` }}
-                  />
                 </div>
+                {group.rows.map(renderRow)}
               </div>
-              <div
-                role="gridcell"
-                className="text-on-surface-variant flex items-center gap-1 px-3 tabular-nums"
-              >
-                <Workflow aria-hidden className="size-4" />
-                {item.blockedByIds.length > 0 ? `${item.blockedByIds.length} upstream` : 'Clear'}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function TimelineLens({
-  rows,
-  orgId,
-}: {
-  rows: readonly ProjectOverviewItem[];
-  orgId: string;
-}): JSX.Element {
-  const dated = rows.filter((item) => Boolean(item.startDate ?? item.targetDate));
-  const timestamps = dated
-    .flatMap((item) =>
-      [item.startDate, item.targetDate]
-        .filter((value): value is string => typeof value === 'string')
-        .map((value) => new Date(value).getTime()),
-    )
-    .filter(Number.isFinite);
-  const now = Date.now();
-  const min = timestamps.length > 0 ? Math.min(...timestamps) : now;
-  const max = timestamps.length > 0 ? Math.max(...timestamps) : now + 1000 * 60 * 60 * 24 * 90;
-  const range = Math.max(max - min, 1000 * 60 * 60 * 24 * 30);
-  const position = (value: string | null | undefined): number =>
-    value ? Math.max(0, Math.min(100, ((new Date(value).getTime() - min) / range) * 100)) : 0;
-
-  return (
-    <div className="overflow-x-auto overscroll-x-contain">
-      <div className="min-w-[62rem]">
-        <div className="text-on-surface-variant grid h-9 grid-cols-[20rem_minmax(40rem,1fr)] items-center text-xs">
-          <div className="px-3 font-medium">Project</div>
-          <div className="flex justify-between px-4">
-            <span>{DATE_FORMAT.format(new Date(min))}</span>
-            <span>{DATE_FORMAT.format(new Date(max))}</span>
-          </div>
-        </div>
-        {rows.map((item) => {
-          const left = position(item.startDate ?? item.targetDate);
-          const right = position(item.targetDate ?? item.startDate);
-          // The whole timeline row — its label column and its bar — drags the Project itself.
-          const dragProps = dragSourceProps(
-            entityDragSource({
-              kind: 'project',
-              id: item.id,
-              organizationId: item.organizationId,
-              title: item.name,
-            }),
-          );
-          return (
-            <div
-              key={item.id}
-              {...dragProps}
-              className={cn(
-                'hover:bg-surface-container-high grid min-h-[64px] grid-cols-[20rem_minmax(40rem,1fr)] items-center rounded-lg transition-colors',
-                dragProps?.className,
-              )}
-            >
-              <Link
-                href={`/orgs/${orgId}/projects/${item.id}`}
-                className="min-w-0 px-3 py-2 hover:underline"
-              >
-                <span className="text-on-surface block truncate text-sm font-semibold">
-                  {item.name}
-                </span>
-                {item.summary ? (
-                  <span className="text-on-surface-variant mt-0.5 line-clamp-2 text-xs leading-4">
-                    {item.summary}
-                  </span>
-                ) : null}
-              </Link>
-              <div className="relative mx-4 h-7">
-                <span className="bg-outline-variant/50 absolute top-1/2 right-0 left-0 h-px" />
-                {item.startDate || item.targetDate ? (
-                  <Link
-                    href={`/orgs/${orgId}/projects/${item.id}`}
-                    aria-label={`${item.name} timeline`}
-                    className="bg-primary-container text-on-primary-container absolute top-1 h-5 min-w-3 rounded-full"
-                    style={{ left: `${left}%`, width: `${Math.max(2, right - left)}%` }}
-                  />
-                ) : (
-                  <span className="text-on-surface-variant absolute top-1 text-xs">
-                    Not scheduled
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            ))
+          : applied.rows.map(renderRow)}
       </div>
     </div>
   );
@@ -380,7 +333,7 @@ export default function ProjectsListClient(): JSX.Element {
   const teamNoun = useVocabulary('team');
   const [createOpen, setCreateOpen] = useState(false);
   const [lens, setLens] = useState<Lens>('list');
-  const { state, setFilters, setGroupBy, setSort } = useViewState();
+  const { state, display, setFilters, setGroupBy, setSort, setDisplay } = useViewState();
 
   const overviewQ = useApiQuery(projectOverviewDef(orgId));
   const membersQ = useApiListQuery(
@@ -426,7 +379,23 @@ export default function ProjectsListClient(): JSX.Element {
     [leadNameById, members, teamNameById, teamNoun, teams],
   );
   const applied = useMemo(() => applyView(projects, state, catalog), [catalog, projects, state]);
+  // The dependency canvas is inherently flat (it lays out a graph, not a list), so it takes the
+  // flattened rows. The list and timeline lenses consume `applied` directly and render the groups.
   const rows = applied.groups ? applied.groups.flatMap((group) => group.rows) : applied.rows;
+  const timelineCatalog = useMemo(
+    () => buildProjectTimelineCatalog(orgId, (teamId) => teamNameById.get(teamId) ?? null),
+    [orgId, teamNameById],
+  );
+  // The viewport is owned here, not by the canvas, so the axis controls can compose into the one
+  // toolbar row above instead of forcing a second control row directly over the chart.
+  const timelineSpans = useMemo(
+    () =>
+      projects
+        .map((project) => timelineCatalog.span(project))
+        .filter((span): span is NonNullable<typeof span> => span !== null),
+    [projects, timelineCatalog],
+  );
+  const viewport = useTimelineViewport(timelineSpans, display.scale);
 
   const displayMutation = useApiMutation<
     EntityDisplayOut,
@@ -495,6 +464,100 @@ export default function ProjectsListClient(): JSX.Element {
     invalidateKeys: [[...queryKeys.projects(orgId), 'overview']],
   });
 
+  /**
+   * Persist a dragged span.
+   *
+   * @remarks
+   * Optimistic by design: the bar has already moved under the user's pointer, so the cache is
+   * updated immediately and the request follows. A failure rolls the row back and surfaces an
+   * inline error — the drag is never blocked, confirmed, or snapped back mid-gesture.
+   */
+  const rescheduleMutation = useApiMutation<
+    ProjectOut,
+    { projectId: string; startDate: string; targetDate: string },
+    { previous?: typeof overviewQ.data }
+  >({
+    mutationFn: ({ projectId, startDate, targetDate }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].$patch({
+            param: { orgId, id: projectId },
+            json: { startDate, targetDate },
+          }),
+        `Could not reschedule this ${projectNoun.toLowerCase()}.`,
+      ),
+    onMutate: async ({ projectId, startDate, targetDate }) => {
+      const key = [...queryKeys.projects(orgId), 'overview'] as const;
+      await queryClient.cancelQueries({ queryKey: key });
+      const previous = queryClient.getQueryData<typeof overviewQ.data>(key);
+      queryClient.setQueryData(key, (current: typeof overviewQ.data) =>
+        current
+          ? {
+              ...current,
+              items: current.items.map((item) =>
+                item.id === projectId ? { ...item, startDate, targetDate } : item,
+              ),
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous)
+        queryClient.setQueryData([...queryKeys.projects(orgId), 'overview'], context.previous);
+    },
+    invalidateKeys: [[...queryKeys.projects(orgId), 'overview']],
+  });
+
+  const handleReschedule = useCallback(
+    (projectId: string, span: TimelineSpan): void => {
+      rescheduleMutation.mutate({
+        projectId,
+        startDate: toWireDate(span.start),
+        targetDate: toWireDate(span.end),
+      });
+    },
+    [rescheduleMutation],
+  );
+
+  /**
+   * Apply a whole downstream ripple.
+   *
+   * @remarks
+   * Issued as one batch so the proposal reads as a single decision; the shared overview key is
+   * invalidated once at the end rather than per row.
+   */
+  const [applyingCascade, setApplyingCascade] = useState(false);
+  const handleApplyCascade = useCallback(
+    (changes: readonly ScheduleChange[]): void => {
+      if (changes.length === 0) return;
+      setApplyingCascade(true);
+      void Promise.all(
+        changes.map((change) =>
+          unwrap(
+            () =>
+              api.v1.orgs[':orgId'].projects[':id'].$patch({
+                param: { orgId, id: change.id },
+                json: {
+                  startDate: toWireDate(change.to.start),
+                  targetDate: toWireDate(change.to.end),
+                },
+              }),
+            `Could not reschedule a dependent ${projectNoun.toLowerCase()}.`,
+          ),
+        ),
+      )
+        .catch(() => undefined)
+        .finally(() => {
+          setApplyingCascade(false);
+          void queryClient.invalidateQueries({
+            queryKey: [...queryKeys.projects(orgId), 'overview'],
+          });
+        });
+    },
+    [orgId, projectNoun, queryClient],
+  );
+
   const handleCreated = useCallback(
     (created: ProjectOut): void => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
@@ -525,10 +588,18 @@ export default function ProjectsListClient(): JSX.Element {
       }
       toolbar={
         projects.length > 0 ? (
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          // Two affordances: Filter (which rows) and Display (how they are arranged and drawn).
+          // The lens switcher rides the bar's leading slot and the timeline's own options are
+          // sections inside Display, so the surface never grows a third control row.
+          <FilterToolbar
+            catalog={catalog}
+            state={state}
+            onFiltersChange={setFilters}
+            onGroupByChange={setGroupBy}
+            onSortChange={setSort}
+            leading={
               <div
-                className="bg-surface-container-low flex items-center rounded-lg p-1"
+                className="bg-surface-container-low mr-1 flex shrink-0 items-center rounded-lg p-0.5"
                 aria-label="Project view"
               >
                 {lensOptions.map((option) => {
@@ -539,28 +610,37 @@ export default function ProjectsListClient(): JSX.Element {
                       type="button"
                       size="sm"
                       variant={lens === option.id ? 'secondary' : 'ghost'}
-                      className="min-h-10 gap-1.5 @2xl:min-h-8"
+                      className="min-h-10 gap-1.5 px-2.5 @2xl:min-h-8 @2xl:px-3"
                       aria-pressed={lens === option.id}
+                      aria-label={option.label}
                       onClick={() => {
                         setLens(option.id);
                       }}
                     >
-                      <Icon aria-hidden className="size-4" /> {option.label}
+                      <Icon aria-hidden className="size-4" />
+                      <span className="hidden @2xl:inline">{option.label}</span>
                     </Button>
                   );
                 })}
               </div>
-            </div>
-            <FilterToolbar
-              catalog={catalog}
-              state={state}
-              onFiltersChange={setFilters}
-              onGroupByChange={setGroupBy}
-              onSortChange={setSort}
-            />
-          </div>
+            }
+            {...(lens === 'timeline'
+              ? {
+                  displayExtras: (
+                    <TimelineDisplaySections
+                      display={display}
+                      onDisplayChange={setDisplay}
+                      onToday={viewport.resetToToday}
+                      onZoomIn={viewport.zoomIn}
+                      onZoomOut={viewport.zoomOut}
+                    />
+                  ),
+                }
+              : {})}
+          />
         ) : null
       }
+      fill={lens === 'timeline'}
     >
       <CreateProjectDialog
         orgId={orgId}
@@ -603,12 +683,12 @@ export default function ProjectsListClient(): JSX.Element {
         />
       ) : (
         <section
-          className="bg-surface-container-low relative rounded-xl p-2"
+          className="relative flex min-h-0 flex-1 flex-col"
           aria-label={`${projectsNoun} ${lens} view`}
         >
           {lens === 'list' ? (
             <ListLens
-              rows={rows}
+              applied={applied}
               orgId={orgId}
               displayPending={displayMutation.isPending}
               onDisplayChange={(projectId, iconKey, colorKey, customColor) => {
@@ -628,7 +708,24 @@ export default function ProjectsListClient(): JSX.Element {
           ) : lens === 'dependencies' ? (
             <ProjectGraphPanel rows={rows} orgId={orgId} />
           ) : (
-            <TimelineLens rows={rows} orgId={orgId} />
+            <TimelineCanvas
+              applied={applied}
+              catalog={timelineCatalog}
+              display={display}
+              viewport={viewport}
+              noun={projectNoun}
+              pluralNoun={projectsNoun}
+              canSchedule={canRename}
+              onReschedule={handleReschedule}
+              onApplyCascade={handleApplyCascade}
+              applyingCascade={applyingCascade}
+              onActivate={(projectId) => {
+                router.push(`/orgs/${orgId}/projects/${projectId}`);
+              }}
+              onPrefetch={(projectId) => {
+                prefetch(projectDetailDef(orgId, projectId));
+              }}
+            />
           )}
         </section>
       )}

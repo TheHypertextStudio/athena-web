@@ -1,32 +1,44 @@
 'use client';
 
 /**
- * `views` — the unified, drop-in **filter toolbar** every Docket list page adopts.
+ * `views` — the unified, drop-in **view bar** every Docket list page adopts.
  *
  * @remarks
- * This is the one filter vocabulary that replaces the app's piecewise, per-page controls (the
+ * This is the one control vocabulary that replaces the app's piecewise, per-page controls (the
  * bespoke Projects status menu, the hard-coded Initiatives/Cycles grouping, the controls
- * Programs/Teams lacked). It mirrors Linear's single bar: an **Add filter** menu that produces
- * removable filter **chips**, a **Group by** control, a **Sort by** control with an
- * ascending/descending toggle, and an optional **Save view** slot — all built on the Phase A
- * primitives ({@link DropdownMenu} / {@link Popover}, the shared focus ring, the density rhythm)
- * with real labels (no eyebrows / uppercase).
+ * Programs/Teams lacked).
+ *
+ * It presents exactly **two** affordances, which is the whole design:
+ *
+ * - **Filter** — which rows are in the list. Active predicates become removable chips beneath the
+ *   bar, so the applied state stays visible without a control per field.
+ * - **Display** — how those rows are arranged and drawn: grouping, ordering, and any options the
+ *   surface itself contributes through {@link FilterToolbarProps.displayExtras}.
+ *
+ * Earlier this bar spent a bordered pill each on "Add filter", "Group by", "Sort by", and a sort
+ * direction toggle, and a page then added its own lens switcher and view-specific controls beside
+ * them. The result read as an undifferentiated field of buttons with no hierarchy, and it wrapped
+ * to three rows on a phone — pushing the actual content below the fold. Grouping and ordering are
+ * *presentation*, so they belong in Display; the page keeps one row no matter how many
+ * capabilities the surface has, because a new capability lands inside a menu rather than beside it.
  *
  * A page wires it in three lines: declare a {@link FieldCatalog} for its row type, hold the state
  * with {@link import('./use-view-state').useViewState} (URL-persisted), and render
- * `<FilterToolbar catalog={…} state={state} on…={…} />`. The toolbar is fully controlled — it
- * owns no state — so the same state drives both the toolbar and the page's
+ * `<FilterToolbar catalog={…} state={state} on…={…} />`. The toolbar is fully controlled — it owns
+ * no state — so the same state drives both the bar and the page's
  * {@link import('./apply-view').applyView} call. Every affordance is keyboard-reachable and the
  * value chooser reads the catalog's options (sync or lazily resolved from loaded page data), so
  * filtering by an enum (status, health) or a relation (lead, team) needs no per-page UI.
  */
-import { ChevronDown, Filter, X } from '@docket/ui/icons';
+import { ChevronDown, Filter, TuneRounded, X } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
   focusRing,
@@ -43,11 +55,15 @@ import {
   type ViewSortTerm,
   type ViewState,
   filterableFields,
-  findField,
   groupableFields,
   sortableFields,
 } from './field-catalog';
 import { AddFilterMenu } from './add-filter-menu';
+
+/** The sentinel value for "no grouping" in the Display menu's radio group. */
+const NO_GROUPING = '__none__';
+/** The sentinel value for "default order" in the Display menu's radio group. */
+const DEFAULT_ORDER = '__default__';
 
 /** Props for {@link FilterToolbar}. */
 export interface FilterToolbarProps<T> {
@@ -62,6 +78,24 @@ export interface FilterToolbarProps<T> {
   /** Replace the active sort terms. */
   onSortChange: (sort: readonly ViewSortTerm[]) => void;
   /**
+   * Extra sections appended inside the **Display** menu — a surface's own presentation options
+   * (a timeline's scale, density, and axis navigation, say).
+   *
+   * @remarks
+   * This extension point exists so a surface with more capabilities does not grow more *buttons*.
+   * Anything about how rows are drawn belongs in this menu beside grouping and ordering, rather
+   * than as another pill competing with them for the same row.
+   */
+  displayExtras?: ReactNode;
+  /**
+   * A leading slot rendered before the Filter button — typically a lens switcher.
+   *
+   * @remarks
+   * Taken as a slot so the bar stays one flex row that this component controls, instead of a page
+   * stacking its own control row above it.
+   */
+  leading?: ReactNode;
+  /**
    * An optional trailing slot, pinned to the bar's end — typically a "Save view" button. Rendered
    * after a flexible spacer so it sits opposite the controls.
    */
@@ -69,7 +103,7 @@ export interface FilterToolbarProps<T> {
 }
 
 /**
- * The unified filter / group / sort toolbar.
+ * The unified view bar: Filter, Display, and the active-filter chips.
  *
  * @typeParam T - The page's row type.
  * @param props - The {@link FilterToolbarProps}.
@@ -81,15 +115,16 @@ export function FilterToolbar<T>({
   onFiltersChange,
   onGroupByChange,
   onSortChange,
+  displayExtras,
+  leading,
   saveSlot,
 }: FilterToolbarProps<T>): JSX.Element {
   const groupable = groupableFields(catalog);
   const sortable = sortableFields(catalog);
   const filterable = filterableFields(catalog);
 
-  const groupField = state.groupBy ? findField(catalog, state.groupBy.field) : null;
   const primarySort = state.sort[0] ?? null;
-  const sortField = primarySort ? findField(catalog, primarySort.field) : null;
+  const hasDisplay = groupable.length > 0 || sortable.length > 0 || displayExtras !== undefined;
 
   /** Append a predicate to the active set. */
   function addFilter(field: string, op: FilterOperator, value: unknown): void {
@@ -101,98 +136,84 @@ export function FilterToolbar<T>({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
+        {leading}
+
         {filterable.length > 0 ? <AddFilterMenu fields={filterable} onAdd={addFilter} /> : null}
 
-        {(groupable.length > 0 || sortable.length > 0) && filterable.length > 0 ? (
-          <span className="bg-outline-variant mx-0.5 h-5 w-px" aria-hidden="true" />
-        ) : null}
-
-        {groupable.length > 0 ? (
+        {hasDisplay ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <span className="text-on-surface-variant">Group by</span>
-                <span>{groupField ? groupField.label : 'None'}</span>
+              <Button variant="outline" size="sm" className="min-h-10 gap-1.5 @2xl:min-h-8">
+                <TuneRounded className="size-4" aria-hidden="true" />
+                <span className="hidden @2xl:inline">Display</span>
                 <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[12rem]">
-              <DropdownMenuLabel>Group by</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  onGroupByChange(null);
-                }}
-              >
-                No grouping
-              </DropdownMenuItem>
-              {groupable.map((field) => (
-                <DropdownMenuItem
-                  key={field.key}
-                  onSelect={() => {
-                    onGroupByChange({ field: field.key });
-                  }}
-                >
-                  {field.label}
-                </DropdownMenuItem>
-              ))}
+            <DropdownMenuContent align="start" className="min-w-[14rem]">
+              {groupable.length > 0 ? (
+                <>
+                  <DropdownMenuLabel>Grouping</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={state.groupBy?.field ?? NO_GROUPING}
+                    onValueChange={(next) => {
+                      onGroupByChange(next === NO_GROUPING ? null : { field: next });
+                    }}
+                  >
+                    <DropdownMenuRadioItem value={NO_GROUPING}>No grouping</DropdownMenuRadioItem>
+                    {groupable.map((field) => (
+                      <DropdownMenuRadioItem key={field.key} value={field.key}>
+                        {field.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </>
+              ) : null}
+
+              {groupable.length > 0 && sortable.length > 0 ? <DropdownMenuSeparator /> : null}
+
+              {sortable.length > 0 ? (
+                <>
+                  <DropdownMenuLabel>Ordering</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={primarySort?.field ?? DEFAULT_ORDER}
+                    onValueChange={(next) => {
+                      onSortChange(
+                        next === DEFAULT_ORDER
+                          ? []
+                          : [{ field: next, dir: primarySort?.dir ?? 'asc' }],
+                      );
+                    }}
+                  >
+                    <DropdownMenuRadioItem value={DEFAULT_ORDER}>
+                      Default order
+                    </DropdownMenuRadioItem>
+                    {sortable.map((field) => (
+                      <DropdownMenuRadioItem key={field.key} value={field.key}>
+                        {field.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  {primarySort ? (
+                    <DropdownMenuCheckboxItem
+                      checked={primarySort.dir === 'desc'}
+                      onCheckedChange={(checked) => {
+                        onSortChange([{ field: primarySort.field, dir: checked ? 'desc' : 'asc' }]);
+                      }}
+                    >
+                      Reverse order
+                    </DropdownMenuCheckboxItem>
+                  ) : null}
+                </>
+              ) : null}
+
+              {displayExtras !== undefined && (groupable.length > 0 || sortable.length > 0) ? (
+                <DropdownMenuSeparator />
+              ) : null}
+              {displayExtras}
             </DropdownMenuContent>
           </DropdownMenu>
-        ) : null}
-
-        {sortable.length > 0 ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <span className="text-on-surface-variant">Sort by</span>
-                <span>{sortField ? sortField.label : 'Default'}</span>
-                <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[12rem]">
-              <DropdownMenuLabel>Sort by</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onSelect={() => {
-                  onSortChange([]);
-                }}
-              >
-                Default order
-              </DropdownMenuItem>
-              {sortable.map((field) => (
-                <DropdownMenuItem
-                  key={field.key}
-                  onSelect={() => {
-                    onSortChange([{ field: field.key, dir: primarySort?.dir ?? 'asc' }]);
-                  }}
-                >
-                  {field.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-
-        {primarySort ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => {
-              onSortChange([
-                { field: primarySort.field, dir: primarySort.dir === 'asc' ? 'desc' : 'asc' },
-              ]);
-            }}
-            aria-label={`Toggle sort direction, currently ${primarySort.dir === 'asc' ? 'ascending' : 'descending'}`}
-          >
-            {primarySort.dir === 'asc' ? 'Ascending' : 'Descending'}
-            <ChevronDown
-              className={cn('size-3.5', primarySort.dir === 'asc' && 'rotate-180')}
-              aria-hidden="true"
-            />
-          </Button>
         ) : null}
 
         {saveSlot ? (
@@ -203,6 +224,11 @@ export function FilterToolbar<T>({
         ) : null}
       </div>
 
+      {/*
+        Active predicates stay visible as removable chips. This is what lets Filter be a single
+        control: the applied state lives here in the open, rather than being implied by a row of
+        controls each of which must be read to know what is in effect.
+      */}
       {state.filters.length > 0 ? (
         <ul className="flex flex-wrap items-center gap-2" aria-label="Active filters">
           {state.filters.map((filter, index) => {

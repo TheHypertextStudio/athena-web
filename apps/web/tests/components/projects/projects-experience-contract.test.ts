@@ -27,7 +27,23 @@ describe('Projects experience contract', () => {
     // The dependencies lens now renders the shared React Flow canvas (lazy-loaded) instead of the
     // old hand-rolled SVG DependencyLens.
     expect(overview).toContain('<ProjectGraphPanel');
-    expect(overview).toContain('<TimelineLens');
+    // The timeline lens renders the shared, entity-generic timeline engine rather than a
+    // Projects-only implementation, so its axis, zoom, markers, and drag behavior are the same
+    // code the Hub portfolio runs.
+    expect(overview).toContain('<TimelineCanvas');
+    expect(overview).toContain('buildProjectTimelineCatalog');
+    expect(overview).not.toContain('TimelineLens');
+  });
+
+  it('renders grouping in both lenses instead of flattening it away', () => {
+    const overview = source(overviewPath);
+    // Regression guard: the page previously did
+    // `applied.groups ? applied.groups.flatMap((group) => group.rows) : applied.rows`
+    // for every lens, which discarded the band headers and made "Group by" a no-op on screen.
+    // Both the list and the timeline now consume `applied` and render its groups.
+    expect(overview).toContain('applied.groups');
+    expect(overview).toContain('applied={applied}');
+    expect(overview).toContain('<ListLens');
   });
 
   it('preserves dense, stable rows and full columns inside a local scroller', () => {

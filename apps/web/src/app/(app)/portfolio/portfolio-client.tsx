@@ -1,16 +1,27 @@
 'use client';
 
 import { EmptyState } from '@docket/ui/components';
-import { LayoutGrid } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { ChevronDown, LayoutGrid, TuneRounded } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+  Skeleton,
+} from '@docket/ui/primitives';
+import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { buildLayout } from '@/components/portfolio/layout';
+import {
+  buildHubTimelineCatalog,
+  buildHubTimelineView,
+} from '@/components/portfolio/hub-timeline-catalog';
 import { OrgFilterChips } from '@/components/portfolio/org-filter-chips';
-import { RoadmapTimeline } from '@/components/portfolio/roadmap-timeline';
-import { ScaleMenu } from '@/components/portfolio/scale-menu';
-import { type Granularity, buildScale } from '@/components/portfolio/time-scale';
+import TimelineCanvas from '@/components/timeline/timeline-canvas';
+import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport';
+import TimelineDisplaySections from '@/components/timeline/timeline-display-sections';
+import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
@@ -19,25 +30,36 @@ import { userErrorMessage } from '@/lib/problem';
  * The Hub "Portfolio" surface — one cross-org roadmap timeline.
  *
  * @remarks
- * A Client Component and the caller's flagship cross-org planning view. It reads the
- * aggregated roadmap via `api.v1.hub.portfolio.$get` (org swimlanes → Program lanes → Project
- * bars, each item carrying its originating org) and renders it as a single, calm, horizontally
- * scrollable {@link RoadmapTimeline}:
+ * A Client Component and the caller's flagship cross-org planning view. It reads the aggregated
+ * roadmap via `api.v1.hub.portfolio.$get` (org swimlanes → Program lanes → Project bars, each item
+ * carrying its originating org) and renders it through the **shared timeline engine** rather than
+ * a bespoke roadmap of its own.
  *
- * - **Org swimlanes** are the default rows — each tenant's slice of the roadmap, never merged.
- * - **Programs** are ongoing lane containers (no bar of their own); **Projects** draw as bars
- *   positioned across the weeks/months they span, tinted by health, with milestone diamonds.
- * - An **adaptive time scale** auto-picks its granularity from the visible span, with a styled
- *   manual override ({@link ScaleMenu}).
- * - **Org focus chips** ({@link OrgFilterChips}) highlight one tenant's band and dim the rest
- *   without hiding any work.
+ * That sharing is the point. The portfolio and the org Projects lens previously maintained two
+ * separate timeline implementations, and the newer one was markedly worse — no real axis, no
+ * scale model, empty bars. Both now render {@link TimelineCanvas} over their own
+ * `TimelineCatalog`, so the calendar axis, zoom, grouping, markers, and accessibility are written
+ * once and improve for both at the same time.
  *
- * The screen owns its loading skeleton, a `role="alert"` error with retry, and a calm empty
- * state, mirroring the Today cockpit so the Hub reads as one product. It stays live without a
- * manual refresh: the dynamic-data layer auto-refetches on window focus and after any mutation.
+ * - **Org bands** are the grouping — each tenant's slice, contiguous and never merged with another's.
+ * - **Programs** surface as row context beside each Project's name.
+ * - **Org focus chips** narrow the roadmap to one tenant.
+ * - The surface is **read-only**: cross-org rescheduling belongs in the owning org's Projects lens,
+ *   so `canSchedule` is false and the canvas renders without drag affordances.
+ *
+ * The screen owns its loading skeleton, a `role="alert"` error with retry, and a calm empty state,
+ * mirroring the Today cockpit so the Hub reads as one product. It stays live without a manual
+ * refresh: the dynamic-data layer auto-refetches on window focus and after any mutation.
  */
+/** No-op for the canvas's write callbacks: the portfolio is a read-only, cross-org roadmap. */
+function noop(): void {
+  /* The portfolio never schedules; the owning org's Projects lens does. */
+}
+
 export default function PortfolioClient(): JSX.Element {
+  const router = useRouter();
   const { orgName } = useActiveOrg();
+  const { display, setDisplay } = useViewState();
 
   const portfolioQ = useApiQuery(
     apiQueryOptions(
@@ -52,32 +74,40 @@ export default function PortfolioClient(): JSX.Element {
     ? userErrorMessage(portfolioQ.error, 'Could not load the portfolio.')
     : null;
 
-  /** The requested time-scale granularity (`auto` defers to the span-derived pick). */
-  const [granularity, setGranularity] = useState<Granularity>('auto');
-  /** The focused org id (its band stays bright, others dim), or null for no focus. */
+  /** The focused org id (the roadmap narrows to that band), or null for every org. */
   const [focusedOrgId, setFocusedOrgId] = useState<string | null>(null);
 
-  // The render-ready layout (per-org rows + the flattened dated bars for the scale).
-  const layout = useMemo(() => buildLayout(data?.swimlanes ?? []), [data]);
-
-  // The shared, adaptive time scale derived from exactly what is on the timeline.
-  const scale = useMemo(
-    () => buildScale(layout.allPlaced, granularity),
-    [layout.allPlaced, granularity],
+  const swimlanes = useMemo(() => data?.swimlanes ?? [], [data]);
+  const catalog = useMemo(() => buildHubTimelineCatalog(), []);
+  const applied = useMemo(
+    () => buildHubTimelineView(swimlanes, focusedOrgId),
+    [focusedOrgId, swimlanes],
   );
+  const spans = useMemo(
+    () =>
+      applied.rows
+        .map((row) => catalog.span(row))
+        .filter((span): span is NonNullable<typeof span> => span !== null),
+    [applied.rows, catalog],
+  );
+  const viewport = useTimelineViewport(spans, display.scale);
 
   // The org focus chips: every org with at least one bar, in swimlane order, name-resolved.
   const orgFilterOptions = useMemo(
     () =>
-      layout.rows
-        .filter((row) => row.barCount > 0)
-        .map((row) => ({
-          id: row.organization.id,
-          name: row.organization.name || orgName(row.organization.id),
-          count: row.barCount,
-        })),
-    [layout.rows, orgName],
+      swimlanes
+        .map((swimlane) => ({
+          id: swimlane.organization.id,
+          name: swimlane.organization.name || orgName(swimlane.organization.id),
+          count:
+            swimlane.unassigned.length +
+            swimlane.programs.reduce((sum, lane) => sum + lane.projects.length, 0),
+        }))
+        .filter((option) => option.count > 0),
+    [orgName, swimlanes],
   );
+
+  const hasAnyBars = orgFilterOptions.length > 0;
 
   // Clear a stale focus if the focused org no longer carries any work on a reload.
   useEffect(() => {
@@ -86,22 +116,16 @@ export default function PortfolioClient(): JSX.Element {
     }
   }, [focusedOrgId, orgFilterOptions]);
 
-  const hasSwimlanes = layout.rows.length > 0;
+  const hasSwimlanes = swimlanes.length > 0;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="mx-auto flex h-full min-h-0 w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-on-surface text-title-large">Portfolio</h1>
-          <p className="text-on-surface-variant text-xs">Every venture on one timeline.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ScaleMenu
-            value={granularity}
-            resolved={scale?.granularity ?? null}
-            onChange={setGranularity}
-            disabled={loading || !scale}
-          />
+          <p className="text-on-surface-variant hidden text-xs @2xl:block">
+            Every venture on one timeline.
+          </p>
         </div>
       </header>
 
@@ -131,14 +155,34 @@ export default function PortfolioClient(): JSX.Element {
           title="No roadmap yet"
           body="Once you have projects in flight, they appear here on one shared timeline."
         />
-      ) : !layout.hasAnyBars || !scale ? (
+      ) : !hasAnyBars ? (
         <EmptyState
           icon={LayoutGrid}
-          title="Nothing scheduled"
-          body="Set start and target dates on your projects to place them on the timeline."
+          title="Nothing in flight"
+          body="Once you have projects in flight, they appear here on one shared timeline."
         />
       ) : (
-        <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
+          <div className="flex items-center justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="min-h-10 gap-1.5 @2xl:min-h-8">
+                  <TuneRounded className="size-4" aria-hidden="true" />
+                  <span className="hidden @2xl:inline">Display</span>
+                  <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[14rem]">
+                <TimelineDisplaySections
+                  display={display}
+                  onDisplayChange={setDisplay}
+                  onToday={viewport.resetToToday}
+                  onZoomIn={viewport.zoomIn}
+                  onZoomOut={viewport.zoomOut}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           {orgFilterOptions.length > 1 ? (
             <OrgFilterChips
               options={orgFilterOptions}
@@ -146,7 +190,23 @@ export default function PortfolioClient(): JSX.Element {
               onFocus={setFocusedOrgId}
             />
           ) : null}
-          <RoadmapTimeline rows={layout.rows} scale={scale} focusedOrgId={focusedOrgId} />
+          <TimelineCanvas
+            applied={applied}
+            catalog={catalog}
+            display={display}
+            viewport={viewport}
+            noun="Project"
+            pluralNoun="Projects"
+            canSchedule={false}
+            onReschedule={noop}
+            onApplyCascade={noop}
+            applyingCascade={false}
+            onActivate={(projectId) => {
+              const row = applied.rows.find((entry) => entry.bar.id === projectId);
+              if (row) router.push(`/orgs/${row.bar.organizationId}/projects/${row.bar.id}`);
+            }}
+            onPrefetch={noop}
+          />
         </div>
       )}
     </div>

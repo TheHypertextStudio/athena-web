@@ -23,24 +23,42 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
 
 import {
+  DEFAULT_VIEW_DISPLAY,
+  type ViewDisplayState,
   type ViewFilterTerm,
   type ViewGroupTerm,
   type ViewSortTerm,
   type ViewState,
 } from './field-catalog';
-import { parseViewState, serializeViewState } from './view-state-url';
+import {
+  parseViewDisplay,
+  parseViewState,
+  serializeViewDisplay,
+  serializeViewState,
+} from './view-state-url';
 
 /** The value returned by {@link useViewState}: the current state plus its setters. */
 export interface UseViewStateResult {
   /** The current view state, parsed from the URL. */
   state: ViewState;
+  /**
+   * The current presentation toggles, parsed from the URL.
+   *
+   * @remarks
+   * Held alongside — never inside — {@link ViewState}: the query is what a saved view persists and
+   * shares, while presentation is a per-viewer preference. Both ride the same URL so a configured
+   * lens stays shareable and reload-stable.
+   */
+  display: ViewDisplayState;
   /** Replace the active filter predicates. */
   setFilters: (filters: readonly ViewFilterTerm[]) => void;
   /** Replace the active grouping (or clear it with `null`). */
   setGroupBy: (groupBy: ViewGroupTerm | null) => void;
   /** Replace the active sort terms. */
   setSort: (sort: readonly ViewSortTerm[]) => void;
-  /** Clear all filters / grouping / sort (back to the empty state). */
+  /** Replace the presentation toggles. */
+  setDisplay: (display: ViewDisplayState) => void;
+  /** Clear all filters / grouping / sort and restore the default presentation. */
   reset: () => void;
 }
 
@@ -63,10 +81,15 @@ export function useViewState(): UseViewStateResult {
   // so the memo only recomputes when the query actually changes.
   const search = searchParams.toString();
   const state = useMemo<ViewState>(() => parseViewState(new URLSearchParams(search)), [search]);
+  const display = useMemo<ViewDisplayState>(
+    () => parseViewDisplay(new URLSearchParams(search)),
+    [search],
+  );
 
   const commit = useCallback(
-    (next: ViewState): void => {
+    (next: ViewState, nextDisplay: ViewDisplayState): void => {
       const params = serializeViewState(next, new URLSearchParams(search));
+      serializeViewDisplay(nextDisplay, params);
       const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
@@ -75,25 +98,31 @@ export function useViewState(): UseViewStateResult {
 
   const setFilters = useCallback(
     (filters: readonly ViewFilterTerm[]): void => {
-      commit({ ...state, filters });
+      commit({ ...state, filters }, display);
     },
-    [commit, state],
+    [commit, display, state],
   );
   const setGroupBy = useCallback(
     (groupBy: ViewGroupTerm | null): void => {
-      commit({ ...state, groupBy });
+      commit({ ...state, groupBy }, display);
     },
-    [commit, state],
+    [commit, display, state],
   );
   const setSort = useCallback(
     (sort: readonly ViewSortTerm[]): void => {
-      commit({ ...state, sort });
+      commit({ ...state, sort }, display);
+    },
+    [commit, display, state],
+  );
+  const setDisplay = useCallback(
+    (next: ViewDisplayState): void => {
+      commit(state, next);
     },
     [commit, state],
   );
   const reset = useCallback((): void => {
-    commit({ filters: [], groupBy: null, sort: [] });
+    commit({ filters: [], groupBy: null, sort: [] }, DEFAULT_VIEW_DISPLAY);
   }, [commit]);
 
-  return { state, setFilters, setGroupBy, setSort, reset };
+  return { state, display, setFilters, setGroupBy, setSort, setDisplay, reset };
 }

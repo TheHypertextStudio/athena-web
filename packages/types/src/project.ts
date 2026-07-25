@@ -209,11 +209,40 @@ export const ProjectOut = z
 /** Project representation value. */
 export type ProjectOut = z.infer<typeof ProjectOut>;
 
+/**
+ * A dated checkpoint on a Project, plotted as a marker along the Project's timeline bar.
+ *
+ * @remarks
+ * Carries only what a timeline marker needs — identity, a name for the tooltip, and the date that
+ * positions it. Deliberately narrower than the full Milestone record so the portfolio overview
+ * stays a bounded read; the Project detail surface remains the place to inspect a Milestone.
+ */
+export const ProjectOverviewMilestone = z
+  .object({
+    id: MilestoneId.describe('The milestone id.'),
+    name: z.string().describe('The milestone name shown at its marker.'),
+    targetDate: z
+      .string()
+      .nullable()
+      .describe(
+        "The milestone's target date (ISO-8601) — where its marker sits on the timeline — or `null` when undated.",
+      ),
+  })
+  .meta({
+    id: 'ProjectOverviewMilestone',
+    description: 'A dated checkpoint marker on a Project timeline bar.',
+  });
+/** Project overview milestone value. */
+export type ProjectOverviewMilestone = z.infer<typeof ProjectOverviewMilestone>;
+
 /** One Project row composed for the high-density portfolio overview. */
 export const ProjectOverviewItem = ProjectOut.extend({
   display: EntityDisplayOut.describe(
     'Presentation-only icon and semantic color metadata kept outside the Project record.',
   ),
+  milestones: z
+    .array(ProjectOverviewMilestone)
+    .describe('Dated checkpoints plotted as markers along this Project timeline bar.'),
   taskCount: z.number().int().min(0).describe('Number of Tasks directly assigned to the Project.'),
   completedTaskCount: z
     .number()
@@ -226,7 +255,8 @@ export const ProjectOverviewItem = ProjectOut.extend({
   blocksIds: z.array(ProjectId).describe('Projects whose progress depends on this Project.'),
 }).meta({
   id: 'ProjectOverviewItem',
-  description: 'A Project with display, task-progress, and dependency context for portfolio views.',
+  description:
+    'A Project with display, task-progress, milestone, and dependency context for portfolio views.',
 });
 /** Project portfolio row value. */
 export type ProjectOverviewItem = z.infer<typeof ProjectOverviewItem>;

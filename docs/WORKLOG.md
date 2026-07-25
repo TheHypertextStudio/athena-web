@@ -1,11 +1,76 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-21
+> **Last Updated**: 2026-07-25
 
 ---
 
 ## Active Tasks
+
+### [TIMELINE-001] Replace the Projects timeline with a generic, manipulable timeline engine
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-25
+- **Completed**: 2026-07-25
+- **Priority**: P1
+- **Design**: `docs/superpowers/specs/2026-07-25-projects-timeline-design.md`
+- **Description**: The Projects Timeline lens was 75 lines inline in a 613-line page client and was
+  not a timeline — its "axis" was two `<span>`s in a `justify-between`, so no date could be read
+  off the chart. Meanwhile `components/portfolio/` already held a competent roadmap engine that the
+  Projects page had ignored and reimplemented worse. The root problem was duplication, not polish.
+- **Approach**: Extract one entity-generic engine (`apps/web/src/components/timeline/`) driven by a
+  `TimelineCatalog<T>`, mirroring how `views/field-catalog.ts` generalized filtering. Both the org
+  Projects lens and the Hub portfolio now render the same `TimelineCanvas` over their own catalog,
+  which retired the duplicate implementation and proved the abstraction against two callers with
+  materially different shapes (view-field grouping vs. org grouping; writable vs. read-only; with
+  and without a dependency graph).
+- **Key decisions**:
+  - **Three independent geometry tokens.** Row height is uniform and derives only from the display
+    options (no per-row input exists, so heterogeneous heights are unrepresentable); bar height is a
+    constant centered in the track; pointer targets exceed the bar via transparent padding.
+    Collapsing these is the classic timeline bug where interaction ergonomics silently drive layout.
+  - **The viewport is decoupled from the data extents** and today-anchored, which is what makes zoom
+    and pan stable and stops bars from kissing the window edges.
+  - **No horizontal scroll.** Time is navigated by zoom/pan, so the label column can never scroll
+    out of view and the axis can never desynchronise from the bars.
+  - **Never reject a gesture.** Drags commit optimistically with inline undo; dependency violations
+    render as standing red signal; the downstream ripple is _proposed_, not silently applied — the
+    middle path between Linear (flag only) and classic Gantt (auto-cascade).
+  - **Display options are a sibling of `ViewState`, not part of it.** `ViewState` models the query
+    that saved views persist; presentation is a per-viewer preference. Both ride the same URL.
+- **Defects fixed**: discarded `Group by` headers (flattened away for every lens); UTC-midnight
+  date parsing that shifted dates a day west of UTC; non-sticky axis and label column; bare divs
+  where the list lens used grid semantics; single-date projects collapsing to an indistinguishable
+  2% stub; "Not scheduled" text rendered inside the plot area; year-less axis labels.
+- **Files changed**: new `apps/web/src/components/timeline/` (12 modules), new
+  `projects/project-timeline-catalog.ts` and `portfolio/hub-timeline-catalog.ts`, rewritten
+  `projects-client.tsx` timeline + list lenses, rewritten `portfolio-client.tsx`, deleted 9
+  superseded `components/portfolio/` modules, `ProjectOverviewItem.milestones` + its
+  `GET /overview` projection, `ViewDisplayState` across `views/`, two new `@docket/ui` icons.
+- **Validation**: 840 web tests (63 new), 1331 API tests, 271 types tests; typecheck and lint clean
+  across web/api/types/ui; rendered and screenshotted both surfaces at 1440×900 and 390×844 in
+  light and dark against a live isolated stack.
+- **Control surface**: the page shows a lens switcher plus exactly two controls — **Filter** (which
+  rows) and **Display** (how they are arranged and drawn). Grouping and ordering moved out of the
+  filter bar into Display; the timeline contributes scale, density, bar contents, and axis
+  navigation as sections inside that same menu via a new `displayExtras` slot. Every list page in
+  the app inherits this, since they all render the shared `FilterToolbar`.
+- **Learnings**:
+  - Screenshots caught defects that types, lint, and tests all passed over — a fixed-px label column
+    that starved the plot area on mobile, colliding axis tick labels, milestone diamonds drawn
+    through bar labels, and a dependency polyline routed straight through a destination bar so it
+    read as a strikethrough. Rendering is not optional verification for UI work.
+  - Looking at a screenshot is not the same as _reading_ it. The first mobile capture showed the
+    chart starting ~640px down an 844px viewport — the content was below the fold — and that went
+    unnoticed while a smaller issue in the same image got fixed. Measure the vertical budget, don't
+    just glance.
+  - Condensing controls "on mobile" was the wrong frame: a toolbar with eight peer pills is already
+    wrong on a 1440px display. The fix was an information-architecture change (two menus) applied at
+    every width, not a responsive tweak.
+  - Lifting the viewport out of the canvas was what actually made the single control row possible.
+    Component-owned state had been silently dictating the page's layout.
+
+---
 
 ### [DRAG-001] Make every core object draggable from anywhere in its bounds
 

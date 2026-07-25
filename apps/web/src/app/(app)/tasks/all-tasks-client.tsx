@@ -12,8 +12,9 @@
  * endpoint would collapse the fan-out into one request without changing this surface.
  */
 import type { Priority, TaskOut } from '@docket/types';
+import { cn } from '@docket/ui';
 import { StatusIcon } from '@docket/ui/components';
-import { DRAGGABLE } from '@docket/ui/lib/draggable';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -23,9 +24,9 @@ import { type JSX, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { OrgChip } from '@/components/org-chip';
-import { writeScheduleDragObject } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
+import { entityDragSource } from '@/lib/entity-drag';
 import { myWorkDefs } from '@/lib/my-work-defs';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
@@ -172,19 +173,25 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
   );
   const rename = useRenameTask(task.organizationId, [queryKeys.tasks(task.organizationId)]);
 
+  // The canonical entity payload also mirrors the legacy scheduling object, so dragging a row onto
+  // the calendar still timeboxes it.
+  const dragProps = dragSourceProps(
+    entityDragSource({
+      kind: 'task',
+      id: task.id,
+      organizationId: task.organizationId,
+      title: task.title,
+    }),
+  );
+
   return (
     <Link
       href={href}
-      draggable
-      onDragStart={(event) => {
-        writeScheduleDragObject(event.dataTransfer, {
-          kind: 'task',
-          taskId: task.id,
-          organizationId: task.organizationId,
-          title: task.title,
-        });
-      }}
-      className={`${DRAGGABLE} hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
+      {...dragProps}
+      className={cn(
+        'hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+        dragProps?.className,
+      )}
     >
       <StatusIcon type={stateTypeOf(task.state)} />
       {canEdit ? (

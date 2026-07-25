@@ -7,6 +7,85 @@
 
 ## Active Tasks
 
+### [DRAG-001] Make every core object draggable from anywhere in its bounds
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-25
+- **Completed**: 2026-07-25
+- **Priority**: P1
+- **Description**: Reported symptom was two-sided: text inside draggable objects was still
+  selectable (a drag painted a stray highlight), and parts of an object — its icon, its metadata —
+  "didn't seem to want to be draggable". The mandate: every core object (initiative, program,
+  project, task, cycle, team) must feel interactive, and must be draggable from any part of its
+  boundary.
+- **Root cause** (measured in real Chromium via a minimal repro + Playwright, not assumed):
+  - `draggable="true"` **already implies `user-select: none` in Chromium**, so the existing
+    `DRAGGABLE` (`select-none`) class was near-redundant where it was applied. Firefox/Safari do
+    not imply it, so the explicit class stays.
+  - Native HTML5 drag **already** starts from presses on `<button>`, `<input>`, and even
+    `<a draggable={false}>` descendants. The initial hypothesis that these children created dead
+    zones was **disproved by measurement**.
+  - Therefore both symptoms had **one** cause: only 3 of ~30 core-object list surfaces had a
+    `draggable` attribute at all. The rest were wholly inert, hence selectable and undraggable
+    everywhere including their icons and metadata.
+  - The one genuine dead zone is a child that `preventDefault()`s pointer-down. Verified in the
+    installed Radix source: `DropdownMenuTrigger` does this, `PopoverTrigger` does not — so
+    icon pickers (Popover) drag fine, while row-action menus (DropdownMenu) intentionally do not.
+- **Approach**: a shared primitive rather than 30 hand-patches, split so the design system stays
+  domain-free:
+  - `packages/ui/src/lib/draggable.ts` — the _mechanical_ half: `DragSource`, `dragSourceProps()`,
+    and `DRAGGABLE` = `select-none active:cursor-grabbing`. Rows keep `cursor-pointer` at rest
+    because their primary action is still click-to-open; the cursor transforms only on the drag
+    press.
+  - `apps/web/src/lib/entity-drag.ts` — the _vocabulary_ half: one `EntityDragItem` discriminated
+    union, one MIME, and `entityDragSource()`. A drop target (not the row) decides what a drop
+    means, so new drop targets need no row changes.
+  - Compatibility: a canonical write **also mirrors** the two legacy payloads (scheduling +
+    initiative hierarchy) onto the same drag, so existing drop targets keep working untouched.
+    Mirrors come out once every target reads `readEntityDragObject`.
+  - All three row families (`EntityListRow`, `ListRow`, `EntityTable`) gained a drag prop applied
+    across **every** render branch, including the inert one and the `render`/`renderRowLink` slots.
+- **Files Changed**: 30 (new: `entity-drag.ts` + 2 test files; the primitive + 3 row families in
+  `packages/ui`; ~20 surfaces across initiatives, programs, projects, tasks, cycles, teams,
+  my-work, triage, portfolio, today, work-board, task-table, view-runner).
+- **Learnings**:
+  - The `render`/`renderRowLink` slots are a **silent-failure footgun**: a slot that cherry-picks
+    props instead of spreading them drops `draggable`/`onDragStart` with no type error, leaving a
+    row that looks wired but is undraggable. This was caught for real in `task-table.tsx`, which
+    set `rowDrag` while its link slot dropped the props. Both slots are now documented to spread,
+    and `task-table` was rewritten to `{...linkProps}`.
+  - Measuring before fixing changed the design twice — it killed a `dragHandoffProps` helper built
+    on a wrong assumption about `stopPropagation`, and it redirected the fix from "patch children"
+    to "the rows were never draggable at all".
+- **Verified in the running app** (not just unit tests), by driving a real signed-in session via
+  the repo's own `e2e/tools/dev-session.ts` CDP virtual authenticator, seeding one of each object
+  through the API, and probing the live DOM:
+
+  | Surface     | row      | `user-select` | selectable descendants | cursor    | drag from icon / metadata             |
+  | ----------- | -------- | ------------- | ---------------------- | --------- | ------------------------------------- |
+  | Initiatives | `div`    | `none`        | 0 of 18                | `pointer` | canonical + legacy initiative payload |
+  | Programs    | `button` | `none`        | 0 of 16                | `pointer` | canonical payload                     |
+  | Projects    | `div`    | `none`        | 0 of 21                | `pointer` | canonical payload                     |
+  | All tasks   | `a`      | `none`        | 0                      | `pointer` | canonical + legacy schedule payload   |
+  | My Work     | `div`    | `none`        | 0                      | `pointer` | canonical + legacy schedule payload   |
+  | Triage      | `div`    | `none`        | 0                      | `pointer` | canonical + legacy schedule payload   |
+
+- **Two "feel interactive" defects the browser caught that tests could not**:
+  - The Projects list row had no `cursor-pointer` at all — it never looked clickable. Added.
+  - `EditableTitle` in `doubleClick` mode rendered `cursor-text` over a title where a **single
+    click navigates** and only a double-click edits. It advertised "type here" over the app's
+    primary navigation gesture. Now `cursor-pointer`; `cursor-text` remains correct in `click`
+    mode (detail headings, where the field really is an input) and in the freeform body editor.
+- **Known gaps** (deliberate, not oversights):
+  - Row action menus (Radix `DropdownMenu` triggers) remain non-draggable — they are controls, and
+    forcing a drag through them would fight their open-on-press behavior.
+  - Event/activity surfaces (stream, inbox notifications, search results, command palette) were
+    left alone: they represent events, not core objects.
+  - `Roadmap` in `components/initiatives/roadmap.tsx` gained a required `organizationId` prop; it
+    currently has zero callers, so whoever wires it up must pass it.
+
+---
+
 ### [LINEAR-AGENT-001] Add Linear Agent platform support for Athena
 
 - **Status**: COMPLETED

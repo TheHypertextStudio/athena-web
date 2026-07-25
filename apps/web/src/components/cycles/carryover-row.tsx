@@ -24,8 +24,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
+
+import { entityDragSource } from '@/lib/entity-drag';
 
 /** A destination cycle a carryover task can be moved to. */
 export interface CarryoverTarget {
@@ -39,6 +42,8 @@ export interface CarryoverTarget {
 export interface CarryoverItem {
   /** The task id. */
   readonly taskId: string;
+  /** The owning workspace, carried so the row can be dragged out of the dialog. */
+  readonly organizationId: string;
   /** The task title. */
   readonly title: string;
   /** The task's canonical workflow-state type (for the leading glyph). */
@@ -93,8 +98,23 @@ export function CarryoverRow({
     : 'Choose a cycle';
   const noTargets = targets.length === 0;
 
+  const dragProps = dragSourceProps(
+    entityDragSource({
+      kind: 'task',
+      id: item.taskId,
+      organizationId: item.organizationId,
+      title: item.title,
+    }),
+  );
+
   return (
-    <div className="border-outline-variant flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0">
+    <div
+      {...dragProps}
+      className={cn(
+        'border-outline-variant flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0',
+        dragProps?.className,
+      )}
+    >
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <StatusIcon type={item.stateType} className="shrink-0" />
         <span className="text-on-surface text-body-medium truncate">{item.title}</span>

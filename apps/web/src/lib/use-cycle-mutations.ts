@@ -76,6 +76,7 @@ export function useCycleMutations(
     setDecisions(
       incompleteTasks.map((task) => ({
         taskId: task.id,
+        organizationId: task.organizationId,
         title: task.title,
         stateType: stateTypeOf(task.state),
         action: defaultAction,

@@ -12,9 +12,11 @@
  */
 import type { Health, HubProjectBar } from '@docket/types';
 import { cn } from '@docket/ui';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { entityDragSource } from '@/lib/entity-drag';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { usePrefetchApi } from '@/lib/query';
 
@@ -47,6 +49,16 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
           const warm = (): void => {
             prefetch(projectDetailDef(bar.organizationId, bar.id));
           };
+          // The chip is the Project's row in this tray, so it is also its drag source — an
+          // undated Project is exactly the thing a calendar or cycle drop target wants to schedule.
+          const dragProps = dragSourceProps(
+            entityDragSource({
+              kind: 'project',
+              id: bar.id,
+              organizationId: bar.organizationId,
+              title: bar.name,
+            }),
+          );
           return (
             <li key={bar.id}>
               <Link
@@ -54,7 +66,11 @@ export function UnscheduledTray({ bars, dimmed }: UnscheduledTrayProps): JSX.Ele
                 onMouseEnter={warm}
                 onFocus={warm}
                 aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled, ${labelFor(health)}`}
-                className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none"
+                {...dragProps}
+                className={cn(
+                  'border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+                  dragProps?.className,
+                )}
               >
                 <span aria-hidden="true" className={cn('size-2 rounded-full', fillFor(health))} />
                 <span className="text-on-surface max-w-[14rem] truncate">{bar.name}</span>

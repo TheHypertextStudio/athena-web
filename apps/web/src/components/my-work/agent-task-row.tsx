@@ -8,6 +8,7 @@ import {
   StatusIcon,
   type WorkflowStateType,
 } from '@docket/ui/components';
+import type { DragSource } from '@docket/ui/lib/draggable';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -50,6 +51,12 @@ export interface AgentTaskRowProps {
   canEdit?: boolean;
   /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
   onRename?: (taskId: string, title: string) => void;
+  /**
+   * Makes the whole row a drag source, forwarded to the underlying {@link ListRow}. Callers build
+   * this from the task's canonical entity object (`entityDragSource({ kind: 'task', … })`) since
+   * the row's view-model does not carry the workspace the drop target needs.
+   */
+  drag?: DragSource;
 }
 
 /**
@@ -71,9 +78,10 @@ export function AgentTaskRow({
   onActivate,
   canEdit,
   onRename,
+  drag,
 }: AgentTaskRowProps): JSX.Element {
   return (
-    <ListRow active={active} onActivate={onActivate}>
+    <ListRow active={active} onActivate={onActivate} drag={drag}>
       <ListCell className="shrink-0">
         <StatusIcon type={task.stateType} />
       </ListCell>

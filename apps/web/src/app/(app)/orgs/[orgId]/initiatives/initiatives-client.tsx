@@ -11,7 +11,7 @@ import type {
 } from '@docket/types';
 import { InitiativeId } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { DRAGGABLE } from '@docket/ui/lib/draggable';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
@@ -30,7 +30,6 @@ import {
   planReparent,
   readInitiativeDragObject,
   selfOrDescendantPredicate,
-  writeInitiativeDragObject,
 } from '@/components/initiatives/hierarchy-dnd';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
@@ -44,6 +43,7 @@ import {
   useApiQuery,
   usePrefetchApi,
 } from '@/lib/query';
+import { entityDragSource } from '@/lib/entity-drag';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { userErrorMessage } from '@/lib/problem';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -723,14 +723,45 @@ export default function InitiativesListClient(): JSX.Element {
                     draggingId !== null &&
                     draggingId !== item.id &&
                     !isSelfOrDescendant(draggingId, item.id);
+                  // The row is the drag source for the whole object: pressing anywhere inside it —
+                  // the icon, the name, any metadata cell — starts the same drag.
+                  const dragProps = dragSourceProps(
+                    entityDragSource(
+                      {
+                        kind: 'initiative',
+                        id: item.id,
+                        organizationId: item.organizationId,
+                        title: item.name,
+                        parentInitiativeId: item.parentInitiativeId,
+                        parentLinkId: item.parentLinkId,
+                      },
+                      {
+                        enabled: canReparent,
+                        onDragStart: () => {
+                          dragOccurredRef.current = true;
+                          setDraggingId(item.id);
+                        },
+                        onDragEnd: () => {
+                          setDraggingId(null);
+                          setDropTargetId(null);
+                          // Clear on the next tick so the post-drop synthesized click (dispatched
+                          // before this macrotask) is still suppressed, while later genuine clicks
+                          // navigate normally.
+                          window.setTimeout(() => {
+                            dragOccurredRef.current = false;
+                          }, 0);
+                        },
+                      },
+                    ),
+                  );
                   return (
                     <div
                       key={item.id}
                       role="row"
                       aria-level={item.depth}
                       aria-rowindex={rowIndex + 1}
-                      draggable={canReparent}
-                      className={`${DRAGGABLE} grid h-[72px] cursor-pointer grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
+                      {...dragProps}
+                      className={`${dragProps?.className ?? ''} grid h-[72px] cursor-pointer grid-cols-[minmax(22.5rem,1fr)_5.5rem_7rem_7.5rem_6rem_7rem] rounded-lg transition-colors ${draggingId === item.id ? 'opacity-50' : 'hover:bg-surface-container-high'} ${dropTargetId === item.id ? 'ring-primary bg-surface-container-high ring-2 ring-inset' : ''}`}
                       onMouseEnter={() => {
                         prefetch(initiativeDetailDef(item.organizationId, item.id));
                       }}
@@ -742,26 +773,6 @@ export default function InitiativesListClient(): JSX.Element {
                         if (dragOccurredRef.current) return;
                         if ((event.target as HTMLElement).closest('a, button')) return;
                         router.push(`/orgs/${item.organizationId}/initiatives/${item.id}`);
-                      }}
-                      onDragStart={(event) => {
-                        if (!canReparent) return;
-                        writeInitiativeDragObject(event.dataTransfer, {
-                          id: item.id,
-                          parentInitiativeId: item.parentInitiativeId,
-                          parentLinkId: item.parentLinkId,
-                        });
-                        dragOccurredRef.current = true;
-                        setDraggingId(item.id);
-                      }}
-                      onDragEnd={() => {
-                        setDraggingId(null);
-                        setDropTargetId(null);
-                        // Clear on the next tick so the post-drop synthesized click (dispatched
-                        // before this macrotask) is still suppressed, while later genuine clicks
-                        // navigate normally.
-                        window.setTimeout(() => {
-                          dragOccurredRef.current = false;
-                        }, 0);
                       }}
                       onDragOver={(event) => {
                         if (!isValidDropTarget) return;

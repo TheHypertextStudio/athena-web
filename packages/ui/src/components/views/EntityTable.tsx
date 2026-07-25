@@ -21,6 +21,8 @@ import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 import { useListKeyboard } from '../../hooks/useListKeyboard';
 import { GroupHeader } from './GroupHeader';
+import type { DragSource } from '../../lib/draggable';
+
 import type { Column, ColumnPriority, EntityTableRowLinkProps } from './entity-table-columns';
 import { columnClassName, columnStyle } from './entity-table-columns';
 import { EntityTableRow } from './entity-table-row';
@@ -54,12 +56,24 @@ export interface EntityTableProps<T> {
   getRowKey: (row: T) => string;
   /** Per-row link target. When provided, each data row renders as an `<a href>`. */
   rowHref?: (row: T) => string | undefined;
-  /** Render the row's link via a custom element (typically a router `Link`). */
+  /**
+   * Render the row's link via a custom element (typically a router `Link`).
+   *
+   * @remarks
+   * Forward every prop you are handed — spreading (`{...props}`) rather than cherry-picking.
+   * A dropped {@link EntityTableProps.rowDrag} prop silently un-draggables the row with no type
+   * error.
+   */
   renderRowLink?: (props: EntityTableRowLinkProps) => React.ReactNode;
   /** Activate (open) a row on click / Enter. */
   onRowClick?: (row: T) => void;
   /** Warm a row's destination cache on hover/focus (prefetch-on-intent). Optional; no-op if unset. */
   onRowPrefetch?: (row: T) => void;
+  /**
+   * Make each data row a drag source, draggable from anywhere in its bounds. Return `undefined` for
+   * rows that must not be dragged (a read-only projection, a cross-workspace reference).
+   */
+  rowDrag?: (row: T) => DragSource | undefined;
   /** The currently selected row keys (controlled). */
   selected?: ReadonlySet<string>;
   /** Toggle a row's selection (controlled). */
@@ -110,6 +124,7 @@ export function EntityTable<T>({
   renderRowLink,
   onRowClick,
   onRowPrefetch,
+  rowDrag,
   selected,
   onSelect,
   collapsed: collapsedProp,
@@ -247,6 +262,7 @@ export function EntityTable<T>({
             selected={selected?.has(key) ?? false}
             href={rowHref?.(entry.row)}
             renderRowLink={renderRowLink}
+            drag={rowDrag?.(entry.row)}
             onRowPrefetch={
               onRowPrefetch
                 ? () => {

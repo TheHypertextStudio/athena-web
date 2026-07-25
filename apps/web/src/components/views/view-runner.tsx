@@ -23,6 +23,7 @@ import type { WorkflowStateType } from '@docket/ui/components';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
+import { entityDragSource } from '@/lib/entity-drag';
 import { stateTypeOf } from '@/lib/work-state';
 
 import { applyView, EMPTY_GROUP_ID } from './apply-view';
@@ -116,7 +117,17 @@ export function ViewRunner({
       groupBy={(task) => groupOfTask.get(task.id) ?? null}
       rowHeight={40}
       renderRow={(task, ctx) => (
-        <TaskRow task={toRow(task)} active={ctx.active} onActivate={ctx.onActivate} />
+        <TaskRow
+          task={toRow(task)}
+          active={ctx.active}
+          onActivate={ctx.onActivate}
+          drag={entityDragSource({
+            kind: 'task',
+            id: task.id,
+            organizationId: task.organizationId,
+            title: task.title,
+          })}
+        />
       )}
       onActivateItem={(task) => {
         onOpenTask(task.id);

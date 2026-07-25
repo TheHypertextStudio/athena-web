@@ -12,6 +12,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { FolderKanban, GanttChart, ListView, Plus, Workflow } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
@@ -31,6 +32,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
+import { entityDragSource } from '@/lib/entity-drag';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { projectOverviewDef } from '@/lib/fetch-project-overview';
 import {
@@ -202,11 +204,25 @@ function ListLens({
         </div>
         {rows.map((item) => {
           const percent = progressPercent(item);
+          // The row is the drag source for the whole Project: pressing anywhere inside it — the
+          // icon, the title, any metadata cell — starts the same drag.
+          const dragProps = dragSourceProps(
+            entityDragSource({
+              kind: 'project',
+              id: item.id,
+              organizationId: item.organizationId,
+              title: item.name,
+            }),
+          );
           return (
             <div
               key={item.id}
               role="row"
-              className="hover:bg-surface-container-high relative grid min-h-[72px] grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors"
+              {...dragProps}
+              className={cn(
+                'hover:bg-surface-container-high relative grid min-h-[72px] cursor-pointer grid-cols-[minmax(25rem,1fr)_7rem_7rem_7rem_7rem_8rem] items-center rounded-lg transition-colors',
+                dragProps?.className,
+              )}
               onMouseEnter={() => {
                 onPrefetch(item.id);
               }}
@@ -298,10 +314,23 @@ function TimelineLens({
         {rows.map((item) => {
           const left = position(item.startDate ?? item.targetDate);
           const right = position(item.targetDate ?? item.startDate);
+          // The whole timeline row — its label column and its bar — drags the Project itself.
+          const dragProps = dragSourceProps(
+            entityDragSource({
+              kind: 'project',
+              id: item.id,
+              organizationId: item.organizationId,
+              title: item.name,
+            }),
+          );
           return (
             <div
               key={item.id}
-              className="hover:bg-surface-container-high grid min-h-[64px] grid-cols-[20rem_minmax(40rem,1fr)] items-center rounded-lg transition-colors"
+              {...dragProps}
+              className={cn(
+                'hover:bg-surface-container-high grid min-h-[64px] grid-cols-[20rem_minmax(40rem,1fr)] items-center rounded-lg transition-colors',
+                dragProps?.className,
+              )}
             >
               <Link
                 href={`/orgs/${orgId}/projects/${item.id}`}

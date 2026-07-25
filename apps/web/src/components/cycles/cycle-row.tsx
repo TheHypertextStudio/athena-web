@@ -10,7 +10,8 @@
  * with its completed/committed count in the meta band, plus the status {@link Badge} trailing.
  * Before stats arrive a slim skeleton stands in for the pace meta so the row never jumps. The
  * whole row is a link to the cycle detail (rendered via a Next.js {@link Link} so the router
- * prefetches and Enter navigates natively).
+ * prefetches and Enter navigates natively), and a drag source for the cycle itself so any drop
+ * target that understands a cycle can receive it.
  *
  * Rendered with `@docket/ui` primitives and semantic tokens — no hardcoded color.
  */
@@ -21,6 +22,7 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { entityDragSource } from '@/lib/entity-drag';
 
 import { formatWindow } from './format-window';
 import { STATUS_LABEL, statusBadgeVariant, statusGlyphType } from './cycle-status';
@@ -72,12 +74,21 @@ export function CycleRow({
     <EntityListRow
       href={href}
       aria-label={title}
+      drag={entityDragSource({
+        kind: 'cycle',
+        id: cycle.id,
+        organizationId: cycle.organizationId,
+        title,
+      })}
       render={(p) => (
         <Link
           href={p.href ?? href}
           className={p.className}
           onClick={p.onClick}
           aria-current={p['aria-current']}
+          draggable={p.draggable}
+          onDragStart={p.onDragStart}
+          onDragEnd={p.onDragEnd}
           onMouseEnter={onPrefetch}
           onFocus={onPrefetch}
         >

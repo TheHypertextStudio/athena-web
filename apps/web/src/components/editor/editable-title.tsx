@@ -141,7 +141,10 @@ export function EditableTitle({
             clearOpenTimer();
             setFocused(true);
           }}
-          className={cn('cursor-text', className)}
+          // A single click on this title *opens the row*; only a double-click edits. A text cursor
+          // would advertise "type here" over the app's primary navigation gesture, so the title
+          // inherits the row's pointer instead.
+          className={cn('cursor-pointer', className)}
         >
           {value.length > 0 ? value : placeholder}
         </span>

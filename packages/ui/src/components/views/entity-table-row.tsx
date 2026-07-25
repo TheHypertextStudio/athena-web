@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { type DragSource, dragSourceProps } from '../../lib/draggable';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 
@@ -30,6 +31,8 @@ export interface EntityTableRowProps<T> {
   onRowPrefetch?: () => void;
   onActivate?: () => void;
   onSelect?: () => void;
+  /** Makes the whole row a drag source (bound to this row by EntityTable's `rowDrag`). */
+  drag?: DragSource;
 }
 
 /**
@@ -51,7 +54,9 @@ export function EntityTableRow<T>({
   onRowPrefetch,
   onActivate,
   onSelect,
+  drag,
 }: EntityTableRowProps<T>): React.JSX.Element {
+  const dragProps = dragSourceProps(drag);
   const rowClassName = cn(
     TABLE_ROW_BASE,
     TABLE_ROW_INTERACTIVE,
@@ -59,6 +64,7 @@ export function EntityTableRow<T>({
     // (its inset focus ring already marks it) so a dense table never over-colors.
     selected && 'bg-secondary-container',
     active && !selected && 'bg-surface-container-highest',
+    dragProps?.className,
   );
 
   const handleClick = React.useCallback(() => {
@@ -106,6 +112,13 @@ export function EntityTableRow<T>({
           onFocus: onRowPrefetch,
           tabIndex: -1,
           'aria-current': ariaCurrent,
+          ...(dragProps
+            ? {
+                draggable: dragProps.draggable,
+                onDragStart: dragProps.onDragStart,
+                ...(dragProps.onDragEnd ? { onDragEnd: dragProps.onDragEnd } : {}),
+              }
+            : {}),
           children: cells,
         })}
       </>
@@ -126,6 +139,7 @@ export function EntityTableRow<T>({
         onMouseEnter={onRowPrefetch}
         onFocus={onRowPrefetch}
         onKeyDown={handleKeyDown}
+        {...dragProps}
         className={rowClassName}
       >
         {cells}
@@ -143,6 +157,7 @@ export function EntityTableRow<T>({
       tabIndex={-1}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
+      {...dragProps}
       className={cn(rowClassName, 'text-left')}
     >
       {cells}

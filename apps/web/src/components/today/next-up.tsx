@@ -14,13 +14,16 @@
  * unit-tested against fixed timestamps without rendering.
  */
 import type { HubTaskItem } from '@docket/types';
+import { cn } from '@docket/ui';
 import { ArrowRight } from '@docket/ui/icons';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import Link from 'next/link';
 
 import { OrgChip } from '@/components/org-chip';
+import { entityDragSource } from '@/lib/entity-drag';
 import { formatClock } from '@/lib/format-time';
 
 import { type CalendarBlock, selectNextUp } from './next-up-select';
@@ -74,6 +77,11 @@ export default function NextUp({
             const taskId = pick.kind === 'block' ? pick.block.taskId : pick.task.id;
             const title = pick.kind === 'block' ? taskTitle(pick.block.taskId) : pick.task.title;
             const lead = pick.kind === 'block' ? formatClock(pick.block.startsAt) : 'Due today';
+            // Both pick shapes resolve to the task behind the row, so a Next-up row drags as the
+            // same canonical task object every other task surface publishes.
+            const dragProps = dragSourceProps(
+              entityDragSource({ kind: 'task', id: taskId, organizationId: orgId, title }),
+            );
             return (
               <li
                 key={`${pick.kind}-${taskId}-${pick.kind === 'block' ? pick.block.startsAt : ''}`}
@@ -84,7 +92,11 @@ export default function NextUp({
               >
                 <Link
                   href={`/orgs/${orgId}/tasks/${taskId}`}
-                  className="group border-outline-variant bg-surface-container-low hover:bg-surface-container hover:border-outline focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-[background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99] motion-safe:hover:-translate-y-px"
+                  {...dragProps}
+                  className={cn(
+                    'group border-outline-variant bg-surface-container-low hover:bg-surface-container hover:border-outline focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-[background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99] motion-safe:hover:-translate-y-px',
+                    dragProps?.className,
+                  )}
                 >
                   <span className="text-on-surface-variant min-w-[5.5rem] shrink-0 text-sm tabular-nums">
                     {lead}

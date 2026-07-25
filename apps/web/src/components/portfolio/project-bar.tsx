@@ -17,9 +17,11 @@
  */
 import type { Health, HubMilestoneItem, HubProjectBar } from '@docket/types';
 import { cn } from '@docket/ui';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { entityDragSource } from '@/lib/entity-drag';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { usePrefetchApi } from '@/lib/query';
 
@@ -78,6 +80,16 @@ export function ProjectBar({ bar, start, end, scale, dimmed }: ProjectBarProps):
   const ariaLabel = `${bar.name} — ${statusLabel(bar.status)}, ${span}, ${labelFor(health)}${
     placed.length > 0 ? `, ${placed.length} milestone${placed.length === 1 ? '' : 's'}` : ''
   }`;
+  // The bar *is* the row here, so it doubles as the Project's drag source; the milestone
+  // diamonds are pointer-transparent overlays and never intercept the gesture.
+  const dragProps = dragSourceProps(
+    entityDragSource({
+      kind: 'project',
+      id: bar.id,
+      organizationId: bar.organizationId,
+      title: bar.name,
+    }),
+  );
 
   return (
     <div className="relative h-8">
@@ -87,10 +99,12 @@ export function ProjectBar({ bar, start, end, scale, dimmed }: ProjectBarProps):
         onFocus={warmDetail}
         aria-label={ariaLabel}
         title={`${bar.name} · ${span}`}
+        {...dragProps}
         className={cn(
           'focus-visible:ring-ring group absolute top-0 flex h-8 min-w-0 items-center gap-2 rounded-md border px-2.5 text-left text-xs font-medium shadow-sm transition-[filter,opacity] hover:brightness-110 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
           barClassFor(health),
           dimmed && 'opacity-30',
+          dragProps?.className,
         )}
         style={{ left: `${left}%`, width: `${width}%` }}
       >

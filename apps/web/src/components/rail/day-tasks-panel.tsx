@@ -7,16 +7,17 @@
  * One of the shell's supplemental rail panels (paired with the Agenda). On the calendar it is the
  * default panel — a Sunsama-style *day plan* of the tasks relevant to today (the cross-workspace
  * `hub.today` `plan` set), so the rail shows work you can act on instead of duplicating the
- * calendar's own timeline. Each row is `draggable` and writes a `kind: 'task'` schedule-drag object,
- * so a task can be dragged straight onto the calendar to timebox it (the drop side is a follow-up).
+ * calendar's own timeline. Each row is a shared `entityDragSource` of `kind: 'task'`, so a task can
+ * be dragged straight onto the calendar to timebox it (the drop side is a follow-up).
  *
  * Reads through the shared TanStack Query layer (`hub.today`, org-agnostic); rows mirror the proven
  * `/tasks` row (status glyph · title · due · workspace chip) and link into the task. Tonal cards, no
  * borders — the surface step carries the separation.
  */
 import type { HubTaskItem } from '@docket/types';
+import { cn } from '@docket/ui';
 import { StatusIcon } from '@docket/ui/components';
-import { DRAGGABLE } from '@docket/ui/lib/draggable';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,8 +26,8 @@ import { type JSX, useMemo } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { OrgChip } from '@/components/org-chip';
-import { writeScheduleDragObject } from '@/components/scheduling';
 import { api } from '@/lib/api';
+import { entityDragSource } from '@/lib/entity-drag';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
@@ -81,19 +82,25 @@ function DayTaskRow({
   );
   const rename = useRenameTask(task.organizationId, [queryKeys.today(date)]);
 
+  // The canonical entity payload also mirrors the legacy scheduling object, so dropping a row on
+  // the calendar still timeboxes it.
+  const dragProps = dragSourceProps(
+    entityDragSource({
+      kind: 'task',
+      id: task.id,
+      organizationId: task.organizationId,
+      title: task.title,
+    }),
+  );
+
   return (
     <Link
       href={href}
-      draggable
-      onDragStart={(event) => {
-        writeScheduleDragObject(event.dataTransfer, {
-          kind: 'task',
-          taskId: task.id,
-          organizationId: task.organizationId,
-          title: task.title,
-        });
-      }}
-      className={`${DRAGGABLE} bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none`}
+      {...dragProps}
+      className={cn(
+        'bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+        dragProps?.className,
+      )}
     >
       <StatusIcon type={stateTypeOf(task.state)} />
       {canEdit ? (

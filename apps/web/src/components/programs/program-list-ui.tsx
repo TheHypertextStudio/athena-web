@@ -13,6 +13,7 @@ import {
   STATUS_LABEL,
   statusGlyphType,
 } from '@/components/programs/program-status';
+import { entityDragSource } from '@/lib/entity-drag';
 
 /** The row view-model derived for one Program (owner + child-work roll-up). */
 export interface ProgramRow {
@@ -57,6 +58,12 @@ export function ProgramRows({
         return (
           <EntityListRow
             key={program.id}
+            drag={entityDragSource({
+              kind: 'program',
+              id: program.id,
+              organizationId: program.organizationId,
+              title: program.name,
+            })}
             leading={
               <StatusIcon
                 type={statusGlyphType(program.status)}

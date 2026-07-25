@@ -29,6 +29,7 @@
  */
 import * as React from 'react';
 
+import { type DragSource, dragSourceProps } from '../../lib/draggable';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 
@@ -78,6 +79,12 @@ export interface EntityListRowProps {
   /**
    * Render via a custom element — typically a router `Link`. Receives the same `className`,
    * `href`, and activation handlers; use with {@link EntityListRowProps.href}.
+   *
+   * @remarks
+   * The row cannot apply props to an element it does not create, so a `render` slot must forward
+   * everything it is handed. Spreading the whole object (`{...props}`) is the safe form; cherry-
+   * picking silently drops whatever you forget — most easily {@link EntityListRowProps.drag}, whose
+   * absence turns a draggable row back into a selectable, undraggable one with no type error.
    */
   render?: (props: EntityRowRenderProps) => React.ReactNode;
   /** Activate (open) the row — fired on click and Enter. */
@@ -99,6 +106,13 @@ export interface EntityListRowProps {
    * Defaults to `false` (trailing content is always visible).
    */
   revealTrailingOnHover?: boolean;
+  /**
+   * Makes the whole row a drag source — draggable from anywhere in its bounds, with text selection
+   * suppressed so the gesture never paints a stray highlight. Applies to every rendered form of the
+   * row, including the inert (`interactive={false}`) one: a row with no destination can still be a
+   * meaningful thing to drag.
+   */
+  drag?: DragSource;
   /** Accessible label for the row when the title alone is not descriptive. */
   'aria-label'?: string;
   /** Extra classes merged onto the row element. */
@@ -113,6 +127,10 @@ export interface EntityRowRenderProps {
   onKeyDown: (event: React.KeyboardEvent) => void;
   tabIndex: number;
   'aria-current': 'true' | undefined;
+  /** Present when the row is a drag source; spread onto the rendered element. */
+  draggable?: boolean;
+  onDragStart?: (event: React.DragEvent) => void;
+  onDragEnd?: (event: React.DragEvent) => void;
   children: React.ReactNode;
 }
 
@@ -165,10 +183,12 @@ export function EntityListRow({
   selected = false,
   tabIndex = 0,
   revealTrailingOnHover = false,
+  drag,
   'aria-label': ariaLabel,
   className,
 }: EntityListRowProps): React.JSX.Element {
   const tone = React.useContext(EntityListToneContext);
+  const dragProps = dragSourceProps(drag);
 
   const handleClick = React.useCallback(() => {
     onActivate?.();
@@ -193,6 +213,7 @@ export function EntityListRow({
     // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral.
     selected && 'bg-secondary-container',
     active && !selected && 'bg-surface-container-highest',
+    dragProps?.className,
     className,
   );
 
@@ -232,7 +253,7 @@ export function EntityListRow({
 
   if (!interactive) {
     return (
-      <div aria-label={ariaLabel} className={rowClassName}>
+      <div aria-label={ariaLabel} {...dragProps} className={rowClassName}>
         {body}
       </div>
     );
@@ -248,6 +269,13 @@ export function EntityListRow({
           onKeyDown: handleKeyDown,
           tabIndex,
           'aria-current': ariaCurrent,
+          ...(dragProps
+            ? {
+                draggable: dragProps.draggable,
+                onDragStart: dragProps.onDragStart,
+                ...(dragProps.onDragEnd ? { onDragEnd: dragProps.onDragEnd } : {}),
+              }
+            : {}),
           children: body,
         })}
       </>
@@ -265,6 +293,7 @@ export function EntityListRow({
         tabIndex={tabIndex}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
+        {...dragProps}
         className={rowClassName}
       >
         {body}
@@ -282,6 +311,7 @@ export function EntityListRow({
       tabIndex={tabIndex}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
+      {...dragProps}
       className={rowClassName}
     >
       {body}

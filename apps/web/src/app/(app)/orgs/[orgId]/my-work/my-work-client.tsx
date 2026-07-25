@@ -8,6 +8,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useState } from 'react';
 
 import { useSession } from '@/lib/auth-client';
+import { entityDragSource } from '@/lib/entity-drag';
 import { useActiveOrg } from '@/components/active-org';
 import { AgentTaskRow } from '@/components/my-work/agent-task-row';
 import { SplitTabs } from '@/components/my-work/split-tabs';
@@ -170,6 +171,12 @@ export default function MyWorkClient(): JSX.Element {
             renderRow={(task, ctx) => (
               <AgentTaskRow
                 task={toRow(task, tab)}
+                drag={entityDragSource({
+                  kind: 'task',
+                  id: task.id,
+                  organizationId: task.organizationId,
+                  title: task.title,
+                })}
                 active={ctx.active}
                 onActivate={ctx.onActivate}
                 canEdit={canEdit}

@@ -24,7 +24,10 @@
 import type { Health, InitiativeTimelineBar, InitiativeTimelineLane } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Flag, FolderKanban } from '@docket/ui/icons';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
 import type { JSX } from 'react';
+
+import { entityDragSource } from '@/lib/entity-drag';
 
 import { formatAxisTick, formatDate, toMillis } from './format-date';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
@@ -52,6 +55,15 @@ function statusLabel(status: string): string {
 
 /** Props for {@link Roadmap}. */
 export interface RoadmapProps {
+  /**
+   * The workspace the rolled-up Programs and Projects belong to.
+   *
+   * @remarks
+   * The timeline roll-up returns lanes and bars without their owning org (they are all children
+   * of one Initiative, which is org-scoped), so the org comes in from the Initiative detail that
+   * renders the roadmap. Drop targets need it to reject cross-workspace moves.
+   */
+  organizationId: string;
   /** The always-on Program lanes from the timeline roll-up. */
   lanes: readonly InitiativeTimelineLane[];
   /** The Project bars from the timeline roll-up. */
@@ -75,6 +87,7 @@ export interface RoadmapProps {
  * @returns the rendered roadmap.
  */
 export function Roadmap({
+  organizationId,
   lanes,
   bars,
   targetDate,
@@ -201,6 +214,15 @@ export function Roadmap({
                   formatDate(bar.startDate) && formatDate(bar.targetDate)
                     ? `${formatDate(bar.startDate)} – ${formatDate(bar.targetDate)}`
                     : (formatDate(bar.startDate) ?? formatDate(bar.targetDate) ?? 'Unscheduled');
+                // The bar is the Project's row on this roadmap, so it is also its drag source.
+                const dragProps = dragSourceProps(
+                  entityDragSource({
+                    kind: 'project',
+                    id: bar.id,
+                    organizationId,
+                    title: bar.name,
+                  }),
+                );
                 return (
                   <li key={bar.id} className="relative h-8">
                     <button
@@ -211,9 +233,11 @@ export function Roadmap({
                       aria-label={`${bar.name} — ${statusLabel(bar.status)}, ${spanCopy}${
                         bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
                       }`}
+                      {...dragProps}
                       className={cn(
                         'focus-visible:ring-ring absolute top-0 flex h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-white shadow-sm transition-[filter] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
                         fillFor(bar.health),
+                        dragProps?.className,
                       )}
                       style={{ left: `${left}%`, width: `${width}%` }}
                     >
@@ -230,27 +254,43 @@ export function Roadmap({
           <div className="flex flex-col gap-2">
             <h3 className="text-on-surface-variant text-xs font-medium">Unscheduled</h3>
             <ul className="flex flex-wrap gap-2">
-              {unscheduled.map((bar) => (
-                <li key={bar.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onOpenProject(bar.id);
-                    }}
-                    aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled${
-                      bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
-                    }`}
-                    className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn('size-2 rounded-full', fillFor(bar.health))}
-                    />
-                    <span className="text-on-surface truncate">{bar.name}</span>
-                    <span className="text-on-surface-variant">{statusLabel(bar.status)}</span>
-                  </button>
-                </li>
-              ))}
+              {unscheduled.map((bar) => {
+                // A dateless Project is exactly what a calendar or cycle drop target wants to
+                // schedule, so the chip drags the same object a placed bar does.
+                const dragProps = dragSourceProps(
+                  entityDragSource({
+                    kind: 'project',
+                    id: bar.id,
+                    organizationId,
+                    title: bar.name,
+                  }),
+                );
+                return (
+                  <li key={bar.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenProject(bar.id);
+                      }}
+                      aria-label={`${bar.name} — ${statusLabel(bar.status)}, unscheduled${
+                        bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
+                      }`}
+                      {...dragProps}
+                      className={cn(
+                        'border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                        dragProps?.className,
+                      )}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={cn('size-2 rounded-full', fillFor(bar.health))}
+                      />
+                      <span className="text-on-surface truncate">{bar.name}</span>
+                      <span className="text-on-surface-variant">{statusLabel(bar.status)}</span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         ) : null}

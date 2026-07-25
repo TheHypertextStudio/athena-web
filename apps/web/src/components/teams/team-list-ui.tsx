@@ -6,6 +6,8 @@ import { FolderKanban, ListChecks, Workflow } from '@docket/ui/icons';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { entityDragSource } from '@/lib/entity-drag';
+
 /** The row view-model derived for one Team (scope + workflow roll-up). */
 export interface TeamRow {
   team: TeamOut;
@@ -24,7 +26,13 @@ export interface TeamRowsProps {
   ariaLabel: string;
 }
 
-/** A bordered {@link EntityList} of team rows (shared by the flat + grouped renders). */
+/**
+ * A bordered {@link EntityList} of team rows (shared by the flat + grouped renders).
+ *
+ * @remarks
+ * Rows have no destination yet, so they stay inert — but each one is still a drag source for its
+ * team, which is what lets a team be dropped onto a target that scopes work to it.
+ */
 export function TeamRows({
   rows,
   projectNoun,
@@ -43,6 +51,12 @@ export function TeamRows({
             key={team.id}
             interactive={false}
             aria-label={`${team.key} ${team.name}`}
+            drag={entityDragSource({
+              kind: 'team',
+              id: team.id,
+              organizationId: team.organizationId,
+              title: team.name,
+            })}
             leading={
               <span className="bg-surface-container text-on-surface-variant rounded px-1.5 py-0.5 font-mono text-xs font-medium">
                 {team.key}

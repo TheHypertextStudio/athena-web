@@ -27,6 +27,7 @@ import {
 } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import { FolderKanban, Target, XCircle } from '@docket/ui/icons';
+import type { DragSource } from '@docket/ui/lib/draggable';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -95,6 +96,13 @@ export interface TriageRowProps {
   onAssignProgram: (programId: string) => void;
   /** Dismiss (archive) this task out of the queue. */
   onDismiss: () => void;
+  /**
+   * Makes the whole row a drag source, forwarded to the underlying {@link ListRow} — so an unsorted
+   * item can be dragged onto a destination instead of walked through the menu. Callers build this
+   * from the task's canonical entity object (`entityDragSource({ kind: 'task', … })`) since the
+   * row's view-model does not carry the workspace the drop target needs.
+   */
+  drag?: DragSource;
 }
 
 /**
@@ -132,6 +140,7 @@ export function TriageRow({
   onAssignProject,
   onAssignProgram,
   onDismiss,
+  drag,
 }: TriageRowProps): JSX.Element {
   return (
     <ContextMenu>
@@ -142,7 +151,7 @@ export function TriageRow({
         row measurement.
       */}
       <ContextMenuTrigger asChild>
-        <ListRow active={active} onActivate={onActivate}>
+        <ListRow active={active} onActivate={onActivate} drag={drag}>
           <ListCell className="shrink-0">
             <StatusIcon type={task.stateType} />
           </ListCell>

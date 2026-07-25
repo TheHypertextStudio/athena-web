@@ -18,11 +18,14 @@
  */
 import type { ProgramWorkOut } from '@docket/types';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
+import { cn } from '@docket/ui/lib/utils';
 import { Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
+import { entityDragSource } from '@/lib/entity-drag';
 import { stateTypeOf } from '@/lib/work-state';
 
 /** Props for {@link WorkBoard}. */
@@ -152,6 +155,8 @@ export function WorkBoard({
                       {segment.tasks.map((task) => (
                         <li key={task.id}>
                           <TaskLine
+                            taskId={task.id}
+                            organizationId={task.organizationId}
                             title={task.title}
                             stateType={stateTypeOf(task.state)}
                             canEdit={canEdit}
@@ -196,14 +201,28 @@ export function WorkBoard({
  * inline editor — a single click opens the task, a double-click renames it — and the row is a plain
  * container so the edit `<input>` never nests inside a `<button>`. Otherwise the whole row is a
  * single button that opens the task on click, as before.
+ *
+ * Either form is a drag source for the task, so work can be pulled off the board onto the calendar
+ * or any other target that accepts a task.
  */
-function TaskLine({ title, stateType, canEdit, onOpen, onRename }: TaskLineProps): JSX.Element {
+function TaskLine({
+  taskId,
+  organizationId,
+  title,
+  stateType,
+  canEdit,
+  onOpen,
+  onRename,
+}: TaskLineProps): JSX.Element {
   const rowClass =
     'group border-outline-variant hover:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:ring-ring flex min-h-10 w-full items-center gap-2 border-b px-3 text-left transition-colors outline-none last:border-b-0 focus-visible:ring-1 focus-visible:ring-inset';
+  const dragProps = dragSourceProps(
+    entityDragSource({ kind: 'task', id: taskId, organizationId, title }),
+  );
 
   if (canEdit && onRename) {
     return (
-      <div className={rowClass}>
+      <div {...dragProps} className={cn(rowClass, dragProps?.className)}>
         <StatusIcon type={stateType} className="size-4 shrink-0" />
         <EditableTitle
           value={title}
@@ -219,7 +238,12 @@ function TaskLine({ title, stateType, canEdit, onOpen, onRename }: TaskLineProps
   }
 
   return (
-    <button type="button" onClick={onOpen} className={rowClass}>
+    <button
+      type="button"
+      onClick={onOpen}
+      {...dragProps}
+      className={cn(rowClass, dragProps?.className)}
+    >
       <StatusIcon type={stateType} className="size-4 shrink-0" />
       <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{title}</span>
     </button>
@@ -228,6 +252,10 @@ function TaskLine({ title, stateType, canEdit, onOpen, onRename }: TaskLineProps
 
 /** Props for {@link TaskLine}. */
 interface TaskLineProps {
+  /** The task's id — identifies the row and the object it publishes when dragged. */
+  taskId: string;
+  /** The workspace the task belongs to, carried on the drag so targets can reject cross-org drops. */
+  organizationId: string;
   /** The task's title. */
   title: string;
   /** The task's canonical workflow-state type, coloring the leading glyph. */

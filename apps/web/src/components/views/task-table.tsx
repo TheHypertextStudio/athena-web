@@ -40,6 +40,7 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { entityDragSource } from '@/lib/entity-drag';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
 import { stateTypeOf } from '@/lib/work-state';
@@ -216,7 +217,9 @@ export interface TaskTableProps {
  * The single task-list surface: every task row reads with the same status glyph + title + aligned
  * properties as every other task list, and the same row chrome as an entity roster. Rows open the
  * task detail through a real Next.js `Link`; `onOpenTask` may additionally run on activation (e.g.
- * a router push for the keyboard path).
+ * a router push for the keyboard path). Every row is also a drag source publishing the canonical
+ * `kind: 'task'` entity object, so a task can be dragged from any task list onto any drop target
+ * (the calendar, an initiative, a cycle) without this surface knowing what a drop means.
  *
  * @param props - The {@link TaskTableProps}.
  * @returns the rendered table.
@@ -239,18 +242,18 @@ export function TaskTable({
       {...(groups ? { groups } : { rows: tasks ?? [] })}
       getRowKey={(task) => task.id}
       rowHref={(task) => taskHref(task)}
-      renderRowLink={(lp) => (
-        <Link
-          href={lp.href}
-          className={lp.className}
-          onClick={lp.onClick}
-          onMouseEnter={lp.onMouseEnter}
-          onFocus={lp.onFocus}
-          tabIndex={lp.tabIndex}
-          aria-current={lp['aria-current']}
-        >
-          {lp.children}
-        </Link>
+      rowDrag={(task) =>
+        entityDragSource({
+          kind: 'task',
+          id: task.id,
+          organizationId: task.organizationId,
+          title: task.title,
+        })
+      }
+      renderRowLink={({ children, ...linkProps }) => (
+        // Spread rather than cherry-pick: a dropped `draggable`/`onDragStart` would silently turn
+        // the row back into an undraggable one with no type error.
+        <Link {...linkProps}>{children}</Link>
       )}
       onRowPrefetch={onRowPrefetch}
       onRowClick={

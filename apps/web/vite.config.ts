@@ -53,6 +53,9 @@ const config = docketVitest({
     // and it is what partitions per-user storage. Its expiry and its rejection of malformed or
     // empty values are behavior, not wiring.
     'src/lib/session-snapshot.ts',
+    // The persisted-cache key derivation is what keeps two accounts' work data apart on a shared
+    // device, so the per-user scoping and the availability guard are gated on their own.
+    'src/lib/query-persist.ts',
   ],
 });
 

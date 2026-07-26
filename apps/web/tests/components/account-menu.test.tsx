@@ -18,6 +18,16 @@ vi.mock('../../src/lib/auth-client', () => ({
 }));
 
 import AccountMenu from '../../src/components/account-menu';
+import { makeQueryWrapper } from '../support/query';
+
+/**
+ * Signing out now clears the persisted query cache as well as the session, so the menu reads the
+ * query client from context and must be rendered inside a provider — as it always is in the app.
+ */
+function renderMenu(ui: React.ReactElement) {
+  const { wrapper: Wrapper } = makeQueryWrapper();
+  return render(<Wrapper>{ui}</Wrapper>);
+}
 
 afterEach(() => {
   cleanup();
@@ -26,7 +36,7 @@ afterEach(() => {
 describe('AccountMenu', () => {
   it('opens the shared create-workspace action', async () => {
     const onCreateWorkspace = vi.fn();
-    render(<AccountMenu onCreateWorkspace={onCreateWorkspace} />);
+    renderMenu(<AccountMenu onCreateWorkspace={onCreateWorkspace} />);
 
     const trigger = screen.getByRole('button', { name: 'Account menu' });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
@@ -45,7 +55,7 @@ describe('AccountMenu', () => {
     // shared dismiss context, the same mechanism the nav rows use.
     const onCreateWorkspace = vi.fn();
     const dismiss = vi.fn();
-    render(
+    renderMenu(
       <ShellDrawerProvider dismiss={dismiss}>
         <AccountMenu onCreateWorkspace={onCreateWorkspace} />
       </ShellDrawerProvider>,
@@ -64,7 +74,7 @@ describe('AccountMenu', () => {
   });
 
   it('opens the user-owned global Settings destination', async () => {
-    render(<AccountMenu onCreateWorkspace={vi.fn()} />);
+    renderMenu(<AccountMenu onCreateWorkspace={vi.fn()} />);
 
     const trigger = screen.getByRole('button', { name: 'Account menu' });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });

@@ -3,10 +3,12 @@
 import { ContextProvider } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { TooltipProvider } from '@docket/ui/primitives';
-import { QueryClientProvider } from '@tanstack/react-query';
-import { type JSX, type ReactNode, useState } from 'react';
+import { type QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { type JSX, type ReactNode, useRef, useState } from 'react';
 
 import { createQueryClient } from '@/lib/query';
+import { SessionExpiredError } from '@/lib/query';
+import { signOutAndPurge } from '@/lib/sign-out';
 
 import { AuthenticationInterlockProvider } from './authentication-interlock';
 import { ServiceWorkerProvider } from './service-worker-provider';
@@ -42,7 +44,21 @@ export interface ProvidersProps {
  * — the App Router client-component pattern for TanStack Query.
  */
 export function Providers({ children }: ProvidersProps): JSX.Element {
-  const [queryClient] = useState(() => createQueryClient());
+  // The `onError` hook `createQueryClient` documents was never actually supplied, so the global
+  // "a 401 signs you out" path did not exist. Wiring it matters more now that the cache is
+  // persisted: an expired session must purge the on-disk copy, not just stop refetching.
+  const clientRef = useRef<QueryClient | null>(null);
+  const [queryClient] = useState(() => {
+    const client = createQueryClient({
+      onError: (error) => {
+        if (error instanceof SessionExpiredError && clientRef.current) {
+          void signOutAndPurge(clientRef.current);
+        }
+      },
+    });
+    clientRef.current = client;
+    return client;
+  });
   return (
     <ContextProvider>
       <VocabularyProvider>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { DENSITIES, useContextState } from '@docket/ui/components';
 import {
   Building,
@@ -19,7 +21,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { signOut } from '@/lib/auth-client';
+import { signOutAndPurge } from '@/lib/sign-out';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
 import type { PaletteItem, PaletteScope } from './types';
@@ -66,6 +68,7 @@ interface CommandActionsInput {
  */
 export function useCommandActions({ scope, close }: CommandActionsInput): readonly PaletteItem[] {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { orgs, activeOrgId, orgName } = useActiveOrg();
   const { density, setDensity } = useContextState();
 
@@ -157,9 +160,9 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
         keywords: ['log out', 'logout', 'leave'],
         run: () => {
           close();
-          void signOut().then(() => {
-            router.replace('/sign-in');
-          });
+          // Centralized: see `lib/sign-out.ts` — clearing the persisted query cache on the way
+          // out is what stops the next person on a shared device seeing this one's data.
+          void signOutAndPurge(queryClient);
         },
       },
     );

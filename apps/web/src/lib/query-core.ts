@@ -71,7 +71,12 @@ export const STALE = {
 } as const;
 
 /** How long an unused query stays cached before GC — long enough that back-nav stays instant. */
-const DEFAULT_GC_TIME_MS = 5 * 60_000;
+// Must be >= the persisted cache's maxAge (24h): `persistQueryClient` refuses to restore an entry
+// whose gcTime has already elapsed, so the previous 5 minutes meant essentially nothing survived a
+// cold start and offline rendering silently did nothing. The cost is that unused queries stay
+// resident for a day within one long-lived tab — bounded by what was actually visited, and the
+// persister's own maxAge still evicts on restore.
+const DEFAULT_GC_TIME_MS = 24 * 60 * 60_000;
 
 /**
  * Build a {@link QueryClient} with the app-wide defaults.
@@ -108,6 +113,17 @@ export function createQueryClient(handlers?: { onError?: (error: unknown) => voi
         refetchOnWindowFocus: true,
         // A 401 (session expired) is not worth retrying — fail fast so the global handler redirects.
         retry: (failureCount, error) => !(error instanceof SessionExpiredError) && failureCount < 1,
+      },
+      mutations: {
+        // Counter-intuitive but deliberate. The DEFAULT ('online') *pauses* a mutation while
+        // offline and replays it on reconnect — which is precisely the offline write queue this
+        // app does not want: a write can then land hours later against a server whose state has
+        // moved on, with nobody watching. 'always' attempts it, fails immediately with a
+        // network-level ApiRequestError, and the existing inline error treatment explains it.
+        //
+        // Queries stay on the default 'online' on purpose: switching them would make every mounted
+        // surface fire and fail the instant signal drops, spraying error banners across the app.
+        networkMode: 'always',
       },
     },
   });

@@ -33,7 +33,9 @@
     "@emotion/server": "^11.11.0",
     "@js-temporal/polyfill": "^0.5.1",
     "@mui/material-nextjs": "^9.0.1",
-    "@tanstack/react-query": "^5.101.0",
+    "@tanstack/query-async-storage-persister": "^5.101.4",
+    "@tanstack/react-query": "^5.101.4",
+    "@tanstack/react-query-persist-client": "^5.101.4",
     "@tiptap/extension-link": "3.27.3",
     "@tiptap/markdown": "3.27.3",
     "@tiptap/pm": "3.27.3",
@@ -43,6 +45,7 @@
     "better-auth": "catalog:",
     "dagre": "^0.8.5",
     "hono": "catalog:",
+    "idb-keyval": "^6.3.0",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"

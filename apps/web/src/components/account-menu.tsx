@@ -1,5 +1,7 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { useShellDrawer } from '@docket/ui/components';
 import { LogOut, Plus, Settings } from '@docket/ui/icons';
 import {
@@ -15,7 +17,8 @@ import {
 import { useRouter } from 'next/navigation';
 import type { JSX } from 'react';
 
-import { authClient, signOut } from '@/lib/auth-client';
+import { authClient } from '@/lib/auth-client';
+import { signOutAndPurge } from '@/lib/sign-out';
 
 /**
  * The account control pinned to the foot of the app sidebar.
@@ -34,6 +37,7 @@ export default function AccountMenu({
   onCreateWorkspace: () => void;
 }): JSX.Element | null {
   const router = useRouter();
+  const queryClient = useQueryClient();
   // When this menu is rendered inside the mobile off-canvas nav drawer, a selection must both act
   // and close the drawer — otherwise the destination renders behind the still-open drawer. `null`
   // on the static desktop rail (no drawer to close), so every call is a safe no-op there.
@@ -91,9 +95,9 @@ export default function AccountMenu({
         <DropdownMenuItem
           onSelect={() => {
             dismissDrawer?.();
-            void signOut().then(() => {
-              router.replace('/sign-in');
-            });
+            // Centralized: sign-out must also clear the in-memory cache, the offline identity
+            // snapshot, and every persisted cache bucket before navigating.
+            void signOutAndPurge(queryClient);
           }}
         >
           <LogOut aria-hidden="true" className="size-4" />

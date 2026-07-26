@@ -15,6 +15,7 @@ import {
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, ListChecks, Search } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -26,12 +27,14 @@ import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { OfflineBanner, OfflineShellFallback } from '@/components/offline-state';
+import { QueryPersistence } from '@/components/query-persistence';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
+import { purgeAllPersistedQueryCaches } from '@/lib/query-persist';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
 import {
   clearSessionSnapshot,
@@ -137,6 +140,18 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   // re-resolve identity mid-session.
   const [snapshot] = useState(() => readSessionSnapshot(Date.now()));
 
+  // If the snapshot named a different person than the session that just resolved, everything
+  // restored from the persisted cache belongs to that other account. Drop it before any of it can
+  // be rendered — this is the shared-device case, where B signs in on a device A used last.
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (status !== 'authenticated' || !session || !snapshot) return;
+    if (snapshot.userId !== session.user.id) {
+      queryClient.clear();
+      void purgeAllPersistedQueryCaches();
+    }
+  }, [status, session, snapshot, queryClient]);
+
   // Reconnecting is the one moment a re-ask is guaranteed to be worthwhile. Better Auth's own
   // online manager also refetches here; this is belt and braces for the captive-portal case, where
   // the browser never fired an `offline` event to begin with.
@@ -206,6 +221,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
         orgsError={orgsError}
       >
         <CommandPaletteProvider enabled={!shellLoading}>
+          <QueryPersistence userId={userId} />
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
               loading={shellLoading}

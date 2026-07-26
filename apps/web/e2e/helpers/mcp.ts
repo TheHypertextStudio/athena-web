@@ -99,7 +99,12 @@ export async function registerClient(
       response_types: ['code'],
     },
   });
-  expect(res.status(), 'dynamic client registration must succeed').toBe(201);
+  // RFC 7591 §3.2.1 specifies 201 Created, and the deprecated mcp() plugin returned it;
+  // `@better-auth/oauth-provider` answers 200 instead. Both are successful registrations and
+  // real clients branch on 2xx, so accept either rather than pinning a status the AS does not
+  // emit — this mismatch has failed every E2E run (and therefore blocked every production
+  // deploy) since the oauth-provider migration.
+  expect([200, 201], 'dynamic client registration must succeed').toContain(res.status());
   const body = (await res.json()) as { client_id: string; scope?: string };
   expect(body.client_id).toBeTruthy();
   // Registering WITHOUT a `scope` is what every real MCP client does, and the AS writes its
@@ -145,6 +150,10 @@ export async function authorizeInBrowser(
     state: randomBytes(8).toString('hex'),
     code_challenge: opts.pkce.challenge,
     code_challenge_method: 'S256',
+    // RFC 8707 resource indicator, which the MCP spec requires of clients. It is what binds the
+    // access token's `aud` to this resource server; omit it and the AS mints an audience-less
+    // token that the RS correctly refuses.
+    resource: MCP_URL,
   });
   await page.goto(`${authorizePath}?${params.toString()}`);
 
@@ -176,6 +185,9 @@ export async function exchangeCode(
       redirect_uri: REDIRECT_URI,
       client_id: opts.clientId,
       code_verifier: opts.pkce.verifier,
+      // Repeated at the token endpoint per RFC 8707 §2.2 — this is the request the AS actually
+      // reads the audience from when stamping `aud`.
+      resource: MCP_URL,
     },
   });
   expect(res.status(), 'token exchange must succeed').toBe(200);

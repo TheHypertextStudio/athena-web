@@ -162,19 +162,38 @@ function bearerToken(headers: Headers): string | null {
  * @returns the resolved {@link McpContext} with the token's verified scopes.
  * @throws {AuthError} When OAuth is not configured or the token fails verification.
  */
+/**
+ * The OAuth issuer identifier — Better Auth's mount point, NOT the bare API origin.
+ *
+ * @remarks
+ * `MCP_ISSUER_URL` names the API origin because that is what a deploy configures, but the
+ * authorization server is Better Auth mounted at `/api/auth`: its discovery document advertises
+ * `issuer: <origin>/api/auth` and it stamps that same value into every access token's `iss`.
+ * Verifying against the bare origin therefore rejects every token the AS issues, and a PRM that
+ * points `authorization_servers` at the bare origin names something that is not an issuer.
+ * One helper so the advertised issuer, the verified issuer, and the JWKS location cannot drift.
+ *
+ * @returns the issuer identifier, or `null` when the RS is not configured for OAuth.
+ */
+export function oauthIssuer(): string | null {
+  const origin = env.MCP_ISSUER_URL?.replace(/\/$/, '');
+  return origin ? `${origin}/api/auth` : null;
+}
+
 async function resolveBearerContext(token: string): Promise<McpContext> {
   // Issuer binding (§2.5 item 3): the RS only accepts tokens once it advertises an issuer
   // + canonical resource. Absent that config, a Bearer token is rejected outright (it
   // cannot have been minted by *this* AS for *this* resource).
-  if (!env.MCP_ISSUER_URL || !env.MCP_RESOURCE_URL) {
+  const issuer = oauthIssuer();
+  if (!issuer || !env.MCP_RESOURCE_URL) {
     throw new AuthError('Bearer tokens are not accepted on this resource');
   }
 
   let payload: Awaited<ReturnType<typeof verifyAccessToken>>;
   try {
     payload = await verifyAccessToken(token, {
-      verifyOptions: { audience: env.MCP_RESOURCE_URL, issuer: env.MCP_ISSUER_URL },
-      jwksUrl: `${env.MCP_ISSUER_URL}/api/auth/jwks`,
+      verifyOptions: { audience: env.MCP_RESOURCE_URL, issuer },
+      jwksUrl: `${issuer}/jwks`,
     });
   } catch {
     throw new AuthError();

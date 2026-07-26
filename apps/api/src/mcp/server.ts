@@ -21,7 +21,7 @@ import type { Context } from 'hono';
 import { env } from '../env';
 import { ApiError } from '../error';
 import type { McpContext } from './auth';
-import { resolveMcpContext } from './auth';
+import { oauthIssuer, resolveMcpContext } from './auth';
 import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
 import { registerResources } from './resources';
@@ -151,7 +151,10 @@ function problem(c: Context, err: unknown): Response {
  */
 export function protectedResourceMetadata(c: Context): Response {
   const resource = canonicalResourceUrl(c);
-  const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
+  // The issuer identifier is Better Auth's mount point, not the API origin — that is what the AS
+  // advertises and what it stamps into `iss`, so a client that discovers the AS from here lands
+  // directly on its real document instead of relying on the compatibility redirect below.
+  const issuer = oauthIssuer() ?? `${new URL(resource).origin}/api/auth`;
   return c.json({
     resource,
     authorization_servers: [issuer],
@@ -183,7 +186,7 @@ export function authorizationServerMetadata(c: Context): Response {
     return c.redirect(`${issuer}/api/auth/.well-known/oauth-authorization-server`, 307);
   }
   return c.json({
-    issuer,
+    issuer: oauthIssuer() ?? `${issuer}/api/auth`,
     authorization_endpoint: `${issuer}/api/auth/oauth2/authorize`,
     token_endpoint: `${issuer}/api/auth/oauth2/token`,
     registration_endpoint: `${issuer}/api/auth/oauth2/register`,

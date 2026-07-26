@@ -5,12 +5,17 @@
  *
  * @remarks
  * Better Auth's `oauthProvider()` plugin redirects authenticated users here when
- * an external MCP client (Claude Desktop, Cursor, …) requests scopes. The URL carries three
- * query params set by Better Auth's authorize handler (authorize.mjs `consentPage` branch):
+ * an external MCP client (Claude Desktop, Cursor, …) requests scopes. The URL carries the
+ * **signed authorization query** — every parameter of the original `/oauth2/authorize` request
+ * plus an `exp` and a `sig` — rather than a short opaque handle:
  *
- * - `consent_code` — the temporary code stored server-side; echoed back in the POST body.
+ * - `sig` — the HMAC over the query the plugin issued; its presence marks a well-formed request,
+ *   and the endpoint re-verifies it server-side before honoring anything here.
  * - `client_id` — the OAuth client id (may be an HTTPS URL for CIMD clients).
- * - `scope` — space-separated list of Docket MCP scopes the client is requesting.
+ * - `scope` — space-separated list of scopes the client is requesting.
+ *
+ * The deprecated `oidcProvider()` pair issued a `consent_code` instead; that contract is gone.
+ * Nothing on this page is trusted — the query is echoed back verbatim and the server decides.
  *
  * The client's display name/icon come from `GET /v1/oauth/clients/:clientId/metadata` — the
  * **server-validated** row Better Auth's OAuth application table holds (for CIMD clients, the
@@ -18,12 +23,13 @@
  * preflight; see `apps/api/src/mcp/cimd.ts`). This page never fetches the (attacker-controlled)
  * `client_id` URL directly — that would render whatever an untrusted client chose to serve.
  *
- * On **Approve**: POSTs to `/api/auth/oauth2/consent` with `{ accept: true, consent_code }`.
- * Better Auth stores the consent, exchanges the code for an authorization code, and returns
- * `{ redirectURI }` — the page then performs a client-side redirect to complete the flow.
+ * On **Approve**: POSTs to `/api/auth/oauth2/consent` with `{ accept: true, oauth_query }`, where
+ * `oauth_query` is this page's own query string echoed back unmodified. Better Auth verifies the
+ * signature, stores the consent, mints an authorization code, and returns `{ redirect_uri }` —
+ * the page then performs a client-side redirect to complete the flow.
  *
- * On **Deny**: POSTs the same endpoint with `{ accept: false, consent_code }`. Better Auth
- * returns `{ redirectURI }` pointing at the client's `redirect_uri` with `error=access_denied`.
+ * On **Deny**: POSTs the same endpoint with `{ accept: false, oauth_query }`. Better Auth returns
+ * a `redirect_uri` pointing at the client's callback with `error=access_denied`.
  *
  * Unauthenticated users are redirected to `/sign-in` with the current search params preserved
  * so Better Auth can resume the flow after the user signs in.
@@ -163,7 +169,12 @@ function ConsentPage(): JSX.Element {
   const params = useSearchParams();
   const { data: session, isPending: sessionPending } = useSession();
 
-  const consentCode = params.get('consent_code');
+  // `oauthProvider()` redirects here with the SIGNED authorization query — every original
+  // authorize parameter plus `exp`/`sig` — not the `consent_code` the deprecated oidcProvider()
+  // pair issued. The whole query string is echoed back as `oauth_query`, which a `before` hook
+  // on the consent endpoint signature-verifies to reload the pending authorization. `sig` is
+  // therefore the marker of a well-formed request.
+  const signature = params.get('sig');
   const clientId = params.get('client_id') ?? '';
   const scopeParam = params.get('scope') ?? '';
 
@@ -184,7 +195,7 @@ function ConsentPage(): JSX.Element {
 
   // Redirect unauthenticated users to sign-in, then back to this exact consent screen (params
   // and all) once they authenticate. Must go through `signInReturnPath`'s `?callbackURL=`
-  // wrapper - a bare `/sign-in${currentSearch}` puts `consent_code`/`client_id`/`scope` on
+  // wrapper - a bare `/sign-in${currentSearch}` puts the signed authorize params on
   // `/sign-in`'s own query string, which the sign-in page never reads (it only honors
   // `callbackURL`), so it falls back to the home destination and the OAuth grant is lost.
   useEffect(() => {
@@ -195,8 +206,8 @@ function ConsentPage(): JSX.Element {
 
   const decide = useCallback(
     async (accept: boolean): Promise<void> => {
-      if (!consentCode) {
-        setError('Missing consent code. Please try connecting again.');
+      if (!signature) {
+        setError('This authorization link is incomplete. Please try connecting again.');
         return;
       }
       setPending(true);
@@ -205,22 +216,34 @@ function ConsentPage(): JSX.Element {
         const res = await fetch('/api/auth/oauth2/consent', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ accept, consent_code: consentCode }),
+          // Echo the signed query back verbatim (minus the leading `?`) — the endpoint verifies
+          // the signature over the exact string it issued, so re-serializing from `params` would
+          // risk reordering or re-encoding it into a signature mismatch.
+          body: JSON.stringify({ accept, oauth_query: window.location.search.replace(/^\?/, '') }),
           credentials: 'same-origin',
         });
         if (!res.ok) {
           setError('Could not update authorization. Please try again.');
           return;
         }
-        const { redirectURI } = (await res.json()) as { redirectURI: string };
-        window.location.href = redirectURI;
+        // The handler answers `{ redirect: true, url }` even though the plugin's own OpenAPI
+        // metadata for this route documents `redirect_uri`. Prefer what it actually emits and
+        // fall back to the documented name, so a future version aligning with its docs keeps
+        // working — and surface a real error rather than navigating to `undefined`.
+        const body = (await res.json()) as { url?: string; redirect_uri?: string };
+        const destination = body.url ?? body.redirect_uri;
+        if (!destination) {
+          setError('Could not complete authorization. Please try connecting again.');
+          return;
+        }
+        window.location.href = destination;
       } catch {
         setError('Something went wrong. Please try again.');
       } finally {
         setPending(false);
       }
     },
-    [consentCode],
+    [signature],
   );
 
   if (sessionPending) {
@@ -236,7 +259,7 @@ function ConsentPage(): JSX.Element {
     return <ConsentShell>{<></>}</ConsentShell>;
   }
 
-  if (!consentCode) {
+  if (!signature) {
     return (
       <ConsentShell>
         <Card className="w-full max-w-sm">

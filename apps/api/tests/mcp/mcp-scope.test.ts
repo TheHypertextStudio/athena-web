@@ -354,7 +354,10 @@ describe('discovery routes (PRM + AS metadata)', () => {
       bearer_methods_supported: string[];
     };
     expect(prm.resource).toBe('https://api.docket.test/mcp');
-    expect(prm.authorization_servers).toEqual(['https://auth.docket.test']);
+    // Better Auth's mount point, not the bare origin: that is the issuer identifier the AS
+    // advertises and stamps into every token's `iss`, so pointing a client at the origin sends
+    // it somewhere that is not an issuer — and makes every minted token fail verification.
+    expect(prm.authorization_servers).toEqual(['https://auth.docket.test/api/auth']);
     // Includes `offline_access`: RFC 9728 §2 defines this as the scopes used in authorization
     // requests for the resource, not the resource's capabilities, and a client that intersects
     // this list with the challenge hint would otherwise drop it and lose its refresh token.

@@ -38,6 +38,7 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { withComposerReset } from '@/components/composer/reset-on-open';
 import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
@@ -75,7 +76,7 @@ export interface CreateTaskDialogProps {
  * @param props - The {@link CreateTaskDialogProps}.
  * @returns the rendered composer.
  */
-export function CreateTaskDialog({
+export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   orgId,
   teams,
   defaultTeamId,
@@ -137,28 +138,6 @@ export function CreateTaskDialog({
   }, [options.cycles, teamId, cycleNoun]);
 
   const statusOptions = useMemo(() => workflowStateOptions(workflowStates), [workflowStates]);
-
-  /** Reset transient form state whenever the dialog closes. */
-  const handleOpenChange = useCallback(
-    (next: boolean): void => {
-      if (!next) {
-        setTitle('');
-        setSummary('');
-        setBody('');
-        setTeamOverride(null);
-        setState(null);
-        setPriority('none');
-        setAssigneeId(defaultAssigneeId);
-        setProjectId(defaultProjectId);
-        setCycleId(null);
-        setDueDate(null);
-        setLabelIds([]);
-        setError(null);
-      }
-      onOpenChange(next);
-    },
-    [onOpenChange, defaultAssigneeId, defaultProjectId],
-  );
 
   /** Toggle a label id in/out of the selected set. */
   const toggleLabel = useCallback((id: string): void => {
@@ -230,7 +209,7 @@ export function CreateTaskDialog({
   return (
     <ComposerShell
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={onOpenChange}
       heading="New task"
       icon={<TaskAlt aria-hidden="true" />}
       context={teams.length > 1 ? teamName : undefined}
@@ -279,4 +258,4 @@ export function CreateTaskDialog({
       />
     </ComposerShell>
   );
-}
+});

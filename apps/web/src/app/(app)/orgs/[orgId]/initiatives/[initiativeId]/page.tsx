@@ -504,8 +504,8 @@ export default function InitiativeDetailPage(): JSX.Element {
                 ? userErrorMessage(postUpdate.error, 'Could not post the update.')
                 : null
             }
-            onPost={(body, health) => {
-              postUpdate.mutate({ body, ...(health ? { health } : {}) });
+            onPost={async (body, health) => {
+              await postUpdate.mutateAsync({ body, ...(health ? { health } : {}) });
             }}
             showHealthComposer
           />

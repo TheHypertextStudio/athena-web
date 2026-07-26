@@ -7,6 +7,48 @@
 
 ## Active Tasks
 
+### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
+
+- **Status**: REVIEW
+- **Started**: 2026-07-25
+- **Priority**: P0
+- **Description**: Reported as "forms don't clear when creating new things". Creating a project (or
+  task, program, initiative, cycle, team) and reopening the composer showed the entity you had just
+  created — title, summary, description, and every property pick still populated.
+- **Root cause**: The composers are _controlled_ by their host page, so the component stays mounted
+  for the life of the page and its `useState` outlives any open→close cycle. Each composer
+  compensated with a hand-written `handleOpenChange` wrapper that reset every field on close — but
+  the successful-create path closed the dialog by calling the host's `onOpenChange` prop _directly_,
+  never touching that wrapper. The single most common exit was the one exit that leaked. All six
+  composers carried the identical defect (they were copied from one another). Cancelling via
+  Esc/backdrop/discard _did_ clear, which is why it read as intermittent.
+- **Approach**: Replaced the per-field bookkeeping with a lifetime rule instead of a longer reset
+  list. `withComposerReset` keys the composer subtree to an open-generation counter, so a
+  closed→open transition remounts it and _all_ state — current fields, future fields, in-flight and
+  error flags, and the shell's own discard confirmation — is rebuilt from its initializers. The
+  reset is keyed to entry, so no exit path can bypass it, and the closing dialog no longer blanks
+  itself mid-animation. The hand-rolled reset blocks are deleted, and `onOpenChange` is now passed
+  through untouched.
+- **Also fixed (same family, opposite direction)**: `UpdatesPanel` cleared its textarea on submit,
+  before the write settled — a failed post rendered its error over an empty box having already
+  discarded the text needed to retry. `onPost` now returns a promise; the draft clears only on
+  success and survives a failure.
+- **Files changed**: `apps/web/src/components/composer/reset-on-open.tsx` (new), the six composers
+  under `components/{tasks,projects,initiatives,programs,teams,cycles}/create-*.tsx`,
+  `components/entity-detail/updates-panel.tsx`, `lib/use-project-mutations.ts`,
+  `lib/use-program-mutations.ts`, and the three entity detail pages that post updates. Tests:
+  `tests/composers/composer-reset.test.tsx`, `tests/composers/composer-reset-contract.test.ts`,
+  `tests/components/updates-panel.test.tsx`.
+- **Learnings**: The existing composer tests rendered with `open` hard-coded to `true` and never
+  toggled it, so no test could observe a second open — the bug was invisible to a suite that
+  otherwise covered these composers well. Any component whose state must be scoped to a UI episode
+  (an open dialog, a selected row, an active step) should bind that state's lifetime to the episode
+  via remount, rather than hand-reconciling it on every exit path.
+- **Verified**: `pnpm typecheck`, `pnpm lint`, and the full web suite (913 tests) pass; the new
+  behavior test was confirmed red against the old code before the fix.
+
+---
+
 ### [MCP-SCOPE-001] MCP write tools return 403 for every connected client
 
 - **Status**: REVIEW
@@ -47,6 +89,7 @@
   provider's `clientRegistration*` options — the exact surface that broke. Both are now pinned.
   A registration-time scope ceiling that is also the authorize-time ceiling is a trap: it can only
   ever drift narrower, and it fails in production only, for DCR'd clients only, on writes only.
+
 ---
 
 ### [PWA-001] Make Docket installable with read-only offline support

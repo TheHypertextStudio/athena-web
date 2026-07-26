@@ -482,9 +482,7 @@ export default function ProjectDetailPage(): JSX.Element {
             resolveActor={resolveActor}
             posting={updatePosting}
             postError={updateError}
-            onPost={(body) => {
-              postUpdate(body);
-            }}
+            onPost={(body) => postUpdate(body)}
             showHealthComposer={false}
           />
         </div>

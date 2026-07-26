@@ -13,8 +13,10 @@
  * {@link CreateCycleDialogProps.nextNumberForTeam}. Built on the shared {@link ComposerShell}.
  *
  * The dialog is *controlled* by the host page so its header "New {cycle}" button and empty-state
- * CTA open the *same* dialog. This component owns only the form's transient field state (reset
- * whenever the dialog closes). The parent is handed the created {@link CycleOut} through
+ * CTA open the *same* dialog. This component owns only the form's transient field state, which
+ * {@link withComposerReset} scopes to a single open — so a reopened composer re-derives its default
+ * date range from today rather than from whenever it was last closed. The parent is handed the
+ * created {@link CycleOut} through
  * {@link CreateCycleDialogProps.onCreated} so it can optimistically prepend the new row + route.
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
@@ -25,6 +27,7 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { withComposerReset } from '@/components/composer/reset-on-open';
 import { enumOptions } from '@/components/pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -84,7 +87,7 @@ export interface CreateCycleDialogProps {
  * @param props - The {@link CreateCycleDialogProps}.
  * @returns the rendered composer.
  */
-export function CreateCycleDialog({
+export const CreateCycleDialog = withComposerReset(function CreateCycleComposer({
   orgId,
   cycleNoun,
   teams,
@@ -119,23 +122,6 @@ export function CreateCycleDialog({
     startsAt.length > 0 &&
     endsAt.length > 0 &&
     endsAt > startsAt;
-
-  /** Reset transient form state whenever the dialog closes (next range re-derives from today). */
-  const handleOpenChange = useCallback(
-    (next: boolean): void => {
-      if (!next) {
-        const freshStart = todayISODate();
-        setName('');
-        setTeamOverride(null);
-        setStartsAt(freshStart);
-        setEndsAt(addDaysISO(freshStart, DEFAULT_CYCLE_DAYS));
-        setStatus('upcoming');
-        setError(null);
-      }
-      onOpenChange(next);
-    },
-    [onOpenChange],
-  );
 
   const canSubmit = teamId !== null && !teamsLoading && rangeValid;
 
@@ -197,7 +183,7 @@ export function CreateCycleDialog({
   return (
     <ComposerShell
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={onOpenChange}
       heading={`New ${cycleNoun.toLowerCase()}`}
       title={name}
       onTitleChange={setName}
@@ -238,4 +224,4 @@ export function CreateCycleDialog({
       />
     </ComposerShell>
   );
-}
+});

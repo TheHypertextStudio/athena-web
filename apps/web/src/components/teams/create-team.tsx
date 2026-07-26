@@ -24,6 +24,7 @@ import { type JSX, useCallback, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { withComposerReset } from '@/components/composer/reset-on-open';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The longest auto-suggested key length (matches typical Linear-style team prefixes). */
@@ -55,7 +56,7 @@ export interface CreateTeamDialogProps {
  * @param props - The {@link CreateTeamDialogProps}.
  * @returns the rendered composer.
  */
-export function CreateTeamDialog({
+export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
   orgId,
   open,
   onOpenChange,
@@ -85,24 +86,6 @@ export function CreateTeamDialog({
   );
 
   const canSubmit = name.trim().length > 0 && key.trim().length > 0;
-
-  /** Reset transient form state whenever the dialog closes. */
-  const handleOpenChange = useCallback(
-    (next: boolean): void => {
-      if (!next) {
-        setName('');
-        setKey('');
-        setKeyDirty(false);
-        setSummary('');
-        setDescription('');
-        setTriageEnabled(true);
-        setAgentGuidance('');
-        setError(null);
-      }
-      onOpenChange(next);
-    },
-    [onOpenChange],
-  );
 
   /** Create the team with the default workflow, then prepend it via the parent. */
   const submit = useCallback(async (): Promise<void> => {
@@ -156,7 +139,7 @@ export function CreateTeamDialog({
   return (
     <ComposerShell
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={onOpenChange}
       heading="New team"
       title={name}
       onTitleChange={onNameChange}
@@ -234,4 +217,4 @@ export function CreateTeamDialog({
       </div>
     </ComposerShell>
   );
-}
+});

@@ -66,7 +66,8 @@ function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
 export interface ProjectMutations {
   patchProject: (patch: ProjectPatch) => void;
   setInitiatives: (initiativeIds: readonly string[]) => void;
-  postUpdate: (body: string) => void;
+  /** Post an update; the promise settles with the write so the composer can clear only on success. */
+  postUpdate: (body: string) => Promise<void>;
   propsPending: boolean;
   propsError: string | null;
   updatePosting: boolean;
@@ -196,7 +197,9 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
   return {
     patchProject: patch.mutate,
     setInitiatives: initiativeM.mutate,
-    postUpdate: updateM.mutate,
+    postUpdate: async (body) => {
+      await updateM.mutateAsync(body);
+    },
     propsPending: patch.isPending || initiativeM.isPending,
     propsError: patch.error
       ? userErrorMessage(patch.error, 'Could not update this project.')

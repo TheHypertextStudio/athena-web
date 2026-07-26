@@ -13,7 +13,9 @@
  *
  * The dialog is *controlled* by the host page so its header "New {initiative}" button and
  * empty-state CTA open the *same* dialog. This component owns only the form's transient field
- * state (reset whenever the dialog closes). The parent is handed the created {@link InitiativeOut}
+ * state, which {@link withComposerReset} scopes to a single open so every open starts from a
+ * pristine draft however the previous one ended. The parent is handed the created
+ * {@link InitiativeOut}
  * through {@link CreateInitiativeDialogProps.onCreated} so it can route to its (empty) detail.
  *
  * @see {@link useComposerOptions} for the owner option source.
@@ -32,6 +34,7 @@ import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { withComposerReset } from '@/components/composer/reset-on-open';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -107,7 +110,7 @@ export interface CreateInitiativeDialogProps {
  * @param props - The {@link CreateInitiativeDialogProps}.
  * @returns the rendered composer.
  */
-export function CreateInitiativeDialog({
+export const CreateInitiativeDialog = withComposerReset(function CreateInitiativeComposer({
   orgId,
   initiativeNoun,
   open,
@@ -130,27 +133,6 @@ export function CreateInitiativeDialog({
   const [template, setTemplate] = useState<'blank' | 'strategic' | 'objective'>('blank');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  /** Reset transient form state whenever the dialog closes. */
-  const handleOpenChange = useCallback(
-    (next: boolean): void => {
-      if (!next) {
-        setName('');
-        setSummary('');
-        setBody('');
-        setOwnerId(null);
-        setStatus('active');
-        setTargetDate(null);
-        setHealth(null);
-        setPriority('none');
-        setUpdateCadence('monthly');
-        setTemplate('blank');
-        setError(null);
-      }
-      onOpenChange(next);
-    },
-    [onOpenChange],
-  );
 
   const canSubmit = name.trim().length > 0;
 
@@ -214,7 +196,7 @@ export function CreateInitiativeDialog({
   return (
     <ComposerShell
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={onOpenChange}
       heading={`New ${initiativeNoun.toLowerCase()}`}
       title={name}
       onTitleChange={setName}
@@ -310,4 +292,4 @@ export function CreateInitiativeDialog({
       />
     </ComposerShell>
   );
-}
+});

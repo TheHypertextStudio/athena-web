@@ -49,7 +49,8 @@ function toProgramPatchBody(patch: ProgramPatch): ProgramUpdate {
 /** ProgramMutations describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramMutations {
   patchProgram: (patch: ProgramPatch) => void;
-  postUpdate: (body: string, health: Health | undefined) => void;
+  /** Post an update; the promise settles with the write so the composer can clear only on success. */
+  postUpdate: (body: string, health: Health | undefined) => Promise<void>;
   propsPending: boolean;
   propsError: string | null;
   updatePosting: boolean;
@@ -126,8 +127,8 @@ export function useProgramMutations(
 
   return {
     patchProgram: patch.mutate,
-    postUpdate: (body, health) => {
-      postUpdateM.mutate({ body, health });
+    postUpdate: async (body, health) => {
+      await postUpdateM.mutateAsync({ body, health });
     },
     propsPending: patch.isPending,
     propsError: patch.error

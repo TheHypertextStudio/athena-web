@@ -395,7 +395,7 @@ export default function ProgramDetailPage(): JSX.Element {
             posting={updatePosting}
             postError={updateError}
             onPost={(body, postHealth) => {
-              postUpdate(body, postHealth);
+              return postUpdate(body, postHealth);
             }}
           />
         </div>

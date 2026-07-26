@@ -71,8 +71,15 @@ export interface UpdatesPanelProps {
   posting: boolean;
   /** A post error to surface, if any. */
   postError: string | null;
-  /** Post a new update with an optional health verdict. */
-  onPost: (body: string, health: Health | undefined) => void;
+  /**
+   * Post a new update with an optional health verdict.
+   *
+   * @remarks
+   * Returns a promise that settles with the write, so the panel can clear the composer on success
+   * and preserve the draft on failure. A rejection is expected to be reported through
+   * {@link UpdatesPanelProps.postError}; the panel swallows it rather than re-reporting.
+   */
+  onPost: (body: string, health: Health | undefined) => Promise<void>;
   /**
    * Show the "Set health" composer control. Defaults to `true`; pass `false` on surfaces where
    * health is not update-driven (e.g. Project) so the composer posts a plain update.
@@ -99,10 +106,25 @@ export function UpdatesPanel({
   const [body, setBody] = useState('');
   const [health, setHealth] = useState<HealthChoice>('');
 
-  function submit(event: React.SyntheticEvent): void {
+  /**
+   * Post the draft, clearing the composer only once the update is actually saved.
+   *
+   * @remarks
+   * Clearing optimistically on submit reads fine until the post fails: the panel would surface
+   * {@link UpdatesPanelProps.postError} over an empty box, having already thrown away the text the
+   * author would need to retry. Awaiting the parent's write keeps a failed draft exactly where it
+   * was — the error is recoverable instead of destructive.
+   */
+  async function submit(event: React.SyntheticEvent): Promise<void> {
     event.preventDefault();
-    if (body.trim().length === 0) return;
-    onPost(body.trim(), health === '' ? undefined : health);
+    const trimmed = body.trim();
+    if (trimmed.length === 0 || posting) return;
+    try {
+      await onPost(trimmed, health === '' ? undefined : health);
+    } catch {
+      // The parent owns the message and renders it through `postError`; keep the draft to retry.
+      return;
+    }
     setBody('');
     setHealth('');
   }
@@ -110,7 +132,9 @@ export function UpdatesPanel({
   return (
     <div className="flex flex-col gap-6">
       <form
-        onSubmit={submit}
+        onSubmit={(event) => {
+          void submit(event);
+        }}
         className="border-outline-variant bg-surface-container-low flex flex-col gap-3 rounded-xl border p-4"
       >
         <label

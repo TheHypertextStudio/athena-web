@@ -14,9 +14,11 @@
  *
  * The dialog is *controlled* by the host page so the page's header "New {project}" button and its
  * empty-state "Create your first {project}" CTA both open the *same* dialog. This component owns
- * only the form's transient field state (reset whenever the dialog closes). The parent owns the
- * roster and is handed the created {@link ProjectOut} through {@link CreateProjectDialogProps.onCreated}
- * so it can optimistically prepend the new row and route to its detail.
+ * only the form's transient field state; {@link withComposerReset} scopes that state to a single
+ * open, so every open starts from a pristine draft however the previous one ended. The parent owns
+ * the roster and is handed the created {@link ProjectOut} through
+ * {@link CreateProjectDialogProps.onCreated} so it can optimistically prepend the new row and route
+ * to its detail.
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
  * @see {@link useComposerOptions} for the lead + initiative option sources.
@@ -28,6 +30,7 @@ import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -67,7 +70,7 @@ export interface CreateProjectDialogProps {
  * @param props - The {@link CreateProjectDialogProps}.
  * @returns the rendered composer.
  */
-export function CreateProjectDialog({
+export const CreateProjectDialog = withComposerReset(function CreateProjectComposer({
   orgId,
   projectNoun,
   teams,
@@ -94,25 +97,6 @@ export function CreateProjectDialog({
   const [error, setError] = useState<string | null>(null);
 
   const teamId = teamOverride ?? defaultTeamId;
-
-  /** Reset transient form state whenever the dialog closes. */
-  const handleOpenChange = useCallback(
-    (next: boolean): void => {
-      if (!next) {
-        setName('');
-        setSummary('');
-        setBody('');
-        setTeamOverride(null);
-        setLeadId(null);
-        setStartDate(null);
-        setTargetDate(null);
-        setInitiativeIds([]);
-        setError(null);
-      }
-      onOpenChange(next);
-    },
-    [onOpenChange],
-  );
 
   /** Toggle an initiative id in/out of the selected set. */
   const toggleInitiative = useCallback((id: string): void => {
@@ -181,7 +165,7 @@ export function CreateProjectDialog({
   return (
     <ComposerShell
       open={open}
-      onOpenChange={handleOpenChange}
+      onOpenChange={onOpenChange}
       heading={`New ${projectNoun.toLowerCase()}`}
       title={name}
       onTitleChange={setName}
@@ -234,4 +218,4 @@ export function CreateProjectDialog({
       />
     </ComposerShell>
   );
-}
+});

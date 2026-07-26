@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@docket/tsconfig/base.json",
+  "compilerOptions": {
+    // `WebWorker` instead of `DOM`, and never both: a service worker has no `window` or
+    // `document`, and loading both libs in one program collides on shared globals (`EventTarget`,
+    // `fetch`, `caches`). Keeping this its own program — mirroring `e2e/tsconfig.json` — is what
+    // lets the worker be strictly typechecked without weakening the app's own DOM types.
+    "lib": ["ES2022", "WebWorker"],
+    "types": [],
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "composite": false,
+    "incremental": false
+  },
+  "include": ["**/*.ts"]
+}

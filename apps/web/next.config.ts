@@ -75,7 +75,17 @@ const nextConfig: NextConfig = {
   // so hot-reload works (Next 16 blocks cross-origin dev resources by default).
   allowedDevOrigins: ['web.docket.localhost', '*.docket.localhost', ...authAllowedDevOrigins()],
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      {
+        // The worker script itself must never be served stale, or a deployed update can sit
+        // unnoticed behind a cached copy for as long as the browser's heuristic freshness lasts —
+        // and the update prompt only fires when the browser actually re-fetches these bytes and
+        // finds them different. The assets the worker caches are content-hashed and unaffected.
+        source: '/sw.js',
+        headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }],
+      },
+    ];
   },
   async redirects() {
     return [

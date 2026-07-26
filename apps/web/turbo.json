@@ -5,7 +5,10 @@
   // the intent token with `BETTER_AUTH_SECRET` (read from `process.env`, not via `@docket/env`).
   "tasks": {
     "build": {
-      "env": ["NEXT_PUBLIC_*"]
+      "env": ["NEXT_PUBLIC_*"],
+      // The bundled service worker is a build product alongside `.next`, so it must be restored
+      // from cache with it — otherwise a cache hit leaves `public/sw.js` missing entirely.
+      "outputs": ["public/sw.js"]
     },
     "dev": {
       "env": ["NEXT_PUBLIC_*", "BETTER_AUTH_SECRET"]

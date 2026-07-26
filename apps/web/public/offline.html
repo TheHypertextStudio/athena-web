@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  The offline fallback document, served by the service worker when a navigation cannot reach the
+  network.
+
+  Deliberately a static file rather than a Next route. The worker answers a request for some other
+  URL with this document, so the address bar still reads (say) /today — which means any App Router
+  page served here would hydrate one route tree while the URL claimed another. Static HTML has no
+  hydration and cannot mismatch. It also cannot be coupled to the app bundle or accidentally read
+  user data, and it sidesteps the route-group question entirely (/ belongs to marketing and is
+  forced light; the app routes are auth-gated).
+
+  Keeping the original URL is the point: this is a waiting room, not a dead end. Reloading once the
+  connection returns lands on the real route.
+
+  Colours are the --surface-container / --on-surface token pair, inlined because no stylesheet is
+  reachable offline.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f2f5fb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1a1d23" media="(prefers-color-scheme: dark)" />
+    <title>You're offline — Docket</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --surface-container: #f2f5fb;
+        --surface: #fcfdff;
+        --on-surface: #16171a;
+        --on-surface-variant: #5b6070;
+        --outline-variant: #d6dceb;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --surface-container: #1a1d23;
+          --surface: #22252b;
+          --on-surface: #ebedf1;
+          --on-surface-variant: #a8aebf;
+          --outline-variant: #343a45;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: var(--surface-container);
+        color: var(--on-surface);
+        /* Matches the app's brand face when it happens to be installed locally, and degrades to the
+           platform UI face otherwise. No webfont is reachable offline. */
+        font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .panel {
+        width: 100%;
+        max-width: 26rem;
+        padding: 2rem;
+        border: 1px solid var(--outline-variant);
+        border-radius: 0.75rem;
+        background: var(--surface);
+        text-align: center;
+      }
+      .disc {
+        width: 3rem;
+        height: 3rem;
+        margin: 0 auto 1rem;
+        display: grid;
+        place-items: center;
+        border-radius: 999px;
+        background: var(--surface-container);
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.0625rem;
+        font-weight: 600;
+        line-height: 1.4;
+      }
+      p {
+        margin: 0 0 1.5rem;
+        font-size: 0.875rem;
+        line-height: 1.55;
+        color: var(--on-surface-variant);
+      }
+      button {
+        font: inherit;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: var(--on-surface);
+        background: var(--surface-container);
+        border: 1px solid var(--outline-variant);
+        border-radius: 0.5rem;
+        /* >=40px tall to satisfy the craft rubric's mobile touch-target gate. */
+        min-height: 2.5rem;
+        padding: 0 1rem;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--on-surface-variant);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--on-surface);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="panel">
+      <div class="disc" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="32" height="32" rx="7" fill="#1C1C1F" />
+          <rect x="8.5" y="8" width="4" height="16" rx="2" fill="#FAFAFA" />
+          <rect x="14" y="8" width="4" height="10" rx="2" fill="#FAFAFA" />
+          <rect x="19.5" y="8" width="4" height="13" rx="2" fill="#FAFAFA" />
+        </svg>
+      </div>
+      <h1>You're offline</h1>
+      <p>
+        Docket can't load this page without a connection. Nothing has been lost — reconnect and this
+        page will pick up where you left off.
+      </p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+    <script>
+      // Reload the moment connectivity returns, so nobody sits on this page longer than they need
+      // to. The URL is still the route that was requested, so this lands on the real page.
+      addEventListener('online', function () {
+        location.reload();
+      });
+    </script>
+  </body>
+</html>

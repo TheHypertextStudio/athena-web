@@ -27,6 +27,7 @@ import { useAuthenticationInterlock } from '@/components/authentication-interloc
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { OfflineBanner, OfflineShellFallback } from '@/components/offline-state';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
+import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
@@ -346,6 +347,10 @@ function AppShellInner({
   const { openPalette } = useCommandPalette();
   const { tabs, activeKey, closeTab } = useOpenDocuments();
 
+  // Registration itself lives at the root so it happens on every route; the shell only consumes
+  // the result, so the update prompt can share the one banner slot with the offline notice.
+  const { applyUpdate } = useServiceWorkerUpdate();
+
   // The sidebar's unread badge polls on a focus-only minute interval, sharing the inbox's
   // notifications-count cache (queryKeys.notificationsCount()) so the two stay in lock-step.
   const unreadCountQ = useLiveApiQuery(
@@ -487,11 +492,15 @@ function AppShellInner({
           tabBar={tabBar}
           mobileBrand={mobileBrand}
           mobileActions={mobileActions}
-          // The shell banner slot is a sibling of `<main>`, so the standing offline disclosure
-          // never disturbs a page's `h-full` sizing the way page-level content would.
+          // The shell banner slot is a sibling of `<main>`, so these never disturb a page's
+          // `h-full` sizing the way page-level content would. Offline outranks the update prompt:
+          // reloading for a new version is pointless — and would land on the offline page —
+          // while there is no connection to fetch it over.
           banner={
             offline ? (
               <OfflineBanner online={offline.online} onRetry={offline.onRetry} />
+            ) : applyUpdate ? (
+              <UpdateBanner onApply={applyUpdate} />
             ) : undefined
           }
           aside={settingsSurface ? undefined : railAsideFor(loading, calendarSurface)}

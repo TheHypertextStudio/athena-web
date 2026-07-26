@@ -1,0 +1,160 @@
+'use client';
+
+import { Button } from '@docket/ui/primitives';
+import {
+  type JSX,
+  type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
+/**
+ * Registers the service worker and publishes the "a new version is ready" handshake.
+ *
+ * @remarks
+ * Mounted at the **root**, not inside the authenticated shell, so registration happens on every
+ * route. Someone arriving at `/sign-in` or a marketing page is exactly who needs the worker
+ * installed early — offline support must be bootstrapped before it is needed, and an app that only
+ * registered after sign-in would never cache its offline page for a first-run install.
+ *
+ * The update state is published through context rather than rendered here, so the shell can place
+ * {@link UpdateBanner} in its one banner slot and order it against the offline notice, instead of
+ * two independent banners stacking.
+ *
+ * The worker installs and then **waits**: `sw.ts` deliberately omits `skipWaiting()` on install, so
+ * a new version never takes over a live tab and mixes old chunks with new ones mid-session. The
+ * exchange is explicit — the worker waits, this notices, someone accepts, and only then does it
+ * activate and the page reload.
+ *
+ * Registration failures are swallowed on purpose: they are not user-actionable, there is no toast
+ * system in this codebase, and reading `.message` off the resulting `DOMException` is a hard
+ * violation of the repository's error-source policy. A failed registration costs offline support
+ * and nothing else.
+ */
+
+/** How long to wait between update checks triggered by the tab regaining focus. */
+const UPDATE_CHECK_THROTTLE_MS = 60_000;
+
+/** Published service-worker state. */
+interface ServiceWorkerValue {
+  /** Applies the waiting update and reloads, or `null` when no update is waiting. */
+  readonly applyUpdate: (() => void) | null;
+}
+
+const ServiceWorkerContext = createContext<ServiceWorkerValue>({ applyUpdate: null });
+
+/** Read the current service-worker update state. */
+export function useServiceWorkerUpdate(): ServiceWorkerValue {
+  return useContext(ServiceWorkerContext);
+}
+
+/** Registers the worker and publishes update state to the tree. */
+export function ServiceWorkerProvider({ children }: { children: ReactNode }): JSX.Element {
+  const [waiting, setWaiting] = useState<ServiceWorker | null>(null);
+  const reloadingRef = useRef(false);
+  const lastCheckRef = useRef(0);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined;
+
+    let registration: ServiceWorkerRegistration | undefined;
+    let disposed = false;
+
+    // Prompt only when an existing worker is being replaced. On a first visit a worker also
+    // reaches `installed`, but nothing on screen is stale — asking someone to reload a page they
+    // just opened would be noise.
+    const offerIfStale = (worker: ServiceWorker | null): void => {
+      if (!disposed && worker && navigator.serviceWorker.controller) setWaiting(worker);
+    };
+
+    const onControllerChange = (): void => {
+      // Guarded: this can fire more than once, and a reload loop would be catastrophic.
+      if (reloadingRef.current) return;
+      reloadingRef.current = true;
+      window.location.reload();
+    };
+
+    const register = async (): Promise<void> => {
+      try {
+        registration = await navigator.serviceWorker.register('/sw.js');
+        if (disposed) return;
+
+        // A worker may already be waiting from an earlier visit that was never reloaded.
+        offerIfStale(registration.waiting);
+
+        registration.addEventListener('updatefound', () => {
+          const installing = registration?.installing;
+          if (!installing) return;
+          installing.addEventListener('statechange', () => {
+            if (installing.state === 'installed') offerIfStale(installing);
+          });
+        });
+      } catch {
+        // See the note above: not user-actionable, and the error object must not be read.
+      }
+    };
+
+    const onVisibility = (): void => {
+      if (document.visibilityState !== 'visible' || !registration) return;
+      const now = Date.now();
+      if (now - lastCheckRef.current < UPDATE_CHECK_THROTTLE_MS) return;
+      lastCheckRef.current = now;
+      void registration.update();
+    };
+
+    // Registering after `load` keeps the install off the critical path of the first paint.
+    if (document.readyState === 'complete') {
+      void register();
+    } else {
+      window.addEventListener('load', () => void register(), { once: true });
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    document.addEventListener('visibilitychange', onVisibility);
+
+    return () => {
+      disposed = true;
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
+  const applyUpdate = useCallback((): void => {
+    if (!waiting) return;
+    // `type`, never `message`: the error-source policy's AST scan flags any property named
+    // `message` under `src/`, and the worker matches on `type` accordingly.
+    waiting.postMessage({ type: 'SKIP_WAITING' });
+    setWaiting(null);
+  }, [waiting]);
+
+  const value = useMemo<ServiceWorkerValue>(
+    () => ({ applyUpdate: waiting ? applyUpdate : null }),
+    [waiting, applyUpdate],
+  );
+
+  return <ServiceWorkerContext value={value}>{children}</ServiceWorkerContext>;
+}
+
+/** The inline "new version ready" prompt, rendered by the shell in its banner slot. */
+export function UpdateBanner({ onApply }: { readonly onApply: () => void }): JSX.Element {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="border-outline-variant bg-surface-container-high text-on-surface text-body-medium flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2"
+    >
+      <span className="font-medium">A new version of Docket is ready</span>
+      <span className="text-on-surface-variant min-w-0 flex-1">
+        Reload to pick it up. Your open work stays where it is.
+      </span>
+      <Button variant="outline" size="sm" onClick={onApply}>
+        Reload
+      </Button>
+    </div>
+  );
+}

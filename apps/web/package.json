@@ -10,11 +10,11 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "next build",
+    "build": "next build && tsx scripts/build-service-worker.ts --production",
     "dev": "portless run --force",
-    "dev:app": "next dev",
+    "dev:app": "tsx scripts/build-service-worker.ts && next dev",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p service-worker/tsconfig.json",
     "lint": "eslint .",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run",
     "test:watch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest",
@@ -60,6 +60,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "esbuild": "^0.28.1",
     "jsdom": "^29.1.1",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.2",

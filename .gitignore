@@ -78,3 +78,6 @@ temp/
 # Superpowers brainstorm visual companion
 .superpowers/
 .vercel/
+
+# Bundled service worker (generated from apps/web/service-worker by the build script)
+apps/web/public/sw.js

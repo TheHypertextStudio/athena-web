@@ -9,6 +9,7 @@ import { type JSX, type ReactNode, useState } from 'react';
 import { createQueryClient } from '@/lib/query';
 
 import { AuthenticationInterlockProvider } from './authentication-interlock';
+import { ServiceWorkerProvider } from './service-worker-provider';
 
 /** Props for {@link Providers}. */
 export interface ProvidersProps {
@@ -31,6 +32,9 @@ export interface ProvidersProps {
  * 4. TanStack Query's `QueryClientProvider` — the dynamic-data layer that backs every
  *    read/mutation hook in `@/lib/query`, so data surfaces auto-refetch on window focus
  *    and after mutations instead of needing a manual "Refresh" button.
+ * 5. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ *    authenticated shell. Offline support has to be installed before it is needed, and someone
+ *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
  *
  * All are Client Components, so this file carries the `'use client'` boundary and is
  * mounted once by the root layout. The {@link QueryClient} is created via `useState` (lazy
@@ -44,7 +48,9 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
       <VocabularyProvider>
         <TooltipProvider delayDuration={400}>
           <AuthenticationInterlockProvider>
-            <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+            <QueryClientProvider client={queryClient}>
+              <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+            </QueryClientProvider>
           </AuthenticationInterlockProvider>
         </TooltipProvider>
       </VocabularyProvider>

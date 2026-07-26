@@ -76,6 +76,10 @@ export const baseConfig = tseslint.config(
       '**/.next.*/**',
       '**/.turbo/**',
       '**/coverage/**',
+      // Generated build output, like `.next` above: the service worker is authored as typechecked
+      // ES modules under `apps/web/service-worker` (linted there) and bundled to this file. The
+      // bundle is not in any tsconfig, so the type-aware parser cannot resolve it.
+      '**/public/sw.js',
       '**/drizzle/**',
       '**/.claude/**',
       '**/.lova/**',

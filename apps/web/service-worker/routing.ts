@@ -1,0 +1,121 @@
+/**
+ * The service worker's routing table, as a pure function.
+ *
+ * @remarks
+ * Split from `sw.ts` so it can be unit-tested in the app's normal Vitest run: the worker itself
+ * needs a `ServiceWorkerGlobalScope`, but *which strategy applies to a URL* is plain logic, and it
+ * is the part where a mistake is expensive — caching an authenticated API response, or swallowing
+ * a dev-server request and breaking hot reload.
+ *
+ * There is deliberately no precache manifest anywhere in this worker. Next emits content-hashed,
+ * immutable filenames under `/_next/static`, so a cache-first strategy is self-healing: a new build
+ * requests new URLs and simply misses. That is the entire reason this codebase needs no build-time
+ * manifest generator (and therefore no Workbox or Serwist, both of which are webpack plugins that
+ * would force this Turbopack app onto the webpack builder).
+ */
+
+/** What the fetch handler should do with a request. */
+export type CacheStrategy =
+  /** Do not call `respondWith` at all — let the request go to the network untouched. */
+  | 'passthrough'
+  /** Serve from cache when present, otherwise fetch and store. For immutable URLs only. */
+  | 'cache-first'
+  /** Serve from cache immediately and refresh the entry in the background. */
+  | 'stale-while-revalidate'
+  /** Try the network, fall back to the offline document. Responses are never cached. */
+  | 'navigation';
+
+/** The inputs the routing decision depends on. */
+export interface RouteRequest {
+  /** HTTP method. */
+  readonly method: string;
+  /** Fully-qualified request URL. */
+  readonly url: string;
+  /** The worker's own origin; anything else is another party's business. */
+  readonly origin: string;
+  /** Whether this is a top-level document navigation. */
+  readonly isNavigation: boolean;
+  /** Whether the worker was built for production. Dev assets are not immutable. */
+  readonly production: boolean;
+}
+
+/**
+ * Decide how to handle a request.
+ *
+ * @remarks
+ * Evaluated in order; the first match wins. The two API rules are the security floor and must stay
+ * ahead of every caching rule: **no authenticated response ever enters Cache Storage.** Because of
+ * them the worker needs no per-user cache partitioning, and signing out on a shared device has
+ * nothing to purge here — the only place user data persists is the per-user IndexedDB query cache,
+ * which is cleared explicitly. Weakening either rule turns this worker into a data leak.
+ *
+ * @param request - The request being routed.
+ * @returns The strategy to apply.
+ */
+export function routeRequest(request: RouteRequest): CacheStrategy {
+  const { method, url, origin, isNavigation, production } = request;
+
+  // Only GETs are ever cacheable, and another origin's caching policy is not ours to override.
+  if (method !== 'GET') return 'passthrough';
+  if (!url.startsWith(`${origin}/`)) return 'passthrough';
+
+  const path = pathOf(url, origin);
+
+  // --- Security floor. Never cache, never intercept. ---
+  // Better Auth traffic and the typed API are same-origin here (the app proxies them), which is
+  // exactly why they must be excluded explicitly rather than by origin.
+  if (path === '/api/auth' || path.startsWith('/api/auth/')) return 'passthrough';
+  if (path === '/v1' || path.startsWith('/v1/')) return 'passthrough';
+
+  // --- Dev-server plumbing. Intercepting any of this breaks hot reload. ---
+  if (isDevPath(path) || url.includes('?_rsc=') || url.includes('__nextDataReq')) {
+    return 'passthrough';
+  }
+
+  // Next's image optimizer negotiates on Accept headers, so a URL-keyed cache would serve the
+  // wrong format to the wrong browser.
+  if (path.startsWith('/_next/image')) return 'passthrough';
+
+  // Content-hashed and immutable in a production build. Under Turbopack in dev the same paths are
+  // rebuilt in place, so caching them would serve stale chunks.
+  if (path.startsWith('/_next/static/')) return production ? 'cache-first' : 'passthrough';
+
+  // Small, stable, and worth having offline; revalidated in the background so a redeploy is picked
+  // up without a hard refresh.
+  if (
+    path.startsWith('/icons/') ||
+    path === '/manifest.webmanifest' ||
+    path === '/icon.svg' ||
+    path.startsWith('/apple-icon')
+  ) {
+    return 'stale-while-revalidate';
+  }
+
+  // Documents get the offline fallback but are themselves never stored: an authenticated route's
+  // HTML would otherwise be replayable to whoever opens the browser next.
+  if (isNavigation) return 'navigation';
+
+  return 'passthrough';
+}
+
+/** The pathname of a same-origin URL, without allocating a `URL` for the common case. */
+function pathOf(url: string, origin: string): string {
+  const rest = url.slice(origin.length);
+  const queryAt = rest.indexOf('?');
+  const hashAt = rest.indexOf('#');
+  const end = Math.min(
+    queryAt === -1 ? rest.length : queryAt,
+    hashAt === -1 ? rest.length : hashAt,
+  );
+  return rest.slice(0, end);
+}
+
+/** Whether a path belongs to the dev server rather than the application. */
+function isDevPath(path: string): boolean {
+  return (
+    path.startsWith('/_next/webpack-hmr') ||
+    path.startsWith('/__nextjs') ||
+    path.startsWith('/_next/static/development/') ||
+    path.startsWith('/_next/turbopack')
+  );
+}

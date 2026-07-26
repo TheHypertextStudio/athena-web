@@ -47,6 +47,52 @@
   provider's `clientRegistration*` options — the exact surface that broke. Both are now pinned.
   A registration-time scope ceiling that is also the authorize-time ceiling is a trap: it can only
   ever drift narrower, and it fails in production only, for DCR'd clients only, on writes only.
+---
+
+### [PWA-001] Make Docket installable with read-only offline support
+
+- **Status**: REVIEW
+- **Started**: 2026-07-25
+- **Completed**: 2026-07-25
+- **Priority**: P1
+- **Description**: Ship Docket as an installable PWA that stays usable, read-only, without a
+  network, and that announces new versions rather than swapping them into a live tab.
+- **Out of scope (deliberate)**: web push notifications, a custom `beforeinstallprompt` UI, and any
+  offline write queue. Queuing was rejected rather than deferred — see the spec.
+- **Implementation**:
+  1. Manifest, generated icon set, `viewport`/`Metadata` exports, and standalone window chrome
+     (`h-dvh` plus safe-area insets in the shared `AppShell`).
+  2. A four-state session discriminator so an unreachable server is no longer treated as a
+     sign-out, plus an offline identity snapshot and offline surfaces.
+  3. Centralized sign-out teardown and the global session-expiry handler that `createQueryClient`
+     documented but never actually received.
+  4. The service worker: ES-module source in its own TS program, bundled by esbuild to a classic
+     worker, with an explicit update handshake.
+  5. Query-cache persistence to IndexedDB with per-user partitioning.
+- **Findings worth keeping**:
+  - The shell's auth gate could not tell "signed out" from "could not ask", so a dropped connection
+    opened a non-dismissible sign-in dialog at someone with a valid session. Better Auth
+    distinguishes them at the transport level (200 + null body vs a rejected request), so the fix
+    is exact rather than heuristic. `navigator.onLine` is unfit for this — it is `true` behind a
+    captive portal.
+  - `gcTime` at 5 minutes would have made cache persistence silently do nothing:
+    `persistQueryClient` will not restore an entry whose `gcTime` has already elapsed.
+  - TanStack's _default_ mutation `networkMode` pauses and replays offline writes — an offline write
+    queue by another name. `'always'` is what disables it.
+  - Serwist and Workbox are webpack plugins; this app builds with Turbopack. Neither is needed,
+    because content-hashed asset URLs make runtime cache-first self-healing without a precache
+    manifest.
+- **Validation**: `pnpm typecheck` and `pnpm lint` clean across all 17 packages; 894 web unit tests
+  pass; 7 new e2e specs pass against a running dev server. Offline behaviour, worker control, cache
+  contents, and the absence of any `/v1` or `/api/auth` cache entry were also confirmed by driving a
+  real browser.
+- **Notes**: two failures pre-exist on `main` and are unrelated — `pnpm --filter @docket/test-utils
+test` fails one doc-coverage assertion on `portfolio-client.tsx`, and `next build` fails
+  prerendering `/problems/dependency_cycle`. Both reproduce on a clean checkout with none of this
+  work applied.
+- **Spec**: `docs/engineering/specs/pwa.md`
+
+---
 
 ### [WIP-RECONCILE-001] Reconcile parked pre-sync working tree with main
 

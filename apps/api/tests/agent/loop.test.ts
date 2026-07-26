@@ -293,7 +293,7 @@ describe('driveSession — act_with_approval (the default dial)', () => {
             {
               type: 'tool_use',
               id: 'toolu_rd_1',
-              name: 'search',
+              name: 'find',
               input: { orgId: seed.orgId, query: 'venue' },
             },
           ],
@@ -447,7 +447,7 @@ describe('driveSession — bounds and failure surfaces', () => {
           {
             type: 'tool_use' as const,
             id: 'toolu_loop',
-            name: 'search',
+            name: 'find',
             input: { orgId: seed.orgId, query: 'again' },
           },
         ],

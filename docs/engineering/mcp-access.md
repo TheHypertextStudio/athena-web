@@ -122,7 +122,8 @@ the normal action policy still decide whether Athena may execute it or must requ
 
 ## What's exposed
 
-- **Tools** (~26) — task CRUD and workflow (`create_task`, `update_task`, `move_task`, `assign_task`, `set_task_state`, dependencies, subtasks), projects/programs/initiatives, comments and status updates, daily-plan, `run_view` + `search`, agent-session control (`trigger_agent`, `approve_action`, …), and `link_external`.
+- **Tools** (~26) — task CRUD and workflow (`create_task`, `update_task`, `move_task`, `assign_task`, `set_task_state`, dependencies, subtasks), projects/programs/initiatives, comments and status updates, daily-plan, `run_view` + `find`, agent-session control (`trigger_agent`, `approve_action`, …), and `link_external`.
+  - `find` is ranked relevance search over the whole workspace — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, labels. It reads the same permission-filtered search index the web app uses, so results are trimmed to what the caller may actually see, and it trails writes by a moment. Use `run_view` to enumerate live rows by exact criteria.
 - **Resources** — reads are modeled as `docket://` resources: `docket://orgs`, `docket://hub/today`, `docket://hub/inbox`, `docket://hub/portfolio`, and templated per-entity URIs (`docket://{org}/{type}/{id}`), all permission-gated with existence-hiding.
 - **Prompts** — workspace-context bootstrap prompts for agent sessions.
 

@@ -5,7 +5,6 @@ export {
   orgIdParam,
   resolveStateTransition,
   runEntityQuery,
-  searchEntities,
   subjectTable,
   wouldCreateCycle,
 } from './tools-shared-queries';

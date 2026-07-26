@@ -37,7 +37,7 @@ const SYSTEM_PROMPT = [
   '',
   'Prefer the smallest change that accomplishes the goal. When an action needs approval, it',
   'will surface as a pending action on the session -- do not retry it as a different tool.',
-  'Never fabricate ids; resolve them via search, run_view, or the resources first.',
+  'Never fabricate ids; resolve them via find, run_view, or the resources first.',
 ].join('\n');
 
 /**

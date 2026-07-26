@@ -2,9 +2,22 @@ import { OrganizationId, type SearchDocumentKind, type SearchOut } from '@docket
 import type { searchDocument } from '@docket/db';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
+/**
+ * Who is searching.
+ *
+ * @remarks
+ * A human searches as a `user`, which reaches their own private documents and the activity they
+ * are a recipient of, across every org they belong to. An `agent` searches as a single org-scoped
+ * Actor: it has grants, but no personal document scope at all, so `user_private` rows and
+ * recipient-only activity are invisible to it rather than matched against a stand-in id.
+ */
+export type SearchCaller =
+  | { kind: 'user'; userId: string }
+  | { kind: 'agent'; actorId: string; organizationId: string };
+
 interface SearchWorkspaceInput {
   scope: 'hub' | 'org';
-  userId: string;
+  caller: SearchCaller;
   orgId?: string;
   activeOrgId?: string | null;
   params: {
@@ -86,7 +99,9 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
   const limit = Math.min(Math.max(input.params.limit ?? 20, 1), maxLimit);
   if (query.length === 0) return { query, items: [], facets: [] };
 
-  const callerAccess = await resolveCallerOrgAccess(input.userId);
+  // An agent owns no documents, so it has no personal scope to widen the search with.
+  const ownerUserId = input.caller.kind === 'user' ? input.caller.userId : null;
+  const callerAccess = await resolveCallerAccess(input.caller);
   const callerAccessByOrg = new Map(callerAccess.map((access) => [access.organizationId, access]));
   const callerOrgIds = callerAccess.map((access) => access.organizationId);
   const requestedOrgIds = new Set(input.params.orgIds ?? []);
@@ -98,13 +113,13 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
       : callerOrgIds.filter((orgId) => requestedOrgIds.size === 0 || requestedOrgIds.has(orgId));
 
   const candidateRows = await loadCandidateRows({
-    userId: input.userId,
+    ownerUserId,
     orgIds: accessibleOrgIds,
     query,
     includeArchived: input.params.includeArchived ?? false,
   });
   const visible = await filterVisibleRows(candidateRows, {
-    userId: input.userId,
+    ownerUserId,
     accessByOrg: callerAccessByOrg,
   });
 
@@ -116,7 +131,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
     .map((row) =>
       scoreRow(row, query, {
         activeOrgId: input.activeOrgId ?? null,
-        userId: input.userId,
+        ownerUserId,
         callerActorId: row.organizationId
           ? (callerAccessByOrg.get(row.organizationId)?.actorId ?? null)
           : null,
@@ -141,8 +156,26 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
   };
 }
 
-async function resolveCallerOrgAccess(userId: string): Promise<CallerOrgAccess[]> {
+/**
+ * Resolve the caller's per-org Actor rows, which carry the role every grant check reads from.
+ *
+ * @remarks
+ * A user resolves to one active human Actor per org they belong to. An agent resolves to exactly
+ * one Actor — its own — in exactly one org, so an agent's search can never reach beyond the
+ * workspace it was created in.
+ *
+ * @param caller - The searching principal.
+ * @returns one access record per org the caller can act in.
+ */
+async function resolveCallerAccess(caller: SearchCaller): Promise<CallerOrgAccess[]> {
   const schema = await import('@docket/db');
+  const identity =
+    caller.kind === 'user'
+      ? and(eq(schema.actor.userId, caller.userId), eq(schema.actor.kind, 'human'))
+      : and(
+          eq(schema.actor.id, caller.actorId),
+          eq(schema.actor.organizationId, caller.organizationId),
+        );
   const rows = await schema.db
     .select({
       organizationId: schema.actor.organizationId,
@@ -159,13 +192,7 @@ async function resolveCallerOrgAccess(userId: string): Promise<CallerOrgAccess[]
         eq(schema.actor.organizationId, schema.role.organizationId),
       ),
     )
-    .where(
-      and(
-        eq(schema.actor.userId, userId),
-        eq(schema.actor.kind, 'human'),
-        eq(schema.actor.status, 'active'),
-      ),
-    );
+    .where(and(identity, eq(schema.actor.status, 'active')));
   return rows.map((row) => ({
     organizationId: row.organizationId,
     actorId: row.actorId,
@@ -175,7 +202,7 @@ async function resolveCallerOrgAccess(userId: string): Promise<CallerOrgAccess[]
 }
 
 async function loadCandidateRows(input: {
-  userId: string;
+  ownerUserId: string | null;
   orgIds: readonly string[];
   query: string;
   includeArchived: boolean;
@@ -185,13 +212,15 @@ async function loadCandidateRows(input: {
   const textVector = searchTextVector(schema.searchDocument);
   const tsQuery = sql`plainto_tsquery('simple', ${input.query})`;
   const fullTextMatch = sql`${textVector} @@ ${tsQuery}`;
+  // A caller with no owning user (an agent) reaches org documents only. Note an empty candidate
+  // set is the correct answer for an agent with no accessible orgs, not a reason to widen.
+  const ownedByCaller = input.ownerUserId
+    ? eq(schema.searchDocument.userId, input.ownerUserId)
+    : undefined;
   const visibility =
     input.orgIds.length > 0
-      ? or(
-          inArray(schema.searchDocument.organizationId, input.orgIds),
-          eq(schema.searchDocument.userId, input.userId),
-        )
-      : eq(schema.searchDocument.userId, input.userId);
+      ? or(inArray(schema.searchDocument.organizationId, input.orgIds), ownedByCaller)
+      : (ownedByCaller ?? sql`false`);
   const conditions = [
     visibility,
     or(
@@ -228,7 +257,7 @@ function searchTextVector(table: typeof searchDocument) {
 
 async function filterVisibleRows(
   rows: readonly SearchDocumentRow[],
-  caller: { userId: string; accessByOrg: ReadonlyMap<string, CallerOrgAccess> },
+  caller: { ownerUserId: string | null; accessByOrg: ReadonlyMap<string, CallerOrgAccess> },
 ): Promise<{ rows: SearchDocumentRow[]; recipientEventIds: ReadonlySet<string> }> {
   const subjectRefs = new Map<string, SubjectRef>();
   const eventIds: string[] = [];
@@ -241,13 +270,18 @@ async function filterVisibleRows(
   }
 
   const subjectAccess = await resolveSubjectAccess([...subjectRefs.values()], caller.accessByOrg);
-  const recipientEventIds = await loadRecipientEventIds(caller.userId, eventIds);
+  // Recipient fan-out is per user; a caller with no owning user is a recipient of nothing.
+  const recipientEventIds = caller.ownerUserId
+    ? await loadRecipientEventIds(caller.ownerUserId, eventIds)
+    : new Set<string>();
 
   const visibleRows = rows.filter((row) => {
     const visibility = readVisibility(row.visibility);
     switch (visibility.mode) {
+      // Guard the null caller explicitly: a row with no owner must not match an ownerless
+      // caller by both sides being nullish.
       case 'user_private':
-        return row.userId === caller.userId;
+        return caller.ownerUserId !== null && row.userId === caller.ownerUserId;
       case 'org_members':
         return Boolean(row.organizationId && caller.accessByOrg.has(row.organizationId));
       case 'grantable': {
@@ -258,7 +292,7 @@ async function filterVisibleRows(
         if (recipientEventIds.has(row.entityId)) return true;
         const subject = visibilitySubject(row, visibility);
         if (subject) return subjectAccess.get(subjectKey(subject)) ?? false;
-        if (row.userId) return row.userId === caller.userId;
+        if (row.userId) return row.userId === caller.ownerUserId;
         return Boolean(row.organizationId && caller.accessByOrg.has(row.organizationId));
       }
     }
@@ -701,7 +735,7 @@ function scoreRow(
   query: string,
   context: {
     activeOrgId: string | null;
-    userId: string;
+    ownerUserId: string | null;
     callerActorId: string | null;
     activityRecipient: boolean;
   },
@@ -763,9 +797,9 @@ function scoreRow(
 
 function relationshipBoost(
   row: SearchDocumentRow,
-  context: { userId: string; callerActorId: string | null; activityRecipient: boolean },
+  context: { ownerUserId: string | null; callerActorId: string | null; activityRecipient: boolean },
 ): number {
-  let boost = row.userId === context.userId ? 8 : 0;
+  let boost = context.ownerUserId !== null && row.userId === context.ownerUserId ? 8 : 0;
   if (context.activityRecipient) boost += 10;
   if (!context.callerActorId) return boost;
   const facet = facetRecord(row.facet);

@@ -1,13 +1,15 @@
 import { dailyPlanItem, db, hub, task } from '@docket/db';
+import { SearchDocumentKind, type SearchResult, type SearchRoute } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { type SearchCaller, searchWorkspace } from '../search/query';
 import type { McpContext } from './auth';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
-import { orgIdParam, runEntityQuery, searchEntities } from './tools-shared';
+import { orgIdParam, runEntityQuery } from './tools-shared';
 
 const runViewInputSchema = {
   orgId: orgIdParam,
@@ -22,7 +24,107 @@ const runViewOutputSchema = {
   nextCursor: z.string().optional(),
 };
 
-/** Register run_view, search, and add_to_daily_plan on `server`. */
+const findInputSchema = {
+  orgId: orgIdParam,
+  query: z
+    .string()
+    .min(1)
+    .describe('What to look for. Matched against titles, summaries, and body text.'),
+  kinds: z
+    .array(SearchDocumentKind)
+    .optional()
+    .describe('Restrict to these kinds of thing. Omit to search everything.'),
+  assigneeIds: z.array(z.string()).optional().describe('Only items assigned to these actor ids.'),
+  ownerIds: z.array(z.string()).optional().describe('Only items owned or led by these actor ids.'),
+  labelIds: z.array(z.string()).optional().describe('Only items carrying these label ids.'),
+  statuses: z
+    .array(z.string())
+    .optional()
+    .describe("Only items in these statuses or workflow states (e.g. 'active', 'todo')."),
+  from: z.iso.datetime().optional().describe('Only items updated at or after this instant.'),
+  to: z.iso.datetime().optional().describe('Only items updated at or before this instant.'),
+  includeArchived: z.boolean().default(false).describe('Include archived items.'),
+  limit: z.number().int().min(1).max(50).default(20).describe('Maximum results to return.'),
+  cursor: z.string().optional().describe('An opaque cursor from a previous page of results.'),
+};
+
+const findOutputSchema = {
+  items: z.array(
+    z.object({
+      kind: z.string(),
+      id: z.string(),
+      title: z.string(),
+      summary: z.string().optional(),
+      subjectKind: z.string().optional(),
+      subjectId: z.string().optional(),
+    }),
+  ),
+  facets: z.array(z.looseObject({ field: z.string() })),
+  nextCursor: z.string().optional(),
+};
+
+/**
+ * Project the caller onto the identity the search engine filters visibility by.
+ *
+ * @param ctx - The authenticated MCP caller.
+ * @returns the matching {@link SearchCaller}.
+ */
+function searchCallerFor(ctx: McpContext): SearchCaller {
+  return ctx.principal.kind === 'user'
+    ? { kind: 'user', userId: ctx.principal.userId }
+    : {
+        kind: 'agent',
+        actorId: ctx.principal.agentActorId,
+        organizationId: ctx.principal.orgId,
+      };
+}
+
+/**
+ * Reduce a search route to the id an agent can actually act on next.
+ *
+ * @remarks
+ * A result's own document id (`task:<org>:<entity>`) is an index key, not something any tool
+ * accepts. The route is where the real entity id lives, and it differs per result shape — an
+ * `entity` hit points at itself, a `content` hit at the comment or update, an `activity` hit at
+ * the event. Purely external hits have no Docket id at all.
+ *
+ * @param route - The result's typed route.
+ * @returns the actionable id, or null when the hit lives entirely outside Docket.
+ */
+function actionableId(route: SearchRoute): string | null {
+  switch (route.type) {
+    case 'entity':
+      return route.entityId;
+    case 'content':
+      return route.contentId;
+    case 'activity':
+      return route.eventId;
+    case 'calendar_event':
+      return route.calendarEventId;
+    case 'external':
+      return null;
+  }
+}
+
+/**
+ * Shape one search hit for a tool caller.
+ *
+ * @param item - The engine's result row.
+ * @returns the compact projection, or null when the hit carries no actionable Docket id.
+ */
+function findItem(item: SearchResult) {
+  const id = actionableId(item.route);
+  if (!id) return null;
+  return {
+    kind: item.kind,
+    id,
+    title: item.title,
+    ...(item.summary ? { summary: item.summary } : {}),
+    ...(item.subject ? { subjectKind: item.subject.kind, subjectId: item.subject.id } : {}),
+  };
+}
+
+/** Register run_view, find, and add_to_daily_plan on `server`. */
 export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): void {
   const runView = (input: z.infer<z.ZodObject<typeof runViewInputSchema>>) =>
     runTool(async () => {
@@ -68,17 +170,15 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
   );
 
   server.registerTool(
-    'search',
+    'find',
     {
-      title: 'Search',
-      description: "Fused title search across the caller's tasks, projects, and programs.",
-      inputSchema: {
-        orgId: orgIdParam,
-        query: z.string().min(1),
-        limit: z.number().int().min(1).max(50).default(20),
-        cursor: z.string().optional(),
-      },
+      title: 'Find',
+      description:
+        'Search a workspace by relevance across every kind of thing in it — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, and labels. Ranked, so the best match comes first; use this when you know roughly what something is called but not exactly where it lives. To enumerate everything matching exact criteria instead, use run_view. Results come from a search index that trails writes by a moment, so something created seconds ago may not appear yet — use the id returned by the tool that created it rather than searching for it.',
+      inputSchema: findInputSchema,
+      outputSchema: findOutputSchema,
       annotations: {
+        title: 'Find',
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -87,19 +187,38 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     },
     (input) =>
       runTool(async () => {
+        // Membership in the org is the entry gate; per-row visibility (private tasks, grant-gated
+        // subjects, activity the caller is not a recipient of) is enforced inside searchWorkspace.
         const actorCtx = await scopedActor(ctx, input.orgId, 'work:read');
         await authorize(actorCtx, 'view', {
           kind: 'organization',
           id: input.orgId,
           orgId: input.orgId,
         });
-        const { results, nextCursor } = await searchEntities(
-          input.orgId,
-          input.query,
-          input.limit,
-          input.cursor,
-        );
-        return jsonResult({ query: input.query, results, nextCursor });
+        const result = await searchWorkspace({
+          scope: 'org',
+          caller: searchCallerFor(ctx),
+          orgId: input.orgId,
+          activeOrgId: input.orgId,
+          params: {
+            q: input.query,
+            limit: input.limit,
+            includeArchived: input.includeArchived,
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+            ...(input.kinds ? { kinds: input.kinds } : {}),
+            ...(input.assigneeIds ? { assigneeIds: input.assigneeIds } : {}),
+            ...(input.ownerIds ? { ownerIds: input.ownerIds } : {}),
+            ...(input.labelIds ? { labelIds: input.labelIds } : {}),
+            ...(input.statuses ? { statuses: input.statuses } : {}),
+            ...(input.from ? { from: input.from } : {}),
+            ...(input.to ? { to: input.to } : {}),
+          },
+        });
+        return jsonResult({
+          items: result.items.map(findItem).filter((item) => item !== null),
+          facets: result.facets,
+          ...(result.nextCursor ? { nextCursor: result.nextCursor } : {}),
+        });
       }),
   );
 

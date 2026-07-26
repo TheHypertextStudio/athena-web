@@ -127,7 +127,7 @@ describe('search query service', () => {
 
     const beforeGrant = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'obsidian', limit: 10 },
     });
     expect(beforeGrant.items.map((item) => item.id)).toEqual([
@@ -146,7 +146,7 @@ describe('search query service', () => {
 
     const afterGrant = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'obsidian', limit: 10 },
     });
     expect(afterGrant.items.map((item) => item.id)).toEqual(
@@ -235,7 +235,7 @@ describe('search query service', () => {
 
     const beforeRecipient = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'quartz', limit: 10 },
     });
     expect(beforeRecipient.items).toHaveLength(0);
@@ -250,7 +250,7 @@ describe('search query service', () => {
 
     const afterRecipient = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'quartz', limit: 10 },
     });
     expect(afterRecipient.items.map((item) => item.id)).toEqual([`activity:${orgId}:${eventId}`]);
@@ -370,7 +370,7 @@ describe('search query service', () => {
 
     const result = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'zeppelin', limit: 10 },
     });
 
@@ -468,7 +468,7 @@ describe('search query service', () => {
 
     const orgScoped = await searchWorkspace({
       scope: 'org',
-      userId,
+      caller: { kind: 'user', userId },
       orgId: orgA,
       params: { q: 'cursorword', limit: 10 },
     });
@@ -476,7 +476,7 @@ describe('search query service', () => {
 
     const activityOnly = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: {
         q: 'cursorword',
         limit: 10,
@@ -491,14 +491,14 @@ describe('search query service', () => {
 
     const withArchived = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'cursorword', limit: 10, includeArchived: true },
     });
     expect(withArchived.items.some((item) => item.id.includes('archived'))).toBe(true);
 
     const firstPage = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'cursorword', limit: 1 },
     });
     expect(firstPage.items).toHaveLength(1);
@@ -506,7 +506,7 @@ describe('search query service', () => {
 
     const secondPage = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'cursorword', limit: 1, cursor: firstPage.nextCursor },
     });
     expect(secondPage.items).toHaveLength(1);
@@ -586,14 +586,14 @@ describe('search query service', () => {
 
     const relationshipBoosted = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'astra', limit: 10 },
     });
     expect(relationshipBoosted.items[0]?.id).toBe(`task:${orgA}:astra_related`);
 
     const activeBoosted = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       activeOrgId: orgB,
       params: { q: 'solstice', limit: 10 },
     });
@@ -626,7 +626,7 @@ describe('search query service', () => {
 
     const result = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'nebula budget', limit: 1 },
     });
 
@@ -718,7 +718,7 @@ describe('search query service', () => {
 
     const result = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'recipient comet', limit: 2 },
     });
 
@@ -766,7 +766,7 @@ describe('search query service', () => {
 
     const fullPage = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'palette delta', limit: 6, surface: 'page' },
     });
     expect(fullPage.items.map((item) => item.family)).toEqual([
@@ -780,7 +780,7 @@ describe('search query service', () => {
 
     const palette = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'palette delta', limit: 6, surface: 'palette' },
     });
     expect(palette.items.filter((item) => item.family === 'people')).toHaveLength(2);
@@ -812,7 +812,7 @@ describe('search query service', () => {
 
     const palette = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'palette capstar', limit: 100, surface: 'palette' },
     });
     expect(palette.items).toHaveLength(50);
@@ -820,7 +820,7 @@ describe('search query service', () => {
 
     const page = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'palette capstar', limit: 100, surface: 'page' },
     });
     expect(page.items).toHaveLength(60);
@@ -863,7 +863,7 @@ describe('search query service', () => {
       },
     ]);
 
-    const base = { scope: 'hub' as const, userId };
+    const base = { scope: 'hub' as const, caller: { kind: 'user' as const, userId } };
     await expect(
       searchWorkspace({
         ...base,
@@ -927,7 +927,7 @@ describe('search query service', () => {
 
     const result = await searchWorkspace({
       scope: 'hub',
-      userId,
+      caller: { kind: 'user', userId },
       params: { q: 'budget finance', limit: 10 },
     });
 

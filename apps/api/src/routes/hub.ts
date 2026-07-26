@@ -301,7 +301,7 @@ Built as a per-membership fan-out merged in application code: **tenant bands sta
         HubSearchOut,
         await searchWorkspace({
           scope: 'hub',
-          userId: session.user.id,
+          caller: { kind: 'user', userId: session.user.id },
           activeOrgId: params.activeOrgId ?? null,
           params,
         }),

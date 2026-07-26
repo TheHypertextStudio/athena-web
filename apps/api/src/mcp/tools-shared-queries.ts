@@ -1,6 +1,6 @@
 import type { actor } from '@docket/db';
 import { db, initiative, program, project, task, team } from '@docket/db';
-import { and, desc, eq, ilike, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
@@ -289,78 +289,4 @@ export async function runEntityQuery(
     .orderBy(desc(initiative.createdAt), desc(initiative.id))
     .limit(limit + 1);
   return pageRows(rows, limit, (r) => ({ id: r.id, title: r.name, status: r.status }));
-}
-
-interface SearchResult {
-  readonly type: 'task' | 'project' | 'program';
-  readonly id: string;
-  readonly title: string;
-}
-
-/**
- * Search an org's tasks, projects, and programs by title and return a page of
- * matches sorted by stable key.
- *
- * @param orgId - The organization to scope the search to.
- * @param query - The substring to match against entity titles/names.
- * @param limit - The maximum number of results to return.
- * @param cursor - An opaque cursor from a prior page, or undefined for the first.
- * @returns The matching results and an optional `nextCursor` when more remain.
- * @throws {McpError} When the cursor is invalid or no longer resolves to a result.
- */
-export async function searchEntities(
-  orgId: string,
-  query: string,
-  limit: number,
-  cursor?: string,
-): Promise<{ readonly results: readonly SearchResult[]; readonly nextCursor?: string }> {
-  const after = decodeToolCursor(cursor, 'search');
-  const pattern = `%${query}%`;
-  const [taskRows, projectRows, programRows] = await Promise.all([
-    db
-      .select({ id: task.id, title: task.title })
-      .from(task)
-      .where(
-        and(eq(task.organizationId, orgId), isNull(task.archivedAt), ilike(task.title, pattern)),
-      ),
-    db
-      .select({ id: project.id, name: project.name })
-      .from(project)
-      .where(and(eq(project.organizationId, orgId), ilike(project.name, pattern))),
-    db
-      .select({ id: program.id, name: program.name })
-      .from(program)
-      .where(and(eq(program.organizationId, orgId), ilike(program.name, pattern))),
-  ]);
-  const all = [
-    ...taskRows.map((t) => ({
-      key: `task:${t.id}`,
-      result: { type: 'task' as const, id: t.id, title: t.title },
-    })),
-    ...projectRows.map((p) => ({
-      key: `project:${p.id}`,
-      result: { type: 'project' as const, id: p.id, title: p.name },
-    })),
-    ...programRows.map((p) => ({
-      key: `program:${p.id}`,
-      result: { type: 'program' as const, id: p.id, title: p.name },
-    })),
-  ].sort((a, b) => a.key.localeCompare(b.key));
-  const start = after ? all.findIndex((row) => row.key === after) + 1 : 0;
-  if (after && start === 0) throw invalidCursor();
-  const page = all.slice(start, start + limit);
-  const next = all[start + limit];
-  const last = page[page.length - 1];
-  return {
-    results: page.map((row) => row.result),
-    ...(next && last
-      ? {
-          nextCursor: toolCursorCodec.encode({
-            v: 1,
-            surface: 'search',
-            key: last.key,
-          }),
-        }
-      : {}),
-  };
 }

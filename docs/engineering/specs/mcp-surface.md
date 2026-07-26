@@ -221,10 +221,18 @@ This is how an agent that started **read-only** (engineering plan / product §4)
 | `reject_action`          |    F     |      T      |     T      |     F     | `agents:run`      |
 | `cancel_session`         |    F     |      T      |     T      |     F     | `agents:run`      |
 | `run_view`               |  **T**   |      —      |     T      |     F     | `work:read`       |
-| `search`                 |  **T**   |      —      |     T      |     F     | `work:read`       |
+| `find`                   |  **T**   |      —      |     T      |     F     | `work:read`       |
 | `add_to_daily_plan`      |    F     |      F      |     T      |     F     | `work:write`      |
 
-> `run_view` and `search` are _read_ operations exposed as **tools** (not resources) because they take rich query arguments — resources are for addressable-by-URI reads. They keep `readOnlyHint:true` and need only `work:read`.
+> `run_view` and `find` are _read_ operations exposed as **tools** (not resources) because they take rich query arguments — resources are for addressable-by-URI reads. They keep `readOnlyHint:true` and need only `work:read`.
+>
+> **RESOLVED: `search` shipped as `find`, backed by the workspace search engine.** The original
+> implementation ran three unbounded `ILIKE` scans over `task`/`project`/`program` and authorized
+> once at the org root, so any caller who could open a workspace received every matching title in
+> it — including private work their grants did not reach. `find` delegates to `searchWorkspace`
+> (`apps/api/src/search/query.ts`), which applies the same per-row visibility cascade as the web
+> app across all 18 indexed kinds. Because that engine reads the `search_document` projection, the
+> tool is eventually consistent with writes; `run_view` remains the live-row read.
 
 ### 3.3 Shared Zod fragments (`@docket/types`)
 
@@ -699,7 +707,7 @@ On `initialize`, the RS advertises:
 - **`completions: {}`** — implement `completion/complete` for: resource-template `{id}` vars (return matching entities the principal can see, by recent/active), `{org}` (the principal's org slugs), and tool enum args (e.g. `team`, `state` from the team's `workflow_states`, `provider`).
 - **`logging`** — ~~emit `notifications/message` at `info`/`warning`/`error`~~ **RESOLVED: not shipped, no longer advertised.** No code path ever emitted a log notification, so advertising it invited a client to set a level against a silent channel. The unused `McpCatalog.sendLoggingMessage` passthrough was removed with it. Restore both together, and never log tokens or credentials.
 - **`tasks`** — declare `tasks.requests.tools.call` so clients MAY augment `trigger_agent_session` / `run_view` calls as tasks. Tasks are **authorization-context-bound** (spec security): `tasks/get|result|cancel|list` MUST reject task IDs not owned by the requestor's token context. Adopt behind a feature flag (open issue: experimental churn).
-- **Pagination:** honor `cursor`/`nextCursor` on `tools/list`, `resources/list`, `resources/templates/list`, `tasks/list`, and inside `run_view`/`search`.
+- **Pagination:** honor `cursor`/`nextCursor` on `tools/list`, `resources/list`, `resources/templates/list`, `tasks/list`, and inside `run_view`/`find`.
 - **Lifecycle utilities:** support `ping`, progress (`notifications/progress` with the request's `progressToken`), and cancellation (`notifications/cancelled`).
 
 ---

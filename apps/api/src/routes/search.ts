@@ -33,7 +33,7 @@ const searchRouter = new Hono<AppEnv>().get(
       SearchOut,
       await searchWorkspace({
         scope: 'org',
-        userId: session.user.id,
+        caller: { kind: 'user', userId: session.user.id },
         orgId,
         activeOrgId: orgId,
         params,

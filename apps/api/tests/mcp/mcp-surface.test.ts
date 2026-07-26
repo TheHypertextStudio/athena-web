@@ -283,10 +283,48 @@ const PagedViewPayload = z.looseObject({
   nextCursor: z.string().optional(),
 });
 
-const PagedSearchPayload = z.looseObject({
-  results: z.array(z.looseObject({ id: z.string() })),
+const PagedFindPayload = z.looseObject({
+  items: z.array(z.looseObject({ id: z.string(), kind: z.string(), title: z.string() })),
   nextCursor: z.string().optional(),
 });
+
+/**
+ * Index a task into the search projection `find` reads from.
+ *
+ * @remarks
+ * Indexing is an async outbox in production, so tests write the projection row directly — the
+ * same approach `tests/search/query.test.ts` takes. `visibility` is the field under test: a
+ * `grantable` task is only reachable through the grant cascade, and a `user_private` one only by
+ * its owner.
+ */
+async function indexTask(input: {
+  orgId: string;
+  taskId: string;
+  title: string;
+  visibility: Record<string, unknown>;
+  userId?: string;
+}): Promise<void> {
+  await db.insert(schema.searchDocument).values({
+    id: `task:${input.orgId}:${input.taskId}`,
+    organizationId: input.orgId,
+    ...(input.userId ? { userId: input.userId } : {}),
+    kind: 'task',
+    family: 'work',
+    sourceTable: 'task',
+    entityId: input.taskId,
+    title: input.title,
+    facet: {},
+    route: {
+      type: 'entity',
+      organizationId: input.orgId,
+      entityKind: 'task',
+      entityId: input.taskId,
+      href: `/orgs/${input.orgId}/tasks/${input.taskId}`,
+    },
+    visibility: input.visibility,
+    baseRank: 100,
+  });
+}
 
 async function collectToolNames(client: Client): Promise<string[]> {
   const names: string[] = [];
@@ -1036,18 +1074,96 @@ describe('run_view / search tools', () => {
     expect((hidden.content[0] as { text: string }).text).toContain('not_found');
   });
 
-  it('searches fused titles across tasks/projects/programs', async () => {
+  it('finds indexed work and returns the actionable entity id', async () => {
     const s = await seedOrg(['view']);
+    await indexTask({
+      orgId: s.orgId,
+      taskId: s.taskId,
+      title: 'Ship',
+      visibility: { mode: 'org_members' },
+    });
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'search',
+      name: 'find',
       arguments: { orgId: s.orgId, query: 'Ship' },
     })) as CallToolResult;
-    const results = payload(res)['results'] as { type: string }[];
-    expect(results.some((r) => r.type === 'task')).toBe(true);
+    const items = payload(res)['items'] as { id: string; kind: string }[];
+    // The id must be the task's own id, not the `task:<org>:<id>` index key, or no other tool
+    // could consume it.
+    expect(items).toContainEqual(expect.objectContaining({ id: s.taskId, kind: 'task' }));
   });
 
-  it('paginates run_view and search results with opaque cursors', async () => {
+  it('does not leak private work to a caller whose org grant does not cascade', async () => {
+    const s = await seedOrg(['view']);
+
+    // A caller who may open the workspace but holds no blanket grant over its contents — the
+    // shape a guest or a narrowly-scoped collaborator has. `view` on the org itself still
+    // satisfies the tool's entry gate, because there the org IS the target resource.
+    await db
+      .update(schema.grant)
+      .set({ cascades: false })
+      .where(eq(schema.grant.organizationId, s.orgId));
+
+    const privateTasks = await db
+      .insert(schema.task)
+      .values([
+        {
+          organizationId: s.orgId,
+          title: 'Ship granted',
+          teamId: s.teamId,
+          state: 'todo',
+          visibility: 'private',
+          createdBy: s.actorId,
+        },
+        {
+          organizationId: s.orgId,
+          title: 'Ship secret',
+          teamId: s.teamId,
+          state: 'todo',
+          visibility: 'private',
+          createdBy: s.actorId,
+        },
+      ])
+      .returning({ id: schema.task.id });
+    const grantedId = privateTasks[0]!.id;
+    const secretId = privateTasks[1]!.id;
+
+    // Only the first one is explicitly shared with this caller.
+    await db.insert(schema.grant).values({
+      organizationId: s.orgId,
+      subjectKind: 'actor',
+      subjectId: s.actorId,
+      resourceKind: 'task',
+      resourceId: grantedId,
+      capabilities: ['view'],
+      effect: 'allow',
+    });
+
+    for (const id of [grantedId, secretId]) {
+      await indexTask({
+        orgId: s.orgId,
+        taskId: id,
+        title: id === grantedId ? 'Ship granted' : 'Ship secret',
+        visibility: { mode: 'grantable', subjectKind: 'task', subjectId: id },
+      });
+    }
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'find',
+      arguments: { orgId: s.orgId, query: 'Ship' },
+    })) as CallToolResult;
+    const items = payload(res)['items'] as { id: string; title: string }[];
+    const ids = items.map((item) => item.id);
+
+    expect(ids).toContain(grantedId);
+    // The ungranted one must not surface at all — not even its title, which is what the previous
+    // implementation exposed by authorizing once at the org root and never per row.
+    expect(ids).not.toContain(secretId);
+    expect(JSON.stringify(items)).not.toContain('Ship secret');
+  });
+
+  it('paginates run_view and find results with opaque cursors', async () => {
     const s = await seedOrg(['view']);
     await db.insert(schema.task).values([
       {
@@ -1097,13 +1213,21 @@ describe('run_view / search tools', () => {
     const secondIds = secondPayload.items.map((item) => item.id);
     expect(new Set([...firstIds, ...secondIds]).size).toBe(4);
 
-    const firstSearch = (await client.callTool({
-      name: 'search',
-      arguments: { orgId: s.orgId, query: 'Ship', limit: 2 },
+    for (const [index, id] of [s.taskId, s.task2Id].entries()) {
+      await indexTask({
+        orgId: s.orgId,
+        taskId: id,
+        title: `Ship ${index}`,
+        visibility: { mode: 'org_members' },
+      });
+    }
+    const firstFind = (await client.callTool({
+      name: 'find',
+      arguments: { orgId: s.orgId, query: 'Ship', limit: 1 },
     })) as CallToolResult;
-    const searchPayload = PagedSearchPayload.parse(payload(firstSearch));
-    expect(searchPayload.results.length).toBe(2);
-    expect(searchPayload.nextCursor).toEqual(expect.any(String));
+    const findPayload = PagedFindPayload.parse(payload(firstFind));
+    expect(findPayload.items.length).toBe(1);
+    expect(findPayload.nextCursor).toEqual(expect.any(String));
   });
 });
 
@@ -1118,7 +1242,7 @@ describe('MCP list pagination', () => {
 
     const toolNames = await collectToolNames(client);
     expect(toolNames).toEqual([...new Set(toolNames)]);
-    expect(toolNames).toEqual(expect.arrayContaining(['run_view', 'search', 'create_task']));
+    expect(toolNames).toEqual(expect.arrayContaining(['run_view', 'find', 'create_task']));
 
     const resourceUris = await collectResourceUris(client);
     expect(resourceUris).toEqual([...new Set(resourceUris)]);

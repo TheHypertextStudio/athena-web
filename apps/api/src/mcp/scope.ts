@@ -57,7 +57,7 @@ export const CONNECT_SCOPES: readonly string[] = [...MCP_SCOPES, OFFLINE_ACCESS_
  * The scope each MCP tool requires (mcp-surface.md §3.2 quick-reference table).
  *
  * @remarks
- * Read tools (`run_view`/`search`) need only `work:read`; mutations need `work:write`;
+ * Read tools (`run_view`/`find`) need only `work:read`; mutations need `work:write`;
  * agent-lifecycle tools need `agents:run`; connector tools need `connectors:link`. Keyed
  * by the registered tool name so {@link requireScope} can be called uniformly.
  */
@@ -91,7 +91,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   cancel_session: 'agents:run',
   // work:read — reads exposed as tools
   run_view: 'work:read',
-  search: 'work:read',
+  find: 'work:read',
 } as const;
 
 /** The scope every `docket://` resource read requires (all reads are `work:read`). */

@@ -10,7 +10,7 @@
   },
   "license": "UNLICENSED",
   "scripts": {
-    "build": "dotenv -e .env.local -- turbo run build",
+    "build": "dotenv -e .env.local -- env NODE_ENV=production turbo run build",
     "dev": "dotenv -e .env.local -- turbo run dev",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",

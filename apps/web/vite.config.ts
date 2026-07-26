@@ -45,6 +45,14 @@ const config = docketVitest({
     // logic (which column each item lands in, how many columns a cluster needs, and the exact
     // gutters between them) that must stay correct independent of the React card renderer.
     'src/components/scheduling/scheduling-overlap-layout.ts',
+    // The session state machine decides whether an unresponsive server means "sign in again" or
+    // "you're offline". Getting it wrong shows a non-dismissible sign-in dialog to someone whose
+    // session is perfectly valid, so the discriminator is gated independently of the shell.
+    'src/lib/session-status.ts',
+    // The offline identity snapshot is the shell's only user id while the server is unreachable,
+    // and it is what partitions per-user storage. Its expiry and its rejection of malformed or
+    // empty values are behavior, not wiring.
+    'src/lib/session-snapshot.ts',
   ],
 });
 

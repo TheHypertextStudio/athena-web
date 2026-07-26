@@ -31,6 +31,7 @@ export { default as ChevronUp } from '@mui/icons-material/KeyboardArrowUp';
 export { default as Circle } from '@mui/icons-material/Circle';
 export { default as CircleDashed } from '@mui/icons-material/RadioButtonUnchecked';
 export { default as CircleDot } from '@mui/icons-material/RadioButtonChecked';
+export { default as CloudOff } from '@mui/icons-material/CloudOff';
 export { default as Command } from '@mui/icons-material/KeyboardCommandKey';
 export { default as CornerDownLeft } from '@mui/icons-material/SubdirectoryArrowLeft';
 export { default as CreditCard } from '@mui/icons-material/CreditCardOutlined';

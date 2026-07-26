@@ -11,9 +11,14 @@ const { orgsGet, pathnameState, requireAuthentication, resolveTabTitle, sessionS
     pathnameState: { value: '/today' },
     requireAuthentication: vi.fn(),
     resolveTabTitle: vi.fn(() => Promise.resolve('Project Atlas')),
+    // Mirrors Better Auth's `useSession` return shape. `error` is what separates "the server said
+    // there is no session" (200 with a null body) from "the server could not be reached" — the
+    // shell branches on that difference, so the mock has to carry it.
     sessionState: {
       data: null as null | { user: { id: string; name: string; email: string } },
       isPending: true,
+      error: null as null | { status: number },
+      refetch: vi.fn(),
     },
   }),
 );
@@ -89,6 +94,9 @@ function renderFrame() {
 beforeEach(() => {
   sessionState.data = null;
   sessionState.isPending = true;
+  sessionState.error = null;
+  sessionState.refetch.mockReset();
+  window.localStorage.clear();
   pathnameState.value = '/today';
   orgsGet.mockReset().mockImplementation(() => new Promise(() => undefined));
   requireAuthentication.mockReset();
@@ -140,6 +148,61 @@ describe('AppShellFrame session loading', () => {
     await waitFor(() => {
       expect(requireAuthentication).toHaveBeenCalledWith('/today?view=week');
     });
+  });
+
+  it('never demands a sign-in when the session request failed rather than answering', async () => {
+    // The regression this branch exists to prevent. Offline — or against a 5xx — the session query
+    // rejects, which used to look identical to "no session" and threw up the non-dismissible
+    // sign-in interlock at someone whose session was perfectly valid and who could not possibly
+    // have signed in on that network.
+    sessionState.isPending = false;
+    sessionState.error = { status: 0 };
+
+    renderFrame();
+
+    await waitFor(() => {
+      expect(screen.getByText(/You're offline|Can't reach Docket/)).toBeInTheDocument();
+    });
+    expect(requireAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('renders the offline surface rather than the shell when no cached identity exists', async () => {
+    sessionState.isPending = false;
+    sessionState.error = { status: 0 };
+
+    renderFrame();
+
+    // No snapshot in storage, so there is no workspace to render. It must not fall through to the
+    // shell (which would imply a live session) nor to the interlock.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Private route content')).not.toBeInTheDocument();
+    expect(requireAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('clears the cached identity when the server confirms the session is gone', async () => {
+    window.localStorage.setItem(
+      'docket:session-snapshot',
+      JSON.stringify({
+        userId: 'user_1',
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        image: null,
+        savedAt: Date.now(),
+      }),
+    );
+    sessionState.isPending = false;
+    sessionState.error = null;
+
+    renderFrame();
+
+    // "Signed out, then offline" must never render a shell, so the snapshot goes before the
+    // redirect rather than lingering for the next unreachable launch to pick up.
+    await waitFor(() => {
+      expect(requireAuthentication).toHaveBeenCalled();
+    });
+    expect(window.localStorage.getItem('docket:session-snapshot')).toBeNull();
   });
 
   it('keeps workspace-bound content provisional while organizations resolve', () => {

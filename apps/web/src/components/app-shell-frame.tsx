@@ -25,13 +25,32 @@ import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
+import { OfflineBanner, OfflineShellFallback } from '@/components/offline-state';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
+import {
+  clearSessionSnapshot,
+  readSessionSnapshot,
+  writeSessionSnapshot,
+} from '@/lib/session-snapshot';
+import { resolveSessionStatus } from '@/lib/session-status';
+import { useOnlineStatus } from '@/lib/use-online-status';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
+
+/**
+ * How long the session query may stay pending before the shell treats the server as unreachable.
+ *
+ * @remarks
+ * Only reached when a request hangs instead of failing — a captive portal that completes the TCP
+ * handshake and then never responds. Eight seconds is past any plausible cold start on a slow
+ * connection, so a healthy-but-sluggish load still resolves normally and keeps its loading
+ * treatment rather than being misreported as offline.
+ */
+const SESSION_PEND_BUDGET_MS = 8_000;
 
 import {
   homeKeyFromPath,
@@ -62,14 +81,67 @@ import {
  */
 export function AppShellFrame({ children }: { children: ReactNode }): JSX.Element {
   const pathname = usePathname();
-  const { data: session, isPending } = authClient.useSession();
+  const { data: session, isPending, error: sessionError, refetch } = authClient.useSession();
   const { requireAuthentication } = useAuthenticationInterlock();
+  const online = useOnlineStatus();
 
+  // A request that hangs rather than fails (captive portal) never flips `isPending`, so give the
+  // pend a deadline and treat an overrun as unreachable. Reset whenever the query restarts.
+  const [pendingTimedOut, setPendingTimedOut] = useState(false);
   useEffect(() => {
-    if (!isPending && !session) {
+    if (!isPending) {
+      setPendingTimedOut(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => {
+      setPendingTimedOut(true);
+    }, SESSION_PEND_BUDGET_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [isPending]);
+
+  const status = resolveSessionStatus({
+    hasSession: Boolean(session),
+    isPending,
+    hasError: sessionError !== null,
+    pendingTimedOut,
+  });
+
+  // Only a server-confirmed "no session" may interrupt. An unreachable server means we simply do
+  // not know, and shoving a non-dismissible sign-in dialog at someone who is merely offline —
+  // with a perfectly valid session — is the failure this branch exists to prevent.
+  useEffect(() => {
+    if (status === 'signed-out') {
+      clearSessionSnapshot();
       requireAuthentication(`${pathname}${window.location.search}`);
     }
-  }, [isPending, pathname, requireAuthentication, session]);
+  }, [status, pathname, requireAuthentication]);
+
+  // Keep the offline identity fresh while the server is answering.
+  useEffect(() => {
+    if (status !== 'authenticated' || !session) return;
+    writeSessionSnapshot(
+      {
+        userId: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+        image: session.user.image ?? null,
+      },
+      Date.now(),
+    );
+  }, [status, session]);
+
+  // Read once per unreachable episode rather than on every render, so the offline shell does not
+  // re-resolve identity mid-session.
+  const [snapshot] = useState(() => readSessionSnapshot(Date.now()));
+
+  // Reconnecting is the one moment a re-ask is guaranteed to be worthwhile. Better Auth's own
+  // online manager also refetches here; this is belt and braces for the captive-portal case, where
+  // the browser never fired an `offline` event to begin with.
+  useEffect(() => {
+    if (online && status === 'unreachable') void refetch();
+  }, [online, status, refetch]);
 
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
   // layer and gated on an authenticated session. The frame itself stays mounted while this settles.
@@ -86,9 +158,31 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     ? userErrorMessage(orgsQ.error, 'Could not load your workspaces.')
     : null;
 
-  const userId = session?.user.id ?? null;
+  // The snapshot stands in for the live session ONLY while the server is unreachable. Every other
+  // status ignores it, so it can never keep a signed-out person inside the shell.
+  const offlineIdentity = status === 'unreachable' ? snapshot : null;
+
+  const userId = session?.user.id ?? offlineIdentity?.userId ?? null;
   const routeOrgId = orgIdFromPath(pathname);
-  const shellLoading = !session || orgsQ.isPending;
+  // Offline, `orgsQ` is disabled and will never settle, so gating on it would pin the shell to its
+  // loading treatment forever. Anything the query layer has cached still renders; the rest degrades
+  // to empty, with the offline banner explaining why.
+  const shellLoading = offlineIdentity ? false : !session || orgsQ.isPending;
+
+  // Unreachable with nothing to go on: no identity, so no workspace to render. A plain, honest
+  // surface with a retry — never the shell (which would imply a live session), and never the
+  // sign-in interlock (which would blame the person for a network fault).
+  if (status === 'unreachable' && !offlineIdentity) {
+    return (
+      <OfflineShellFallback
+        online={online}
+        onRetry={() => {
+          void refetch();
+        }}
+      />
+    );
+  }
+
   const settingsSurface =
     pathname === '/settings' ||
     pathname.startsWith('/settings/') ||
@@ -118,6 +212,16 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
               calendarSurface={calendarSurface}
               routeOrgId={routeOrgId}
               userId={userId}
+              offline={
+                offlineIdentity
+                  ? {
+                      online,
+                      onRetry: () => {
+                        void refetch();
+                      },
+                    }
+                  : null
+              }
               workspaceKey={workspaceKeyFromPath(pathname)}
               homeKey={homeKeyFromPath(pathname)}
             >
@@ -205,6 +309,11 @@ interface AppShellInnerProps {
   calendarSurface: boolean;
   routeOrgId: string | null;
   userId: string | null;
+  /**
+   * Set while the shell is rendering from a cached identity because the server is unreachable.
+   * Drives the standing offline banner; `null` whenever the session is live.
+   */
+  offline: { readonly online: boolean; readonly onRetry: () => void } | null;
   workspaceKey?: WorkspaceNavKey;
   homeKey?: HomeNavKey;
   children: ReactNode;
@@ -226,6 +335,7 @@ function AppShellInner({
   calendarSurface,
   routeOrgId,
   userId,
+  offline,
   workspaceKey,
   homeKey,
   children,
@@ -377,6 +487,13 @@ function AppShellInner({
           tabBar={tabBar}
           mobileBrand={mobileBrand}
           mobileActions={mobileActions}
+          // The shell banner slot is a sibling of `<main>`, so the standing offline disclosure
+          // never disturbs a page's `h-full` sizing the way page-level content would.
+          banner={
+            offline ? (
+              <OfflineBanner online={offline.online} onRetry={offline.onRetry} />
+            ) : undefined
+          }
           aside={settingsSurface ? undefined : railAsideFor(loading, calendarSurface)}
         >
           {loading ? <AppShellContentSkeleton /> : children}

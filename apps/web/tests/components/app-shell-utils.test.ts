@@ -49,7 +49,13 @@ describe('object detail shell treatment', () => {
     const accountIdx = shellFrame.indexOf('<AccountMenu');
     expect(bannerIdx).toBeGreaterThan(-1);
     expect(accountIdx).toBeGreaterThan(bannerIdx);
-    // No top-of-content banner slot any more.
-    expect(shellFrame).not.toContain('banner={');
+    // The nudge specifically must not go back into the shell's top-of-content banner slot.
+    //
+    // This assertion used to forbid `banner={` outright, which was a proxy for the same thing. The
+    // slot itself is legitimate — `AppShell` renders it as a sibling of `<main>`, so it does not
+    // sit in any page's scroll flow — and the offline banner now uses it, because a connectivity
+    // warning must stay visible even when the sidebar is collapsed or hidden behind the mobile
+    // drawer. What the nudge must never do is reclaim it; that is what is pinned here.
+    expect(shellFrame).not.toMatch(/banner=\{[^}]*RecoveryNudgeBanner/);
   });
 });

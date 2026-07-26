@@ -10,6 +10,21 @@ export const ViewScope = z.enum(['personal', 'team', 'organization']);
 /** View scope value. */
 export type ViewScope = z.infer<typeof ViewScope>;
 
+/**
+ * The closed set of comparison operators a saved-view predicate may use.
+ *
+ * @remarks
+ * Exported separately from {@link ViewFilter} so the server-side SQL translator can name the
+ * legal operators when it rejects one, rather than failing with an opaque message.
+ */
+export const ViewFilterOp = z
+  .enum(['eq', 'neq', 'in', 'nin', 'gt', 'lt', 'contains'])
+  .describe(
+    "Comparison operator: 'eq' (=), 'neq' (≠), 'in' (in set), 'nin' (not in set), 'gt' (>), 'lt' (<), 'contains' (substring/membership).",
+  );
+/** A saved-view comparison operator. */
+export type ViewFilterOp = z.infer<typeof ViewFilterOp>;
+
 /** One predicate in a saved view's filter set. */
 export const ViewFilter = z
   .object({
@@ -18,11 +33,7 @@ export const ViewFilter = z
       .describe(
         'Task field the predicate tests (e.g. `state`, `assigneeId`, `priority`, `labels`).',
       ),
-    op: z
-      .enum(['eq', 'neq', 'in', 'nin', 'gt', 'lt', 'contains'])
-      .describe(
-        "Comparison operator: 'eq' (=), 'neq' (≠), 'in' (in set), 'nin' (not in set), 'gt' (>), 'lt' (<), 'contains' (substring/membership).",
-      ),
+    op: ViewFilterOp,
     value: z
       .unknown()
       .describe(

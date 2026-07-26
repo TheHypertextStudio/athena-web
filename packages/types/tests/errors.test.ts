@@ -37,9 +37,9 @@ describe('Problem', () => {
       status: 422,
       detail: 'name is required',
       code: 'validation_error',
-      fieldErrors: { name: ['Required'] },
+      fieldErrors: { name: [{ code: 'invalid_type', expected: 'string' }] },
     });
-    expect(parsed.fieldErrors).toEqual({ name: ['Required'] });
+    expect(parsed.fieldErrors).toEqual({ name: [{ code: 'invalid_type', expected: 'string' }] });
   });
 
   it('rejects a non-integer status', () => {

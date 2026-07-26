@@ -11,6 +11,7 @@
  */
 import { event } from '@docket/db';
 import type { ViewFilter } from '@docket/db';
+import { ViewFilterOp } from '@docket/types';
 import {
   and,
   type AnyColumn,
@@ -48,7 +49,7 @@ const DATE_FIELDS = new Set(['occurredAt']);
 
 function rejectField(field: string): never {
   throw new ApiError(400, 'validation_error', `Unknown filter field: ${field}`, {
-    filter: [`Unknown field "${field}"`],
+    filter: [{ code: 'invalid_option', options: Object.keys(FILTER_FIELDS) }],
   });
 }
 
@@ -94,7 +95,7 @@ export function buildFilterConditions(filters: readonly ViewFilter[]): SQL[] {
         break;
       default:
         throw new ApiError(400, 'validation_error', `Unknown filter operator: ${String(f.op)}`, {
-          filter: [`Unknown operator "${String(f.op)}"`],
+          filter: [{ code: 'invalid_option', options: [...ViewFilterOp.options] }],
         });
     }
   }

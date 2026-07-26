@@ -10,7 +10,7 @@
  */
 import { type Capability, canActor, type ResourceRef } from '@docket/authz';
 import { db } from '@docket/db';
-import { publicProblemTitle } from '@docket/types';
+import { publicProblemTitle, type FieldIssue } from '@docket/types';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { ApiError, CapabilityError, InsufficientScopeError, NotFoundError } from '../error';
@@ -48,26 +48,70 @@ export function errorResult(message: string): CallToolResult {
 }
 
 /**
+ * Render one field issue as a self-correcting hint for the calling model.
+ *
+ * @remarks
+ * The prose is composed here from the machine-readable {@link FieldIssue}, never echoed from a
+ * validator — the wire shape carries no message by design. Composing it locally also keeps the
+ * phrasing uniform across every tool.
+ *
+ * @param field - The field path the issue applies to.
+ * @param issue - The issue to render.
+ * @returns a single indented line naming the constraint that failed.
+ */
+function formatFieldIssue(field: string, issue: FieldIssue): string {
+  const detail: string[] = [];
+  if (issue.options) detail.push(`allowed values: ${issue.options.join(', ')}`);
+  if (issue.expected !== undefined) detail.push(`expected type: ${issue.expected}`);
+  if (issue.format !== undefined) detail.push(`expected format: ${issue.format}`);
+  if (issue.minimum !== undefined) detail.push(`minimum: ${issue.minimum}`);
+  if (issue.maximum !== undefined) detail.push(`maximum: ${issue.maximum}`);
+  const suffix = detail.length > 0 ? ` (${detail.join('; ')})` : '';
+  return `  ${field}: ${issue.code}${suffix}`;
+}
+
+/**
+ * Render a domain error as text the calling model can act on.
+ *
+ * @remarks
+ * The summary stays derived from the closed code catalog — never `err.message`, which is
+ * author-controlled prose that may name config keys, provider payloads, or SQL. What makes this
+ * actionable rather than opaque is the STRUCTURE beneath it: the required scope, and the failing
+ * field paths with their {@link FieldIssue} codes and legal values. That is what an agent needs
+ * to re-issue its own arguments correctly, and it carries no diagnostic text at all.
+ *
+ * @param err - The domain error to describe.
+ * @returns the multi-line failure description.
+ */
+function describeApiError(err: ApiError): string {
+  const lines = [`${err.code}: ${publicProblemTitle(err.code)}`];
+  if (err instanceof InsufficientScopeError) {
+    lines.push(`  required scope: ${err.requiredScope}`);
+  }
+  for (const [field, issues] of Object.entries(err.fieldErrors ?? {})) {
+    for (const issue of issues) lines.push(formatFieldIssue(field, issue));
+  }
+  return lines.join('\n');
+}
+
+/**
  * Run a tool body, mapping any thrown {@link ApiError} to the `isError` contract.
  *
  * @remarks
  * Domain errors (auth, capability, not-found, conflict, validation) become readable
- * `isError` results; unexpected errors surface a generic message without leaking
- * internals. This keeps every tool handler free of repetitive try/catch.
+ * `isError` results carrying the failing field, the offending constraint, and the legal
+ * alternatives; unexpected errors surface a generic message without leaking internals. This
+ * keeps every tool handler free of repetitive try/catch.
  *
  * @param body - The tool implementation producing a success result.
  * @returns the body's result, or an error result on failure.
+ * @see {@link describeApiError} for why MCP reveals more detail than the HTTP renderer.
  */
 export async function runTool(body: () => Promise<CallToolResult>): Promise<CallToolResult> {
   try {
     return await body();
   } catch (err) {
-    if (err instanceof InsufficientScopeError) {
-      return errorResult(
-        `${err.code}: ${publicProblemTitle(err.code)} Required scope: ${err.requiredScope}.`,
-      );
-    }
-    if (err instanceof ApiError) return errorResult(`${err.code}: ${publicProblemTitle(err.code)}`);
+    if (err instanceof ApiError) return errorResult(describeApiError(err));
     return errorResult('Internal error');
   }
 }

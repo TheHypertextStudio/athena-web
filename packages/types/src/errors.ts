@@ -38,7 +38,7 @@ export const ProblemCode = z
     [
       'The closed, machine-readable error taxonomy clients switch on (alongside the HTTP status).',
       '',
-      '- `validation_error` (HTTP 422): request body/params/query failed schema validation; per-field messages are in `fieldErrors`.',
+      '- `validation_error` (HTTP 422): request body/params/query failed schema validation; the failing fields and their stable reason codes are in `fieldErrors`.',
       '- `unauthorized` (HTTP 401): no session or an invalid/expired one — sign in.',
       '- `forbidden` (HTTP 403): authenticated but lacks the required capability/grant (or, for MCP tokens, the required OAuth scope).',
       '- `not_found` (HTTP 404): the resource does not exist, or is hidden by existence-hiding from a caller who may not see it.',
@@ -197,6 +197,74 @@ export function problemDefinition(code: string): ProblemDefinition | undefined {
   return parsed.success ? PROBLEM_CATALOG[parsed.data] : undefined;
 }
 
+/**
+ * The closed set of per-field validation reasons clients may branch on.
+ *
+ * @remarks
+ * This is the field-level analogue of {@link ProblemCode}: a stable machine code that a UI
+ * switches on to choose its OWN copy. It exists so callers never have to read
+ * {@link FieldIssue.message}, which is a developer diagnostic and not interface text.
+ */
+export const FieldIssueCode = z
+  .enum([
+    'invalid_type',
+    'invalid_option',
+    'invalid_format',
+    'too_small',
+    'too_big',
+    'invalid_value',
+  ])
+  .describe(
+    [
+      'Why a single field failed validation. Branch on this to select application-owned copy.',
+      '',
+      '- `invalid_type`: absent, or present with the wrong type; the wanted type is in `expected`. Note the validator reports a missing field and a wrong-typed field identically, so this code covers both.',
+      '- `invalid_option`: not one of a closed set; the legal values are in `options`.',
+      '- `invalid_format`: failed a string format (email, uri, date-time, regex); see `format`.',
+      '- `too_small` / `too_big`: outside an allowed bound; see `minimum` / `maximum`.',
+      '- `invalid_value`: failed a constraint with no more specific code.',
+    ].join('\n'),
+  );
+/** Why a single field failed validation. */
+export type FieldIssueCode = z.infer<typeof FieldIssueCode>;
+
+/**
+ * One validation failure on one field: a stable code plus the parameters that caused it.
+ *
+ * @remarks
+ * Deliberately carries NO prose. A schema author can put anything in a validator message —
+ * config keys, provider payloads, operator instructions — so no thrown string crosses this
+ * boundary, and neither does the rejected `input`, which may itself be a secret. Everything a
+ * caller needs is machine-readable: branch on `code` and read the parameters to compose your own
+ * copy ("must be at least 8 characters" from `too_small` + `minimum: 8`). That is strictly more
+ * information than a scrubbed message, with strictly less exposure.
+ *
+ * @see {@link FieldIssueCode} for the branchable codes.
+ */
+export const FieldIssue = z.object({
+  code: FieldIssueCode,
+  expected: z.string().optional().describe('The expected type, on `invalid_type`.'),
+  options: z.array(z.string()).optional().describe('The legal values, on `invalid_option`.'),
+  format: z
+    .string()
+    .optional()
+    .describe('The string format that failed, on `invalid_format` (e.g. `email`, `date-time`).'),
+  minimum: z
+    .number()
+    .optional()
+    .describe('The lower bound, on `too_small` (length for strings/arrays, value for numbers).'),
+  maximum: z
+    .number()
+    .optional()
+    .describe('The upper bound, on `too_big` (length for strings/arrays, value for numbers).'),
+  inclusive: z
+    .boolean()
+    .optional()
+    .describe('Whether the bound in `minimum`/`maximum` is itself allowed.'),
+});
+/** One validation failure on one field. */
+export type FieldIssue = z.infer<typeof FieldIssue>;
+
 /** An RFC 9457 problem-details object. */
 export const Problem = z.object({
   type: z
@@ -216,10 +284,10 @@ export const Problem = z.object({
     .describe('A human-readable explanation specific to this occurrence, when available.'),
   code: ProblemCode.describe('The closed machine-readable code clients branch on.'),
   fieldErrors: z
-    .record(z.string(), z.array(z.string()))
+    .record(z.string(), z.array(FieldIssue))
     .optional()
     .describe(
-      'Present on `validation_error` (422): a map of field path → validation messages; the path `_` holds form-level (non-field) errors.',
+      'Present on `validation_error` (422): a map of field path → the issues on that field; the path `_` holds form-level (non-field) errors. Branch on each issue `code`, never on its `message`.',
     ),
 });
 /** A problem-details value. */

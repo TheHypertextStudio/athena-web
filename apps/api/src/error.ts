@@ -6,7 +6,12 @@
  * and emits the `@docket/types` {@link Problem} shape as `application/problem+json`.
  */
 import type { StandardSchemaV1 } from '@standard-schema/spec';
-import { publicProblemTitle, type ProblemCode } from '@docket/types';
+import {
+  publicProblemTitle,
+  type FieldIssue,
+  type FieldIssueCode,
+  type ProblemCode,
+} from '@docket/types';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { ZodError } from 'zod';
@@ -17,14 +22,14 @@ export class ApiError extends Error {
   readonly status: ContentfulStatusCode;
   /** Machine-readable problem code. */
   readonly code: ProblemCode;
-  /** Per-field validation messages, when applicable. */
-  readonly fieldErrors?: Record<string, string[]>;
+  /** Per-field validation issues, when applicable. */
+  readonly fieldErrors?: Record<string, FieldIssue[]>;
 
   constructor(
     status: ContentfulStatusCode,
     code: ProblemCode,
     message: string,
-    fieldErrors?: Record<string, string[]>,
+    fieldErrors?: Record<string, FieldIssue[]>,
   ) {
     super(message);
     this.name = new.target.name;
@@ -132,19 +137,95 @@ export class AgentPlanRequiredError extends ApiError {
 }
 
 /**
+ * Read a property off a schema issue without asserting its full discriminated-union shape.
+ *
+ * @remarks
+ * Zod's issue variants carry code-specific parameters (`minimum`, `options`, `format`) that the
+ * Standard-Schema surface does not declare, and `hono-openapi`'s validator hook erases the
+ * variant. Reflecting is how we recover those parameters from either source without a cast.
+ *
+ * @param issue - The issue to read from.
+ * @param key - The property name.
+ * @returns the raw value, or `undefined` when absent.
+ */
+function issueProp(issue: StandardSchemaV1.Issue, key: string): unknown {
+  return Reflect.get(issue, key);
+}
+
+/**
+ * Classify one schema issue into the closed {@link FieldIssueCode} taxonomy.
+ *
+ * @param issue - The issue to classify.
+ * @returns the stable reason code clients branch on.
+ */
+function fieldIssueCode(issue: StandardSchemaV1.Issue): FieldIssueCode {
+  switch (issueProp(issue, 'code')) {
+    case 'invalid_type':
+      return 'invalid_type';
+    case 'invalid_value':
+      return 'invalid_option';
+    case 'invalid_format':
+      return 'invalid_format';
+    case 'too_small':
+      return 'too_small';
+    case 'too_big':
+      return 'too_big';
+    default:
+      return 'invalid_value';
+  }
+}
+
+/**
+ * Project one schema issue onto the public {@link FieldIssue} shape, keeping the parameters a
+ * client needs to compose its own copy.
+ *
+ * @remarks
+ * Deliberately drops `issue.message` and `issue.input`: the message is author-controlled prose
+ * that may name internals, and the input is the rejected value itself, which may be a secret.
+ * Only the classification and its bounds survive.
+ *
+ * @param issue - The issue to project.
+ * @returns the wire-shaped field issue.
+ */
+function toFieldIssue(issue: StandardSchemaV1.Issue): FieldIssue {
+  const code = fieldIssueCode(issue);
+  const expected = issueProp(issue, 'expected');
+  const format = issueProp(issue, 'format');
+  const minimum = issueProp(issue, 'minimum');
+  const maximum = issueProp(issue, 'maximum');
+  const inclusive = issueProp(issue, 'inclusive');
+  const values = issueProp(issue, 'values');
+  return {
+    code,
+    ...(typeof expected === 'string' ? { expected } : {}),
+    ...(typeof format === 'string' ? { format } : {}),
+    // Bounds arrive as number | bigint; the wire shape is JSON, so only plain numbers survive.
+    ...(typeof minimum === 'number' ? { minimum } : {}),
+    ...(typeof maximum === 'number' ? { maximum } : {}),
+    ...(typeof inclusive === 'boolean' ? { inclusive } : {}),
+    ...(Array.isArray(values) ? { options: values.map((value) => String(value)) } : {}),
+  };
+}
+
+/**
  * 422 — request body/params failed validation. Accepts either a {@link ZodError} (raw zod
  * failures bubbling to {@link onError}) or the Standard-Schema issue list that
  * `hono-openapi`'s validator hook yields — both map to the Problem `fieldErrors`.
+ *
+ * @remarks
+ * Each issue keeps its stable {@link FieldIssueCode} and parameters so a client can render
+ * specific guidance ("must be at least 8 characters") from the code rather than echoing the
+ * diagnostic message. See {@link FieldIssue} for why the message itself is not interface copy.
  */
 export class ValidationError extends ApiError {
   constructor(error: ZodError | readonly StandardSchemaV1.Issue[]) {
     const issues: readonly StandardSchemaV1.Issue[] =
       error instanceof ZodError ? error.issues : error;
-    const fieldErrors: Record<string, string[]> = {};
+    const fieldErrors: Record<string, FieldIssue[]> = {};
     for (const issue of issues) {
       const key =
         (issue.path ?? []).map((seg) => (typeof seg === 'object' ? seg.key : seg)).join('.') || '_';
-      (fieldErrors[key] ??= []).push(issue.message);
+      (fieldErrors[key] ??= []).push(toFieldIssue(issue));
     }
     super(422, 'validation_error', 'Validation failed', fieldErrors);
   }
@@ -166,18 +247,15 @@ export function onError(err: Error, c: Context) {
         : new ApiError(500, 'internal', 'Internal server error');
 
   c.header('Content-Type', 'application/problem+json');
-  const fieldErrors = apiErr.fieldErrors
-    ? Object.fromEntries(
-        Object.keys(apiErr.fieldErrors).map((field) => [field, ['Invalid value.']]),
-      )
-    : undefined;
   return c.json(
     {
       type: `https://docket.dev/problems/${apiErr.code}`,
+      // `title` stays derived from the closed code catalog — never `apiErr.message`, which can
+      // carry config keys, provider payloads, or SQL detail.
       title: publicProblemTitle(apiErr.code),
       status: apiErr.status,
       code: apiErr.code,
-      ...(fieldErrors ? { fieldErrors } : {}),
+      ...(apiErr.fieldErrors ? { fieldErrors: apiErr.fieldErrors } : {}),
     },
     apiErr.status,
   );

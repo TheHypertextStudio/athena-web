@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { z, type ZodError } from 'zod';
 
 import type { AppEnv } from '../src/context';
-import { publicProblemTitle } from '@docket/types';
+import { publicProblemTitle, type FieldIssue } from '@docket/types';
 import {
   ApiError,
   AuthError,
@@ -123,9 +123,26 @@ describe('onError mapping', () => {
     const r = z.object({ a: z.string(privateDiagnostic) }).safeParse({ a: 1 });
     const res = await appThrowing(new ValidationError(r.error!)).request('/');
     expect(res.status).toBe(422);
-    const body = (await res.json()) as { fieldErrors: Record<string, string[]> };
-    expect(body.fieldErrors['a']).toEqual(['Invalid value.']);
+    const body = (await res.json()) as { fieldErrors: Record<string, FieldIssue[]> };
+    expect(body.fieldErrors['a']).toEqual([{ code: 'invalid_type', expected: 'string' }]);
     expect(JSON.stringify(body)).not.toContain(privateDiagnostic);
+  });
+
+  it('never echoes the rejected input, which may itself be a secret', async () => {
+    const r = z.object({ password: z.string().min(8) }).safeParse({ password: 'hunter2' });
+    const res = await appThrowing(new ValidationError(r.error!)).request('/');
+    const body = (await res.json()) as { fieldErrors: Record<string, FieldIssue[]> };
+    expect(body.fieldErrors['password']).toEqual([
+      { code: 'too_small', minimum: 8, inclusive: true },
+    ]);
+    expect(JSON.stringify(body)).not.toContain('hunter2');
+  });
+
+  it('carries the legal values so a caller can correct itself', async () => {
+    const r = z.object({ state: z.enum(['backlog', 'done']) }).safeParse({ state: 'in progress' });
+    const res = await appThrowing(new ValidationError(r.error!)).request('/');
+    const body = (await res.json()) as { fieldErrors: Record<string, FieldIssue[]> };
+    expect(body.fieldErrors['state']?.[0]?.options).toEqual(['backlog', 'done']);
   });
 
   it('wraps a bare ZodError into a 422 ValidationError', async () => {

@@ -53,6 +53,7 @@ import { type ComponentType, type JSX, Suspense, useCallback, useEffect, useStat
 import { signInReturnPath } from '@/components/app-shell-utils';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
+import { resolveSessionStatus } from '@/lib/session-status';
 
 /** Human-readable label, description, and icon for each Docket MCP scope. */
 const SCOPE_INFO: Record<
@@ -167,7 +168,7 @@ function ConnectionHero({
 function ConsentPage(): JSX.Element {
   const router = useRouter();
   const params = useSearchParams();
-  const { data: session, isPending: sessionPending } = useSession();
+  const { data: session, isPending: sessionPending, error: sessionError } = useSession();
 
   // `oauthProvider()` redirects here with the SIGNED authorization query — every original
   // authorize parameter plus `exp`/`sig` — not the `consent_code` the deprecated oidcProvider()
@@ -198,11 +199,23 @@ function ConsentPage(): JSX.Element {
   // wrapper - a bare `/sign-in${currentSearch}` puts the signed authorize params on
   // `/sign-in`'s own query string, which the sign-in page never reads (it only honors
   // `callbackURL`), so it falls back to the home destination and the OAuth grant is lost.
+  //
+  // Gated on the shared four-way classifier rather than the `!sessionPending && !session` boolean
+  // pair this used to test. That pair cannot tell "signed out" from "could not ask", so a dropped
+  // connection or a 5xx on `/get-session` bounced an authenticated user out of a consent flow they
+  // were in the middle of granting. Only a server-confirmed `signed-out` may redirect; `unreachable`
+  // falls through to the pending treatment below, where the session read is still retrying.
+  const sessionStatus = resolveSessionStatus({
+    hasSession: Boolean(session),
+    isPending: sessionPending,
+    hasError: Boolean(sessionError),
+    pendingTimedOut: false,
+  });
   useEffect(() => {
-    if (!sessionPending && !session) {
+    if (sessionStatus === 'signed-out') {
       router.replace(signInReturnPath(`${window.location.pathname}${window.location.search}`));
     }
-  }, [session, sessionPending, router]);
+  }, [sessionStatus, router]);
 
   const decide = useCallback(
     async (accept: boolean): Promise<void> => {
@@ -246,7 +259,9 @@ function ConsentPage(): JSX.Element {
     [signature],
   );
 
-  if (sessionPending) {
+  // `unreachable` shares the pending treatment on purpose: the session read is still retrying, and a
+  // consent grant is exactly the wrong thing to abandon over one failed request.
+  if (sessionStatus === 'pending' || sessionStatus === 'unreachable') {
     return (
       <ConsentShell>
         <div className="text-on-surface-variant text-body-medium">Loading…</div>

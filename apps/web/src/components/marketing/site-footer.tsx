@@ -2,12 +2,24 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { TAGLINE } from '@/lib/marketing-copy';
-import { signUpUrl } from '@/lib/marketing-links';
+
+import { FooterEntryLink } from './marketing-cta';
 
 interface FooterColumn {
   title: string;
   links: readonly { href: string; label: string }[];
+  /**
+   * Whether this column ends with the auth-dependent entry link ({@link FooterEntryLink}).
+   *
+   * @remarks
+   * An explicit flag rather than matching on `title`, so renaming the column heading cannot silently
+   * drop the link.
+   */
+  entryLink?: boolean;
 }
+
+/** The shared link treatment, passed to {@link FooterEntryLink} so styling stays owned here. */
+const LINK_CLASS = 'text-muted-foreground hover:text-foreground text-body-medium transition-colors';
 
 const COLUMNS: readonly FooterColumn[] = [
   {
@@ -15,8 +27,8 @@ const COLUMNS: readonly FooterColumn[] = [
     links: [
       { href: '/#features', label: 'Features' },
       { href: '/pricing', label: 'Pricing' },
-      { href: signUpUrl, label: 'Get started' },
     ],
+    entryLink: true,
   },
   {
     title: 'Company',
@@ -50,14 +62,16 @@ export function SiteFooter(): JSX.Element {
             <ul className="flex flex-col gap-2">
               {column.links.map((link) => (
                 <li key={link.label}>
-                  <Link
-                    href={link.href}
-                    className="text-muted-foreground hover:text-foreground text-body-medium transition-colors"
-                  >
+                  <Link href={link.href} className={LINK_CLASS}>
                     {link.label}
                   </Link>
                 </li>
               ))}
+              {column.entryLink ? (
+                <li>
+                  <FooterEntryLink className={LINK_CLASS} />
+                </li>
+              ) : null}
             </ul>
           </div>
         ))}

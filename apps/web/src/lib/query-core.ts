@@ -90,9 +90,12 @@ const DEFAULT_GC_TIME_MS = 24 * 60 * 60_000;
  * (replacing manual "Refresh" buttons), and a single `retry` smooths a transient network blip.
  *
  * An optional `onError` (injected by the client providers) is invoked for every failed query AND
- * mutation, so a {@link SessionExpiredError} from any read/write drives a single global sign-out +
- * redirect. It is intentionally a parameter (not baked in) so the server-safe core stays free of
- * browser/router coupling — the SSR client passes nothing.
+ * mutation. A {@link SessionExpiredError} reaching it does **not** sign anyone out: it prompts a
+ * confirming read of the session endpoint, and only a confirmed "no session" purges local state and
+ * asks for sign-in (see `UnauthorizedWatcher` in `components/providers.tsx`). One endpoint's `401`
+ * is not evidence that a session ended — reacting to it destructively is what used to sign people
+ * out of perfectly valid sessions. It is intentionally a parameter (not baked in) so the server-safe
+ * core stays free of browser/router coupling — the SSR client passes nothing.
  *
  * @param handlers - Optional global cache handlers (`onError`), wired by the client providers.
  * @returns a configured {@link QueryClient}.

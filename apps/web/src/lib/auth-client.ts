@@ -2,6 +2,8 @@ import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/react';
 import { twoFactorClient } from 'better-auth/client/plugins';
 
+import type { SessionProbe } from './session-recovery';
+
 /**
  * Resolve the same-origin base origin for the Better Auth client.
  *
@@ -109,3 +111,39 @@ export const changeEmail = authClient.changeEmail;
  * @remarks Convenience re-export of {@link authClient.useSession}.
  */
 export const useSession = authClient.useSession;
+
+/**
+ * Ask the session endpoint directly whether a session still exists.
+ *
+ * @remarks
+ * The authoritative one-shot read behind {@link createUnauthorizedConfirmer}: `/get-session` is the
+ * only endpoint whose job is answering "is this person signed in?", so it is the only one allowed to
+ * settle that question. A `401` from some unrelated data endpoint is not an answer — see
+ * {@link file://./session-recovery.ts} for why conflating the two used to sign people out of valid
+ * sessions.
+ *
+ * `disableCookieCache` forces a real session-store lookup rather than letting Better Auth answer
+ * from a signed cookie. Docket configures no cookie cache today, but this read exists precisely to
+ * be trustworthy, and it should not quietly become advisory if that ever changes.
+ *
+ * The three-way mapping is deliberate:
+ *
+ * - a `401` **is** a real answer (no session) and reports `failed: false`, or a genuinely expired
+ *   session could never be recognized;
+ * - any other error, and any rejection, reports `failed: true` — "could not ask" — so the caller
+ *   changes nothing.
+ *
+ * @returns The reduced facts for {@link resolveUnauthorizedVerdict}.
+ */
+export async function probeSession(): Promise<SessionProbe> {
+  try {
+    const { data, error } = await authClient.getSession({
+      query: { disableCookieCache: true },
+    });
+    if (error) return { hasSession: false, failed: error.status !== 401 };
+    return { hasSession: Boolean(data), failed: false };
+  } catch {
+    // Offline, DNS failure, captive portal: no answer, so no verdict.
+    return { hasSession: false, failed: true };
+  }
+}

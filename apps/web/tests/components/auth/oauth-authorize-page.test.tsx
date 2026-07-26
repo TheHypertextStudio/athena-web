@@ -7,13 +7,21 @@
 import { cleanup, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+/**
+ * The mock mirrors Better Auth's real `useSession` shape, `error` included. It is not decoration:
+ * the page distinguishes "the server said you have no session" from "the server never answered", and
+ * a mock that omitted `error` would let a regression in that distinction pass unnoticed.
+ */
+interface MockSession {
+  data: { user: { email: string } } | null;
+  isPending: boolean;
+  error: { status: number } | null;
+}
+
 const { metadataGet, replace, useSession } = vi.hoisted(() => ({
   metadataGet: vi.fn(),
   replace: vi.fn(),
-  useSession: vi.fn((): { data: { user: { email: string } } | null; isPending: boolean } => ({
-    data: null,
-    isPending: false,
-  })),
+  useSession: vi.fn((): MockSession => ({ data: null, isPending: false, error: null })),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -39,7 +47,7 @@ beforeEach(() => {
   metadataGet.mockResolvedValue({ ok: false });
   replace.mockReset();
   useSession.mockReset();
-  useSession.mockReturnValue({ data: null, isPending: false });
+  useSession.mockReturnValue({ data: null, isPending: false, error: null });
   window.history.replaceState(null, '', `/oauth/authorize${CONSENT_QUERY}`);
 });
 
@@ -59,7 +67,7 @@ describe('OAuthAuthorizePage', () => {
   });
 
   it('does not redirect while the session read is still pending', () => {
-    useSession.mockReturnValue({ data: null, isPending: true });
+    useSession.mockReturnValue({ data: null, isPending: true, error: null });
 
     render(<OAuthAuthorizePage />);
 
@@ -67,12 +75,33 @@ describe('OAuthAuthorizePage', () => {
   });
 
   it('does not redirect an authenticated visitor', async () => {
-    useSession.mockReturnValue({ data: { user: { email: 'ada@example.com' } }, isPending: false });
+    useSession.mockReturnValue({
+      data: { user: { email: 'ada@example.com' } },
+      isPending: false,
+      error: null,
+    });
 
     render(<OAuthAuthorizePage />);
 
     await waitFor(() => {
       expect(metadataGet).toHaveBeenCalled();
+    });
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('does not abandon a consent grant because the session read failed', async () => {
+    // Regression. This page used to gate on `!isPending && !session`, a boolean pair that cannot
+    // tell "signed out" from "could not ask". A dropped connection or a 5xx on `/get-session` threw
+    // an authenticated user out of a consent flow they were part-way through granting — and since
+    // sign-in completes via fetch, the grant was simply lost. Only a server-confirmed sign-out may
+    // redirect; an errored read keeps waiting.
+    const failed: MockSession = { data: null, isPending: false, error: { status: 500 } };
+    useSession.mockReturnValue(failed);
+
+    render(<OAuthAuthorizePage />);
+
+    await waitFor(() => {
+      expect(useSession).toHaveBeenCalled();
     });
     expect(replace).not.toHaveBeenCalled();
   });

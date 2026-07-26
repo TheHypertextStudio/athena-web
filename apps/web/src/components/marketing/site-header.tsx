@@ -1,8 +1,7 @@
-import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { signInUrl, signUpUrl } from '@/lib/marketing-links';
+import { HeaderActions } from './marketing-cta';
 
 interface NavLink {
   href: string;
@@ -19,6 +18,10 @@ const NAV: readonly NavLink[] = [
  * Site header for marketing pages — typographic wordmark over a hairline rule.
  * The wordmark is set in Fraunces (the display face); nav and actions stay in
  * Plex Sans, quietly previewing the product's own typography.
+ *
+ * @remarks
+ * Stays a Server Component: only the action cluster needs the session, and it is isolated in
+ * {@link HeaderActions} so this page keeps its static rendering.
  */
 export function SiteHeader(): JSX.Element {
   return (
@@ -41,14 +44,7 @@ export function SiteHeader(): JSX.Element {
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="ghost" size="sm">
-            <Link href={signInUrl}>Sign in</Link>
-          </Button>
-          <Button asChild size="sm">
-            <Link href={signUpUrl}>Get started</Link>
-          </Button>
-        </div>
+        <HeaderActions />
       </div>
     </header>
   );

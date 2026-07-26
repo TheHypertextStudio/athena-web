@@ -1,11 +1,81 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-25
+> **Last Updated**: 2026-07-26
 
 ---
 
 ## Active Tasks
+
+### [AUTH-UX-001] Docket keeps demanding sign-in despite a live session on the device
+
+- **Status**: REVIEW
+- **Started**: 2026-07-26
+- **Priority**: P0
+- **Description**: Reported as "Docket keeps showing me the sign in page and asking me to auth even
+  if there's already an active session on device." Paired with a second, related complaint: the
+  marketing home page never reflected auth state.
+- **Root cause**: The global TanStack `onError` in `components/providers.tsx` treated a
+  `SessionExpiredError` from **any** of the ~72 data surfaces as proof of sign-out, and reacted with
+  `signOutAndPurge` — Better Auth `signOut()`, then `window.location.replace('/sign-in')` with no
+  `callbackURL`. A single `401` is not proof of that: it also occurs on an API cold start, on a read
+  racing the daily `session.updateAge` (24h) session-record rotation, and on a transient failure
+  through the Next rewrite proxy. Because the reaction called `signOut()` **first**, a spurious
+  `401` destroyed a session that was still valid — so the forced passkey ceremony that followed was
+  real, and recurred every time the race did. **The bug manufactured its own evidence**, which is why
+  it never looked intermittent to the user. `refetchOnWindowFocus: true` meant merely returning to
+  the tab could trigger it, with no user action at all. It also bypassed `lib/session-status.ts`
+  entirely — the module whose whole purpose is that "no session" and "could not ask" must drive
+  different UI, and which documents that only `signed-out` may open the interlock.
+- **Approach**: A `401` from a data endpoint is now **evidence to check, not a verdict to execute**.
+  `lib/session-recovery.ts` (pure, mirroring `session-status.ts`'s shape) resolves a session probe to
+  `session-live` / `session-ended` / `unconfirmed`, single-flighted so a burst of simultaneous 401s
+  asks `/get-session` once. Only a confirmed `session-ended` purges local state and opens the
+  existing **dismissible** interlock, carrying the current path as its return target. Nothing on this
+  path calls `signOut()` any more: if the session has genuinely ended there is nothing left to end,
+  and if it has not, ending it _is_ the bug. `signOutAndPurge` is now reserved for the two explicit
+  user-initiated sign-outs (account menu, command palette), with `purgeLocalSessionState` split out
+  for the reactive path.
+- **Also fixed (same family)**: `app/oauth/authorize/page.tsx` gated on the raw
+  `!isPending && !session` boolean pair that `session-status.ts` explicitly warns against, so a 5xx
+  or dropped connection on `/get-session` threw an authenticated user out of a consent flow they were
+  part-way through granting. It now uses the shared classifier and treats `unreachable` as "keep
+  waiting". The stale doc comment in `query-core.ts` claiming a `401` "drives a global sign-out" was
+  corrected — it had described the bug as the contract.
+- **Marketing auth state**: every CTA hardcoded "Sign in" / "Get started", so a signed-in person
+  opening Docket was told to authenticate — and the obvious click led to `/sign-in`, where the
+  conditional-mediation passkey prompt is armed. The marketing surface was funnelling signed-in
+  people into the auth flow. Header, hero, closing band, and the footer entry link now read the
+  session via `useMarketingAuthState` (folded through the same `resolveSessionStatus`) and offer
+  "Open Docket" → `/today` instead. Implemented as small client islands so `/` stays statically
+  renderable rather than being opted out of static rendering by a server-side `cookies()` read; while
+  the state is `unknown` they render the visitor treatment, which is correct for nearly everyone
+  reading a public landing page and makes the signed-in swap additive. The `session-snapshot.ts`
+  localStorage record was deliberately **not** consulted to pre-empt that window — its documented
+  contract is "who was here last", never "is this person signed in?", and a button label is not worth
+  eroding an invariant a reviewer is told to check.
+- **Files changed**: `apps/web/src/lib/session-recovery.ts` (new),
+  `components/marketing/marketing-cta.tsx` (new), `components/marketing/use-marketing-auth.ts`
+  (new), `components/providers.tsx`, `lib/sign-out.ts`, `lib/auth-client.ts` (adds `probeSession`),
+  `lib/query-core.ts`, `lib/marketing-links.ts`, `app/oauth/authorize/page.tsx`, and the four
+  marketing surfaces (`site-header`, `hero`, `cta-band`, `site-footer`). Tests:
+  `tests/lib/session-recovery.test.ts`, `tests/components/unauthorized-watcher.test.tsx`,
+  `tests/components/marketing-cta.test.tsx`, plus `tests/components/auth/oauth-authorize-page.test.tsx`.
+- **Learnings**: Two competing authorities on the same question is the defect, not the specific
+  handler. The codebase already had a careful, well-documented four-state session classifier _and_ a
+  second path that ignored it and acted destructively on one endpoint's word; the second silently won
+  because it ran first and was irreversible. When one module is designated the authority on a
+  question, every reactive path must be made to _ask_ it rather than re-derive the answer — and a
+  reaction that destroys the thing it is diagnosing can never be safe on a guess. Separately, the
+  existing OAuth test mock omitted `error` from the `useSession` shape; a mock that drops a field the
+  real client always sets will hide exactly this class of regression.
+- **Verified**: `pnpm typecheck`, `pnpm lint`, and the full web suite (941 tests, +17) pass.
+  End-to-end against the live dev stack with a real passkey session: a `401` injected on the shell's
+  `/v1/notifications/count` background poll left the user on `/today` with the session intact, and
+  the **same test was confirmed red against the pre-fix handler** — it navigated to `/sign-in` and
+  `get-session` returned `NONE`, reproducing the report exactly. The genuine-expiry path was
+  separately confirmed to still raise the interlock, and the signed-in marketing page was rendered
+  and screenshotted (0 × "Sign in", 3 × "Open Docket").
 
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 

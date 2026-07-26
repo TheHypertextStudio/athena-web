@@ -7,6 +7,44 @@
 
 ## Active Tasks
 
+### [WIP-RECONCILE-001] Reconcile parked pre-sync working tree with main
+
+- **Status**: BLOCKED
+- **Started**: 2026-07-25
+- **Priority**: P2
+- **Description**: A local working tree of 136 uncommitted files was parked so `main` could be
+  synced with the remote. Decide, per feature stream, whether anything in it is still wanted.
+- **Where the work lives** (three independent copies, none of them on a branch):
+  - `git stash` entry `b957d7197451c2b4dd7dc28afb573f0d2f91fc03`, based on `d8e08c4`. Recover with
+    `git stash apply b957d719` (use the SHA, not `stash@{0}` — the index shifts as stashes are added).
+  - `parked-tracked.patch` (5116 lines) and `parked-untracked.tar.gz` in the session scratchpad.
+  - The empty branch `wip/parked-2026-07-25`, still pointing at the old base `d8e08c4`.
+- **Why it is blocked**: the parked tree does not build. It fails `pnpm lint` with 51 errors and
+  `apps/web` typecheck with 63 errors, so the repository `pre-commit` hook rejects it and it cannot
+  be committed to a branch without `--no-verify`. Those errors are not defects to fix in place —
+  they are artifacts of a base that is now 196 commits stale.
+- **Already superseded** (landed upstream independently, safe to discard from the parked copy):
+  the build repair publishing `AuthenticationRequiredError`, `readError`, `exportScope` and
+  `FULL_ACCOUNT_EXPORT_SCOPE`; the `project-detail/discussion.tsx` deletion;
+  `project-dependency-routes.ts`; `use-project-dependencies.ts`; `components/editor/`.
+- **Not upstream — genuinely unique, and the only part worth reviewing**:
+  - Security-audit stack: `packages/auth/src/security-audit{,-plugin}.ts`,
+    `packages/types/src/security-audit.ts`, `apps/api/src/routes/{me,admin}-security-events.ts`,
+    `security-audit-serializers.ts`, `apps/admin/.../security-events/page.tsx`,
+    `apps/web/src/components/settings/security-events-section.tsx`, and the settings
+    `security/history` + `export/history` pages.
+  - Time-tracking web surfaces: `apps/web/src/app/(app)/time/` and
+    `apps/web/src/components/time/` (11 files). The underlying domain shipped in `d8e08c4`; only
+    the UI is parked.
+  - Task-detail refactor: `components/task-detail/{task-detail-header,task-detail-body,workflow-state,agent-activity-feed}`
+    plus `components/tasks/workspace-task-launcher.tsx`.
+- **Blocker — migration numbering collides**: the parked tree carries `0031`–`0036`, but upstream
+  has since used those exact numbers for different migrations and advanced to `0047`. The parked
+  migrations must be renumbered and regenerated against the current schema; they cannot be replayed.
+  `packages/db/drizzle/meta/_journal.json` must be reconciled by hand, never merged.
+- **Notes**: this is a re-integration project, not a replay. Treat the parked copy as a reference
+  implementation to port forward, and re-derive the migrations from the current schema.
+
 ### [TIMELINE-001] Replace the Projects timeline with a generic, manipulable timeline engine
 
 - **Status**: COMPLETED

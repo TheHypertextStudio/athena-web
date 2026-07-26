@@ -160,7 +160,6 @@ export const task = pgTable(
     ...auditColumns(),
     title: text('title').notNull(),
     description: text('description'),
-    summary: text('summary'),
     teamId: text('team_id')
       .notNull()
       .references(() => team.id, { onDelete: 'cascade' }),

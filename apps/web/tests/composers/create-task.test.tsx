@@ -269,6 +269,18 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(taskPost).not.toHaveBeenCalled();
   });
 
+  it('offers no summary line — a task title is already its one-liner', () => {
+    // Tasks deliberately capture title + description only. The other work entities are long-lived
+    // containers whose names ("Atlas", "Q3 Reliability") say nothing alone, so a summary earns its
+    // space there; a task title ("Dual-write the ingest path") is the summary by construction, and
+    // a second one-line field under it just asked for the same sentence twice.
+    renderComposer();
+
+    expect(screen.getByLabelText('Task title')).toBeTruthy();
+    expect(screen.queryByLabelText('One-sentence summary')).toBeNull();
+    expect(screen.queryByPlaceholderText('One-sentence summary')).toBeNull();
+  });
+
   it('surfaces application-owned copy when the create fails', async () => {
     taskPost.mockResolvedValue(jsonResponse(false, { detail: 'Title is taken.' }));
     const { onCreated } = renderComposer();

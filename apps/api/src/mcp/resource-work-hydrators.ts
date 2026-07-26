@@ -88,7 +88,6 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
   return {
     id: t.id,
     title: t.title,
-    summary: t.summary,
     description: t.description,
     teamId: t.teamId,
     state: t.state,

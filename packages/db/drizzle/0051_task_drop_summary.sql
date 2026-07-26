@@ -1,0 +1,20 @@
+-- Drop `task.summary`.
+--
+-- Migration 0044 gave tasks a one-line summary so every work object captured its identity the
+-- same way — but a task is not the same kind of object as a project, initiative, program, or
+-- team. Those are long-lived containers whose names ("Atlas", "Q3 Reliability") say nothing on
+-- their own, so a one-line summary earns its space. A task's title is *already* the one-liner:
+-- "Dual-write the ingest path" carries the salient information by construction. Stacking a
+-- second one-line field under it asked the author to say the same thing twice, and left the
+-- composer with a placeholder line that was almost always left blank.
+--
+-- Tasks keep `title` + `description`. The other four entities keep their summary.
+--
+-- This is a destructive drop rather than a soft hide: leaving a written-but-unreadable column
+-- behind would be dead schema, and a summary that no surface renders is worse than no summary
+-- at all — it silently swallows text a user typed. The field shipped four days before this
+-- migration (0044, 2026-07-21) and was never surfaced on the task detail screen, so the data at
+-- risk is whatever was typed into the create composer's subtitle line in that window.
+--
+-- `IF EXISTS` keeps this idempotent and safe against a database that never ran 0044.
+ALTER TABLE "task" DROP COLUMN IF EXISTS "summary";

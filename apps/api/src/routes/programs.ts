@@ -55,7 +55,6 @@ function taskToOut(
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,
-    summary: t.summary,
     description: t.description,
     teamId: t.teamId,
     state: t.state,

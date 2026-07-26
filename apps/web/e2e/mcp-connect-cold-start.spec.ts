@@ -49,14 +49,25 @@ test('an unauthenticated MCP authorize request resumes to consent after sign-in,
   expect(page.url()).toContain('response_type=code');
   expect(page.url()).toContain(`client_id=${clientId}`);
 
-  await page.getByRole('button', { name: 'Sign in with a passkey' }).click();
+  // The sign-in page arms WebAuthn conditional mediation (`autoFill: true`) on mount, and the
+  // virtual authenticator satisfies it on its own — so the ceremony often completes with no click
+  // at all and the app navigates to consent while Playwright is still running its actionability
+  // checks on this button. The click then hangs against a detached element even though the flow
+  // succeeded. Both orderings are a correct resume, so race the click against the outcome; the
+  // assertion below is what actually gates the test.
+  const authorize = page.getByRole('button', { name: 'Authorize' });
+  await Promise.race([
+    page
+      .getByRole('button', { name: 'Sign in with a passkey' })
+      .click({ timeout: TIMEOUTS.ceremony })
+      .catch(() => undefined),
+    authorize.waitFor({ state: 'visible', timeout: TIMEOUTS.ceremony }),
+  ]);
 
   // Must land back on the consent screen for THIS client - never /today, and never left on
   // sign-in with the request abandoned.
-  await expect(page.getByRole('button', { name: 'Authorize' })).toBeVisible({
-    timeout: TIMEOUTS.ceremony,
-  });
-  await page.getByRole('button', { name: 'Authorize' }).click();
+  await expect(authorize).toBeVisible({ timeout: TIMEOUTS.ceremony });
+  await authorize.click();
 
   await page.waitForURL(`${REDIRECT_URI}*`, { timeout: TIMEOUTS.ceremony });
   const redirected = new URL(page.url());

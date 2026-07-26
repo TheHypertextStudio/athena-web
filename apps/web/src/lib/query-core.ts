@@ -169,21 +169,6 @@ export function rpcErrorResponse<T>(response: {
 }
 
 /**
- * The error {@link unwrap} throws for a non-OK API response.
- *
- * @remarks
- * An `Error` subclass (so it satisfies TanStack's `DefaultError`) carrying application-owned copy,
- * the HTTP `status`, and, when the body parsed as a {@link Problem}, its machine-readable `code`.
- * A caller can
- * `instanceof`-narrow to this type to distinguish ONE specific failure (e.g. the Linear
- * write-scope 409 on `PATCH /integrations/:id`) from any other failure on the same endpoint (e.g.
- * a 422 from an unrelated validation error) — the message string alone can't do that, since two
- * different failures can produce unrelated messages that both need distinct handling, or (less
- * commonly) similar-looking ones that don't.
- *
- * @see `IntegrationConfigPanel`'s two-way re-auth notice for the motivating use.
- */
-/**
  * A read could not be attempted because the browser is offline.
  *
  * @remarks
@@ -206,6 +191,21 @@ export class OfflineError extends UserFacingError {
   }
 }
 
+/**
+ * The error {@link unwrap} throws for a non-OK API response.
+ *
+ * @remarks
+ * An `Error` subclass (so it satisfies TanStack's `DefaultError`) carrying application-owned copy,
+ * the HTTP `status`, and, when the body parsed as a {@link Problem}, its machine-readable `code`.
+ * A caller can
+ * `instanceof`-narrow to this type to distinguish ONE specific failure (e.g. the Linear
+ * write-scope 409 on `PATCH /integrations/:id`) from any other failure on the same endpoint (e.g.
+ * a 422 from an unrelated validation error) — the message string alone can't do that, since two
+ * different failures can produce unrelated messages that both need distinct handling, or (less
+ * commonly) similar-looking ones that don't.
+ *
+ * @see `IntegrationConfigPanel`'s two-way re-auth notice for the motivating use.
+ */
 export class ApiRequestError extends UserFacingError {
   /** The response's HTTP status code. */
   override readonly status: number;

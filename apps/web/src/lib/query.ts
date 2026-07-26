@@ -57,20 +57,6 @@ export * from './query-core';
 export { queryKeys } from './query-keys';
 
 /**
- * Read hook: subscribe a component to a typed query {@link apiQueryOptions | definition}.
- *
- * @remarks
- * The one read primitive — always pass a definition from {@link apiQueryOptions} (key + fetcher +
- * optional {@link STALE} tier). The hook's `data` is the parsed body and its `error` carries only
- * app-owned copy plus structured status/problem code on failure. It inherits the
- * {@link createQueryClient} defaults (refetch-on-focus, one retry), so the surface stays fresh
- * without a manual refresh button.
- *
- * @typeParam T - The parsed response body type, carried by the definition.
- * @param def - A typed definition from {@link apiQueryOptions}.
- * @returns the {@link UseQueryResult} for the parsed body.
- */
-/**
  * Present a query that is paused for want of a network as an error rather than as "loading".
  *
  * @remarks
@@ -105,6 +91,20 @@ function withOfflineError<T>(result: UseQueryResult<T>): UseQueryResult<T> {
   } as UseQueryResult<T>;
 }
 
+/**
+ * Read hook: subscribe a component to a typed query {@link apiQueryOptions | definition}.
+ *
+ * @remarks
+ * The one read primitive — always pass a definition from {@link apiQueryOptions} (key + fetcher +
+ * optional {@link STALE} tier). The hook's `data` is the parsed body and its `error` carries only
+ * app-owned copy plus structured status/problem code on failure. It inherits the
+ * {@link createQueryClient} defaults (refetch-on-focus, one retry), so the surface stays fresh
+ * without a manual refresh button.
+ *
+ * @typeParam T - The parsed response body type, carried by the definition.
+ * @param def - A typed definition from {@link apiQueryOptions}.
+ * @returns the {@link UseQueryResult} for the parsed body.
+ */
 export function useApiQuery<T>(def: UseQueryOptions<T>): UseQueryResult<T> {
   return withOfflineError(useQuery(def));
 }

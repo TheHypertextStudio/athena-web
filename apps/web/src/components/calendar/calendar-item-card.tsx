@@ -218,7 +218,7 @@ export default function CalendarItemCard({
             role="img"
             aria-label={readOnlyLabel}
             title={readOnlyLabel}
-            className="text-on-surface-variant [&_svg]:size-3.5"
+            className="text-on-surface-variant [&_svg]:size-4"
           >
             <Shield />
           </span>
@@ -236,10 +236,7 @@ export default function CalendarItemCard({
             )}
           >
             <syncMeta.icon
-              className={cn(
-                '[&_svg]:size-3.5',
-                item.syncState === 'push_pending' && 'animate-spin',
-              )}
+              className={cn('[&_svg]:size-4', item.syncState === 'push_pending' && 'animate-spin')}
             />
           </span>
         ) : null}

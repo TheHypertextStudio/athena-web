@@ -70,7 +70,7 @@ export function SelectableCard({
             : 'border-outline-variant scale-90 opacity-0 group-hover:opacity-40',
         )}
       >
-        <Check className="size-3" />
+        <Check className="size-4" />
       </span>
 
       {Icon ? (

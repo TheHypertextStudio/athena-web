@@ -77,7 +77,7 @@ export function GroupHeader({
       }}
       style={level > 0 ? { paddingLeft: `${String(level * 1.25 + 0.5)}rem` } : undefined}
     >
-      <Chevron aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+      <Chevron aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
       {decoration ? <span className="flex shrink-0 items-center">{decoration}</span> : null}
       <span className="truncate">{label}</span>
       {typeof count === 'number' ? (

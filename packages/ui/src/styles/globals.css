@@ -1,3 +1,31 @@
+/*
+ * Cascade-layer order — MUST come before `@import 'tailwindcss'` below.
+ *
+ * MUI (`@mui/icons-material`'s underlying `SvgIcon`) injects its own styles at runtime via
+ * Emotion, wrapped in a named `@layer mui { ... }` (e.g. `.MuiSvgIcon-root { width: 1em; height:
+ * 1em; font-size: 1.5rem; }` — MUI's 24px default). CSS Cascade Layers order layers by where
+ * their name is FIRST established, not by specificity or by where their rules physically sit in
+ * source order, and nothing in this codebase declared `mui` before Tailwind's own
+ * `@layer theme, base, components, utilities` — so a bare, un-important Tailwind `size-*` utility
+ * was silently losing to MUI's 24px default, on every icon, everywhere — verified by measuring a
+ * button's `<Plus className="size-4">` rendering at a computed 24px instead of 16px.
+ *
+ * This bare `@layer mui;` statement registers `mui` first (lowest priority) — necessary, but
+ * empirically **not sufficient**: MUI's Emotion `<style>` tag is inline and parsed synchronously,
+ * while this stylesheet is an external `<link>` that loads asynchronously, and re-testing after
+ * this fix landed still showed the same `Plus` icon at 24px. Whichever stylesheet the browser
+ * happens to evaluate first wins the *actual* layer registration, and that's a load-order race
+ * this file cannot win by source position alone.
+ *
+ * The reliable fix is `!important` on the specific utility (Tailwind's trailing `!`, e.g.
+ * `size-4!`): an important declaration beats a non-important one regardless of layer or the race
+ * above. `StatusIcon`/`StatusGlyph` (`packages/ui/src/components/atoms/StatusIcon.tsx`) do this
+ * correctly. This layer declaration stays as defense-in-depth (harmless, and correct for any
+ * *non-MUI* layer conflicts), but do not rely on it alone for icon sizing — every bare `size-*`
+ * class on an MUI icon anywhere else in the app has this same latent bug, unaudited.
+ */
+@layer mui;
+
 @import 'tailwindcss';
 @import 'tw-animate-css';
 

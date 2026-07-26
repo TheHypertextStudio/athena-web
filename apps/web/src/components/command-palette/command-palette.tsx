@@ -274,7 +274,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         {/* Footer hint bar */}
         <div className="border-outline-variant text-on-surface-variant flex items-center justify-between gap-3 border-t px-3 py-2 text-[11px]">
           <span className="flex items-center gap-1.5">
-            <Command aria-hidden="true" className="size-3" />K to toggle
+            <Command aria-hidden="true" className="size-4" />K to toggle
           </span>
           <span className="flex items-center gap-3">
             <span>↑↓ navigate</span>

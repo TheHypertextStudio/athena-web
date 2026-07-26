@@ -13,7 +13,7 @@
  */
 import type { Priority, TaskOut } from '@docket/types';
 import { cn } from '@docket/ui';
-import { StatusIcon } from '@docket/ui/components';
+import { StatusGlyph } from '@docket/ui/components';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
@@ -107,7 +107,7 @@ export default function AllTasksClient(): JSX.Element {
       {loading && mine.length === 0 ? (
         <Stack gap={1} aria-hidden="true">
           {Array.from({ length: 6 }, (_, i) => (
-            <Skeleton key={i} className="h-11 w-full rounded-lg" />
+            <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
           ))}
         </Stack>
       ) : sorted.length === 0 ? (
@@ -189,11 +189,11 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
       href={href}
       {...dragProps}
       className={cn(
-        'hover:bg-surface-container-low focus-visible:ring-ring flex items-center gap-3 rounded-lg px-3 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+        'hover:bg-surface-container-low focus-visible:ring-ring flex min-h-[72px] items-center gap-3 rounded-lg px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
         dragProps?.className,
       )}
     >
-      <StatusIcon type={stateTypeOf(task.state)} />
+      <StatusGlyph type={stateTypeOf(task.state)} />
       {canEdit ? (
         <EditableTitle
           value={task.title}
@@ -206,10 +206,12 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
             router.push(href);
           }}
           ariaLabel="Task title"
-          className="text-on-surface min-w-0 flex-1 truncate text-sm"
+          className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium"
         />
       ) : (
-        <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{task.title}</span>
+        <span className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium">
+          {task.title}
+        </span>
       )}
       {task.dueDate ? (
         <span

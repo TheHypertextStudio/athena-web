@@ -106,12 +106,12 @@ export function ViewList({ views, activeId, onOpen, catalog }: ViewListProps): J
               </div>
               <div className="text-on-surface-variant flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                 <span className="inline-flex items-center gap-1">
-                  <Filter className="size-3.5" aria-hidden="true" />
+                  <Filter className="size-4" aria-hidden="true" />
                   {summary.filters}
                 </span>
                 {summary.grouping ? (
                   <span className="inline-flex items-center gap-1">
-                    <Layers className="size-3.5" aria-hidden="true" />
+                    <Layers className="size-4" aria-hidden="true" />
                     {summary.grouping}
                   </span>
                 ) : null}

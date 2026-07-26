@@ -148,7 +148,7 @@ export default function ViewsPage(): JSX.Element {
                   }}
                   aria-expanded={composerOpen}
                 >
-                  <Plus className="size-3.5" aria-hidden="true" />
+                  <Plus className="size-4" aria-hidden="true" />
                   Save as view
                 </Button>
               }

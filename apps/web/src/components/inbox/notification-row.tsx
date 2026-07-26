@@ -187,7 +187,7 @@ function DeliveryHint({ hint }: DeliveryHintProps): JSX.Element {
         : 'Also sent';
   return (
     <span className="inline-flex items-center gap-1">
-      <Icon aria-hidden="true" className="size-3.5" />
+      <Icon aria-hidden="true" className="size-4" />
       <span>{label}</span>
       {hint.valueMasked ? <span className="font-medium">{hint.valueMasked}</span> : null}
     </span>

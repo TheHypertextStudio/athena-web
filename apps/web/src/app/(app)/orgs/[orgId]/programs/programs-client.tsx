@@ -3,10 +3,15 @@
 import type { ProgramOut } from '@docket/types';
 import { EmptyState, StatusIcon } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Layers, Plus } from '@docket/ui/icons';
+import { LayoutGrid, Layers, ListView, Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 
-import { type ProgramRow, ListSkeleton, ProgramRows } from '@/components/programs/program-list-ui';
+import {
+  type ProgramRow,
+  ListSkeleton,
+  ProgramCards,
+  ProgramRows,
+} from '@/components/programs/program-list-ui';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -50,11 +55,21 @@ import { useOrgCapability } from '@/lib/use-org-capability';
  * shareable and survives a reload. Entity nouns route through {@link useVocabulary}; data is
  * fetched at runtime so the production build needs no running server.
  */
+/** The Programs roster's two lenses — dense identity rows, or a grid of cards. */
+type Lens = 'list' | 'cards';
+
+/** The lens toggle's options, matching the icon+label segmented control Projects uses. */
+const LENS_OPTIONS = [
+  { id: 'list' as const, label: 'List', icon: ListView },
+  { id: 'cards' as const, label: 'Cards', icon: LayoutGrid },
+];
+
 export default function ProgramsListClient(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();
   const orgId = params.orgId;
   const queryClient = useQueryClient();
+  const [lens, setLens] = useState<Lens>('list');
 
   const programLabel = useVocabulary('program');
   const programsLabel = useVocabulary('program', { plural: true });
@@ -194,6 +209,9 @@ export default function ProgramsListClient(): JSX.Element {
     [ownerNameById, projectCountByProgram, taskCountByProgram],
   );
 
+  /** The active lens's roster renderer — same prop shape either way. */
+  const RosterLens = lens === 'list' ? ProgramRows : ProgramCards;
+
   /**
    * Refetch the roster from the server (prefix-matched, so this also refreshes any open
    * program-detail beneath it), then open the freshly-created program's detail.
@@ -224,13 +242,38 @@ export default function ProgramsListClient(): JSX.Element {
       }
       toolbar={
         !loading && !loadError && programs.length > 0 ? (
-          <FilterToolbar
-            catalog={catalog}
-            state={state}
-            onFiltersChange={setFilters}
-            onGroupByChange={setGroupBy}
-            onSortChange={setSort}
-          />
+          <div className="flex flex-col gap-3">
+            <div
+              className="bg-surface-container-low flex items-center rounded-lg p-1"
+              aria-label={`${programsLabel} view`}
+            >
+              {LENS_OPTIONS.map((option) => {
+                const Icon = option.icon;
+                return (
+                  <Button
+                    key={option.id}
+                    type="button"
+                    size="sm"
+                    variant={lens === option.id ? 'secondary' : 'ghost'}
+                    className="min-h-10 gap-1.5 @2xl:min-h-8"
+                    aria-pressed={lens === option.id}
+                    onClick={() => {
+                      setLens(option.id);
+                    }}
+                  >
+                    <Icon aria-hidden="true" className="size-4" /> {option.label}
+                  </Button>
+                );
+              })}
+            </div>
+            <FilterToolbar
+              catalog={catalog}
+              state={state}
+              onFiltersChange={setFilters}
+              onGroupByChange={setGroupBy}
+              onSortChange={setSort}
+            />
+          </div>
         ) : null
       }
     >
@@ -280,7 +323,7 @@ export default function ProgramsListClient(): JSX.Element {
                 <span>{group.label}</span>
                 <span className="text-on-surface-variant/70 tabular-nums">{group.rows.length}</span>
               </h2>
-              <ProgramRows
+              <RosterLens
                 rows={group.rows.map(toRow)}
                 projectNoun={projectNoun}
                 projectNounPlural={projectNounPlural}
@@ -299,7 +342,7 @@ export default function ProgramsListClient(): JSX.Element {
           ))}
         </div>
       ) : (
-        <ProgramRows
+        <RosterLens
           rows={applied.rows.map(toRow)}
           projectNoun={projectNoun}
           projectNounPlural={projectNounPlural}

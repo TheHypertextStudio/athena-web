@@ -76,7 +76,7 @@ export function PaletteRow({
       ) : null}
 
       {active ? (
-        <CornerDownLeft aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+        <CornerDownLeft aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
       ) : null}
     </li>
   );

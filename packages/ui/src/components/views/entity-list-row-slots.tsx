@@ -17,7 +17,7 @@ export interface RowMetaProps {
  *
  * @example
  * ```tsx
- * <RowMeta tabular><ListChecks className="size-3.5" /> 12 tasks</RowMeta>
+ * <RowMeta tabular><ListChecks className="size-4" /> 12 tasks</RowMeta>
  * ```
  */
 export function RowMeta({ children, tabular = false, className }: RowMetaProps): React.JSX.Element {

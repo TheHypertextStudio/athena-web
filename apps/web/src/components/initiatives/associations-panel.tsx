@@ -133,7 +133,7 @@ function AssociationGroup({
                   aria-label={`Unlink ${item.name}`}
                   className="text-on-surface-variant hover:text-destructive focus-visible:ring-ring rounded p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
                 >
-                  <X aria-hidden="true" className="size-3.5" />
+                  <X aria-hidden="true" className="size-4" />
                 </button>
               ) : null}
             </li>

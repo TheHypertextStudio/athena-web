@@ -33,7 +33,7 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
       {renderLink(
         tab.href,
         <>
-          <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+          <Icon aria-hidden="true" className="size-4 shrink-0 opacity-70" />
           <span className="min-w-0 flex-1 truncate">{tab.title}</span>
         </>,
         cn(

@@ -16,10 +16,13 @@ export {
 } from './atoms/EmptyState';
 export {
   STATE_TYPE_TOKEN_CLASS,
+  StatusGlyph,
+  type StatusGlyphProps,
   StatusIcon,
   type StatusIconProps,
   type WorkflowStateType,
 } from './atoms/StatusIcon';
+export { IdentityGlyph, type IdentityGlyphProps } from './atoms/IdentityGlyph';
 export {
   EntityList,
   type EntityListProps,

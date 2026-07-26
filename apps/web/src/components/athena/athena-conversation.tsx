@@ -229,7 +229,7 @@ export default function AthenaConversation({
             void newChat();
           }}
         >
-          <Plus aria-hidden="true" className="size-3.5" />
+          <Plus aria-hidden="true" className="size-4" />
           New chat
         </Button>
         <Button
@@ -241,7 +241,7 @@ export default function AthenaConversation({
             setConnectOpen(true);
           }}
         >
-          <Cable aria-hidden="true" className="size-3.5" />
+          <Cable aria-hidden="true" className="size-4" />
           Connect a tool
         </Button>
       </div>

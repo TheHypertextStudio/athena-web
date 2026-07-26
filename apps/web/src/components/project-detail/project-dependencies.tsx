@@ -159,7 +159,7 @@ function DependencyColumn({
                     onRemove(project.id);
                   }}
                 >
-                  <X className="size-3.5" />
+                  <X className="size-4" />
                 </Button>
               ) : null}
             </li>

@@ -175,7 +175,7 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
         ) : (
           <>
             {hidePlaceholderIcon ? null : (
-              <Plus aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+              <Plus aria-hidden="true" className="size-4 shrink-0 opacity-70" />
             )}
             <span className="truncate">{placeholder}</span>
           </>

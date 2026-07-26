@@ -59,7 +59,7 @@ export function ViewScopeBadge({ scope }: ViewScopeBadgeProps): JSX.Element {
   const Icon = meta.Icon;
   return (
     <Badge variant={meta.variant} className="gap-1 font-normal" title={meta.description}>
-      <Icon aria-hidden="true" className="size-3" />
+      <Icon aria-hidden="true" className="size-4" />
       {meta.label}
     </Badge>
   );

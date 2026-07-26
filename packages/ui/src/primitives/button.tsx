@@ -18,10 +18,19 @@ import { focusRing } from './focus';
  * Class-variance-authority recipe for {@link Button}.
  *
  * @remarks
- * Exposes `variant` (`default` | `destructive` | `outline` | `secondary` | `ghost` |
+ * Exposes `variant` (`default` | `elevated` | `destructive` | `outline` | `secondary` | `ghost` |
  * `link`) and `size` (`default` | `sm` | `lg` | `icon`). Exported so callers can apply
  * button styling to non-button elements (e.g. an anchor) without rendering a `Button`.
  * The keyboard-focus treatment is the shared standalone {@link focusRing}.
+ *
+ * MD3 (Material Design 3, including the 2025 Expressive refresh) treats a shadow/elevation as ONE
+ * specific button style — the dedicated **Elevated** button, used sparingly (e.g. a button
+ * floating over a busy or colored surface that needs visual separation) — never the resting state
+ * of a Filled, Filled Tonal, Outlined, or Text button. This recipe previously carried `shadow`/
+ * `shadow-sm` on `default`/`destructive`/`outline`/`secondary` (a shadcn default, not an MD3 one),
+ * so every button in the app read as "raised" regardless of context. Those variants are now flat
+ * (Filled / Filled Tonal / Outlined, per MD3), and `elevated` is a new, explicit opt-in for the
+ * rare case that genuinely wants the shadow treatment.
  */
 export const buttonVariants = cva(
   cn(
@@ -31,11 +40,13 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'bg-primary text-primary-foreground shadow hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90',
+        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        elevated:
+          'bg-surface-container-low text-primary shadow-sm hover:bg-surface-container hover:shadow',
+        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
         outline:
-          'border-outline-variant border bg-transparent shadow-sm hover:bg-surface-container-high hover:text-on-surface',
-        secondary: 'bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80',
+          'border-outline-variant border bg-transparent hover:bg-surface-container-high hover:text-on-surface',
+        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-surface-container-high hover:text-on-surface',
         link: 'text-primary underline-offset-4 hover:underline',
       },

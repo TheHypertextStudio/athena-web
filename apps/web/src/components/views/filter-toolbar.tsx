@@ -148,7 +148,7 @@ export function FilterToolbar<T>({
               <Button variant="outline" size="sm" className="min-h-10 gap-1.5 @2xl:min-h-8">
                 <TuneRounded className="size-4" aria-hidden="true" />
                 <span className="hidden @2xl:inline">Display</span>
-                <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
+                <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="min-w-[14rem]">

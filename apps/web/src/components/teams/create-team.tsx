@@ -194,7 +194,7 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
                 : 'border-outline-variant',
             )}
           >
-            {triageEnabled ? <Check className="size-3" /> : null}
+            {triageEnabled ? <Check className="size-4" /> : null}
           </span>
           <span className="text-on-surface">Triage queue</span>
         </button>

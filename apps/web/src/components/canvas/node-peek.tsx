@@ -158,7 +158,7 @@ export default function NodePeek({
             onNavigate(node.id);
           }}
         >
-          Open task <ArrowRight className="size-3.5" />
+          Open task <ArrowRight className="size-4" />
         </Button>
         {canEdit ? (
           <Button

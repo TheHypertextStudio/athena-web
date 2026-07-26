@@ -103,7 +103,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
         }}
         className="nodrag nopan bg-surface-container-highest text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
       >
-        <ArrowRight className="size-3.5" />
+        <ArrowRight className="size-4" />
       </Link>
 
       <div className="flex min-w-0 items-center gap-2">

@@ -125,7 +125,7 @@ function MultiSelect({
         >
           {label}
           {selected.size > 0 ? <span className="text-xs">({selected.size})</span> : null}
-          <ChevronDown className="size-3.5" />
+          <ChevronDown className="size-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-72 overflow-auto">
@@ -272,7 +272,7 @@ export default function GraphToolbar({
             className="gap-1"
           >
             Group: {GROUP_BY_LABELS[groupBy]}
-            <ChevronDown className="size-3.5" />
+            <ChevronDown className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">

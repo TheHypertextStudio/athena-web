@@ -40,7 +40,7 @@ export function ScopeToggle({
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
-        <Globe aria-hidden="true" className="size-3.5" />
+        <Globe aria-hidden="true" className="size-4" />
         Hub
       </button>
       <button
@@ -59,7 +59,7 @@ export function ScopeToggle({
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
-        <Building aria-hidden="true" className="size-3.5 shrink-0" />
+        <Building aria-hidden="true" className="size-4 shrink-0" />
         <span className="truncate">{orgBound ? orgLabel : 'This org'}</span>
       </button>
     </div>

@@ -177,7 +177,7 @@ export function OverviewSummary({
             .filter((s) => s.count > 0)
             .map((s) => (
               <li key={s.type} className="flex items-center gap-1.5 text-xs">
-                <StatusIcon type={s.type} className="size-3.5" label={STATE_GROUP_LABEL[s.type]} />
+                <StatusIcon type={s.type} className="size-4" label={STATE_GROUP_LABEL[s.type]} />
                 <span className="text-on-surface-variant">{STATE_GROUP_LABEL[s.type]}</span>
                 <span className="text-on-surface font-medium tabular-nums">{s.count}</span>
               </li>

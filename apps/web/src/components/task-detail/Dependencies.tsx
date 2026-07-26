@@ -133,7 +133,7 @@ export function Dependencies({
           {blockedBy.length > 0 ? (
             <div className="flex flex-col gap-1">
               <div className="text-on-surface-variant flex items-center gap-1.5 text-xs font-medium">
-                <ChevronLeft className="size-3.5" />
+                <ChevronLeft className="size-4" />
                 Blocked by
               </div>
               <ul className="flex flex-col">
@@ -155,7 +155,7 @@ export function Dependencies({
           {blocking.length > 0 ? (
             <div className="flex flex-col gap-1">
               <div className="text-on-surface-variant flex items-center gap-1.5 text-xs font-medium">
-                <ChevronRight className="size-3.5" />
+                <ChevronRight className="size-4" />
                 Blocking
               </div>
               <ul className="flex flex-col">

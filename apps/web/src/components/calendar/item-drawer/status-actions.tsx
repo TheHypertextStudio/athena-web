@@ -81,7 +81,7 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
           )}
         >
           <meta.icon
-            className={cn('size-3.5', item.syncState === 'push_pending' && 'animate-spin')}
+            className={cn('size-4', item.syncState === 'push_pending' && 'animate-spin')}
           />
           {meta.label}
         </span>

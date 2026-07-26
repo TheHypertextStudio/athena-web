@@ -589,7 +589,7 @@ function FilterButton({
           : 'bg-surface-container-low text-on-surface hover:bg-surface-container flex h-9 min-w-0 items-center gap-2 rounded-md px-2 text-left text-xs font-medium'
       }
     >
-      {Icon ? <Icon aria-hidden="true" className="size-3.5 shrink-0" /> : null}
+      {Icon ? <Icon aria-hidden="true" className="size-4 shrink-0" /> : null}
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {count !== undefined ? <span className="shrink-0 tabular-nums">{count}</span> : null}
     </button>

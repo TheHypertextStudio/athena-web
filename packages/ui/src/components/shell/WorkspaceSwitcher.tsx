@@ -196,7 +196,7 @@ export function WorkspaceSwitcher({
             </span>
           )}
           {loading ? null : (
-            <ChevronDown aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+            <ChevronDown aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
           )}
         </Button>
       </DropdownMenuTrigger>

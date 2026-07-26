@@ -38,7 +38,7 @@ export function CommandPaletteTrigger({ className }: CommandPaletteTriggerProps)
       <Search aria-hidden="true" className="size-4 shrink-0" />
       <span className="flex-1 text-left">Search…</span>
       <kbd className="bg-surface-container text-on-surface-variant pointer-events-none inline-flex h-5 items-center gap-0.5 rounded border px-1.5 text-[10px] font-medium">
-        <Command aria-hidden="true" className="size-3" />K
+        <Command aria-hidden="true" className="size-4" />K
       </kbd>
     </button>
   );

@@ -5,7 +5,7 @@ export function SchedulingGripIcon(): JSX.Element {
   return (
     <svg
       aria-hidden="true"
-      className="mx-auto size-3.5"
+      className="mx-auto size-4"
       data-schedule-grip-icon=""
       viewBox="0 0 14 14"
       fill="currentColor"
@@ -22,7 +22,7 @@ export function SchedulingLinkIcon(): JSX.Element {
   return (
     <svg
       aria-hidden="true"
-      className="mx-auto size-3.5"
+      className="mx-auto size-4"
       data-schedule-link-icon=""
       viewBox="0 0 16 16"
       fill="none"

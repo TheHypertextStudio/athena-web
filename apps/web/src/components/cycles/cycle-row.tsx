@@ -1,31 +1,32 @@
 'use client';
 
 /**
- * One cycle row in the Cycles list.
+ * The Cycles roster — a 72px identity-row grid, standardized with Initiatives/Programs/Projects.
  *
  * @remarks
- * A cycle's at-a-glance summary as a dense {@link EntityListRow} (design-system §5.1): a
- * leading status glyph, the cycle's number + optional name as the title, its date window as
- * the subtitle, and — once its rolled-up stats have loaded — a {@link RowProgress} pace bar
- * with its completed/committed count in the meta band, plus the status {@link Badge} trailing.
- * Before stats arrive a slim skeleton stands in for the pace meta so the row never jumps. The
- * whole row is a link to the cycle detail (rendered via a Next.js {@link Link} so the router
- * prefetches and Enter navigates natively), and a drag source for the cycle itself so any drop
- * target that understands a cycle can receive it.
- *
- * Rendered with `@docket/ui` primitives and semantic tokens — no hardcoded color.
+ * Previously rendered through the dense `EntityListRow` family (36px "comfortable" rows) inside a
+ * bordered {@link EntityList}. That read visibly smaller than the other core-object rosters even
+ * though a cycle carries the same tier of information (status, a completion pace, a points
+ * roll-up) — so this hand-rolls the same aligned-column grid Initiatives/Programs/Projects use.
+ * {@link CycleRows} owns the frame + column header (mirroring `ProgramRows`); {@link CycleRow} is
+ * one row, still a link to the cycle detail and a drag source for the cycle itself.
  */
 import type { CycleOut, CycleStats } from '@docket/types';
-import { EntityListRow, RowMeta, RowProgress, StatusIcon } from '@docket/ui/components';
+import { StatusGlyph } from '@docket/ui/components';
+import { dragSourceProps } from '@docket/ui/lib/draggable';
+import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
-import type { JSX } from 'react';
+import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { entityDragSource } from '@/lib/entity-drag';
 
 import { formatWindow } from './format-window';
 import { STATUS_LABEL, statusBadgeVariant, statusGlyphType } from './cycle-status';
+
+/** Column widths shared by {@link CycleRows}'s header and each {@link CycleRow}. */
+const ROW_GRID = 'grid-cols-[minmax(20rem,1fr)_7rem_10rem_8rem]';
 
 /** Props for {@link CycleRow}. */
 export interface CycleRowProps {
@@ -70,93 +71,145 @@ export function CycleRow({
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 
+  const dragProps = dragSourceProps(
+    entityDragSource({
+      kind: 'cycle',
+      id: cycle.id,
+      organizationId: cycle.organizationId,
+      title,
+    }),
+  );
+
   return (
-    <EntityListRow
+    <Link
       href={href}
+      role="row"
       aria-label={title}
-      drag={entityDragSource({
-        kind: 'cycle',
-        id: cycle.id,
-        organizationId: cycle.organizationId,
-        title,
-      })}
-      render={(p) => (
-        <Link
-          href={p.href ?? href}
-          className={p.className}
-          onClick={p.onClick}
-          aria-current={p['aria-current']}
-          draggable={p.draggable}
-          onDragStart={p.onDragStart}
-          onDragEnd={p.onDragEnd}
-          onMouseEnter={onPrefetch}
-          onFocus={onPrefetch}
-        >
-          {p.children}
-        </Link>
+      {...dragProps}
+      onMouseEnter={onPrefetch}
+      onFocus={onPrefetch}
+      className={cn(
+        'hover:bg-surface-container-high grid min-h-[72px] cursor-pointer items-center rounded-lg transition-colors',
+        ROW_GRID,
+        dragProps?.className,
       )}
-      leading={
-        <StatusIcon type={statusGlyphType(cycle.status)} label={STATUS_LABEL[cycle.status]} />
-      }
-      title={
-        <span className="flex min-w-0 items-center gap-2">
-          {canRename && onRename ? (
-            <EditableTitle
-              value={cycle.name ?? ''}
-              onSave={(name) => {
-                onRename(cycle.id, name);
-              }}
-              canEdit
-              activate="doubleClick"
-              {...(onOpen ? { onActivate: onOpen } : {})}
-              ariaLabel="Cycle name"
-              placeholder={numberLabel}
-              className="text-on-surface truncate font-medium"
-            />
-          ) : (
-            <span className="text-on-surface truncate font-medium">{title}</span>
-          )}
-          {cycle.name ? (
-            <span className="text-on-surface-variant shrink-0 text-xs font-normal tabular-nums">
-              {cycleNoun} {cycle.number}
-            </span>
-          ) : null}
-        </span>
-      }
-      subtitle={formatWindow(cycle.startsAt, cycle.endsAt)}
-      meta={
-        stats ? (
-          <>
-            <RowMeta tabular>
-              <RowProgress
-                value={taskPct}
-                label={`${cycleNoun} ${String(cycle.number)} tasks complete`}
+    >
+      <div className="flex min-w-0 items-center gap-3 px-2 py-2">
+        <StatusGlyph type={statusGlyphType(cycle.status)} label={STATUS_LABEL[cycle.status]} />
+        <div className="min-w-0">
+          <span className="flex min-w-0 items-center gap-2">
+            {canRename && onRename ? (
+              <EditableTitle
+                value={cycle.name ?? ''}
+                onSave={(name) => {
+                  onRename(cycle.id, name);
+                }}
+                canEdit
+                activate="doubleClick"
+                {...(onOpen ? { onActivate: onOpen } : {})}
+                ariaLabel="Cycle name"
+                placeholder={numberLabel}
+                className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
               />
-              <span>
-                <span className="text-on-surface font-medium">{stats.completed}</span>/
-                {stats.committed}
-              </span>
-            </RowMeta>
-            {stats.carryover > 0 && cycle.status !== 'completed' ? (
-              <RowMeta tabular className="text-state-started font-medium">
-                {stats.carryover} open
-              </RowMeta>
             ) : (
-              <RowMeta tabular>
-                {stats.completedCapacity}/{stats.capacity} pts
-              </RowMeta>
+              <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
+                {title}
+              </span>
             )}
-          </>
-        ) : (
-          <RowMeta>
-            <Skeleton className="h-1.5 w-16 rounded-full" />
-            <Skeleton className="h-3 w-16" />
-          </RowMeta>
-        )
-      }
-      trailing={
+            {cycle.name ? (
+              <span className="text-on-surface-variant shrink-0 text-xs font-normal tabular-nums">
+                {numberLabel}
+              </span>
+            ) : null}
+          </span>
+          <p className="text-on-surface-variant mt-0.5 text-xs leading-4">
+            {formatWindow(cycle.startsAt, cycle.endsAt)}
+          </p>
+        </div>
+      </div>
+      <div className="px-3">
         <Badge variant={statusBadgeVariant(cycle.status)}>{STATUS_LABEL[cycle.status]}</Badge>
-      }
-    />
+      </div>
+      <div className="px-3">
+        {stats ? (
+          <div className="flex items-center gap-2">
+            <div className="bg-surface-container-highest h-1.5 w-14 overflow-hidden rounded-full">
+              <span
+                className="bg-primary block h-full rounded-full"
+                style={{ width: `${taskPct}%` }}
+              />
+            </div>
+            <span className="text-sm tabular-nums">
+              <span className="text-on-surface font-medium">{stats.completed}</span>
+              <span className="text-on-surface-variant">/{stats.committed}</span>
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-1.5 w-14 rounded-full" />
+            <Skeleton className="h-3 w-10" />
+          </div>
+        )}
+      </div>
+      <div className="text-on-surface-variant px-3 text-sm tabular-nums">
+        {stats ? (
+          stats.carryover > 0 && cycle.status !== 'completed' ? (
+            <span className="text-state-started font-medium">{stats.carryover} open</span>
+          ) : (
+            <span>
+              {stats.completedCapacity}/{stats.capacity} pts
+            </span>
+          )
+        ) : (
+          <Skeleton className="h-3 w-12" />
+        )}
+      </div>
+    </Link>
+  );
+}
+
+/**
+ * Props for {@link CycleRows}.
+ *
+ * @remarks
+ * Extends the outer wrapper's own div props so a caller can pass `className`, `data-*`, `id`, or
+ * an event handler straight through to the roster frame, matching {@link ProgramRows}'s contract.
+ */
+export interface CycleRowsProps extends ComponentPropsWithoutRef<'div'> {
+  /** The cycle rows to render, in order. */
+  rows: readonly CycleRowProps[];
+  /** Accessible label for the roster grid. */
+  ariaLabel: string;
+}
+
+/** The Cycles roster frame: the 72px-row grid's shared column header + its data rows. */
+export function CycleRows({ rows, ariaLabel, className, ...rest }: CycleRowsProps): JSX.Element {
+  return (
+    <div {...rest} className={cn('bg-surface-container-low relative rounded-xl p-2', className)}>
+      <div className="overflow-x-auto overscroll-x-contain pb-1">
+        <div role="grid" aria-label={ariaLabel} className="min-w-[46rem] text-sm">
+          <div
+            role="row"
+            className={cn('text-on-surface-variant grid h-8 items-center text-xs', ROW_GRID)}
+          >
+            <div role="columnheader" className="px-3 pl-14 font-medium">
+              Cycle
+            </div>
+            <div role="columnheader" className="px-3 font-medium">
+              Status
+            </div>
+            <div role="columnheader" className="px-3 font-medium">
+              Progress
+            </div>
+            <div role="columnheader" className="px-3 font-medium">
+              Points
+            </div>
+          </div>
+          {rows.map((row) => (
+            <CycleRow key={row.cycle.id} {...row} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

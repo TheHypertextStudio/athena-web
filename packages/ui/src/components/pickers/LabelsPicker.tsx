@@ -88,7 +88,7 @@ export function LabelsPicker<TValue extends string = string>({
 
   const trigger = (
     <PropertyTrigger
-      icon={summary ? <Tag className="text-on-surface-variant size-3.5" /> : undefined}
+      icon={summary ? <Tag className="text-on-surface-variant size-4" /> : undefined}
       label={summary}
       placeholder={placeholder}
       ariaLabel={`${ariaLabel} — ${summary ?? 'none'}`}

@@ -144,7 +144,7 @@ export function PickerList<TValue extends string = string>({
     <div className="flex flex-col">
       {searchable ? (
         <div className="border-outline-variant flex items-center gap-2 border-b px-2 py-1.5">
-          <Search aria-hidden="true" className="text-on-surface-variant size-3.5 shrink-0" />
+          <Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
           <input
             // A bare input (not the boxed Input primitive) so the search field reads as part
             // of the popover chrome, like Linear's command-style pickers.
@@ -199,7 +199,7 @@ export function PickerList<TValue extends string = string>({
                       active && 'bg-surface-container-highest',
                     )}
                   >
-                    <X aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+                    <X aria-hidden="true" className="size-4 shrink-0 opacity-70" />
                     <span className="truncate">{clear?.label}</span>
                   </button>
                 </li>
@@ -229,7 +229,7 @@ export function PickerList<TValue extends string = string>({
                   {option.icon ? (
                     <span
                       aria-hidden="true"
-                      className="flex size-3.5 shrink-0 items-center justify-center"
+                      className="flex size-4 shrink-0 items-center justify-center"
                     >
                       {option.icon}
                     </span>
@@ -241,10 +241,7 @@ export function PickerList<TValue extends string = string>({
                     </span>
                   ) : null}
                   {chosen ? (
-                    <Check
-                      aria-hidden="true"
-                      className="text-on-surface-variant size-3.5 shrink-0"
-                    />
+                    <Check aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
                   ) : null}
                 </button>
               </li>

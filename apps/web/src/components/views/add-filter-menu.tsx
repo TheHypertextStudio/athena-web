@@ -36,7 +36,7 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
           className="gap-1.5 px-2.5 @2xl:px-3"
           aria-label="Add filter"
         >
-          <Plus className="size-3.5" aria-hidden="true" />
+          <Plus className="size-4" aria-hidden="true" />
           {/* The label is shed on narrow containers so the whole toolbar stays one row. */}
           <span className="hidden @2xl:inline">Add filter</span>
         </Button>

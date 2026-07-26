@@ -23,7 +23,7 @@
  * familiar segmented look is preserved, but now user-changeable.
  */
 import type { CycleOut, CycleStats } from '@docket/types';
-import { EmptyState, EntityList, StatusIcon } from '@docket/ui/components';
+import { EmptyState, StatusIcon } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { RefreshCw } from '@docket/ui/icons';
@@ -33,7 +33,7 @@ import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
-import { CycleRow } from '@/components/cycles/cycle-row';
+import { type CycleRowProps, CycleRows } from '@/components/cycles/cycle-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { type FieldOption, type ViewState } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
@@ -162,27 +162,24 @@ export default function CyclesClient(): JSX.Element {
 
   const total = cycles.length;
 
-  /** Render one cycle row (shared by the flat + grouped renders). */
-  const renderRow = useCallback(
-    (cycle: CycleOut): JSX.Element => (
-      <CycleRow
-        key={cycle.id}
-        cycle={cycle}
-        stats={statsById[cycle.id] ?? null}
-        cycleNoun={cycleNoun}
-        href={`/orgs/${orgId}/cycles/${cycle.id}`}
-        onPrefetch={() => {
-          prefetch(cycleDetailDef(orgId, cycle.id));
-        }}
-        canRename={canRename}
-        onRename={(id, name) => {
-          renameCycle.mutate({ id, name });
-        }}
-        onOpen={() => {
-          router.push(`/orgs/${orgId}/cycles/${cycle.id}`);
-        }}
-      />
-    ),
+  /** Build one cycle row's props (shared by the flat + grouped renders). */
+  const toRowProps = useCallback(
+    (cycle: CycleOut): CycleRowProps => ({
+      cycle,
+      stats: statsById[cycle.id] ?? null,
+      cycleNoun,
+      href: `/orgs/${orgId}/cycles/${cycle.id}`,
+      onPrefetch: () => {
+        prefetch(cycleDetailDef(orgId, cycle.id));
+      },
+      canRename,
+      onRename: (id, name) => {
+        renameCycle.mutate({ id, name });
+      },
+      onOpen: () => {
+        router.push(`/orgs/${orgId}/cycles/${cycle.id}`);
+      },
+    }),
     [cycleNoun, orgId, statsById, prefetch, canRename, renameCycle, router],
   );
 
@@ -246,14 +243,15 @@ export default function CyclesClient(): JSX.Element {
                 <span>{group.label}</span>
                 <span className="tabular-nums">{group.rows.length}</span>
               </h2>
-              <EntityList aria-label={`${group.label} ${cycleNounPlural.toLowerCase()}`}>
-                {group.rows.map(renderRow)}
-              </EntityList>
+              <CycleRows
+                rows={group.rows.map(toRowProps)}
+                ariaLabel={`${group.label} ${cycleNounPlural.toLowerCase()}`}
+              />
             </section>
           ))}
         </div>
       ) : (
-        <EntityList aria-label={cycleNounPlural}>{applied.rows.map(renderRow)}</EntityList>
+        <CycleRows rows={applied.rows.map(toRowProps)} ariaLabel={cycleNounPlural} />
       )}
     </div>
   );
@@ -266,16 +264,9 @@ function ListSkeleton(): JSX.Element {
       {[0, 1].map((section) => (
         <div key={section} className="flex flex-col gap-3">
           <Skeleton className="h-3 w-20" />
-          <div className="border-outline-variant divide-outline-variant flex flex-col divide-y overflow-hidden rounded-xl border">
+          <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-2">
             {[0, 1].map((row) => (
-              <div key={row} className="flex items-center gap-3 px-3 py-2.5">
-                <Skeleton className="size-4 rounded-full" />
-                <div className="flex flex-col gap-1">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-24" />
-                </div>
-                <Skeleton className="ml-auto h-4 w-20" />
-              </div>
+              <Skeleton key={row} className="h-[72px] w-full rounded-lg" />
             ))}
           </div>
         </div>

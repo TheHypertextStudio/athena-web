@@ -147,7 +147,7 @@ export function ComposerShell({
         {/* Breadcrumb: a muted contextual label, not a heading. Reserve right room for the close X. */}
         <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
           {icon ? (
-            <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-3">
+            <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
               {icon}
             </span>
           ) : null}

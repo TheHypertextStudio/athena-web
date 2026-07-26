@@ -1,3 +1,16 @@
+'use client';
+
+/*
+ * Marked a client module because {@link DialogContent} restores focus to its opener with `React.useRef`
+ * and `React.useCallback` — hooks, and DOM-only ones at that. Radix's own interactive packages
+ * ship this directive, but that boundary does not extend to the focus handling written here.
+ *
+ * Nothing currently renders this from a Server Component, so this is a guard rather than a fix:
+ * without it, the first server-rendered dialog would fail at the `useRef` call. The stateless
+ * primitives beside it (button, card, badge, input, separator) genuinely do not need the
+ * directive and deliberately do not carry it, so they stay usable from Server Components.
+ */
+
 /**
  * `@docket/ui` — Dialog primitive family (focused, Linear-style modal).
  *

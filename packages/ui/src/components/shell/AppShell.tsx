@@ -227,7 +227,16 @@ export function AppShell({
         // is a vertical stack (mobile top bar over the content) with no gutter so the main panel
         // goes full-bleed; at `lg` and up it becomes a horizontal row with a uniform gutter (p-2)
         // so the blended sidebar + floating main panel inset from the window edges.
-        'bg-surface-container text-on-surface flex h-screen w-full flex-col overflow-hidden lg:flex-row lg:gap-2 lg:p-2',
+        // `h-dvh`, not `h-screen`: `100vh` is the *largest* viewport height, so on mobile browsers
+        // it sits behind the collapsing URL bar and the shell overflows by exactly that bar's
+        // height. The dynamic unit tracks the visible viewport instead.
+        //
+        // The horizontal safe-area insets matter only once Docket is installed and running without
+        // browser chrome: in landscape on a notched device the sidebar would otherwise slide under
+        // the notch. They resolve to `0px` everywhere else, so this is inert in a browser tab.
+        // Top and bottom insets are applied to the mobile bar and `<main>` rather than here, so the
+        // canvas colour still bleeds edge to edge behind the status bar.
+        'bg-surface-container text-on-surface flex h-dvh w-full flex-col overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] lg:flex-row lg:gap-2 lg:p-2',
         className,
       )}
     >
@@ -242,7 +251,11 @@ export function AppShell({
       </a>
 
       {/* Mobile top bar — shown only below `lg`; opens the sidebar drawer. */}
-      <div className="border-outline-variant flex h-12 shrink-0 items-center gap-2 border-b px-2 lg:hidden">
+      {/* `min-h-12` + a top safe-area inset rather than a fixed `h-12`: installed on a notched
+          device the bar must grow by the inset so its controls clear the status bar, instead of
+          keeping a 48px box and hiding the menu button underneath it. The inset is `0px` in a
+          browser tab, where this stays exactly the 48px bar it was. */}
+      <div className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b px-2 pt-[env(safe-area-inset-top)] lg:hidden">
         <button
           type="button"
           aria-label="Open navigation"
@@ -307,7 +320,11 @@ export function AppShell({
           id="main-content"
           tabIndex={-1}
           className={cn(
-            'bg-surface lg:border-outline-variant @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto outline-none lg:rounded-xl lg:border lg:shadow-sm',
+            // The bottom safe-area inset pads the scroll content so the last row of a list clears
+            // the iOS home indicator when installed. It resolves to `0px` in a browser tab and on
+            // desktop, so `<main>`'s "a page's `h-full` means all the space `<main>` has left"
+            // contract is unchanged there — and still holds when inset, just `inset` px shorter.
+            'bg-surface lg:border-outline-variant @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto pb-[env(safe-area-inset-bottom)] outline-none lg:rounded-xl lg:border lg:shadow-sm',
             rebinding && 'animate-org-rebind',
           )}
         >

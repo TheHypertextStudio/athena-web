@@ -56,6 +56,16 @@ function noop(): void {
   /* The portfolio never schedules; the owning org's Projects lens does. */
 }
 
+/**
+ * The Portfolio surface: every org's projects on one cross-org roadmap.
+ *
+ * @remarks
+ * Read-only by design — scheduling belongs to the owning org's Projects lens, so the canvas's
+ * write callbacks are wired to {@link noop}. Owns its own loading skeleton, `role="alert"` error
+ * state with retry, and empty state, and stays live via the query layer's focus/mutation refetch.
+ *
+ * @returns the portfolio screen.
+ */
 export default function PortfolioClient(): JSX.Element {
   const router = useRouter();
   const { orgName } = useActiveOrg();

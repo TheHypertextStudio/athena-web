@@ -763,6 +763,8 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 
 ### `offline_access` must be an explicit granted scope, or refresh tokens silently stop being issued.
 
+> **Amended 2026-07-25** by _One scope list, not three_ below. The conclusion stands — `offline_access` must be explicitly granted — but the mechanism changed: `clientRegistrationDefaultScopes` no longer exists, and `scopes` alone carries it.
+
 **Decision.** `clientRegistrationDefaultScopes` includes `offline_access` alongside `work:read`, and the full `scopes` list includes it too.
 
 **Why.** Unlike the deprecated `mcp()` plugin (which issued refresh tokens unconditionally), `oauthProvider()` only mints a refresh token when the client's granted scope set explicitly contains `offline_access`. Missing this would have silently downgraded every MCP client to access-token-only sessions — a real regression this migration's research phase caught before it shipped, not one dug out of a production report.
@@ -772,3 +774,28 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 **Decision.** `packages/db/drizzle/0046_oauth_provider_drop_deprecated.sql` drops `oauth_access_token`, `oauth_application`, `oauth_consent`; `0047_oauth_provider_create_tables.sql` creates `oauth_client` (renamed from `oauth_application`), a new `oauth_refresh_token` table (split out of the old combined access-token table), the redefined `oauth_access_token`, `oauth_consent`, and a new `jwks` table. No token/consent data is carried across. The shapes were captured by running `@better-auth/cli`'s `generate` against a scratch `betterAuth()` config (PGlite + the real plugin set) — not hand-transcribed from documentation, which is how the original `oauthApplication`/`oauthAccessToken`/`oauthConsent` tables' endpoint-path mismatches were introduced in the first place.
 
 **Why.** The JWT verification model makes the old DB-driven opaque-token rows meaningless regardless of migration strategy, and every currently-connected MCP client is a pre-paying-customer/early connection — reconnecting once after a token rejection is normal, expected OAuth client behavior (re-run discovery + DCR), not a breaking incident. This is explicitly the moment to take that one-time cost, before real paying users exist. Real codegen (rather than hand-authoring again) is a direct, structural fix for the bug class that caused this whole incident: `oauthClient` keeps both a `public: boolean` field AND a `type: text` field (not a replacement, as initially assumed from docs alone), and `redirectUris`/`scopes`/`contacts` are native Postgres arrays, not the comma/space-joined strings the old hand-authored schema used — differences that only surfaced by generating the schema from the real package.
+
+## MCP connect scopes (2026-07-25)
+
+> Triggered by a production report: every MCP write tool returned `403 insufficient_scope` and the
+> client's automatic step-up retry also failed. Confirmed live against `docket-api.hypertext.studio` —
+> reads worked, `create_project` 403'd, and the AS discovery document advertised
+> `["openid","profile","email","offline_access"]` with no Docket scope in it at all.
+
+### One scope list, not three.
+
+**Decision.** `oauthProvider()` is configured with `scopes` only. `clientRegistrationDefaultScopes` and `clientRegistrationAllowedScopes` are deliberately unset, so the plugin falls back to `scopes` for both.
+
+**Why.** A client that registers without an explicit `scope` — which every MCP client does — has the registration default written onto its `oauth_client.scopes` row, and that row is then the hard ceiling for **both** `/oauth2/authorize` and the token exchange. A narrower default therefore pins the client read-only permanently: a later step-up authorize for `work:write` is rejected with `invalid_scope` before the consent screen is reached, and a refresh grant can only ever narrow. The plugin validates `allowed ⊆ scopes` at boot but nothing validates `defaults ⊇ scopes`, so a second list can only ever drift into that failure — in production only, for dynamically-registered clients only, on write tools only. One list makes the failure unrepresentable. `packages/auth/tests/auth.test.ts` pins all three properties so a future edit cannot quietly reintroduce a ceiling.
+
+### The 401 challenge advertises everything, not a `work:read` baseline.
+
+**Decision.** `challenge401` and the PRM `scopes_supported` both advertise the full connect set — the four capability scopes plus `offline_access` — matching what the AS document already derives from `scopes`. `challenge403` carries `offline_access` forward only when the token already holds it.
+
+**Why.** A client asks for exactly what it is told to ask for, so the old `scope="work:read"` hint was itself sufficient to produce a read-only connection even before the registration ceiling existed. And because the granted set is fixed at consent time, "start read-only, escalate later" is not recoverable in practice — step-up needs a full interactive re-authorization, which a client may never attempt. `offline_access` is included despite RFC 6750 §3 scoping the attribute to what is _required_ to access the resource: the AS mints a refresh token only when it is granted, so omitting it trades a hard 403 for a connection that silently dies 15 minutes later. Four sources (`scopes`, AS metadata, PRM, both challenges) describe one authorization request; a regression test asserts they agree.
+
+### Repair pinned rows by NULLing them, and never touch consent rows.
+
+**Decision.** `packages/db/drizzle/0048_oauth_client_unpin_registration_scopes.sql` sets `oauth_client.scopes` to NULL for rows contained by `{work:read, offline_access}`. It does not touch `oauth_consent` or `oauth_refresh_token`.
+
+**Why.** NULL makes the plugin fall through to its configured `scopes` — already how CIMD-registered clients behave, since `upsertCimdClient` deliberately omits the column — so the repair cannot be re-frozen by a future scope addition, which a hardcoded array would be. Consent rows record what a human actually approved; widening them would forge consent and mint capabilities nobody granted, so users re-authorize through the consent screen instead. The migration is a no-op against a prod that has not yet applied `0047` (the table is created empty), and exists for environments that registered a client between `0047` and this fix.

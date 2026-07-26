@@ -7,6 +7,47 @@
 
 ## Active Tasks
 
+### [MCP-SCOPE-001] MCP write tools return 403 for every connected client
+
+- **Status**: REVIEW
+- **Started**: 2026-07-25
+- **Priority**: P0
+- **Description**: Every MCP write tool (`create_project`, `create_task`, …) returned
+  `403 insufficient_scope` in production, and the client's automatic step-up retry failed too.
+  Reproduced live against the connected Claude connector: `run_view` succeeded, `create_project`
+  403'd.
+- **Root cause (two, one per deploy generation)**:
+  - _Live in prod (`mcp()` deploy)_: `challenge401` advertised `scope="work:read"`, so a
+    spec-following client requested exactly that and consented read-only. Confirmed against
+    `docket-api.hypertext.studio`: the AS document advertised
+    `["openid","profile","email","offline_access"]` — Better Auth's hardcoded default — so the
+    Docket scopes were never discoverable from the authorization server at all.
+  - _On `main`, not yet deployed (`oauthProvider()` migration)_: `clientRegistrationDefaultScopes:
+['work:read','offline_access']` is written onto `oauth_client.scopes` at registration, and that
+    row is the ceiling for both `/oauth2/authorize` and the token exchange — so step-up escalation
+    became structurally impossible, not merely unused.
+  - _Compounding both_: `oauthProvider()` mints a refresh token only when `offline_access` is
+    granted, and the PRM did not advertise it. Fixing only the 403 would have traded a hard
+    failure for a connection that silently expires after 15 minutes.
+- **Approach**: one scope list on the provider (drop both registration-scope options); advertise
+  the full connect set in `challenge401` and the PRM so all four discovery sources agree; carry
+  `offline_access` forward in `challenge403` only when already granted; migration `0048` NULLs
+  any already-pinned `oauth_client.scopes`.
+- **Files changed**: `packages/auth/src/auth-builder.ts`, `apps/api/src/mcp/scope.ts`,
+  `apps/api/src/mcp/server.ts`, `packages/db/drizzle/0048_oauth_client_unpin_registration_scopes.sql`
+  (+ `meta/_journal.json`), `apps/web/src/app/oauth/authorize/page.tsx`,
+  `apps/web/src/components/settings/connected-apps-tab.tsx`, plus tests in
+  `packages/auth/tests/auth.test.ts`, `apps/api/tests/mcp/mcp-scope.test.ts`,
+  `packages/db/tests/oauth-client-unpin-migration.test.ts`, and the specs
+  `docs/engineering/specs/mcp-surface.md` §2.3/§2.6 and `docs/engineering/DECISIONS.md`.
+- **Remaining**: deploy + apply migrations manually (unpooled URL), then reconnect the Claude
+  connector — the existing consent row records only `work:read` and is deliberately not rewritten.
+  Confirm an `oauth_refresh_token` row exists afterwards, or the connection dies in 15 minutes.
+- **Learnings**: there was zero test coverage of the AS document's `scopes_supported` or the
+  provider's `clientRegistration*` options — the exact surface that broke. Both are now pinned.
+  A registration-time scope ceiling that is also the authorize-time ceiling is a trap: it can only
+  ever drift narrower, and it fails in production only, for DCR'd clients only, on writes only.
+
 ### [WIP-RECONCILE-001] Reconcile parked pre-sync working tree with main
 
 - **Status**: BLOCKED

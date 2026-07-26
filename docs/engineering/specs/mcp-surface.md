@@ -119,10 +119,18 @@ app.get('/.well-known/oauth-protected-resource/mcp', (c) =>
 {
   "resource": "https://api.docket.app/mcp", // canonical RS URI (no trailing slash)
   "authorization_servers": ["https://api.docket.app"], // the single Docket AS issuer
-  "scopes_supported": ["work:read", "work:write", "agents:run", "connectors:link"],
+  "scopes_supported": [
+    "work:read",
+    "work:write",
+    "agents:run",
+    "connectors:link",
+    "offline_access",
+  ],
   "bearer_methods_supported": ["header"],
 }
 ```
+
+`offline_access` is listed even though it is not a Docket capability. RFC 9728 §2 defines `scopes_supported` as the scope values "used in authorization requests to the authorization server for this resource" — not the resource's own capabilities — and the AS mints a refresh token **only** when the granted set contains it. A client that intersects this document with the `WWW-Authenticate` hint before building its authorize URL would otherwise drop it and end up with a 15-minute connection and no renewal path. This document, the AS metadata, and both challenges (§2.6) describe one authorization request and MUST advertise the same set.
 
 **AS metadata (RFC 8414) — required fields the RS depends on:** `issuer`, `authorization_endpoint`, `token_endpoint`, `registration_endpoint` (DCR fallback), `code_challenge_methods_supported: ["S256"]` (MUST be present — clients refuse otherwise), `scopes_supported`, `client_id_metadata_document_supported: true` (CIMD; §2.4), `token_endpoint_auth_methods_supported`. Served at the OIDC well-known too (`/.well-known/openid-configuration`) for client interop.
 
@@ -154,8 +162,10 @@ Per spec §"Client Registration Approaches", the priority order is pre-registrat
 
 ```
 WWW-Authenticate: Bearer resource_metadata="https://api.docket.app/.well-known/oauth-protected-resource/mcp",
-                         scope="work:read"
+                         scope="work:read work:write agents:run connectors:link offline_access"
 ```
+
+The challenge advertises the **full** connect set, not a `work:read` baseline. A client asks for exactly what it is told to ask for, so a narrower hint connects it read-only — and because a client's granted set is fixed at registration/consent time, "read-only for now, escalate later" is not recoverable in practice. One consent screen listing everything is both more honest to the user and the only reliable path. Including `offline_access` stretches RFC 6750 §3 (which scopes the attribute to what is _required_ to access the resource); it is deliberate, for the renewal reason in §2.3.
 
 **403 (insufficient_scope, runtime step-up):** include the scopes needed for _this_ operation plus already-granted relevant scopes (spec "Recommended approach"):
 
@@ -166,7 +176,9 @@ WWW-Authenticate: Bearer error="insufficient_scope",
                          error_description="Posting an update requires work:write"
 ```
 
-This is how an agent that started **read-only** (engineering plan / product §4) escalates: a write tool returns 403 → client runs step-up authorization → re-calls with `work:write`.
+This is how an agent that started **read-only** (engineering plan / product §4) escalates: a write tool returns 403 → client runs step-up authorization → re-calls with `work:write`. `offline_access` is carried forward in the `scope` list when — and only when — the token already holds it, so a step-up never silently downgrades a durable connection to a non-renewable one.
+
+**Step-up is a fallback, not the primary path.** It requires the client to run a full re-authorization: a refresh grant can only ever narrow the scope set, never widen it. Treat the §2.6 401 hint as the mechanism that gets a client fully authorized, and step-up as recovery for clients that ignored it.
 
 ---
 

@@ -337,6 +337,13 @@
       "when": 1784958876261,
       "tag": "0047_oauth_provider_create_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1785027600000,
+      "tag": "0048_oauth_client_unpin_registration_scopes",
+      "breakpoints": true
     }
   ]
 }

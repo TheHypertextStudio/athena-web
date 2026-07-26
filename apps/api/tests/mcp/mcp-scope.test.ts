@@ -162,14 +162,16 @@ describe('scope helpers', () => {
     }).toThrow(/work:write/);
   });
 
-  it('challenge401 points at the PRM document and the baseline scope', () => {
+  it('challenge401 points at the PRM document and advertises the full connect scope set', () => {
     const c = scopeMod.challenge401(
       'https://api.docket.test/.well-known/oauth-protected-resource/mcp',
     );
     expect(c).toContain(
       'Bearer resource_metadata="https://api.docket.test/.well-known/oauth-protected-resource/mcp"',
     );
-    expect(c).toContain('scope="work:read"');
+    // The whole set, not just `work:read`: a client asks for exactly what this advertises, so a
+    // narrower hint connects it read-only forever (and, without `offline_access`, un-renewably).
+    expect(c).toContain('scope="work:read work:write agents:run connectors:link offline_access"');
   });
 
   it('challenge403 lists granted + newly-required scopes (recommended strategy), deduped + ordered', () => {
@@ -183,11 +185,36 @@ describe('scope helpers', () => {
     expect(c).toContain('error_description=');
   });
 
+  it('challenge403 carries offline_access forward only when the token already holds it', () => {
+    const url = 'https://api.docket.test/.well-known/oauth-protected-resource/mcp';
+
+    // Not granted ⇒ absent. A step-up must not request scopes the user never approved.
+    expect(scopeMod.challenge403(url, 'work:write', ['work:read'])).not.toContain('offline_access');
+
+    // Already granted ⇒ carried forward, so stepping up cannot silently downgrade a durable
+    // connection to a non-renewable 15-minute one.
+    expect(scopeMod.challenge403(url, 'work:write', ['work:read', 'offline_access'])).toContain(
+      'scope="work:read work:write offline_access"',
+    );
+  });
+
   it('TOOL_SCOPE maps reads/mutations/agents/connectors and covers every registered tool', () => {
     expect(scopeMod.TOOL_SCOPE['run_view']).toBe('work:read');
     expect(scopeMod.TOOL_SCOPE['create_task']).toBe('work:write');
     expect(scopeMod.TOOL_SCOPE['trigger_agent']).toBe('agents:run');
     expect(scopeMod.TOOL_SCOPE['link_external']).toBe('connectors:link');
+  });
+
+  it('keeps offline_access out of the capability layer entirely', () => {
+    // `offline_access` is an AS renewal scope, not a Docket capability. If it ever reached
+    // MCP_SCOPES it would become assignable into TOOL_SCOPE and gate a tool on a scope that
+    // grants nothing — so the two sets must stay disjoint by construction.
+    expect(scopeMod.MCP_SCOPES).not.toContain('offline_access');
+    expect(scopeMod.CONNECT_SCOPES).toContain('offline_access');
+    for (const required of Object.values(scopeMod.TOOL_SCOPE)) {
+      expect(scopeMod.MCP_SCOPES).toContain(required);
+    }
+    expect(scopeMod.MCP_SCOPES).toContain(scopeMod.RESOURCE_READ_SCOPE);
   });
 });
 
@@ -328,13 +355,41 @@ describe('discovery routes (PRM + AS metadata)', () => {
     };
     expect(prm.resource).toBe('https://api.docket.test/mcp');
     expect(prm.authorization_servers).toEqual(['https://auth.docket.test']);
+    // Includes `offline_access`: RFC 9728 §2 defines this as the scopes used in authorization
+    // requests for the resource, not the resource's capabilities, and a client that intersects
+    // this list with the challenge hint would otherwise drop it and lose its refresh token.
     expect(prm.scopes_supported).toEqual([
       'work:read',
       'work:write',
       'agents:run',
       'connectors:link',
+      'offline_access',
     ]);
     expect(prm.bearer_methods_supported).toEqual(['header']);
+  });
+
+  it('advertises the SAME scope set in the PRM, the AS document, and the 401 challenge', async () => {
+    // These describe one authorization request. When they disagree a client silently drops
+    // whichever scope is missing from the one it happens to read — which is how a connector
+    // ends up read-only (no work:write) or non-renewable (no offline_access). Any future edit
+    // that touches one source and not the others fails here rather than in production.
+    const prm = (await (
+      await app().request('/.well-known/oauth-protected-resource/mcp')
+    ).json()) as { scopes_supported: string[] };
+
+    // The AS route 307s to Better Auth in a real deploy; the JSON body is the fallback branch.
+    const asDoc = serverMod.authorizationServerMetadata({
+      req: { url: 'https://api.docket.test/.well-known/oauth-authorization-server' },
+      json: (body: unknown) => body,
+    } as never) as unknown as { scopes_supported: string[] };
+
+    const challengeScope = /scope="([^"]+)"/.exec(
+      scopeMod.challenge401('https://api.docket.test/.well-known/oauth-protected-resource/mcp'),
+    )?.[1];
+
+    expect(prm.scopes_supported).toEqual([...scopeMod.CONNECT_SCOPES]);
+    expect(asDoc.scopes_supported).toEqual([...scopeMod.CONNECT_SCOPES]);
+    expect(challengeScope).toBe([...scopeMod.CONNECT_SCOPES].join(' '));
   });
 
   it('serves the bare PRM path too', async () => {
@@ -390,7 +445,7 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
     const wa = res.headers.get('www-authenticate') ?? '';
     expect(wa).toContain('resource_metadata=');
     expect(wa).toContain('/.well-known/oauth-protected-resource/mcp');
-    expect(wa).toContain('scope="work:read"');
+    expect(wa).toContain('scope="work:read work:write agents:run connectors:link offline_access"');
   });
 
   it('returns a 403 insufficient_scope step-up for a tools/call the token cannot satisfy', async () => {

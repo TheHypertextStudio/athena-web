@@ -483,14 +483,24 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       oauthProvider({
         loginPage: e.OIDC_LOGIN_PAGE_URL,
         consentPage,
-        // `offline_access` must be an explicit scope for oauthProvider() to ever issue a
-        // refresh token (unlike the deprecated mcp() plugin, which issued one unconditionally)
-        // — included in the client's default scopes so a dynamically-registered MCP client
-        // gets a refresh token without needing to know to ask for it by name, preserving the
-        // 30-day long-lived-connection behavior Docket already has today.
+        // `scopes` is deliberately the ONLY scope list. `clientRegistrationDefaultScopes` and
+        // `clientRegistrationAllowedScopes` are intentionally NOT set: a client that registers
+        // without an explicit `scope` (which every MCP client does) has the default written
+        // onto its `oauth_client.scopes` row, and that row is then the hard ceiling for BOTH
+        // `/oauth2/authorize` AND the token exchange. A narrower default therefore pins the
+        // client read-only *permanently* — a later step-up authorize for `work:write` is
+        // rejected with `invalid_scope` before the consent screen is ever reached, and a
+        // refresh grant can only ever narrow. That was the 2026-07 "every write tool 403s"
+        // outage. The plugin validates `allowed ⊆ scopes` at boot but nothing validates
+        // `defaults ⊇ scopes`, so a second list can only ever drift into that failure — in
+        // production only, for dynamically-registered clients only, on write tools only.
+        // Omitting both makes the plugin fall back to `scopes` for each, which is the intent.
+        //
+        // `offline_access` must be an explicit granted scope for oauthProvider() to ever issue
+        // a refresh token (unlike the deprecated mcp() plugin, which issued one unconditionally)
+        // — without it a connected client silently degrades to a 15-minute access token with no
+        // renewal path, so it belongs in the set every client is offered at consent time.
         scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link', 'offline_access'],
-        clientRegistrationDefaultScopes: ['work:read', 'offline_access'],
-        clientRegistrationAllowedScopes: ['work:write', 'agents:run', 'connectors:link'],
         accessTokenExpiresIn: 60 * 15,
         refreshTokenExpiresIn: 60 * 60 * 24 * 30,
         ...(isRealValue(e.MCP_RESOURCE_URL) ? { validAudiences: [e.MCP_RESOURCE_URL] } : {}),

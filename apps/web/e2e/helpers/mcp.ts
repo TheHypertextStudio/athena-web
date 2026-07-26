@@ -100,8 +100,25 @@ export async function registerClient(
     },
   });
   expect(res.status(), 'dynamic client registration must succeed').toBe(201);
-  const body = (await res.json()) as { client_id: string };
+  const body = (await res.json()) as { client_id: string; scope?: string };
   expect(body.client_id).toBeTruthy();
+  // Registering WITHOUT a `scope` is what every real MCP client does, and the AS writes its
+  // default onto the client row — which then caps every later authorize AND token exchange. If a
+  // narrower default ever comes back, the client is pinned below these scopes permanently and no
+  // step-up can rescue it, so assert the inherited ceiling here rather than downstream where it
+  // surfaces as a confusing mid-flow `invalid_scope`.
+  const inherited = (body.scope ?? '').split(' ').filter(Boolean);
+  for (const scope of [
+    'work:read',
+    'work:write',
+    'agents:run',
+    'connectors:link',
+    'offline_access',
+  ]) {
+    expect(inherited, `a client registering without \`scope\` must inherit ${scope}`).toContain(
+      scope,
+    );
+  }
   return body.client_id;
 }
 
@@ -151,7 +168,7 @@ export async function exchangeCode(
   request: APIRequestContext,
   discovery: Discovery,
   opts: { clientId: string; code: string; pkce: Pkce },
-): Promise<{ accessToken: string; scope: string }> {
+): Promise<{ accessToken: string; scope: string; refreshToken: string | null }> {
   const res = await request.post(discovery.tokenEndpoint, {
     form: {
       grant_type: 'authorization_code',
@@ -162,9 +179,17 @@ export async function exchangeCode(
     },
   });
   expect(res.status(), 'token exchange must succeed').toBe(200);
-  const body = (await res.json()) as { access_token: string; scope?: string };
+  const body = (await res.json()) as {
+    access_token: string;
+    scope?: string;
+    refresh_token?: string;
+  };
   expect(body.access_token).toBeTruthy();
-  return { accessToken: body.access_token, scope: body.scope ?? '' };
+  return {
+    accessToken: body.access_token,
+    scope: body.scope ?? '',
+    refreshToken: body.refresh_token ?? null,
+  };
 }
 
 /** Register + authorize + exchange in one go; returns a Bearer token for `scope`. */

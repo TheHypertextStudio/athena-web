@@ -25,7 +25,7 @@ import { resolveMcpContext } from './auth';
 import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
 import { registerResources } from './resources';
-import { challenge401, challenge403, MCP_SCOPES, TOOL_SCOPE } from './scope';
+import { challenge401, challenge403, CONNECT_SCOPES, TOOL_SCOPE } from './scope';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
@@ -137,8 +137,14 @@ function problem(c: Context, err: unknown): Response {
  * @remarks
  * Mounted at both `/.well-known/oauth-protected-resource` and the `…/mcp` sub-path
  * (mcp-surface.md §2.3). Advertises the canonical resource URI, the single Docket AS
- * issuer (`MCP_ISSUER_URL`), the four supported scopes, and `bearer_methods_supported`
+ * issuer (`MCP_ISSUER_URL`), the {@link CONNECT_SCOPES} set, and `bearer_methods_supported`
  * so a client can locate the AS, register/consent, and mint an audience-bound token.
+ *
+ * `scopes_supported` lists `offline_access` alongside the four capability scopes because
+ * RFC 9728 §2 defines the field as the scope values "used in authorization requests to the
+ * authorization server for this resource" — not the resource's own capabilities — and
+ * `offline_access` genuinely is one of them. Omitting it would let a client that intersects
+ * this document with the `WWW-Authenticate` hint drop it and lose its refresh token.
  *
  * @param c - The Hono context.
  * @returns the PRM JSON document.
@@ -149,7 +155,7 @@ export function protectedResourceMetadata(c: Context): Response {
   return c.json({
     resource,
     authorization_servers: [issuer],
-    scopes_supported: [...MCP_SCOPES],
+    scopes_supported: [...CONNECT_SCOPES],
     bearer_methods_supported: ['header'],
   });
 }
@@ -182,7 +188,7 @@ export function authorizationServerMetadata(c: Context): Response {
     token_endpoint: `${issuer}/api/auth/oauth2/token`,
     registration_endpoint: `${issuer}/api/auth/oauth2/register`,
     code_challenge_methods_supported: ['S256'],
-    scopes_supported: [...MCP_SCOPES],
+    scopes_supported: [...CONNECT_SCOPES],
     token_endpoint_auth_methods_supported: ['none'],
     client_id_metadata_document_supported: true,
   });

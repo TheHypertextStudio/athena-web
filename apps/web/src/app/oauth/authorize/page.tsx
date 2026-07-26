@@ -28,7 +28,7 @@
  * Unauthenticated users are redirected to `/sign-in` with the current search params preserved
  * so Better Auth can resume the flow after the user signs in.
  */
-import { Cable, Edit, Link as LinkIcon, Sparkles, TaskAlt } from '@docket/ui/icons';
+import { Cable, Edit, Link as LinkIcon, RefreshCw, Sparkles, TaskAlt } from '@docket/ui/icons';
 import {
   Avatar,
   AvatarFallback,
@@ -72,6 +72,14 @@ const SCOPE_INFO: Record<
     label: 'Link external items',
     detail: 'Connect external tools and link items from integrated services.',
     icon: Cable,
+  },
+  // Not a Docket capability — this is the standard OAuth scope that lets the app refresh its
+  // own access without prompting again. Described in plain terms because the person reading
+  // this screen is deciding whether to trust an app, not reading an OAuth spec.
+  offline_access: {
+    label: 'Stay connected',
+    detail: 'Keep working on your behalf without asking you to sign in again.',
+    icon: RefreshCw,
   },
 };
 

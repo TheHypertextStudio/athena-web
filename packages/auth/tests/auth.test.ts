@@ -1205,6 +1205,40 @@ describe('buildAuthOptions env-gating', () => {
     expect(ids[ids.length - 1]).toBe('next-cookies');
   });
 
+  it('gives oauth-provider ONE scope list — no narrower registration default or ceiling', async () => {
+    const { buildAuthOptions } = await import('../src/index');
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        OIDC_LOGIN_PAGE_URL: 'https://docket.example/sign-in',
+        MCP_RESOURCE_URL: 'https://docket.example/mcp',
+      },
+      MAILER_DEPS,
+    );
+    const provider = (opts.plugins ?? []).find((p) => p.id === 'oauth-provider') as
+      | { options?: Record<string, unknown> }
+      | undefined;
+    expect(provider).toBeDefined();
+    const options = provider?.options ?? {};
+
+    // A client that registers without an explicit `scope` — which every MCP client does — has
+    // this list written onto its `oauth_client` row, and that row is then the hard ceiling for
+    // both /oauth2/authorize and the token exchange. A narrower default therefore pins the
+    // client read-only permanently: the 2026-07 "every write tool 403s" outage. `offline_access`
+    // must stay too, because the provider mints a refresh token only when it is granted.
+    expect(options['scopes']).toEqual([
+      'work:read',
+      'work:write',
+      'agents:run',
+      'connectors:link',
+      'offline_access',
+    ]);
+    // Both must remain unset so the provider falls back to `scopes` for each. A second list can
+    // only ever drift narrower than the first — nothing validates that it does not.
+    expect(options['clientRegistrationDefaultScopes']).toBeUndefined();
+    expect(options['clientRegistrationAllowedScopes']).toBeUndefined();
+  });
+
   it('does not mount jwt/oauth-provider when OIDC_LOGIN_PAGE_URL is not set', async () => {
     const { buildAuthOptions } = await import('../src/index');
     const opts = buildAuthOptions(baseEnv, MAILER_DEPS);

@@ -37,6 +37,9 @@ const SCOPE_LABEL: Record<string, string> = {
   'work:write': 'Create & update work',
   'agents:run': 'Manage agents',
   'connectors:link': 'Link external items',
+  // Standard OAuth renewal scope rather than a Docket capability; labelled so the roster never
+  // shows a raw `offline_access` token.
+  offline_access: 'Stay connected',
 };
 
 /** One authorized MCP client as returned by `GET /v1/me/connected-apps`. */

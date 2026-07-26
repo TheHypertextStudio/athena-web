@@ -11,11 +11,14 @@
 import { signUpAndOnboard } from './helpers/app';
 import { expect, test } from './helpers/fixtures';
 import {
+  authorizeInBrowser,
   discover,
+  exchangeCode,
   mcpCall,
   mcpReadResource,
   mcpToolCall,
   mintToken,
+  newPkce,
   registerClient,
 } from './helpers/mcp';
 import { apiJson } from './helpers/net';
@@ -32,6 +35,18 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
   const unauthed = await mcpCall(request, null, 'tools/list', {});
   expect(unauthed.status).toBe(401);
   expect(unauthed.wwwAuthenticate).toContain('resource_metadata=');
+  // The challenge is the only hint that reaches a client before it builds its authorize URL, and
+  // a client asks for exactly what it advertises. If it ever narrows again, connectors silently
+  // go back to being read-only (or, without `offline_access`, non-renewable).
+  for (const scope of [
+    'work:read',
+    'work:write',
+    'agents:run',
+    'connectors:link',
+    'offline_access',
+  ]) {
+    expect(unauthed.wwwAuthenticate, `401 challenge must advertise ${scope}`).toContain(scope);
+  }
 
   // ── A real signed-in human (passkey ceremony) to consent on behalf of ──
   const { orgId } = await signUpAndOnboard(page, 'McpConnect');
@@ -70,10 +85,25 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
   expect(denied.wwwAuthenticate).toContain('work:write');
 
   // ── Step up: re-consent for work:write, then the same write succeeds ──
-  const writeToken = await mintToken(page, request, discovery, {
+  // Exchanged explicitly (rather than via `mintToken`) so the refresh token is observable: the AS
+  // mints one ONLY when `offline_access` is granted, so a step-up that dropped it would trade a
+  // durable connection for one that dies 15 minutes later — invisible to every other assertion.
+  const stepUpPkce = newPkce();
+  const stepUpCode = await authorizeInBrowser(page, discovery, {
     clientId,
-    scope: 'work:read work:write',
+    scope: 'work:read work:write offline_access',
+    pkce: stepUpPkce,
   });
+  const stepUp = await exchangeCode(request, discovery, {
+    clientId,
+    code: stepUpCode,
+    pkce: stepUpPkce,
+  });
+  expect(
+    stepUp.refreshToken,
+    'a token granted offline_access must carry a refresh token',
+  ).toBeTruthy();
+  const writeToken = stepUp.accessToken;
   const created = await mcpToolCall<{ id: string; state: string }>(
     request,
     writeToken,

@@ -18,7 +18,13 @@ pnpm dev              # start everything
 ```
 
 `.env.local` is already committed with working local defaults, so there's no file to
-copy — `pnpm dev` runs out of the box. Docker must be running (the DB starts automatically).
+copy — `pnpm dev` runs out of the box. No Docker daemon is needed: the default
+`DATABASE_URL=pglite://.data/docket` is an embedded, in-process Postgres, and `pnpm dev` applies
+migrations before any app server starts (turbo's `dev → ^db:migrate` dependency). To use the Docker
+Postgres instead, run `pnpm db:up` and set `DATABASE_URL=postgres://docket:docket@localhost:5433/docket`.
+
+Those defaults are kept honest by `packages/env/tests/env-files.test.ts`, which derives the required
+variables from the schema itself and fails if `.env.local` or `.env.example` is missing any of them.
 
 ## `pnpm proxy:install` — what it does and its implications
 

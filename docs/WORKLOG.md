@@ -76,6 +76,57 @@
   `get-session` returned `NONE`, reproducing the report exactly. The genuine-expiry path was
   separately confirmed to still raise the interlock, and the signed-in marketing page was rendered
   and screenshotted (0 × "Sign in", 3 × "Open Docket").
+### [ENV-DRIFT-001] A fresh clone cannot boot the API
+
+- **Status**: REVIEW
+- **Started**: 2026-07-26
+- **Priority**: P1
+- **Description**: In any fresh clone or `git worktree`, `pnpm dev` killed the API immediately with
+  `Invalid environment variables` (`WEB_URL`, `GOOGLE_OAUTH_PUBLIC`, `AGENT_MAX_TURNS`). Because only
+  the API died, the web app kept serving 200 and `/api/auth/get-session` returned 502 — so it
+  presented as broken auth rather than a process that never started, and cost real debugging time.
+- **Root cause**: `.env.local` is tracked on purpose (safe local defaults, with real values kept out
+  of git by `git update-index --skip-worktree`, armed by the `prepare` hook), and its header declares
+  ".env.example is the contract/source of truth". Nothing enforced that. Three vars were added to the
+  schema and to `.env.example` but never to `.env.local`, and because every active developer already
+  had them in their skip-worktree'd copy, nobody could see the committed file was broken. The design
+  was sound; the missing piece was that no test compared the two files against the schema.
+- **Approach**: Restored the four drifted vars (`WEB_URL`, `GOOGLE_OAUTH_PUBLIC`, `AGENT_MAX_TURNS`,
+  `NEXT_PUBLIC_PASSKEY_RP_ID`) and added `packages/env/tests/env-files.test.ts`, which derives the
+  required set from the slice schemas themselves — so adding a required var now fails until both
+  files carry it. The test reads committed content via `git show` for its hygiene assertions, because
+  a developer's on-disk `.env.local` legitimately holds real credentials (and a Vercel-CLI-written
+  `VERCEL_OIDC_TOKEN`); asserting against that would fail for them and risk printing secrets.
+- **Also fixed**: The committed file pointed the web origin at `web.docket.localhost` while
+  `.env.example`, `docs/local-development.md`, and its own `MCP_ALLOWED_ORIGINS`/`OIDC_LOGIN_PAGE_URL`
+  lines all said `docket.localhost` — so even after booting, trusted origins and the session cookie
+  were misconfigured. Corrected, and the documented-but-absent `BETTER_AUTH_ALLOWED_HOSTS` /
+  `BETTER_AUTH_COOKIE_DOMAIN` were added. The new test also caught four **retired** vars still in the
+  defaults: `GITHUB_CLIENT_ID`/`_SECRET` (superseded by the GitHub App pair — `slices.ts` calls them
+  "retired") and `ATHENA_AGENT_ENDPOINT`/`_API_KEY` (gone from `agentServer` when the agent runtime
+  moved in-process). All four removed. `docs/local-development.md`'s "Docker must be running" line was
+  stale — the default is embedded PGlite.
+- **Deliberately not done**: `.env.local` was **not** untracked. Every revision in its history was
+  checked: no real secret has ever been committed — all secret-bearing keys are empty or obvious dev
+  sentinels — so the skip-worktree design has held, and no rotation is required. Its tracked-ness is
+  also what makes `pnpm dev` work with no setup step. The schema was **not** given dev defaults for
+  `AGENT_MAX_TURNS` and friends either; `slices.ts` documents `NODE_ENV` as the one intentionally
+  defaulted var, and hiding a required value is worse than failing. Instead `api.ts` now supplies
+  `onValidationError`, which names the offending vars, the file to edit, and the fact that only the
+  API refuses to boot — the misleading part of the original failure.
+- **Files changed**: `.env.local`, `packages/env/src/api.ts`,
+  `packages/env/tests/env-files.test.ts` (new), `docs/local-development.md`.
+- **Learnings**: A file that every developer overrides locally is invisible to the people best placed
+  to notice it is broken — `skip-worktree` hid the defect from everyone except a fresh clone. Any
+  committed-defaults file needs a test that reads the _committed_ bytes, not the working copy, or it
+  will drift silently. The two-file arrangement is still the weak point: `.env.example` and
+  `.env.local` must be kept in step by hand, and the test only reports the drift rather than removing
+  the possibility. Seeding `.env.local` from `.env.example` in `prepare` and gitignoring it would
+  collapse them to one source of truth; deferred because it changes every developer's workflow.
+- **Verified**: Reproduced in a clean worktree (3 validation errors, API dead). After the fix, the
+  documented `pnpm dev` applies migrations and boots all three apps with **0** validation errors, and
+  `/api/auth/get-session` returns `200` with body `null` through the full web → rewrite-proxy → API
+  chain. `@docket/env` typecheck, lint, and tests pass.
 
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 

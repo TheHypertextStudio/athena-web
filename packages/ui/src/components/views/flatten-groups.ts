@@ -7,9 +7,9 @@ import { NO_GROUP_ID, NO_GROUP_LABEL } from './list-view-types';
  * (globals.css §density) — the two MUST change together or virtualized scrolling jitters.
  */
 export const DENSITY_ROW_HEIGHT: Record<Density, number> = {
-  compact: 32,
-  comfortable: 36,
-  spacious: 44,
+  compact: 36,
+  comfortable: 40,
+  spacious: 48,
 };
 
 /** Build the composite collapse key for a sub-group bucket. */

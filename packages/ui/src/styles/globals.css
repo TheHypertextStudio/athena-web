@@ -384,28 +384,36 @@
    * Density system: list-row metrics keyed off the `data-density` attribute the AppShell
    * emits from user preference. Row components consume `min-h-(--row-h)` / `py-(--row-py)`
    * so one attribute swap retunes every list in the product. The :root fallback matches
-   * `comfortable` (36px rows), keeping rows correct outside the shell (auth, tests).
-   * NOTE: the virtualizer's row-height estimate in ListView.tsx mirrors these values —
-   * change them together.
+   * `comfortable` (40px rows), keeping rows correct outside the shell (auth, tests).
+   *
+   * `comfortable` is 40px on purpose: it is the row height a Linear-style object list reads
+   * correctly at. The previous 36px default made a row feel like a line of text rather than a
+   * thing you can point at — too tight for a row that carries a status glyph, an editable
+   * title, an avatar, and trailing metadata, and noticeably shorter than the products this
+   * list is measured against. The ladder around it moved with it (compact 36, spacious 48) so
+   * the three steps stay evenly spaced and compact remains genuinely denser than the default.
+   *
+   * NOTE: `DENSITY_ROW_HEIGHT` in flatten-groups.ts mirrors these values for the virtualizer's
+   * row-height estimate — the two MUST change together or virtualized scrolling jitters.
    */
   :root {
-    --row-h: 2.25rem;
-    --row-py: 0.375rem;
+    --row-h: 2.5rem;
+    --row-py: 0.5rem;
   }
 
   [data-density='compact'] {
-    --row-h: 2rem;
-    --row-py: 0.25rem;
-  }
-
-  [data-density='comfortable'] {
     --row-h: 2.25rem;
     --row-py: 0.375rem;
   }
 
+  [data-density='comfortable'] {
+    --row-h: 2.5rem;
+    --row-py: 0.5rem;
+  }
+
   [data-density='spacious'] {
-    --row-h: 2.75rem;
-    --row-py: 0.625rem;
+    --row-h: 3rem;
+    --row-py: 0.75rem;
   }
 
   /*

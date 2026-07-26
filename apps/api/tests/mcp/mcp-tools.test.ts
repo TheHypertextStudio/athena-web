@@ -706,6 +706,55 @@ describe('mcpHandler success path (authenticated)', () => {
     expect(res.status).toBe(200);
   });
 
+  it('advertises only the capabilities the stateless transport can deliver', async () => {
+    const s = await seedOrg(['view']);
+    getSession.mockResolvedValueOnce({
+      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
+    });
+    const app = new Hono();
+    app.on(['POST', 'GET'], '/mcp', mcpHandler);
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'c', version: '0.0.0' },
+        },
+      }),
+    });
+    const body = await res.text();
+    // Streamable HTTP frames the reply as SSE when the client accepts it; the JSON-RPC payload
+    // is the last `data:` line.
+    const dataLines = body.split('\n').filter((line) => line.startsWith('data:'));
+    const raw = dataLines.length > 0 ? dataLines[dataLines.length - 1]!.slice(5) : body;
+    const payload = JSON.parse(raw) as {
+      result: { capabilities: Record<string, Record<string, unknown> | undefined> };
+    };
+    const caps = payload.result.capabilities;
+
+    // Both of these promise something a per-request server cannot deliver: `subscribe` leaves a
+    // client waiting for a `resources/updated` frame that can never be pushed, and `logging`
+    // invites it to set a level nothing will ever emit against.
+    expect(caps['resources']?.['subscribe']).toBeUndefined();
+    expect(caps['logging']).toBeUndefined();
+
+    // The ones backed by real handlers stay advertised. (`listChanged` is deliberately not
+    // asserted either way — the SDK sets it during registration, and it is harmless here because
+    // the catalog cannot change within the life of a deploy.)
+    expect(caps['tools']).toBeDefined();
+    expect(caps['resources']).toBeDefined();
+    expect(caps['prompts']).toBeDefined();
+    expect(caps['completions']).toBeDefined();
+  });
+
   it('returns a 500 problem when a non-ApiError escapes auth resolution', async () => {
     getSession.mockRejectedValueOnce(new Error('boom'));
     const app = new Hono();

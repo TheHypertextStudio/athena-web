@@ -18,7 +18,6 @@ import type {
   TaskToolExecution,
   ToolTaskHandler,
 } from '@modelcontextprotocol/sdk/experimental/tasks';
-import type { LoggingMessageNotification } from '@modelcontextprotocol/sdk/types.js';
 import {
   ListPromptsRequestSchema,
   ListResourceTemplatesRequestSchema,
@@ -197,13 +196,6 @@ export class McpCatalog implements McpRegistrar {
   ): RegisteredPrompt {
     this.prompts.push({ key: name, value: promptListValue(name, config) });
     return this.mcp.registerPrompt(name, config, cb);
-  }
-
-  sendLoggingMessage(
-    params: LoggingMessageNotification['params'],
-    sessionId?: string,
-  ): Promise<void> {
-    return this.mcp.sendLoggingMessage(params, sessionId);
   }
 
   installListHandlers(ctx: McpContext): void {

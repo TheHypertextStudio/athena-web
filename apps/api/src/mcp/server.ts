@@ -45,18 +45,26 @@ const SERVER_INFO = { name: 'docket', version: '1.0.0' } as const;
  */
 export function buildServer(ctx: McpContext): McpServer {
   const tasksEnabled = env.MCP_TASKS_ENABLED;
-  // Advertise the tool/resource/prompt/completion/logging capabilities Docket implements
-  // (mcp-surface.md section 5). `resources.subscribe`/`listChanged` and `tools.listChanged`
-  // are declared so a future event-bus fan-out can flip without re-negotiation; the
-  // SDK populates `completions` automatically from the resource-template complete callbacks
-  // and `prompts` from registerPrompt, but we declare them so the shape is explicit.
+  // Advertise ONLY what this server can actually do (mcp-surface.md section 5). Notably absent:
+  //
+  // - `resources.subscribe`: a client would call `resources/subscribe` and then wait forever for
+  //   a `notifications/resources/updated` that cannot arrive. The transport is stateless
+  //   (`sessionIdGenerator: undefined`), so a server instance dies with the request that built
+  //   it and can never push a later frame. Restore it alongside a session-bound transport and a
+  //   real event-bus fan-out, not before.
+  // - `logging`: a client would set a level and receive nothing, because no code path ever
+  //   emitted a log notification.
+  //
+  // The `listChanged` flags are NOT declared here, but the SDK sets them on tools/resources/
+  // prompts as a side effect of registration. That one is left alone: it is vacuous rather than
+  // broken, since the catalog is fixed for the life of a deploy, so the promise to announce a
+  // change is trivially kept.
   const server = new McpServer(SERVER_INFO, {
     capabilities: {
-      tools: { listChanged: true },
-      resources: { subscribe: true, listChanged: true },
-      prompts: { listChanged: true },
+      tools: {},
+      resources: {},
+      prompts: {},
       completions: {},
-      logging: {},
       ...(tasksEnabled
         ? { tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } } }
         : {}),

@@ -205,9 +205,9 @@ async function connect(ctx: McpContext): Promise<Client> {
     { name: 'test', version: '0.0.0' },
     {
       capabilities: {
-        tools: { listChanged: true },
-        resources: { subscribe: true, listChanged: true },
-        prompts: { listChanged: true },
+        tools: {},
+        resources: {},
+        prompts: {},
         completions: {},
       },
     },
@@ -235,9 +235,9 @@ async function connectWithTasks(ctx: McpContext): Promise<Client> {
     { name: 'test', version: '0.0.0' },
     {
       capabilities: {
-        tools: { listChanged: true },
-        resources: { subscribe: true, listChanged: true },
-        prompts: { listChanged: true },
+        tools: {},
+        resources: {},
+        prompts: {},
         completions: {},
         tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } },
       },
@@ -447,9 +447,9 @@ describe('MCP tool metadata and task execution', () => {
       { name: 'test', version: '0.0.0' },
       {
         capabilities: {
-          tools: { listChanged: true },
-          resources: { subscribe: true, listChanged: true },
-          prompts: { listChanged: true },
+          tools: {},
+          resources: {},
+          prompts: {},
           completions: {},
           tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } },
         },

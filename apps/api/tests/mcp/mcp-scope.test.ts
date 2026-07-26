@@ -128,7 +128,7 @@ async function connect(
   };
   const server = new McpServer(
     { name: 'test', version: '0.0.0' },
-    { capabilities: { tools: { listChanged: true }, resources: { subscribe: true } } },
+    { capabilities: { tools: {}, resources: {} } },
   );
   registerTools(server, ctx);
   registerResources(server, ctx);

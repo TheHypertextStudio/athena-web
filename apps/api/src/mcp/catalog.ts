@@ -23,10 +23,18 @@ import {
   ListResourceTemplatesRequestSchema,
   ListResourcesRequestSchema,
   ListToolsRequestSchema,
+  SetLevelRequestSchema,
+  SubscribeRequestSchema,
+  UnsubscribeRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { db, mcpSubscription } from '@docket/db';
+import { and, eq } from 'drizzle-orm';
 import type { z } from 'zod';
 
+import { ConflictError } from '../error';
 import type { McpContext } from './auth';
+import { authorizeResourceUri } from './resources';
+import { setSessionLogLevel } from './session-registry';
 import {
   type PromptConfig,
   type PromptListValue,
@@ -237,6 +245,60 @@ export class McpCatalog implements McpRegistrar {
     this.protocol.setRequestHandler(ListPromptsRequestSchema, (request: ListPromptsRequest) => {
       const page = pageValues(sortedPrompts, request.params?.cursor, 'prompts', ctx, this.pageSize);
       return { prompts: page.items, nextCursor: page.nextCursor };
+    });
+  }
+
+  /**
+   * Install `resources/subscribe`, `resources/unsubscribe`, and `logging/setLevel`.
+   *
+   * @remarks
+   * The SDK ships schemas for all three but registers handlers for none, so they are ours. They
+   * live here rather than in `resources.ts` because, like the list handlers, they are protocol
+   * plumbing over the whole catalog rather than behavior of any one resource.
+   *
+   * Subscribing authorizes the URI through exactly the same path a read does, so it can never
+   * reveal that something exists which the caller could not have read. A caller with no session
+   * gets a clear error rather than a silently dropped subscription — there would be nowhere to
+   * deliver to.
+   *
+   * @param ctx - The authenticated caller.
+   * @param sessionId - The caller's session, or null when it has not opened one.
+   */
+  installSubscriptionHandlers(ctx: McpContext, sessionId: string | null): void {
+    // All three are session-addressed, so each shares the same precondition: without a session
+    // there is nowhere to deliver to, and silently accepting would look like it worked.
+    const requireSession = (): string => {
+      if (!sessionId) {
+        throw new ConflictError(
+          'This request needs an MCP session. Send `initialize` first and reuse the returned Mcp-Session-Id.',
+        );
+      }
+      return sessionId;
+    };
+
+    this.protocol.setRequestHandler(SubscribeRequestSchema, async (request) => {
+      const session = requireSession();
+      await authorizeResourceUri(ctx, request.params.uri);
+      await db
+        .insert(mcpSubscription)
+        .values({ sessionId: session, uri: request.params.uri })
+        .onConflictDoNothing({ target: [mcpSubscription.sessionId, mcpSubscription.uri] });
+      return {};
+    });
+
+    this.protocol.setRequestHandler(UnsubscribeRequestSchema, async (request) => {
+      const session = requireSession();
+      await db
+        .delete(mcpSubscription)
+        .where(
+          and(eq(mcpSubscription.sessionId, session), eq(mcpSubscription.uri, request.params.uri)),
+        );
+      return {};
+    });
+
+    this.protocol.setRequestHandler(SetLevelRequestSchema, async (request) => {
+      await setSessionLogLevel(requireSession(), request.params.level);
+      return {};
     });
   }
 }

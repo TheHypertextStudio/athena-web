@@ -68,7 +68,7 @@ server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // The MCP Streamable HTTP endpoint lives OUTSIDE the typed `AppType` routes (like
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC
 // contract consumed by `hc<AppType>`.
-server.on(['POST', 'GET'], '/mcp', mcpHandler);
+server.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
 // OAuth 2.1 RS discovery (mcp-surface.md §2.3): the Protected Resource Metadata document
 // (RFC 9728, served at both the bare path and the `/mcp` sub-path) the `WWW-Authenticate`
 // challenge points at, plus the Authorization Server metadata pointer (RFC 8414).

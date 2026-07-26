@@ -19,8 +19,16 @@ import { publicProblemTitle } from '@docket/types';
 import type { Context } from 'hono';
 
 import { env } from '../env';
-import { ApiError } from '../error';
+import { ApiError, ConflictError, NotFoundError } from '../error';
 import type { McpContext } from './auth';
+import { attachStream, notifyLog } from './notify';
+import {
+  createSession,
+  endSession,
+  resolveSession,
+  SESSION_HEADER,
+  touchSession,
+} from './session-registry';
 import { oauthIssuer, resolveMcpContext } from './auth';
 import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
@@ -43,28 +51,21 @@ const SERVER_INFO = { name: 'docket', version: '1.0.0' } as const;
  * @param ctx - The authenticated MCP caller.
  * @returns the configured {@link McpServer} with tools + resources registered.
  */
-export function buildServer(ctx: McpContext): McpServer {
+export function buildServer(ctx: McpContext, sessionId: string | null = null): McpServer {
   const tasksEnabled = env.MCP_TASKS_ENABLED;
-  // Advertise ONLY what this server can actually do (mcp-surface.md section 5). Notably absent:
-  //
-  // - `resources.subscribe`: a client would call `resources/subscribe` and then wait forever for
-  //   a `notifications/resources/updated` that cannot arrive. The transport is stateless
-  //   (`sessionIdGenerator: undefined`), so a server instance dies with the request that built
-  //   it and can never push a later frame. Restore it alongside a session-bound transport and a
-  //   real event-bus fan-out, not before.
-  // - `logging`: a client would set a level and receive nothing, because no code path ever
-  //   emitted a log notification.
-  //
-  // The `listChanged` flags are NOT declared here, but the SDK sets them on tools/resources/
-  // prompts as a side effect of registration. That one is left alone: it is vacuous rather than
-  // broken, since the catalog is fixed for the life of a deploy, so the promise to announce a
-  // change is trivially kept.
+  // Everything advertised here is delivered (mcp-notifications.md §5). `resources.subscribe` and
+  // `logging` are real: the notification channel is a session-scoped SSE stream this server owns
+  // directly (see `notificationStream`), and the write→notify hop rides Postgres LISTEN/NOTIFY so
+  // it survives `--max-instances=10` with no session affinity. `listChanged` is advertised on all
+  // three lists; only the tool list actually fires one, when a grant change alters what the
+  // caller may call.
   const server = new McpServer(SERVER_INFO, {
     capabilities: {
-      tools: {},
-      resources: {},
-      prompts: {},
+      tools: { listChanged: true },
+      resources: { subscribe: true, listChanged: true },
+      prompts: { listChanged: true },
       completions: {},
+      logging: {},
       ...(tasksEnabled
         ? { tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } } }
         : {}),
@@ -76,6 +77,7 @@ export function buildServer(ctx: McpContext): McpServer {
   registerResources(catalog, ctx);
   registerPrompts(catalog, ctx);
   catalog.installListHandlers(ctx);
+  catalog.installSubscriptionHandlers(ctx, sessionId);
   return server;
 }
 
@@ -202,6 +204,106 @@ export function authorizationServerMetadata(c: Context): Response {
     scopes_supported: [...CONNECT_SCOPES],
     token_endpoint_auth_methods_supported: ['none'],
     client_id_metadata_document_supported: true,
+  });
+}
+
+/** How often the notification stream writes a comment frame to survive proxy idle reaping. */
+const HEARTBEAT_MS = 25_000;
+
+/** Whether a parsed body is the `initialize` request that starts a session. */
+function isInitializeBody(body: unknown): boolean {
+  return rpcMessages(body).some((message) => message.method === 'initialize');
+}
+
+/** The protocol version an `initialize` body negotiated, when it declared one. */
+function negotiatedProtocolVersion(body: unknown): string | null {
+  for (const message of rpcMessages(body)) {
+    if (message.method !== 'initialize') continue;
+    if (typeof message.params !== 'object' || message.params === null) continue;
+    const version: unknown = Reflect.get(message.params, 'protocolVersion');
+    if (typeof version === 'string') return version;
+  }
+  return null;
+}
+
+/**
+ * Hold the server→client SSE stream for one session.
+ *
+ * @remarks
+ * Modelled on `routes/stream-sse.ts`, the app's existing long-lived connection: a buffer plus a
+ * wake callback so the synchronous notify handler can hand off to the async writer, a heartbeat
+ * so proxies do not reap an idle connection, and abort wiring so a disconnect tears down cleanly.
+ *
+ * One stream per session — a second GET gets 409, matching the transport spec's own rule — so a
+ * reconnecting client cannot silently end up with two half-fed channels.
+ *
+ * @param c - The Hono context for the GET.
+ * @param sessionId - The session this stream belongs to.
+ * @returns the SSE response.
+ */
+async function notificationStream(c: Context, sessionId: string): Promise<Response> {
+  const encoder = new TextEncoder();
+  const pending: string[] = [];
+  let wake: (() => void) | undefined;
+  const state = { closed: false };
+  // Read through a call rather than the property directly: every write happens in a callback the
+  // loop's control flow does not contain, so narrowing the property would be wrong.
+  const isClosed = (): boolean => state.closed;
+
+  // Claim the session's stream before committing to a response, so a second GET can still be
+  // answered with a real 409 rather than a 200 whose body immediately errors.
+  const detach = await attachStream(sessionId, (frame) => {
+    pending.push(frame);
+    wake?.();
+  });
+  if (!detach) {
+    return problem(c, new ConflictError('Only one notification stream is allowed per session'));
+  }
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const signal = c.req.raw.signal;
+      const onAbort = (): void => {
+        state.closed = true;
+        wake?.();
+      };
+      signal.addEventListener('abort', onAbort);
+
+      try {
+        while (!isClosed()) {
+          // Draining is synchronous, so the loop condition above is the only close check needed
+          // before the next await.
+          while (pending.length > 0) {
+            const frame = pending.shift();
+            /* v8 ignore next -- defensive: length was just checked */
+            if (frame === undefined) break;
+            controller.enqueue(encoder.encode(`data: ${frame}\n\n`));
+          }
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+            setTimeout(resolve, HEARTBEAT_MS);
+          });
+          wake = undefined;
+          // Woken with nothing buffered means the heartbeat fired, not a notification.
+          if (!isClosed() && pending.length === 0) {
+            controller.enqueue(encoder.encode(': ping\n\n'));
+          }
+        }
+      } finally {
+        detach();
+        signal.removeEventListener('abort', onAbort);
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'Mcp-Session-Id': sessionId,
+    },
   });
 }
 
@@ -415,10 +517,39 @@ export async function mcpHandler(c: Context): Promise<Response> {
     return problem(c, err);
   }
 
+  const presentedSession = c.req.raw.headers.get(SESSION_HEADER);
+  // Prove a presented session belongs to this caller before it can address anything. A mismatch
+  // is a miss, not a denial, so a guessed id cannot confirm a session exists.
+  let session: string | null = null;
+  if (presentedSession) {
+    try {
+      session = await resolveSession(ctx, presentedSession);
+    } catch (err) {
+      return problem(c, err);
+    }
+    void touchSession(session).catch(() => undefined);
+  }
+
+  // `DELETE` ends a session and drops its subscriptions (mcp-notifications.md §4.1).
+  if (c.req.raw.method === 'DELETE') {
+    if (!session) return problem(c, new NotFoundError('Session not found'));
+    await endSession(ctx, session);
+    return new Response(null, { status: 204 });
+  }
+
+  // `GET` is the server→client notification stream. It is owned here rather than by the SDK
+  // transport because it must outlive the request that opened it, and because a stateless
+  // per-request transport has nowhere to keep it.
+  if (c.req.raw.method === 'GET') {
+    if (!session) return problem(c, new NotFoundError('Session not found'));
+    return notificationStream(c, session);
+  }
+
   // Read the body once so we can both run the scope preflight AND hand an intact request to
   // the transport (the web `Request` body is a single-use stream).
   let raw = c.req.raw;
   let body: unknown = null;
+  let mintedSession: string | null = null;
   if (raw.method === 'POST') {
     const text = await raw.clone().text();
     body = safeJson(text);
@@ -432,12 +563,29 @@ export async function mcpHandler(c: Context): Promise<Response> {
     }
 
     const stepUp = scopeStepUp(c, ctx, body);
-    if (stepUp) return stepUp;
+    if (stepUp) {
+      // A refusal the caller can act on: the 403 carries the challenge, but a client watching the
+      // notification stream also gets told which tool it lost and why, without having to correlate
+      // an HTTP status back to the call it made.
+      if (session) {
+        const refused = toolScopeForBody(body);
+        void notifyLog(session, 'warning', {
+          event: 'tool_scope_refused',
+          ...(refused ? { requiredScope: refused } : {}),
+        }).catch(() => undefined);
+      }
+      return stepUp;
+    }
+
+    // A client completing `initialize` without a session gets one, so it can open the stream.
+    if (!session && isInitializeBody(body)) {
+      mintedSession = await createSession(ctx, negotiatedProtocolVersion(body));
+    }
     // Rebuild the request from the buffered text since `clone()` above already tee'd it.
     raw = new Request(raw.url, { method: raw.method, headers: raw.headers, body: text });
   }
 
-  const server = buildServer(ctx);
+  const server = buildServer(ctx, session ?? mintedSession);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
   const activeIds = raw.method === 'POST' ? [...new Set(cancellableRequestIds(body))] : [];
@@ -463,7 +611,17 @@ export async function mcpHandler(c: Context): Promise<Response> {
 
   try {
     const response = await transport.handleRequest(raw);
-    return responseWithCleanup(response, cleanup);
+    const withCleanup = responseWithCleanup(response, cleanup);
+    if (!mintedSession) return withCleanup;
+    // Hand the new session id back on the `initialize` response so the client can open the
+    // notification stream and address subscriptions.
+    const headers = new Headers(withCleanup.headers);
+    headers.set('Mcp-Session-Id', mintedSession);
+    return new Response(withCleanup.body, {
+      status: withCleanup.status,
+      statusText: withCleanup.statusText,
+      headers,
+    });
   } catch (err) {
     cleanup();
     throw err;

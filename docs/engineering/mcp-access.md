@@ -126,6 +126,12 @@ the normal action policy still decide whether Athena may execute it or must requ
   - `find` is ranked relevance search over the whole workspace — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, labels. It reads the same permission-filtered search index the web app uses, so results are trimmed to what the caller may actually see, and it trails writes by a moment. Use `run_view` to enumerate live rows by exact criteria.
 - **Resources** — reads are modeled as `docket://` resources: `docket://orgs`, `docket://hub/today`, `docket://hub/inbox`, `docket://hub/portfolio`, and templated per-entity URIs (`docket://{org}/{type}/{id}`), all permission-gated with existence-hiding.
 - **Prompts** — workspace-context bootstrap prompts for agent sessions.
+- **Live updates** — a client that completes `initialize` gets an `Mcp-Session-Id` and can hold a
+  `GET /mcp` stream open to receive `notifications/resources/updated` for anything it has
+  `resources/subscribe`d to, `notifications/tools/list_changed` when a grant change alters what it
+  may call, and `notifications/message` at whatever level it sets via `logging/setLevel`. Delivery
+  is best-effort and not replayed — treat an update as a prompt to re-read, not as the data.
+  `DELETE /mcp` ends the session. See [`specs/mcp-notifications.md`](specs/mcp-notifications.md).
 
 The authoritative surface contract is [`specs/mcp-surface.md`](specs/mcp-surface.md).
 

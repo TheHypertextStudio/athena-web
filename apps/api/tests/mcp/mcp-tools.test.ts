@@ -706,7 +706,7 @@ describe('mcpHandler success path (authenticated)', () => {
     expect(res.status).toBe(200);
   });
 
-  it('advertises only the capabilities the stateless transport can deliver', async () => {
+  it('advertises the notification capabilities it now delivers', async () => {
     const s = await seedOrg(['view']);
     getSession.mockResolvedValueOnce({
       user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
@@ -740,19 +740,44 @@ describe('mcpHandler success path (authenticated)', () => {
     };
     const caps = payload.result.capabilities;
 
-    // Both of these promise something a per-request server cannot deliver: `subscribe` leaves a
-    // client waiting for a `resources/updated` frame that can never be pushed, and `logging`
-    // invites it to set a level nothing will ever emit against.
-    expect(caps['resources']?.['subscribe']).toBeUndefined();
-    expect(caps['logging']).toBeUndefined();
+    // These two were withdrawn while the notification channel did not exist. It does now — a
+    // session-scoped SSE stream fed over Postgres LISTEN/NOTIFY — so advertising them is a
+    // promise the server keeps. The round-trip is asserted in mcp-notifications.test.ts.
+    expect(caps['resources']?.['subscribe']).toBe(true);
+    expect(caps['logging']).toBeDefined();
 
-    // The ones backed by real handlers stay advertised. (`listChanged` is deliberately not
-    // asserted either way — the SDK sets it during registration, and it is harmless here because
-    // the catalog cannot change within the life of a deploy.)
     expect(caps['tools']).toBeDefined();
     expect(caps['resources']).toBeDefined();
     expect(caps['prompts']).toBeDefined();
     expect(caps['completions']).toBeDefined();
+  });
+
+  it('hands back a session id on initialize so a client can open the stream', async () => {
+    const s = await seedOrg(['view']);
+    getSession.mockResolvedValueOnce({
+      user: { id: s.userId, name: 'Ada', email: 'a@e.com' },
+    });
+    const app = new Hono();
+    app.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-11-25',
+          capabilities: {},
+          clientInfo: { name: 'c', version: '0.0.0' },
+        },
+      }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Mcp-Session-Id')).toEqual(expect.any(String));
   });
 
   it('returns a 500 problem when a non-ApiError escapes auth resolution', async () => {

@@ -652,3 +652,21 @@ export const streamRelevance = pgEnum('stream_relevance', [
 ]);
 /** Cadence of a generated cross-org summary (lunch / end-of-day / end-of-week). */
 export const summaryCadence = pgEnum('summary_cadence', ['lunch', 'eod', 'eow']);
+
+/**
+ * RFC 5424 severity levels, as MCP's `logging/setLevel` and `notifications/message` use them.
+ *
+ * @remarks
+ * Ordered least→most severe so a stored session level can be compared by index: a session set to
+ * `warning` receives `warning` and everything after it, and nothing before.
+ */
+export const logLevel = pgEnum('log_level', [
+  'debug',
+  'info',
+  'notice',
+  'warning',
+  'error',
+  'critical',
+  'alert',
+  'emergency',
+]);

@@ -663,14 +663,12 @@ Each `{var}` is completable via the **completion API** (§5 capabilities). `mime
 
 ### 4.4 Subscriptions
 
-> **RESOLVED: not shipped, and no longer advertised.** The stateless transport (§1.1) means a
-> server instance dies with the request that created it, so a `notifications/resources/updated`
-> frame can never be pushed to a subscriber. Advertising `resources.subscribe` left a client
-> waiting forever instead of re-reading, so it was removed from the declared capabilities
-> (`apps/api/src/mcp/server.ts`); clients poll. The `listChanged` flags remain only because the
-> SDK sets them during registration — they are harmless, since the catalog is fixed for the life
-> of a deploy. Everything below describes the design to restore alongside a session-bound
-> transport, not current behavior.
+> **RESOLVED: shipped — see [`mcp-notifications.md`](mcp-notifications.md), which supersedes this
+> section.** Subscriptions are real. The request path stays stateless (§1.1 still holds), and the
+> notification channel is a separate session-scoped SSE stream the server owns directly, fed by
+> Postgres `LISTEN/NOTIFY` so a write served by one Cloud Run instance reaches a stream held by
+> another. Sessions and subscriptions live in `mcp_session` / `mcp_subscription`. Delivery is
+> best-effort and un-replayed: a frame is a hint to re-read, never the data itself.
 
 - Advertise `resources.subscribe: true` and `resources.listChanged: true`.
 - **Subscribable:** `docket://{org}/session/{id}` (live agent activity — the highest-value subscription; powers a client watching a running session), `docket://{org}/task/{id}`, and the Hub `inbox`/`today` resources (new approvals/notifications).
@@ -688,10 +686,11 @@ On `initialize`, the RS advertises:
   "protocolVersion": "2025-11-25",
   "serverInfo": { "name": "docket", "title": "Docket", "version": "<build>" },
   "capabilities": {
-    "tools": {}, // RESOLVED: `listChanged` is set by the SDK, not declared here
-    "resources": {}, // RESOLVED: `subscribe` removed — see §4.4
-    "prompts": {},
+    "tools": { "listChanged": true }, // fires when a grant change alters the caller's tool set
+    "resources": { "subscribe": true, "listChanged": true }, // see mcp-notifications.md
+    "prompts": { "listChanged": true },
     "completions": {}, // arg autocompletion for resource-template vars + tool enums
+    "logging": {}, // notifications/message, level per session
     "tasks": {
       // EXPERIMENTAL — for long agent runs / big views
       "list": {},
@@ -705,7 +704,7 @@ On `initialize`, the RS advertises:
 - **`tools.listChanged: true`** — the available tool set is **principal- and org-aware**: a client whose token lacks `agents:run` does not see the agent tools; connectors not yet linked hide `link_external` for unsupported subjects. When grants/connectors change mid-session, the RS emits `notifications/tools/list_changed`.
 - **`prompts`:** advertised (`prompts.listChanged: true`) — the implementation registers workspace-context bootstrap prompts (`apps/api/src/mcp/prompts.ts`), superseding this spec's original "deferred in v1" stance.
 - **`completions: {}`** — implement `completion/complete` for: resource-template `{id}` vars (return matching entities the principal can see, by recent/active), `{org}` (the principal's org slugs), and tool enum args (e.g. `team`, `state` from the team's `workflow_states`, `provider`).
-- **`logging`** — ~~emit `notifications/message` at `info`/`warning`/`error`~~ **RESOLVED: not shipped, no longer advertised.** No code path ever emitted a log notification, so advertising it invited a client to set a level against a silent channel. The unused `McpCatalog.sendLoggingMessage` passthrough was removed with it. Restore both together, and never log tokens or credentials.
+- **`logging: {}`** — **RESOLVED: shipped.** `logging/setLevel` persists to `mcp_session.log_level` and `notifications/message` frames go out over the session's stream ([`mcp-notifications.md`](mcp-notifications.md) §4.6). Never log tokens, credentials, or another principal's data.
 - **`tasks`** — declare `tasks.requests.tools.call` so clients MAY augment `trigger_agent_session` / `run_view` calls as tasks. Tasks are **authorization-context-bound** (spec security): `tasks/get|result|cancel|list` MUST reject task IDs not owned by the requestor's token context. Adopt behind a feature flag (open issue: experimental churn).
 - **Pagination:** honor `cursor`/`nextCursor` on `tools/list`, `resources/list`, `resources/templates/list`, `tasks/list`, and inside `run_view`/`find`.
 - **Lifecycle utilities:** support `ping`, progress (`notifications/progress` with the request's `progressToken`), and cancellation (`notifications/cancelled`).

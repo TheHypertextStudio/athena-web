@@ -92,6 +92,10 @@ function createDb(): Database {
   if (url.startsWith('pglite:')) {
     const client = openPglite(url);
     closeCached = () => client.close();
+    listenerCached = async (channel, handler) => {
+      const unsub = await client.listen(channel, handler);
+      return unsub;
+    };
     return drizzlePglite(client, { schema: fullSchema });
   }
 
@@ -102,16 +106,56 @@ function createDb(): Database {
   // `prepare:false` keeps the client compatible with Neon's pooled (pgbouncer) endpoint.
   const client = postgres(pgUrl, { prepare: false });
   closeCached = () => client.end();
+  listenerCached = async (channel, handler) => {
+    // postgres-js dedicates a connection to LISTEN and reconnects on its own; the returned
+    // handle's `unlisten` releases it.
+    const subscription = await client.listen(channel, handler);
+    return async () => {
+      await subscription.unlisten();
+    };
+  };
   return drizzlePostgres(client, { schema: fullSchema });
   /* v8 ignore stop */
 }
 
+/** Attach a `LISTEN` handler for `channel`, resolving to its unlisten function. */
+type ChannelListener = (
+  channel: string,
+  handler: (payload: string) => void,
+) => Promise<() => Promise<void>>;
+
 let cached: Database | undefined;
 let closeCached: (() => Promise<void>) | undefined;
+let listenerCached: ChannelListener | undefined;
 
 /** Lazily construct (once) and return the driver-appropriate client. */
 function initDb(): Database {
   return (cached ??= createDb());
+}
+
+/**
+ * Subscribe to a Postgres `NOTIFY` channel.
+ *
+ * @remarks
+ * The cross-instance hop the MCP notification channel rides on. Both drivers implement
+ * `LISTEN` natively — PGlite in-process, postgres-js over a dedicated reconnecting connection —
+ * so this works identically in tests, dev, and Cloud Run without any broker.
+ *
+ * Publishing is a plain query (`select pg_notify(...)`) and needs no special client, so only the
+ * listen side is abstracted here.
+ *
+ * @param channel - The channel name to listen on.
+ * @param handler - Called with the raw payload string on each notification.
+ * @returns an unlisten function.
+ */
+export async function listenToChannel(
+  channel: string,
+  handler: (payload: string) => void,
+): Promise<() => Promise<void>> {
+  initDb();
+  /* v8 ignore next -- defensive: createDb always assigns the listener alongside the client */
+  if (!listenerCached) throw new Error('database client does not support LISTEN');
+  return listenerCached(channel, handler);
 }
 
 /**
@@ -142,5 +186,6 @@ export async function closeDb(): Promise<void> {
   const close = closeCached;
   cached = undefined;
   closeCached = undefined;
+  listenerCached = undefined;
   if (close) await close();
 }

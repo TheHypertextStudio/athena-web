@@ -144,8 +144,9 @@
 - **Subtasks**:
   - [x] Structured field errors end to end (`FieldIssue` in `@docket/types`, `ValidationError`,
         `onError`, MCP `runTool`)
-  - [x] Withdraw MCP capabilities the stateless transport cannot honor
   - [x] Fix the `search` permission leak; rewire as `find` over `searchWorkspace`
+  - [x] Build the server→client notification channel so `resources/subscribe`, `list_changed`, and
+        `logging` are real (spec: `docs/engineering/specs/mcp-notifications.md`)
   - [ ] Descriptor resolution (names accepted wherever ids are)
   - [ ] `run_view` → `list_work` with real filters
   - [ ] `get` (batch hydrate by descriptor or id)
@@ -161,10 +162,26 @@
     plus its parameters (`options`, `minimum`, `expected`, `format`) and deliberately no message —
     strictly more information for a caller, strictly less exposure. Two existing tests were right
     to guard the old property and both still pass unchanged.
-  - **`listChanged` was left alone on purpose.** The SDK sets it during registration and it is
-    vacuous rather than broken, since the catalog is fixed for the life of a deploy. Only
-    `resources.subscribe` and `logging` — which leave a client waiting on frames that can never
-    arrive — were withdrawn.
+  - **The three notification capabilities were withdrawn first, then built.** Withdrawing was the
+    wrong call: the right fix for "we advertise something we cannot deliver" is to deliver it. All
+    three needed the same missing piece — a way to push a frame after the request that created the
+    server has ended — and the blocker was never a flag. It was that `apps/api` runs on Cloud Run
+    with `--max-instances=10` and no session affinity, no Redis, and no pub/sub of any kind, so an
+    in-process bus would have delivered nothing most of the time.
+  - **The design keeps requests stateless and makes only the channel stateful.** The SDK's stateful
+    transport holds `_initialized` and the session in process memory, which would force every POST
+    for a session onto the instance holding it — unachievable with header-based MCP clients. So
+    POSTs stay per-request (any instance), the GET stream is owned by our own handler, session and
+    subscription state lives in Postgres, and the write→notify hop rides `LISTEN/NOTIFY`. Zero new
+    dependencies; `MCP_SESSION_STORE_URL` turned out to be an empty shell — declared, validated by
+    a cross-field env rule, and read by nothing.
+  - **The notify probe runs on every entity write**, so its cost when nobody is subscribed is what
+    matters. Lookup and publish are deliberately one statement: a single indexed probe of
+    `mcp_subscription.uri` that emits nothing, rather than a select plus a round trip per row.
+  - **A swallowed error hid a broken query.** `announce` caught everything so a notification could
+    never fail a write — and that silently masked a malformed `json_build_object` (Postgres cannot
+    infer a bare parameter's type there) which disabled every subscription. It now logs. "Must not
+    fail the write" is not the same as "must not be observable."
   - `find` reads the `search_document` projection, so it trails writes by the indexing interval.
     That is a real behavioural change from the live-table scan it replaced; the tool description
     says so and points at `run_view` for live rows.

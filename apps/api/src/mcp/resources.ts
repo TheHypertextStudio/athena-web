@@ -50,7 +50,7 @@ import {
   hydrateTask,
 } from './resource-work-hydrators';
 import { authorize, scopedActor } from './result';
-import { RESOURCE_READ_SCOPE } from './scope';
+import { RESOURCE_READ_SCOPE, requireScope } from './scope';
 
 /** The entity types the `docket://{org}/{type}/{id}` template can read. */
 const READABLE_TYPES = [
@@ -103,6 +103,46 @@ function resourceKindOf(type: ReadableType): ResourceKind {
 /** The authorization target id for a read (the entity itself for nodes; the org otherwise). */
 function authTargetId(type: ReadableType, orgId: string, id: string): string {
   return resourceKindOf(type) === 'organization' && type !== 'org' ? orgId : id;
+}
+
+/**
+ * Authorize a `docket://` URI for reading, without hydrating it.
+ *
+ * @remarks
+ * `resources/subscribe` must pass exactly the gate `resources/read` passes, or subscribing
+ * becomes an oracle: a caller could confirm that a task exists by watching whether a subscription
+ * succeeded. Sharing this function rather than restating the rule is what keeps the two in step.
+ *
+ * Hub URIs (`docket://hub/...`) are caller-scoped by construction — they resolve against the
+ * caller's own Hub — so they need no org gate. Anything else is rejected.
+ *
+ * @param ctx - The authenticated caller.
+ * @param uri - The `docket://` URI being subscribed to.
+ * @throws {NotFoundError} When the URI is unreadable, malformed, or below the caller's view.
+ */
+export async function authorizeResourceUri(ctx: McpContext, uri: string): Promise<void> {
+  const parsed = new URL(uri);
+  if (parsed.protocol !== 'docket:') throw new NotFoundError();
+
+  if (parsed.host === 'hub') {
+    // Hub resources resolve against the caller's own Hub, so there is no org to authorize
+    // against — only the token-level scope gate applies. An agent principal has no Hub at all,
+    // so it cannot subscribe to one (existence-hiding, matching how the Hub tools treat agents).
+    requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
+    if (ctx.principal.kind === 'agent') throw new NotFoundError();
+    return;
+  }
+
+  const [type, id] = parsed.pathname.replace(/^\//, '').split('/');
+  const orgId = parsed.host;
+  if (!orgId || !type || !id || !isReadableType(type)) throw new NotFoundError();
+
+  const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
+  await authorize(actorCtx, 'view', {
+    kind: resourceKindOf(type),
+    id: authTargetId(type, orgId, id),
+    orgId,
+  });
 }
 
 /**

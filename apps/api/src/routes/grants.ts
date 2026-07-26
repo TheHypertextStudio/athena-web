@@ -25,6 +25,7 @@ import { CapabilityError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
+import { notifyGrantsChanged } from '../mcp/notify';
 import { capabilityGuard } from '../permissions/capability-guard';
 
 type GrantRow = typeof grant.$inferSelect;
@@ -143,6 +144,9 @@ Semantics that flow into the resolver: \`cascades\` (default true) makes the gra
       const row = upserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('grant upsert returned no row');
+      // A grant change is the only thing that can move a live MCP client's tool list, since the
+      // surface is principal-aware. Best-effort: a missed frame must not fail the grant write.
+      await notifyGrantsChanged(orgId, row.subjectKind, row.subjectId).catch(() => undefined);
       return ok(c, GrantOut, toOut(row));
     },
   )
@@ -170,6 +174,7 @@ Removing a cascading org-root role grant strips that role's org-wide baseline, a
         .returning();
       const row = deleted[0];
       if (!row) throw new NotFoundError('Grant not found');
+      await notifyGrantsChanged(orgId, row.subjectKind, row.subjectId).catch(() => undefined);
       return ok(c, GrantOut, toOut(row));
     },
   );

@@ -111,6 +111,30 @@ describe('migrate main()', () => {
     expect(migrateMocks.openPglite).toHaveBeenCalledWith('pglite://:memory:');
   });
 
+  it('refuses to migrate PGlite while the app reads Postgres, and vice versa', async () => {
+    // The real-world failure: `.env.local` left DATABASE_URL_UNPOOLED pointing at the Docker
+    // Postgres while DATABASE_URL stayed on embedded PGlite, so every `pnpm dev` migrated
+    // Postgres and the PGlite database the app actually read silently fell behind.
+    vi.stubEnv('DATABASE_URL_UNPOOLED', 'postgres://docket:docket@localhost:5433/docket');
+    vi.stubEnv('DATABASE_URL', 'pglite://.data/docket');
+    const { main } = await import('../src/migrate');
+
+    await expect(main()).rejects.toThrow(/different database backends/);
+    expect(migrateMocks.openPglite).not.toHaveBeenCalled();
+  });
+
+  it('allows a pooled app URL with an unpooled DDL endpoint on the same backend', async () => {
+    // Production legitimately pairs a pooled `neon:` app URL with an unpooled `postgres:` one —
+    // the same database via a different endpoint, which the guard must not reject.
+    vi.stubEnv('DATABASE_URL_UNPOOLED', 'postgres://user:pw@db.example.invalid/docket');
+    vi.stubEnv('DATABASE_URL', 'neon://user:pw@pooler.example.invalid/docket');
+    const { main } = await import('../src/migrate');
+
+    // It gets far enough to actually dial the (unresolvable) host, which is the proof that the
+    // backend guard did not fire — the assertion is on *which* failure comes back, not on success.
+    await expect(main()).rejects.toThrow(/ENOTFOUND|getaddrinfo|ECONNREFUSED/);
+  });
+
   it('throws when neither DATABASE_URL nor DATABASE_URL_UNPOOLED is set', async () => {
     const { main } = await import('../src/migrate');
 

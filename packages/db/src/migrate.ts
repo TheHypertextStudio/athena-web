@@ -56,9 +56,26 @@ export async function main(): Promise<void> {
   // Prefer the unpooled URL for migrations, but treat an empty string (the common local
   // case — `.env.local` sets `DATABASE_URL_UNPOOLED=`) as absent and fall back to DATABASE_URL.
   const unpooled = process.env['DATABASE_URL_UNPOOLED'];
-  const url = unpooled !== undefined && unpooled !== '' ? unpooled : process.env['DATABASE_URL'];
+  const appUrl = process.env['DATABASE_URL'];
+  const url = unpooled !== undefined && unpooled !== '' ? unpooled : appUrl;
   if (!url) {
     throw new Error('DATABASE_URL is not set — see .env.example (local: pglite://.data/docket).');
+  }
+
+  // Refuse to migrate a *different database than the app reads*. The two URLs may legitimately
+  // differ (prod pairs a pooled `neon:` app URL with an unpooled `postgres:` DDL endpoint — same
+  // database, different endpoint), but the embedded `pglite:` backend is a different database
+  // entirely: no endpoint of a TCP Postgres is ever the same store as a directory on disk. A
+  // mismatch there migrates one database while the app reads the other, and nothing fails at the
+  // time — the app simply drifts further behind on every run until a migration finally collides
+  // with schema it never recorded applying.
+  if (appUrl && url.startsWith('pglite:') !== appUrl.startsWith('pglite:')) {
+    throw new Error(
+      'DATABASE_URL_UNPOOLED and DATABASE_URL point at different database backends ' +
+        `(migrating ${url.startsWith('pglite:') ? 'PGlite' : 'Postgres'} while the app reads ` +
+        `${appUrl.startsWith('pglite:') ? 'PGlite' : 'Postgres'}). Leave DATABASE_URL_UNPOOLED ` +
+        'empty for the embedded PGlite setup — see .env.example.',
+    );
   }
 
   if (url.startsWith('pglite:')) {

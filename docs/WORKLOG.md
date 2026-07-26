@@ -128,6 +128,52 @@
   `/api/auth/get-session` returns `200` with body `null` through the full web → rewrite-proxy → API
   chain. `@docket/env` typecheck, lint, and tests pass.
 
+### [MCP-SURFACE-001] Make the MCP server usable by third-party agents
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-07-26
+- **Priority**: P0
+- **Description**: The MCP server exposes 26 tools that map roughly 1:1 onto SQL statements, so an
+  agent cannot express ordinary intents against it — "reassign Sarah's open work to me" needs a
+  name→id lookup, a filtered query, and a bulk write, and the surface offers none of the three.
+  Because Athena's loop connects to the same `buildServer` over an in-memory transport, every gap
+  here is also a gap in Athena: the MCP catalog is the product's agent capability ceiling.
+- **Design**: `docs/superpowers/specs/` — plan approved 2026-07-26. Three phases: reads (descriptor
+  resolution, teaching errors, real query tools), writes (change sets + intent-shaped tools with
+  undo), then MCP Apps UI (SEP-1865 `io.modelcontextprotocol/ui`).
+- **Subtasks**:
+  - [x] Structured field errors end to end (`FieldIssue` in `@docket/types`, `ValidationError`,
+        `onError`, MCP `runTool`)
+  - [x] Withdraw MCP capabilities the stateless transport cannot honor
+  - [x] Fix the `search` permission leak; rewire as `find` over `searchWorkspace`
+  - [ ] Descriptor resolution (names accepted wherever ids are)
+  - [ ] `run_view` → `list_work` with real filters
+  - [ ] `get` (batch hydrate by descriptor or id)
+  - [ ] `.describe()` on every input field; `outputSchema` on every tool
+- **Notes**:
+  - **Security**: the `search` tool authorized once at the org root and then ran an unfiltered
+    `ILIKE` over `task`/`project`/`program`. Any caller who could open a workspace could enumerate
+    private titles their grants did not reach. Regression test added; it fails against the old
+    implementation.
+  - **Field errors were scrubbed by design, and the design was wrong.** `onError` replaced every
+    validator message with the literal "Invalid value.", which protected a real concern (author
+    prose becoming UI copy) by destroying the diagnosis. Replaced with a closed `FieldIssueCode`
+    plus its parameters (`options`, `minimum`, `expected`, `format`) and deliberately no message —
+    strictly more information for a caller, strictly less exposure. Two existing tests were right
+    to guard the old property and both still pass unchanged.
+  - **`listChanged` was left alone on purpose.** The SDK sets it during registration and it is
+    vacuous rather than broken, since the catalog is fixed for the life of a deploy. Only
+    `resources.subscribe` and `logging` — which leave a client waiting on frames that can never
+    arrive — were withdrawn.
+  - `find` reads the `search_document` projection, so it trails writes by the indexing interval.
+    That is a real behavioural change from the live-table scan it replaced; the tool description
+    says so and points at `run_view` for live rows.
+  - **Known dead code, deliberately left:** the shared tool-cursor codec still declares a `search`
+    surface that nothing issues. Collapsing the union to `run_view` alone makes the replay guard in
+    `decodeToolCursor` provably dead (eslint `no-unnecessary-condition` catches it), and the guard
+    is worth keeping. Phase 2 renames `run_view` → `list_work` and adds sibling read tools, which
+    restores a genuine multi-surface union — clean it up there, not before.
+
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 
 - **Status**: REVIEW

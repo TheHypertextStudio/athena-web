@@ -196,6 +196,87 @@ function payload(res: CallToolResult): Record<string, unknown> {
   return JSON.parse((res.content[0] as { text: string }).text) as Record<string, unknown>;
 }
 
+describe('descriptor resolution', () => {
+  it('creates a task addressed entirely by name', async () => {
+    const s = await seedOrg(['contribute', 'assign']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'create_task',
+      arguments: {
+        orgId: s.orgId,
+        // Not one id in this call — the team, the assignee, the project, and the state are all
+        // named the way a person would say them.
+        teamId: 'Core',
+        title: 'Named refs',
+        assigneeId: 'Ada',
+        projectId: 'Proj',
+        state: 'In Progress',
+      },
+    })) as CallToolResult;
+    expect(res.isError).toBeFalsy();
+    const created = payload(res) as { id: string; state: string };
+    expect(created.state).toBe('in_progress');
+
+    const [row] = await db
+      .select({ teamId: schema.task.teamId, assigneeId: schema.task.assigneeId })
+      .from(schema.task)
+      .where(eq(schema.task.id, created.id));
+    expect(row?.teamId).toBe(s.teamId);
+    expect(row?.assigneeId).toBe(s.actorId);
+  });
+
+  it('lists the legal states when one is misnamed', async () => {
+    const s = await seedOrg(['contribute']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'create_task',
+      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Bad state', state: 'shipped' },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    // The whole point: the failure is self-correcting, not a dead end.
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('in_progress');
+    expect(text).toContain('allowed values');
+  });
+
+  it('prefers an exact name over a longer one that merely starts with it', async () => {
+    const s = await seedOrg(['contribute']);
+    const [longer] = await db
+      .insert(schema.project)
+      .values({ organizationId: s.orgId, name: 'Proj Two', createdBy: s.actorId })
+      .returning({ id: schema.project.id });
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'create_task',
+      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Exact wins', projectId: 'Proj' },
+    })) as CallToolResult;
+    expect(res.isError).toBeFalsy();
+    const [row] = await db
+      .select({ projectId: schema.task.projectId })
+      .from(schema.task)
+      .where(eq(schema.task.id, (payload(res) as { id: string }).id));
+    expect(row?.projectId).toBe(s.projectId);
+    expect(row?.projectId).not.toBe(longer!.id);
+  });
+
+  it('refuses to guess when no candidate is an exact match', async () => {
+    const s = await seedOrg(['contribute']);
+    await db.insert(schema.project).values([
+      { organizationId: s.orgId, name: 'Atlas One', createdBy: s.actorId },
+      { organizationId: s.orgId, name: 'Atlas Two', createdBy: s.actorId },
+    ]);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'create_task',
+      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Ambiguous', projectId: 'Atlas' },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('Atlas One');
+    expect(text).toContain('Atlas Two');
+  });
+});
+
 describe('create_task tool', () => {
   it('creates with all optional fields set (priority/assignee/project/date/state)', async () => {
     const s = await seedOrg(['contribute', 'assign']);

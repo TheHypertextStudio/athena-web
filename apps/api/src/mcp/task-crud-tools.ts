@@ -1,4 +1,4 @@
-import { actor, db, project, task, team } from '@docket/db';
+import { db, task, team } from '@docket/db';
 import { Priority } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
@@ -8,7 +8,13 @@ import { NotFoundError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { assertRefInOrg, loadTask, orgIdParam, resolveStateTransition } from './tools-shared';
+import {
+  DESCRIPTOR_HINT,
+  resolveDescriptor,
+  resolveOptional,
+  resolveWorkflowState,
+} from './descriptors';
+import { loadTask, orgIdParam, resolveStateTransition } from './tools-shared';
 
 /** Register create_task, update_task, move_task on `server`. */
 export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): void {
@@ -17,17 +23,28 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'Create task',
       description:
-        "Create a task in an organization (state defaults to the team's first workflow state).",
+        "Create a task in an organization. Every reference accepts a name as well as an id, so you can create a task on the Platform team assigned to Sarah without looking either up first. State defaults to the team's first workflow state.",
       inputSchema: {
         orgId: orgIdParam,
-        teamId: z.string().min(1),
-        title: z.string().min(1),
-        description: z.string().optional(),
-        state: z.string().optional(),
+        teamId: z.string().min(1).describe(`The team the task belongs to. ${DESCRIPTOR_HINT}`),
+        title: z.string().min(1).describe('A short one-line summary of the work.'),
+        description: z.string().optional().describe('The full body, as markdown.'),
+        state: z
+          .string()
+          .optional()
+          .describe(
+            'The workflow state, by key or display name ("in review" resolves to `in_review`). Defaults to the team\'s first state. Read the team resource to see the legal set.',
+          ),
         priority: Priority.optional(),
-        assigneeId: z.string().optional(),
-        projectId: z.string().optional(),
-        dueDate: z.iso.date().optional(),
+        assigneeId: z
+          .string()
+          .optional()
+          .describe(`Who is accountable for the work. ${DESCRIPTOR_HINT}`),
+        projectId: z
+          .string()
+          .optional()
+          .describe(`The project to file it under. ${DESCRIPTOR_HINT}`),
+        dueDate: z.iso.date().optional().describe('The due date, as `YYYY-MM-DD`.'),
       },
       outputSchema: {
         id: z.string(),
@@ -49,21 +66,39 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
           orgId: input.orgId,
         });
 
+        const teamId = await resolveDescriptor(input.orgId, 'team', input.teamId, 'teamId');
+        const assigneeId = await resolveOptional(
+          input.orgId,
+          'actor',
+          input.assigneeId,
+          'assigneeId',
+        );
+        const projectId = await resolveOptional(
+          input.orgId,
+          'project',
+          input.projectId,
+          'projectId',
+        );
+
         const teamRows = await db
           .select()
           .from(team)
-          .where(and(eq(team.id, input.teamId), eq(team.organizationId, input.orgId)))
+          .where(and(eq(team.id, teamId), eq(team.organizationId, input.orgId)))
           .limit(1);
         const teamRow = teamRows[0];
+        /* v8 ignore next -- @preserve defensive: the descriptor resolver already proved it exists */
         if (!teamRow) throw new NotFoundError('Team not found');
 
-        await assertRefInOrg(actor, input.orgId, input.assigneeId, 'Assignee not found');
-        await assertRefInOrg(project, input.orgId, input.projectId, 'Project not found');
-
         const firstState = teamRow.workflowStates[0];
-        const { state, completedAt, canceledAt } = firstState
-          ? await resolveStateTransition(input.orgId, input.teamId, input.state ?? firstState.key)
-          : { state: input.state ?? 'backlog', completedAt: null, canceledAt: null };
+        const requested = input.state ?? firstState?.key;
+        const { state, completedAt, canceledAt } =
+          firstState && requested
+            ? await resolveStateTransition(
+                input.orgId,
+                teamId,
+                await resolveWorkflowState(input.orgId, teamId, requested),
+              )
+            : { state: input.state ?? 'backlog', completedAt: null, canceledAt: null };
 
         const inserted = await db
           .insert(task)
@@ -71,13 +106,13 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
             organizationId: input.orgId,
             title: input.title,
             description: input.description,
-            teamId: input.teamId,
+            teamId,
             state,
             completedAt,
             canceledAt,
             priority: input.priority ?? 'none',
-            assigneeId: input.assigneeId,
-            projectId: input.projectId,
+            assigneeId: assigneeId ?? undefined,
+            projectId: projectId ?? undefined,
             dueDate: input.dueDate ? new Date(input.dueDate) : undefined,
             source: 'native',
             createdBy: actorCtx.actorId,
@@ -95,15 +130,26 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
     'update_task',
     {
       title: 'Update task',
-      description: "Update a task's fields (title, description, state, priority, due date).",
+      description:
+        "Update a task's own fields. Only the fields you pass change. To move it to another team or project use move_task; to change who owns it use assign_task.",
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1),
-        title: z.string().min(1).optional(),
-        description: z.string().optional(),
-        state: z.string().optional(),
+        taskId: z.string().min(1).describe('The task to update, by id.'),
+        title: z.string().min(1).optional().describe('A short one-line summary of the work.'),
+        description: z.string().optional().describe('The full body, as markdown.'),
+        state: z
+          .string()
+          .optional()
+          .describe(
+            'The workflow state, by key or display name ("in review" resolves to `in_review`). Validated against the owning team\'s states; the error lists the legal set.',
+          ),
         priority: Priority.optional(),
-        dueDate: z.iso.date().optional(),
+        dueDate: z.iso.date().optional().describe('The due date, as `YYYY-MM-DD`.'),
+      },
+      outputSchema: {
+        id: z.string(),
+        state: z.string(),
+        priority: z.string(),
       },
       annotations: {
         readOnlyHint: false,
@@ -125,14 +171,15 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         // timestamp derivation, identical to the tasks router PATCH — otherwise an
         // unknown state key, or a done/canceled state with a null completedAt/canceledAt,
         // corrupts project progress.
-        const statePatch =
-          input.state !== undefined
-            ? await resolveStateTransition(
-                input.orgId,
-                (await loadTask(input.orgId, input.taskId)).teamId,
-                input.state,
-              )
-            : undefined;
+        let statePatch: Awaited<ReturnType<typeof resolveStateTransition>> | undefined;
+        if (input.state !== undefined) {
+          const { teamId } = await loadTask(input.orgId, input.taskId);
+          statePatch = await resolveStateTransition(
+            input.orgId,
+            teamId,
+            await resolveWorkflowState(input.orgId, teamId, input.state),
+          );
+        }
 
         const updated = await db
           .update(task)
@@ -162,12 +209,22 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
     'move_task',
     {
       title: 'Move task',
-      description: 'Reparent a task onto a different team and/or project.',
+      description:
+        'Reparent a task onto a different team and/or project. Pass a null projectId to detach it from its project without moving teams.',
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1),
-        teamId: z.string().optional(),
-        projectId: z.string().nullable().optional(),
+        taskId: z.string().min(1).describe('The task to move, by id.'),
+        teamId: z.string().optional().describe(`The team to move it to. ${DESCRIPTOR_HINT}`),
+        projectId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(`The project to file it under, or null to detach it. ${DESCRIPTOR_HINT}`),
+      },
+      outputSchema: {
+        id: z.string(),
+        teamId: z.string(),
+        projectId: z.string().nullable(),
       },
       annotations: {
         readOnlyHint: false,
@@ -185,28 +242,20 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
           orgId: input.orgId,
         });
 
-        if (input.teamId !== undefined) {
-          const teamRows = await db
-            .select({ id: team.id })
-            .from(team)
-            .where(and(eq(team.id, input.teamId), eq(team.organizationId, input.orgId)))
-            .limit(1);
-          if (!teamRows[0]) throw new NotFoundError('Team not found');
-        }
-        if (typeof input.projectId === 'string') {
-          const projectRows = await db
-            .select({ id: project.id })
-            .from(project)
-            .where(and(eq(project.id, input.projectId), eq(project.organizationId, input.orgId)))
-            .limit(1);
-          if (!projectRows[0]) throw new NotFoundError('Project not found');
-        }
+        // Resolution doubles as the tenant check: a descriptor only ever matches within this org.
+        const teamId = await resolveOptional(input.orgId, 'team', input.teamId, 'teamId');
+        const projectId = await resolveOptional(
+          input.orgId,
+          'project',
+          input.projectId,
+          'projectId',
+        );
 
         const updated = await db
           .update(task)
           .set({
-            ...(input.teamId !== undefined ? { teamId: input.teamId } : {}),
-            ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
+            ...(teamId !== undefined ? { teamId } : {}),
+            ...(projectId !== undefined ? { projectId } : {}),
           })
           .where(and(eq(task.id, input.taskId), eq(task.organizationId, input.orgId)))
           .returning();

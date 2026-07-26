@@ -37,6 +37,14 @@ describe('resolveSessionStatus', () => {
     expect(offline).toBe('unreachable');
   });
 
+  it('reports unreachable while a failed lookup is still being retried', () => {
+    // Regression. Better Auth retries a failed session request, so `isPending` flaps back to true
+    // between attempts. Checking `isPending` first left the shell stuck on `pending` forever
+    // against a server answering 500 in five milliseconds — and reset the patience timer on every
+    // retry, so the deadline never arrived either. An error with no session is already an answer.
+    expect(resolveSessionStatus({ ...base, isPending: true, hasError: true })).toBe('unreachable');
+  });
+
   it('treats a pend that outlives its budget as unreachable', () => {
     // Captive portal: the request hangs instead of failing, so isPending never flips.
     expect(resolveSessionStatus({ ...base, isPending: true, pendingTimedOut: true })).toBe(

@@ -183,6 +183,29 @@ export function rpcErrorResponse<T>(response: {
  *
  * @see `IntegrationConfigPanel`'s two-way re-auth notice for the motivating use.
  */
+/**
+ * A read could not be attempted because the browser is offline.
+ *
+ * @remarks
+ * Distinct from {@link ApiRequestError}: nothing was sent, so there is no status and no problem
+ * code — the request was *paused*, not failed. It exists so a surface can say "you're offline"
+ * instead of the two dishonest alternatives it would otherwise be stuck with: an infinite loading
+ * skeleton (TanStack keeps a paused query `pending` forever), or an empty state claiming there is
+ * nothing to show when the truth is that nobody asked.
+ *
+ * `status` is 0, matching the convention `unwrap` already uses for a network-level failure.
+ */
+export class OfflineError extends UserFacingError {
+  /** Always 0 — no response was ever received. */
+  override readonly status: number;
+
+  constructor(message = "You're offline, so this couldn't be loaded.") {
+    super(message, { status: 0 });
+    this.name = 'OfflineError';
+    this.status = 0;
+  }
+}
+
 export class ApiRequestError extends UserFacingError {
   /** The response's HTTP status code. */
   override readonly status: number;

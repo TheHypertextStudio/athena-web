@@ -36,8 +36,15 @@ function currentReturnPath(): string {
  * @remarks
  * This provider deliberately does not observe every failed request. A background refetch is not
  * user intent, while a protected deep link or a button click is; those owners call
- * {@link useAuthenticationInterlock} when they receive `code: unauthorized`. The dialog cannot
- * be dismissed, and navigation happens only after the person explicitly chooses to sign in.
+ * {@link useAuthenticationInterlock} when they receive `code: unauthorized`. Navigation happens
+ * only after the person explicitly chooses to sign in — that part is unchanged.
+ *
+ * The dialog **is** dismissible, which reverses an earlier decision. It was previously a modal
+ * with no escape: no close button, `Escape` suppressed, outside-clicks suppressed, and
+ * `onOpenChange` a no-op. That trapped someone whose session had lapsed inside a wall, taking the
+ * navigation, the settings surfaces, and every already-loaded page down with it. Signing in is the
+ * recommended action, not a toll gate — dismissing leaves the person in the app with the shell
+ * intact, and any protected action they retry simply asks again.
  */
 export function AuthenticationInterlockProvider({
   children,
@@ -59,24 +66,25 @@ export function AuthenticationInterlockProvider({
   return (
     <AuthenticationInterlockContext.Provider value={{ requireAuthentication }}>
       {children}
-      <Dialog open={open} onOpenChange={() => undefined}>
-        <DialogContent
-          showClose={false}
-          onEscapeKeyDown={(event) => {
-            event.preventDefault();
-          }}
-          onPointerDownOutside={(event) => {
-            event.preventDefault();
-          }}
-        >
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Sign in to continue</DialogTitle>
             <DialogDescription>
               Your session is no longer available for this action. Sign in to continue from this
-              exact place.
+              exact place, or close this to keep looking around.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+              }}
+            >
+              Not now
+            </Button>
             <Button type="button" onClick={continueToSignIn}>
               Sign in to continue
             </Button>

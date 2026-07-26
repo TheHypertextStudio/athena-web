@@ -164,19 +164,25 @@ describe('AppShellFrame session loading', () => {
       expect(screen.getByText(/You're offline|Can't reach Docket/)).toBeInTheDocument();
     });
     expect(requireAuthentication).not.toHaveBeenCalled();
+    // The chrome must survive: an unreachable server degrades the content region, never the app.
+    expect(screen.getByRole('link', { name: 'Today' })).toBeInTheDocument();
   });
 
-  it('renders the offline surface rather than the shell when no cached identity exists', async () => {
+  it('degrades only the content region when there is no cached identity', async () => {
     sessionState.isPending = false;
     sessionState.error = { status: 0 };
 
     renderFrame();
 
-    // No snapshot in storage, so there is no workspace to render. It must not fall through to the
-    // shell (which would imply a live session) nor to the interlock.
+    // No snapshot, so there is no workspace to populate — but that is not a reason to replace the
+    // application with an error page. An earlier version rendered a full-screen wall here, which
+    // threw away navigation, settings and the command palette along with the session lookup.
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     });
+    expect(screen.getByRole('main')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Today' })).toBeInTheDocument();
+    // Still no private content and still no sign-in demand: unknown is not signed-out.
     expect(screen.queryByText('Private route content')).not.toBeInTheDocument();
     expect(requireAuthentication).not.toHaveBeenCalled();
   });

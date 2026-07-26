@@ -77,9 +77,15 @@ export function resolveSessionStatus(input: SessionStatusInput): SessionStatus {
   // because a refresh happened to land while the connection was dropping.
   if (hasSession) return 'authenticated';
 
+  // An error outranks a pend, and this ordering is load-bearing. Better Auth retries a failed
+  // session lookup, so `isPending` flaps back to true between attempts — checking it first left the
+  // shell reporting `pending` forever against a server that was answering 500 in five milliseconds,
+  // and reset the patience timer on every retry so the deadline below never arrived. Once there is
+  // an error and no session, we already know the answer: nobody useful is responding.
+  if (hasError) return 'unreachable';
+
   if (isPending) return pendingTimedOut ? 'unreachable' : 'pending';
 
-  // Settled, no session. The error flag is the entire difference between "the server told us there
-  // is no session" and "we never got an answer".
-  return hasError ? 'unreachable' : 'signed-out';
+  // Settled, no session, no error: the server genuinely said there is no session.
+  return 'signed-out';
 }

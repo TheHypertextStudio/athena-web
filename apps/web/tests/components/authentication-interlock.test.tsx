@@ -119,7 +119,11 @@ function restoreLocation(): void {
 afterEach(cleanup);
 
 describe('AuthenticationInterlockProvider', () => {
-  it('keeps the dialog open when Escape is pressed', () => {
+  it('lets the person dismiss the prompt and stay in the app', () => {
+    // Reverses an earlier decision. The prompt used to be a trap — no close button, Escape and
+    // outside-clicks suppressed — which took the navigation, the settings surfaces, and every
+    // already-loaded page down with the lapsed session. Signing in is the recommended action, not
+    // a toll gate; a protected action retried after dismissing simply asks again.
     render(
       <AuthenticationInterlockProvider>
         <ProtectedAction />
@@ -134,7 +138,20 @@ describe('AuthenticationInterlockProvider', () => {
 
     fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
 
-    expect(screen.getByRole('dialog')).toBeVisible();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('offers an explicit way out that is not signing in', () => {
+    render(
+      <AuthenticationInterlockProvider>
+        <ProtectedAction />
+      </AuthenticationInterlockProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download export' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('continues to sign-in with the exact protected path preserved', () => {

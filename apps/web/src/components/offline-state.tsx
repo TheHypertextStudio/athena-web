@@ -59,39 +59,42 @@ export function OfflineBanner({ online, onRetry }: OfflineBannerProps): JSX.Elem
   );
 }
 
-/** Props for {@link OfflineShellFallback}. */
-interface OfflineShellFallbackProps {
+/** Props for {@link OfflineContent}. */
+interface OfflineContentProps {
   /** Whether the browser reports a connection. */
   readonly online: boolean;
-  /** Re-ask the server for the session. */
-  readonly onRetry: () => void;
+  /** Re-ask the server for the session, if a retry is available. */
+  readonly onRetry?: (() => void) | undefined;
 }
 
 /**
- * The whole-screen offline state, used when the server is unreachable and there is no cached
- * identity to render a workspace for.
+ * The content-region offline state, used when the server is unreachable and there is no cached
+ * identity to populate a workspace with.
  *
  * @remarks
- * This is the branch that replaces the old failure mode. Previously an unreachable session endpoint
- * fell through to "no session", which opened the non-dismissible sign-in interlock — telling
- * someone with a perfectly valid session to sign in again, on a network where signing in cannot
- * possibly succeed. Showing the actual problem, with a retry, is both truthful and actionable.
+ * This deliberately renders **inside** `<main>` rather than replacing the application. An earlier
+ * version was a `min-h-dvh` takeover, and that was wrong: it threw away the navigation, the
+ * settings information architecture, the command palette, and any surface that had cached data —
+ * none of which need a network. Losing a session lookup is not a reason to lose the whole product.
+ *
+ * It also never blames the person or claims the session expired. The server was not reached, so
+ * that is simply unknown.
  */
-export function OfflineShellFallback({ online, onRetry }: OfflineShellFallbackProps): JSX.Element {
+export function OfflineContent({ online, onRetry }: OfflineContentProps): JSX.Element {
   return (
-    <main className="bg-surface-container flex min-h-dvh items-center justify-center p-6">
+    <div className="flex h-full items-center justify-center p-6">
       <div className="w-full max-w-md">
         <EmptyState
           icon={CloudOff}
           title={online ? "Can't reach Docket" : "You're offline"}
           body={
             online
-              ? "Docket isn't responding right now. Your work is safe — this is a connection problem, not a sign-out."
-              : 'Reconnect to pick up where you left off. Nothing has been lost.'
+              ? "Docket isn't responding, so your workspace can't be loaded yet. Your work is safe — this is a connection problem, not a sign-out."
+              : 'Your workspace will load once you reconnect. Nothing has been lost.'
           }
-          cta={{ label: 'Try again', onClick: onRetry }}
+          {...(onRetry ? { cta: { label: 'Try again', onClick: onRetry } } : {})}
         />
       </div>
-    </main>
+    </div>
   );
 }

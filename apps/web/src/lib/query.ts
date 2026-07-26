@@ -51,7 +51,7 @@ import {
 } from '@tanstack/react-query';
 
 import { useOptionalAuthenticationRecovery } from '@/components/authentication-interlock';
-import type { ApiInfiniteDef } from './query-core';
+import { type ApiInfiniteDef, OfflineError } from './query-core';
 
 export * from './query-core';
 export { queryKeys } from './query-keys';
@@ -70,8 +70,43 @@ export { queryKeys } from './query-keys';
  * @param def - A typed definition from {@link apiQueryOptions}.
  * @returns the {@link UseQueryResult} for the parsed body.
  */
+/**
+ * Present a query that is paused for want of a network as an error rather than as "loading".
+ *
+ * @remarks
+ * This is the single point that keeps the app usable offline. With TanStack's default
+ * `networkMode: 'online'`, a query with no connection sits at `status: 'pending'` /
+ * `fetchStatus: 'paused'` **indefinitely** — and every surface in this app gates its skeleton on
+ * `isPending`, so without this an offline Docket would show ~72 surfaces spinning forever. A
+ * permanent spinner is the worst of all outcomes: it looks like the app is broken and gives the
+ * person nothing to act on.
+ *
+ * Surfaces already render an inline `role="alert"` with a retry for `isError`, so re-presenting the
+ * paused state as an {@link OfflineError} gives every one of them an honest, non-blocking offline
+ * treatment with no per-surface changes.
+ *
+ * Only applies when there is **no data**. A query holding cached (including persisted) data stays
+ * on the success path and keeps rendering it, with the refetch quietly paused in the background —
+ * which is exactly the progressive-enhancement behaviour we want.
+ *
+ * @param result - The raw TanStack result.
+ * @returns The result, or an error-shaped view of it when paused with nothing to show.
+ */
+function withOfflineError<T>(result: UseQueryResult<T>): UseQueryResult<T> {
+  if (result.fetchStatus !== 'paused' || result.data !== undefined) return result;
+  return {
+    ...result,
+    status: 'error',
+    isPending: false,
+    isLoading: false,
+    isError: true,
+    isSuccess: false,
+    error: new OfflineError(),
+  } as UseQueryResult<T>;
+}
+
 export function useApiQuery<T>(def: UseQueryOptions<T>): UseQueryResult<T> {
-  return useQuery(def);
+  return withOfflineError(useQuery(def));
 }
 
 /**

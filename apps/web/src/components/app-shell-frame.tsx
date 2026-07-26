@@ -17,7 +17,7 @@ import { Calendar, ListChecks, Search } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
-import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import AccountMenu from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
@@ -26,7 +26,7 @@ import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
-import { OfflineBanner, OfflineShellFallback } from '@/components/offline-state';
+import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { QueryPersistence } from '@/components/query-persistence';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
@@ -152,12 +152,23 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     }
   }, [status, session, snapshot, queryClient]);
 
-  // Reconnecting is the one moment a re-ask is guaranteed to be worthwhile. Better Auth's own
-  // online manager also refetches here; this is belt and braces for the captive-portal case, where
-  // the browser never fired an `offline` event to begin with.
+  // Re-ask ONLY on the offline -> online edge, never on `status`.
+  //
+  // An earlier version refetched whenever `status === 'unreachable'`, which was a self-inflicted
+  // request storm: the refetch failed, status returned to `unreachable`, and the effect fired
+  // again — measured at ~2,060 requests to `/api/auth/get-session` in 15 seconds against a server
+  // that was merely returning 500. It also meant `isPending` never settled, so the shell could
+  // never reach a terminal state and sat on its loading treatment indefinitely.
+  //
+  // Better Auth's own online manager already refetches on reconnect, so this is only a backstop for
+  // the captive-portal case where no `offline` event ever fired. Everything else is the explicit
+  // retry control.
+  const wasOnlineRef = useRef(online);
   useEffect(() => {
-    if (online && status === 'unreachable') void refetch();
-  }, [online, status, refetch]);
+    const cameBackOnline = online && !wasOnlineRef.current;
+    wasOnlineRef.current = online;
+    if (cameBackOnline) void refetch();
+  }, [online, refetch]);
 
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
   // layer and gated on an authenticated session. The frame itself stays mounted while this settles.
@@ -185,19 +196,12 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   // to empty, with the offline banner explaining why.
   const shellLoading = offlineIdentity ? false : !session || orgsQ.isPending;
 
-  // Unreachable with nothing to go on: no identity, so no workspace to render. A plain, honest
-  // surface with a retry — never the shell (which would imply a live session), and never the
-  // sign-in interlock (which would blame the person for a network fault).
-  if (status === 'unreachable' && !offlineIdentity) {
-    return (
-      <OfflineShellFallback
-        online={online}
-        onRetry={() => {
-          void refetch();
-        }}
-      />
-    );
-  }
+  // Unreachable with no cached identity: there is no workspace to populate, but that is NOT a
+  // reason to replace the application with an error page. The shell's chrome — navigation, the
+  // settings information architecture, the command palette's navigate actions — is static and
+  // works perfectly well without a network, so it stays. Only the content region degrades, via
+  // `unavailable` below. Anything that renders a wall here throws away everything that still works.
+  const unavailable = status === 'unreachable' && !offlineIdentity;
 
   const settingsSurface =
     pathname === '/settings' ||
@@ -230,7 +234,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
               routeOrgId={routeOrgId}
               userId={userId}
               offline={
-                offlineIdentity
+                status === 'unreachable'
                   ? {
                       online,
                       onRetry: () => {
@@ -239,6 +243,7 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
                     }
                   : null
               }
+              unavailable={unavailable}
               workspaceKey={workspaceKeyFromPath(pathname)}
               homeKey={homeKeyFromPath(pathname)}
             >
@@ -331,6 +336,11 @@ interface AppShellInnerProps {
    * Drives the standing offline banner; `null` whenever the session is live.
    */
   offline: { readonly online: boolean; readonly onRetry: () => void } | null;
+  /**
+   * Set when the server is unreachable AND there is no cached identity, so there is nothing to
+   * populate the content region with. Degrades `<main>` only — the surrounding chrome stays live.
+   */
+  unavailable: boolean;
   workspaceKey?: WorkspaceNavKey;
   homeKey?: HomeNavKey;
   children: ReactNode;
@@ -353,6 +363,7 @@ function AppShellInner({
   routeOrgId,
   userId,
   offline,
+  unavailable,
   workspaceKey,
   homeKey,
   children,
@@ -513,7 +524,10 @@ function AppShellInner({
           // reloading for a new version is pointless — and would land on the offline page —
           // while there is no connection to fetch it over.
           banner={
-            offline ? (
+            // Suppressed while `unavailable`: the banner's promise ("showing what was loaded
+            // earlier") is false when nothing was ever loaded, and the content state already says
+            // the same thing better. One offline message, in the right place.
+            offline && !unavailable ? (
               <OfflineBanner online={offline.online} onRetry={offline.onRetry} />
             ) : applyUpdate ? (
               <UpdateBanner onApply={applyUpdate} />
@@ -521,7 +535,13 @@ function AppShellInner({
           }
           aside={settingsSurface ? undefined : railAsideFor(loading, calendarSurface)}
         >
-          {loading ? <AppShellContentSkeleton /> : children}
+          {unavailable ? (
+            <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
+          ) : loading ? (
+            <AppShellContentSkeleton />
+          ) : (
+            children
+          )}
         </AppShell>
       </AthenaPanelProvider>
     </VocabularyProvider>

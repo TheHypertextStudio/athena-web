@@ -116,6 +116,8 @@ describe('ui:// widget resources', () => {
 
     expect(widgets.map((r) => r.uri).sort()).toEqual([
       'ui://docket/change-report',
+      'ui://docket/entity',
+      'ui://docket/plan',
       'ui://docket/work-list',
     ]);
     // The mimeType is how a host tells an app document from an ordinary HTML resource.
@@ -176,6 +178,8 @@ describe('tool → widget linkage', () => {
       );
     }
     expect(uriFor('list_work')).toBe('ui://docket/work-list');
+    expect(uriFor('get')).toBe('ui://docket/entity');
+    expect(uriFor('plan_day')).toBe('ui://docket/plan');
   });
 
   it('never points a tool at a widget that is not registered', async () => {

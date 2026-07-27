@@ -21,6 +21,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { buildHubTodayPayload } from '../routes/hub-today';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
+import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 
@@ -138,6 +139,7 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
         items: z.array(PlanItem).describe('The day, in order, after any edits.'),
         applied: z.number().int().describe('How many edits changed something.'),
       },
+      _meta: widgetMeta(WIDGET.plan),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

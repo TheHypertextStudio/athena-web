@@ -14,6 +14,7 @@ import {
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
+import { originOf } from './change-set';
 
 /** A lightweight task ref shared by hydrated DTOs (dependencies, subtasks). */
 export function taskRef(t: {
@@ -64,7 +65,7 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
   if (!t) throw new NotFoundError();
 
   const cols = { id: task.id, title: task.title, state: task.state, projectId: task.projectId };
-  const [blocking, blockedBy, subtasks] = await Promise.all([
+  const [blocking, blockedBy, subtasks, origin] = await Promise.all([
     db
       .select(cols)
       .from(taskDependency)
@@ -81,6 +82,7 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
       .where(
         and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
       ),
+    originOf('task', id),
   ]);
 
   return {
@@ -106,6 +108,18 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
       externalUrl: t.externalUrl,
       syncMode: t.sourceSyncMode,
     },
+    // Authorship, which is a different axis from `provenance` above: that says whether the row is
+    // mirrored from an external system, this says which tool and conversation made it. Null for
+    // anything created before change sets existed, or through the web app.
+    origin: origin
+      ? {
+          tool: origin.origin.tool,
+          client: origin.origin.client ?? null,
+          sessionId: origin.origin.sessionId ?? null,
+          actorId: origin.actorId,
+          at: origin.at.toISOString(),
+        }
+      : null,
     blocking: blocking.map(taskRef),
     blockedBy: blockedBy.map(taskRef),
     subtasks: subtasks.map(taskRef),

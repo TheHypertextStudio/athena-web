@@ -20,6 +20,8 @@ import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 
 import type { McpRegistrar } from '../catalog';
 import { CHANGE_REPORT_HTML } from './change-report';
+import { ENTITY_HTML } from './entity';
+import { PLAN_HTML } from './plan';
 import { UI_EXTENSION, UI_MIME_TYPE } from './runtime';
 import { WORK_LIST_HTML } from './work-list';
 
@@ -29,6 +31,8 @@ export { UI_EXTENSION, UI_MIME_TYPE } from './runtime';
 export const WIDGET = {
   changeReport: 'ui://docket/change-report',
   workList: 'ui://docket/work-list',
+  entity: 'ui://docket/entity',
+  plan: 'ui://docket/plan',
 } as const;
 
 /**
@@ -58,6 +62,17 @@ const DOCUMENTS: Readonly<Record<string, { title: string; description: string; h
     title: 'Work list',
     description: 'A scannable view of the set a query matched.',
     html: WORK_LIST_HTML,
+  },
+  [WIDGET.entity]: {
+    title: 'Entity',
+    description:
+      'One piece of work with its current state, what is blocking it, and where it came from.',
+    html: ENTITY_HTML,
+  },
+  [WIDGET.plan]: {
+    title: 'Day plan',
+    description: 'A day in order, with its timeboxes and what is left.',
+    html: PLAN_HTML,
   },
 };
 

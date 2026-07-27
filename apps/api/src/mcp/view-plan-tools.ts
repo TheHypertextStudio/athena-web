@@ -211,6 +211,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         items: z.array(z.looseObject({ id: z.string() })),
         missing: z.array(z.object({ ref: z.string(), reason: z.string() })),
       },
+      _meta: widgetMeta(WIDGET.entity),
       annotations: {
         title: 'Get',
         readOnlyHint: true,

@@ -44,6 +44,7 @@ describe('buildCorsMiddleware — public OAuth AS surface', () => {
     '/.well-known/oauth-protected-resource',
     '/.well-known/oauth-protected-resource/mcp',
     '/.well-known/oauth-authorization-server',
+    '/.well-known/oauth-authorization-server/api/auth',
     '/.well-known/mcp-client.json',
     '/api/auth/oauth2/register',
     '/api/auth/oauth2/token',

@@ -13,34 +13,34 @@
  * already-signed-in browser. Left unfixed, a returning user connecting a new MCP client landed on
  * `/today` with the authorization request silently abandoned instead of the consent screen.
  */
+import { startAuthorization } from '@modelcontextprotocol/sdk/client/auth.js';
+
 import { newUser, signOut, signUp } from './helpers/app';
 import { TIMEOUTS } from './helpers/constants';
 import { expect, test } from './helpers/fixtures';
-import { discover, exchangeCode, newPkce, REDIRECT_URI, registerClient } from './helpers/mcp';
+import { discover, exchangeCode, MCP_URL, REDIRECT_URI, registerClient } from './helpers/mcp';
 
 test('an unauthenticated MCP authorize request resumes to consent after sign-in, not /today', async ({
   page,
-  request,
 }) => {
   // A returning user: has an account and a passkey, but no session on this browser right now.
   await signUp(page, newUser('McpColdStart'));
   await signOut(page);
 
-  const discovery = await discover(request);
-  const clientId = await registerClient(request, discovery, 'Docket E2E Cold-Start Client');
-  const pkce = newPkce();
-  const authorizePath = new URL(discovery.authorizationEndpoint).pathname;
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: clientId,
-    redirect_uri: REDIRECT_URI,
-    scope: 'work:read',
-    state: 'cold-start-state',
-    code_challenge: pkce.challenge,
-    code_challenge_method: 'S256',
-  });
+  const discovery = await discover();
+  const clientId = await registerClient(discovery, 'Docket E2E Cold-Start Client');
+  const { authorizationUrl, codeVerifier } = await startAuthorization(
+    discovery.authorizationServerUrl,
+    {
+      metadata: discovery.metadata,
+      clientInformation: { client_id: clientId },
+      redirectUrl: REDIRECT_URI,
+      scope: 'work:read',
+      resource: new URL(MCP_URL),
+    },
+  );
 
-  await page.goto(`${authorizePath}?${params.toString()}`);
+  await page.goto(authorizationUrl.pathname + authorizationUrl.search);
 
   // No session -> Better Auth's oauthProvider plugin bounces to sign-in with the raw OAuth query intact.
   await expect(page.getByRole('button', { name: 'Sign in with a passkey' })).toBeVisible({
@@ -77,6 +77,6 @@ test('an unauthenticated MCP authorize request resumes to consent after sign-in,
   if (!code) throw new Error('authorize redirect must carry a code');
 
   // The code is real and exchanges cleanly - the whole chain, not just the UI hop.
-  const { accessToken } = await exchangeCode(request, discovery, { clientId, code, pkce });
+  const { accessToken } = await exchangeCode(discovery, { clientId, code, codeVerifier });
   expect(accessToken).toBeTruthy();
 });

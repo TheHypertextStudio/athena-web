@@ -18,7 +18,6 @@ import {
   mcpReadResource,
   mcpToolCall,
   mintToken,
-  newPkce,
   registerClient,
 } from './helpers/mcp';
 import { apiJson } from './helpers/net';
@@ -52,11 +51,11 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
   const { orgId } = await signUpAndOnboard(page, 'McpConnect');
 
   // ── Discover → register ──
-  const discovery = await discover(request);
-  const clientId = await registerClient(request, discovery, 'Docket E2E Agent');
+  const discovery = await discover();
+  const clientId = await registerClient(discovery, 'Docket E2E Agent');
 
   // ── Consent for read-only; the minted token carries exactly that scope ──
-  const readToken = await mintToken(page, request, discovery, {
+  const readToken = await mintToken(page, discovery, {
     clientId,
     scope: 'work:read',
   });
@@ -89,16 +88,15 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
   // Exchanged explicitly (rather than via `mintToken`) so the refresh token is observable: the AS
   // mints one ONLY when `offline_access` is granted, so a step-up that dropped it would trade a
   // durable connection for one that dies 15 minutes later — invisible to every other assertion.
-  const stepUpPkce = newPkce();
-  const stepUpCode = await authorizeInBrowser(page, discovery, {
-    clientId,
-    scope: 'work:read work:write offline_access',
-    pkce: stepUpPkce,
-  });
-  const stepUp = await exchangeCode(request, discovery, {
+  const { code: stepUpCode, codeVerifier: stepUpCodeVerifier } = await authorizeInBrowser(
+    page,
+    discovery,
+    { clientId, scope: 'work:read work:write offline_access' },
+  );
+  const stepUp = await exchangeCode(discovery, {
     clientId,
     code: stepUpCode,
-    pkce: stepUpPkce,
+    codeVerifier: stepUpCodeVerifier,
   });
   expect(
     stepUp.refreshToken,

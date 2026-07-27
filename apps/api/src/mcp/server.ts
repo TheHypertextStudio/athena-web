@@ -176,10 +176,19 @@ export function protectedResourceMetadata(c: Context): Response {
  * the canonical discovery document (with `issuer`, the authorization/token/registration
  * endpoints, and `code_challenge_methods_supported:["S256"]`) at
  * `<issuer>/api/auth/.well-known/oauth-authorization-server` — relative to its base path,
- * NOT at the RFC 8414 root location. The RS-level `/.well-known/oauth-authorization-server`
- * route 307-redirects there so a client that discovered the AS via the PRM
- * `authorization_servers` entry lands on the live document (mcp-surface.md §2.3) — without
- * re-importing the heavy Better Auth plugin chain.
+ * NOT at the RFC 8414 root location. This handler 307-redirects there so a client that
+ * discovered the AS via the PRM `authorization_servers` entry lands on the live document
+ * (mcp-surface.md §2.3) — without re-importing the heavy Better Auth plugin chain.
+ *
+ * `server.ts` mounts this at TWO paths, and both matter: the bare
+ * `/.well-known/oauth-authorization-server` only covers a client discovering an issuer with NO
+ * path component, which ours (`.../api/auth`) is not. RFC 8414 §3.1 requires the well-known
+ * segment inserted BEFORE the issuer's path for that case —
+ * `/.well-known/oauth-authorization-server/api/auth` — and that is the form the official MCP
+ * SDK's `discoverAuthorizationServerMetadata` actually tries first. Without it mounted, DCR
+ * fails for every spec-compliant client: they never learn the real `registration_endpoint`, so
+ * `Client.connect()` errors before ever reaching `/oauth2/register` (confirmed against
+ * production via `discoverOAuthServerInfo()` from `@modelcontextprotocol/sdk`).
  *
  * @param c - The Hono context.
  * @returns a 307 redirect to the AS's OIDC discovery document.

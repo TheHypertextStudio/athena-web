@@ -3,16 +3,33 @@
  * token exchange, and raw Streamable HTTP JSON-RPC calls against `/mcp`.
  *
  * @remarks
+ * Discovery, dynamic client registration, and token exchange run through the OFFICIAL
+ * `@modelcontextprotocol/sdk` client functions (`discoverOAuthServerInfo`, `registerClient`,
+ * `startAuthorization`, `exchangeAuthorization`) rather than hand-rolled `fetch`/request calls.
+ * This is not cosmetic: a hand-rolled discovery helper that hits a known-good URL directly
+ * proves nothing about whether a REAL client (Claude Desktop, claude.ai, Cursor, or this SDK
+ * itself) can actually find that URL on its own. That gap shipped a production incident —
+ * `/api/auth/.well-known/oauth-authorization-server` (bare root) worked, but the RFC 8414
+ * path-aware location every spec-compliant client tries FIRST for an issuer with a path
+ * (`/.well-known/oauth-authorization-server/api/auth`) 404'd, and no hand-rolled test caught
+ * it because none of them walked the real discovery algorithm. See `mcp/server.ts`'s
+ * `authorizationServerMetadata` remarks.
+ *
  * The dev stack splits the browser origin ({@link ORIGIN}, `docket.localhost`) from the
  * API origin ({@link API_ORIGIN}, `api.docket.localhost`). Cookie-less OAuth machinery
- * (discovery, registration, token exchange, Bearer MCP calls) talks to the API origin via
- * Playwright request contexts; the interactive authorize/consent leg navigates through the
- * WEB origin's `/api/auth` rewrite so the host-only session cookie minted by the passkey
- * sign-up rides along. In production AS + RS share the API origin and the cookie lives
- * there, so real clients follow the discovery metadata verbatim — this split is dev-only.
+ * (discovery, registration, token exchange, Bearer MCP calls) talks to the API origin
+ * directly; the interactive authorize/consent leg navigates through the WEB origin's
+ * `/api/auth` rewrite so the host-only session cookie minted by the passkey sign-up rides
+ * along. In production AS + RS share the API origin and the cookie lives there, so real
+ * clients follow the discovery metadata verbatim — this split is dev-only.
  */
-import { createHash, randomBytes } from 'node:crypto';
-
+import {
+  discoverOAuthServerInfo,
+  exchangeAuthorization,
+  registerClient as sdkRegisterClient,
+  startAuthorization,
+} from '@modelcontextprotocol/sdk/client/auth.js';
+import type { AuthorizationServerMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
 import type { APIRequestContext, Page } from '@playwright/test';
 
 import { ORIGIN, TIMEOUTS } from './constants';
@@ -27,71 +44,40 @@ export const MCP_URL = `${API_ORIGIN}/mcp`;
 /** A redirect URI on the app origin; the route does not exist — the spec only reads the URL. */
 export const REDIRECT_URI = `${ORIGIN}/e2e/oauth/callback`;
 
-/** One PKCE S256 pair (RFC 7636). */
-export interface Pkce {
-  verifier: string;
-  challenge: string;
-}
-
-/** Mint a PKCE verifier + S256 challenge. */
-export function newPkce(): Pkce {
-  const verifier = randomBytes(32).toString('base64url');
-  const challenge = createHash('sha256').update(verifier).digest('base64url');
-  return { verifier, challenge };
-}
-
-/** The AS endpoints the flows exercise, discovered via the RFC 9728 → RFC 8414 chain. */
+/**
+ * The AS location + metadata document a real client walked away with, exactly as
+ * {@link discoverOAuthServerInfo} returns it — nothing reshaped or renamed.
+ */
 export interface Discovery {
-  issuer: string;
-  authorizationEndpoint: string;
-  tokenEndpoint: string;
-  registrationEndpoint: string;
+  readonly authorizationServerUrl: string;
+  readonly metadata: AuthorizationServerMetadata;
 }
 
 /**
- * Walk the full discovery chain a real MCP client follows: the Protected Resource
- * Metadata names the AS, whose `/.well-known/oauth-authorization-server` 307-redirects
- * to the live OIDC configuration.
+ * Walk the full discovery chain a real MCP client follows, via the official SDK: the
+ * Protected Resource Metadata (RFC 9728) names the AS, then
+ * {@link discoverOAuthServerInfo} tries every RFC 8414 / OIDC candidate location for that
+ * AS's metadata document, in the SDK's own priority order — the same probing a real client
+ * does, not a single known-good URL a test author happens to already know works.
  */
-export async function discover(request: APIRequestContext): Promise<Discovery> {
-  const prmRes = await request.get(`${API_ORIGIN}/.well-known/oauth-protected-resource/mcp`);
-  expect(prmRes.status(), 'PRM document must be served').toBe(200);
-  const prm = (await prmRes.json()) as { resource: string; authorization_servers: string[] };
-  expect(prm.resource).toBe(MCP_URL);
-  const issuer = prm.authorization_servers[0];
-  expect(issuer, 'PRM must name an authorization server').toBeTruthy();
-
-  // Playwright follows the 307 to <issuer>/.well-known/openid-configuration.
-  const asRes = await request.get(`${API_ORIGIN}/.well-known/oauth-authorization-server`);
+export async function discover(): Promise<Discovery> {
+  const info = await discoverOAuthServerInfo(MCP_URL);
+  expect(info.resourceMetadata?.resource, 'PRM must name this exact MCP resource').toBe(MCP_URL);
   expect(
-    asRes.status(),
-    'AS discovery must resolve — is the MCP OAuth env (MCP_ISSUER_URL/MCP_RESOURCE_URL/OIDC_LOGIN_PAGE_URL) set for the dev stack?',
-  ).toBe(200);
-  const meta = (await asRes.json()) as {
-    issuer: string;
-    authorization_endpoint: string;
-    token_endpoint: string;
-    registration_endpoint: string;
-    code_challenge_methods_supported?: string[];
-  };
-  expect(meta.code_challenge_methods_supported).toContain('S256');
-  if (!issuer) throw new Error('PRM must name an authorization server');
-  return {
-    issuer,
-    authorizationEndpoint: meta.authorization_endpoint,
-    tokenEndpoint: meta.token_endpoint,
-    registrationEndpoint: meta.registration_endpoint,
-  };
+    info.authorizationServerMetadata,
+    'the official SDK must be able to discover AS metadata (RFC 8414) for this issuer via one of its standard well-known locations — the RS only advertises the issuer string, so the client is entirely on its own to find the document',
+  ).toBeTruthy();
+  const metadata = info.authorizationServerMetadata;
+  if (!metadata) throw new Error('AS metadata discovery failed');
+  expect(metadata.code_challenge_methods_supported).toContain('S256');
+  return { authorizationServerUrl: info.authorizationServerUrl, metadata };
 }
 
-/** Dynamically register a public PKCE client (RFC 7591) and return its `client_id`. */
-export async function registerClient(
-  request: APIRequestContext,
-  discovery: Discovery,
-  clientName: string,
-): Promise<string> {
-  const res = await request.post(discovery.registrationEndpoint, {
-    data: {
+/** Dynamically register a public PKCE client (RFC 7591) via the SDK and return its `client_id`. */
+export async function registerClient(discovery: Discovery, clientName: string): Promise<string> {
+  const client = await sdkRegisterClient(discovery.authorizationServerUrl, {
+    metadata: discovery.metadata,
+    clientMetadata: {
       client_name: clientName,
       redirect_uris: [REDIRECT_URI],
       token_endpoint_auth_method: 'none',
@@ -99,20 +85,13 @@ export async function registerClient(
       response_types: ['code'],
     },
   });
-  // RFC 7591 §3.2.1 specifies 201 Created, and the deprecated mcp() plugin returned it;
-  // `@better-auth/oauth-provider` answers 200 instead. Both are successful registrations and
-  // real clients branch on 2xx, so accept either rather than pinning a status the AS does not
-  // emit — this mismatch has failed every E2E run (and therefore blocked every production
-  // deploy) since the oauth-provider migration.
-  expect([200, 201], 'dynamic client registration must succeed').toContain(res.status());
-  const body = (await res.json()) as { client_id: string; scope?: string };
-  expect(body.client_id).toBeTruthy();
+  expect(client.client_id).toBeTruthy();
   // Registering WITHOUT a `scope` is what every real MCP client does, and the AS writes its
   // default onto the client row — which then caps every later authorize AND token exchange. If a
   // narrower default ever comes back, the client is pinned below these scopes permanently and no
   // step-up can rescue it, so assert the inherited ceiling here rather than downstream where it
   // surfaces as a confusing mid-flow `invalid_scope`.
-  const inherited = (body.scope ?? '').split(' ').filter(Boolean);
+  const inherited = (client.scope ?? '').split(' ').filter(Boolean);
   for (const scope of [
     'work:read',
     'work:write',
@@ -124,12 +103,12 @@ export async function registerClient(
       scope,
     );
   }
-  return body.client_id;
+  return client.client_id;
 }
 
 /**
  * Run the interactive authorize + consent leg in the signed-in browser and return the
- * authorization code.
+ * authorization code plus the PKCE verifier the SDK generated for it.
  *
  * @remarks
  * Navigates the authorize URL through the WEB origin's `/api/auth` rewrite (see module
@@ -139,23 +118,23 @@ export async function registerClient(
 export async function authorizeInBrowser(
   page: Page,
   discovery: Discovery,
-  opts: { clientId: string; scope: string; pkce: Pkce },
-): Promise<string> {
-  const authorizePath = new URL(discovery.authorizationEndpoint).pathname;
-  const params = new URLSearchParams({
-    response_type: 'code',
-    client_id: opts.clientId,
-    redirect_uri: REDIRECT_URI,
-    scope: opts.scope,
-    state: randomBytes(8).toString('hex'),
-    code_challenge: opts.pkce.challenge,
-    code_challenge_method: 'S256',
-    // RFC 8707 resource indicator, which the MCP spec requires of clients. It is what binds the
-    // access token's `aud` to this resource server; omit it and the AS mints an audience-less
-    // token that the RS correctly refuses.
-    resource: MCP_URL,
-  });
-  await page.goto(`${authorizePath}?${params.toString()}`);
+  opts: { clientId: string; scope: string },
+): Promise<{ code: string; codeVerifier: string }> {
+  const { authorizationUrl, codeVerifier } = await startAuthorization(
+    discovery.authorizationServerUrl,
+    {
+      metadata: discovery.metadata,
+      clientInformation: { client_id: opts.clientId },
+      redirectUrl: REDIRECT_URI,
+      scope: opts.scope,
+      // RFC 8707 resource indicator, which the MCP spec requires of clients. It is what binds
+      // the access token's `aud` to this resource server; omit it and the AS mints an
+      // audience-less token that the RS correctly refuses.
+      resource: new URL(MCP_URL),
+    },
+  );
+  const authorizePath = authorizationUrl.pathname + authorizationUrl.search;
+  await page.goto(authorizePath);
 
   // A scope set not yet consented to lands on the consent screen; approve it.
   await expect(page.getByRole('button', { name: 'Authorize' })).toBeVisible({
@@ -169,54 +148,43 @@ export async function authorizeInBrowser(
   const code = redirected.searchParams.get('code');
   expect(code, 'authorize redirect must carry a code').toBeTruthy();
   if (!code) throw new Error('authorize redirect must carry a code');
-  return code;
+  return { code, codeVerifier };
 }
 
-/** Exchange an authorization code for an access token (public client + PKCE). */
+/** Exchange an authorization code for an access token (public client + PKCE), via the SDK. */
 export async function exchangeCode(
-  request: APIRequestContext,
   discovery: Discovery,
-  opts: { clientId: string; code: string; pkce: Pkce },
+  opts: { clientId: string; code: string; codeVerifier: string },
 ): Promise<{ accessToken: string; scope: string; refreshToken: string | null }> {
-  const res = await request.post(discovery.tokenEndpoint, {
-    form: {
-      grant_type: 'authorization_code',
-      code: opts.code,
-      redirect_uri: REDIRECT_URI,
-      client_id: opts.clientId,
-      code_verifier: opts.pkce.verifier,
-      // Repeated at the token endpoint per RFC 8707 §2.2 — this is the request the AS actually
-      // reads the audience from when stamping `aud`.
-      resource: MCP_URL,
-    },
+  const tokens = await exchangeAuthorization(discovery.authorizationServerUrl, {
+    metadata: discovery.metadata,
+    clientInformation: { client_id: opts.clientId },
+    authorizationCode: opts.code,
+    codeVerifier: opts.codeVerifier,
+    redirectUri: REDIRECT_URI,
+    // Repeated at the token endpoint per RFC 8707 §2.2 — this is the request the AS actually
+    // reads the audience from when stamping `aud`.
+    resource: new URL(MCP_URL),
   });
-  expect(res.status(), 'token exchange must succeed').toBe(200);
-  const body = (await res.json()) as {
-    access_token: string;
-    scope?: string;
-    refresh_token?: string;
-  };
-  expect(body.access_token).toBeTruthy();
+  expect(tokens.access_token).toBeTruthy();
   return {
-    accessToken: body.access_token,
-    scope: body.scope ?? '',
-    refreshToken: body.refresh_token ?? null,
+    accessToken: tokens.access_token,
+    scope: tokens.scope ?? '',
+    refreshToken: tokens.refresh_token ?? null,
   };
 }
 
 /** Register + authorize + exchange in one go; returns a Bearer token for `scope`. */
 export async function mintToken(
   page: Page,
-  request: APIRequestContext,
   discovery: Discovery,
   opts: { clientId: string; scope: string },
 ): Promise<string> {
-  const pkce = newPkce();
-  const code = await authorizeInBrowser(page, discovery, { ...opts, pkce });
-  const { accessToken } = await exchangeCode(request, discovery, {
+  const { code, codeVerifier } = await authorizeInBrowser(page, discovery, opts);
+  const { accessToken } = await exchangeCode(discovery, {
     clientId: opts.clientId,
     code,
-    pkce,
+    codeVerifier,
   });
   return accessToken;
 }

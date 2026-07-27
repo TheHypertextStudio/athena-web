@@ -33,9 +33,9 @@ test('an MCP client can trigger an agent session and approve its proposed action
   });
 
   // OAuth: one client, consented for reads + session control.
-  const discovery = await discover(request);
-  const clientId = await registerClient(request, discovery, 'Docket E2E Session Agent');
-  const token = await mintToken(page, request, discovery, {
+  const discovery = await discover();
+  const clientId = await registerClient(discovery, 'Docket E2E Session Agent');
+  const token = await mintToken(page, discovery, {
     clientId,
     scope: 'work:read agents:run',
   });

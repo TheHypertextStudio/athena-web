@@ -136,6 +136,22 @@ describe('server boot', () => {
     const auth = await server.request('/api/auth/anything', { method: 'GET' });
     expect(auth.status).toBe(200);
   });
+
+  it('mounts AS metadata at the RFC 8414 path-aware location, not only the bare root', async () => {
+    // Regression coverage for a production incident: the official MCP SDK's
+    // discoverAuthorizationServerMetadata (and therefore Claude Desktop / claude.ai / any
+    // spec-compliant client) inserts the well-known segment BEFORE the issuer's path
+    // (`/api/auth`) — it never probes the bare root when the issuer has a path component. That
+    // location 404d in production, so no compliant client could ever learn the real
+    // registration_endpoint and DCR failed before it ever reached `/oauth2/register`.
+    const bare = await server.request('/.well-known/oauth-authorization-server');
+    const pathAware = await server.request('/.well-known/oauth-authorization-server/api/auth');
+    expect(pathAware.status).toBe(307);
+    expect(pathAware.headers.get('location')).toBe(bare.headers.get('location'));
+    expect(pathAware.headers.get('location')).toContain(
+      '/api/auth/.well-known/oauth-authorization-server',
+    );
+  });
 });
 
 describe('server CORS trusted-origins parsing', () => {

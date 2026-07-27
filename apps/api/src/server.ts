@@ -67,6 +67,12 @@ server.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
 server.get('/.well-known/oauth-protected-resource', protectedResourceMetadata);
 server.get('/.well-known/oauth-protected-resource/mcp', protectedResourceMetadata);
 server.get('/.well-known/oauth-authorization-server', authorizationServerMetadata);
+// RFC 8414 §3.1: an issuer with a path component (ours is `<origin>/api/auth`) is discovered
+// with the well-known segment inserted BEFORE that path, not at the bare root above — the form
+// every spec-compliant client (including the official MCP SDK) actually probes first. Confirmed
+// missing via `discoverOAuthServerInfo()` returning no `authorizationServerMetadata` at all
+// against production; see `authorizationServerMetadata`'s remarks in `mcp/server.ts`.
+server.get('/.well-known/oauth-authorization-server/api/auth', authorizationServerMetadata);
 // URL-form client identifiers (CIMD) are the current MCP OAuth preference. This document is
 // public and contains no tenant, user, or credential data; authorization servers fetch it while
 // connecting any remote MCP server to Athena.

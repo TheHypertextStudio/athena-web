@@ -519,6 +519,240 @@ describe('capability: find any object', () => {
   });
 });
 
+describe('capability: list everything for a scope', () => {
+  /** Seed one of each container plus two tasks, so a listing has something to narrow. */
+  async function seedWorkspace(client: Client, s: Seed): Promise<void> {
+    await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [
+        { ref: 'i', kind: 'initiative', title: 'Q3 Platform' },
+        { ref: 'pg', kind: 'program', title: 'Reliability', parent: 'i' },
+        { ref: 'pj', kind: 'project', title: 'Auth Rewrite', parent: 'pg' },
+        { ref: 't1', kind: 'task', title: 'Audit sessions', parent: 'pj' },
+        { ref: 't2', kind: 'task', title: 'Unrelated errand' },
+      ],
+    });
+  }
+
+  it('lists all tasks, and only the ones in a scope when given one', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await seedWorkspace(client, s);
+
+    const all = (await call(client, 'list_work', { orgId: s.orgId, entity: 'task' })) as {
+      items: { title: string }[];
+    };
+    expect(all.items.map((i) => i.title).sort()).toEqual(['Audit sessions', 'Unrelated errand']);
+
+    const scoped = (await call(client, 'list_work', {
+      orgId: s.orgId,
+      entity: 'task',
+      project: 'Auth Rewrite',
+    })) as { items: { title: string }[] };
+    expect(scoped.items.map((i) => i.title)).toEqual(['Audit sessions']);
+  });
+
+  it('lists all projects, and narrows by program or initiative', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await seedWorkspace(client, s);
+
+    const all = (await call(client, 'list_work', { orgId: s.orgId, entity: 'project' })) as {
+      items: { title: string }[];
+    };
+    expect(all.items.map((i) => i.title)).toEqual(['Auth Rewrite']);
+
+    const byProgram = (await call(client, 'list_work', {
+      orgId: s.orgId,
+      entity: 'project',
+      program: 'Reliability',
+    })) as { items: { title: string }[] };
+    expect(byProgram.items.map((i) => i.title)).toEqual(['Auth Rewrite']);
+  });
+
+  it('lists all programs, and narrows by the initiative they roll up to', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await seedWorkspace(client, s);
+    // A second program under no initiative, so the filter has something to exclude.
+    await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [{ ref: 'pg2', kind: 'program', title: 'Growth' }],
+    });
+
+    const all = (await call(client, 'list_work', { orgId: s.orgId, entity: 'program' })) as {
+      items: { title: string }[];
+    };
+    expect(all.items.map((i) => i.title).sort()).toEqual(['Growth', 'Reliability']);
+
+    // This filter was declared supported and silently ignored before — it returned both.
+    const scoped = (await call(client, 'list_work', {
+      orgId: s.orgId,
+      entity: 'program',
+      initiative: 'Q3 Platform',
+    })) as { items: { title: string }[] };
+    expect(scoped.items.map((i) => i.title)).toEqual(['Reliability']);
+  });
+
+  it('lists all initiatives, and narrows by status', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await seedWorkspace(client, s);
+
+    const all = (await call(client, 'list_work', { orgId: s.orgId, entity: 'initiative' })) as {
+      items: { title: string }[];
+    };
+    expect(all.items.map((i) => i.title)).toEqual(['Q3 Platform']);
+
+    const wrongStatus = (await call(client, 'list_work', {
+      orgId: s.orgId,
+      entity: 'initiative',
+      status: ['completed'],
+    })) as { items: unknown[] };
+    expect(wrongStatus.items).toEqual([]);
+  });
+
+  it('refuses a filter the entity has no column for, naming the ones it has', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'list_work',
+      // Programs have no assignee; silently dropping this would answer confidently and wrongly.
+      arguments: { orgId: s.orgId, entity: 'program', assignee: 'Ada' },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('assignee');
+    expect(text).toContain('owner');
+  });
+});
+
+describe('capability: create and edit programs', () => {
+  it('creates a program', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    const out = (await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [{ ref: 'pg', kind: 'program', title: 'Reliability', owner: 'Ada' }],
+    })) as { placed: { id: string; kind: string }[] };
+    expect(out.placed[0]?.kind).toBe('program');
+
+    const [row] = await db
+      .select({ name: schema.program.name, ownerId: schema.program.ownerId })
+      .from(schema.program)
+      .where(eq(schema.program.id, out.placed[0]!.id));
+    expect(row).toEqual({ name: 'Reliability', ownerId: s.actorId });
+  });
+
+  it('edits a program by name', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [{ ref: 'pg', kind: 'program', title: 'Reliability' }],
+    });
+
+    const out = await call(client, 'update', {
+      orgId: s.orgId,
+      entity: 'program',
+      scope: { status: ['active'] },
+      set: { title: 'Reliability & Scale', health: 'on_track', owner: 'Ada' },
+    });
+    expect(out['changed']).toBe(1);
+
+    const [row] = await db
+      .select({
+        name: schema.program.name,
+        health: schema.program.health,
+        ownerId: schema.program.ownerId,
+      })
+      .from(schema.program)
+      .where(eq(schema.program.organizationId, s.orgId));
+    expect(row).toEqual({
+      name: 'Reliability & Scale',
+      health: 'on_track',
+      ownerId: s.actorId,
+    });
+  });
+});
+
+describe('capability: assign and deassign projects to programs', () => {
+  it('files a project under a program, then detaches it, both by name', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [
+        { ref: 'pg', kind: 'program', title: 'Reliability' },
+        { ref: 'pj', kind: 'project', title: 'Auth Rewrite' },
+      ],
+    });
+
+    await call(client, 'update', {
+      orgId: s.orgId,
+      entity: 'project',
+      scope: { status: ['planned'] },
+      set: { program: 'Reliability' },
+    });
+    const [filed] = await db
+      .select({ programId: schema.project.programId })
+      .from(schema.project)
+      .where(eq(schema.project.organizationId, s.orgId));
+    expect(filed?.programId).not.toBeNull();
+
+    await call(client, 'update', {
+      orgId: s.orgId,
+      entity: 'project',
+      scope: { status: ['planned'] },
+      set: { program: null },
+    });
+    const [detached] = await db
+      .select({ programId: schema.project.programId })
+      .from(schema.project)
+      .where(eq(schema.project.organizationId, s.orgId));
+    expect(detached?.programId).toBeNull();
+  });
+
+  it('also rolls a program up to an initiative and takes it back off', async () => {
+    const s = await seedOrg();
+    const client = await connect(s.ctx);
+    await call(client, 'organize', {
+      orgId: s.orgId,
+      items: [
+        { ref: 'i', kind: 'initiative', title: 'Q3 Platform' },
+        { ref: 'pg', kind: 'program', title: 'Reliability' },
+      ],
+    });
+
+    await call(client, 'link', {
+      orgId: s.orgId,
+      relation: 'contributes_to',
+      from: 'Reliability',
+      to: 'Q3 Platform',
+    });
+    expect(
+      await db
+        .select()
+        .from(schema.initiativeProgram)
+        .where(eq(schema.initiativeProgram.organizationId, s.orgId)),
+    ).toHaveLength(1);
+
+    await call(client, 'link', {
+      orgId: s.orgId,
+      relation: 'contributes_to',
+      from: 'Reliability',
+      to: 'Q3 Platform',
+      remove: true,
+    });
+    expect(
+      await db
+        .select()
+        .from(schema.initiativeProgram)
+        .where(eq(schema.initiativeProgram.organizationId, s.orgId)),
+    ).toEqual([]);
+  });
+});
+
 describe('capability: every change is reversible', () => {
   it('undoes the last thing done, whatever it was', async () => {
     const s = await seedOrg();

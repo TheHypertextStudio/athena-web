@@ -20,6 +20,7 @@
 import {
   db,
   initiative,
+  initiativeProgram,
   initiativeProject,
   program,
   project,
@@ -123,7 +124,7 @@ export const listWorkFilters = {
   initiative: z
     .string()
     .optional()
-    .describe(`Only projects linked to this initiative. ${DESCRIPTOR_HINT}`),
+    .describe(`Only projects or programs rolling up to this initiative. ${DESCRIPTOR_HINT}`),
   assignee: z
     .string()
     .optional()
@@ -434,27 +435,40 @@ async function listContainers(
     if (input.lead !== undefined) {
       where.push(eq(project.leadId, await resolveDescriptor(orgId, 'actor', input.lead, 'lead')));
     }
-    if (input.initiative !== undefined) {
-      const initiativeId = await resolveDescriptor(
-        orgId,
-        'initiative',
-        input.initiative,
-        'initiative',
-      );
-      where.push(
-        exists(
-          db
-            .select({ one: sql`1` })
-            .from(initiativeProject)
-            .where(
-              and(
-                eq(initiativeProject.projectId, project.id),
-                eq(initiativeProject.initiativeId, initiativeId),
+  }
+  // Both projects and programs roll up to initiatives, through their own join table. This lived
+  // inside the project branch and was therefore declared-but-unapplied for programs — a filter
+  // silently doing nothing is the one failure this module exists to prevent, since it hands the
+  // caller a confidently wrong answer rather than an error.
+  if (input.initiative !== undefined && entity !== 'initiative') {
+    const initiativeId = await resolveDescriptor(
+      orgId,
+      'initiative',
+      input.initiative,
+      'initiative',
+    );
+    const link =
+      entity === 'project'
+        ? { table: initiativeProject, member: initiativeProject.projectId, own: project.id }
+        : { table: initiativeProgram, member: initiativeProgram.programId, own: program.id };
+    where.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(link.table)
+          .where(
+            and(
+              eq(link.member, link.own),
+              eq(
+                entity === 'project'
+                  ? initiativeProject.initiativeId
+                  : initiativeProgram.initiativeId,
+                initiativeId,
               ),
             ),
-        ),
-      );
-    }
+          ),
+      ),
+    );
   }
   if (entity !== 'project' && input.owner !== undefined) {
     const ownerId = await resolveDescriptor(orgId, 'actor', input.owner, 'owner');

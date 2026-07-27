@@ -160,9 +160,13 @@
         → `manage_session` (26 tools → 15)
   - [x] Extend Athena's proposal ghost past `create_task`, in the same pass as the deletion
   - [x] `workspaces` — the bootstrap tool, and the capability contract test behind it
-  - [ ] Phase 3: MCP Apps UI (SEP-1865 `io.modelcontextprotocol/ui`) + elicitation
-  - [ ] End-to-end against a live MCP client over OAuth — the "one sentence, one call" metric
-        remains unmeasured
+  - [x] Phase 3: MCP Apps (SEP-1865 `io.modelcontextprotocol/ui`) — `ui://` widget resources,
+        `_meta.ui.resourceUri` linkage, the `change-report` and `work-list` cards
+  - [x] Elicitation on an ambiguous descriptor, with the candidate-list error as the fallback
+  - [x] End-to-end over OAuth: `mcp-connect.spec.ts` and `mcp-session.spec.ts` drive discover →
+        register → consent → read → step up → write against a live stack in CI
+  - [ ] `entity` and `plan` widgets (the two lower-value cards of the four)
+  - [ ] Per-row undo inside the fullscreen change report
 - **Notes**:
   - **Security**: the `search` tool authorized once at the org root and then ran an unfiltered
     `ILIKE` over `task`/`project`/`program`. Any caller who could open a workspace could enumerate
@@ -257,6 +261,36 @@
     needs its own design pass. `routes/time-submissions.ts` also still exports a router nothing
     mounts — deleting it destroys work and mounting it exposes an unreviewed endpoint outside the
     agreed Work+planning scope, so it stays flagged rather than half-resolved.
+
+  - **The change report shows diffs, not end states.** Because writes execute immediately, the
+    card is the only place anyone sees what happened, and "priority is now low" is not checkable
+    the way "high → low" is. Skipped items get the same visual weight as changed ones and their
+    reasons are spelled out — "someone else changed it", not `changed_since` — because the half of
+    a bulk write that did not land is exactly the part prose buries.
+  - **Undo lives on the card**, and firing it sends `ui/update-model-context`. Without that the
+    agent's next answer confidently references a change the user just reversed, which is the most
+    confusing thing a widget can do.
+  - **It is the real extension, not ChatGPT's.** `io.modelcontextprotocol/ui`, `ui://` resources
+    at `text/html;profile=mcp-app`, linked by `_meta.ui.resourceUri`, speaking
+    `ui/initialize` → `ui/notifications/initialized` → `ui/notifications/tool-result`. The tests
+    assert the absence of `window.openai`, `text/html+skybridge`, and `iframe-ready` as well as
+    the presence of the spec's method names. A host without the extension ignores `_meta` and
+    shows the JSON, so declaring a widget can never make the surface worse.
+  - **Widget documents are inlined by necessity.** The host serves them under a deny-all CSP, so
+    there is no CDN and no stylesheet to fetch; a test asserts no `http(s)` reference survives.
+    Colour comes from the host's CSS variables with neutral fallbacks, so an unstyled host still
+    renders something legible.
+  - **`orgId` reaches the card through `ui/notifications/tool-input`** rather than by widening
+    every write tool's output schema to feed a widget.
+  - **Elicitation is a shortcut, not a path.** Every non-answer — no capability, list too long, a
+    decline, a cancel, a client that advertises it then fails — falls back to the candidate-list
+    error, which is what a model needs to re-issue correctly on its own. A regression turning
+    "cannot ask" into "cannot resolve" would break every non-elicitation client at once, so each
+    of those cases is tested.
+  - **The server reaches descriptor resolution via `AsyncLocalStorage`**, not an extra parameter
+    on four resolvers and all their call sites. Request-scoped rather than module-global on
+    purpose: a shared variable would let two concurrent callers see each other's server, which is
+    a cross-tenant bug rather than a glitch. Tested with an interleaved pair.
 
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 

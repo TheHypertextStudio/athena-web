@@ -16,5 +16,6 @@ onboarding
 permissions
 projects
 takeout
+time
 ui
 web

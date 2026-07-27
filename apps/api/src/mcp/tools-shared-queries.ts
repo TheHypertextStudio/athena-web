@@ -1,6 +1,6 @@
 import type { actor } from '@docket/db';
 import { db, initiative, program, project, task, team } from '@docket/db';
-import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
@@ -124,28 +124,21 @@ export async function wouldCreateCycle(
   return rawResultRowCount(reach) > 0;
 }
 
-/** A lightweight projection for `run_view` rows. */
-export interface ViewItem {
+/** A position in the `(createdAt DESC, id DESC)` keyset `list_work` pages on. */
+export interface WorkCursor {
+  readonly createdAt: Date;
   readonly id: string;
-  readonly title: string;
-  readonly state?: string;
-  readonly status?: string;
-}
-
-interface PagedViewItems {
-  readonly items: readonly ViewItem[];
-  readonly nextCursor?: string;
 }
 
 interface ToolCursorPayload {
   readonly v: 1;
-  readonly surface: 'run_view' | 'search';
+  readonly surface: 'list_work';
   readonly key: string;
 }
 
 const ToolCursorPayloadSchema: z.ZodType<ToolCursorPayload> = z.object({
   v: z.literal(1),
-  surface: z.enum(['run_view', 'search']),
+  surface: z.literal('list_work'),
   key: z.string(),
 });
 
@@ -163,130 +156,49 @@ const toolCursorCodec = createCursorCodec({
   secretMissingError: () => new Error('MCP signing secret is not configured'),
 });
 
-function decodeToolCursor(
-  cursor: string | undefined,
-  surface: ToolCursorPayload['surface'],
-): string | undefined {
+/**
+ * Decode a page cursor into the keyset position it names.
+ *
+ * @remarks
+ * The seek predicate itself is built by the caller, because the columns differ per entity — a
+ * cursor is a position, not a query fragment.
+ *
+ * @param cursor - The opaque cursor from a previous page, if any.
+ * @returns the position to resume after, or undefined for the first page.
+ * @throws {ValidationError} When the cursor is unreadable or was minted for another surface.
+ */
+export function decodeWorkCursor(cursor: string | undefined): WorkCursor | undefined {
   if (!cursor) return undefined;
-  const payload = toolCursorCodec.decode(cursor);
-  if (payload.surface !== surface) throw invalidCursor();
-  return payload.key;
+  const [iso, id] = toolCursorCodec.decode(cursor).key.split('|');
+  if (!iso || !id || Number.isNaN(Date.parse(iso))) throw invalidCursor();
+  return { createdAt: new Date(iso), id };
 }
 
-function pageRows<T extends { readonly id: string; readonly createdAt: Date }>(
+/**
+ * Trim an over-fetched result to a page and mint the cursor for the next one.
+ *
+ * @param rows - `limit + 1` rows, so the extra one reveals whether more remain.
+ * @param limit - The page size the caller asked for.
+ * @returns the page and, when more remain, the cursor to continue from.
+ */
+export function pageWorkRows<T extends { readonly id: string; readonly createdAt: Date }>(
   rows: readonly T[],
   limit: number,
-  map: (row: T) => ViewItem,
-): PagedViewItems {
+): { items: Omit<T, 'createdAt'>[]; nextCursor?: string } {
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
   const last = page[page.length - 1];
+  const items = page.map(({ createdAt: _createdAt, ...rest }) => rest);
   return {
-    items: page.map(map),
+    items,
     ...(hasMore && last
       ? {
           nextCursor: toolCursorCodec.encode({
             v: 1,
-            surface: 'run_view',
+            surface: 'list_work',
             key: `${last.createdAt.toISOString()}|${last.id}`,
           }),
         }
       : {}),
   };
-}
-
-/** Run an org-scoped, ad-hoc entity query for `run_view`. */
-export async function runEntityQuery(
-  orgId: string,
-  entity: 'task' | 'project' | 'program' | 'initiative',
-  limit: number,
-  cursor?: string,
-): Promise<PagedViewItems> {
-  const rawCursor = decodeToolCursor(cursor, 'run_view');
-  const [cursorIso, cursorId] = rawCursor?.split('|') ?? [];
-  if (rawCursor && (!cursorIso || !cursorId || Number.isNaN(Date.parse(cursorIso)))) {
-    throw invalidCursor();
-  }
-  const cursorDate = cursorIso ? new Date(cursorIso) : undefined;
-
-  if (entity === 'task') {
-    const seek =
-      cursorDate && cursorId
-        ? or(
-            lt(task.createdAt, cursorDate),
-            and(eq(task.createdAt, cursorDate), lt(task.id, cursorId)),
-          )
-        : undefined;
-    const rows = await db
-      .select({ id: task.id, title: task.title, state: task.state, createdAt: task.createdAt })
-      .from(task)
-      .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt), seek))
-      .orderBy(desc(task.createdAt), desc(task.id))
-      .limit(limit + 1);
-    return pageRows(rows, limit, (r) => ({ id: r.id, title: r.title, state: r.state }));
-  }
-
-  if (entity === 'project') {
-    const seek =
-      cursorDate && cursorId
-        ? or(
-            lt(project.createdAt, cursorDate),
-            and(eq(project.createdAt, cursorDate), lt(project.id, cursorId)),
-          )
-        : undefined;
-    const rows = await db
-      .select({
-        id: project.id,
-        name: project.name,
-        status: project.status,
-        createdAt: project.createdAt,
-      })
-      .from(project)
-      .where(and(eq(project.organizationId, orgId), seek))
-      .orderBy(desc(project.createdAt), desc(project.id))
-      .limit(limit + 1);
-    return pageRows(rows, limit, (r) => ({ id: r.id, title: r.name, status: r.status }));
-  }
-
-  if (entity === 'program') {
-    const seek =
-      cursorDate && cursorId
-        ? or(
-            lt(program.createdAt, cursorDate),
-            and(eq(program.createdAt, cursorDate), lt(program.id, cursorId)),
-          )
-        : undefined;
-    const rows = await db
-      .select({
-        id: program.id,
-        name: program.name,
-        status: program.status,
-        createdAt: program.createdAt,
-      })
-      .from(program)
-      .where(and(eq(program.organizationId, orgId), seek))
-      .orderBy(desc(program.createdAt), desc(program.id))
-      .limit(limit + 1);
-    return pageRows(rows, limit, (r) => ({ id: r.id, title: r.name, status: r.status }));
-  }
-
-  const seek =
-    cursorDate && cursorId
-      ? or(
-          lt(initiative.createdAt, cursorDate),
-          and(eq(initiative.createdAt, cursorDate), lt(initiative.id, cursorId)),
-        )
-      : undefined;
-  const rows = await db
-    .select({
-      id: initiative.id,
-      name: initiative.name,
-      status: initiative.status,
-      createdAt: initiative.createdAt,
-    })
-    .from(initiative)
-    .where(and(eq(initiative.organizationId, orgId), seek))
-    .orderBy(desc(initiative.createdAt), desc(initiative.id))
-    .limit(limit + 1);
-  return pageRows(rows, limit, (r) => ({ id: r.id, title: r.name, status: r.status }));
 }

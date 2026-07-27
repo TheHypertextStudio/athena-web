@@ -10,7 +10,7 @@ Docket ships a first-party [Model Context Protocol](https://modelcontextprotocol
 https://<api-origin>/mcp
 ```
 
-For the hosted deployment that is `https://docket-api.hypertext.studio/mcp` — note the **API** origin, not the web app origin. The endpoint speaks MCP Streamable HTTP (`POST` for messages, `GET` for the SSE stream) and is stateless: no `Mcp-Session-Id` continuity is required or offered.
+For the hosted deployment that is `https://docket-api.hypertext.studio/mcp` — note the **API** origin, not the web app origin. The endpoint speaks MCP Streamable HTTP: `POST` for messages, `GET` for the server→client stream, `DELETE` to end a session. Requests themselves are stateless, so a client may work without ever holding a session. `initialize` returns an `Mcp-Session-Id` anyway, and presenting it unlocks the notification channel described under **Live updates** below.
 
 Discovery documents (what OAuth-aware clients fetch automatically):
 
@@ -122,8 +122,10 @@ the normal action policy still decide whether Athena may execute it or must requ
 
 ## What's exposed
 
-- **Tools** (~26) — task CRUD and workflow (`create_task`, `update_task`, `move_task`, `assign_task`, `set_task_state`, dependencies, subtasks), projects/programs/initiatives, comments and status updates, daily-plan, `run_view` + `find`, agent-session control (`trigger_agent`, `approve_action`, …), and `link_external`.
-  - `find` is ranked relevance search over the whole workspace — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, labels. It reads the same permission-filtered search index the web app uses, so results are trimmed to what the caller may actually see, and it trails writes by a moment. Use `run_view` to enumerate live rows by exact criteria.
+- **Tools** (27) — task CRUD and workflow (`create_task`, `update_task`, `move_task`, `assign_task`, `set_task_state`, dependencies, subtasks), projects/programs/initiatives, comments and status updates, daily-plan, the read tools `find` / `list_work` / `get`, agent-session control (`trigger_agent`, `approve_action`, …), and `link_external`.
+  - `find` is ranked relevance search over the whole workspace — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, labels. It reads the same permission-filtered search index the web app uses, so results are trimmed to what the caller may actually see, and it trails writes by a moment. Use `list_work` to enumerate live rows by exact criteria — it filters by team, project, assignee, delegate, state, priority, label, cycle, due window, blocked-ness, and unfiled (the triage queue). A filter the chosen entity has no column for is rejected, naming the ones it does, rather than silently ignored.
+  - `get` reads one or more entities in full — a task with its dependencies and subtasks, a project with its milestones and latest update. Refs you cannot see come back in `missing` instead of failing the batch.
+- **Names work anywhere ids do** — `teamId: "Platform"`, `assigneeId: "Sarah"`, `state: "In Review"` all resolve server-side. Matching runs exact → prefix → substring and only accepts an unambiguous hit, so an ambiguous name comes back listing the candidates rather than guessing, and an unknown workflow state comes back listing the team's legal ones.
 - **Resources** — reads are modeled as `docket://` resources: `docket://orgs`, `docket://hub/today`, `docket://hub/inbox`, `docket://hub/portfolio`, and templated per-entity URIs (`docket://{org}/{type}/{id}`), all permission-gated with existence-hiding.
 - **Prompts** — workspace-context bootstrap prompts for agent sessions.
 - **Live updates** — a client that completes `initialize` gets an `Mcp-Session-Id` and can hold a

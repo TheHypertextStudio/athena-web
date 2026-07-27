@@ -163,7 +163,7 @@ export async function hydrateAgent(orgId: string, id: string): Promise<unknown> 
   };
 }
 
-/** Saved View: the view definition (results come from the `run_view` tool). */
+/** Saved View: the stored definition only. Executing a saved view is not yet supported; `list_work` takes its filters as arguments instead. */
 export async function hydrateView(orgId: string, id: string): Promise<unknown> {
   const rows = await db
     .select()

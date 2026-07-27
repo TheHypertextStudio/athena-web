@@ -1,10 +1,11 @@
-export type { ViewItem } from './tools-shared-queries';
+export type { WorkCursor } from './tools-shared-queries';
 export {
   assertRefInOrg,
   loadTask,
   orgIdParam,
   resolveStateTransition,
-  runEntityQuery,
+  decodeWorkCursor,
+  pageWorkRows,
   subjectTable,
   wouldCreateCycle,
 } from './tools-shared-queries';

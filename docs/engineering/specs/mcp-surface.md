@@ -220,11 +220,11 @@ This is how an agent that started **read-only** (engineering plan / product §4)
 | `approve_action`         |    F     |      T      |     T      |     F     | `agents:run`      |
 | `reject_action`          |    F     |      T      |     T      |     F     | `agents:run`      |
 | `cancel_session`         |    F     |      T      |     T      |     F     | `agents:run`      |
-| `run_view`               |  **T**   |      —      |     T      |     F     | `work:read`       |
+| `list_work`              |  **T**   |      —      |     T      |     F     | `work:read`       |
 | `find`                   |  **T**   |      —      |     T      |     F     | `work:read`       |
 | `add_to_daily_plan`      |    F     |      F      |     T      |     F     | `work:write`      |
 
-> `run_view` and `find` are _read_ operations exposed as **tools** (not resources) because they take rich query arguments — resources are for addressable-by-URI reads. They keep `readOnlyHint:true` and need only `work:read`.
+> `list_work` and `find` are _read_ operations exposed as **tools** (not resources) because they take rich query arguments — resources are for addressable-by-URI reads. They keep `readOnlyHint:true` and need only `work:read`.
 >
 > **RESOLVED: `search` shipped as `find`, backed by the workspace search engine.** The original
 > implementation ran three unbounded `ILIKE` scans over `task`/`project`/`program` and authorized
@@ -657,7 +657,7 @@ Each `{var}` is completable via the **completion API** (§5 capabilities). `mime
 | `docket://{org}/comment/{id}`    | Comment       | Author Actor, subject ref, body, thread parent.                                                                                                                                                                                                            |
 | `docket://{org}/session/{id}`    | Agent Session | status, agent, task ref, trigger, accountability (`agent` + `initiator`), and the **Session Activity** stream (`thought/action/response/elicitation/error`, with per-action approval status). **No compute/cost** (provider owns it). Subscribable (§4.4). |
 | `docket://{org}/agent/{id}`      | Agent         | provider connection (endpoint/protocol — **no credentials**), `grants[]`, `approval_policy`, accountable owner, guidance.                                                                                                                                  |
-| `docket://{org}/view/{id}`       | Saved View    | View definition (permission-filtered); the _results_ come from `run_view`.                                                                                                                                                                                 |
+| `docket://{org}/view/{id}`       | Saved View    | View definition (permission-filtered); executing a stored view is not supported; `list_work` takes filters as arguments.                                                                                                                                   |
 
 **`resources/read` contract:** returns `contents: [{ uri, mimeType: "application/json", text: <JSON projection> }]`. The projection is a **Zod-validated** read DTO in `@docket/types` (one per type) so the shape is stable. Not-found → JSON-RPC `-32002`; no-grant → `-32002` (do NOT leak existence to unauthorized callers — return not-found, not forbidden).
 
@@ -706,7 +706,7 @@ On `initialize`, the RS advertises:
 - **`completions: {}`** — implement `completion/complete` for: resource-template `{id}` vars (return matching entities the principal can see, by recent/active), `{org}` (the principal's org slugs), and tool enum args (e.g. `team`, `state` from the team's `workflow_states`, `provider`).
 - **`logging: {}`** — **RESOLVED: shipped.** `logging/setLevel` persists to `mcp_session.log_level` and `notifications/message` frames go out over the session's stream ([`mcp-notifications.md`](mcp-notifications.md) §4.6). Never log tokens, credentials, or another principal's data.
 - **`tasks`** — declare `tasks.requests.tools.call` so clients MAY augment `trigger_agent_session` / `run_view` calls as tasks. Tasks are **authorization-context-bound** (spec security): `tasks/get|result|cancel|list` MUST reject task IDs not owned by the requestor's token context. Adopt behind a feature flag (open issue: experimental churn).
-- **Pagination:** honor `cursor`/`nextCursor` on `tools/list`, `resources/list`, `resources/templates/list`, `tasks/list`, and inside `run_view`/`find`.
+- **Pagination:** honor `cursor`/`nextCursor` on `tools/list`, `resources/list`, `resources/templates/list`, `tasks/list`, and inside `list_work`/`find`.
 - **Lifecycle utilities:** support `ping`, progress (`notifications/progress` with the request's `progressToken`), and cancellation (`notifications/cancelled`).
 
 ---

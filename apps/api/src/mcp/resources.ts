@@ -145,6 +145,40 @@ export async function authorizeResourceUri(ctx: McpContext, uri: string): Promis
   });
 }
 
+/** The entity types `get` and the `docket://` template can read. */
+export const READABLE_ENTITY_TYPES = READABLE_TYPES;
+
+/**
+ * Authorize and hydrate one entity, the same way a `docket://` resource read does.
+ *
+ * @remarks
+ * Shared with the `get` tool so a batch read cannot drift from the single read it batches — in
+ * particular so it authorizes per entity rather than once for the request, which is the difference
+ * between a batch read and a way around the permission cascade.
+ *
+ * @param ctx - The authenticated caller.
+ * @param orgId - The organization the entity lives in.
+ * @param type - The entity type.
+ * @param id - The entity id.
+ * @returns the hydrated DTO.
+ * @throws {NotFoundError} When it does not exist or is below the caller's view.
+ */
+export async function readEntity(
+  ctx: McpContext,
+  orgId: string,
+  type: string,
+  id: string,
+): Promise<unknown> {
+  if (!isReadableType(type)) throw new NotFoundError();
+  const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
+  await authorize(actorCtx, 'view', {
+    kind: resourceKindOf(type),
+    id: authTargetId(type, orgId, id),
+    orgId,
+  });
+  return hydrate(type, orgId, id);
+}
+
 /**
  * Build the hydrated read DTO for one entity within an org, or throw not-found.
  *

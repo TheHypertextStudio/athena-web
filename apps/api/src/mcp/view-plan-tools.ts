@@ -9,18 +9,91 @@ import type { McpContext } from './auth';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
-import { orgIdParam, runEntityQuery } from './tools-shared';
+import { ApiError } from '../error';
+import { DESCRIPTOR_HINT, type DescriptorKind, resolveDescriptor } from './descriptors';
+import { READABLE_ENTITY_TYPES, readEntity } from './resources';
 
-const runViewInputSchema = {
+/**
+ * Which readable types can also be addressed by name.
+ *
+ * @remarks
+ * Tasks, comments, updates, sessions, agents, and saved views have no stable human handle — a task
+ * title is neither unique nor short-lived enough to resolve — so those stay id-only.
+ */
+const NAMEABLE: Partial<Record<(typeof READABLE_ENTITY_TYPES)[number], DescriptorKind>> = {
+  project: 'project',
+  program: 'program',
+  initiative: 'initiative',
+  team: 'team',
+  cycle: 'cycle',
+};
+import { listWork, listWorkFilters, WORK_ENTITIES } from './list-work';
+import { decodeWorkCursor, orgIdParam, pageWorkRows } from './tools-shared';
+
+const listWorkInputSchema = {
   orgId: orgIdParam,
-  entity: z.enum(['task', 'project', 'program', 'initiative']),
-  limit: z.number().int().min(1).max(200).default(50),
-  cursor: z.string().optional(),
+  entity: z
+    .enum(WORK_ENTITIES)
+    .describe('Which kind of work to enumerate. Filters are validated against this choice.'),
+  team: listWorkFilters.team.describe(`Only work on this team. ${DESCRIPTOR_HINT}`),
+  project: listWorkFilters.project.describe(`Only work in this project. ${DESCRIPTOR_HINT}`),
+  program: listWorkFilters.program.describe(`Only work under this program. ${DESCRIPTOR_HINT}`),
+  initiative: listWorkFilters.initiative.describe(
+    `Only projects linked to this initiative. ${DESCRIPTOR_HINT}`,
+  ),
+  assignee: listWorkFilters.assignee.describe(
+    `Only tasks this person or agent is accountable for. ${DESCRIPTOR_HINT}`,
+  ),
+  delegate: listWorkFilters.delegate.describe(
+    `Only tasks whose doing was handed to this agent. ${DESCRIPTOR_HINT}`,
+  ),
+  lead: listWorkFilters.lead.describe(`Only projects led by this person. ${DESCRIPTOR_HINT}`),
+  owner: listWorkFilters.owner.describe(
+    `Only programs or initiatives owned by this person. ${DESCRIPTOR_HINT}`,
+  ),
+  state: listWorkFilters.state.describe(
+    'Only tasks in any of these workflow states. Display names resolve when `team` is also set, since states are per-team.',
+  ),
+  status: listWorkFilters.status.describe(
+    'Only projects/programs/initiatives in any of these statuses.',
+  ),
+  priority: listWorkFilters.priority.describe('Only tasks at any of these priorities.'),
+  label: listWorkFilters.label.describe(`Only work carrying this label. ${DESCRIPTOR_HINT}`),
+  cycle: listWorkFilters.cycle.describe(
+    `Only tasks committed to this cycle, by name or number. ${DESCRIPTOR_HINT}`,
+  ),
+  parent: listWorkFilters.parent.describe('Only subtasks of this task id.'),
+  unfiled: listWorkFilters.unfiled.describe(
+    'Only tasks in no project and no program — the triage queue.',
+  ),
+  blocked: listWorkFilters.blocked.describe(
+    'Only tasks with at least one dependency that has not finished.',
+  ),
+  blocking: listWorkFilters.blocking.describe('Only tasks that something else is waiting on.'),
+  dueBefore: listWorkFilters.dueBefore.describe('Only tasks due on or before this `YYYY-MM-DD`.'),
+  dueAfter: listWorkFilters.dueAfter.describe('Only tasks due on or after this `YYYY-MM-DD`.'),
+  updatedAfter: listWorkFilters.updatedAfter.describe(
+    'Only work changed at or after this instant.',
+  ),
+  archived: listWorkFilters.archived.describe(
+    'List archived work instead of active work. Defaults to false.',
+  ),
+  limit: z.number().int().min(1).max(200).default(50).describe('Maximum rows to return.'),
+  cursor: z.string().optional().describe('An opaque cursor from a previous page.'),
 };
 
-const runViewOutputSchema = {
-  entity: z.enum(['task', 'project', 'program', 'initiative']),
-  items: z.array(z.looseObject({ id: z.string() })),
+const listWorkOutputSchema = {
+  entity: z.enum(WORK_ENTITIES),
+  items: z.array(
+    z.object({
+      id: z.string(),
+      title: z.string(),
+      state: z.string().optional(),
+      status: z.string().optional(),
+      assigneeId: z.string().optional(),
+      projectId: z.string().optional(),
+    }),
+  ),
   nextCursor: z.string().optional(),
 };
 
@@ -124,9 +197,9 @@ function findItem(item: SearchResult) {
   };
 }
 
-/** Register run_view, find, and add_to_daily_plan on `server`. */
+/** Register list_work, find, and add_to_daily_plan on `server`. */
 export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): void {
-  const runView = (input: z.infer<z.ZodObject<typeof runViewInputSchema>>) =>
+  const listWorkTool = (input: z.infer<z.ZodObject<typeof listWorkInputSchema>>) =>
     runTool(async () => {
       // A read still requires `view` on the org root; a caller who can't see the org
       // gets the existence-hiding not-found (-32002 surfaced as isError text), never a
@@ -138,26 +211,23 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         orgId: input.orgId,
       });
 
-      const { items, nextCursor } = await runEntityQuery(
-        input.orgId,
-        input.entity,
-        input.limit,
-        input.cursor,
-      );
-      return jsonResult({ entity: input.entity, items, nextCursor });
+      const { entity, limit, cursor, orgId, ...filters } = input;
+      const rows = await listWork(orgId, entity, filters, limit, decodeWorkCursor(cursor));
+      const { items, nextCursor } = pageWorkRows(rows, limit);
+      return jsonResult({ entity, items, ...(nextCursor ? { nextCursor } : {}) });
     });
 
   registerOptionalTaskTool(
     server,
-    'run_view',
+    'list_work',
     {
-      title: 'Run view',
+      title: 'List work',
       description:
-        'Run an ad-hoc, permission-filtered query over tasks/projects/programs/initiatives.',
-      inputSchema: runViewInputSchema,
-      outputSchema: runViewOutputSchema,
+        'Enumerate tasks, projects, programs, or initiatives matching exact criteria — everything assigned to someone, everything blocked, everything due this week, everything unfiled. Filters accept names as well as ids. Use find instead when you know roughly what something is called but not where it lives; this returns live rows, find reads a search index that trails writes.',
+      inputSchema: listWorkInputSchema,
+      outputSchema: listWorkOutputSchema,
       annotations: {
-        title: 'Run view',
+        title: 'List work',
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
@@ -165,8 +235,61 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       },
       execution: { taskSupport: 'optional' },
     },
-    createTaskToolHandler<typeof runViewInputSchema>(runView),
-    runView,
+    createTaskToolHandler<typeof listWorkInputSchema>(listWorkTool),
+    listWorkTool,
+  );
+
+  server.registerTool(
+    'get',
+    {
+      title: 'Get',
+      description:
+        'Read one or more entities in full — a task with its dependencies and subtasks, a project with its milestones and latest update, a session with its whole activity stream. Pass several ids to fetch them in one call. Anything you cannot see is reported in `missing` rather than failing the batch, so one unreadable id never costs you the rest.',
+      inputSchema: {
+        orgId: orgIdParam,
+        type: z
+          .enum(READABLE_ENTITY_TYPES)
+          .describe('What kind of entity the refs name. All refs in one call share a type.'),
+        refs: z
+          .array(z.string().min(1))
+          .min(1)
+          .max(50)
+          .describe(
+            `The entities to read. Projects, programs, initiatives, teams, and cycles also accept names. ${DESCRIPTOR_HINT}`,
+          ),
+      },
+      outputSchema: {
+        items: z.array(z.looseObject({ id: z.string() })),
+        missing: z.array(z.object({ ref: z.string(), reason: z.string() })),
+      },
+      annotations: {
+        title: 'Get',
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    (input) =>
+      runTool(async () => {
+        const items: unknown[] = [];
+        const missing: { ref: string; reason: string }[] = [];
+        for (const ref of input.refs) {
+          try {
+            // Resolved and authorized one at a time: a batch that authorized once would be a way
+            // around the per-entity cascade, not a faster read.
+            const kind = NAMEABLE[input.type];
+            const id = kind ? await resolveDescriptor(input.orgId, kind, ref, 'refs') : ref;
+            items.push(await readEntity(ctx, input.orgId, input.type, id));
+          } catch (err) {
+            missing.push({
+              ref,
+              reason: err instanceof ApiError ? err.code : 'internal',
+            });
+          }
+        }
+        return jsonResult({ items, missing });
+      }),
   );
 
   server.registerTool(
@@ -174,7 +297,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     {
       title: 'Find',
       description:
-        'Search a workspace by relevance across every kind of thing in it — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, and labels. Ranked, so the best match comes first; use this when you know roughly what something is called but not exactly where it lives. To enumerate everything matching exact criteria instead, use run_view. Results come from a search index that trails writes by a moment, so something created seconds ago may not appear yet — use the id returned by the tool that created it rather than searching for it.',
+        'Search a workspace by relevance across every kind of thing in it — tasks, projects, programs, initiatives, cycles, milestones, comments, updates, attachments, calendar events, agent sessions, teams, members, and labels. Ranked, so the best match comes first; use this when you know roughly what something is called but not exactly where it lives. To enumerate everything matching exact criteria instead, use list_work. Results come from a search index that trails writes by a moment, so something created seconds ago may not appear yet — use the id returned by the tool that created it rather than searching for it.',
       inputSchema: findInputSchema,
       outputSchema: findOutputSchema,
       annotations: {

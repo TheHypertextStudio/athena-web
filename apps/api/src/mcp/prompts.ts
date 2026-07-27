@@ -37,7 +37,7 @@ const SYSTEM_PROMPT = [
   '',
   'Prefer the smallest change that accomplishes the goal. When an action needs approval, it',
   'will surface as a pending action on the session -- do not retry it as a different tool.',
-  'Never fabricate ids; resolve them via find, run_view, or the resources first.',
+  'Never fabricate ids. Most tools accept a name directly; otherwise resolve one via find, list_work, or the resources.',
 ].join('\n');
 
 /**
@@ -118,7 +118,7 @@ export function registerPrompts(server: McpRegistrar, ctx: McpContext): void {
         'user',
         [
           `Summarize the current state of organization ${args.org} for a standup.`,
-          `Use run_view (entity=task) and the portfolio resource docket://hub/portfolio to`,
+          `Use list_work (entity=task) and the portfolio resource docket://hub/portfolio to`,
           `ground the summary. Call out blocked work, at-risk projects, and pending approvals.`,
         ].join('\n'),
         'A standup summary request.',

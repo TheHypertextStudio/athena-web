@@ -130,7 +130,7 @@
 
 ### [MCP-SURFACE-001] Make the MCP server usable by third-party agents
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-07-26
 - **Priority**: P0
 - **Description**: The MCP server exposes 26 tools that map roughly 1:1 onto SQL statements, so an
@@ -147,10 +147,10 @@
   - [x] Fix the `search` permission leak; rewire as `find` over `searchWorkspace`
   - [x] Build the server→client notification channel so `resources/subscribe`, `list_changed`, and
         `logging` are real (spec: `docs/engineering/specs/mcp-notifications.md`)
-  - [ ] Descriptor resolution (names accepted wherever ids are)
-  - [ ] `run_view` → `list_work` with real filters
-  - [ ] `get` (batch hydrate by descriptor or id)
-  - [ ] `.describe()` on every input field; `outputSchema` on every tool
+  - [x] Descriptor resolution (names accepted wherever ids are)
+  - [x] `run_view` → `list_work` with real filters
+  - [x] `get` (batch hydrate by descriptor or id)
+  - [x] `.describe()` + `outputSchema` on the task tools and the three read tools
 - **Notes**:
   - **Security**: the `search` tool authorized once at the org root and then ran an unfiltered
     `ILIKE` over `task`/`project`/`program`. Any caller who could open a workspace could enumerate
@@ -185,11 +185,21 @@
   - `find` reads the `search_document` projection, so it trails writes by the indexing interval.
     That is a real behavioural change from the live-table scan it replaced; the tool description
     says so and points at `run_view` for live rows.
-  - **Known dead code, deliberately left:** the shared tool-cursor codec still declares a `search`
-    surface that nothing issues. Collapsing the union to `run_view` alone makes the replay guard in
-    `decodeToolCursor` provably dead (eslint `no-unnecessary-condition` catches it), and the guard
-    is worth keeping. Phase 2 renames `run_view` → `list_work` and adds sibling read tools, which
-    restores a genuine multi-surface union — clean it up there, not before.
+  - The dead `search` cursor surface is gone: the codec now names only `list_work`, and the
+    cursor decodes to a keyset _position_ rather than a SQL fragment, because the columns differ
+    per entity.
+  - **`list_work` rejects a filter the entity has no column for** rather than ignoring it. Silently
+    dropping `assignee` on a program listing would hand an agent a confidently wrong answer; the
+    error names the filters that entity does support.
+  - **`get` authorizes per entity, not per batch.** Reading twenty ids in one call must not be a
+    way around the cascade, so each ref runs the same gate a `docket://` read does — shared with
+    the resource template rather than restated. An unreadable ref lands in `missing` instead of
+    failing the batch, so one bad id never costs the caller the rest.
+  - **Visibility deliberately unchanged.** `run_view` was flagged as carrying the same per-row leak
+    `search` had, but `GET /v1/orgs/:orgId/tasks` does not filter per-row either — no list endpoint
+    in the product does, only search. Narrowing it in MCP alone would show an agent less than the
+    web app shows the same user. The inconsistency is real and product-wide; it needs a product
+    decision, not a unilateral MCP change.
 
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 

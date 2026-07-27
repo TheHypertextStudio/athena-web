@@ -199,7 +199,7 @@ describe('scope helpers', () => {
   });
 
   it('TOOL_SCOPE maps reads/mutations/agents/connectors and covers every registered tool', () => {
-    expect(scopeMod.TOOL_SCOPE['run_view']).toBe('work:read');
+    expect(scopeMod.TOOL_SCOPE['list_work']).toBe('work:read');
     expect(scopeMod.TOOL_SCOPE['create_task']).toBe('work:write');
     expect(scopeMod.TOOL_SCOPE['trigger_agent']).toBe('agents:run');
     expect(scopeMod.TOOL_SCOPE['link_external']).toBe('connectors:link');
@@ -264,7 +264,7 @@ describe('tool scope gating (layer 1, before the grant check)', () => {
     const s = await seedOrg([]); // no grants → below view
     const client = await connect(s.userId, s.email, ['work:read']);
     const res = (await client.callTool({
-      name: 'run_view',
+      name: 'list_work',
       arguments: { orgId: s.orgId, entity: 'task' },
     })) as CallToolResult;
     expect(res.isError).toBe(true);

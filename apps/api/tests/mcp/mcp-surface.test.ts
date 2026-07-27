@@ -424,12 +424,12 @@ describe('MCP tool metadata and task execution', () => {
     } while (cursor);
 
     const createTask = tools.find((tool) => tool.name === 'create_task');
-    const runView = tools.find((tool) => tool.name === 'run_view');
+    const listWork = tools.find((tool) => tool.name === 'list_work');
     const triggerAgent = tools.find((tool) => tool.name === 'trigger_agent');
 
     expect(createTask?.outputSchema?.type).toBe('object');
     expect(createTask?.execution?.taskSupport).toBe('forbidden');
-    expect(runView?.execution?.taskSupport).toBe('optional');
+    expect(listWork?.execution?.taskSupport).toBe('optional');
     expect(triggerAgent?.execution?.taskSupport).toBe('optional');
     for (const tool of tools) {
       expect(tool._meta ?? {}).not.toHaveProperty('docket');
@@ -455,7 +455,7 @@ describe('MCP tool metadata and task execution', () => {
       {
         method: 'tools/call',
         params: {
-          name: 'run_view',
+          name: 'list_work',
           arguments: { orgId: s.orgId, entity: 'task', limit: 5 },
           task: { ttl: 60_000 },
         },
@@ -1050,13 +1050,13 @@ describe('respond_to_session / cancel_session tools', () => {
   });
 });
 
-describe('run_view / search tools', () => {
+describe('list_work / find tools', () => {
   it('runs each entity view for a viewer and hides from a non-member (not-found, not forbidden)', async () => {
     const s = await seedOrg(['view']);
     const client = await connect(s.ctx);
     for (const entity of ['task', 'project', 'program', 'initiative'] as const) {
       const res = (await client.callTool({
-        name: 'run_view',
+        name: 'list_work',
         arguments: { orgId: s.orgId, entity },
       })) as CallToolResult;
       expect(res.isError).toBeFalsy();
@@ -1067,11 +1067,98 @@ describe('run_view / search tools', () => {
     const noGrant = await seedOrg([]);
     const c2 = await connect(noGrant.ctx);
     const hidden = (await c2.callTool({
-      name: 'run_view',
+      name: 'list_work',
       arguments: { orgId: noGrant.orgId, entity: 'task' },
     })) as CallToolResult;
     expect(hidden.isError).toBe(true);
     expect((hidden.content[0] as { text: string }).text).toContain('not_found');
+  });
+
+  it('filters tasks by assignee, state, and blocked-ness', async () => {
+    const s = await seedOrg(['view', 'contribute']);
+    const [mine] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: s.orgId,
+        title: 'Mine',
+        teamId: s.teamId,
+        state: 'todo',
+        assigneeId: s.actorId,
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.task.id });
+    // `s.taskId` blocks `mine`, and the blocker is unfinished, so `mine` is the blocked one.
+    await db.insert(schema.taskDependency).values({
+      organizationId: s.orgId,
+      blockingTaskId: s.taskId,
+      blockedTaskId: mine!.id,
+    });
+    const client = await connect(s.ctx);
+
+    const byAssignee = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'task', assignee: 'Ada' },
+    })) as CallToolResult;
+    const assigned = payload(byAssignee)['items'] as { id: string }[];
+    expect(assigned.map((item) => item.id)).toEqual([mine!.id]);
+
+    const blocked = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'task', blocked: true },
+    })) as CallToolResult;
+    expect((payload(blocked)['items'] as { id: string }[]).map((item) => item.id)).toEqual([
+      mine!.id,
+    ]);
+
+    const blocking = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'task', blocking: true },
+    })) as CallToolResult;
+    expect((payload(blocking)['items'] as { id: string }[]).map((item) => item.id)).toContain(
+      s.taskId,
+    );
+  });
+
+  it('gets several entities at once and reports the unreadable ones separately', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'get',
+      arguments: { orgId: s.orgId, type: 'task', refs: [s.taskId, s.task2Id, MISSING] },
+    })) as CallToolResult;
+    expect(res.isError).toBeFalsy();
+    const body = payload(res) as {
+      items: { id: string }[];
+      missing: { ref: string; reason: string }[];
+    };
+    // One bad ref must not cost the caller the two good ones.
+    expect(body.items.map((item) => item.id).sort()).toEqual([s.taskId, s.task2Id].sort());
+    expect(body.missing).toEqual([{ ref: MISSING, reason: 'not_found' }]);
+  });
+
+  it('gets a project by name', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'get',
+      arguments: { orgId: s.orgId, type: 'project', refs: ['Proj'] },
+    })) as CallToolResult;
+    const body = payload(res) as { items: { id: string }[] };
+    expect(body.items[0]?.id).toBe(s.projectId);
+  });
+
+  it('rejects a filter the entity has no column for, naming the ones it does', async () => {
+    const s = await seedOrg(['view']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'list_work',
+      arguments: { orgId: s.orgId, entity: 'program', assignee: 'Ada' },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    const text = (res.content[0] as { text: string }).text;
+    // Silently ignoring an inapplicable filter would hand back a confidently wrong answer.
+    expect(text).toContain('assignee');
+    expect(text).toContain('owner');
   });
 
   it('finds indexed work and returns the actionable entity id', async () => {
@@ -1163,7 +1250,7 @@ describe('run_view / search tools', () => {
     expect(JSON.stringify(items)).not.toContain('Ship secret');
   });
 
-  it('paginates run_view and find results with opaque cursors', async () => {
+  it('paginates list_work and find results with opaque cursors', async () => {
     const s = await seedOrg(['view']);
     await db.insert(schema.task).values([
       {
@@ -1191,7 +1278,7 @@ describe('run_view / search tools', () => {
     const client = await connect(s.ctx);
 
     const firstView = (await client.callTool({
-      name: 'run_view',
+      name: 'list_work',
       arguments: { orgId: s.orgId, entity: 'task', limit: 2 },
     })) as CallToolResult;
     const firstPayload = PagedViewPayload.parse(payload(firstView));
@@ -1199,7 +1286,7 @@ describe('run_view / search tools', () => {
     expect(firstPayload.nextCursor).toEqual(expect.any(String));
 
     const secondView = (await client.callTool({
-      name: 'run_view',
+      name: 'list_work',
       arguments: {
         orgId: s.orgId,
         entity: 'task',
@@ -1242,7 +1329,7 @@ describe('MCP list pagination', () => {
 
     const toolNames = await collectToolNames(client);
     expect(toolNames).toEqual([...new Set(toolNames)]);
-    expect(toolNames).toEqual(expect.arrayContaining(['run_view', 'find', 'create_task']));
+    expect(toolNames).toEqual(expect.arrayContaining(['list_work', 'find', 'create_task']));
 
     const resourceUris = await collectResourceUris(client);
     expect(resourceUris).toEqual([...new Set(resourceUris)]);

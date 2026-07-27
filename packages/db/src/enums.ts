@@ -670,3 +670,12 @@ export const logLevel = pgEnum('log_level', [
   'alert',
   'emergency',
 ]);
+
+/**
+ * What a change set did to one entity.
+ *
+ * @remarks
+ * `link` covers edges that are not rows a caller edits — a dependency, an initiative association —
+ * where reversing means removing the edge rather than restoring a prior column value.
+ */
+export const changeSetOp = pgEnum('change_set_op', ['create', 'update', 'archive', 'link']);

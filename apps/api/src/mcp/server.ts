@@ -67,7 +67,7 @@ export function buildServer(ctx: McpContext, sessionId: string | null = null): M
     ...(tasksEnabled ? { taskStore: taskStoreForContext(ctx) } : {}),
   });
   const catalog = createMcpCatalog(server, { tasksEnabled });
-  registerTools(catalog, ctx);
+  registerTools(catalog, ctx, sessionId);
   registerResources(catalog, ctx);
   registerPrompts(catalog, ctx);
   catalog.installListHandlers(ctx);

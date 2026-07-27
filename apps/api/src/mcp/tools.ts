@@ -26,6 +26,7 @@ import { registerTaskCrudTools } from './task-crud-tools';
 import { registerTaskDepTools } from './task-dep-tools';
 import { registerTaskFieldTools } from './task-field-tools';
 import { registerViewPlanTools } from './view-plan-tools';
+import { registerWriteTools } from './write-tools';
 
 /**
  * Register every Docket mutation tool on `server`, bound to the calling user.
@@ -39,8 +40,14 @@ import { registerViewPlanTools } from './view-plan-tools';
  *
  * @param server - The per-request {@link McpServer} to register tools on.
  * @param ctx - The authenticated MCP caller.
+ * @param sessionId - The caller's MCP session, stamped onto recorded change sets so a change can
+ *   be traced back to the conversation that made it. Null when the client holds no session.
  */
-export function registerTools(server: McpRegistrar, ctx: McpContext): void {
+export function registerTools(
+  server: McpRegistrar,
+  ctx: McpContext,
+  sessionId: string | null = null,
+): void {
   registerTaskCrudTools(server, ctx);
   registerTaskFieldTools(server, ctx);
   registerTaskDepTools(server, ctx);
@@ -49,4 +56,5 @@ export function registerTools(server: McpRegistrar, ctx: McpContext): void {
   registerContentTools(server, ctx);
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);
+  registerWriteTools(server, ctx, sessionId);
 }

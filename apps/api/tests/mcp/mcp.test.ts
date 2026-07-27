@@ -181,14 +181,14 @@ afterEach(async () => {
   }
 });
 
-describe('create_task tool', () => {
+describe('capture tool', () => {
   it('creates a task for a contributor', async () => {
     const s = await seedOrg(['contribute']);
     const { client } = await harnessFor(s.ctx);
 
     const result = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'From MCP' },
+      name: 'capture',
+      arguments: { orgId: s.orgId, text: 'From MCP' },
     })) as CallToolResult;
 
     expect(result.isError).toBeFalsy();
@@ -209,8 +209,8 @@ describe('create_task tool', () => {
     const { client } = await harnessFor(s.ctx);
 
     const result = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Should not exist' },
+      name: 'capture',
+      arguments: { orgId: s.orgId, text: 'Should not exist' },
     })) as CallToolResult;
 
     expect(result.isError).toBe(true);

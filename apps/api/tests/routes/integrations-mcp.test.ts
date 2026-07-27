@@ -280,8 +280,8 @@ describe('the union toolbox: remote read + local writes in one session', () => {
           content: integrations.SUNSAMA_BACKLOG.map((item, i) => ({
             type: 'tool_use' as const,
             id: `toolu_su_c${String(i)}`,
-            name: 'create_task',
-            input: { orgId: seed.orgId, teamId: seed.teamId, title: item.title },
+            name: 'capture',
+            input: { orgId: seed.orgId, text: item.title },
           })),
         },
         stopReason: 'tool_use',

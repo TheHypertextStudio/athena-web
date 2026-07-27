@@ -41,12 +41,11 @@ test('an MCP client can trigger an agent session and approve its proposed action
   });
 
   // ── Trigger over MCP: a pending session bound to the agent ──
-  const session = await mcpToolCall<{ id: string; status: string }>(
-    request,
-    token,
-    'trigger_agent',
-    { orgId, agentId: agent.id, prompt: 'Plan the launch checklist' },
-  );
+  const session = await mcpToolCall<{ id: string; status: string }>(request, token, 'run_agent', {
+    orgId,
+    agentId: agent.id,
+    prompt: 'Plan the launch checklist',
+  });
   expect(session.status).toBe('pending');
 
   // ── Drive the runtime (the substrate act a human/automation performs) ──
@@ -72,8 +71,8 @@ test('an MCP client can trigger an agent session and approve its proposed action
   const approved = await mcpToolCall<{ id: string; status: string }>(
     request,
     token,
-    'approve_action',
-    { orgId, sessionId: session.id },
+    'manage_session',
+    { orgId, sessionId: session.id, action: 'approve' },
   );
   expect(approved.status).toBe('running');
 

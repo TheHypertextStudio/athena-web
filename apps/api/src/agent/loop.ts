@@ -289,7 +289,7 @@ export async function driveSession(
 
   const maxTurns = env.AGENT_MAX_TURNS;
 
-  // Paid-plan gate, only on a session's FIRST run: every door (REST, the trigger_agent
+  // Paid-plan gate, only on a session's FIRST run: every door (REST, the run_agent
   // MCP tool, the proactive sweep) funnels through here, and resumes of an
   // already-started session are deliberately exempt so an approval arriving after a
   // plan lapse still lands the work the user already reviewed.

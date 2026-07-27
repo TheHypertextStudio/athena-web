@@ -16,30 +16,14 @@ import { and, desc, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import { deriveCaptureTitle } from '../lib/capture-title';
 import { resolveLandingTarget } from '../lib/task-landing';
-import { truncateTitle } from '@docket/agent-runtime';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, undoChangeSet } from './change-set';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
-
-/**
- * Derive a task title from freeform capture text.
- *
- * @remarks
- * The first non-empty line, whitespace collapsed and length-capped — matching `POST /capture`
- * exactly, so text captured through either door lands identically. The full text stays as the
- * description.
- *
- * @param text - The captured text.
- * @returns the single-line title.
- */
-function deriveTitle(text: string): string {
-  const firstLine = text.split('\n').find((line) => line.trim().length > 0) ?? text;
-  return truncateTitle(firstLine.trim().replace(/\s+/g, ' '));
-}
 
 /** Register capture and undo on `server`. */
 export function registerWriteTools(
@@ -59,7 +43,7 @@ export function registerWriteTools(
     {
       title: 'Capture',
       description:
-        'Turn something said into a task, without needing to know where it should go. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. Use create_task when you need to place it precisely.',
+        'Turn something said into a task, without needing to know where it should go. The team, workflow state, current cycle, and assignee are all resolved for you, so this is the cheapest path from a sentence to a tracked piece of work. Use organize when you need to place it precisely, or file several things at once.',
       inputSchema: {
         orgId: orgIdParam,
         text: z
@@ -99,7 +83,7 @@ export function registerWriteTools(
           .insert(task)
           .values({
             organizationId: input.orgId,
-            title: deriveTitle(input.text),
+            title: deriveCaptureTitle(input.text),
             description: input.text,
             teamId: landing.teamId,
             state: landing.state,

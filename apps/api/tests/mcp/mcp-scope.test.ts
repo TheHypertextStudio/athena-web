@@ -200,8 +200,8 @@ describe('scope helpers', () => {
 
   it('TOOL_SCOPE maps reads/mutations/agents/connectors and covers every registered tool', () => {
     expect(scopeMod.TOOL_SCOPE['list_work']).toBe('work:read');
-    expect(scopeMod.TOOL_SCOPE['create_task']).toBe('work:write');
-    expect(scopeMod.TOOL_SCOPE['trigger_agent']).toBe('agents:run');
+    expect(scopeMod.TOOL_SCOPE['capture']).toBe('work:write');
+    expect(scopeMod.TOOL_SCOPE['run_agent']).toBe('agents:run');
     expect(scopeMod.TOOL_SCOPE['link_external']).toBe('connectors:link');
   });
 
@@ -224,8 +224,8 @@ describe('tool scope gating (layer 1, before the grant check)', () => {
     // Read-only token: the grant (contribute) is sufficient, but the SCOPE is not.
     const client = await connect(s.userId, s.email, ['work:read']);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Should be scope-blocked' },
+      name: 'capture',
+      arguments: { orgId: s.orgId, text: 'Should be scope-blocked' },
     })) as CallToolResult;
     expect(res.isError).toBe(true);
     expect((res.content[0] as { text: string }).text).toContain('work:write');
@@ -242,8 +242,8 @@ describe('tool scope gating (layer 1, before the grant check)', () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.userId, s.email, ['work:read', 'work:write']);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Allowed' },
+      name: 'capture',
+      arguments: { orgId: s.orgId, text: 'Allowed' },
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
     expect(payload(res)['id']).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
@@ -253,8 +253,12 @@ describe('tool scope gating (layer 1, before the grant check)', () => {
     const s = await seedOrg(['contribute', 'assign']);
     const client = await connect(s.userId, s.email, ['work:read', 'work:write']);
     const cancel = (await client.callTool({
-      name: 'cancel_session',
-      arguments: { orgId: s.orgId, sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
+      name: 'manage_session',
+      arguments: {
+        orgId: s.orgId,
+        sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        action: 'cancel',
+      },
     })) as CallToolResult;
     expect(cancel.isError).toBe(true);
     expect((cancel.content[0] as { text: string }).text).toContain('agents:run');
@@ -459,7 +463,7 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
       jsonrpc: '2.0',
       id: 2,
       method: 'tools/call',
-      params: { name: 'create_task', arguments: { orgId: s.orgId, teamId: s.teamId, title: 'x' } },
+      params: { name: 'capture', arguments: { orgId: s.orgId, text: 'x' } },
     });
     const res = await mcpApp().request('/mcp', {
       method: 'POST',
@@ -487,7 +491,7 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
       jsonrpc: '2.0',
       id: 3,
       method: 'tools/call',
-      params: { name: 'create_task', arguments: { orgId: s.orgId, teamId: s.teamId, title: 'ok' } },
+      params: { name: 'capture', arguments: { orgId: s.orgId, text: 'ok' } },
     });
     const res = await mcpApp().request('/mcp', {
       method: 'POST',

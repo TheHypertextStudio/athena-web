@@ -201,36 +201,50 @@ describe('descriptor resolution', () => {
     const s = await seedOrg(['contribute', 'assign']);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'create_task',
+      name: 'organize',
       arguments: {
         orgId: s.orgId,
-        // Not one id in this call — the team, the assignee, the project, and the state are all
-        // named the way a person would say them.
-        teamId: 'Core',
-        title: 'Named refs',
-        assigneeId: 'Ada',
-        projectId: 'Proj',
-        state: 'In Progress',
+        items: [
+          {
+            // Not one id in this call — the team, the assignee, the project, and the state are
+            // all named the way a person would say them.
+            ref: 't',
+            kind: 'task',
+            title: 'Named refs',
+            team: 'Core',
+            assignee: 'Ada',
+            project: 'Proj',
+            state: 'In Progress',
+          },
+        ],
       },
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
-    const created = payload(res) as { id: string; state: string };
-    expect(created.state).toBe('in_progress');
+    const created = payload(res) as { placed: { id: string }[] };
+    const id = created.placed[0]!.id;
 
     const [row] = await db
-      .select({ teamId: schema.task.teamId, assigneeId: schema.task.assigneeId })
+      .select({
+        teamId: schema.task.teamId,
+        assigneeId: schema.task.assigneeId,
+        state: schema.task.state,
+      })
       .from(schema.task)
-      .where(eq(schema.task.id, created.id));
+      .where(eq(schema.task.id, id));
     expect(row?.teamId).toBe(s.teamId);
     expect(row?.assigneeId).toBe(s.actorId);
+    expect(row?.state).toBe('in_progress');
   });
 
   it('lists the legal states when one is misnamed', async () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Bad state', state: 'shipped' },
+      name: 'organize',
+      arguments: {
+        orgId: s.orgId,
+        items: [{ ref: 't', kind: 'task', title: 'Bad state', state: 'shipped' }],
+      },
     })) as CallToolResult;
     expect(res.isError).toBe(true);
     // The whole point: the failure is self-correcting, not a dead end.
@@ -247,14 +261,17 @@ describe('descriptor resolution', () => {
       .returning({ id: schema.project.id });
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Exact wins', projectId: 'Proj' },
+      name: 'organize',
+      arguments: {
+        orgId: s.orgId,
+        items: [{ ref: 't', kind: 'task', title: 'Exact wins', project: 'Proj' }],
+      },
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
     const [row] = await db
       .select({ projectId: schema.task.projectId })
       .from(schema.task)
-      .where(eq(schema.task.id, (payload(res) as { id: string }).id));
+      .where(eq(schema.task.id, (payload(res) as { placed: { id: string }[] }).placed[0]!.id));
     expect(row?.projectId).toBe(s.projectId);
     expect(row?.projectId).not.toBe(longer!.id);
   });
@@ -267,8 +284,11 @@ describe('descriptor resolution', () => {
     ]);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Ambiguous', projectId: 'Atlas' },
+      name: 'organize',
+      arguments: {
+        orgId: s.orgId,
+        items: [{ ref: 't', kind: 'task', title: 'Ambiguous', project: 'Atlas' }],
+      },
     })) as CallToolResult;
     expect(res.isError).toBe(true);
     const text = (res.content[0] as { text: string }).text;
@@ -282,212 +302,14 @@ describe('id validation', () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'set_task_state',
-      arguments: { orgId: s.orgId, taskId: 'not-a-ulid', state: 'todo' },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: 'not-a-ulid', action: 'cancel' },
     })) as CallToolResult;
     expect(res.isError).toBe(true);
     // A bare `z.string().min(1)` accepted this and only failed later, as a not-found — which
-    // reads to an agent as "wrong task" rather than "malformed argument".
+    // reads to an agent as "wrong session" rather than "malformed argument".
     const text = (res.content[0] as { text: string }).text;
-    expect(text).toContain('taskId');
-  });
-});
-
-describe('create_task tool', () => {
-  it('creates with all optional fields set (priority/assignee/project/date/state)', async () => {
-    const s = await seedOrg(['contribute', 'assign']);
-    const client = await connect(s.ctx);
-    const res = (await client.callTool({
-      name: 'create_task',
-      arguments: {
-        orgId: s.orgId,
-        teamId: s.teamId,
-        title: 'Full',
-        description: 'd',
-        state: 'in_progress',
-        priority: 'high',
-        assigneeId: s.actorId,
-        projectId: s.projectId,
-        dueDate: '2026-09-01',
-      },
-    })) as CallToolResult;
-    expect(res.isError).toBeFalsy();
-    expect(payload(res)['state']).toBe('in_progress');
-  });
-
-  it('defaults the state from the team workflow + 404 on missing team', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const ok = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Default' },
-    })) as CallToolResult;
-    expect(ok.isError).toBeFalsy();
-    const bad = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', title: 'x' },
-    })) as CallToolResult;
-    expect(bad.isError).toBe(true);
-    expect((bad.content[0] as { text: string }).text).toContain('not_found');
-  });
-
-  it('falls back to backlog when the team has no workflow states', async () => {
-    const s = await seedOrg(['contribute']);
-    const [t] = await db
-      .insert(schema.team)
-      .values({
-        organizationId: s.orgId,
-        name: 'E',
-        key: `E${Math.random().toString(36).slice(2, 6)}`,
-        workflowStates: [],
-      })
-      .returning({ id: schema.team.id });
-    const client = await connect(s.ctx);
-    const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: t!.id, title: 'Bk' },
-    })) as CallToolResult;
-    expect(payload(res)['state']).toBe('backlog');
-  });
-});
-
-describe('update_task tool', () => {
-  it('updates all fields + 404 on missing task', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const res = (await client.callTool({
-      name: 'update_task',
-      arguments: {
-        orgId: s.orgId,
-        taskId: s.taskId,
-        title: 'New',
-        description: 'd',
-        state: 'done',
-        priority: 'low',
-        dueDate: '2026-10-01',
-      },
-    })) as CallToolResult;
-    expect(res.isError).toBeFalsy();
-    // Minimal update (covers the undefined branches).
-    const min = (await client.callTool({
-      name: 'update_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, title: 'Only' },
-    })) as CallToolResult;
-    expect(min.isError).toBeFalsy();
-    const bad = (await client.callTool({
-      name: 'update_task',
-      arguments: { orgId: s.orgId, taskId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', title: 'x' },
-    })) as CallToolResult;
-    expect(bad.isError).toBe(true);
-  });
-
-  it('updates without a title (covers the title-absent branch)', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const res = (await client.callTool({
-      name: 'update_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, priority: 'urgent' },
-    })) as CallToolResult;
-    expect(res.isError).toBeFalsy();
-  });
-});
-
-describe('move_task tool', () => {
-  it('moves team + project, validates both, 404s, and clears project with null', async () => {
-    const s = await seedOrg(['contribute']);
-    const [t2] = await db
-      .insert(schema.team)
-      .values({
-        organizationId: s.orgId,
-        name: 'T2',
-        key: `T${Math.random().toString(36).slice(2, 6)}`,
-      })
-      .returning({ id: schema.team.id });
-    const client = await connect(s.ctx);
-
-    const moved = (await client.callTool({
-      name: 'move_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, teamId: t2!.id, projectId: s.projectId },
-    })) as CallToolResult;
-    expect(moved.isError).toBeFalsy();
-
-    // Clear project with null + no team change.
-    const cleared = (await client.callTool({
-      name: 'move_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, projectId: null },
-    })) as CallToolResult;
-    expect(cleared.isError).toBeFalsy();
-
-    // Bad team.
-    const badTeam = (await client.callTool({
-      name: 'move_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, teamId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
-    })) as CallToolResult;
-    expect(badTeam.isError).toBe(true);
-    // Bad project.
-    const badProj = (await client.callTool({
-      name: 'move_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, projectId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
-    })) as CallToolResult;
-    expect(badProj.isError).toBe(true);
-    // Missing task (no team/project changes provided → set is non-empty? both undefined → empty set; use a team to reach the update).
-    const missing = (await client.callTool({
-      name: 'move_task',
-      arguments: { orgId: s.orgId, taskId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', teamId: t2!.id },
-    })) as CallToolResult;
-    expect(missing.isError).toBe(true);
-  });
-});
-
-describe('assign_task tool', () => {
-  it('assigns, unassigns (null), validates assignee, 404s', async () => {
-    const s = await seedOrg(['assign']);
-    const client = await connect(s.ctx);
-    const assigned = (await client.callTool({
-      name: 'assign_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, assigneeId: s.actorId },
-    })) as CallToolResult;
-    expect(assigned.isError).toBeFalsy();
-    const unassigned = (await client.callTool({
-      name: 'assign_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, assigneeId: null },
-    })) as CallToolResult;
-    expect(unassigned.isError).toBeFalsy();
-    const badAssignee = (await client.callTool({
-      name: 'assign_task',
-      arguments: { orgId: s.orgId, taskId: s.taskId, assigneeId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
-    })) as CallToolResult;
-    expect(badAssignee.isError).toBe(true);
-    const missing = (await client.callTool({
-      name: 'assign_task',
-      arguments: { orgId: s.orgId, taskId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', assigneeId: null },
-    })) as CallToolResult;
-    expect(missing.isError).toBe(true);
-  });
-});
-
-describe('create_project tool', () => {
-  it('creates with and without dates', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const full = (await client.callTool({
-      name: 'create_project',
-      arguments: {
-        orgId: s.orgId,
-        name: 'P',
-        description: 'd',
-        leadId: s.actorId,
-        teamId: s.teamId,
-        startDate: '2026-01-01',
-        targetDate: '2026-02-01',
-      },
-    })) as CallToolResult;
-    expect(full.isError).toBeFalsy();
-    const bare = (await client.callTool({
-      name: 'create_project',
-      arguments: { orgId: s.orgId, name: 'P2' },
-    })) as CallToolResult;
-    expect(bare.isError).toBeFalsy();
+    expect(text).toContain('sessionId');
   });
 });
 
@@ -611,34 +433,34 @@ describe('link_external tool', () => {
   });
 });
 
-describe('trigger_agent tool', () => {
+describe('run_agent tool', () => {
   it('triggers with and without a task, validates agent + task, custom trigger', async () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const withTask = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: s.agentId, taskId: s.taskId, trigger: 'mention' },
     })) as CallToolResult;
     expect(withTask.isError).toBeFalsy();
     const noTask = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: s.agentId },
     })) as CallToolResult;
     expect(noTask.isError).toBeFalsy();
     const badAgent = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
     })) as CallToolResult;
     expect(badAgent.isError).toBe(true);
     const badTask = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: s.agentId, taskId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
     })) as CallToolResult;
     expect(badTask.isError).toBe(true);
   });
 });
 
-describe('approve_action / reject_action tools', () => {
+describe('manage_session approve / reject', () => {
   /** Seed an awaiting-approval session with a proposed action; returns its id. */
   async function seedAwaiting(s: Seed): Promise<string> {
     const [sess] = await db
@@ -669,8 +491,8 @@ describe('approve_action / reject_action tools', () => {
     const id = await seedAwaiting(s);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'approve_action',
-      arguments: { orgId: s.orgId, sessionId: id },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: id, action: 'approve' },
     })) as CallToolResult;
     expect(payload(res)['status']).toBe('running');
   });
@@ -680,8 +502,8 @@ describe('approve_action / reject_action tools', () => {
     const id = await seedAwaiting(s);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'reject_action',
-      arguments: { orgId: s.orgId, sessionId: id },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: id, action: 'reject' },
     })) as CallToolResult;
     expect(payload(res)['status']).toBe('canceled');
   });
@@ -690,8 +512,8 @@ describe('approve_action / reject_action tools', () => {
     const s = await seedOrg(['assign']);
     const client = await connect(s.ctx);
     const missing = (await client.callTool({
-      name: 'approve_action',
-      arguments: { orgId: s.orgId, sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: '01ARZ3NDEKTSV4RRFFQ69G5FAV', action: 'approve' },
     })) as CallToolResult;
     expect(missing.isError).toBe(true);
 
@@ -708,8 +530,8 @@ describe('approve_action / reject_action tools', () => {
       })
       .returning({ id: schema.agentSession.id });
     const notAwaiting = (await client.callTool({
-      name: 'approve_action',
-      arguments: { orgId: s.orgId, sessionId: pending!.id },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: pending!.id, action: 'approve' },
     })) as CallToolResult;
     expect(notAwaiting.isError).toBe(true);
 
@@ -726,8 +548,8 @@ describe('approve_action / reject_action tools', () => {
       })
       .returning({ id: schema.agentSession.id });
     const noAction = (await client.callTool({
-      name: 'approve_action',
-      arguments: { orgId: s.orgId, sessionId: bare!.id },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: bare!.id, action: 'approve' },
     })) as CallToolResult;
     expect(noAction.isError).toBe(true);
   });

@@ -108,8 +108,8 @@ function importScript(seed: Seed): readonly AgentRuntimeModule.ScriptedTurn[] {
   const create = (id: string, title: string) => ({
     type: 'tool_use' as const,
     id,
-    name: 'create_task',
-    input: { orgId: seed.orgId, teamId: seed.teamId, title },
+    name: 'capture',
+    input: { orgId: seed.orgId, text: title },
   });
   return [
     {
@@ -172,13 +172,15 @@ describe('the batch proposal flow (import-shaped)', () => {
       'Reply to the partnership email',
     ]);
 
-    // 3) Inline ghost edit: retitle the third proposal before blessing it.
+    // 3) Inline ghost edit: retitle the third proposal before blessing it. A capture's editable
+    // field is its `text` — the title is derived from the first line, so editing the text is
+    // exactly how a reviewer renames the ghost.
     const third = group.items[2]!;
     const patched = await app.request(`/${session.id}/activity/${third.activityId}/proposal`, {
       method: 'PATCH',
       headers: J,
       body: JSON.stringify({
-        input: { ...third.input, title: 'Reply to the partnership email (priority)' },
+        input: { ...third.input, text: 'Reply to the partnership email (priority)' },
       }),
     });
     expect(patched.status).toBe(200);

@@ -178,13 +178,13 @@ describe('ensureDefaultAgent grant seeding', () => {
 });
 
 describe('in-process MCP as the agent principal', () => {
-  it('create_task succeeds with the seeded grant and attributes the task to the agent actor', async () => {
+  it('capture succeeds with the seeded grant and attributes the task to the agent actor', async () => {
     const seed = await seedOrg();
     const ctx = await internalAgentContext(seed.orgId, seed.agentId);
     const client = await connect(ctx);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: seed.orgId, teamId: seed.teamId, title: 'Book the venue' },
+      name: 'capture',
+      arguments: { orgId: seed.orgId, text: 'Book the venue' },
     })) as CallToolResult;
     expect(res.isError ?? false).toBe(false);
 
@@ -211,8 +211,8 @@ describe('in-process MCP as the agent principal', () => {
     const ctx = await internalAgentContext(seed.orgId, bare!.id);
     const client = await connect(ctx);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: seed.orgId, teamId: seed.teamId, title: 'Nope' },
+      name: 'capture',
+      arguments: { orgId: seed.orgId, text: 'Nope' },
     })) as CallToolResult;
     expect(res.isError).toBe(true);
   });

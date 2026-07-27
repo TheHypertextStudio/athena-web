@@ -19,7 +19,7 @@ import type { SessionRow } from './agent-session-helpers';
  * prompt is persisted as the session's first `response` activity (there is no schema
  * brief column) so {@link runSession} threads it through as the runtime `task` brief;
  * the session then runs and settles like any other. Trigger is `delegation` (a human
- * delegating planning to the agent), matching `trigger_agent`'s default.
+ * delegating planning to the agent), matching `run_agent`'s default.
  *
  * @param orgId - The active organization id.
  * @param actorId - The caller's actor id (the session initiator + prompt author).
@@ -130,7 +130,7 @@ export async function createSessionFromObservation(
  * Run a hosted session against the agentic loop.
  *
  * @remarks
- * Kept as the runner's exported name — the session routes, the `trigger_agent` MCP
+ * Kept as the runner's exported name — the session routes, the `run_agent` MCP
  * tool, and the proactive sweep all call it — but the implementation is now the
  * re-entrant {@link driveSession}: transcript-backed multi-turn tool use over the
  * in-process MCP toolbox, gated by the agent's approval dial.

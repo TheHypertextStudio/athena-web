@@ -7,7 +7,7 @@
  * still escalate a freeform prompt into a planned session. This helper finds the org's
  * default agent (a registered agent whose Actor's display name is {@link DEFAULT_AGENT_NAME})
  * or lazily materializes one — its agent Actor (`kind='agent'`) plus the `agent` row —
- * so {@link import('../routes/agent-sessions')} and the `trigger_agent` MCP tool can bind
+ * so {@link import('../routes/agent-sessions')} and the `run_agent` MCP tool can bind
  * a session to it on first use. The runtime that actually executes the session stays the
  * {@link import('@docket/agent-runtime').AgentRuntime} selected by the API container;
  * this only guarantees a persistent org-scoped agent exists.

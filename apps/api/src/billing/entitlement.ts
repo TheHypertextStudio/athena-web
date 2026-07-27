@@ -11,7 +11,7 @@
  * bypass that is independent of Stripe entirely (see `POST /admin/orgs/:id/billing-exemption`).
  *
  * Enforced at ONE choke point — the first run of {@link driveSession} — which covers
- * every door: the REST session routes, the `trigger_agent` MCP tool, and the
+ * every door: the REST session routes, the `run_agent` MCP tool, and the
  * proactive sweep. Resumes of an already-started session are deliberately NOT
  * re-gated, so an approval arriving after a plan lapse still lands the work the
  * user already reviewed.

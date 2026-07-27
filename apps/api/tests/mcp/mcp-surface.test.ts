@@ -370,47 +370,6 @@ async function collectPromptNames(client: Client): Promise<string[]> {
   return names;
 }
 
-describe('set_task_delegate tool', () => {
-  it('sets a delegate (assign), clears it (null), validates the agent, 404s', async () => {
-    const s = await seedOrg(['assign']);
-    const client = await connect(s.ctx);
-    const set = (await client.callTool({
-      name: 'set_task_delegate',
-      arguments: { orgId: s.orgId, taskId: s.taskId, delegateId: s.agentActorId },
-    })) as CallToolResult;
-    expect(payload(set)['delegateId']).toBe(s.agentActorId);
-
-    const cleared = (await client.callTool({
-      name: 'set_task_delegate',
-      arguments: { orgId: s.orgId, taskId: s.taskId, delegateId: null },
-    })) as CallToolResult;
-    expect(payload(cleared)['delegateId']).toBeNull();
-
-    const badAgent = (await client.callTool({
-      name: 'set_task_delegate',
-      arguments: { orgId: s.orgId, taskId: s.taskId, delegateId: MISSING },
-    })) as CallToolResult;
-    expect(badAgent.isError).toBe(true);
-
-    const missing = (await client.callTool({
-      name: 'set_task_delegate',
-      arguments: { orgId: s.orgId, taskId: MISSING, delegateId: null },
-    })) as CallToolResult;
-    expect(missing.isError).toBe(true);
-  });
-
-  it('is denied for a contribute-only actor (assign required)', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const res = (await client.callTool({
-      name: 'set_task_delegate',
-      arguments: { orgId: s.orgId, taskId: s.taskId, delegateId: null },
-    })) as CallToolResult;
-    expect(res.isError).toBe(true);
-    expect((res.content[0] as { text: string }).text).toContain('forbidden');
-  });
-});
-
 describe('MCP tool metadata and task execution', () => {
   it('advertises standard metadata, output schemas, and task support without Docket confirmation meta', async () => {
     const s = await seedOrg(['view', 'contribute', 'assign', 'manage']);
@@ -423,14 +382,17 @@ describe('MCP tool metadata and task execution', () => {
       cursor = page.nextCursor;
     } while (cursor);
 
-    const createTask = tools.find((tool) => tool.name === 'create_task');
+    const capture = tools.find((tool) => tool.name === 'capture');
     const listWork = tools.find((tool) => tool.name === 'list_work');
-    const triggerAgent = tools.find((tool) => tool.name === 'trigger_agent');
+    const runAgent = tools.find((tool) => tool.name === 'run_agent');
 
-    expect(createTask?.outputSchema?.type).toBe('object');
-    expect(createTask?.execution?.taskSupport).toBe('forbidden');
+    expect(capture?.outputSchema?.type).toBe('object');
+    expect(capture?.execution?.taskSupport).toBe('forbidden');
     expect(listWork?.execution?.taskSupport).toBe('optional');
-    expect(triggerAgent?.execution?.taskSupport).toBe('optional');
+    expect(runAgent?.execution?.taskSupport).toBe('optional');
+    // Every tool declares an output schema — three of twenty-six did before this surface was
+    // rebuilt, while `structuredContent` was emitted for all of them regardless.
+    for (const tool of tools) expect(tool.outputSchema?.type).toBe('object');
     for (const tool of tools) {
       expect(tool._meta ?? {}).not.toHaveProperty('docket');
     }
@@ -440,8 +402,8 @@ describe('MCP tool metadata and task execution', () => {
     const s = await seedOrg(['contribute']);
     const client = await connectWithTasks(s.ctx);
     const res = (await client.callTool({
-      name: 'create_task',
-      arguments: { orgId: s.orgId, teamId: s.teamId, title: 'Structured task' },
+      name: 'capture',
+      arguments: { orgId: s.orgId, text: 'Structured task' },
     })) as CallToolResult;
 
     expect(res.structuredContent).toMatchObject({ state: 'backlog' });
@@ -558,341 +520,6 @@ describe('MCP tool metadata and task execution', () => {
   });
 });
 
-describe('set_task_state tool', () => {
-  it('transitions to a valid state and rejects an unknown one', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const ok = (await client.callTool({
-      name: 'set_task_state',
-      arguments: { orgId: s.orgId, taskId: s.taskId, state: 'done' },
-    })) as CallToolResult;
-    expect(payload(ok)['state']).toBe('done');
-    // The terminal `done` state stamped completedAt.
-    const rows = await db.select().from(schema.task).where(eq(schema.task.id, s.taskId)).limit(1);
-    expect(rows[0]?.completedAt).not.toBeNull();
-
-    const bad = (await client.callTool({
-      name: 'set_task_state',
-      arguments: { orgId: s.orgId, taskId: s.taskId, state: 'nope' },
-    })) as CallToolResult;
-    expect(bad.isError).toBe(true);
-  });
-});
-
-describe('add_subtask tool', () => {
-  it('creates a subtask inheriting the parent team + 404s a missing parent', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const res = (await client.callTool({
-      name: 'add_subtask',
-      arguments: { orgId: s.orgId, parentTaskId: s.taskId, title: 'Sub' },
-    })) as CallToolResult;
-    expect(payload(res)['parentTaskId']).toBe(s.taskId);
-
-    const bad = (await client.callTool({
-      name: 'add_subtask',
-      arguments: { orgId: s.orgId, parentTaskId: MISSING, title: 'x' },
-    })) as CallToolResult;
-    expect(bad.isError).toBe(true);
-  });
-});
-
-describe('add_task_dependency / remove_task_dependency tools', () => {
-  it('adds, is idempotent, rejects self + cycles, then removes', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-
-    const added = (await client.callTool({
-      name: 'add_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.taskId, blockedTaskId: s.task2Id },
-    })) as CallToolResult;
-    expect(payload(added)['alreadyLinked']).toBe(false);
-
-    const again = (await client.callTool({
-      name: 'add_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.taskId, blockedTaskId: s.task2Id },
-    })) as CallToolResult;
-    expect(payload(again)['alreadyLinked']).toBe(true);
-
-    const selfLoop = (await client.callTool({
-      name: 'add_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.taskId, blockedTaskId: s.taskId },
-    })) as CallToolResult;
-    expect(selfLoop.isError).toBe(true);
-
-    // Reverse edge would close a cycle.
-    const cycleEdge = (await client.callTool({
-      name: 'add_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.task2Id, blockedTaskId: s.taskId },
-    })) as CallToolResult;
-    expect(cycleEdge.isError).toBe(true);
-
-    const missing = (await client.callTool({
-      name: 'add_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.taskId, blockedTaskId: MISSING },
-    })) as CallToolResult;
-    expect(missing.isError).toBe(true);
-
-    const removed = (await client.callTool({
-      name: 'remove_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.taskId, blockedTaskId: s.task2Id },
-    })) as CallToolResult;
-    expect(payload(removed)['removed']).toBe(true);
-
-    const removeMissing = (await client.callTool({
-      name: 'remove_task_dependency',
-      arguments: { orgId: s.orgId, blockingTaskId: s.taskId, blockedTaskId: s.task2Id },
-    })) as CallToolResult;
-    expect(removeMissing.isError).toBe(true);
-  });
-});
-
-describe('update_project tool', () => {
-  it('patches fields, no-ops empty patch, validates refs, 404s', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const patched = (await client.callTool({
-      name: 'update_project',
-      arguments: {
-        orgId: s.orgId,
-        projectId: s.projectId,
-        name: 'Renamed',
-        description: 'd',
-        status: 'active',
-        leadId: s.actorId,
-        programId: s.programId,
-        startDate: '2026-01-01',
-        targetDate: '2026-02-01',
-      },
-    })) as CallToolResult;
-    expect(payload(patched)['name']).toBe('Renamed');
-
-    const empty = (await client.callTool({
-      name: 'update_project',
-      arguments: { orgId: s.orgId, projectId: s.projectId },
-    })) as CallToolResult;
-    expect(empty.isError).toBeFalsy();
-
-    const badLead = (await client.callTool({
-      name: 'update_project',
-      arguments: { orgId: s.orgId, projectId: s.projectId, leadId: MISSING },
-    })) as CallToolResult;
-    expect(badLead.isError).toBe(true);
-
-    const emptyMissing = (await client.callTool({
-      name: 'update_project',
-      arguments: { orgId: s.orgId, projectId: MISSING },
-    })) as CallToolResult;
-    expect(emptyMissing.isError).toBe(true);
-
-    const patchMissing = (await client.callTool({
-      name: 'update_project',
-      arguments: { orgId: s.orgId, projectId: MISSING, name: 'x' },
-    })) as CallToolResult;
-    expect(patchMissing.isError).toBe(true);
-  });
-});
-
-describe('create_program tool', () => {
-  it('requires manage and validates the owner', async () => {
-    const manager = await seedOrg(['manage']);
-    const client = await connect(manager.ctx);
-    const ok = (await client.callTool({
-      name: 'create_program',
-      arguments: { orgId: manager.orgId, name: 'P', description: 'd', ownerId: manager.actorId },
-    })) as CallToolResult;
-    expect(ok.isError).toBeFalsy();
-    expect(payload(ok)['name']).toBe('P');
-
-    const badOwner = (await client.callTool({
-      name: 'create_program',
-      arguments: { orgId: manager.orgId, name: 'P2', ownerId: MISSING },
-    })) as CallToolResult;
-    expect(badOwner.isError).toBe(true);
-
-    const contributor = await seedOrg(['contribute']);
-    const c2 = await connect(contributor.ctx);
-    const denied = (await c2.callTool({
-      name: 'create_program',
-      arguments: { orgId: contributor.orgId, name: 'Nope' },
-    })) as CallToolResult;
-    expect(denied.isError).toBe(true);
-    expect((denied.content[0] as { text: string }).text).toContain('forbidden');
-  });
-});
-
-describe('create_initiative tool', () => {
-  it('creates with and without an owner/date', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const full = (await client.callTool({
-      name: 'create_initiative',
-      arguments: {
-        orgId: s.orgId,
-        name: 'Theme',
-        summary: 'A strategic theme',
-        description: 'd',
-        ownerId: s.actorId,
-        status: 'proposed',
-        health: 'at_risk',
-        priority: 'high',
-        updateCadence: 'quarterly',
-        targetDate: '2026-06-01',
-      },
-    })) as CallToolResult;
-    expect(payload(full)['name']).toBe('Theme');
-    expect(payload(full)).toMatchObject({
-      summary: 'A strategic theme',
-      status: 'proposed',
-      health: 'at_risk',
-      priority: 'high',
-      updateCadence: 'quarterly',
-    });
-
-    const bare = (await client.callTool({
-      name: 'create_initiative',
-      arguments: { orgId: s.orgId, name: 'Bare' },
-    })) as CallToolResult;
-    expect(bare.isError).toBeFalsy();
-
-    const badOwner = (await client.callTool({
-      name: 'create_initiative',
-      arguments: { orgId: s.orgId, name: 'X', ownerId: MISSING },
-    })) as CallToolResult;
-    expect(badOwner.isError).toBe(true);
-  });
-
-  it('updates Initiative state and document fields', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-    const updated = (await client.callTool({
-      name: 'update_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        summary: 'Ready for board review',
-        status: 'completed',
-        health: 'on_track',
-        priority: 'medium',
-        updateCadence: 'none',
-      },
-    })) as CallToolResult;
-    expect(updated.isError).toBeFalsy();
-    expect(payload(updated)).toMatchObject({
-      summary: 'Ready for board review',
-      status: 'completed',
-      health: 'on_track',
-      priority: 'medium',
-      updateCadence: 'none',
-    });
-
-    const noOp = (await client.callTool({
-      name: 'update_initiative',
-      arguments: { orgId: s.orgId, initiativeId: s.initiativeId },
-    })) as CallToolResult;
-    expect(noOp.isError).toBeFalsy();
-    expect(payload(noOp)).toMatchObject({ id: s.initiativeId });
-  });
-});
-
-describe('link_initiative tool', () => {
-  it('links/unlinks a project and a program, is idempotent, validates targets', async () => {
-    const s = await seedOrg(['contribute']);
-    const client = await connect(s.ctx);
-
-    const linkProj = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'project',
-        targetId: s.projectId,
-      },
-    })) as CallToolResult;
-    expect(payload(linkProj)['linked']).toBe(true);
-
-    // Idempotent re-link.
-    const relink = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'project',
-        targetId: s.projectId,
-      },
-    })) as CallToolResult;
-    expect(payload(relink)['linked']).toBe(true);
-
-    const unlinkProj = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'project',
-        targetId: s.projectId,
-        action: 'unlink',
-      },
-    })) as CallToolResult;
-    expect(payload(unlinkProj)['linked']).toBe(false);
-
-    const linkProg = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'program',
-        targetId: s.programId,
-      },
-    })) as CallToolResult;
-    expect(payload(linkProg)['linked']).toBe(true);
-
-    const unlinkProg = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'program',
-        targetId: s.programId,
-        action: 'unlink',
-      },
-    })) as CallToolResult;
-    expect(payload(unlinkProg)['linked']).toBe(false);
-
-    const badInit = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: MISSING,
-        targetType: 'project',
-        targetId: s.projectId,
-      },
-    })) as CallToolResult;
-    expect(badInit.isError).toBe(true);
-
-    const badTargetProj = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'project',
-        targetId: MISSING,
-      },
-    })) as CallToolResult;
-    expect(badTargetProj.isError).toBe(true);
-
-    const badTargetProg = (await client.callTool({
-      name: 'link_initiative',
-      arguments: {
-        orgId: s.orgId,
-        initiativeId: s.initiativeId,
-        targetType: 'program',
-        targetId: MISSING,
-      },
-    })) as CallToolResult;
-    expect(badTargetProg.isError).toBe(true);
-  });
-});
-
 describe('comment tool', () => {
   it('comments, threads a reply, rejects cross-subject/2-level/parent-404', async () => {
     const s = await seedOrg(['comment']);
@@ -956,7 +583,7 @@ describe('comment tool', () => {
   });
 });
 
-describe('respond_to_session / cancel_session tools', () => {
+describe('manage_session respond / cancel', () => {
   it('replies to an elicitation, resuming the session, and 409s a non-elicitation', async () => {
     const s = await seedOrg(['contribute']);
     const [sess] = await db
@@ -991,26 +618,50 @@ describe('respond_to_session / cancel_session tools', () => {
 
     const client = await connect(s.ctx);
     const ok = (await client.callTool({
-      name: 'respond_to_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id, activityId: elicit!.id, body: 'an answer' },
+      name: 'manage_session',
+      arguments: {
+        orgId: s.orgId,
+        sessionId: sess!.id,
+        action: 'respond',
+        activityId: elicit!.id,
+        body: 'an answer',
+      },
     })) as CallToolResult;
     expect(payload(ok)['status']).toBe('running');
 
     const notElicit = (await client.callTool({
-      name: 'respond_to_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id, activityId: thought!.id, body: 'x' },
+      name: 'manage_session',
+      arguments: {
+        orgId: s.orgId,
+        sessionId: sess!.id,
+        action: 'respond',
+        activityId: thought!.id,
+        body: 'x',
+      },
     })) as CallToolResult;
     expect(notElicit.isError).toBe(true);
 
     const missingSession = (await client.callTool({
-      name: 'respond_to_session',
-      arguments: { orgId: s.orgId, sessionId: MISSING, activityId: elicit!.id, body: 'x' },
+      name: 'manage_session',
+      arguments: {
+        orgId: s.orgId,
+        sessionId: MISSING,
+        action: 'respond',
+        activityId: elicit!.id,
+        body: 'x',
+      },
     })) as CallToolResult;
     expect(missingSession.isError).toBe(true);
 
     const missingActivity = (await client.callTool({
-      name: 'respond_to_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id, activityId: MISSING, body: 'x' },
+      name: 'manage_session',
+      arguments: {
+        orgId: s.orgId,
+        sessionId: sess!.id,
+        action: 'respond',
+        activityId: MISSING,
+        body: 'x',
+      },
     })) as CallToolResult;
     expect(missingActivity.isError).toBe(true);
   });
@@ -1030,21 +681,21 @@ describe('respond_to_session / cancel_session tools', () => {
       .returning({ id: schema.agentSession.id });
     const client = await connect(s.ctx);
     const ok = (await client.callTool({
-      name: 'cancel_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: sess!.id, action: 'cancel' },
     })) as CallToolResult;
     expect(payload(ok)['status']).toBe('canceled');
 
     // Already terminal → 409.
     const again = (await client.callTool({
-      name: 'cancel_session',
-      arguments: { orgId: s.orgId, sessionId: sess!.id },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: sess!.id, action: 'cancel' },
     })) as CallToolResult;
     expect(again.isError).toBe(true);
 
     const missing = (await client.callTool({
-      name: 'cancel_session',
-      arguments: { orgId: s.orgId, sessionId: MISSING },
+      name: 'manage_session',
+      arguments: { orgId: s.orgId, sessionId: MISSING, action: 'cancel' },
     })) as CallToolResult;
     expect(missing.isError).toBe(true);
   });
@@ -1329,7 +980,7 @@ describe('MCP list pagination', () => {
 
     const toolNames = await collectToolNames(client);
     expect(toolNames).toEqual([...new Set(toolNames)]);
-    expect(toolNames).toEqual(expect.arrayContaining(['list_work', 'find', 'create_task']));
+    expect(toolNames).toEqual(expect.arrayContaining(['list_work', 'find', 'capture']));
 
     const resourceUris = await collectResourceUris(client);
     expect(resourceUris).toEqual([...new Set(resourceUris)]);
@@ -1352,30 +1003,6 @@ describe('MCP list pagination', () => {
     await expect(client.listTools({ cursor: 'not-a-valid-cursor' })).rejects.toThrow(
       /Invalid cursor/,
     );
-  });
-});
-
-describe('add_to_daily_plan tool', () => {
-  it('adds a task, is idempotent, and 404s a missing task', async () => {
-    const s = await seedOrg(['view']);
-    const client = await connect(s.ctx);
-    const added = (await client.callTool({
-      name: 'add_to_daily_plan',
-      arguments: { orgId: s.orgId, taskId: s.taskId, date: '2026-06-07' },
-    })) as CallToolResult;
-    expect(payload(added)['created']).toBe(true);
-
-    const again = (await client.callTool({
-      name: 'add_to_daily_plan',
-      arguments: { orgId: s.orgId, taskId: s.taskId, date: '2026-06-07' },
-    })) as CallToolResult;
-    expect(payload(again)['created']).toBe(false);
-
-    const missing = (await client.callTool({
-      name: 'add_to_daily_plan',
-      arguments: { orgId: s.orgId, taskId: MISSING, date: '2026-06-07' },
-    })) as CallToolResult;
-    expect(missing.isError).toBe(true);
   });
 });
 
@@ -1698,12 +1325,12 @@ describe('prompts', () => {
   });
 });
 
-describe('trigger_agent with a prompt argument', () => {
+describe('run_agent with a prompt argument', () => {
   it('accepts the optional prompt and persists the session', async () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: s.agentId, taskId: s.taskId, prompt: 'do the thing' },
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
@@ -1724,7 +1351,7 @@ describe('trigger_agent with a prompt argument', () => {
     const client = await connect(s.ctx);
     // Task-less trigger: the prompt is the only brief available to the run.
     const res = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: s.agentId, prompt: 'plan outreach strategy' },
     })) as CallToolResult;
     expect(res.isError).toBeFalsy();
@@ -1743,7 +1370,7 @@ describe('trigger_agent with a prompt argument', () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const res = (await client.callTool({
-      name: 'trigger_agent',
+      name: 'run_agent',
       arguments: { orgId: s.orgId, agentId: s.agentId, taskId: s.taskId },
     })) as CallToolResult;
     const sessionId = payload(res)['id'] as string;

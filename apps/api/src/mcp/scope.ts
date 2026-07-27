@@ -63,24 +63,8 @@ export const CONNECT_SCOPES: readonly string[] = [...MCP_SCOPES, OFFLINE_ACCESS_
  */
 export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // work:write — work-layer mutations
-  create_task: 'work:write',
-  update_task: 'work:write',
-  move_task: 'work:write',
-  assign_task: 'work:write',
-  set_task_delegate: 'work:write',
-  set_task_state: 'work:write',
-  add_subtask: 'work:write',
-  add_task_dependency: 'work:write',
-  remove_task_dependency: 'work:write',
-  create_project: 'work:write',
-  update_project: 'work:write',
-  create_program: 'work:write',
-  create_initiative: 'work:write',
-  update_initiative: 'work:write',
-  link_initiative: 'work:write',
   comment: 'work:write',
   report_status: 'work:write',
-  add_to_daily_plan: 'work:write',
   capture: 'work:write',
   update: 'work:write',
   organize: 'work:write',
@@ -91,11 +75,8 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   // connectors:link — external linking
   link_external: 'connectors:link',
   // agents:run — agent session lifecycle
-  trigger_agent: 'agents:run',
-  respond_to_session: 'agents:run',
-  approve_action: 'agents:run',
-  reject_action: 'agents:run',
-  cancel_session: 'agents:run',
+  run_agent: 'agents:run',
+  manage_session: 'agents:run',
   // work:read — reads exposed as tools
   list_work: 'work:read',
   find: 'work:read',

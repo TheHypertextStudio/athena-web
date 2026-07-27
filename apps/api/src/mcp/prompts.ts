@@ -30,8 +30,10 @@ const SYSTEM_PROMPT = [
   'bounded efforts that move planned -> active -> completed (or canceled).',
   '',
   'Read entities as resources at docket://{org}/{type}/{id} and discover the orgs you can',
-  'act in via docket://orgs. Make changes only through the mutation tools (create_task,',
-  'update_task, set_task_state, post_update, add_comment, trigger_agent, ...). Every tool is',
+  'act in via docket://orgs. Make changes through the write tools, which are named for intent',
+  'rather than for tables: capture (a sentence becomes a task), organize (a whole plan at once),',
+  'update (change work by describing which work, not by listing ids), link, archive, comment,',
+  'report_status, plan_day. Every one of them is reversible with undo, and every one is',
   'org-scoped: pass the orgId you are acting within; you may only act in orgs you are a',
   'member of, and only with the capability the operation requires.',
   '',
@@ -100,7 +102,7 @@ export function registerPrompts(server: McpRegistrar, ctx: McpContext): void {
         `Work the Docket task ${args.task_id} in organization ${args.org}.`,
         `Read its full context first: docket://${args.org}/task/${args.task_id}.`,
         args.goal ? `Goal: ${args.goal}` : 'Goal: advance the task toward its next workflow state.',
-        'Use update_task / set_task_state / add_comment to record progress; do not invent ids.',
+        'Use update to move it and comment to record progress; do not invent ids.',
       ];
       return textPrompt('user', lines.join('\n'), 'A focused task brief.');
     },

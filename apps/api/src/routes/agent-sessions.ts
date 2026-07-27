@@ -354,7 +354,7 @@ Semantics: the org-scoped session must exist (404 \`Session not found\` otherwis
       tag: 'Agents',
       summary: 'List pending proposal groups',
       response: z.array(ProposalGroupOut),
-      description: `List the session's still-\`proposed\` actions grouped by \`proposalGroupId\` (one batch per assistant turn), each member ghost-projected as {@link ProposalItemOut} — the read behind both the session proposal card ("review all N") and the workspace ghost rows. A \`create_task\` proposal carries a \`ghost\` task shape (title/team/project/dueDate) that views render as a translucent, editable row; proposals without a spatial home have \`ghost: null\` and review in the session card. Editing goes through \`PATCH /:id/activity/:activityId/proposal\`; deciding through the group approve/reject routes. Org-scoped 404 when the session is missing. A read; org membership suffices.`,
+      description: `List the session's still-\`proposed\` actions grouped by \`proposalGroupId\` (one batch per assistant turn), each member ghost-projected as {@link ProposalItemOut} — the read behind both the session proposal card ("review all N") and the workspace ghost rows. A proposal that resolves to exactly one task — a \`capture\`, or a single-item \`organize\` — carries a \`ghost\` task shape (title/team/project/dueDate) that views render as a translucent, editable row; proposals without a spatial home have \`ghost: null\` and review in the session card. Editing goes through \`PATCH /:id/activity/:activityId/proposal\`; deciding through the group approve/reject routes. Org-scoped 404 when the session is missing. A read; org membership suffices.`,
     }),
     zParam(idParam),
     async (c) => {

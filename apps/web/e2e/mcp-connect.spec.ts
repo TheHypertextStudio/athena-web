@@ -66,19 +66,20 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
   const toolNames = (
     (tools.body as { result?: { tools?: { name: string }[] } }).result?.tools ?? []
   ).map((t) => t.name);
-  expect(toolNames).toContain('create_task');
+  expect(toolNames).toContain('capture');
 
   const orgs = await mcpReadResource<{ id: string }[]>(request, readToken, 'docket://orgs');
   expect(orgs.map((o) => o.id)).toContain(orgId);
 
   // ── A write with the read-only token: the §2.6 step-up challenge, not a silent error ──
+  // `capture` resolves its own landing team, so the call names none — but onboarding must still
+  // have minted one, or there would be nowhere for the captured task to land.
   const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${orgId}/teams`);
-  const teamId = teams.items[0]?.id;
-  expect(teamId, 'onboarding must have minted a team').toBeTruthy();
+  expect(teams.items[0]?.id, 'onboarding must have minted a team').toBeTruthy();
 
   const denied = await mcpCall(request, readToken, 'tools/call', {
-    name: 'create_task',
-    arguments: { orgId, teamId, title: 'Should be blocked' },
+    name: 'capture',
+    arguments: { orgId, text: 'Should be blocked' },
   });
   expect(denied.status).toBe(403);
   expect(denied.wwwAuthenticate).toContain('insufficient_scope');
@@ -104,12 +105,10 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
     'a token granted offline_access must carry a refresh token',
   ).toBeTruthy();
   const writeToken = stepUp.accessToken;
-  const created = await mcpToolCall<{ id: string; state: string }>(
-    request,
-    writeToken,
-    'create_task',
-    { orgId, teamId, title: 'Created over MCP e2e' },
-  );
+  const created = await mcpToolCall<{ id: string; state: string }>(request, writeToken, 'capture', {
+    orgId,
+    text: 'Created over MCP e2e',
+  });
   expect(created.id).toBeTruthy();
 
   // ── The write is real: the typed RPC surface sees the task ──

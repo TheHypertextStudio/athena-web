@@ -134,8 +134,8 @@ function createTaskScript(seed: Seed): readonly AgentRuntimeModule.ScriptedTurn[
           {
             type: 'tool_use',
             id: 'toolu_ct_1',
-            name: 'create_task',
-            input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Book the venue' },
+            name: 'capture',
+            input: { orgId: seed.orgId, text: 'Book the venue' },
           },
         ],
       },
@@ -188,8 +188,8 @@ describe('driveSession — act_with_approval (the default dial)', () => {
     expect(action?.proposalGroupId).toBeTruthy();
     expect(action?.body.action?.toolCall).toEqual({
       connection: 'docket',
-      tool: 'create_task',
-      input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Book the venue' },
+      tool: 'capture',
+      input: { orgId: seed.orgId, text: 'Book the venue' },
       toolUseId: 'toolu_ct_1',
     });
     expect(action?.body.action?.mode).toBe('proposal');

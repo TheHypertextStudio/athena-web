@@ -4,9 +4,10 @@
  * @remarks
  * The UI contract behind the ghost system: still-`proposed` actions are grouped by
  * `proposalGroupId` (one batch per assistant turn) and each member's stored
- * `toolCall` is projected into a surface-shaped ghost — a `create_task` becomes a
- * translucent, editable task row in the workspace views; anything without a spatial
- * home falls back to the session proposal card (`ghost: null`). Editing a ghost
+ * `toolCall` is projected into a surface-shaped ghost — a proposal that resolves to exactly one
+ * task becomes a translucent, editable task row in the workspace views; anything without a spatial
+ * home, such as a multi-node `organize` plan, falls back to the session proposal card
+ * (`ghost: null`). Editing a ghost
  * PATCHes the stored `toolCall.input` (only while `proposed`); approval executes
  * exactly what is stored.
  */
@@ -16,21 +17,73 @@ import { and, asc, eq, isNotNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../error';
+import { deriveCaptureTitle } from '../lib/capture-title';
 import type { ActivityRow } from '../routes/agent-session-helpers';
 
-/** Project one stored tool call into its workspace ghost, when it has one. */
+/** Every id in Docket is a 26-char Crockford-base32 ULID. */
+const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
+ * Read a proposed reference, keeping only what the workspace can actually resolve.
+ *
+ * @remarks
+ * The write tools accept names wherever they accept ids, so a proposal may carry "Platform
+ * Migration" where the ghost's contract wants a project id. A ghost renders inside the workspace
+ * views, which look up by id — so a name is dropped rather than passed through, and the ghost shows
+ * the field as unset instead of pointing at nothing. The name still reaches the reviewer in the
+ * proposal `summary` and the editable `input`.
+ *
+ * @param value - The proposed reference.
+ * @returns the id, or null when it was a name or absent.
+ */
+function ghostRef(value: unknown): string | null {
+  return typeof value === 'string' && ULID.test(value) ? value : null;
+}
+
+/** Read a proposed date, which is a plain `YYYY-MM-DD` on every tool that takes one. */
+function ghostDate(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+/**
+ * Project one stored tool call into its workspace ghost, when it has one.
+ *
+ * @remarks
+ * A ghost is a translucent, editable task row rendered in place, so only proposals that resolve to
+ * exactly one task get one. `capture` always does; `organize` does when its plan happens to be a
+ * single task, which is the common shape for "add a task from what we discussed". A multi-node
+ * plan has no single spatial home and falls back to the session proposal card — the tree ghost is
+ * a separate surface, not something to fake by picking the first item.
+ *
+ * @param tool - The proposed tool.
+ * @param input - Its stored, still-editable input.
+ * @returns the ghost, or null when the proposal has no spatial home.
+ */
 function projectGhost(
   tool: string,
   input: Record<string, unknown>,
 ): z.input<typeof GhostTaskOut> | null {
-  if (tool !== 'create_task') return null;
-  const title = typeof input['title'] === 'string' ? input['title'] : '';
+  if (tool === 'capture') {
+    const text = input['text'];
+    if (typeof text !== 'string' || text.trim().length === 0) return null;
+    // The same derivation `capture` itself uses, so the preview and the write agree on the title.
+    return { title: deriveCaptureTitle(text), teamId: null, projectId: null, dueDate: null };
+  }
+
+  if (tool !== 'organize') return null;
+  const items = input['items'];
+  if (!Array.isArray(items) || items.length !== 1) return null;
+  const only: unknown = items[0];
+  if (typeof only !== 'object' || only === null) return null;
+  const item = only as Record<string, unknown>;
+  if (item['kind'] !== 'task') return null;
+  const title = typeof item['title'] === 'string' ? item['title'] : '';
   if (!title) return null;
   return {
     title,
-    teamId: typeof input['teamId'] === 'string' ? input['teamId'] : null,
-    projectId: typeof input['projectId'] === 'string' ? input['projectId'] : null,
-    dueDate: typeof input['dueDate'] === 'string' ? input['dueDate'] : null,
+    teamId: ghostRef(item['team']),
+    projectId: ghostRef(item['project']),
+    dueDate: ghostDate(item['dueDate']),
   };
 }
 

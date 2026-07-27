@@ -13,22 +13,17 @@
  * Every tool declares ALL FOUR {@link import('@modelcontextprotocol/sdk/types.js').ToolAnnotations}
  * hints explicitly (`readOnlyHint`/`destructiveHint`/`idempotentHint`/`openWorldHint`)
  * per mcp-surface.md §3.2 — Docket's own DB is a closed world (`openWorldHint:false`)
- * except `link_external` and `trigger_agent` which touch external systems.
+ * except `link_external` and `run_agent` which touch external systems.
  */
 import type { McpRegistrar } from './catalog';
 
 import type { McpContext } from './auth';
 import { registerArchiveTool } from './archive-tool';
 import { registerContentTools } from './content-tools';
-import { registerInitiativeTools } from './initiative-tools';
 import { registerLinkTool } from './link-tool';
 import { registerOrganizeTool } from './organize-tool';
 import { registerPlanTools } from './plan-tools';
-import { registerProjectTools } from './project-tools';
 import { registerSessionTools } from './session-tools';
-import { registerTaskCrudTools } from './task-crud-tools';
-import { registerTaskDepTools } from './task-dep-tools';
-import { registerTaskFieldTools } from './task-field-tools';
 import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
 import { registerWriteTools } from './write-tools';
@@ -53,11 +48,6 @@ export function registerTools(
   ctx: McpContext,
   sessionId: string | null = null,
 ): void {
-  registerTaskCrudTools(server, ctx);
-  registerTaskFieldTools(server, ctx);
-  registerTaskDepTools(server, ctx);
-  registerProjectTools(server, ctx);
-  registerInitiativeTools(server, ctx);
   registerContentTools(server, ctx);
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);

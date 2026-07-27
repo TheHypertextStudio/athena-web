@@ -5,7 +5,7 @@ import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { NotFoundError } from '../error';
+import { NotFoundError, ValidationError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
@@ -33,7 +33,7 @@ const sessionRefOutputSchema = {
 /** Every session tool takes the session it acts on; only the verb differs. */
 const sessionIdParam = AgentSessionId.describe('The agent session to act on.');
 
-/** Register trigger_agent, respond_to_session, approve_action, reject_action, cancel_session. */
+/** Register run_agent and manage_session on `server`. */
 export function registerSessionTools(server: McpRegistrar, ctx: McpContext): void {
   const triggerAgent = (input: z.infer<z.ZodObject<typeof triggerAgentInputSchema>>) =>
     runTool(async () => {
@@ -102,11 +102,11 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
 
   registerOptionalTaskTool(
     server,
-    'trigger_agent',
+    'run_agent',
     {
-      title: 'Trigger agent',
+      title: 'Run agent',
       description:
-        'Create an agent session for a registered agent (optionally on a task) to be run.',
+        'Start an agent working — on a task, or on a freeform instruction. Returns the session, which manage_session then drives: answering its questions, approving or rejecting what it proposes, or stopping it.',
       inputSchema: triggerAgentInputSchema,
       outputSchema: sessionRefOutputSchema,
       annotations: {
@@ -124,134 +124,106 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
   );
 
   server.registerTool(
-    'respond_to_session',
+    'manage_session',
     {
-      title: 'Respond to session',
+      title: 'Manage agent session',
       description:
-        'Answer an agent elicitation in a live session (resumes an awaiting_input session).',
+        'Drive a running agent session: `respond` answers a question it asked, `approve` and `reject` decide on the action it is waiting on, and `cancel` stops it. These were four tools with four shapes, but they are one thing — a decision about a session that is waiting on you.',
       inputSchema: {
         orgId: orgIdParam,
         sessionId: sessionIdParam,
-        activityId: SessionActivityId.describe('The elicitation activity being answered.'),
-        body: z.string().min(1).describe('The answer to give the agent.'),
+        action: z
+          .enum(SESSION_ACTIONS)
+          .describe(
+            'What to do. `respond` needs `activityId` and `body`; the rest need neither, since they act on whatever the session is currently waiting on.',
+          ),
+        activityId: SessionActivityId.optional().describe(
+          'The question being answered. Required for `respond`.',
+        ),
+        body: z
+          .string()
+          .min(1)
+          .optional()
+          .describe('The answer to give the agent. Required for `respond`.'),
       },
       outputSchema: {
-        sessionId: AgentSessionId,
-        status: z.string().describe('The session lifecycle status after the reply.'),
+        id: AgentSessionId,
+        status: z.string().describe('The session lifecycle status after the call.'),
       },
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
+        // `approve` executes whatever the agent proposed, and `cancel` ends a run.
+        destructiveHint: true,
+        idempotentHint: true,
         openWorldHint: false,
       },
     },
     (input) =>
       runTool(async () => {
-        // The reply route gates on `contribute`.
+        // Deciding on a proposed action is an `assign`-level act (permissions §9.3), exactly as
+        // the agent-sessions router gates its approve route; answering and cancelling are
+        // lifecycle acts gated on `contribute`.
+        const needsAssign = input.action === 'approve' || input.action === 'reject';
         const actorCtx = await scopedActor(ctx, input.orgId, 'agents:run');
-        await authorize(actorCtx, 'contribute', {
+        await authorize(actorCtx, needsAssign ? 'assign' : 'contribute', {
           kind: 'organization',
           id: input.orgId,
           orgId: input.orgId,
         });
-        const status = await replyToElicitation(
-          input.orgId,
-          input.sessionId,
-          input.activityId,
-          input.body,
+
+        const result = await runSessionAction(input.orgId, input.sessionId, input);
+        await enqueueSearchUpsert(input.orgId, 'agent_session', result.id);
+        return jsonResult(result);
+      }),
+  );
+}
+
+/** The decisions a caller can make about a session that is waiting on them. */
+const SESSION_ACTIONS = ['respond', 'approve', 'reject', 'cancel'] as const;
+
+/** One session action, already authorized. */
+interface SessionActionInput {
+  readonly action: (typeof SESSION_ACTIONS)[number];
+  readonly activityId?: string;
+  readonly body?: string;
+}
+
+/**
+ * Apply one session action.
+ *
+ * @param orgId - The organization the session runs in.
+ * @param sessionId - The session.
+ * @param input - What to do.
+ * @returns the session and its status afterwards.
+ * @throws {ValidationError} When `respond` is missing the question or the answer.
+ */
+async function runSessionAction(
+  orgId: string,
+  sessionId: string,
+  input: SessionActionInput,
+): Promise<{ id: string; status: string }> {
+  switch (input.action) {
+    case 'respond': {
+      if (input.activityId === undefined || input.body === undefined) {
+        throw new ValidationError(
+          new z.ZodError([
+            {
+              code: 'custom',
+              path: ['action'],
+              message: 'Responding needs both activityId and body.',
+              input: input.action,
+            },
+          ]),
         );
-        await enqueueSearchUpsert(input.orgId, 'agent_session', input.sessionId);
-        return jsonResult({ sessionId: input.sessionId, status });
-      }),
-  );
-
-  server.registerTool(
-    'approve_action',
-    {
-      title: 'Approve agent action',
-      description:
-        'Approve the latest proposed action of an awaiting-approval agent session (resumes it).',
-      inputSchema: { orgId: orgIdParam, sessionId: sessionIdParam },
-      outputSchema: sessionRefOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    (input) =>
-      runTool(async () => {
-        // The session approval gate is an `assign`-level act (permissions §9.3), exactly
-        // as the agent-sessions router's approve route requires.
-        const actorCtx = await scopedActor(ctx, input.orgId, 'agents:run');
-        await authorize(actorCtx, 'assign', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-        const row = await resolveSessionAction(input.orgId, input.sessionId, 'approved');
-        await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
-        return jsonResult({ id: row.id, status: row.status });
-      }),
-  );
-
-  server.registerTool(
-    'reject_action',
-    {
-      title: 'Reject agent action',
-      description:
-        'Reject the latest proposed action of an awaiting-approval agent session (cancels it).',
-      inputSchema: { orgId: orgIdParam, sessionId: sessionIdParam },
-      outputSchema: sessionRefOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    (input) =>
-      runTool(async () => {
-        const actorCtx = await scopedActor(ctx, input.orgId, 'agents:run');
-        await authorize(actorCtx, 'assign', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-        const row = await resolveSessionAction(input.orgId, input.sessionId, 'rejected');
-        await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
-        return jsonResult({ id: row.id, status: row.status });
-      }),
-  );
-
-  server.registerTool(
-    'cancel_session',
-    {
-      title: 'Cancel session',
-      description: 'Cancel a non-terminal agent session (stamps endedAt).',
-      inputSchema: { orgId: orgIdParam, sessionId: sessionIdParam },
-      outputSchema: sessionRefOutputSchema,
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
-    },
-    (input) =>
-      runTool(async () => {
-        // Lifecycle transitions are gated on `contribute` in the agent-sessions router.
-        const actorCtx = await scopedActor(ctx, input.orgId, 'agents:run');
-        await authorize(actorCtx, 'contribute', {
-          kind: 'organization',
-          id: input.orgId,
-          orgId: input.orgId,
-        });
-        const row = await cancelSession(input.orgId, input.sessionId);
-        await enqueueSearchUpsert(input.orgId, 'agent_session', row.id);
-        return jsonResult({ id: row.id, status: row.status });
-      }),
-  );
+      }
+      const status = await replyToElicitation(orgId, sessionId, input.activityId, input.body);
+      return { id: sessionId, status };
+    }
+    case 'approve':
+      return resolveSessionAction(orgId, sessionId, 'approved');
+    case 'reject':
+      return resolveSessionAction(orgId, sessionId, 'rejected');
+    case 'cancel':
+      return cancelSession(orgId, sessionId);
+  }
 }

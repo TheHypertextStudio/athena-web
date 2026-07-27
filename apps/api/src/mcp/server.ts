@@ -26,6 +26,7 @@ import { createSession, endSession, resolveSession, SESSION_HEADER } from './ses
 import { oauthIssuer, resolveMcpContext } from './auth';
 import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
+import { withRequestScope } from './request-context';
 import { registerResources } from './resources';
 import { challenge401, challenge403, CONNECT_SCOPES, TOOL_SCOPE } from './scope';
 import { taskStoreForContext } from './task-store';
@@ -585,7 +586,10 @@ export async function mcpHandler(c: Context): Promise<Response> {
   for (const id of activeIds) activeMcpRequests.set(requestKey(id), activeEntry);
 
   try {
-    const response = await transport.handleRequest(raw);
+    // The scope wraps dispatch, so anything the tool body reaches — descriptor resolution most of
+    // all — can send a server→client request without that server being threaded through every
+    // signature between here and there.
+    const response = await withRequestScope(server.server, () => transport.handleRequest(raw));
     const withCleanup = responseWithCleanup(response, cleanup);
     if (!mintedSession) return withCleanup;
     // Hand the new session id back on the `initialize` response so the client can open the

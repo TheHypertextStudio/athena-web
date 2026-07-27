@@ -33,6 +33,8 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import { askWhichOne } from './elicit';
+import { currentElicitor } from './request-context';
 
 /** The entity kinds a descriptor can name. */
 export type DescriptorKind =
@@ -108,7 +110,11 @@ function unresolved(
  * @param candidates - Everything in scope it could refer to.
  * @returns the resolved id.
  */
-function pick(field: string, value: string, candidates: readonly Candidate[]): string {
+async function pick(
+  field: string,
+  value: string,
+  candidates: readonly Candidate[],
+): Promise<string> {
   const needle = value.trim().toLowerCase();
   const tiers: readonly ((candidate: Candidate) => boolean)[] = [
     (candidate) =>
@@ -122,6 +128,11 @@ function pick(field: string, value: string, candidates: readonly Candidate[]): s
     const only = hits.length === 1 ? hits[0] : undefined;
     if (only) return only.id;
     if (hits.length > 1) {
+      // Ambiguity is a question, not a mistake — ask it in the host's own chrome when the client
+      // can render one. A client that cannot still gets the candidates in the error, which is
+      // enough to re-issue correctly, so eliciting is a shortcut rather than the only path.
+      const chosen = await askWhichOne(currentElicitor(), field, value, hits);
+      if (chosen !== null) return chosen;
       unresolved(
         field,
         value,
@@ -296,7 +307,7 @@ export async function resolveAcross<K extends DescriptorKind>(
     }
   }
 
-  const id = byId ? all[0]?.id : pick(field, value, all);
+  const id = byId ? all[0]?.id : await pick(field, value, all);
   if (id === undefined) {
     throw new NotFoundError(`No ${kinds.join(' or ')} with that id in this organization`);
   }

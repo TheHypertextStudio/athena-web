@@ -21,41 +21,9 @@ import { truncateTitle } from '@docket/agent-runtime';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
-import { recordChangeSet, undoChangeSet } from './change-set';
+import { recordChangeSet, trackedFields, undoChangeSet } from './change-set';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
-
-/** The columns a change set records for a task, and restores on undo. */
-const TASK_TRACKED = [
-  'title',
-  'description',
-  'state',
-  'priority',
-  'assigneeId',
-  'delegateId',
-  'projectId',
-  'programId',
-  'teamId',
-  'dueDate',
-  'completedAt',
-  'canceledAt',
-  'archivedAt',
-] as const;
-
-/**
- * Project a task row down to the fields a change set tracks.
- *
- * @remarks
- * Recording the whole row would make undo refuse on any unrelated edit — `updatedAt` alone would
- * defeat it. Narrowing to the fields a tool can actually write is what lets undo work on a live
- * workspace rather than only an untouched one.
- *
- * @param row - The task row.
- * @returns the tracked subset.
- */
-function trackedTask(row: Record<string, unknown>): Record<string, unknown> {
-  return Object.fromEntries(TASK_TRACKED.map((key) => [key, row[key]]));
-}
 
 /**
  * Derive a task title from freeform capture text.
@@ -151,7 +119,7 @@ export function registerWriteTools(
           actorId: actorCtx.actorId,
           origin: originFor('capture'),
           summary: `Captured "${row.title}"`,
-          changes: [{ kind: 'task', id: row.id, op: 'create', after: trackedTask(row) }],
+          changes: [{ kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) }],
         });
 
         return jsonResult({

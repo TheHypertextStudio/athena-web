@@ -33,6 +33,70 @@ const RECORDABLE = { task, project, program, initiative } as const;
 /** One recordable entity kind. */
 export type RecordableKind = keyof typeof RECORDABLE;
 
+/**
+ * The columns a change set records per kind, and the only ones undo restores.
+ *
+ * @remarks
+ * Recording the whole row would make undo refuse on any unrelated edit — `updatedAt` alone would
+ * defeat it. Narrowing to the fields a tool can actually write is what lets undo work on a live
+ * workspace rather than only an untouched one. `archivedAt` is here because archive is a recorded
+ * op; the external-provenance columns are not, because no tool on this surface writes them.
+ */
+const TRACKED: Record<RecordableKind, readonly string[]> = {
+  task: [
+    'title',
+    'description',
+    'state',
+    'priority',
+    'assigneeId',
+    'delegateId',
+    'projectId',
+    'programId',
+    'teamId',
+    'dueDate',
+    'completedAt',
+    'canceledAt',
+    'archivedAt',
+  ],
+  project: [
+    'name',
+    'description',
+    'status',
+    'health',
+    'leadId',
+    'programId',
+    'teamId',
+    'startDate',
+    'targetDate',
+    'archivedAt',
+  ],
+  program: ['name', 'description', 'status', 'health', 'ownerId', 'archivedAt'],
+  initiative: [
+    'name',
+    'description',
+    'status',
+    'health',
+    'priority',
+    'ownerId',
+    'targetDate',
+    'archivedAt',
+  ],
+};
+
+/**
+ * Project a row down to the fields a change set tracks for its kind.
+ *
+ * @param kind - The entity kind.
+ * @param row - The full row.
+ * @returns the tracked subset.
+ */
+export function trackedFields(
+  kind: RecordableKind,
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  return Object.fromEntries(TRACKED[kind].map((key) => [key, row[key]]));
+}
+
 /** A single recorded change, before it is written. */
 export interface ChangeRecord {
   readonly kind: RecordableKind;

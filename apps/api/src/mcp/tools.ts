@@ -25,6 +25,7 @@ import { registerSessionTools } from './session-tools';
 import { registerTaskCrudTools } from './task-crud-tools';
 import { registerTaskDepTools } from './task-dep-tools';
 import { registerTaskFieldTools } from './task-field-tools';
+import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
 import { registerWriteTools } from './write-tools';
 
@@ -57,4 +58,5 @@ export function registerTools(
   registerSessionTools(server, ctx);
   registerViewPlanTools(server, ctx);
   registerWriteTools(server, ctx, sessionId);
+  registerUpdateTool(server, ctx, sessionId);
 }

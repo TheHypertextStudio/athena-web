@@ -122,15 +122,23 @@ test.describe('offline behaviour', () => {
   test('registers a worker that takes control and precaches the offline page', async ({ page }) => {
     await loadControlled(page, '/sign-in');
 
-    const precached = await page.evaluate(async () => {
-      const names = await caches.keys();
-      const precacheName = names.find((name) => name.startsWith('docket-precache-'));
-      if (!precacheName) return [];
-      const cache = await caches.open(precacheName);
-      return (await cache.keys()).map((request) => new URL(request.url).pathname).sort();
-    });
-
-    expect(precached).toContain('/offline.html');
+    // Polled for the same reason every other cache assertion in this file is: the precache fills
+    // asynchronously as the worker claims the page, so a single read samples an arbitrary moment
+    // and fails with a destroyed execution context whenever it lands during a navigation. This
+    // was the one cache read left un-polled.
+    await expect
+      .poll(
+        async () =>
+          page.evaluate(async () => {
+            const names = await caches.keys();
+            const precacheName = names.find((name) => name.startsWith('docket-precache-'));
+            if (!precacheName) return [];
+            const cache = await caches.open(precacheName);
+            return (await cache.keys()).map((request) => new URL(request.url).pathname).sort();
+          }),
+        { message: 'the worker should precache the offline page' },
+      )
+      .toContain('/offline.html');
   });
 
   test('serves the offline page for a navigation with no network, keeping the URL', async ({

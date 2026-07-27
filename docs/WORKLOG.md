@@ -76,6 +76,7 @@
   `get-session` returned `NONE`, reproducing the report exactly. The genuine-expiry path was
   separately confirmed to still raise the interlock, and the signed-in marketing page was rendered
   and screenshotted (0 × "Sign in", 3 × "Open Docket").
+
 ### [ENV-DRIFT-001] A fresh clone cannot boot the API
 
 - **Status**: REVIEW

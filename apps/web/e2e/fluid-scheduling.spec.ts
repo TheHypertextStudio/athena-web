@@ -285,6 +285,11 @@ test.describe('fluid scheduling interaction contract', () => {
 
     const schedule = scheduleViewport(page);
     await expect(scheduleLane(page, '2026-03-08')).toBeVisible();
+    // The calendar auto-scrolls to a relevant initial position on mount (near "now" at the fixed
+    // clock time), which races an immediate reset to 0 — resetting first just gets overwritten
+    // once that one-time effect fires. Wait for it to move away from 0 (proving it already ran)
+    // before resetting, so the reset below isn't fought.
+    await expect.poll(() => schedule.evaluate((element) => element.scrollTop)).not.toBe(0);
     await schedule.evaluate((element) => {
       element.scrollTop = 0;
     });

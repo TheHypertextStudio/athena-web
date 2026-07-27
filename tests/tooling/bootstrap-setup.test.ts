@@ -279,7 +279,7 @@ describe('production account-creation deployment contract', () => {
       'BETTER_AUTH_ALLOWED_HOSTS: "${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}"',
     );
     expect(workflow).toContain(
-      'BETTER_AUTH_TRUSTED_ORIGINS: "${{ vars.WEB_URL }},${{ vars.ADMIN_URL }},https://claude.ai,https://claude.com"',
+      'BETTER_AUTH_TRUSTED_ORIGINS: "${{ vars.WEB_URL }},${{ vars.ADMIN_URL }}"',
     );
     expect(workflow).toContain('--env-vars-file=${{ runner.temp }}/docket-api-env.yaml');
     expect(workflow).not.toContain('BETTER_AUTH_TRUSTED_ORIGINS=');

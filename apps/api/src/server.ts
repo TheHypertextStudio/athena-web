@@ -13,11 +13,11 @@
 import { serve } from '@hono/node-server';
 import { auth } from '@docket/auth';
 import { Hono } from 'hono';
-import { cors } from 'hono/cors';
 
 import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
+import { buildCorsMiddleware } from './cors';
 import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
@@ -44,15 +44,7 @@ const trustedOrigins =
 /** The root HTTP server: global middleware, the auth mount, the `/v1` app, and docs. */
 export const server = new Hono<AppEnv>();
 
-server.use(
-  '*',
-  cors({
-    origin: trustedOrigins,
-    credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization'],
-    exposeHeaders: ['Authorization', 'WWW-Authenticate'],
-  }),
-);
+server.use('*', buildCorsMiddleware(trustedOrigins));
 server.use('*', sessionMiddleware);
 // CIMD preflight (mcp-surface.md §2.6): Better Auth resolves authorize clients by exact
 // `client_id`, so URL-form MCP client ids must be fetched/validated/upserted into the OAuth

@@ -150,3 +150,10 @@ The authoritative surface contract is [`specs/mcp-surface.md`](specs/mcp-surface
 ## Self-hosting: the server is on by default
 
 The OAuth AS/RS is core functionality — it is **always on**, in every deploy, with no MCP-specific configuration required. Its URLs derive from the base config every deploy already sets: `MCP_ISSUER_URL` from `API_URL`, `MCP_RESOURCE_URL` from `${API_URL}/mcp`, and `OIDC_LOGIN_PAGE_URL` from `${WEB_URL}/sign-in`. Set one of those three only to override its derivation (e.g. a non-standard sign-in route). `MCP_ALLOWED_ORIGINS` is a distinct security allowlist (browser Origins permitted to hit `/mcp`) and is always set explicitly per environment — see [deployment.md](deployment.md) and `.env.example`.
+
+Dynamic client registration, token exchange, introspection, revocation, the JWKS, and the AS/RS
+discovery documents are public by RFC 7591/6749/7662/7009/8414/9728 design — a client
+authenticates itself, never with a session cookie — so they run under an open, credential-free
+CORS policy (`apps/api/src/cors.ts`) rather than `BETTER_AUTH_TRUSTED_ORIGINS`. Any MCP client's
+web UI can call them without an origin ever being added to a list; nothing needs to change here
+for a new one to work.

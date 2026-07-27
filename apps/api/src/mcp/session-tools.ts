@@ -1,5 +1,6 @@
 import { agent, agentSession, db, sessionActivity, task } from '@docket/db';
 import { SessionTrigger } from '@docket/types';
+import { AgentSessionId, SessionActivityId } from '@docket/types';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -18,16 +19,19 @@ import {
 
 const triggerAgentInputSchema = {
   orgId: orgIdParam,
-  agentId: z.string().min(1),
-  taskId: z.string().optional(),
+  agentId: z.string().min(1).describe('The registered agent to run, by id.'),
+  taskId: z.string().optional().describe('Run the agent against this task, by id.'),
   trigger: SessionTrigger.optional(),
-  prompt: z.string().optional(),
+  prompt: z.string().optional().describe('An opening instruction for the session.'),
 };
 
 const sessionRefOutputSchema = {
-  id: z.string(),
-  status: z.string(),
+  id: AgentSessionId,
+  status: z.string().describe('The session lifecycle status after the call.'),
 };
+
+/** Every session tool takes the session it acts on; only the verb differs. */
+const sessionIdParam = z.string().min(1).describe('The agent session to act on, by id.');
 
 /** Register trigger_agent, respond_to_session, approve_action, reject_action, cancel_session. */
 export function registerSessionTools(server: McpRegistrar, ctx: McpContext): void {
@@ -127,9 +131,13 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
         'Answer an agent elicitation in a live session (resumes an awaiting_input session).',
       inputSchema: {
         orgId: orgIdParam,
-        sessionId: z.string().min(1),
-        activityId: z.string().min(1),
-        body: z.string().min(1),
+        sessionId: sessionIdParam,
+        activityId: SessionActivityId.describe('The elicitation activity being answered.'),
+        body: z.string().min(1).describe('The answer to give the agent.'),
+      },
+      outputSchema: {
+        sessionId: AgentSessionId,
+        status: z.string().describe('The session lifecycle status after the reply.'),
       },
       annotations: {
         readOnlyHint: false,
@@ -164,7 +172,8 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
       title: 'Approve agent action',
       description:
         'Approve the latest proposed action of an awaiting-approval agent session (resumes it).',
-      inputSchema: { orgId: orgIdParam, sessionId: z.string().min(1) },
+      inputSchema: { orgId: orgIdParam, sessionId: sessionIdParam },
+      outputSchema: sessionRefOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -194,7 +203,8 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
       title: 'Reject agent action',
       description:
         'Reject the latest proposed action of an awaiting-approval agent session (cancels it).',
-      inputSchema: { orgId: orgIdParam, sessionId: z.string().min(1) },
+      inputSchema: { orgId: orgIdParam, sessionId: sessionIdParam },
+      outputSchema: sessionRefOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,
@@ -221,7 +231,8 @@ export function registerSessionTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Cancel session',
       description: 'Cancel a non-terminal agent session (stamps endedAt).',
-      inputSchema: { orgId: orgIdParam, sessionId: z.string().min(1) },
+      inputSchema: { orgId: orgIdParam, sessionId: sessionIdParam },
+      outputSchema: sessionRefOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,

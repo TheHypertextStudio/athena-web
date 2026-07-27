@@ -1,5 +1,5 @@
 import { comment, db, integration, task, team, update } from '@docket/db';
-import { Health } from '@docket/types';
+import { CommentId, Health, TaskId, UpdateId } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -8,6 +8,7 @@ import { NotFoundError, ValidationError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
+import { DESCRIPTOR_HINT } from './descriptors';
 import { orgIdParam, subjectTable } from './tools-shared';
 
 /** Register add_comment, post_update, link_external on `server`. */
@@ -19,10 +20,22 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
       description: "Post a comment on a task/project/program/initiative (the caller's own actor).",
       inputSchema: {
         orgId: orgIdParam,
-        subjectType: z.enum(['task', 'project', 'program', 'initiative']),
-        subjectId: z.string().min(1),
-        body: z.string().min(1),
-        parentCommentId: z.string().optional(),
+        subjectType: z
+          .enum(['task', 'project', 'program', 'initiative'])
+          .describe('What kind of thing is being commented on.'),
+        subjectId: z.string().min(1).describe('The thing being commented on, by id.'),
+        body: z.string().min(1).describe('The comment text, as markdown.'),
+        parentCommentId: z
+          .string()
+          .optional()
+          .describe(
+            'Reply to this comment. Threads are one level deep — a reply cannot itself be replied to.',
+          ),
+      },
+      outputSchema: {
+        id: CommentId,
+        subjectType: z.string(),
+        subjectId: z.string(),
       },
       annotations: {
         readOnlyHint: false,
@@ -105,10 +118,19 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         "Post a status update on a project/program/initiative; the latest health also sets the subject's current health.",
       inputSchema: {
         orgId: orgIdParam,
-        subjectType: z.enum(['project', 'program', 'initiative']),
-        subjectId: z.string().min(1),
-        body: z.string().min(1),
+        subjectType: z
+          .enum(['project', 'program', 'initiative'])
+          .describe(
+            'What the update is about. Tasks do not take status updates; comment on them instead.',
+          ),
+        subjectId: z.string().min(1).describe('The thing being reported on, by id.'),
+        body: z.string().min(1).describe('The narrative update, as markdown.'),
         health: Health.optional(),
+      },
+      outputSchema: {
+        id: UpdateId,
+        subjectType: z.string(),
+        subjectId: z.string(),
       },
       annotations: {
         readOnlyHint: false,
@@ -166,12 +188,21 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         'Materialize an external item as a linked task carrying its provenance, idempotently.',
       inputSchema: {
         orgId: orgIdParam,
-        integrationId: z.string().min(1),
-        teamId: z.string().min(1),
-        title: z.string().min(1),
-        externalId: z.string().min(1),
-        description: z.string().optional(),
-        externalUrl: z.string().optional(),
+        integrationId: z.string().min(1).describe('The connected integration the item came from.'),
+        teamId: z.string().min(1).describe(`The team the linked task lands on. ${DESCRIPTOR_HINT}`),
+        title: z.string().min(1).describe("The external item's title."),
+        externalId: z
+          .string()
+          .min(1)
+          .describe(
+            "The provider's id for the item. Linking is idempotent on this, so a repeat call returns the existing task.",
+          ),
+        description: z.string().optional().describe('The external body, as markdown.'),
+        externalUrl: z.string().optional().describe('A link back to the item in its own system.'),
+      },
+      outputSchema: {
+        id: TaskId,
+        alreadyLinked: z.boolean().describe('True when this external item was already linked.'),
       },
       annotations: {
         readOnlyHint: false,

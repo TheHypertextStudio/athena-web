@@ -7,6 +7,14 @@ import {
   program,
   project,
 } from '@docket/db';
+import {
+  Health,
+  InitiativeOut,
+  InitiativePriority,
+  InitiativeStatus,
+  InitiativeUpdateCadence,
+  ProgramId,
+} from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -17,7 +25,26 @@ import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
+import { DESCRIPTOR_HINT } from './descriptors';
 import { assertRefInOrg, orgIdParam } from './tools-shared';
+
+/**
+ * The shape both initiative writes return.
+ *
+ * @remarks
+ * Derived from the canonical `InitiativeOut` and shared between create and update, so the two
+ * cannot drift and neither restates a field the DTO already defines. `health` is re-declared only
+ * because the tool returns it nullable where the DTO does not.
+ */
+const initiativeOutputSchema = InitiativeOut.pick({
+  id: true,
+  name: true,
+  summary: true,
+  status: true,
+  priority: true,
+  updateCadence: true,
+  targetDate: true,
+}).extend({ health: Health.nullable() }).shape;
 
 /** Register Initiative and Program mutation tools on `server`. */
 export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): void {
@@ -29,10 +56,11 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         'Create an ongoing program (status active/paused/archived; programs never complete).',
       inputSchema: {
         orgId: orgIdParam,
-        name: z.string().min(1),
-        description: z.string().optional(),
-        ownerId: z.string().optional(),
+        name: z.string().min(1).describe('What the program is called.'),
+        description: z.string().optional().describe('The full brief, as markdown.'),
+        ownerId: z.string().optional().describe(`Who is accountable for it. ${DESCRIPTOR_HINT}`),
       },
+      outputSchema: { id: ProgramId, name: z.string() },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -78,18 +106,21 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
         'Create a cross-cutting theme (associates with programs/projects; holds no work).',
       inputSchema: {
         orgId: orgIdParam,
-        name: z.string().min(1),
-        summary: z.string().max(280).optional(),
-        description: z.string().optional(),
-        ownerId: z.string().optional(),
-        status: z.enum(['proposed', 'active', 'completed', 'canceled']).default('active'),
-        health: z.enum(['on_track', 'at_risk', 'off_track']).optional(),
-        priority: z.enum(['none', 'low', 'medium', 'high']).default('none'),
-        updateCadence: z
-          .enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'none'])
-          .default('monthly'),
-        targetDate: z.iso.date().optional(),
+        name: z.string().min(1).describe('What the initiative is called.'),
+        summary: z
+          .string()
+          .max(280)
+          .optional()
+          .describe('A one-line framing, at most 280 characters.'),
+        description: z.string().optional().describe('The full narrative, as markdown.'),
+        ownerId: z.string().optional().describe(`Who is accountable for it. ${DESCRIPTOR_HINT}`),
+        status: InitiativeStatus.default('active'),
+        health: Health.optional(),
+        priority: InitiativePriority.default('none'),
+        updateCadence: InitiativeUpdateCadence.default('monthly'),
+        targetDate: z.iso.date().optional().describe('The target date, as `YYYY-MM-DD`.'),
       },
+      outputSchema: initiativeOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -147,17 +178,26 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       description: 'Update an Initiative document or its independently owned strategic state.',
       inputSchema: {
         orgId: orgIdParam,
-        initiativeId: z.string().min(1),
-        name: z.string().min(1).optional(),
-        summary: z.string().max(280).optional(),
-        description: z.string().optional(),
-        ownerId: z.string().nullable().optional(),
-        status: z.enum(['proposed', 'active', 'completed', 'canceled']).optional(),
-        health: z.enum(['on_track', 'at_risk', 'off_track']).nullable().optional(),
-        priority: z.enum(['none', 'low', 'medium', 'high']).optional(),
-        updateCadence: z.enum(['weekly', 'biweekly', 'monthly', 'quarterly', 'none']).optional(),
-        targetDate: z.iso.date().nullable().optional(),
+        initiativeId: z.string().min(1).describe(`The initiative to update. ${DESCRIPTOR_HINT}`),
+        name: z.string().min(1).optional().describe('What the initiative is called.'),
+        summary: z
+          .string()
+          .max(280)
+          .optional()
+          .describe('A one-line framing, at most 280 characters.'),
+        description: z.string().optional().describe('The full narrative, as markdown.'),
+        ownerId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe(`Who is accountable, or null to clear. ${DESCRIPTOR_HINT}`),
+        status: InitiativeStatus.optional(),
+        health: Health.nullable().optional(),
+        priority: InitiativePriority.optional(),
+        updateCadence: InitiativeUpdateCadence.optional(),
+        targetDate: z.iso.date().nullable().optional().describe('The target date, or null.'),
       },
+      outputSchema: initiativeOutputSchema,
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -246,10 +286,16 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
       description: 'Link or unlink an initiative to/from a project or program (m2m theme link).',
       inputSchema: {
         orgId: orgIdParam,
-        initiativeId: z.string().min(1),
-        targetType: z.enum(['project', 'program']),
-        targetId: z.string().min(1),
-        action: z.enum(['link', 'unlink']).default('link'),
+        initiativeId: z.string().min(1).describe(`The initiative to link. ${DESCRIPTOR_HINT}`),
+        targetType: z.enum(['project', 'program']).describe('What kind of thing to link it to.'),
+        targetId: z.string().min(1).describe(`The project or program to link. ${DESCRIPTOR_HINT}`),
+        action: z
+          .enum(['link', 'unlink'])
+          .default('link')
+          .describe('Whether to create the association or remove it.'),
+      },
+      outputSchema: {
+        linked: z.boolean().describe('True when the association now exists.'),
       },
       annotations: {
         readOnlyHint: false,

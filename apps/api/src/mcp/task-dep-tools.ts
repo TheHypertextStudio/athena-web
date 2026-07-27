@@ -1,4 +1,5 @@
 import { db, taskDependency } from '@docket/db';
+import { TaskId } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq, or } from 'drizzle-orm';
 import { z } from 'zod';
@@ -15,11 +16,16 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
     {
       title: 'Add task dependency',
       description:
-        'Add a directed blocks edge (blocking → blocked); cross-project, acyclic, no self-loops.',
+        'Record that one task blocks another. Direction matters: the blocking task must finish before the blocked one can. Edges may cross projects, but a cycle or a self-loop is refused.',
       inputSchema: {
         orgId: orgIdParam,
-        blockingTaskId: z.string().min(1),
-        blockedTaskId: z.string().min(1),
+        blockingTaskId: z.string().min(1).describe('The task that must finish first, by id.'),
+        blockedTaskId: z.string().min(1).describe('The task that is waiting, by id.'),
+      },
+      outputSchema: {
+        blockingTaskId: TaskId,
+        blockedTaskId: TaskId,
+        alreadyLinked: z.boolean().describe('True when the edge already existed.'),
       },
       annotations: {
         readOnlyHint: false,
@@ -63,7 +69,15 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
             ),
           )
           .limit(1);
-        if (existing[0]) return jsonResult({ alreadyLinked: true });
+        // Same shape on both branches: a caller should not have to switch on whether the edge
+        // happened to exist already.
+        if (existing[0]) {
+          return jsonResult({
+            blockingTaskId: input.blockingTaskId,
+            blockedTaskId: input.blockedTaskId,
+            alreadyLinked: true,
+          });
+        }
 
         if (await wouldCreateCycle(input.orgId, input.blockingTaskId, input.blockedTaskId)) {
           throw new CycleError();
@@ -86,12 +100,14 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
     'remove_task_dependency',
     {
       title: 'Remove task dependency',
-      description: 'Drop a blocks edge between two tasks (removable from either endpoint).',
+      description:
+        'Remove a blocks edge between two tasks. Either endpoint may ask, and naming the pair in either order works.',
       inputSchema: {
         orgId: orgIdParam,
-        blockingTaskId: z.string().min(1),
-        blockedTaskId: z.string().min(1),
+        blockingTaskId: z.string().min(1).describe('One end of the edge, by id.'),
+        blockedTaskId: z.string().min(1).describe('The other end, by id.'),
       },
+      outputSchema: { removed: z.boolean().describe('True once the edge is gone.') },
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,

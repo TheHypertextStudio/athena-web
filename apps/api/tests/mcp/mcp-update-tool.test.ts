@@ -478,3 +478,75 @@ describe('update guardrails', () => {
     expect(byId.get(theirs)).toBe('none');
   });
 });
+
+describe('every settable field reaches a column', () => {
+  it('writes the task fields no other test exercises', async () => {
+    const s = await seedOrg(['contribute', 'assign']);
+    const [otherTeam] = await db
+      .insert(schema.team)
+      .values({
+        organizationId: s.orgId,
+        name: 'Platform',
+        key: `P${Math.random().toString(36).slice(2, 6)}`,
+      })
+      .returning({ id: schema.team.id });
+    const [agent] = await db
+      .insert(schema.actor)
+      .values({ organizationId: s.orgId, kind: 'agent', displayName: 'Athena' })
+      .returning({ id: schema.actor.id });
+    const id = await seedTask(s, { title: 'Everything' });
+
+    const client = await connect(s.ctx);
+    // description, delegate and team are settable and were otherwise untested — a field declared
+    // in SETTABLE with no line in buildPatch would silently no-op.
+    await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'task',
+        scope: { ids: [id] },
+        set: { description: 'The full brief', delegate: 'Athena', team: 'Platform' },
+      },
+    });
+
+    const [row] = await db
+      .select({
+        description: schema.task.description,
+        delegateId: schema.task.delegateId,
+        teamId: schema.task.teamId,
+      })
+      .from(schema.task)
+      .where(eq(schema.task.id, id));
+    expect(row).toEqual({
+      description: 'The full brief',
+      delegateId: agent!.id,
+      teamId: otherTeam!.id,
+    });
+  });
+
+  it('writes a project lead and clears a description', async () => {
+    const s = await seedOrg(['contribute']);
+    await db
+      .update(schema.project)
+      .set({ description: 'Some prose' })
+      .where(eq(schema.project.id, s.projectId));
+
+    const client = await connect(s.ctx);
+    await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'project',
+        scope: { ids: [s.projectId] },
+        // An empty string clears a clearable text column; that is the wire convention, not null.
+        set: { lead: 'Ada', description: '' },
+      },
+    });
+
+    const [row] = await db
+      .select({ leadId: schema.project.leadId, description: schema.project.description })
+      .from(schema.project)
+      .where(eq(schema.project.id, s.projectId));
+    expect(row).toEqual({ leadId: s.actorId, description: null });
+  });
+});

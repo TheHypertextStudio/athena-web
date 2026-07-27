@@ -20,6 +20,7 @@ import type { McpRegistrar } from './catalog';
 import type { McpContext } from './auth';
 import { registerContentTools } from './content-tools';
 import { registerInitiativeTools } from './initiative-tools';
+import { registerOrganizeTool } from './organize-tool';
 import { registerProjectTools } from './project-tools';
 import { registerSessionTools } from './session-tools';
 import { registerTaskCrudTools } from './task-crud-tools';
@@ -59,4 +60,5 @@ export function registerTools(
   registerViewPlanTools(server, ctx);
   registerWriteTools(server, ctx, sessionId);
   registerUpdateTool(server, ctx, sessionId);
+  registerOrganizeTool(server, ctx, sessionId);
 }

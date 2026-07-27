@@ -83,6 +83,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   add_to_daily_plan: 'work:write',
   capture: 'work:write',
   update: 'work:write',
+  organize: 'work:write',
   undo: 'work:write',
   // connectors:link — external linking
   link_external: 'connectors:link',

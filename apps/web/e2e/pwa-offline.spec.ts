@@ -18,7 +18,8 @@ import { type Page, expect, test } from '@playwright/test';
  */
 
 /**
- * Load a page and wait until a freshly installed worker is controlling it.
+ * Load a page and wait until a freshly installed worker is controlling it — and until the app's
+ * own reaction to that has settled.
  *
  * @remarks
  * No unregister/reset step, deliberately. Playwright gives every test its own browser context with
@@ -29,12 +30,48 @@ import { type Page, expect, test } from '@playwright/test';
  *
  * On a cold context the worker installs, activates, and calls `clients.claim()`, which is what
  * makes `controller` become non-null — so waiting on it is an exact signal rather than a guess.
+ *
+ * That signal is not the end of the story, though: `ServiceWorkerProvider` listens for the exact
+ * same `controllerchange` event and reacts to it with `window.location.reload()` — including this
+ * very first claim on a cold context, not only a later update. Returning as soon as `controller`
+ * is set handed callers a page whose own reload could still be in flight, racing whatever they did
+ * next: `page.evaluate` landing on a destroyed execution context, an explicit `page.reload()`
+ * aborting against one the app already started. The `load` listener below is armed BEFORE the
+ * `waitForFunction` resolves, so it catches a reload that starts the instant the controller
+ * becomes truthy, and this does not return until that reload (if any) has actually finished.
  */
 async function loadControlled(page: Page, path: string): Promise<void> {
   await page.goto(path);
+  const appReload = page.waitForEvent('load', { timeout: 20_000 }).catch(() => undefined);
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller), null, {
     timeout: 20_000,
   });
+  await appReload;
+}
+
+/**
+ * `page.evaluate`, tolerating a transient "Execution context was destroyed" failure.
+ *
+ * @remarks
+ * `expect.poll` retries when its callback returns a value that doesn't match yet, but NOT when
+ * the callback throws — a rejection fails the whole poll on its first occurrence, regardless of
+ * the configured timeout. On this dev stack (Turbopack lazy-compiling routes on demand), a
+ * request landing right as the worker claims the page can still overlap a soft reload the
+ * framework triggers once that on-demand compile finishes, destroying the execution context
+ * `page.evaluate` is mid-read against. That is a timing accident, not a real result, so it is
+ * retried here rather than left to abort every caller's `expect.poll` on the first unlucky read.
+ */
+async function evaluateResilient<T>(page: Page, fn: () => T | Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await page.evaluate(fn);
+    } catch (err) {
+      const destroyed =
+        err instanceof Error && err.message.includes('Execution context was destroyed');
+      if (!destroyed || attempt >= 5) throw err;
+      await page.waitForTimeout(200);
+    }
+  }
 }
 
 /**
@@ -46,7 +83,7 @@ async function loadControlled(page: Page, path: string): Promise<void> {
  * and a cache assertion that samples too early passes for the wrong reason.
  */
 async function cacheContents(page: Page): Promise<Record<string, string[]>> {
-  return page.evaluate(async () => {
+  return evaluateResilient(page, async () => {
     const names = await caches.keys();
     const out: Record<string, string[]> = {};
     for (const name of names) {
@@ -124,12 +161,12 @@ test.describe('offline behaviour', () => {
 
     // Polled for the same reason every other cache assertion in this file is: the precache fills
     // asynchronously as the worker claims the page, so a single read samples an arbitrary moment
-    // and fails with a destroyed execution context whenever it lands during a navigation. This
-    // was the one cache read left un-polled.
+    // — and, via evaluateResilient, tolerates landing on a destroyed execution context rather
+    // than failing the whole poll on the first unlucky read.
     await expect
       .poll(
         async () =>
-          page.evaluate(async () => {
+          evaluateResilient(page, async () => {
             const names = await caches.keys();
             const precacheName = names.find((name) => name.startsWith('docket-precache-'));
             if (!precacheName) return [];

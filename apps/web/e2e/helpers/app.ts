@@ -92,11 +92,15 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
 
   for (let attempt = 0; attempt < 4; attempt++) {
     // Step 1: name + email → request a code, capturing the dev-echoed code from the response.
+    // `pageReady`, not `ui`: `canSubmit` on this page gates on hydration, which `warmUpAuth`
+    // above does not cover (it only pre-compiles the API routes) — a cold `/sign-up` bundle can
+    // leave this button disabled well past `ui`'s budget, and unlike the ceremony-failure retry
+    // below, a timeout here throws immediately rather than looping to a fresh attempt.
     await expect(async () => {
       await page.fill('#name', name);
       await page.fill('#email', email);
       expect(await continueButton.isEnabled()).toBe(true);
-    }).toPass({ timeout: TIMEOUTS.ui });
+    }).toPass({ timeout: TIMEOUTS.pageReady });
 
     const codeResponse = page.waitForResponse(
       (r) => r.url().includes('/api/auth/sign-up/request-code') && r.request().method() === 'POST',

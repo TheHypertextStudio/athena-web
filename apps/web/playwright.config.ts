@@ -22,7 +22,13 @@ export default defineConfig({
   // the whole suite only when it reproduces, not on a single unlucky run.
   retries: process.env['CI'] ? 2 : 0,
   forbidOnly: !!process.env['CI'],
-  timeout: 120_000,
+  // Single-worker (below) means whichever spec happens to run first pays Turbopack's on-demand
+  // compile cost for every route/chunk it touches that nothing earlier in the run has warmed —
+  // repeatedly measured at 100s+ in CI (composer-reset.spec.ts, mcp-connect.spec.ts,
+  // mcp-session.spec.ts each independently hit this and needed `test.slow()` for the identical
+  // reason). 120s left too little margin across the whole suite, not just those three files;
+  // raised once, globally, rather than opting in file by file as each one gets unlucky.
+  timeout: 180_000,
   expect: { timeout: TIMEOUTS.ui },
   reporter: 'list',
   use: {

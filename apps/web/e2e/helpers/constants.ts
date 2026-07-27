@@ -20,11 +20,19 @@ export const RP_ID = process.env['PASSKEY_RP_ID'] ?? new URL(ORIGIN).hostname;
  * - `ui` — a single UI element/assertion settling.
  * - `ceremony` — a passkey ceremony (register/authenticate) or verify → navigate.
  * - `sweep` — an async result driven by the in-process dev scheduler (export ready, onboarding commit).
+ * - `pageReady` — a route's own client bundle compiling and hydrating for the first time in this
+ *   run. `next dev` compiles each route's JS on first request, same as the API routes
+ *   `warmUpAuth`/`pollCompiled` pre-warm — but nothing pre-warms the PAGE side, so a form whose
+ *   submit button only unlocks post-hydration (see `(auth)/sign-up/page.tsx`'s `canSubmit`) can
+ *   sit disabled well past `ui`'s budget on a cold hit. Distinct from `ceremony`: that times a
+ *   real network round trip once the page is already interactive, this times the page becoming
+ *   interactive at all.
  */
 export const TIMEOUTS = {
   ui: 15_000,
   ceremony: 30_000,
   sweep: 45_000,
+  pageReady: 60_000,
 } as const;
 
 /** An org-scoped route, e.g. `orgHref(orgId, 'today')` → `/orgs/<id>/today`. */

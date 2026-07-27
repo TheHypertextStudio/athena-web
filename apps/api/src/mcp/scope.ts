@@ -78,14 +78,15 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   create_initiative: 'work:write',
   update_initiative: 'work:write',
   link_initiative: 'work:write',
-  add_comment: 'work:write',
-  post_update: 'work:write',
+  comment: 'work:write',
+  report_status: 'work:write',
   add_to_daily_plan: 'work:write',
   capture: 'work:write',
   update: 'work:write',
   organize: 'work:write',
   link: 'work:write',
   archive: 'work:write',
+  plan_day: 'work:write',
   undo: 'work:write',
   // connectors:link — external linking
   link_external: 'connectors:link',
@@ -99,6 +100,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   list_work: 'work:read',
   find: 'work:read',
   get: 'work:read',
+  brief: 'work:read',
 } as const;
 
 /** The scope every `docket://` resource read requires (all reads are `work:read`). */

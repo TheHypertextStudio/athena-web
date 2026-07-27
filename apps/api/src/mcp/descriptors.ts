@@ -16,7 +16,18 @@
  * builds that through the ordinary `invalid_value` issue path so the failure renders identically
  * to any other field error — one error contract, not two.
  */
-import { actor, cycle, db, initiative, label, program, project, team, user } from '@docket/db';
+import {
+  actor,
+  cycle,
+  db,
+  initiative,
+  label,
+  program,
+  project,
+  task as taskTable,
+  team,
+  user,
+} from '@docket/db';
 import { and, eq, isNull, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -293,6 +304,48 @@ export async function resolveAcross<K extends DescriptorKind>(
   /* v8 ignore next -- @preserve defensive: every candidate was recorded with its kind above */
   if (kind === undefined) throw new NotFoundError();
   return { id, kind };
+}
+
+/**
+ * The kinds a comment or status update can be about.
+ *
+ * @remarks
+ * A superset of {@link DescriptorKind} on one side and a subset on the other: `task` belongs here
+ * because you comment on tasks, and is absent from descriptors because task titles are not unique
+ * enough to name one by.
+ */
+export type SubjectKind = 'task' | 'project' | 'program' | 'initiative';
+
+/**
+ * Resolve the subject of a comment or update, accepting a name for anything but a task.
+ *
+ * @remarks
+ * Tasks are id-only on purpose. Every other kind here is a small, deliberately-named set where two
+ * things sharing a name is a mistake someone will fix; task titles repeat constantly ("Follow up",
+ * "Write the migration"), so resolving one by name would silently comment on the wrong item.
+ *
+ * @param orgId - The organization the subject belongs to.
+ * @param kind - What kind of thing it is.
+ * @param value - The id, or the name for a container.
+ * @param field - The tool parameter it came from, used in the error.
+ * @returns the resolved id.
+ * @throws {NotFoundError} When a task id is not in this org.
+ */
+export async function resolveSubject(
+  orgId: string,
+  kind: SubjectKind,
+  value: string,
+  field: string,
+): Promise<string> {
+  if (kind !== 'task') return resolveDescriptor(orgId, kind, value, field);
+  const rows = await db
+    .select({ id: taskTable.id })
+    .from(taskTable)
+    .where(and(eq(taskTable.id, value), eq(taskTable.organizationId, orgId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new NotFoundError('No task with that id in this organization');
+  return row.id;
 }
 
 /**

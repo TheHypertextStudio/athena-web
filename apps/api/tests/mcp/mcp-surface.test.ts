@@ -893,18 +893,18 @@ describe('link_initiative tool', () => {
   });
 });
 
-describe('add_comment tool', () => {
+describe('comment tool', () => {
   it('comments, threads a reply, rejects cross-subject/2-level/parent-404', async () => {
     const s = await seedOrg(['comment']);
     const client = await connect(s.ctx);
     const root = (await client.callTool({
-      name: 'add_comment',
+      name: 'comment',
       arguments: { orgId: s.orgId, subjectType: 'task', subjectId: s.taskId, body: 'hi' },
     })) as CallToolResult;
     const rootId = payload(root)['id'] as string;
 
     const reply = (await client.callTool({
-      name: 'add_comment',
+      name: 'comment',
       arguments: {
         orgId: s.orgId,
         subjectType: 'task',
@@ -918,7 +918,7 @@ describe('add_comment tool', () => {
 
     // Reply to a reply → rejected.
     const deep = (await client.callTool({
-      name: 'add_comment',
+      name: 'comment',
       arguments: {
         orgId: s.orgId,
         subjectType: 'task',
@@ -931,7 +931,7 @@ describe('add_comment tool', () => {
 
     // Parent on a different subject → rejected.
     const crossSubject = (await client.callTool({
-      name: 'add_comment',
+      name: 'comment',
       arguments: {
         orgId: s.orgId,
         subjectType: 'project',
@@ -943,7 +943,7 @@ describe('add_comment tool', () => {
     expect(crossSubject.isError).toBe(true);
 
     const badParent = (await client.callTool({
-      name: 'add_comment',
+      name: 'comment',
       arguments: {
         orgId: s.orgId,
         subjectType: 'task',

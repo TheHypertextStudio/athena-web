@@ -23,6 +23,7 @@ import { registerContentTools } from './content-tools';
 import { registerInitiativeTools } from './initiative-tools';
 import { registerLinkTool } from './link-tool';
 import { registerOrganizeTool } from './organize-tool';
+import { registerPlanTools } from './plan-tools';
 import { registerProjectTools } from './project-tools';
 import { registerSessionTools } from './session-tools';
 import { registerTaskCrudTools } from './task-crud-tools';
@@ -65,4 +66,5 @@ export function registerTools(
   registerOrganizeTool(server, ctx, sessionId);
   registerLinkTool(server, ctx, sessionId);
   registerArchiveTool(server, ctx, sessionId);
+  registerPlanTools(server, ctx);
 }

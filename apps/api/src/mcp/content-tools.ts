@@ -8,22 +8,28 @@ import { NotFoundError, ValidationError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { DESCRIPTOR_HINT } from './descriptors';
+import { DESCRIPTOR_HINT, resolveSubject } from './descriptors';
 import { orgIdParam, subjectTable } from './tools-shared';
 
-/** Register add_comment, post_update, link_external on `server`. */
+/** Register comment, report_status, link_external on `server`. */
 export function registerContentTools(server: McpRegistrar, ctx: McpContext): void {
   server.registerTool(
-    'add_comment',
+    'comment',
     {
-      title: 'Add comment',
-      description: "Post a comment on a task/project/program/initiative (the caller's own actor).",
+      title: 'Comment',
+      description:
+        'Post a comment on a task, project, program, or initiative, as the caller. Replies are one level deep — a reply cannot itself be replied to. Use report_status instead when the point is how a container is tracking rather than a remark on it.',
       inputSchema: {
         orgId: orgIdParam,
         subjectType: z
           .enum(['task', 'project', 'program', 'initiative'])
           .describe('What kind of thing is being commented on.'),
-        subjectId: z.string().min(1).describe('The thing being commented on, by id.'),
+        subjectId: z
+          .string()
+          .min(1)
+          .describe(
+            `The thing being commented on. ${DESCRIPTOR_HINT} Tasks must be given by id, since titles repeat.`,
+          ),
         body: z.string().min(1).describe('The comment text, as markdown.'),
         parentCommentId: z
           .string()
@@ -48,9 +54,16 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
       runTool(async () => {
         // The comments router gates create on the `comment` capability.
         const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+        // Resolution doubles as the tenant check: a descriptor only matches within this org.
+        const subjectId = await resolveSubject(
+          input.orgId,
+          input.subjectType,
+          input.subjectId,
+          'subjectId',
+        );
         await authorize(actorCtx, 'comment', {
           kind: input.subjectType,
-          id: input.subjectId,
+          id: subjectId,
           orgId: input.orgId,
         });
 
@@ -64,7 +77,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
             .limit(1);
           const parent = parentRows[0];
           if (!parent) throw new NotFoundError('Parent comment not found');
-          if (parent.subjectType !== input.subjectType || parent.subjectId !== input.subjectId) {
+          if (parent.subjectType !== input.subjectType || parent.subjectId !== subjectId) {
             throw new ValidationError(
               new z.ZodError([
                 {
@@ -96,7 +109,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
             organizationId: input.orgId,
             authorId: actorCtx.actorId,
             subjectType: input.subjectType,
-            subjectId: input.subjectId,
+            subjectId,
             body: input.body,
             parentCommentId: input.parentCommentId,
             createdBy: actorCtx.actorId,
@@ -111,11 +124,11 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
   );
 
   server.registerTool(
-    'post_update',
+    'report_status',
     {
-      title: 'Post status update',
+      title: 'Report status',
       description:
-        "Post a status update on a project/program/initiative; the latest health also sets the subject's current health.",
+        'Say how a project, program, or initiative is tracking, in prose and optionally as a health rating. The rating you give here also becomes the subject\'s current health, so this is the tool that answers "is this on track" — not update, which only sets the field without saying why.',
       inputSchema: {
         orgId: orgIdParam,
         subjectType: z
@@ -123,7 +136,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
           .describe(
             'What the update is about. Tasks do not take status updates; comment on them instead.',
           ),
-        subjectId: z.string().min(1).describe('The thing being reported on, by id.'),
+        subjectId: z.string().min(1).describe(`The thing being reported on. ${DESCRIPTOR_HINT}`),
         body: z.string().min(1).describe('The narrative update, as markdown.'),
         health: Health.optional(),
       },
@@ -142,9 +155,15 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
     (input) =>
       runTool(async () => {
         const actorCtx = await scopedActor(ctx, input.orgId, 'work:write');
+        const subjectId = await resolveSubject(
+          input.orgId,
+          input.subjectType,
+          input.subjectId,
+          'subjectId',
+        );
         await authorize(actorCtx, 'contribute', {
           kind: input.subjectType,
-          id: input.subjectId,
+          id: subjectId,
           orgId: input.orgId,
         });
 
@@ -155,7 +174,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
               organizationId: input.orgId,
               authorId: actorCtx.actorId,
               subjectType: input.subjectType,
-              subjectId: input.subjectId,
+              subjectId,
               health: input.health,
               body: input.body,
               createdBy: actorCtx.actorId,
@@ -170,7 +189,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
             await tx
               .update(tbl)
               .set({ health: input.health })
-              .where(and(eq(tbl.id, input.subjectId), eq(tbl.organizationId, input.orgId)));
+              .where(and(eq(tbl.id, subjectId), eq(tbl.organizationId, input.orgId)));
           }
           return created;
         });

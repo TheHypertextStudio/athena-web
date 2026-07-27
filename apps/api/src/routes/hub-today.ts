@@ -9,7 +9,7 @@ import {
 } from '@docket/db';
 import type { HubTaskItem } from '@docket/types';
 import type { HubTodayOut } from '@docket/types';
-import { and, count, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNull, lt, notInArray } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { callerActorIds, callerOrgIds, sameDay, toTaskItem } from './hub-helpers';
@@ -84,22 +84,23 @@ export async function buildHubTodayPayload(
           .where(and(inArray(task.organizationId, orgIds), inArray(task.id, plannedTaskIds)))
       : [];
 
+  // `dueDate` is a timestamp, so "due on this day" is a half-open range, not equality. Comparing
+  // against `new Date(date)` matched only tasks due at exactly midnight UTC — anything given a
+  // time of day was simply absent from the day's brief, with no sign it had been skipped.
+  const dayStart = new Date(`${date}T00:00:00.000Z`);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const dueOnDate = and(
+    inArray(task.organizationId, orgIds),
+    gte(task.dueDate, dayStart),
+    lt(task.dueDate, dayEnd),
+  );
   const dueRows =
     plannedTaskIds.length > 0
       ? await db
           .select()
           .from(task)
-          .where(
-            and(
-              inArray(task.organizationId, orgIds),
-              eq(task.dueDate, new Date(date)),
-              notInArray(task.id, plannedTaskIds),
-            ),
-          )
-      : await db
-          .select()
-          .from(task)
-          .where(and(inArray(task.organizationId, orgIds), eq(task.dueDate, new Date(date))));
+          .where(and(dueOnDate, notInArray(task.id, plannedTaskIds)))
+      : await db.select().from(task).where(dueOnDate);
 
   const plan = [...planned, ...dueRows].map(toTaskItem);
 

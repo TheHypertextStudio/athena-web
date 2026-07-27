@@ -491,12 +491,12 @@ describe('create_project tool', () => {
   });
 });
 
-describe('post_update tool', () => {
+describe('report_status tool', () => {
   it('posts with health (sets subject health) and without health', async () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);
     const withHealth = (await client.callTool({
-      name: 'post_update',
+      name: 'report_status',
       arguments: {
         orgId: s.orgId,
         subjectType: 'project',
@@ -513,7 +513,7 @@ describe('post_update tool', () => {
       .limit(1);
     expect(rows[0]?.h).toBe('at_risk');
     const noHealth = (await client.callTool({
-      name: 'post_update',
+      name: 'report_status',
       arguments: {
         orgId: s.orgId,
         subjectType: 'initiative',

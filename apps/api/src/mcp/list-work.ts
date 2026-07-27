@@ -20,10 +20,12 @@
 import {
   db,
   initiative,
+  initiativeLabel,
   initiativeProgram,
   initiativeProject,
   program,
   project,
+  projectLabel,
   task,
   taskDependency,
   taskLabel,
@@ -473,6 +475,33 @@ async function listContainers(
   if (entity !== 'project' && input.owner !== undefined) {
     const ownerId = await resolveDescriptor(orgId, 'actor', input.owner, 'owner');
     where.push(eq(entity === 'program' ? program.ownerId : initiative.ownerId, ownerId));
+  }
+  // Projects and initiatives carry labels through their own join tables; programs do not, which is
+  // why `label` is absent from their entry in SUPPORTED rather than accepted and ignored here.
+  if (input.label !== undefined && entity !== 'program') {
+    const labelId = await resolveDescriptor(orgId, 'label', input.label, 'label');
+    const link =
+      entity === 'project'
+        ? {
+            table: projectLabel,
+            member: projectLabel.projectId,
+            own: project.id,
+            label: projectLabel.labelId,
+          }
+        : {
+            table: initiativeLabel,
+            member: initiativeLabel.initiativeId,
+            own: initiative.id,
+            label: initiativeLabel.labelId,
+          };
+    where.push(
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(link.table)
+          .where(and(eq(link.member, link.own), eq(link.label, labelId))),
+      ),
+    );
   }
 
   const rows = await db

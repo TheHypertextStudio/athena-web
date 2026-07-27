@@ -26,6 +26,7 @@ import { registerPlanTools } from './plan-tools';
 import { registerSessionTools } from './session-tools';
 import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
+import { registerWorkspacesTool } from './workspaces-tool';
 import { registerWriteTools } from './write-tools';
 
 /**
@@ -57,4 +58,5 @@ export function registerTools(
   registerLinkTool(server, ctx, sessionId);
   registerArchiveTool(server, ctx, sessionId);
   registerPlanTools(server, ctx);
+  registerWorkspacesTool(server, ctx);
 }

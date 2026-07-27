@@ -82,6 +82,7 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   find: 'work:read',
   get: 'work:read',
   brief: 'work:read',
+  workspaces: 'work:read',
 } as const;
 
 /** The scope every `docket://` resource read requires (all reads are `work:read`). */

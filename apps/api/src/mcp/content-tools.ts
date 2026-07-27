@@ -1,5 +1,5 @@
 import { comment, db, integration, task, team, update } from '@docket/db';
-import { CommentId, Health, TaskId, UpdateId } from '@docket/types';
+import { CommentId, Health, IntegrationId, TaskId, UpdateId } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -188,7 +188,7 @@ export function registerContentTools(server: McpRegistrar, ctx: McpContext): voi
         'Materialize an external item as a linked task carrying its provenance, idempotently.',
       inputSchema: {
         orgId: orgIdParam,
-        integrationId: z.string().min(1).describe('The connected integration the item came from.'),
+        integrationId: IntegrationId.describe('The connected integration the item came from.'),
         teamId: z.string().min(1).describe(`The team the linked task lands on. ${DESCRIPTOR_HINT}`),
         title: z.string().min(1).describe("The external item's title."),
         externalId: z

@@ -45,6 +45,8 @@ import type { SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
+import { Priority } from '@docket/types';
+
 import { ValidationError } from '../error';
 import { resolveDescriptor, resolveWorkflowState } from './descriptors';
 import type { WorkCursor } from './tools-shared-queries';
@@ -73,8 +75,14 @@ export const WORK_ENTITIES = ['task', 'project', 'program', 'initiative'] as con
 /** One listable work entity. */
 export type WorkEntity = (typeof WORK_ENTITIES)[number];
 
-/** Which filters each entity actually supports, used to reject the rest with a real explanation. */
-const SUPPORTED: Record<WorkEntity, readonly string[]> = {
+/**
+ * Which filters each entity actually supports, used to reject the rest with a real explanation.
+ *
+ * @remarks
+ * Keyed by {@link FilterName} rather than `string` so adding a filter to {@link listWorkFilters}
+ * without deciding which entities honor it is a compile error, not a silently ignored argument.
+ */
+const SUPPORTED: Record<WorkEntity, readonly FilterName[]> = {
   task: [
     'team',
     'project',
@@ -111,7 +119,7 @@ export const listWorkFilters = {
   owner: z.string().optional(),
   state: z.array(z.string()).optional(),
   status: z.array(z.string()).optional(),
-  priority: z.array(z.string()).optional(),
+  priority: z.array(Priority).optional(),
   label: z.string().optional(),
   cycle: z.string().optional(),
   parent: z.string().optional(),
@@ -124,18 +132,40 @@ export const listWorkFilters = {
   archived: z.boolean().optional(),
 };
 
-/** One row of the result, uniform enough for a caller to render without switching on entity. */
-export interface WorkRow {
-  readonly id: string;
-  readonly title: string;
-  readonly state?: string;
-  readonly status?: string;
-  readonly assigneeId?: string;
-  readonly projectId?: string;
-}
+/**
+ * One row of the result, uniform enough for a caller to render without switching on entity.
+ *
+ * @remarks
+ * Declared as the schema and inferred into the type, rather than written twice — the tool's
+ * `outputSchema` is this exact object, so a field added here reaches the wire contract
+ * automatically instead of drifting until someone notices.
+ *
+ * Ids are plain strings rather than branded: these values come straight off a primary key, so
+ * re-validating each one per row buys nothing a caller can act on.
+ */
+export const WorkRow = z.object({
+  id: z.string().describe('The entity id.'),
+  title: z.string().describe('Its name or title.'),
+  state: z.string().optional().describe("A task's workflow state."),
+  status: z.string().optional().describe("A project, program, or initiative's status."),
+  assigneeId: z.string().optional().describe('Who is accountable, when set.'),
+  projectId: z.string().optional().describe('The project it belongs to, when set.'),
+});
+/** One listed row. */
+export type WorkRow = z.infer<typeof WorkRow>;
 
-/** The filters a caller supplied, before resolution. */
-export type ListWorkInput = { readonly [K in keyof typeof listWorkFilters]?: unknown };
+/** One filter's name. */
+type FilterName = keyof typeof listWorkFilters;
+
+/**
+ * The filters a caller supplied, before resolution.
+ *
+ * @remarks
+ * Inferred from {@link listWorkFilters} rather than restated, so the query body reads the same
+ * types the schema validates. An earlier draft typed every field `unknown` and paid for it with a
+ * `typeof` guard on each of twenty branches.
+ */
+export type ListWorkInput = z.infer<z.ZodObject<typeof listWorkFilters>>;
 
 /**
  * Reject a filter the requested entity has no column for.
@@ -160,9 +190,11 @@ function unsupported(entity: WorkEntity, field: string): never {
 
 /** Reject every supplied filter the entity cannot honor, so nothing is silently dropped. */
 function assertApplicable(entity: WorkEntity, input: ListWorkInput): void {
-  const allowed = new Set(SUPPORTED[entity]);
-  for (const [field, value] of Object.entries(input)) {
-    if (value === undefined) continue;
+  const allowed = new Set<FilterName>(SUPPORTED[entity]);
+  // Iterating the schema's keys rather than the payload's keeps `field` typed, and means an
+  // unknown key the validator already rejected cannot reach here at all.
+  for (const field of Object.keys(listWorkFilters) as FilterName[]) {
+    if (input[field] === undefined) continue;
     if (!allowed.has(field)) unsupported(entity, field);
   }
 }
@@ -219,57 +251,57 @@ async function listTasks(
   ];
   where.push(input.archived === true ? isNotNull(task.archivedAt) : isNull(task.archivedAt));
 
-  if (typeof input.team === 'string') {
+  if (input.team !== undefined) {
     where.push(eq(task.teamId, await resolveDescriptor(orgId, 'team', input.team, 'team')));
   }
-  if (typeof input.project === 'string') {
+  if (input.project !== undefined) {
     where.push(
       eq(task.projectId, await resolveDescriptor(orgId, 'project', input.project, 'project')),
     );
   }
-  if (typeof input.program === 'string') {
+  if (input.program !== undefined) {
     where.push(
       eq(task.programId, await resolveDescriptor(orgId, 'program', input.program, 'program')),
     );
   }
-  if (typeof input.assignee === 'string') {
+  if (input.assignee !== undefined) {
     where.push(
       eq(task.assigneeId, await resolveDescriptor(orgId, 'actor', input.assignee, 'assignee')),
     );
   }
-  if (typeof input.delegate === 'string') {
+  if (input.delegate !== undefined) {
     where.push(
       eq(task.delegateId, await resolveDescriptor(orgId, 'actor', input.delegate, 'delegate')),
     );
   }
-  if (typeof input.cycle === 'string') {
+  if (input.cycle !== undefined) {
     where.push(eq(task.cycleId, await resolveDescriptor(orgId, 'cycle', input.cycle, 'cycle')));
   }
-  if (typeof input.parent === 'string') {
+  if (input.parent !== undefined) {
     where.push(eq(task.parentTaskId, input.parent));
   }
   if (Array.isArray(input.state) && input.state.length > 0) {
     // States are per-team, so a name is only resolvable when the query is scoped to one team;
     // otherwise the key is taken as given.
-    const teamId = typeof input.team === 'string' ? input.team : null;
+    const teamId = input.team;
     const keys = await Promise.all(
       input.state.map(async (value) =>
         teamId
           ? resolveWorkflowState(
               orgId,
               await resolveDescriptor(orgId, 'team', teamId, 'team'),
-              String(value),
+              value,
               'state',
             )
-          : String(value),
+          : value,
       ),
     );
     where.push(inArray(task.state, keys));
   }
   if (Array.isArray(input.priority) && input.priority.length > 0) {
-    where.push(anyValue(task.priority, input.priority.map(String)));
+    where.push(anyValue(task.priority, input.priority));
   }
-  if (typeof input.label === 'string') {
+  if (input.label !== undefined) {
     const labelId = await resolveDescriptor(orgId, 'label', input.label, 'label');
     where.push(
       exists(
@@ -294,9 +326,9 @@ async function listTasks(
       ),
     );
   }
-  if (typeof input.dueBefore === 'string') where.push(lte(task.dueDate, new Date(input.dueBefore)));
-  if (typeof input.dueAfter === 'string') where.push(gte(task.dueDate, new Date(input.dueAfter)));
-  if (typeof input.updatedAfter === 'string') {
+  if (input.dueBefore !== undefined) where.push(lte(task.dueDate, new Date(input.dueBefore)));
+  if (input.dueAfter !== undefined) where.push(gte(task.dueDate, new Date(input.dueAfter)));
+  if (input.updatedAfter !== undefined) {
     where.push(gte(task.updatedAt, new Date(input.updatedAfter)));
   }
 
@@ -340,24 +372,24 @@ async function listContainers(
   where.push(input.archived === true ? isNotNull(table.archivedAt) : isNull(table.archivedAt));
 
   if (Array.isArray(input.status) && input.status.length > 0) {
-    where.push(anyValue(table.status, input.status.map(String)));
+    where.push(anyValue(table.status, input.status));
   }
-  if (typeof input.updatedAfter === 'string') {
+  if (input.updatedAfter !== undefined) {
     where.push(gte(table.updatedAt, new Date(input.updatedAfter)));
   }
   if (entity === 'project') {
-    if (typeof input.team === 'string') {
+    if (input.team !== undefined) {
       where.push(eq(project.teamId, await resolveDescriptor(orgId, 'team', input.team, 'team')));
     }
-    if (typeof input.program === 'string') {
+    if (input.program !== undefined) {
       where.push(
         eq(project.programId, await resolveDescriptor(orgId, 'program', input.program, 'program')),
       );
     }
-    if (typeof input.lead === 'string') {
+    if (input.lead !== undefined) {
       where.push(eq(project.leadId, await resolveDescriptor(orgId, 'actor', input.lead, 'lead')));
     }
-    if (typeof input.initiative === 'string') {
+    if (input.initiative !== undefined) {
       const initiativeId = await resolveDescriptor(
         orgId,
         'initiative',
@@ -379,7 +411,7 @@ async function listContainers(
       );
     }
   }
-  if (entity !== 'project' && typeof input.owner === 'string') {
+  if (entity !== 'project' && input.owner !== undefined) {
     const ownerId = await resolveDescriptor(orgId, 'actor', input.owner, 'owner');
     where.push(eq(entity === 'program' ? program.ownerId : initiative.ownerId, ownerId));
   }

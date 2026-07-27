@@ -1,5 +1,5 @@
 import { db, task, team } from '@docket/db';
-import { Priority } from '@docket/types';
+import { Priority, TaskId } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -134,7 +134,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         "Update a task's own fields. Only the fields you pass change. To move it to another team or project use move_task; to change who owns it use assign_task.",
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1).describe('The task to update, by id.'),
+        taskId: TaskId.describe('The task to update.'),
         title: z.string().min(1).optional().describe('A short one-line summary of the work.'),
         description: z.string().optional().describe('The full body, as markdown.'),
         state: z
@@ -213,7 +213,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         'Reparent a task onto a different team and/or project. Pass a null projectId to detach it from its project without moving teams.',
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1).describe('The task to move, by id.'),
+        taskId: TaskId.describe('The task to move.'),
         teamId: z.string().optional().describe(`The team to move it to. ${DESCRIPTOR_HINT}`),
         projectId: z
           .string()

@@ -27,7 +27,7 @@ const NAMEABLE: Partial<Record<(typeof READABLE_ENTITY_TYPES)[number], Descripto
   team: 'team',
   cycle: 'cycle',
 };
-import { listWork, listWorkFilters, WORK_ENTITIES } from './list-work';
+import { listWork, listWorkFilters, WORK_ENTITIES, WorkRow } from './list-work';
 import { decodeWorkCursor, orgIdParam, pageWorkRows } from './tools-shared';
 
 const listWorkInputSchema = {
@@ -84,16 +84,7 @@ const listWorkInputSchema = {
 
 const listWorkOutputSchema = {
   entity: z.enum(WORK_ENTITIES),
-  items: z.array(
-    z.object({
-      id: z.string(),
-      title: z.string(),
-      state: z.string().optional(),
-      status: z.string().optional(),
-      assigneeId: z.string().optional(),
-      projectId: z.string().optional(),
-    }),
-  ),
+  items: z.array(WorkRow),
   nextCursor: z.string().optional(),
 };
 

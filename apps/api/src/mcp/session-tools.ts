@@ -1,6 +1,6 @@
 import { agent, agentSession, db, sessionActivity, task } from '@docket/db';
 import { SessionTrigger } from '@docket/types';
-import { AgentSessionId, SessionActivityId } from '@docket/types';
+import { AgentId, AgentSessionId, SessionActivityId, TaskId } from '@docket/types';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -19,8 +19,8 @@ import {
 
 const triggerAgentInputSchema = {
   orgId: orgIdParam,
-  agentId: z.string().min(1).describe('The registered agent to run, by id.'),
-  taskId: z.string().optional().describe('Run the agent against this task, by id.'),
+  agentId: AgentId.describe('The registered agent to run.'),
+  taskId: TaskId.optional().describe('Run the agent against this task.'),
   trigger: SessionTrigger.optional(),
   prompt: z.string().optional().describe('An opening instruction for the session.'),
 };
@@ -31,7 +31,7 @@ const sessionRefOutputSchema = {
 };
 
 /** Every session tool takes the session it acts on; only the verb differs. */
-const sessionIdParam = z.string().min(1).describe('The agent session to act on, by id.');
+const sessionIdParam = AgentSessionId.describe('The agent session to act on.');
 
 /** Register trigger_agent, respond_to_session, approve_action, reject_action, cancel_session. */
 export function registerSessionTools(server: McpRegistrar, ctx: McpContext): void {

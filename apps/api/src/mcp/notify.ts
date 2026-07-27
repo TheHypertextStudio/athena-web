@@ -17,7 +17,7 @@
  * Delivery is best-effort by design. A frame lost to a dropped stream is not replayed, and every
  * notification is a hint to re-read rather than the data itself.
  */
-import { actor, db, listenToChannel, mcpSession, mcpSubscription } from '@docket/db';
+import { actor, db, listenToChannel, logLevel, mcpSession, mcpSubscription } from '@docket/db';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 
 /** The Postgres channel every api instance fans MCP notifications over. */
@@ -27,18 +27,11 @@ const CHANNEL = 'mcp_notify';
  * RFC 5424 severities, least→most severe.
  *
  * @remarks
- * Ordered so a session's stored level can be compared by index; mirrors the `log_level` enum.
+ * Read off the `log_level` pgEnum rather than restated, so the order a session's stored level is
+ * compared against is the same order the column accepts. Two hand-kept copies of an ordered enum
+ * is a silent filtering bug waiting to happen.
  */
-const LOG_LEVELS = [
-  'debug',
-  'info',
-  'notice',
-  'warning',
-  'error',
-  'critical',
-  'alert',
-  'emergency',
-] as const;
+const LOG_LEVELS = logLevel.enumValues;
 
 /** One RFC 5424 severity. */
 export type LogLevel = (typeof LOG_LEVELS)[number];

@@ -277,6 +277,22 @@ describe('descriptor resolution', () => {
   });
 });
 
+describe('id validation', () => {
+  it('rejects an id that is not a ULID before any work happens', async () => {
+    const s = await seedOrg(['contribute']);
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'set_task_state',
+      arguments: { orgId: s.orgId, taskId: 'not-a-ulid', state: 'todo' },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    // A bare `z.string().min(1)` accepted this and only failed later, as a not-found — which
+    // reads to an agent as "wrong task" rather than "malformed argument".
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('taskId');
+  });
+});
+
 describe('create_task tool', () => {
   it('creates with all optional fields set (priority/assignee/project/date/state)', async () => {
     const s = await seedOrg(['contribute', 'assign']);

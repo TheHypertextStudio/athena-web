@@ -1,4 +1,5 @@
 import { db, task } from '@docket/db';
+import { TaskId } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -20,7 +21,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
         'Set or clear who is accountable for a task. Pass null to unassign. This is ownership, not execution — to hand the doing to an agent while ownership stays put, use set_task_delegate.',
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1).describe('The task to assign, by id.'),
+        taskId: TaskId.describe('The task to assign.'),
         assigneeId: z
           .string()
           .nullable()
@@ -70,7 +71,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
         'Hand the doing of a task to an agent while accountability stays with its assignee. Pass null to take it back.',
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1).describe('The task to delegate, by id.'),
+        taskId: TaskId.describe('The task to delegate.'),
         delegateId: z
           .string()
           .nullable()
@@ -121,7 +122,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
         'Move a task to a workflow state. Accepts the key or the display name, so "in review" resolves to `in_review`; an unknown value comes back with the team\'s legal states listed.',
       inputSchema: {
         orgId: orgIdParam,
-        taskId: z.string().min(1).describe('The task to transition, by id.'),
+        taskId: TaskId.describe('The task to transition.'),
         state: z.string().min(1).describe('The target state, by key or display name.'),
       },
       outputSchema: {
@@ -175,7 +176,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
         "Create a subtask under a parent task. It inherits the parent's team and project, so only a title is needed.",
       inputSchema: {
         orgId: orgIdParam,
-        parentTaskId: z.string().min(1).describe('The task this one sits under, by id.'),
+        parentTaskId: TaskId.describe('The task this one sits under.'),
         title: z.string().min(1).describe('A short one-line summary of the subtask.'),
       },
       outputSchema: {

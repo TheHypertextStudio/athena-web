@@ -19,8 +19,8 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
         'Record that one task blocks another. Direction matters: the blocking task must finish before the blocked one can. Edges may cross projects, but a cycle or a self-loop is refused.',
       inputSchema: {
         orgId: orgIdParam,
-        blockingTaskId: z.string().min(1).describe('The task that must finish first, by id.'),
-        blockedTaskId: z.string().min(1).describe('The task that is waiting, by id.'),
+        blockingTaskId: TaskId.describe('The task that must finish first.'),
+        blockedTaskId: TaskId.describe('The task that is waiting.'),
       },
       outputSchema: {
         blockingTaskId: TaskId,
@@ -104,8 +104,8 @@ export function registerTaskDepTools(server: McpRegistrar, ctx: McpContext): voi
         'Remove a blocks edge between two tasks. Either endpoint may ask, and naming the pair in either order works.',
       inputSchema: {
         orgId: orgIdParam,
-        blockingTaskId: z.string().min(1).describe('One end of the edge, by id.'),
-        blockedTaskId: z.string().min(1).describe('The other end, by id.'),
+        blockingTaskId: TaskId.describe('One end of the edge.'),
+        blockedTaskId: TaskId.describe('The other end.'),
       },
       outputSchema: { removed: z.boolean().describe('True once the edge is gone.') },
       annotations: {

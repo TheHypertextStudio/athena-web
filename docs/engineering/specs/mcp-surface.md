@@ -188,431 +188,101 @@ This is how an agent that started **read-only** (engineering plan / product §4)
 
 - **Naming:** `snake_case`, verb-first, ≤128 chars (spec §"Tool Names"). Allowed chars: `[A-Za-z0-9_.-]`.
 - **`inputSchema` / `outputSchema`:** authored as **Zod** in `@docket/types`, converted to JSON Schema 2020-12 via `zod-to-json-schema` (or Zod 4 native `z.toJSONSchema`). `outputSchema` is provided for **every** tool; the result MUST populate `structuredContent` AND a serialized-JSON `TextContent` block (spec §"Structured Content", backwards compat).
-- **`org` argument:** every org-scoped tool takes `org` = the **Organization slug** (matches `docket://{org}/...`; the RS resolves slug→id and authorizes). The Personal space slug is `personal`.
-- **Annotations (verified defaults from `ToolAnnotations`):** `readOnlyHint` default `false`; `destructiveHint` default `true` (meaningful only when not read-only); `idempotentHint` default `false`; `openWorldHint` default `true`. Every Docket mutation sets `openWorldHint: false` (closed world — Docket's own DB) **except** `link_external` and `trigger_agent_session` (they touch external systems → `true`). We set all four explicitly to avoid relying on defaults.
+- **`orgId` argument:** every org-scoped tool takes `orgId` = the Organization **id**, which `workspaces` supplies. An earlier draft of this spec mandated the slug; the code has always taken the id, and `workspaces` returning both closed the discoverability gap that the slug was meant to solve.
+- **Names work wherever ids do**, for every _other_ reference: `assignee: "Sarah"`, `project: "Platform Migration"`, `state: "In Review"` all resolve server-side (`descriptors.ts`). Matching runs exact → prefix → substring and accepts only an unambiguous hit. An ambiguous name elicits when the client can answer, and otherwise comes back listing the candidates. Task titles are deliberately **not** resolvable — they repeat too often to name one by.
+- **Annotations (verified defaults from `ToolAnnotations`):** `readOnlyHint` default `false`; `destructiveHint` default `true` (meaningful only when not read-only); `idempotentHint` default `false`; `openWorldHint` default `true`. Every Docket mutation sets `openWorldHint: false` (closed world — Docket's own DB) **except** `link_external` and `run_agent` (they touch external systems → `true`). We set all four explicitly to avoid relying on defaults.
 - **Errors:** input/validation/business errors → tool result with `isError: true` + actionable text (spec §"Tool Execution Errors"). Unknown tool / malformed → JSON-RPC protocol error. Insufficient scope/grant → JSON-RPC error is NOT used; instead return HTTP 403 at the transport layer for token-scope failures, and `isError:true` for per-resource grant failures (so the model can self-correct, e.g. by requesting access).
 - **Idempotency keys:** create-tools accept an optional `idempotency_key` (UUID); replaying with the same key returns the original result (enables safe retries on flaky SSE). Marked `idempotentHint: true` when present-semantics hold.
 
-### 3.2 Annotation quick-reference
-
-| Tool                     | readOnly | destructive | idempotent | openWorld | Scope             |
-| ------------------------ | :------: | :---------: | :--------: | :-------: | ----------------- |
-| `create_task`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `update_task`            |    F     |      F      |     T      |     F     | `work:write`      |
-| `move_task`              |    F     |      F      |     T      |     F     | `work:write`      |
-| `set_task_assignee`      |    F     |      F      |     T      |     F     | `work:write`      |
-| `set_task_delegate`      |    F     |      F      |     T      |     F     | `work:write`      |
-| `add_task_dependency`    |    F     |      F      |     T      |     F     | `work:write`      |
-| `remove_task_dependency` |    F     |      T      |     T      |     F     | `work:write`      |
-| `add_subtask`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `set_task_state`         |    F     |      F      |     T      |     F     | `work:write`      |
-| `post_update`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `create_project`         |    F     |      F      |     F      |     F     | `work:write`      |
-| `update_project`         |    F     |      F      |     T      |     F     | `work:write`      |
-| `create_program`         |    F     |      F      |     F      |     F     | `work:write`      |
-| `create_initiative`      |    F     |      F      |     F      |     F     | `work:write`      |
-| `link_initiative`        |    F     |      F      |     T      |     F     | `work:write`      |
-| `add_comment`            |    F     |      F      |     F      |     F     | `work:write`      |
-| `link_external`          |    F     |      F      |     T      |   **T**   | `connectors:link` |
-| `start_connector_link`   |    F     |      F      |     F      |   **T**   | `connectors:link` |
-| `trigger_agent_session`  |    F     |      F      |     F      |   **T**   | `agents:run`      |
-| `respond_to_session`     |    F     |      F      |     F      |     F     | `agents:run`      |
-| `approve_action`         |    F     |      T      |     T      |     F     | `agents:run`      |
-| `reject_action`          |    F     |      T      |     T      |     F     | `agents:run`      |
-| `cancel_session`         |    F     |      T      |     T      |     F     | `agents:run`      |
-| `list_work`              |  **T**   |      —      |     T      |     F     | `work:read`       |
-| `find`                   |  **T**   |      —      |     T      |     F     | `work:read`       |
-| `add_to_daily_plan`      |    F     |      F      |     T      |     F     | `work:write`      |
-
-> `list_work` and `find` are _read_ operations exposed as **tools** (not resources) because they take rich query arguments — resources are for addressable-by-URI reads. They keep `readOnlyHint:true` and need only `work:read`.
->
-> **RESOLVED: `search` shipped as `find`, backed by the workspace search engine.** The original
-> implementation ran three unbounded `ILIKE` scans over `task`/`project`/`program` and authorized
-> once at the org root, so any caller who could open a workspace received every matching title in
-> it — including private work their grants did not reach. `find` delegates to `searchWorkspace`
-> (`apps/api/src/search/query.ts`), which applies the same per-row visibility cascade as the web
-> app across all 18 indexed kinds. Because that engine reads the `search_document` projection, the
-> tool is eventually consistent with writes; `run_view` remains the live-row read.
-
-### 3.3 Shared Zod fragments (`@docket/types`)
-
-```ts
-const Slug = z
-  .string()
-  .min(1)
-  .regex(/^[a-z0-9-]+$/);
-const Id = z.string().uuid();
-const ActorRef = z.object({ actor_id: Id }); // Human|Agent (assignable)
-const Health = z.enum(['on_track', 'at_risk', 'off_track']);
-const Priority = z.enum(['none', 'urgent', 'high', 'medium', 'low']);
-const Idem = z.string().uuid().optional(); // idempotency_key
-
-// Returned on most mutations — lets the model fetch the full entity as a resource.
-const EntityRef = z.object({
-  id: Id,
-  type: z.enum([
-    'task',
-    'project',
-    'program',
-    'initiative',
-    'cycle',
-    'team',
-    'update',
-    'comment',
-    'session',
-    'agent',
-    'view',
-  ]),
-  uri: z.string(), // docket://{org}/{type}/{id}
-  url: z.string().url().optional(), // deep link into the web app
-});
-```
-
-### 3.4 Tool definitions (input / output / annotations)
-
-Only load-bearing schemas shown in full; the rest follow the same shape.
-
-#### `create_task` — `work:write`
-
-```ts
-input: z.object({
-  org: Slug,
-  team: z.string(),                       // team key (e.g. "ENG") or id
-  title: z.string().min(1),
-  description: z.string().optional(),
-  priority: Priority.default("none"),
-  assignee: ActorRef.optional(),          // Human or Agent
-  delegate: z.object({ agent_id: Id }).optional(),  // owner stays, agent does it
-  project_id: Id.optional(),
-  program_id: Id.optional(),
-  milestone_id: Id.optional(),
-  cycle_id: Id.optional(),
-  parent_task_id: Id.optional(),
-  due_date: z.string().date().optional(),
-  labels: z.array(Id).optional(),
-  idempotency_key: Idem,
-})
-output: z.object({ task: EntityRef, state: z.string() })
-annotations: { title: "Create task", readOnlyHint:false, destructiveHint:false,
-               idempotentHint:false, openWorldHint:false }
-```
-
-#### `update_task` — `work:write`
-
-```ts
-input: z.object({
-  org: Slug, task_id: Id,
-  patch: z.object({                       // all optional; only provided fields change
-    title: z.string().min(1).optional(),
-    description: z.string().optional(),
-    priority: Priority.optional(),
-    due_date: z.string().date().nullable().optional(),
-    estimate: z.number().nullable().optional(),
-    labels: z.array(Id).optional(),       // full replace
-  }),
-})
-output: z.object({ task: EntityRef })
-annotations: { title:"Update task", readOnlyHint:false, destructiveHint:false,
-               idempotentHint:true, openWorldHint:false }
-```
-
-#### `move_task` — `work:write`
-
-Reparent across Project / Program / Triage and/or re-cycle. Idempotent (same target = no-op).
-
-```ts
-input: z.object({
-  org: Slug, task_id: Id,
-  to: z.object({
-    project_id: Id.nullable().optional(),   // null → detach from project
-    program_id: Id.nullable().optional(),
-    milestone_id: Id.nullable().optional(),
-    cycle_id: Id.nullable().optional(),
-    team: z.string().optional(),            // move between teams (re-keys state)
-    triage: z.boolean().optional(),         // true → send to team Triage
-  }),
-})
-output: z.object({ task: EntityRef })
-annotations: { ...readOnly:F, destructive:F, idempotent:T, openWorld:F }
-```
-
-#### `set_task_assignee` — `work:write`
-
-```ts
-input: z.object({ org: Slug, task_id: Id, assignee: ActorRef.nullable() }) // null = unassign
-output: z.object({ task: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }
-```
-
-#### `set_task_delegate` — `work:write`
-
-Hand the _doing_ to an agent while ownership stays (product §4). Setting a delegate MAY auto-open a session per the agent's `approval_policy` — but does NOT itself dispatch; use `trigger_agent_session`.
-
-```ts
-input: z.object({ org: Slug, task_id: Id, delegate: z.object({ agent_id: Id }).nullable() })
-output: z.object({ task: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }
-```
-
-#### `set_task_state` — `work:write`
-
-```ts
-input: z.object({ org: Slug, task_id: Id, state: z.string() })  // must be a state in the team's workflow_states
-output: z.object({ task: EntityRef, state: z.string() })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }
-```
-
-#### `add_task_dependency` / `remove_task_dependency` — `work:write`
-
-Org-wide, cross-project, **acyclic** (`task_dependency` edges, data-model §5). The RS MUST reject edges that would create a cycle → `isError:true`.
-
-```ts
-// add
-input: z.object({ org: Slug, blocking_task_id: Id, blocked_task_id: Id })
-output: z.object({ blocking: EntityRef, blocked: EntityRef })
-annotations(add): { readOnly:F, destructive:F, idempotent:T, openWorld:F }
-// remove — destructive (drops an edge)
-annotations(remove): { readOnly:F, destructive:T, idempotent:T, openWorld:F }
-```
-
-#### `add_subtask` — `work:write`
-
-```ts
-input: z.object({ org: Slug, parent_task_id: Id, title: z.string().min(1), idempotency_key: Idem })
-output: z.object({ subtask: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `post_update` — `work:write`
-
-A status post on a Project/Program/Initiative; latest update sets the subject's `health` (data-model §5 "Update").
-
-```ts
-input: z.object({
-  org: Slug,
-  subject: z.object({ type: z.enum(["project","program","initiative"]), id: Id }),
-  health: Health,
-  body: z.string().min(1),
-})
-output: z.object({ update: EntityRef, subject_health: Health })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `create_project` — `work:write`
-
-```ts
-input: z.object({
-  org: Slug, name: z.string().min(1), description: z.string().optional(),
-  lead: ActorRef.optional(), program_id: Id.optional(), team: z.string().optional(),
-  start_date: z.string().date().optional(), target_date: z.string().date().optional(),
-  initiative_ids: z.array(Id).optional(), idempotency_key: Idem,
-})
-output: z.object({ project: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `update_project` — `work:write`
-
-```ts
-input: z.object({ org: Slug, project_id: Id, patch: z.object({
-  name: z.string().optional(), description: z.string().optional(),
-  status: z.enum(["planned","active","completed","canceled"]).optional(),
-  lead: ActorRef.nullable().optional(), program_id: Id.nullable().optional(),
-  start_date: z.string().date().nullable().optional(),
-  target_date: z.string().date().nullable().optional(),
-})})
-output: z.object({ project: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }
-```
-
-#### `create_program` — `work:write`
-
-Status set `{active, paused, archived}` — **no `completed`** (programs never finish, data-model §5).
-
-```ts
-input: z.object({ org: Slug, name: z.string().min(1), description: z.string().optional(),
-                  owner: ActorRef.optional(), initiative_ids: z.array(Id).optional(),
-                  idempotency_key: Idem })
-output: z.object({ program: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `create_initiative` — `work:write`
-
-A theme; contains no work. Associates with Programs/Projects (m2m).
-
-```ts
-input: z.object({ org: Slug, name: z.string().min(1), description: z.string().optional(),
-                  owner: ActorRef.optional(), target_date: z.string().date().optional(),
-                  idempotency_key: Idem })
-output: z.object({ initiative: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `link_initiative` — `work:write`
-
-The m2m theme link (`initiative_project` / `initiative_program`).
-
-```ts
-input: z.object({ org: Slug, initiative_id: Id,
-  target: z.object({ type: z.enum(["project","program"]), id: Id }),
-  action: z.enum(["link","unlink"]).default("link") })
-output: z.object({ initiative: EntityRef, target: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }   // unlink is additive-reversible; not flagged destructive
-```
-
-#### `add_comment` — `work:write`
-
-Agents post as their own Actor (data-model §5 "Comment"). This is also how a session's `response`/`elicitation` surfaces on a Task.
-
-```ts
-input: z.object({ org: Slug,
-  subject: z.object({ type: z.enum(["task","project","program","initiative"]), id: Id }),
-  body: z.string().min(1), parent_comment_id: Id.optional(), idempotency_key: Idem })
-output: z.object({ comment: EntityRef })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `link_external` — `connectors:link` · **openWorld:true**
-
-Attach external provenance (Drive doc, GitHub PR, Linear issue) to a Docket entity (data-model §5 "Provenance", "Integration"). The RS uses the org's **Integration credentials** to resolve metadata — **never** the client's token.
-
-```ts
-input: z.object({
-  org: Slug,
-  subject: z.object({ type: z.enum(["task","project"]), id: Id }),
-  integration_id: Id,                       // an existing connected Integration in this org
-  external_url: z.string().url(),
-  role: z.enum(["work","context","signal","time","code"]).default("context"),
-})
-output: z.object({ subject: EntityRef, provenance: z.object({
-  source: z.literal("linked"), external_id: z.string().optional(),
-  external_url: z.string().url(), sync_mode: z.enum(["import","mirror"]) }) })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:true }
-```
-
-#### `start_connector_link` — `connectors:link` · **openWorld:true**
-
-Begin connecting a new external provider. Returns a **URL-mode elicitation** target (spec elicitation; engineering plan §4) so the user completes the connector's OAuth in a browser. Does NOT pass any Docket token to the provider.
-
-```ts
-input: z.object({ org: Slug, provider: z.enum(["github","gmail","calendar","gtasks","linear"]),
-                  pattern: z.enum(["migration","connector"]) })
-output: z.object({ integration_id: Id, authorize_url: z.string().url(),
-                   status: z.enum(["pending","connected"]) })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:true }
-```
-
-#### `trigger_agent_session` — `agents:run` · **openWorld:true** · **task-augmentable**
-
-Open a Session (data-model §5 "Agent Session"). The MCP tool's job is **create + return the session handle**; the provider dispatch + approval gating live in `agents-sessions`. `execution.taskSupport: "optional"` (long-running).
-
-```ts
-input: z.object({
-  org: Slug, agent_id: Id,
-  trigger: z.enum(["assignment","delegation","mention"]).default("delegation"),
-  task_id: Id.optional(),
-  prompt: z.string().optional(),            // free-form instruction for this run
-})
-output: z.object({
-  session: EntityRef,                       // type:"session"
-  status: z.enum(["pending","running","awaiting_input","awaiting_approval"]),
-})
-annotations: { title:"Run agent", readOnly:F, destructive:F, idempotent:F, openWorld:true }
-execution: { taskSupport: "optional" }
-```
-
-#### `respond_to_session` — `agents:run`
-
-Answer an agent's elicitation/question in a live session (mirrors the in-session reply box, product §8.6).
-
-```ts
-input: z.object({ org: Slug, session_id: Id, activity_id: Id, body: z.string().min(1) })
-output: z.object({ session: EntityRef, status: z.string() })
-annotations: { readOnly:F, destructive:F, idempotent:F, openWorld:F }
-```
-
-#### `approve_action` / `reject_action` — `agents:run` · **destructive:true**
-
-Resolve a pending agent action under `act_with_approval`. The RS MUST verify the caller's Actor is the configured **approver** (assigner/delegator default; per-Org/Team `approval_routing` override — logic owned by `agents-sessions`). Approve → the action **applies**; reject → it's discarded. Both flagged `destructiveHint:true` (approve commits an external/irreversible effect; reject discards proposed work).
-
-```ts
-// approve
-input: z.object({ org: Slug, session_id: Id, action_id: Id, note: z.string().optional() })
-output: z.object({ session: EntityRef, action_id: Id,
-                   result: z.enum(["applied","queued"]) })
-// reject
-input: z.object({ org: Slug, session_id: Id, action_id: Id, reason: z.string().optional() })
-output: z.object({ session: EntityRef, action_id: Id, result: z.literal("rejected") })
-annotations: { readOnly:F, destructive:true, idempotent:true, openWorld:F }
-```
-
-#### `cancel_session` — `agents:run` · **destructive:true**
-
-```ts
-input: z.object({ org: Slug, session_id: Id, reason: z.string().optional() })
-output: z.object({ session: EntityRef, status: z.literal("canceled") })
-annotations: { readOnly:F, destructive:true, idempotent:true, openWorld:F }
-```
-
-#### `run_view` — `work:read` · **task-augmentable (optional)**
-
-Execute a saved View or an ad-hoc query; **permission-filtered** (a guest never sees hidden work, product §8.3). Large views may run as a Task.
-
-```ts
-input: z.object({
-  org: Slug,
-  view: z.union([ z.object({ view_id: Id }),
-                  z.object({ query: z.object({       // ad-hoc
-                    entity: z.enum(["task","project","program","initiative","cycle"]),
-                    filters: z.record(z.string(), z.unknown()).optional(),
-                    group_by: z.string().optional(),
-                    sort: z.array(z.object({ field: z.string(),
-                      dir: z.enum(["asc","desc"]) })).optional(),
-                    limit: z.number().int().max(200).default(50),
-                    cursor: z.string().optional(),
-                  }) }) ]),
-})
-output: z.object({
-  items: z.array(z.object({ ref: EntityRef, fields: z.record(z.string(), z.unknown()) })),
-  group_by: z.string().optional(),
-  next_cursor: z.string().optional(),
-})
-annotations: { title:"Run view", readOnly:true, idempotent:true, openWorld:F }
-execution: { taskSupport: "optional" }
-```
-
-#### `search` — `work:read`
-
-The `Cmd+K`-grade fused search. Hub-global (across the principal's orgs) or org-local.
-
-```ts
-input: z.object({
-  query: z.string().min(1),
-  scope: z.union([ z.literal("hub"), z.object({ org: Slug }) ]).default("hub"),
-  types: z.array(z.enum(["task","project","program","initiative","cycle","team",
-                         "update","comment","agent","session","view"])).optional(),
-  limit: z.number().int().max(50).default(20),
-})
-output: z.object({ results: z.array(z.object({
-  ref: EntityRef, title: z.string(), snippet: z.string().optional(),
-  org: Slug })) })
-annotations: { readOnly:true, idempotent:true, openWorld:F }
-```
-
-#### `add_to_daily_plan` — `work:write`
-
-Pull a (possibly cross-org) task into the Hub's personal Daily Plan (data-model §5 "Daily Plan"). Hub-scoped, not org-scoped — authorized by `sub` ownership of the Hub.
-
-```ts
-input: z.object({ org: Slug, task_id: Id, date: z.string().date(),
-                  timebox: z.object({ start: z.string(), end: z.string() }).optional() })
-output: z.object({ plan_item: z.object({ id: Id, date: z.string().date(),
-                   task: EntityRef, status: z.enum(["planned","done"]) }) })
-annotations: { readOnly:F, destructive:F, idempotent:T, openWorld:F }
-```
-
----
+### 3.2 The tool surface
+
+Fifteen tools, named for what someone is trying to do rather than for the row they touch. The
+earlier draft of this section listed twenty-six that mapped roughly 1:1 onto SQL statements; that
+surface could not express ordinary sentences ("reassign Sarah's open work to me" needed a name→id
+lookup, a filtered query, and a bulk write, and offered none of the three) and was replaced.
+
+| Tool             | readOnly | destructive | idempotent | openWorld | Scope             | Widget          |
+| ---------------- | :------: | :---------: | :--------: | :-------: | ----------------- | --------------- |
+| `workspaces`     |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `list_work`      |  **T**   |      F      |     T      |     F     | `work:read`       | `work-list`     |
+| `find`           |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `get`            |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `brief`          |  **T**   |      F      |     T      |     F     | `work:read`       | —               |
+| `capture`        |    F     |      F      |     F      |     F     | `work:write`      | `change-report` |
+| `organize`       |    F     |      F      |   **T**    |     F     | `work:write`      | `change-report` |
+| `update`         |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
+| `link`           |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
+| `archive`        |    F     |    **T**    |     T      |     F     | `work:write`      | `change-report` |
+| `comment`        |    F     |      F      |     F      |     F     | `work:write`      | —               |
+| `report_status`  |    F     |      F      |     F      |     F     | `work:write`      | —               |
+| `plan_day`       |    F     |      F      |     T      |     F     | `work:write`      | —               |
+| `undo`           |    F     |    **T**    |     T      |     F     | `work:write`      | —               |
+| `link_external`  |    F     |      F      |     T      |   **T**   | `connectors:link` | —               |
+| `run_agent`      |    F     |      F      |     F      |   **T**   | `agents:run`      | —               |
+| `manage_session` |    F     |    **T**    |     T      |     F     | `agents:run`      | —               |
+
+Notes on the less obvious entries:
+
+- **`organize` is idempotent** because it reconciles: it matches each item against what already
+  exists _in its parent's scope_ and creates only the rest, so re-running a plan does not duplicate
+  it. Matching is never org-wide for anything with a parent — two projects called "Rollout" under
+  different programs are two projects.
+- **`update`, `archive`, and `undo` are destructive** in the annotation's sense: they rewrite or
+  remove existing state in bulk, and a client should show the caller what will happen. `link` is
+  marked destructive because `remove: true` takes a relation away.
+- **Reads are tools, not resources**, when they take rich query arguments; resources are for reads
+  addressable by URI. `workspaces` is the bootstrap: every other tool needs an `orgId`, and it is
+  the only one that does not.
+- **Every write records a change set** and returns a `changeSetId` for `undo`. Undo is a reverse
+  replay with conflict detection, not a rollback — anything edited by someone else since is
+  reported as skipped rather than clobbered.
+
+**Authoritative definitions live in the code, not here.** Every tool carries a `.describe()` on
+every field and an `outputSchema`, so restating them in prose guarantees drift. See
+`apps/api/src/mcp/` — one module per tool — and `TOOL_SCOPE` in `scope.ts`, which
+`tests/mcp/mcp-scope.test.ts` asserts covers every registered tool, so a rename fails loudly.
+
+### 3.2.1 Widgets (MCP Apps, SEP-1865)
+
+Tools with a widget declare it via `_meta["io.modelcontextprotocol/ui"].resourceUri`, pointing at a
+`ui://docket/*` resource served as `text/html;profile=mcp-app`. A host that does not implement the
+extension ignores the key and renders the JSON, so a widget can never make the surface worse.
+
+- `change-report` — what a write did, as before → after per item, plus what it could not touch and
+  why, plus the undo for that change set. It shows diffs rather than end states because writes
+  execute immediately, making this the only place the change is checkable.
+- `work-list` — the count and first rows of a matched set, so it can be scanned before it is acted
+  on. No filters, no sort, no text entry: the scope came from a sentence, and changing it is
+  another sentence.
+
+Documents are self-contained (the host serves them under a deny-all CSP) and take all colour from
+`hostContext.styles.variables`. See `apps/api/src/mcp/apps/`.
+
+### 3.3 Where the definitions actually live
+
+This section used to carry a `@docket/types` fragment sketch and then ~350 lines of per-tool
+input/output/annotation definitions. Both are deleted rather than updated, because both had already
+drifted from the code in ways that mattered: the sketch typed ids as `z.string().uuid()` (they are
+Crockford-base32 ULIDs, branded per entity in `packages/types/src/primitives.ts`) and used
+`snake_case` field names the API never spoke, while the tool definitions described a surface that
+no longer exists — `run_view`, `start_connector_link`, `trigger_agent_session`,
+`add_to_daily_plan`, and the fourteen per-field task tools.
+
+A prose copy of a schema is a second source of truth that nothing verifies, and this file is the
+evidence for what happens to one. The code is the specification:
+
+| What                                    | Where                                                                                                        |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Every tool's input/output + annotations | `apps/api/src/mcp/*-tool.ts`, `write-tools.ts`, `view-plan-tools.ts`, `content-tools.ts`, `session-tools.ts` |
+| Scope per tool                          | `TOOL_SCOPE` in `apps/api/src/mcp/scope.ts`                                                                  |
+| Branded ids and shared enums            | `packages/types/src/primitives.ts` and its siblings                                                          |
+| Name→id resolution                      | `apps/api/src/mcp/descriptors.ts`                                                                            |
+| Change sets and undo                    | `apps/api/src/mcp/change-set.ts`                                                                             |
+| Widgets                                 | `apps/api/src/mcp/apps/`                                                                                     |
+
+Every field carries a `.describe()` and every tool an `outputSchema`, so `tools/list` is itself the
+readable, always-current contract — `pnpm --filter @docket/api test` fails if `TOOL_SCOPE` misses a
+registered tool, which is the one invariant this file used to assert in prose and could not check.
 
 ## 4. Resources & Resource Templates (reads)
 
@@ -705,7 +375,7 @@ On `initialize`, the RS advertises:
 - **`prompts`:** advertised (`prompts.listChanged: true`) — the implementation registers workspace-context bootstrap prompts (`apps/api/src/mcp/prompts.ts`), superseding this spec's original "deferred in v1" stance.
 - **`completions: {}`** — implement `completion/complete` for: resource-template `{id}` vars (return matching entities the principal can see, by recent/active), `{org}` (the principal's org slugs), and tool enum args (e.g. `team`, `state` from the team's `workflow_states`, `provider`).
 - **`logging: {}`** — **RESOLVED: shipped.** `logging/setLevel` persists to `mcp_session.log_level` and `notifications/message` frames go out over the session's stream ([`mcp-notifications.md`](mcp-notifications.md) §4.6). Never log tokens, credentials, or another principal's data.
-- **`tasks`** — declare `tasks.requests.tools.call` so clients MAY augment `trigger_agent_session` / `run_view` calls as tasks. Tasks are **authorization-context-bound** (spec security): `tasks/get|result|cancel|list` MUST reject task IDs not owned by the requestor's token context. Adopt behind a feature flag (open issue: experimental churn).
+- **`tasks`** — declare `tasks.requests.tools.call` so clients MAY augment `run_agent` / `list_work` calls as tasks. Tasks are **authorization-context-bound** (spec security): `tasks/get|result|cancel|list` MUST reject task IDs not owned by the requestor's token context. Adopt behind a feature flag (open issue: experimental churn).
 - **Pagination:** honor `cursor`/`nextCursor` on `tools/list`, `resources/list`, `resources/templates/list`, `tasks/list`, and inside `list_work`/`find`.
 - **Lifecycle utilities:** support `ping`, progress (`notifications/progress` with the request's `progressToken`), and cancellation (`notifications/cancelled`).
 
@@ -713,12 +383,13 @@ On `initialize`, the RS advertises:
 
 ## 6. Build Checklist (this area)
 
-1. Mount `StreamableHTTPServerTransport` (stateful, Redis-backed) at `/mcp` in `apps/api`; wire `withMcpAuth(auth, …)`; register CORS + Origin allowlist **before** the handler.
+1. Mount `StreamableHTTPServerTransport` at `/mcp` in `apps/api` — **per-request, not stateful**: session and subscription state lives in Postgres and the notify hop rides `LISTEN/NOTIFY`, because Cloud Run runs `--max-instances=10` with no session affinity and there is no Redis (see `mcp-notifications.md`); wire `withMcpAuth(auth, …)`; register CORS + Origin allowlist **before** the handler.
 2. Serve PRM at `/.well-known/oauth-protected-resource` **and** `/.well-known/oauth-protected-resource/mcp`. AS metadata: Better Auth serves the live document at `<issuer>/api/auth/.well-known/oauth-authorization-server` (relative to its base path, NOT the RFC 8414 root); the RS-level `/.well-known/oauth-authorization-server` 307-redirects there. Confirm `code_challenge_methods_supported:["S256"]` and `client_id_metadata_document_supported:true` appear.
 3. Register the 4 scopes in `mcp().oidcConfig.scopes`; implement the token-validation middleware: bearer → `getMcpSession` → audience(`aud`==RS URI) → issuer → scope → principal(`sub`→User→Actor) → grant cascade. Emit the two `WWW-Authenticate` challenge forms.
-4. Author every tool's Zod input/output + annotations in `@docket/types`; register tools with `outputSchema` (JSON Schema 2020-12) and `structuredContent`+text results; gate each by scope (table §3.2) AND grant.
+4. Author every tool's Zod input/output + annotations; register with `outputSchema` (JSON Schema 2020-12) and `structuredContent`+text results; gate each by scope (table §3.2) AND grant.
 5. Implement the `docket://` resource reader (Zod read DTOs), `resources/list`, `resources/templates/list`, `resources/read`, `resources/subscribe`, and the `updated`/`list_changed` notification fan-out from the service-layer event bus.
 6. Implement `completion/complete`, `logging`, `ping`/progress/cancel; gate `tasks` behind `MCP_TASKS_ENABLED`.
-7. Enforce **no downstream token passthrough**: connector resolution in `link_external`/`start_connector_link` uses `Integration.credentials_ref`, never the inbound token.
+7. Enforce **no downstream token passthrough**: connector resolution in `link_external` uses `Integration.credentials_ref`, never the inbound token.
 8. Env contract (validated in `@docket/env`, dev mirrors prod): **DONE, on-by-default.** `MCP_ISSUER_URL`/`MCP_RESOURCE_URL`/`OIDC_LOGIN_PAGE_URL` derive automatically from the required `API_URL`/`WEB_URL` (`packages/env/src/api.ts`) — no MCP-specific setup needed for the AS/RS to mount in any deploy. Only `MCP_ALLOWED_ORIGINS` (a security allowlist) and, if using Tasks, `MCP_SESSION_STORE_URL` (Redis) + `MCP_TASKS_ENABLED` are set explicitly per environment, plus the shared `BETTER_AUTH_URL`/secret/DB vars.
-9. Playwright/integration: **DONE** — `apps/web/e2e/mcp-connect.spec.ts` (discover PRM/AS → DCR register → consent → PKCE token → Bearer read → 403 step-up → write) and `apps/web/e2e/mcp-session.spec.ts` (`trigger_agent` → observe the approval gate on the session resource → `approve_action`; polling instead of subscribe, per the stateless transport). Both run in the CI `e2e` job.
+9. Playwright/integration: **DONE** — `apps/web/e2e/mcp-connect.spec.ts` (discover PRM/AS → DCR register → consent → PKCE token → Bearer read → 403 step-up → `capture`) and `apps/web/e2e/mcp-session.spec.ts` (`run_agent` → observe the approval gate on the session resource → `manage_session` with `action: 'approve'`; polling instead of subscribe, per the per-request transport). Both run in the CI `e2e` job.
+10. **Open:** no rate limit on `/mcp`. The API has no rate-limiting infrastructure and the deployment has no shared store, so a per-instance limiter would give false assurance; it needs its own design pass.

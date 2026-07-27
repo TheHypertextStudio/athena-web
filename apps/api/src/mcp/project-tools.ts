@@ -1,4 +1,4 @@
-import { actor, db, program, project } from '@docket/db';
+import { db, project } from '@docket/db';
 import { ProjectRef, ProjectStatus } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import { and, eq } from 'drizzle-orm';
@@ -9,8 +9,8 @@ import { clearableTextPatch } from '../lib/clearable-text';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { DESCRIPTOR_HINT } from './descriptors';
-import { assertRefInOrg, orgIdParam } from './tools-shared';
+import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
+import { orgIdParam } from './tools-shared';
 
 /** Register create_project and update_project on `server`. */
 export function registerProjectTools(server: McpRegistrar, ctx: McpContext): void {
@@ -46,14 +46,19 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
           orgId: input.orgId,
         });
 
+        const [leadId, teamId] = await Promise.all([
+          resolveOptional(input.orgId, 'actor', input.leadId, 'leadId'),
+          resolveOptional(input.orgId, 'team', input.teamId, 'teamId'),
+        ]);
+
         const inserted = await db
           .insert(project)
           .values({
             organizationId: input.orgId,
             name: input.name,
             description: input.description,
-            leadId: input.leadId,
-            teamId: input.teamId,
+            leadId,
+            teamId,
             startDate: input.startDate ? new Date(input.startDate) : undefined,
             targetDate: input.targetDate ? new Date(input.targetDate) : undefined,
             createdBy: actorCtx.actorId,
@@ -108,15 +113,19 @@ export function registerProjectTools(server: McpRegistrar, ctx: McpContext): voi
           id: input.projectId,
           orgId: input.orgId,
         });
-        await assertRefInOrg(actor, input.orgId, input.leadId, 'Lead not found');
-        await assertRefInOrg(program, input.orgId, input.programId, 'Program not found');
+        // These parameters advertise DESCRIPTOR_HINT, so they must actually resolve names —
+        // `assertRefInOrg` only ever accepted a raw id, making the description a lie.
+        const [leadId, programId] = await Promise.all([
+          resolveOptional(input.orgId, 'actor', input.leadId, 'leadId'),
+          resolveOptional(input.orgId, 'program', input.programId, 'programId'),
+        ]);
 
         const patch = {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...clearableTextPatch('description', input.description),
           ...(input.status !== undefined ? { status: input.status } : {}),
-          ...(input.leadId !== undefined ? { leadId: input.leadId } : {}),
-          ...(input.programId !== undefined ? { programId: input.programId } : {}),
+          ...(leadId !== undefined ? { leadId } : {}),
+          ...(programId !== undefined ? { programId } : {}),
           ...(input.startDate !== undefined
             ? { startDate: input.startDate ? new Date(input.startDate) : null }
             : {}),

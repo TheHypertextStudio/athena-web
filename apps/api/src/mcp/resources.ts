@@ -53,7 +53,7 @@ import { authorize, scopedActor } from './result';
 import { RESOURCE_READ_SCOPE, requireScope } from './scope';
 
 /** The entity types the `docket://{org}/{type}/{id}` template can read. */
-const READABLE_TYPES = [
+export const READABLE_TYPES = [
   'task',
   'project',
   'program',
@@ -69,6 +69,44 @@ const READABLE_TYPES = [
 ] as const;
 /** One readable entity type. */
 type ReadableType = (typeof READABLE_TYPES)[number];
+
+/**
+ * The `source_table` names that map onto a readable resource type.
+ *
+ * @remarks
+ * Only these are addressable as `docket://{org}/{type}/{id}`, so only these are worth announcing
+ * when they change. Kept beside {@link READABLE_TYPES} because the two must agree: a type readable
+ * but absent here would be subscribable and never notified.
+ */
+const TABLE_TO_TYPE: Readonly<Record<string, ReadableType>> = {
+  task: 'task',
+  project: 'project',
+  program: 'program',
+  initiative: 'initiative',
+  cycle: 'cycle',
+  team: 'team',
+  update: 'update',
+  comment: 'comment',
+  agent_session: 'session',
+};
+
+/**
+ * The canonical `docket://` URI for one entity, or null when its table is not addressable.
+ *
+ * @remarks
+ * The one place the scheme is written. It was previously built by string template on the write
+ * path and taken apart by `new URL` on the read path, so the two could disagree about, say,
+ * `agent_session` vs `session` without anything failing loudly.
+ *
+ * @param orgId - The owning organization.
+ * @param sourceTable - The written table.
+ * @param entityId - The written row.
+ * @returns the URI, or null when nothing can subscribe to that table.
+ */
+export function entityUri(orgId: string, sourceTable: string, entityId: string): string | null {
+  const type = TABLE_TO_TYPE[sourceTable];
+  return type ? `docket://${orgId}/${type}/${entityId}` : null;
+}
 
 /** Whether `value` is a supported readable entity type. */
 function isReadableType(value: string): value is ReadableType {
@@ -106,15 +144,41 @@ function authTargetId(type: ReadableType, orgId: string, id: string): string {
 }
 
 /**
+ * The `view` gate every entity read passes, whatever addressed it.
+ *
+ * @remarks
+ * The single place the two-layer check lives: the `work:read` scope, then the per-org `view`
+ * cascade against the right resource kind. The resource template, the `get` tool, and
+ * `resources/subscribe` all route through here, because three copies of this block is exactly how
+ * subscribe silently becomes an oracle for entities a caller cannot read.
+ *
+ * @param ctx - The authenticated caller.
+ * @param orgId - The organization the entity lives in.
+ * @param type - The entity type.
+ * @param id - The entity id.
+ * @throws {NotFoundError} When the type is unknown or the entity is below the caller's view.
+ */
+export async function authorizeEntity(
+  ctx: McpContext,
+  orgId: string,
+  type: string,
+  id: string,
+): Promise<void> {
+  if (!isReadableType(type)) throw new NotFoundError();
+  const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
+  await authorize(actorCtx, 'view', {
+    kind: resourceKindOf(type),
+    id: authTargetId(type, orgId, id),
+    orgId,
+  });
+}
+
+/**
  * Authorize a `docket://` URI for reading, without hydrating it.
  *
  * @remarks
- * `resources/subscribe` must pass exactly the gate `resources/read` passes, or subscribing
- * becomes an oracle: a caller could confirm that a task exists by watching whether a subscription
- * succeeded. Sharing this function rather than restating the rule is what keeps the two in step.
- *
  * Hub URIs (`docket://hub/...`) are caller-scoped by construction — they resolve against the
- * caller's own Hub — so they need no org gate. Anything else is rejected.
+ * caller's own Hub — so they need no org gate. An agent principal has no Hub at all.
  *
  * @param ctx - The authenticated caller.
  * @param uri - The `docket://` URI being subscribed to.
@@ -135,18 +199,9 @@ export async function authorizeResourceUri(ctx: McpContext, uri: string): Promis
 
   const [type, id] = parsed.pathname.replace(/^\//, '').split('/');
   const orgId = parsed.host;
-  if (!orgId || !type || !id || !isReadableType(type)) throw new NotFoundError();
-
-  const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
-  await authorize(actorCtx, 'view', {
-    kind: resourceKindOf(type),
-    id: authTargetId(type, orgId, id),
-    orgId,
-  });
+  if (!orgId || !type || !id) throw new NotFoundError();
+  await authorizeEntity(ctx, orgId, type, id);
 }
-
-/** The entity types `get` and the `docket://` template can read. */
-export const READABLE_ENTITY_TYPES = READABLE_TYPES;
 
 /**
  * Authorize and hydrate one entity, the same way a `docket://` resource read does.
@@ -169,13 +224,9 @@ export async function readEntity(
   type: string,
   id: string,
 ): Promise<unknown> {
+  await authorizeEntity(ctx, orgId, type, id);
+  /* v8 ignore next -- @preserve authorizeEntity rejects an unknown type before this runs */
   if (!isReadableType(type)) throw new NotFoundError();
-  const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
-  await authorize(actorCtx, 'view', {
-    kind: resourceKindOf(type),
-    id: authTargetId(type, orgId, id),
-    orgId,
-  });
   return hydrate(type, orgId, id);
 }
 
@@ -262,15 +313,7 @@ export function registerResources(server: McpRegistrar, ctx: McpContext): void {
       // Two-layer authorization (mcp-surface.md §2.2): the `work:read` scope gate first,
       // then the per-org `view` grant cascade. The URI is addressing only; the actor is
       // re-derived from the verified token.
-      const actorCtx = await scopedActor(ctx, orgId, RESOURCE_READ_SCOPE);
-      await authorize(actorCtx, 'view', {
-        kind: resourceKindOf(typeRaw),
-        id: authTargetId(typeRaw, orgId, id),
-        orgId,
-      });
-
-      const dto = await hydrate(typeRaw, orgId, id);
-      return jsonRead(uri, dto);
+      return jsonRead(uri, await readEntity(ctx, orgId, typeRaw, id));
     },
   );
 }

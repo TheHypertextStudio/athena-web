@@ -25,15 +25,30 @@ export const orgIdParam = OrganizationId.describe(
 );
 
 /**
- * Validate a workflow-state transition for a task against its team's `workflow_states`.
+ * Resolve a workflow-state descriptor against a team and derive its terminal timestamps.
  *
+ * @remarks
+ * Matches the storage key OR the display name, so a caller saying "in review" lands on
+ * `in_review`. Both live here rather than in a separate resolver because this function already
+ * holds the team's `workflowStates` in hand — splitting them meant every state write ran the same
+ * team query twice and could fail with either of two differently-shaped errors.
+ *
+ * The terminal derivation is not optional bookkeeping: a `done`/`canceled` state with a null
+ * `completedAt`/`canceledAt` corrupts project progress.
+ *
+ * @param orgId - The organization the team belongs to.
+ * @param teamId - The team whose workflow applies.
+ * @param state - The target state, by key or display name.
+ * @param field - The tool parameter the value came from, used in the error path.
+ * @returns the resolved key plus the terminal timestamps it implies.
  * @throws {NotFoundError} When the team is missing.
- * @throws {ValidationError} When `state` is not one of the team's workflow states.
+ * @throws {ValidationError} When `state` names no state on that team; lists the legal keys.
  */
 export async function resolveStateTransition(
   orgId: string,
   teamId: string,
   state: string,
+  field = 'state',
 ): Promise<{ state: string; completedAt: Date | null; canceledAt: Date | null }> {
   const teamRows = await db
     .select({ workflowStates: team.workflowStates })
@@ -44,21 +59,26 @@ export async function resolveStateTransition(
   /* v8 ignore next -- @preserve defensive: a task always references an in-org team (FK + cascade) */
   if (!teamRow) throw new NotFoundError('Team not found');
 
-  const target = teamRow.workflowStates.find((s) => s.key === state);
+  const needle = state.trim().toLowerCase();
+  const target = teamRow.workflowStates.find(
+    (candidate) =>
+      candidate.key.toLowerCase() === needle || candidate.name.toLowerCase() === needle,
+  );
   if (!target) {
     throw new ValidationError(
       new z.ZodError([
         {
-          code: 'custom',
-          path: ['state'],
-          message: `Unknown workflow state '${state}'`,
+          code: 'invalid_value',
+          path: [field],
+          message: `"${state}" is not a workflow state on this team.`,
+          values: teamRow.workflowStates.map((candidate) => candidate.key),
           input: state,
         },
       ]),
     );
   }
   return {
-    state,
+    state: target.key,
     completedAt: target.type === 'completed' ? new Date() : null,
     canceledAt: target.type === 'canceled' ? new Date() : null,
   };

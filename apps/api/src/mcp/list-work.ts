@@ -26,6 +26,7 @@ import {
   task,
   taskDependency,
   taskLabel,
+  team,
 } from '@docket/db';
 import {
   and,
@@ -48,7 +49,7 @@ import { z } from 'zod';
 import { Priority } from '@docket/types';
 
 import { ValidationError } from '../error';
-import { resolveDescriptor, resolveWorkflowState } from './descriptors';
+import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 import type { WorkCursor } from './tools-shared-queries';
 
 /**
@@ -107,29 +108,68 @@ const SUPPORTED: Record<WorkEntity, readonly FilterName[]> = {
   initiative: ['owner', 'status', 'label', 'updatedAfter', 'archived'],
 };
 
-/** The filter surface, uniform across entities; applicability is checked per call. */
+/**
+ * The filter surface, uniform across entities; applicability is checked per call.
+ *
+ * @remarks
+ * Descriptions live here, on the module that implements the filters, so the tool can spread this
+ * whole object into its input schema. Restating each field in the tool just to attach a
+ * description meant a filter added here but forgotten there silently never reached the query.
+ */
 export const listWorkFilters = {
-  team: z.string().optional(),
-  project: z.string().optional(),
-  program: z.string().optional(),
-  initiative: z.string().optional(),
-  assignee: z.string().optional(),
-  delegate: z.string().optional(),
-  lead: z.string().optional(),
-  owner: z.string().optional(),
-  state: z.array(z.string()).optional(),
-  status: z.array(z.string()).optional(),
-  priority: z.array(Priority).optional(),
-  label: z.string().optional(),
-  cycle: z.string().optional(),
-  parent: z.string().optional(),
-  unfiled: z.boolean().optional(),
-  blocked: z.boolean().optional(),
-  blocking: z.boolean().optional(),
-  dueBefore: z.iso.date().optional(),
-  dueAfter: z.iso.date().optional(),
-  updatedAfter: z.iso.datetime().optional(),
-  archived: z.boolean().optional(),
+  team: z.string().optional().describe(`Only work on this team. ${DESCRIPTOR_HINT}`),
+  project: z.string().optional().describe(`Only work in this project. ${DESCRIPTOR_HINT}`),
+  program: z.string().optional().describe(`Only work under this program. ${DESCRIPTOR_HINT}`),
+  initiative: z
+    .string()
+    .optional()
+    .describe(`Only projects linked to this initiative. ${DESCRIPTOR_HINT}`),
+  assignee: z
+    .string()
+    .optional()
+    .describe(`Only tasks this person or agent is accountable for. ${DESCRIPTOR_HINT}`),
+  delegate: z
+    .string()
+    .optional()
+    .describe(`Only tasks whose doing was handed to this agent. ${DESCRIPTOR_HINT}`),
+  lead: z.string().optional().describe(`Only projects led by this person. ${DESCRIPTOR_HINT}`),
+  owner: z
+    .string()
+    .optional()
+    .describe(`Only programs or initiatives owned by this person. ${DESCRIPTOR_HINT}`),
+  state: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Only tasks in any of these workflow states. Display names resolve when `team` is also set, since states are per-team.',
+    ),
+  status: z
+    .array(z.string())
+    .optional()
+    .describe('Only projects/programs/initiatives in any of these statuses.'),
+  priority: z.array(Priority).optional().describe('Only tasks at any of these priorities.'),
+  label: z.string().optional().describe(`Only work carrying this label. ${DESCRIPTOR_HINT}`),
+  cycle: z
+    .string()
+    .optional()
+    .describe(`Only tasks committed to this cycle, by name or number. ${DESCRIPTOR_HINT}`),
+  parent: z.string().optional().describe('Only subtasks of this task id.'),
+  unfiled: z
+    .boolean()
+    .optional()
+    .describe('Only tasks in no project and no program — the triage queue.'),
+  blocked: z
+    .boolean()
+    .optional()
+    .describe('Only tasks with at least one dependency that has not finished.'),
+  blocking: z.boolean().optional().describe('Only tasks that something else is waiting on.'),
+  dueBefore: z.iso.date().optional().describe('Only tasks due on or before this `YYYY-MM-DD`.'),
+  dueAfter: z.iso.date().optional().describe('Only tasks due on or after this `YYYY-MM-DD`.'),
+  updatedAfter: z.iso.datetime().optional().describe('Only work changed at or after this instant.'),
+  archived: z
+    .boolean()
+    .optional()
+    .describe('List archived work instead of active work. Defaults to false.'),
 };
 
 /**
@@ -200,6 +240,34 @@ function assertApplicable(entity: WorkEntity, input: ListWorkInput): void {
 }
 
 /**
+ * Map state display-names or keys onto storage keys, reading the team's workflow once.
+ *
+ * @param orgId - The organization the team belongs to.
+ * @param teamId - The already-resolved team.
+ * @param values - The state names or keys the caller supplied.
+ * @returns the storage keys, unknown values passed through so the query simply matches nothing.
+ */
+async function resolveStateKeys(
+  orgId: string,
+  teamId: string,
+  values: readonly string[],
+): Promise<string[]> {
+  const rows = await db
+    .select({ workflowStates: team.workflowStates })
+    .from(team)
+    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
+    .limit(1);
+  const states = rows[0]?.workflowStates ?? [];
+  return values.map((value) => {
+    const needle = value.trim().toLowerCase();
+    const match = states.find(
+      (state) => state.key.toLowerCase() === needle || state.name.toLowerCase() === needle,
+    );
+    return match?.key ?? value;
+  });
+}
+
+/**
  * A task is blocked when something that is not yet finished blocks it.
  *
  * @remarks
@@ -226,8 +294,7 @@ function blockedPredicate(): SQL {
  * cast error — an agent guessing "shipped" should get nothing back, not a 500.
  */
 function anyValue(column: AnyPgColumn, values: readonly string[]): SQL | undefined {
-  const clauses = values.map((value) => eq(sql`${column}::text`, value));
-  return clauses.length > 0 ? or(...clauses) : undefined;
+  return values.length > 0 ? inArray(sql`${column}::text`, [...values]) : undefined;
 }
 
 /**
@@ -251,52 +318,30 @@ async function listTasks(
   ];
   where.push(input.archived === true ? isNotNull(task.archivedAt) : isNull(task.archivedAt));
 
-  if (input.team !== undefined) {
-    where.push(eq(task.teamId, await resolveDescriptor(orgId, 'team', input.team, 'team')));
-  }
-  if (input.project !== undefined) {
-    where.push(
-      eq(task.projectId, await resolveDescriptor(orgId, 'project', input.project, 'project')),
-    );
-  }
-  if (input.program !== undefined) {
-    where.push(
-      eq(task.programId, await resolveDescriptor(orgId, 'program', input.program, 'program')),
-    );
-  }
-  if (input.assignee !== undefined) {
-    where.push(
-      eq(task.assigneeId, await resolveDescriptor(orgId, 'actor', input.assignee, 'assignee')),
-    );
-  }
-  if (input.delegate !== undefined) {
-    where.push(
-      eq(task.delegateId, await resolveDescriptor(orgId, 'actor', input.delegate, 'delegate')),
-    );
-  }
-  if (input.cycle !== undefined) {
-    where.push(eq(task.cycleId, await resolveDescriptor(orgId, 'cycle', input.cycle, 'cycle')));
-  }
-  if (input.parent !== undefined) {
-    where.push(eq(task.parentTaskId, input.parent));
-  }
-  if (Array.isArray(input.state) && input.state.length > 0) {
-    // States are per-team, so a name is only resolvable when the query is scoped to one team;
-    // otherwise the key is taken as given.
-    const teamId = input.team;
-    const keys = await Promise.all(
-      input.state.map(async (value) =>
-        teamId
-          ? resolveWorkflowState(
-              orgId,
-              await resolveDescriptor(orgId, 'team', teamId, 'team'),
-              value,
-              'state',
-            )
-          : value,
-      ),
-    );
-    where.push(inArray(task.state, keys));
+  // Every descriptor here is independent of the others, so they resolve concurrently: a
+  // fully-specified query used to pay six serialized round trips before the list query started.
+  const [teamId, projectId, programId, assigneeId, delegateId, cycleId] = await Promise.all([
+    resolveOptional(orgId, 'team', input.team, 'team'),
+    resolveOptional(orgId, 'project', input.project, 'project'),
+    resolveOptional(orgId, 'program', input.program, 'program'),
+    resolveOptional(orgId, 'actor', input.assignee, 'assignee'),
+    resolveOptional(orgId, 'actor', input.delegate, 'delegate'),
+    resolveOptional(orgId, 'cycle', input.cycle, 'cycle'),
+  ]);
+  if (teamId !== undefined) where.push(eq(task.teamId, teamId));
+  if (projectId !== undefined) where.push(eq(task.projectId, projectId));
+  if (programId !== undefined) where.push(eq(task.programId, programId));
+  if (assigneeId !== undefined) where.push(eq(task.assigneeId, assigneeId));
+  if (delegateId !== undefined) where.push(eq(task.delegateId, delegateId));
+  if (cycleId !== undefined) where.push(eq(task.cycleId, cycleId));
+  if (input.parent !== undefined) where.push(eq(task.parentTaskId, input.parent));
+
+  if (input.state !== undefined && input.state.length > 0) {
+    // States are per-team, so a display name is only resolvable when the query is scoped to one
+    // team; otherwise the value is taken as a key. The team is the one already resolved above —
+    // an earlier version re-resolved it once per state value, paying seven lookups to filter on one.
+    const keys = teamId ? await resolveStateKeys(orgId, teamId, input.state) : input.state;
+    where.push(anyValue(task.state, keys));
   }
   if (Array.isArray(input.priority) && input.priority.length > 0) {
     where.push(anyValue(task.priority, input.priority));

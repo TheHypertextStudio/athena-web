@@ -8,7 +8,7 @@ import { NotFoundError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { DESCRIPTOR_HINT, resolveOptional, resolveWorkflowState } from './descriptors';
+import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
 import { loadTask, orgIdParam, resolveStateTransition } from './tools-shared';
 
 /** Register assign_task, set_task_delegate, set_task_state, add_subtask on `server`. */
@@ -145,11 +145,7 @@ export function registerTaskFieldTools(server: McpRegistrar, ctx: McpContext): v
           orgId: input.orgId,
         });
         const row = await loadTask(input.orgId, input.taskId);
-        const transition = await resolveStateTransition(
-          input.orgId,
-          row.teamId,
-          await resolveWorkflowState(input.orgId, row.teamId, input.state),
-        );
+        const transition = await resolveStateTransition(input.orgId, row.teamId, input.state);
 
         const updated = await db
           .update(task)

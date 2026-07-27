@@ -8,12 +8,7 @@ import { NotFoundError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import {
-  DESCRIPTOR_HINT,
-  resolveDescriptor,
-  resolveOptional,
-  resolveWorkflowState,
-} from './descriptors';
+import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 import { loadTask, orgIdParam, resolveStateTransition } from './tools-shared';
 
 /** Register create_task, update_task, move_task on `server`. */
@@ -93,11 +88,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         const requested = input.state ?? firstState?.key;
         const { state, completedAt, canceledAt } =
           firstState && requested
-            ? await resolveStateTransition(
-                input.orgId,
-                teamId,
-                await resolveWorkflowState(input.orgId, teamId, requested),
-              )
+            ? await resolveStateTransition(input.orgId, teamId, requested)
             : { state: input.state ?? 'backlog', completedAt: null, canceledAt: null };
 
         const inserted = await db
@@ -174,11 +165,7 @@ export function registerTaskCrudTools(server: McpRegistrar, ctx: McpContext): vo
         let statePatch: Awaited<ReturnType<typeof resolveStateTransition>> | undefined;
         if (input.state !== undefined) {
           const { teamId } = await loadTask(input.orgId, input.taskId);
-          statePatch = await resolveStateTransition(
-            input.orgId,
-            teamId,
-            await resolveWorkflowState(input.orgId, teamId, input.state),
-          );
+          statePatch = await resolveStateTransition(input.orgId, teamId, input.state);
         }
 
         const updated = await db

@@ -1,12 +1,4 @@
-import {
-  actor,
-  db,
-  initiative,
-  initiativeProgram,
-  initiativeProject,
-  program,
-  project,
-} from '@docket/db';
+import { db, initiative, initiativeProgram, initiativeProject, program, project } from '@docket/db';
 import {
   Health,
   InitiativeOut,
@@ -25,8 +17,8 @@ import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import { jsonResult, runTool, scopedActor, authorize } from './result';
-import { DESCRIPTOR_HINT } from './descriptors';
-import { assertRefInOrg, orgIdParam } from './tools-shared';
+import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
+import { orgIdParam } from './tools-shared';
 
 /**
  * The shape both initiative writes return.
@@ -77,7 +69,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
           id: input.orgId,
           orgId: input.orgId,
         });
-        await assertRefInOrg(actor, input.orgId, input.ownerId, 'Owner not found');
+        const ownerId = await resolveOptional(input.orgId, 'actor', input.ownerId, 'ownerId');
 
         const inserted = await db
           .insert(program)
@@ -85,7 +77,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
             organizationId: input.orgId,
             name: input.name,
             description: input.description,
-            ownerId: input.ownerId,
+            ownerId,
             status: 'active',
             createdBy: actorCtx.actorId,
           })
@@ -136,7 +128,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
           id: input.orgId,
           orgId: input.orgId,
         });
-        await assertRefInOrg(actor, input.orgId, input.ownerId, 'Owner not found');
+        const ownerId = await resolveOptional(input.orgId, 'actor', input.ownerId, 'ownerId');
 
         const inserted = await db
           .insert(initiative)
@@ -145,7 +137,7 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
             name: input.name,
             summary: input.summary,
             description: input.description,
-            ownerId: input.ownerId,
+            ownerId,
             status: input.status,
             health: input.health,
             priority: input.priority,
@@ -213,12 +205,12 @@ export function registerInitiativeTools(server: McpRegistrar, ctx: McpContext): 
           id: input.initiativeId,
           orgId: input.orgId,
         });
-        await assertRefInOrg(actor, input.orgId, input.ownerId ?? undefined, 'Owner not found');
+        const ownerId = await resolveOptional(input.orgId, 'actor', input.ownerId, 'ownerId');
         const patch: Partial<typeof initiative.$inferInsert> = {
           ...(input.name !== undefined ? { name: input.name } : {}),
           ...clearableTextPatch('summary', input.summary),
           ...clearableTextPatch('description', input.description),
-          ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}),
+          ...(ownerId !== undefined ? { ownerId } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
           ...(input.health !== undefined ? { health: input.health } : {}),
           ...(input.priority !== undefined ? { priority: input.priority } : {}),

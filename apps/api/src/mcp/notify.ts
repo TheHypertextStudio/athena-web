@@ -18,7 +18,8 @@
  * notification is a hint to re-read rather than the data itself.
  */
 import { actor, db, listenToChannel, logLevel, mcpSession, mcpSubscription } from '@docket/db';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 
 /** The Postgres channel every api instance fans MCP notifications over. */
 const CHANNEL = 'mcp_notify';
@@ -47,8 +48,7 @@ interface NotifyEnvelope {
 type FrameSink = (frame: string) => void;
 
 const localStreams = new Map<string, FrameSink>();
-let unlisten: (() => Promise<void>) | undefined;
-let listening: Promise<void> | undefined;
+let listening: Promise<() => Promise<void>> | undefined;
 
 /**
  * Serialize an envelope into the JSON-RPC notification the client expects on the wire.
@@ -79,17 +79,17 @@ function toFrame(envelope: NotifyEnvelope): string {
  * the common case when several instances are up.
  */
 async function ensureListening(): Promise<void> {
-  listening ??= (async () => {
-    unlisten = await listenToChannel(CHANNEL, (payload) => {
-      let envelope: NotifyEnvelope;
-      try {
-        envelope = JSON.parse(payload) as NotifyEnvelope;
-      } catch {
-        return;
-      }
-      localStreams.get(envelope.sessionId)?.(toFrame(envelope));
-    });
-  })();
+  // The unlisten handle IS the promise's value, so there is no window where the subscription is
+  // in flight but its teardown function has not been assigned yet.
+  listening ??= listenToChannel(CHANNEL, (payload) => {
+    let envelope: NotifyEnvelope;
+    try {
+      envelope = JSON.parse(payload) as NotifyEnvelope;
+    } catch {
+      return;
+    }
+    localStreams.get(envelope.sessionId)?.(toFrame(envelope));
+  });
   await listening;
 }
 
@@ -118,17 +118,30 @@ export async function attachStream(
 }
 
 /**
- * Publish a notification to one session, wherever its stream is held.
+ * The `pg_notify` projection every publish selects.
  *
  * @remarks
- * Delivered through Postgres even when the target stream is local, so there is exactly one
- * delivery path to reason about and to test.
+ * Every notification is set-based — addressed by a query rather than a known session id — so the
+ * envelope is built in SQL, and built here once. Spelled out per call site, adding a field to
+ * {@link NotifyEnvelope} would leave the old shape emitted from wherever the author did not look.
  *
- * @param envelope - The addressed notification.
+ * @param sessionIdExpr - SQL naming the session column to address.
+ * @param method - The JSON-RPC method.
+ * @param paramsExpr - SQL producing the `params` object, or null when the method takes none.
+ * @returns the `pg_notify(...)` expression.
  */
-async function publish(envelope: NotifyEnvelope): Promise<void> {
-  const payload = JSON.stringify(envelope);
-  await db.execute(sql`select pg_notify(${CHANNEL}, ${payload})`);
+function envelopeSql(sessionIdExpr: SQL, method: string, paramsExpr?: SQL): SQL {
+  const params = paramsExpr ?? sql`null`;
+  // Every scalar parameter is cast explicitly: inside `json_build_object` Postgres has no column
+  // to infer a placeholder's type from, and an uncast one is a 42P18 at parse time.
+  return sql`pg_notify(
+    ${CHANNEL}::text,
+    json_build_object(
+      'sessionId', ${sessionIdExpr},
+      'method', ${method}::text,
+      'params', ${params}
+    )::text
+  )`;
 }
 
 /**
@@ -148,14 +161,11 @@ async function publish(envelope: NotifyEnvelope): Promise<void> {
  */
 export async function notifyResourceUpdated(uri: string): Promise<void> {
   await db.execute(sql`
-    select pg_notify(
-      ${CHANNEL},
-      json_build_object(
-        'sessionId', ${mcpSubscription.sessionId},
-        'method', 'notifications/resources/updated',
-        'params', json_build_object('uri', ${uri}::text)
-      )::text
-    )
+    select ${envelopeSql(
+      sql`${mcpSubscription.sessionId}`,
+      'notifications/resources/updated',
+      sql`json_build_object('uri', ${uri}::text)`,
+    )}
     from ${mcpSubscription}
     where ${eq(mcpSubscription.uri, uri)}
   `);
@@ -183,10 +193,7 @@ export async function notifyGrantsChanged(
   subjectId: string,
 ): Promise<void> {
   await db.execute(sql`
-    select pg_notify(
-      ${CHANNEL},
-      json_build_object('sessionId', s.id, 'method', 'notifications/tools/list_changed')::text
-    )
+    select ${envelopeSql(sql`s.id`, 'notifications/tools/list_changed')}
     from ${mcpSession} s
     join ${actor} a on s.principal_key = coalesce(a.user_id, a.id)
     where a.organization_id = ${orgId}
@@ -214,18 +221,22 @@ export async function notifyLog(
   level: LogLevel,
   data: Record<string, unknown>,
 ): Promise<void> {
-  const rows = await db
-    .select({ logLevel: mcpSession.logLevel })
-    .from(mcpSession)
-    .where(and(eq(mcpSession.id, sessionId), isNull(mcpSession.endedAt)))
-    .limit(1);
-  const wanted = rows[0]?.logLevel;
-  if (!wanted || LOG_LEVELS.indexOf(level) < LOG_LEVELS.indexOf(wanted)) return;
-  await publish({
-    sessionId,
-    method: 'notifications/message',
-    params: { level, logger: 'docket', data },
-  });
+  // The level predicate lives in the WHERE, so a session that does not want this severity
+  // produces zero rows and no frame — one round trip instead of read-then-publish.
+  const wanted = LOG_LEVELS.slice(0, LOG_LEVELS.indexOf(level) + 1);
+  await db.execute(sql`
+    select ${envelopeSql(
+      sql`${mcpSession.id}`,
+      'notifications/message',
+      sql`json_build_object('level', ${level}::text, 'logger', 'docket', 'data', ${JSON.stringify(data)}::json)`,
+    )}
+    from ${mcpSession}
+    where ${and(
+      eq(mcpSession.id, sessionId),
+      isNull(mcpSession.endedAt),
+      inArray(mcpSession.logLevel, wanted),
+    )}
+  `);
 }
 
 /**
@@ -236,8 +247,7 @@ export async function notifyLog(
  */
 export async function resetNotifications(): Promise<void> {
   localStreams.clear();
-  const stop = unlisten;
-  unlisten = undefined;
+  const pending = listening;
   listening = undefined;
-  if (stop) await stop();
+  if (pending) await (await pending)();
 }

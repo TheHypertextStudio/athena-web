@@ -22,13 +22,7 @@ import { env } from '../env';
 import { ApiError, ConflictError, NotFoundError } from '../error';
 import type { McpContext } from './auth';
 import { attachStream, notifyLog } from './notify';
-import {
-  createSession,
-  endSession,
-  resolveSession,
-  SESSION_HEADER,
-  touchSession,
-} from './session-registry';
+import { createSession, endSession, resolveSession, SESSION_HEADER } from './session-registry';
 import { oauthIssuer, resolveMcpContext } from './auth';
 import { createMcpCatalog } from './catalog';
 import { registerPrompts } from './prompts';
@@ -230,9 +224,10 @@ function negotiatedProtocolVersion(body: unknown): string | null {
  * Hold the server→client SSE stream for one session.
  *
  * @remarks
- * Modelled on `routes/stream-sse.ts`, the app's existing long-lived connection: a buffer plus a
- * wake callback so the synchronous notify handler can hand off to the async writer, a heartbeat
- * so proxies do not reap an idle connection, and abort wiring so a disconnect tears down cleanly.
+ * Frames are enqueued straight onto the `ReadableStream` from the notify callback — its queue is
+ * the buffer, so there is no pending array or wake promise to keep in step. A `setInterval`
+ * heartbeat keeps proxies from reaping an idle connection, and the abort listener is the single
+ * teardown path.
  *
  * One stream per session — a second GET gets 409, matching the transport spec's own rule — so a
  * reconnecting client cannot silently end up with two half-fed channels.
@@ -243,57 +238,38 @@ function negotiatedProtocolVersion(body: unknown): string | null {
  */
 async function notificationStream(c: Context, sessionId: string): Promise<Response> {
   const encoder = new TextEncoder();
-  const pending: string[] = [];
-  let wake: (() => void) | undefined;
-  const state = { closed: false };
-  // Read through a call rather than the property directly: every write happens in a callback the
-  // loop's control flow does not contain, so narrowing the property would be wrong.
-  const isClosed = (): boolean => state.closed;
-
   // Claim the session's stream before committing to a response, so a second GET can still be
   // answered with a real 409 rather than a 200 whose body immediately errors.
-  const detach = await attachStream(sessionId, (frame) => {
-    pending.push(frame);
-    wake?.();
-  });
+  let push: ((text: string) => void) | undefined;
+  let teardown: ((closeController: boolean) => void) | undefined;
+  const detach = await attachStream(sessionId, (frame) => push?.(`data: ${frame}\n\n`));
   if (!detach) {
     return problem(c, new ConflictError('Only one notification stream is allowed per session'));
   }
 
   const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const signal = c.req.raw.signal;
-      const onAbort = (): void => {
-        state.closed = true;
-        wake?.();
+    start(controller) {
+      // Enqueue straight from the notify callback: a ReadableStream already has the queue an
+      // earlier version reimplemented as a pending-buffer plus a wake promise.
+      push = (text) => {
+        controller.enqueue(encoder.encode(text));
       };
-      signal.addEventListener('abort', onAbort);
-
-      try {
-        while (!isClosed()) {
-          // Draining is synchronous, so the loop condition above is the only close check needed
-          // before the next await.
-          while (pending.length > 0) {
-            const frame = pending.shift();
-            /* v8 ignore next -- defensive: length was just checked */
-            if (frame === undefined) break;
-            controller.enqueue(encoder.encode(`data: ${frame}\n\n`));
-          }
-          await new Promise<void>((resolve) => {
-            wake = resolve;
-            setTimeout(resolve, HEARTBEAT_MS);
-          });
-          wake = undefined;
-          // Woken with nothing buffered means the heartbeat fired, not a notification.
-          if (!isClosed() && pending.length === 0) {
-            controller.enqueue(encoder.encode(': ping\n\n'));
-          }
-        }
-      } finally {
+      // A comment frame keeps proxies from reaping an idle connection. Held as an interval rather
+      // than a per-iteration timeout, which leaked a live timer for every frame that arrived first.
+      const heartbeat = setInterval(() => push?.(': ping\n\n'), HEARTBEAT_MS);
+      // Both a client disconnect and a reader cancel land here, and they can both fire for one
+      // stream — so teardown is idempotent and closes the controller only on the abort path.
+      teardown = (closeController) => {
+        if (push === undefined) return;
+        push = undefined;
+        clearInterval(heartbeat);
         detach();
-        signal.removeEventListener('abort', onAbort);
-        controller.close();
-      }
+        if (closeController) controller.close();
+      };
+      c.req.raw.signal.addEventListener('abort', () => teardown?.(true), { once: true });
+    },
+    cancel() {
+      teardown?.(false);
     },
   });
 
@@ -527,7 +503,6 @@ export async function mcpHandler(c: Context): Promise<Response> {
     } catch (err) {
       return problem(c, err);
     }
-    void touchSession(session).catch(() => undefined);
   }
 
   // `DELETE` ends a session and drops its subscriptions (mcp-notifications.md §4.1).

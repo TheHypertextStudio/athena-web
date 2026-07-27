@@ -59,9 +59,12 @@ export async function createSession(
  * @throws {NotFoundError} When no live session with that id belongs to this caller.
  */
 export async function resolveSession(ctx: McpContext, sessionId: string): Promise<string> {
+  // The touch rides the same statement as the lookup: `lastSeenAt` only matters at the reaper's
+  // 24-hour granularity, so a separate UPDATE per request would be a round trip and a WAL write
+  // for nothing.
   const rows = await db
-    .select({ id: mcpSession.id })
-    .from(mcpSession)
+    .update(mcpSession)
+    .set({ lastSeenAt: new Date() })
     .where(
       and(
         eq(mcpSession.id, sessionId),
@@ -69,15 +72,10 @@ export async function resolveSession(ctx: McpContext, sessionId: string): Promis
         isNull(mcpSession.endedAt),
       ),
     )
-    .limit(1);
+    .returning({ id: mcpSession.id });
   const row = rows[0];
   if (!row) throw new NotFoundError('Session not found');
   return row.id;
-}
-
-/** Stamp `lastSeenAt` so an active session is not reaped. Best-effort. */
-export async function touchSession(sessionId: string): Promise<void> {
-  await db.update(mcpSession).set({ lastSeenAt: new Date() }).where(eq(mcpSession.id, sessionId));
 }
 
 /**

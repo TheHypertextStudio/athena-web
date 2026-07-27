@@ -11,7 +11,7 @@ import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
 import { ApiError } from '../error';
 import { DESCRIPTOR_HINT, type DescriptorKind, resolveDescriptor } from './descriptors';
-import { READABLE_ENTITY_TYPES, readEntity } from './resources';
+import { READABLE_TYPES, readEntity } from './resources';
 
 /**
  * Which readable types can also be addressed by name.
@@ -20,7 +20,7 @@ import { READABLE_ENTITY_TYPES, readEntity } from './resources';
  * Tasks, comments, updates, sessions, agents, and saved views have no stable human handle — a task
  * title is neither unique nor short-lived enough to resolve — so those stay id-only.
  */
-const NAMEABLE: Partial<Record<(typeof READABLE_ENTITY_TYPES)[number], DescriptorKind>> = {
+const NAMEABLE: Partial<Record<(typeof READABLE_TYPES)[number], DescriptorKind>> = {
   project: 'project',
   program: 'program',
   initiative: 'initiative',
@@ -35,49 +35,8 @@ const listWorkInputSchema = {
   entity: z
     .enum(WORK_ENTITIES)
     .describe('Which kind of work to enumerate. Filters are validated against this choice.'),
-  team: listWorkFilters.team.describe(`Only work on this team. ${DESCRIPTOR_HINT}`),
-  project: listWorkFilters.project.describe(`Only work in this project. ${DESCRIPTOR_HINT}`),
-  program: listWorkFilters.program.describe(`Only work under this program. ${DESCRIPTOR_HINT}`),
-  initiative: listWorkFilters.initiative.describe(
-    `Only projects linked to this initiative. ${DESCRIPTOR_HINT}`,
-  ),
-  assignee: listWorkFilters.assignee.describe(
-    `Only tasks this person or agent is accountable for. ${DESCRIPTOR_HINT}`,
-  ),
-  delegate: listWorkFilters.delegate.describe(
-    `Only tasks whose doing was handed to this agent. ${DESCRIPTOR_HINT}`,
-  ),
-  lead: listWorkFilters.lead.describe(`Only projects led by this person. ${DESCRIPTOR_HINT}`),
-  owner: listWorkFilters.owner.describe(
-    `Only programs or initiatives owned by this person. ${DESCRIPTOR_HINT}`,
-  ),
-  state: listWorkFilters.state.describe(
-    'Only tasks in any of these workflow states. Display names resolve when `team` is also set, since states are per-team.',
-  ),
-  status: listWorkFilters.status.describe(
-    'Only projects/programs/initiatives in any of these statuses.',
-  ),
-  priority: listWorkFilters.priority.describe('Only tasks at any of these priorities.'),
-  label: listWorkFilters.label.describe(`Only work carrying this label. ${DESCRIPTOR_HINT}`),
-  cycle: listWorkFilters.cycle.describe(
-    `Only tasks committed to this cycle, by name or number. ${DESCRIPTOR_HINT}`,
-  ),
-  parent: listWorkFilters.parent.describe('Only subtasks of this task id.'),
-  unfiled: listWorkFilters.unfiled.describe(
-    'Only tasks in no project and no program — the triage queue.',
-  ),
-  blocked: listWorkFilters.blocked.describe(
-    'Only tasks with at least one dependency that has not finished.',
-  ),
-  blocking: listWorkFilters.blocking.describe('Only tasks that something else is waiting on.'),
-  dueBefore: listWorkFilters.dueBefore.describe('Only tasks due on or before this `YYYY-MM-DD`.'),
-  dueAfter: listWorkFilters.dueAfter.describe('Only tasks due on or after this `YYYY-MM-DD`.'),
-  updatedAfter: listWorkFilters.updatedAfter.describe(
-    'Only work changed at or after this instant.',
-  ),
-  archived: listWorkFilters.archived.describe(
-    'List archived work instead of active work. Defaults to false.',
-  ),
+  // Spread rather than restated: a filter the query understands is a filter the tool accepts.
+  ...listWorkFilters,
   limit: z.number().int().min(1).max(200).default(50).describe('Maximum rows to return.'),
   cursor: z.string().optional().describe('An opaque cursor from a previous page.'),
 };
@@ -239,7 +198,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
       inputSchema: {
         orgId: orgIdParam,
         type: z
-          .enum(READABLE_ENTITY_TYPES)
+          .enum(READABLE_TYPES)
           .describe('What kind of entity the refs name. All refs in one call share a type.'),
         refs: z
           .array(z.string().min(1))
@@ -263,23 +222,31 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
     },
     (input) =>
       runTool(async () => {
-        const items: unknown[] = [];
-        const missing: { ref: string; reason: string }[] = [];
-        for (const ref of input.refs) {
-          try {
-            // Resolved and authorized one at a time: a batch that authorized once would be a way
-            // around the per-entity cascade, not a faster read.
-            const kind = NAMEABLE[input.type];
-            const id = kind ? await resolveDescriptor(input.orgId, kind, ref, 'refs') : ref;
-            items.push(await readEntity(ctx, input.orgId, input.type, id));
-          } catch (err) {
-            missing.push({
-              ref,
-              reason: err instanceof ApiError ? err.code : 'internal',
-            });
-          }
-        }
-        return jsonResult({ items, missing });
+        // Loop-invariant: the type is fixed for the batch, so the descriptor kind is looked up once.
+        const kind = NAMEABLE[input.type];
+        // Concurrent, but still authorized per entity — `readEntity` runs the same `view` gate a
+        // single resource read runs, so batching shares the waiting, never the permission check.
+        const settled = await Promise.all(
+          input.refs.map(async (ref) => {
+            try {
+              const id = kind ? await resolveDescriptor(input.orgId, kind, ref, 'refs') : ref;
+              return {
+                ok: true as const,
+                value: await readEntity(ctx, input.orgId, input.type, id),
+              };
+            } catch (err) {
+              return {
+                ok: false as const,
+                ref,
+                reason: err instanceof ApiError ? err.code : 'internal',
+              };
+            }
+          }),
+        );
+        return jsonResult({
+          items: settled.filter((r) => r.ok).map((r) => r.value),
+          missing: settled.filter((r) => !r.ok).map(({ ref, reason }) => ({ ref, reason })),
+        });
       }),
   );
 

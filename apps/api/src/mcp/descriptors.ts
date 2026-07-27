@@ -17,7 +17,8 @@
  * to any other field error — one error contract, not two.
  */
 import { actor, cycle, db, initiative, label, program, project, team, user } from '@docket/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNull, type SQL } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
@@ -122,13 +123,25 @@ function pick(field: string, value: string, candidates: readonly Candidate[]): s
 }
 
 /**
- * Load everything of one kind that a descriptor could name within an org.
+ * Load what a descriptor could name within an org.
+ *
+ * @remarks
+ * `onlyId` narrows the same queries to a single primary key. That is what keeps the id path — the
+ * overwhelmingly common one, since an agent passes back ids earlier tools returned — from loading
+ * every actor or project in the org just to confirm one row exists.
  *
  * @param orgId - The organization to search.
  * @param kind - The entity kind.
+ * @param onlyId - Restrict to this id instead of listing every candidate.
  * @returns the candidates, each with the handles a caller might use.
  */
-async function candidatesFor(orgId: string, kind: DescriptorKind): Promise<Candidate[]> {
+async function candidatesFor(
+  orgId: string,
+  kind: DescriptorKind,
+  onlyId?: string,
+): Promise<Candidate[]> {
+  const only = (column: AnyPgColumn): SQL | undefined =>
+    onlyId === undefined ? undefined : eq(column, onlyId);
   switch (kind) {
     case 'actor': {
       // Left-joined so an agent Actor, which has no user row, is still resolvable by display name.
@@ -141,6 +154,7 @@ async function candidatesFor(orgId: string, kind: DescriptorKind): Promise<Candi
             eq(actor.organizationId, orgId),
             eq(actor.status, 'active'),
             isNull(actor.archivedAt),
+            only(actor.id),
           ),
         );
       return rows.map((row) => ({
@@ -153,33 +167,43 @@ async function candidatesFor(orgId: string, kind: DescriptorKind): Promise<Candi
       return db
         .select({ id: team.id, label: team.name, alt: team.key })
         .from(team)
-        .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt)));
+        .where(and(eq(team.organizationId, orgId), isNull(team.archivedAt), only(team.id)));
     case 'project':
       return db
         .select({ id: project.id, label: project.name })
         .from(project)
-        .where(and(eq(project.organizationId, orgId), isNull(project.archivedAt)));
+        .where(
+          and(eq(project.organizationId, orgId), isNull(project.archivedAt), only(project.id)),
+        );
     case 'program':
       return db
         .select({ id: program.id, label: program.name })
         .from(program)
-        .where(and(eq(program.organizationId, orgId), isNull(program.archivedAt)));
+        .where(
+          and(eq(program.organizationId, orgId), isNull(program.archivedAt), only(program.id)),
+        );
     case 'initiative':
       return db
         .select({ id: initiative.id, label: initiative.name })
         .from(initiative)
-        .where(and(eq(initiative.organizationId, orgId), isNull(initiative.archivedAt)));
+        .where(
+          and(
+            eq(initiative.organizationId, orgId),
+            isNull(initiative.archivedAt),
+            only(initiative.id),
+          ),
+        );
     case 'label':
       return db
         .select({ id: label.id, label: label.name })
         .from(label)
-        .where(eq(label.organizationId, orgId));
+        .where(and(eq(label.organizationId, orgId), only(label.id)));
     case 'cycle': {
       // A cycle's name is nullable and its number is the stable handle, so both are offered.
       const rows = await db
         .select({ id: cycle.id, name: cycle.name, number: cycle.number })
         .from(cycle)
-        .where(and(eq(cycle.organizationId, orgId), isNull(cycle.archivedAt)));
+        .where(and(eq(cycle.organizationId, orgId), isNull(cycle.archivedAt), only(cycle.id)));
       return rows.map((row) => ({
         id: row.id,
         label: row.name ?? `Cycle ${row.number}`,
@@ -210,15 +234,14 @@ export async function resolveDescriptor(
   value: string,
   field: string = kind,
 ): Promise<string> {
-  const candidates = await candidatesFor(orgId, kind);
   if (ULID.test(value)) {
-    const match = candidates.find((candidate) => candidate.id === value);
+    const [match] = await candidatesFor(orgId, kind, value);
     // A well-formed id that is absent is a miss, not a naming problem — say so plainly rather
     // than offering every name in the org as an alternative.
     if (!match) throw new NotFoundError(`No ${kind} with that id in this organization`);
     return match.id;
   }
-  return pick(field, value, candidates);
+  return pick(field, value, await candidatesFor(orgId, kind));
 }
 
 /**
@@ -248,54 +271,4 @@ export async function resolveOptional(
 ): Promise<string | null | undefined> {
   if (value === undefined || value === null) return value;
   return resolveDescriptor(orgId, kind, value, field);
-}
-
-/**
- * Resolve a workflow-state descriptor against the team that owns the task.
- *
- * @remarks
- * Workflow states are per-team and live in a jsonb array rather than a table, so they need their
- * own path. Callers say "in review"; storage wants `in_review`. Matching the display name as well
- * as the key is the difference between a tool an agent can drive from a sentence and one it has to
- * guess at — and the failure lists the legal keys, which is the single most common way a write
- * goes wrong today.
- *
- * @param orgId - The organization the team belongs to.
- * @param teamId - The team whose workflow applies.
- * @param value - The state key or display name.
- * @param field - The tool parameter it came from.
- * @returns the resolved state key.
- * @throws {ValidationError} When the value names no state on that team.
- */
-export async function resolveWorkflowState(
-  orgId: string,
-  teamId: string,
-  value: string,
-  field = 'state',
-): Promise<string> {
-  const rows = await db
-    .select({ workflowStates: team.workflowStates })
-    .from(team)
-    .where(and(eq(team.id, teamId), eq(team.organizationId, orgId)))
-    .limit(1);
-  const states = rows[0]?.workflowStates;
-  if (!states) throw new NotFoundError('Team not found');
-
-  const needle = value.trim().toLowerCase();
-  const match = states.find(
-    (state) => state.key.toLowerCase() === needle || state.name.toLowerCase() === needle,
-  );
-  if (match) return match.key;
-
-  throw new ValidationError(
-    new z.ZodError([
-      {
-        code: 'invalid_value',
-        path: [field],
-        message: `"${value}" is not a workflow state on this team.`,
-        values: states.map((state) => state.key),
-        input: value,
-      },
-    ]),
-  );
 }

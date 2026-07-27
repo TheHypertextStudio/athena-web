@@ -25,6 +25,7 @@ import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
+import { reapIdleSessions } from '../mcp/session-registry';
 import { sweepExpiredSessions } from './session-sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
@@ -134,8 +135,12 @@ const cron = new Hono()
   // profile's row would otherwise sit in the table forever. Plain stateless delete, safe to retry.
   .post('/expired-sessions-sweep', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const result = await sweepExpiredSessions(new Date());
-    return c.json({ swept: true, ...result });
+    const now = new Date();
+    const result = await sweepExpiredSessions(now);
+    // MCP sessions reap on the same tick. They are request-driven and never expire on their own,
+    // so without this `mcp_session` and its subscriptions grow for the life of the deployment.
+    const mcpSessions = await reapIdleSessions(now);
+    return c.json({ swept: true, ...result, mcpSessions });
   });
 
 export default cron;

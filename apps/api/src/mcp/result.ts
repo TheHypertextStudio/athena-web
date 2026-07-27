@@ -64,8 +64,10 @@ function formatFieldIssue(field: string, issue: FieldIssue): string {
   if (issue.options) detail.push(`allowed values: ${issue.options.join(', ')}`);
   if (issue.expected !== undefined) detail.push(`expected type: ${issue.expected}`);
   if (issue.format !== undefined) detail.push(`expected format: ${issue.format}`);
-  if (issue.minimum !== undefined) detail.push(`minimum: ${issue.minimum}`);
-  if (issue.maximum !== undefined) detail.push(`maximum: ${issue.maximum}`);
+  // `inclusive` says whether the bound itself is allowed; without it "minimum: 8" is ambiguous.
+  const bound = issue.inclusive === false ? ' (exclusive)' : '';
+  if (issue.minimum !== undefined) detail.push(`minimum: ${issue.minimum}${bound}`);
+  if (issue.maximum !== undefined) detail.push(`maximum: ${issue.maximum}${bound}`);
   const suffix = detail.length > 0 ? ` (${detail.join('; ')})` : '';
   return `  ${field}: ${issue.code}${suffix}`;
 }

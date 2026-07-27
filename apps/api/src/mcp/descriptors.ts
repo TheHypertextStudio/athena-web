@@ -245,6 +245,57 @@ export async function resolveDescriptor(
 }
 
 /**
+ * Resolve a descriptor that could name any of several kinds, saying which it turned out to be.
+ *
+ * @remarks
+ * Some relations accept more than one kind on one side — "the migration project contributes to Q3"
+ * and "the Platform program contributes to Q3" are the same sentence, and the speaker never says
+ * which table it lives in. Resolving kind-by-kind and taking the first that succeeds would report
+ * an ambiguity within one kind as "nothing by that name", because the second attempt overwrites the
+ * first's answer. Pooling the candidates first means {@link pick} sees the whole field, so a name
+ * matching a project AND a program is reported as the ambiguity it is.
+ *
+ * @param orgId - The organization to resolve within.
+ * @param kinds - The kinds the descriptor may name, most likely first.
+ * @param value - The id or name supplied by the caller.
+ * @param field - The tool parameter it came from, used in the error.
+ * @returns the resolved id and the kind it belongs to.
+ * @throws {ValidationError} When the name is ambiguous or matches nothing across all `kinds`.
+ * @throws {NotFoundError} When a well-formed id is in none of them.
+ */
+export async function resolveAcross<K extends DescriptorKind>(
+  orgId: string,
+  kinds: readonly K[],
+  value: string,
+  field: string,
+): Promise<{ id: string; kind: K }> {
+  const byId = ULID.test(value);
+  const pools = await Promise.all(
+    kinds.map(async (kind) => ({
+      kind,
+      candidates: await candidatesFor(orgId, kind, byId ? value : undefined),
+    })),
+  );
+  const owner = new Map<string, K>();
+  const all: Candidate[] = [];
+  for (const pool of pools) {
+    for (const candidate of pool.candidates) {
+      owner.set(candidate.id, pool.kind);
+      all.push(candidate);
+    }
+  }
+
+  const id = byId ? all[0]?.id : pick(field, value, all);
+  if (id === undefined) {
+    throw new NotFoundError(`No ${kinds.join(' or ')} with that id in this organization`);
+  }
+  const kind = owner.get(id);
+  /* v8 ignore next -- @preserve defensive: every candidate was recorded with its kind above */
+  if (kind === undefined) throw new NotFoundError();
+  return { id, kind };
+}
+
+/**
  * Resolve an optional descriptor, passing `undefined` and `null` through untouched.
  *
  * @remarks

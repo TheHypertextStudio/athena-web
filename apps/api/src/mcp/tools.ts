@@ -18,8 +18,10 @@
 import type { McpRegistrar } from './catalog';
 
 import type { McpContext } from './auth';
+import { registerArchiveTool } from './archive-tool';
 import { registerContentTools } from './content-tools';
 import { registerInitiativeTools } from './initiative-tools';
+import { registerLinkTool } from './link-tool';
 import { registerOrganizeTool } from './organize-tool';
 import { registerProjectTools } from './project-tools';
 import { registerSessionTools } from './session-tools';
@@ -61,4 +63,6 @@ export function registerTools(
   registerWriteTools(server, ctx, sessionId);
   registerUpdateTool(server, ctx, sessionId);
   registerOrganizeTool(server, ctx, sessionId);
+  registerLinkTool(server, ctx, sessionId);
+  registerArchiveTool(server, ctx, sessionId);
 }

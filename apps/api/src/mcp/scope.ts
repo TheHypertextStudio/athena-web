@@ -84,6 +84,8 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   capture: 'work:write',
   update: 'work:write',
   organize: 'work:write',
+  link: 'work:write',
+  archive: 'work:write',
   undo: 'work:write',
   // connectors:link — external linking
   link_external: 'connectors:link',

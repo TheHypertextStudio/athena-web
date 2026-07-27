@@ -18,12 +18,15 @@ import {
   db,
   genId,
   initiative,
+  initiativeProgram,
+  initiativeProject,
   program,
   project,
   task,
+  taskDependency,
 } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
-import type { PgTable } from 'drizzle-orm/pg-core';
+import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
 import { NotFoundError } from '../error';
 
@@ -32,6 +35,46 @@ const RECORDABLE = { task, project, program, initiative } as const;
 
 /** One recordable entity kind. */
 export type RecordableKind = keyof typeof RECORDABLE;
+
+/**
+ * The relations a change set can record, mapped to the join table and endpoint columns.
+ *
+ * @remarks
+ * Kept apart from {@link RECORDABLE} because a relation has no row state to restore — reversing
+ * one means deleting or re-inserting an edge, not writing columns back. Subtask parentage is
+ * deliberately absent: it lives in a column on `task`, so it reverses through the ordinary update
+ * path rather than needing an entry of its own.
+ */
+const RELATIONS = {
+  blocks: {
+    table: taskDependency,
+    from: taskDependency.blockingTaskId,
+    to: taskDependency.blockedTaskId,
+  },
+  project_contributes_to: {
+    table: initiativeProject,
+    from: initiativeProject.projectId,
+    to: initiativeProject.initiativeId,
+  },
+  program_contributes_to: {
+    table: initiativeProgram,
+    from: initiativeProgram.programId,
+    to: initiativeProgram.initiativeId,
+  },
+} as const;
+
+/** One recordable relation. */
+export type RelationKind = keyof typeof RELATIONS;
+
+/** Whether a recorded `entityKind` names a relation rather than an entity. */
+function isRelation(kind: string): kind is RelationKind {
+  return kind in RELATIONS;
+}
+
+/** The composite key a relation entry is stored under, since an edge has no id of its own. */
+export function edgeKey(from: string, to: string): string {
+  return `${from}:${to}`;
+}
 
 /**
  * The columns a change set records per kind, and the only ones undo restores.
@@ -52,6 +95,7 @@ const TRACKED: Record<RecordableKind, readonly string[]> = {
     'delegateId',
     'projectId',
     'programId',
+    'parentTaskId',
     'teamId',
     'dueDate',
     'completedAt',
@@ -97,15 +141,37 @@ export function trackedFields(
   return Object.fromEntries(TRACKED[kind].map((key) => [key, row[key]]));
 }
 
-/** A single recorded change, before it is written. */
+/** A single recorded change to one entity, before it is written. */
 export interface ChangeRecord {
   readonly kind: RecordableKind;
   readonly id: string;
-  readonly op: 'create' | 'update' | 'archive' | 'link';
+  readonly op: 'create' | 'update' | 'archive';
   /** The row as it was, for an update or archive. Absent on a create. */
   readonly before?: Record<string, unknown>;
   /** The row as it now is, for a create or update. Absent on an archive. */
   readonly after?: Record<string, unknown>;
+}
+
+/**
+ * A single recorded change to a relation, before it is written.
+ *
+ * @remarks
+ * `linked` says which direction the change went, which is all undo needs: reversing a link deletes
+ * the edge, reversing an unlink puts it back.
+ */
+export interface LinkRecord {
+  readonly kind: RelationKind;
+  readonly from: string;
+  readonly to: string;
+  readonly linked: boolean;
+}
+
+/** Anything a tool can record. */
+export type RecordedChange = ChangeRecord | LinkRecord;
+
+/** Whether a recorded change describes a relation rather than an entity. */
+function isLinkRecord(change: RecordedChange): change is LinkRecord {
+  return 'linked' in change;
 }
 
 /** What an undo did, per entity. */
@@ -134,7 +200,7 @@ export async function recordChangeSet(input: {
   actorId: string;
   origin: ChangeOrigin;
   summary: string;
-  changes: readonly ChangeRecord[];
+  changes: readonly RecordedChange[];
 }): Promise<string | null> {
   if (input.changes.length === 0) return null;
   const id = genId();
@@ -149,14 +215,27 @@ export async function recordChangeSet(input: {
     await tx
       .insert(changeSetEntry)
       .values(
-        input.changes.map((change) => ({
-          changeSetId: id,
-          entityKind: change.kind,
-          entityId: change.id,
-          op: change.op,
-          before: change.before ?? null,
-          after: change.after ?? null,
-        })),
+        input.changes.map((change) =>
+          isLinkRecord(change)
+            ? {
+                changeSetId: id,
+                entityKind: change.kind,
+                entityId: edgeKey(change.from, change.to),
+                op: 'link' as const,
+                // An edge has no columns, so which side is populated IS the direction: `after`
+                // means the call created it, `before` means the call removed it.
+                before: change.linked ? null : { from: change.from, to: change.to },
+                after: change.linked ? { from: change.from, to: change.to } : null,
+              }
+            : {
+                changeSetId: id,
+                entityKind: change.kind,
+                entityId: change.id,
+                op: change.op,
+                before: change.before ?? null,
+                after: change.after ?? null,
+              },
+        ),
       )
       // One call touching a row twice collapses to the last write, which is what reversing needs.
       .onConflictDoNothing();
@@ -204,6 +283,61 @@ async function loadRow(
 }
 
 /**
+ * Reverse one recorded relation edge: delete what was linked, restore what was unlinked.
+ *
+ * @remarks
+ * There is no conflict check here, because an edge has no state to have drifted — it either exists
+ * or it does not, and both reversals are idempotent against whatever someone else did meanwhile.
+ *
+ * @param kind - The relation.
+ * @param entry - The recorded endpoints.
+ * @param orgId - The organization it happened in.
+ * @returns what happened to it.
+ */
+async function revertLink(
+  kind: RelationKind,
+  entry: {
+    entityId: string;
+    before: Record<string, unknown> | null;
+    after: Record<string, unknown> | null;
+  },
+  orgId: string,
+): Promise<UndoOutcome> {
+  const relation = RELATIONS[kind];
+  const ref = { kind, id: entry.entityId };
+  const edge = entry.after ?? entry.before;
+  const from = edge?.['from'];
+  const to = edge?.['to'];
+  if (typeof from !== 'string' || typeof to !== 'string') {
+    return { ...ref, reverted: false, reason: 'no_endpoints' };
+  }
+
+  const table = relation.table as PgTable & { organizationId: AnyPgColumn };
+  const where = and(eq(relation.from, from), eq(relation.to, to), eq(table.organizationId, orgId));
+  if (entry.after) {
+    await db.delete(table).where(where);
+  } else {
+    await db
+      .insert(table)
+      .values({ organizationId: orgId, ...endpointValues(kind, from, to) })
+      .onConflictDoNothing();
+  }
+  return { ...ref, reverted: true };
+}
+
+/** The endpoint columns for a relation, named as the join table spells them. */
+function endpointValues(kind: RelationKind, from: string, to: string): Record<string, string> {
+  switch (kind) {
+    case 'blocks':
+      return { blockingTaskId: from, blockedTaskId: to };
+    case 'project_contributes_to':
+      return { projectId: from, initiativeId: to };
+    case 'program_contributes_to':
+      return { programId: from, initiativeId: to };
+  }
+}
+
+/**
  * Reverse one recorded entry.
  *
  * @param entry - The recorded change.
@@ -220,6 +354,8 @@ async function revertEntry(
   },
   orgId: string,
 ): Promise<UndoOutcome> {
+  if (isRelation(entry.entityKind)) return revertLink(entry.entityKind, entry, orgId);
+
   const kind = entry.entityKind as RecordableKind;
   const ref = { kind: entry.entityKind, id: entry.entityId };
   if (!(kind in RECORDABLE)) return { ...ref, reverted: false, reason: 'unsupported_kind' };

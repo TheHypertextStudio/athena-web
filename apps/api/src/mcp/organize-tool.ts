@@ -37,6 +37,7 @@ import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
 import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
+import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
 
@@ -260,6 +261,7 @@ export function registerOrganizeTool(
           .nullable()
           .describe('Pass to `undo` to take the whole plan back. Null when nothing was created.'),
       },
+      _meta: widgetMeta(WIDGET.changeReport),
       annotations: {
         readOnlyHint: false,
         // It only creates and links; nothing existing is overwritten.

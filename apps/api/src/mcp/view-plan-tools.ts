@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { type SearchCaller, searchWorkspace } from '../search/query';
 import type { McpContext } from './auth';
 import { registerOptionalTaskTool, type McpRegistrar } from './catalog';
+import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { createTaskToolHandler } from './task-tools';
 import { ApiError } from '../error';
@@ -173,6 +174,7 @@ export function registerViewPlanTools(server: McpRegistrar, ctx: McpContext): vo
         'Enumerate tasks, projects, programs, or initiatives matching exact criteria — everything assigned to someone, everything blocked, everything due this week, everything unfiled. Filters accept names as well as ids. Use find instead when you know roughly what something is called but not where it lives; this returns live rows, find reads a search index that trails writes.',
       inputSchema: listWorkInputSchema,
       outputSchema: listWorkOutputSchema,
+      _meta: widgetMeta(WIDGET.workList),
       annotations: {
         title: 'List work',
         readOnlyHint: true,

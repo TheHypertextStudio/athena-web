@@ -35,6 +35,7 @@ import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
 import { DESCRIPTOR_HINT, resolveOptional } from './descriptors';
 import { listWork, listWorkFilters, WORK_ENTITIES, type WorkEntity } from './list-work';
+import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam, resolveStateTransition } from './tools-shared';
 
@@ -402,6 +403,7 @@ export function registerUpdateTool(
           .nullable()
           .describe('Pass to `undo` to take the whole call back. Null when nothing changed.'),
       },
+      _meta: widgetMeta(WIDGET.changeReport),
       annotations: {
         readOnlyHint: false,
         // It rewrites existing fields in bulk; the caller should see that before approving.

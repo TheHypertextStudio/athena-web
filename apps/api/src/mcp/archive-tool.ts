@@ -21,6 +21,7 @@ import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type ChangeRecord } from './change-set';
 import { listWork, listWorkFilters, WORK_ENTITIES, type WorkEntity } from './list-work';
+import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 
@@ -83,6 +84,7 @@ export function registerArchiveTool(
           .describe('Items left alone, and why.'),
         changeSetId: z.string().nullable().describe('Pass to `undo`. Null when nothing moved.'),
       },
+      _meta: widgetMeta(WIDGET.changeReport),
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,

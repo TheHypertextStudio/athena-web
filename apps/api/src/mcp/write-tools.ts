@@ -22,6 +22,7 @@ import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, undoChangeSet } from './change-set';
+import { WIDGET, widgetMeta } from './apps';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
 import { orgIdParam } from './tools-shared';
 
@@ -60,6 +61,7 @@ export function registerWriteTools(
         teamId: z.string().describe('The team it landed on.'),
         changeSetId: z.string().describe('Pass to `undo` to take this back.'),
       },
+      _meta: widgetMeta(WIDGET.changeReport),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,

@@ -25,6 +25,7 @@ import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 
 import { NotFoundError } from '../error';
+import { registerApps } from './apps';
 import type { McpContext } from './auth';
 import {
   hydrateAgent,
@@ -287,6 +288,7 @@ async function hydrate(type: ReadableType, orgId: string, id: string): Promise<u
  * @param ctx - The authenticated MCP caller.
  */
 export function registerResources(server: McpRegistrar, ctx: McpContext): void {
+  registerApps(server);
   registerStaticResources(server, ctx);
 
   server.registerResource(

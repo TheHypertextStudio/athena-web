@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-26
+> **Last Updated**: 2026-07-27
 
 ---
 
@@ -133,7 +133,7 @@
 - **Status**: REVIEW
 - **Started**: 2026-07-26
 - **Priority**: P0
-- **Description**: The MCP server exposes 26 tools that map roughly 1:1 onto SQL statements, so an
+- **Description**: The MCP server exposed 26 tools that mapped roughly 1:1 onto SQL statements, so an
   agent cannot express ordinary intents against it — "reassign Sarah's open work to me" needs a
   name→id lookup, a filtered query, and a bulk write, and the surface offers none of the three.
   Because Athena's loop connects to the same `buildServer` over an in-memory transport, every gap
@@ -151,6 +151,17 @@
   - [x] `run_view` → `list_work` with real filters
   - [x] `get` (batch hydrate by descriptor or id)
   - [x] `.describe()` + `outputSchema` on the task tools and the three read tools
+  - [x] `changeSet`/`changeSetEntry` schema island + the recording/undo service
+  - [x] Intent-shaped writes: `capture`, `organize`, `update`, `link`, `archive`, `undo`
+  - [x] `comment` / `report_status` (renamed, now resolving their subject by name)
+  - [x] `brief` and `plan_day`
+  - [x] Delete the 16 absorbed write tools; `trigger_agent` → `run_agent`, the four session verbs
+        → `manage_session` (26 tools → 15)
+  - [x] Extend Athena's proposal ghost past `create_task`, in the same pass as the deletion
+  - [x] `workspaces` — the bootstrap tool, and the capability contract test behind it
+  - [ ] Phase 3: MCP Apps UI (SEP-1865 `io.modelcontextprotocol/ui`) + elicitation
+  - [ ] End-to-end against a live MCP client over OAuth — the "one sentence, one call" metric
+        remains unmeasured
 - **Notes**:
   - **Security**: the `search` tool authorized once at the org root and then ran an unfiltered
     `ILIKE` over `task`/`project`/`program`. Any caller who could open a workspace could enumerate
@@ -200,6 +211,51 @@
     in the product does, only search. Narrowing it in MCP alone would show an agent less than the
     web app shows the same user. The inconsistency is real and product-wide; it needs a product
     decision, not a unilateral MCP change.
+
+  - **The surface is 15 tools, named for intent rather than for tables.** Reads: `find`,
+    `list_work`, `get`, `brief`, `workspaces`. Writes: `capture`, `organize`, `update`, `link`,
+    `archive`, `comment`, `report_status`, `plan_day`, `undo`. Agents/connectors: `run_agent`,
+    `manage_session`, `link_external`.
+  - **Every write records an undoable change set**, because the surface executes immediately
+    rather than proposing. Undo is a reverse replay with conflict detection, not a rollback: by
+    the time someone asks, the transaction is committed and colleagues have been working, so an
+    entry whose tracked fields no longer match is reported as skipped rather than clobbered.
+  - **Change sets deliberately do not extend `provenance_source`.** Its `native|linked` values
+    mean "is this mirrored from an external system" and drive `task_source_uq`/`project_source_uq`
+    and the connector reconcile paths. A task Claude created is still `native`. Keeping authorship
+    on a separate axis also gives program and initiative provenance without new columns.
+  - **`organize` reconciles rather than duplicating.** Running the same plan twice is the normal
+    case — a re-pasted doc, an agent retrying after a timeout — so each item is matched against
+    what already exists _in its parent's scope_, never org-wide for anything with a parent. Two
+    projects called "Rollout" under different programs are two projects.
+  - **A transaction that read on the outer handle stalled.** `organize` resolved descriptors
+    inside its serializable transaction using `db` rather than `tx`, so the reads queued behind a
+    connection the transaction already held: the test file went from 7s to 153s and hit 30s
+    timeouts. Everything now resolves before the transaction opens, which is also better
+    behaviour — a bad name fails before a single row is written.
+  - **The deletion had to be sequenced with the Athena ghost.** `projectGhost` returned null for
+    anything but `create_task`, so removing that tool alone would have turned every proposal into
+    a bare card instead of an editable task row. It now projects a `capture` and a single-item
+    `organize`; a multi-node plan still gets none, because a tree has no single spatial home and
+    faking one would preview a change the approval does not make.
+  - **`workspaces` closed a bootstrapping hole.** Every tool takes an `orgId` and nothing could
+    supply one — the list existed only as the `docket://orgs` resource, and most clients surface
+    tools far more readily than resources. Found by writing the capability contract test, not by
+    reading the code.
+  - **Two real bugs surfaced underneath the new tools.** `buildHubTodayPayload` compared `dueDate`
+    for equality against midnight UTC, so anything due at another time of day was absent from the
+    day with no sign it had been skipped; and `docket://hub/today` ran its own query with no date
+    filter and no assignee filter at all, returning fifty arbitrary tasks under the word "today".
+    Both now share one definition with the `brief` tool.
+  - **`?viewId` on the workspace stream was validated and then dropped**, so a client passing one
+    got a 200 and the unfiltered firehose. Now loaded, composed with `?filter` via AND, and 404ing
+    a view from another workspace.
+  - **Deferred deliberately**: no rate limit on `/mcp`. The API has no rate-limiting
+    infrastructure at all, and the deployment has no shared store (Cloud Run, `--max-instances=10`,
+    no Redis), so a per-instance limiter would give false assurance rather than protection. It
+    needs its own design pass. `routes/time-submissions.ts` also still exports a router nothing
+    mounts — deleting it destroys work and mounting it exposes an unreviewed endpoint outside the
+    agreed Work+planning scope, so it stays flagged rather than half-resolved.
 
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 

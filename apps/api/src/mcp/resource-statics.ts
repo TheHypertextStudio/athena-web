@@ -3,6 +3,7 @@ import type { McpRegistrar } from './catalog';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
+import { buildHubTodayPayload } from '../routes/hub-today';
 import type { McpContext } from './auth';
 
 /** Build the standard hydrated JSON read result for `uri`. */
@@ -124,30 +125,21 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
       mimeType: 'application/json',
     },
     async (uri): Promise<ReadResourceResult> => {
-      const orgIds = (await callerOrgs(ctx)).map((o) => o.id);
       const date = new Date().toISOString().slice(0, 10);
-      const items =
-        orgIds.length > 0
-          ? await db
-              .select({
-                taskId: task.id,
-                title: task.title,
-                state: task.state,
-                organizationId: task.organizationId,
-                dueDate: task.dueDate,
-              })
-              .from(task)
-              .where(and(inArray(task.organizationId, orgIds), isNull(task.archivedAt)))
-              .limit(50)
-          : [];
+      // Built by the same function behind the `brief` tool and the Hub Today screen. This used to
+      // run its own query with no date filter and no assignee filter at all — it announced
+      // "today" and returned fifty arbitrary unarchived tasks from every org the caller belonged
+      // to, which is worse than returning nothing, because it looks like an answer.
+      if (ctx.principal.kind === 'agent') return jsonRead(uri, { date, tasks: [] });
+      const payload = await buildHubTodayPayload(ctx.principal.userId, date);
       return jsonRead(uri, {
         date,
-        tasks: items.map((t) => ({
-          taskId: t.taskId,
+        tasks: payload.plan.map((t) => ({
+          taskId: t.id,
           title: t.title,
           state: t.state,
           organizationId: t.organizationId,
-          dueDate: t.dueDate?.toISOString() ?? null,
+          dueDate: t.dueDate ?? null,
         })),
       });
     },

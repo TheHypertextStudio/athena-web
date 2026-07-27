@@ -191,4 +191,59 @@ describe('GET /v1/orgs/:orgId/stream (workspace firehose)', () => {
     expect(body.items.map((i) => i.title)).toEqual(['B', 'A']);
     expect(body.items.every((i) => i.relevance === null)).toBe(true);
   });
+
+  it('applies a saved view’s stored filters', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await seedEvent(orgId, { system: 'github', kind: 'assignment', title: 'A', occurredAt: T1 });
+    await seedEvent(orgId, { system: 'docket', kind: 'created', title: 'B', occurredAt: T2 });
+    const [view] = await db
+      .insert(schema.savedView)
+      .values({
+        organizationId: orgId,
+        name: 'Only GitHub',
+        filters: [{ field: 'system', op: 'eq', value: 'github' }],
+      })
+      .returning({ id: schema.savedView.id });
+
+    const app = appWithActor(stream, orgId, ['view']);
+    const body = await page(await app.request(`/?viewId=${view!.id}`));
+    // Before this was wired, `?viewId` validated and was then dropped — the caller got a 200 and
+    // the whole unfiltered firehose, which reads as "the filter matched everything".
+    expect(body.items.map((i) => i.title)).toEqual(['A']);
+  });
+
+  it('composes a saved view with an inline filter', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await seedEvent(orgId, { system: 'github', kind: 'assignment', title: 'A', occurredAt: T1 });
+    await seedEvent(orgId, { system: 'github', kind: 'created', title: 'B', occurredAt: T2 });
+    const [view] = await db
+      .insert(schema.savedView)
+      .values({
+        organizationId: orgId,
+        name: 'Only GitHub',
+        filters: [{ field: 'system', op: 'eq', value: 'github' }],
+      })
+      .returning({ id: schema.savedView.id });
+
+    const inline = Buffer.from(
+      JSON.stringify([{ field: 'kind', op: 'eq', value: 'created' }]),
+    ).toString('base64url');
+    const app = appWithActor(stream, orgId, ['view']);
+    const body = await page(await app.request(`/?viewId=${view!.id}&filter=${inline}`));
+    // The two compose with AND, as the route documents.
+    expect(body.items.map((i) => i.title)).toEqual(['B']);
+  });
+
+  it('404s a saved view belonging to another workspace', async () => {
+    const mine = await seedBaseOrg(db, schema);
+    const theirs = await seedBaseOrg(db, schema);
+    const [view] = await db
+      .insert(schema.savedView)
+      .values({ organizationId: theirs.orgId, name: 'Theirs', filters: [] })
+      .returning({ id: schema.savedView.id });
+
+    const app = appWithActor(stream, mine.orgId, ['view']);
+    const res = await app.request(`/?viewId=${view!.id}`);
+    expect(res.status).toBe(404);
+  });
 });

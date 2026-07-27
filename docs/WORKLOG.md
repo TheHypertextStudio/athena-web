@@ -292,6 +292,24 @@
     purpose: a shared variable would let two concurrent callers see each other's server, which is
     a cross-tenant bug rather than a glitch. Tested with an interleaved pair.
 
+  - **Three filters were declared and never applied**, which is the failure `list_work` was
+    written to prevent, arriving through the back door. `assertApplicable` rejects a filter the
+    entity has no column for — so an agent is never handed a wrong answer — but it only checks the
+    _declaration_. `initiative` on programs and `label` on projects and initiatives were listed in
+    `SUPPORTED` with no predicate in the query body, so each returned every row while looking like
+    it had filtered. Found by asking whether the first one had siblings rather than fixing it and
+    moving on.
+  - **The fix is the test, not the three predicates.** `mcp-filter-coverage.test.ts` walks the
+    declaration itself: for every entity and every filter it claims to support, it supplies a value
+    chosen to match nothing and asserts the result set shrinks. A filter added to `SUPPORTED`
+    without a predicate now fails there instead of in a workspace. Verified by disabling the new
+    label predicate and watching it fail with the right diagnosis. The non-matching values name
+    real-but-different entities on purpose — an unknown name raises a resolution error, which would
+    have passed the test for the wrong reason.
+  - **`update` was audited the same way and is clean**: all sixteen `SETTABLE` fields map to a
+    write in `buildPatch`. Four had no test, which is exactly how the `list_work` defects survived,
+    so they have one now.
+
 ### [COMPOSER-RESET-001] Create composers reopen holding the previous draft
 
 - **Status**: REVIEW

@@ -110,7 +110,7 @@ describe('onError mapping', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toMatchObject({
-      type: 'https://docket.dev/problems/not_found',
+      type: 'https://docket.hypertext.studio/problems/not_found',
       title: publicProblemTitle('not_found'),
       status: 404,
       code: 'not_found',

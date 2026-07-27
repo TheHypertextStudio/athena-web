@@ -322,7 +322,7 @@ describe('Linear write-back scope enforcement', () => {
     expect(denied.status).toBe(409);
     const problem = await jsonBody<{ code: string; title: string }>(denied);
     expect(problem).toEqual({
-      type: 'https://docket.dev/problems/linear_write_scope_required',
+      type: 'https://docket.hypertext.studio/problems/linear_write_scope_required',
       title: publicProblemTitle('linear_write_scope_required'),
       status: 409,
       code: 'linear_write_scope_required',

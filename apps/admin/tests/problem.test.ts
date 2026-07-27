@@ -8,7 +8,7 @@ describe('admin user-facing errors', () => {
   it('keeps only response status and code while using caller-owned display copy', async () => {
     const response = new Response(
       JSON.stringify({
-        type: 'https://docket.dev/problems/internal',
+        type: 'https://example.com/problems/internal',
         title: diagnostic,
         detail: diagnostic,
         status: 500,

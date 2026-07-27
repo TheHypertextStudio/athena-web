@@ -254,7 +254,7 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
       jsonResponse(
         false,
         {
-          type: 'https://docket.dev/problems/linear_write_scope_required',
+          type: 'https://example.com/problems/linear_write_scope_required',
           title: 'Reconnect Linear with write access to enable two-way sync.',
           status: 409,
           code: 'linear_write_scope_required',
@@ -297,7 +297,7 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
       jsonResponse(
         false,
         {
-          type: 'https://docket.dev/problems/validation_error',
+          type: 'https://example.com/problems/validation_error',
           title: 'Some information needs attention.',
           status: 422,
           code: 'validation_error',
@@ -331,7 +331,7 @@ describe('IntegrationConfigPanel — two-way write-scope re-auth', () => {
       jsonResponse(
         false,
         {
-          type: 'https://docket.dev/problems/linear_write_scope_required',
+          type: 'https://example.com/problems/linear_write_scope_required',
           title: 'Reconnect Linear with write access to enable two-way sync.',
           status: 409,
           code: 'linear_write_scope_required',

@@ -249,7 +249,7 @@ export function onError(err: Error, c: Context) {
   c.header('Content-Type', 'application/problem+json');
   return c.json(
     {
-      type: `https://docket.dev/problems/${apiErr.code}`,
+      type: `https://docket.hypertext.studio/problems/${apiErr.code}`,
       // `title` stays derived from the closed code catalog — never `apiErr.message`, which can
       // carry config keys, provider payloads, or SQL detail.
       title: publicProblemTitle(apiErr.code),

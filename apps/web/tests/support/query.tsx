@@ -22,7 +22,7 @@ export function problemResponse(
 ): Response {
   return Response.json(
     {
-      type: `https://docket.dev/problems/${code}`,
+      type: `https://example.com/problems/${code}`,
       title: diagnostic,
       detail: diagnostic,
       status,

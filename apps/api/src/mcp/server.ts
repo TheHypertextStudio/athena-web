@@ -127,7 +127,7 @@ function problem(c: Context, err: unknown): Response {
   }
   return c.json(
     {
-      type: `https://docket.dev/problems/${apiErr.code}`,
+      type: `https://docket.hypertext.studio/problems/${apiErr.code}`,
       title: publicProblemTitle(apiErr.code),
       status: apiErr.status,
       code: apiErr.code,
@@ -416,7 +416,7 @@ function scopeStepUp(c: Context, ctx: McpContext, body: unknown): Response | nul
   c.header('WWW-Authenticate', challenge403(resourceMetadataUrl(c), required, ctx.scopes));
   return c.json(
     {
-      type: 'https://docket.dev/problems/insufficient_scope',
+      type: 'https://docket.hypertext.studio/problems/insufficient_scope',
       title: `This operation requires the '${required}' scope`,
       status: 403,
       code: 'insufficient_scope',

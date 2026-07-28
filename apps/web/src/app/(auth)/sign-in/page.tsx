@@ -300,8 +300,11 @@ export default function SignInPage(): JSX.Element {
           </p>
         ) : null}
 
+        {/* `lg` (h-10) rather than the default h-9: the craft rubric's a11y gate requires 40px
+            touch targets on mobile, and this is the screen's only control. */}
         <Button
           type="button"
+          size="lg"
           disabled={!canSubmit}
           onClick={() => {
             void authenticate(false);
@@ -318,7 +321,7 @@ export default function SignInPage(): JSX.Element {
         </Button>
       </div>
 
-      <p className="text-on-surface-variant text-body-medium text-center">
+      <p className="text-on-surface-variant text-body-medium">
         Can&apos;t sign in?{' '}
         <Link
           href="/recover"

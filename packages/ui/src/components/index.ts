@@ -7,6 +7,7 @@
  * `import { AppShell, ListView } from '@docket/ui/components'`.
  */
 export { ActorAvatar, type ActorAvatarProps, type ActorKind } from './atoms/ActorAvatar';
+export { AuthLayout, type AuthLayoutProps } from './auth/AuthLayout';
 export {
   EmptyState,
   type EmptyStateCta,

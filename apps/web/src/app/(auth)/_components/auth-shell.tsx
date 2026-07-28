@@ -1,21 +1,25 @@
 /**
- * `(auth)/_components/auth-shell` — the shared, centered card chrome for the auth screens.
+ * `(auth)/_components/auth-shell` — the shared chrome for the passkey auth screens.
  *
  * @remarks
- * Both sign-in and sign-up render inside this shell so the two screens stay visually
- * identical: a full-height, centered surface; a circular passkey hero mark; a title +
- * supporting line; the screen's form; and a footer cross-link. Keeping the chrome here means
- * the polish (spacing, the hero treatment, the focus-friendly max width) is defined once.
+ * Sign-in, sign-up, and account recovery all render through here so the three screens stay
+ * visually identical and the polish is defined once. The chrome is {@link AuthLayout}: a centred
+ * card whose left column holds the title and its supporting line, and whose right column holds
+ * the form and the cross-link.
+ *
+ * The props are unchanged from the previous centred-card version, so the three screens compose
+ * this exactly as before.
  */
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@docket/ui/primitives';
-import Link from 'next/link';
+import { AuthLayout } from '@docket/ui/components';
 import type { JSX, ReactNode } from 'react';
+
+import Wordmark from '@/components/wordmark';
 
 import { PasskeyMark } from './passkey-mark';
 
 /** Props for {@link AuthShell}. */
 export interface AuthShellProps {
-  /** The card title (e.g. `'Create your account'`). */
+  /** The screen title (e.g. `'Create your account'`). */
   title: string;
   /** The supporting line under the title. */
   description: string;
@@ -26,39 +30,30 @@ export interface AuthShellProps {
 }
 
 /**
- * The centered auth card with the passkey hero mark, title/description, body, and footer.
+ * The auth screen chrome: wordmark, then the title column beside the form column.
  *
- * @remarks
- * The serif "Docket" wordmark above the card and the faintly warm light backdrop are the
- * receiving half of the marketing site's honest seam: the paper hands you the tool here.
- * Card, form, and controls below the wordmark are 100% product design language.
+ * @param props - See {@link AuthShellProps}.
+ * @returns The composed auth screen.
  */
 export function AuthShell({ title, description, children, footer }: AuthShellProps): JSX.Element {
   return (
-    <main className="dark:bg-surface flex min-h-screen flex-col items-center justify-center gap-8 bg-[oklch(0.985_0.008_85)] px-6 py-12">
-      <Link
-        href="/"
-        className="text-foreground wonk text-3xl font-semibold tracking-tight"
-        style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
-      >
-        Docket
-      </Link>
-      <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
+    <AuthLayout
+      brand={<Wordmark className="text-2xl" />}
+      intro={
+        <>
           <span
-            className="bg-primary/10 text-primary mb-2 flex size-12 items-center justify-center rounded-full"
+            className="bg-primary/10 text-primary flex size-9 items-center justify-center rounded-full"
             aria-hidden="true"
           >
-            <PasskeyMark className="size-6" />
+            <PasskeyMark className="size-4" />
           </span>
-          <CardTitle className="text-title-large">{title}</CardTitle>
-          <CardDescription>{description}</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
-          {children}
-          <div className="text-on-surface-variant text-body-medium text-center">{footer}</div>
-        </CardContent>
-      </Card>
-    </main>
+          <h1 className="text-headline-small text-on-surface font-medium">{title}</h1>
+          <p className="text-on-surface-variant text-body-medium">{description}</p>
+        </>
+      }
+    >
+      {children}
+      <div className="text-on-surface-variant text-body-medium">{footer}</div>
+    </AuthLayout>
   );
 }

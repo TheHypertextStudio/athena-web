@@ -4,7 +4,9 @@
  * them to this exact screen instead of falling back to the home destination and silently
  * abandoning the third-party app's authorization request.
  */
-import { cleanup, render, waitFor } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -37,10 +39,31 @@ vi.mock('../../../src/lib/auth-client', () => ({
   useSession,
 }));
 
-import OAuthAuthorizePage from '../../../src/app/oauth/authorize/page';
+import OAuthAuthorizePage from '../../../src/app/(auth)/oauth/authorize/page';
 
 const CONSENT_QUERY =
   '?consent_code=abc123&client_id=https%3A%2F%2Fclient.example&scope=work%3Aread';
+
+/**
+ * A well-formed request: `sig` present (the marker the page gates on), plus the `redirect_uri`
+ * the screen now discloses. `CONSENT_QUERY` above deliberately keeps the stale `consent_code`
+ * shape, so the redirect tests exercise the malformed branch.
+ */
+const SIGNED_QUERY =
+  '?sig=abc123&client_id=https%3A%2F%2Fclient.example%2Fmcp' +
+  '&redirect_uri=https%3A%2F%2Fcallback.example%2Fdone' +
+  '&scope=work%3Aread%20offline_access';
+
+/** Point the page at a signed request and return an authenticated session. */
+function renderSignedRequest(): void {
+  window.history.replaceState(null, '', `/oauth/authorize${SIGNED_QUERY}`);
+  useSession.mockReturnValue({
+    data: { user: { email: 'ada@example.com' } },
+    isPending: false,
+    error: null,
+  });
+  render(<OAuthAuthorizePage />);
+}
 
 beforeEach(() => {
   metadataGet.mockReset();
@@ -104,5 +127,79 @@ describe('OAuthAuthorizePage', () => {
       expect(useSession).toHaveBeenCalled();
     });
     expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('offers a way out of the malformed-request state', () => {
+    // The `sig`-less state used to render a title and description and nothing else, leaving the
+    // reader on a screen with no control of any kind.
+    useSession.mockReturnValue({
+      data: { user: { email: 'ada@example.com' } },
+      isPending: false,
+      error: null,
+    });
+
+    render(<OAuthAuthorizePage />);
+
+    expect(screen.getByRole('heading', { name: 'Invalid request' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Docket' })).toHaveAttribute('href', '/');
+  });
+
+  describe('a well-formed request', () => {
+    it('renders the requested scopes, the account, and where the browser will be returned', async () => {
+      renderSignedRequest();
+
+      expect(await screen.findByRole('button', { name: 'Authorize' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument();
+
+      // Scope labels, not raw scope strings.
+      expect(screen.getByText('Read your work')).toBeInTheDocument();
+      expect(screen.getByText('Stay connected')).toBeInTheDocument();
+
+      expect(screen.getByText('ada@example.com')).toBeInTheDocument();
+      // The disclosure this screen previously omitted entirely: `redirect_uri` was in the query
+      // and never shown, so nobody approving could see where they were about to be sent.
+      expect(screen.getByText('Returns to')).toBeInTheDocument();
+      expect(screen.getByText('callback.example')).toBeInTheDocument();
+    });
+
+    it('renders an unrecognized scope rather than dropping it', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        '/oauth/authorize?sig=abc123&client_id=https%3A%2F%2Fclient.example&scope=some%3Afuture',
+      );
+      useSession.mockReturnValue({
+        data: { user: { email: 'ada@example.com' } },
+        isPending: false,
+        error: null,
+      });
+
+      render(<OAuthAuthorizePage />);
+
+      // Silently hiding a permission the client asked for would understate the grant.
+      expect(await screen.findByText('some:future')).toBeInTheDocument();
+    });
+
+    it('withholds the verified-domain claim when the server returned no metadata', async () => {
+      // `metadataGet` resolves `{ ok: false }` by default. Without server-validated metadata the
+      // host is just an attacker-supplied string that happens to parse, and calling it verified
+      // on a consent screen is precisely the wrong thing to do.
+      renderSignedRequest();
+
+      await screen.findByRole('button', { name: 'Authorize' });
+      expect(screen.queryByText('Verified domain')).not.toBeInTheDocument();
+    });
+
+    it('shows the verified domain once the server validates the client', async () => {
+      metadataGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({ name: 'Client Example', icon: null }),
+      });
+
+      renderSignedRequest();
+
+      expect(await screen.findByText('Verified domain')).toBeInTheDocument();
+      expect(screen.getByText('client.example')).toBeInTheDocument();
+    });
   });
 });

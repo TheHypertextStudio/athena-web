@@ -62,7 +62,18 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@docket/ui', '@docket/types', '@docket/env'],
   // Portless serves dev over https://admin.docket.localhost; allow its HMR/devtools
   // resources so hot-reload works (Next 16 blocks cross-origin dev resources by default).
-  allowedDevOrigins: ['admin.docket.localhost', '*.docket.localhost', ...authAllowedDevOrigins()],
+  //
+  // `*.admin.docket.localhost` is not redundant with `*.docket.localhost`: a wildcard matches one
+  // label, and inside a git worktree Portless prefixes the branch onto the host, so the admin app
+  // serves the two-label `<branch>.admin.docket.localhost`. Without this entry Next blocked the
+  // client bundle there and the console rendered its SSR HTML but never hydrated — a dead sign-in
+  // button with no error in the console to explain it.
+  allowedDevOrigins: [
+    'admin.docket.localhost',
+    '*.docket.localhost',
+    '*.admin.docket.localhost',
+    ...authAllowedDevOrigins(),
+  ],
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

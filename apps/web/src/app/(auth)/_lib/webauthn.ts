@@ -1,50 +1,15 @@
 /**
- * `(auth)/_lib/webauthn` — browser WebAuthn / passkey capability detection.
+ * `(auth)/_lib/webauthn` — product-app binding for the shared WebAuthn helpers.
  *
  * @remarks
- * The auth screens must degrade gracefully where passkeys are unavailable (old browsers,
- * hardened environments, non-secure contexts). These pure feature-detect helpers never throw
- * and are safe to call during render or in effects; they return `false` during SSR (no
- * `window`/`navigator`) so the first client paint can hydrate to the real capability.
+ * The detection logic lives in `@docket/ui/lib/webauthn`, shared with the admin console so both
+ * passkey-only clients classify browser capability identically. This module exists only to bind
+ * the one value a shared package cannot see: `NEXT_PUBLIC_PASSKEY_RP_ID`, which each app's build
+ * inlines at compile time.
  */
+import { signalUnknownPasskey as signal } from '@docket/ui/lib/webauthn';
 
-/**
- * Whether the current browser exposes the WebAuthn API at all (`PublicKeyCredential`).
- *
- * @returns `true` when WebAuthn credential ceremonies can be attempted, else `false`.
- */
-export function isWebAuthnSupported(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.PublicKeyCredential !== 'undefined' &&
-    typeof navigator !== 'undefined' &&
-    typeof navigator.credentials !== 'undefined'
-  );
-}
-
-/**
- * Whether the browser supports conditional mediation (passkey autofill in the form).
- *
- * @remarks
- * Conditional UI lets the browser surface saved passkeys directly in an autofill dropdown
- * (via `autocomplete="webauthn"`), the most polished sign-in path. It is strictly newer than
- * basic WebAuthn, so it is feature-detected separately and the UI falls back to an explicit
- * "Sign in with a passkey" button when it is absent.
- *
- * @returns a promise resolving to `true` when conditional mediation is available.
- */
-export async function isConditionalMediationSupported(): Promise<boolean> {
-  if (!isWebAuthnSupported()) return false;
-  const pkc = window.PublicKeyCredential as typeof PublicKeyCredential & {
-    isConditionalMediationAvailable?: () => Promise<boolean>;
-  };
-  if (typeof pkc.isConditionalMediationAvailable !== 'function') return false;
-  try {
-    return await pkc.isConditionalMediationAvailable();
-  } catch {
-    return false;
-  }
-}
+export { isConditionalMediationSupported, isWebAuthnSupported } from '@docket/ui/lib/webauthn';
 
 /**
  * The WebAuthn relying-party ID this client signals credentials under.
@@ -63,24 +28,9 @@ function resolvePasskeyRpId(): string {
 /**
  * Tell the platform authenticator to prune a credential the server no longer recognizes.
  *
- * @remarks
- * Wraps `PublicKeyCredential.signalUnknownCredential` (WebAuthn Signal API). Call this after a
- * sign-in the server rejects with `PASSKEY_NOT_FOUND` so the deleted passkey stops being offered
- * (notably in the conditional-mediation autofill list). The method is detected with `in` because
- * the DOM lib types it as always present even though older browsers (Safari/Firefox, Chrome
- * <132) lack it; the call is a no-op there and never throws.
- *
  * @param credentialId - The base64url credential ID the rejected ceremony used.
+ * @see {@link file://../../../../../../packages/ui/src/lib/webauthn.ts} for the behavior.
  */
 export async function signalUnknownPasskey(credentialId: string): Promise<void> {
-  if (!isWebAuthnSupported()) return;
-  if (!('signalUnknownCredential' in window.PublicKeyCredential)) return;
-  try {
-    await window.PublicKeyCredential.signalUnknownCredential({
-      rpId: resolvePasskeyRpId(),
-      credentialId,
-    });
-  } catch {
-    // Best-effort cleanup only — a Signal API failure must never disrupt the sign-in flow.
-  }
+  await signal(credentialId, resolvePasskeyRpId());
 }

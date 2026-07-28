@@ -152,6 +152,7 @@ export default function RecoverPage(): JSX.Element {
 
           <Button
             type="button"
+            size="lg"
             disabled={!hydrated || !passkeySupported || pending}
             onClick={() => {
               void enrollPasskey();
@@ -232,7 +233,7 @@ export default function RecoverPage(): JSX.Element {
 
         <AuthError message={error} />
 
-        <Button type="submit" disabled={!canVerify}>
+        <Button type="submit" size="lg" disabled={!canVerify}>
           {pending ? (
             <>
               <Spinner />

@@ -13,6 +13,7 @@
  *   and the endpoint re-verifies it server-side before honoring anything here.
  * - `client_id` — the OAuth client id (may be an HTTPS URL for CIMD clients).
  * - `scope` — space-separated list of scopes the client is requesting.
+ * - `redirect_uri` — where the browser is sent once a decision is made.
  *
  * The deprecated `oidcProvider()` pair issued a `consent_code` instead; that contract is gone.
  * Nothing on this page is trusted — the query is echoed back verbatim and the server decides.
@@ -22,6 +23,20 @@
  * `client_name`/`logo_uri` the server itself fetched and validated during the authorize
  * preflight; see `apps/api/src/mcp/cimd.ts`). This page never fetches the (attacker-controlled)
  * `client_id` URL directly — that would render whatever an untrusted client chose to serve.
+ *
+ * **Layout.** The screen composes {@link AuthLayout}: the request context (who is asking, as which
+ * account, which verified domain, where the browser will be returned) fills the card's left column
+ * and the permission list plus the decision buttons fill the right.
+ *
+ * Permissions are collapsed disclosures inside one tonal block capped at `45dvh`. That cap is the
+ * fix, not decoration: the previous `max-w-sm` card put `Authorize` below an unbounded scope list
+ * with no scroll container anywhere, so a five-scope request on a laptop pushed the primary action
+ * off-screen. The server accepts arbitrary requested scopes, so the row count has no ceiling — only
+ * bounding the list keeps the decision reachable at any viewport height.
+ *
+ * This file lives under the `(auth)` route group — which does not change its `/oauth/authorize`
+ * URL — so it inherits the layout publishing `--font-fraunces`. Outside the group the wordmark's
+ * display face silently resolved to Georgia.
  *
  * On **Approve**: POSTs to `/api/auth/oauth2/consent` with `{ accept: true, oauth_query }`, where
  * `oauth_query` is this page's own query string echoed back unmodified. Better Auth verifies the
@@ -34,23 +49,23 @@
  * Unauthenticated users are redirected to `/sign-in` with the current search params preserved
  * so Better Auth can resume the flow after the user signs in.
  */
-import { Cable, Edit, Link as LinkIcon, RefreshCw, Sparkles, TaskAlt } from '@docket/ui/icons';
+import { AuthLayout } from '@docket/ui/components';
 import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@docket/ui/primitives';
+  Cable,
+  ChevronDown,
+  Edit,
+  Link as LinkIcon,
+  RefreshCw,
+  Sparkles,
+  TaskAlt,
+} from '@docket/ui/icons';
+import { Avatar, AvatarFallback, AvatarImage, Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ComponentType, type JSX, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { signInReturnPath } from '@/components/app-shell-utils';
+import Wordmark from '@/components/wordmark';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
 import { resolveSessionStatus } from '@/lib/session-status';
@@ -113,28 +128,22 @@ function clientDisplayName(clientId: string, metadata: { name: string } | null):
   }
 }
 
+/** The hostname of an absolute URL, or `null` when the value is absent or unparseable. */
+function hostOf(value: string | null): string | null {
+  if (!value) return null;
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return null;
+  }
+}
+
 /** Up to two initials for a display name, used as the avatar fallback (e.g. "Claude" → "C"). */
 function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
   const first = words[0]?.[0] ?? '';
   const second = words.length > 1 ? (words[words.length - 1]?.[0] ?? '') : '';
   return `${first}${second}`.toUpperCase() || '?';
-}
-
-/** The centered card chrome every state of this screen shares: wordmark + warm backdrop. */
-function ConsentShell({ children }: { children: JSX.Element }): JSX.Element {
-  return (
-    <main className="dark:bg-surface flex min-h-screen flex-col items-center justify-center gap-8 bg-[oklch(0.985_0.008_85)] px-6 py-12">
-      <Link
-        href="/"
-        className="text-foreground wonk text-3xl font-semibold tracking-tight"
-        style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
-      >
-        Docket
-      </Link>
-      {children}
-    </main>
-  );
 }
 
 /** The two-mark "X connects to Docket" hero: the requesting client's icon, linked to Docket's. */
@@ -146,21 +155,85 @@ function ConnectionHero({
   clientIcon: string | null | undefined;
 }): JSX.Element {
   return (
-    <div className="mb-2 flex items-center justify-center gap-3" aria-hidden="true">
-      <Avatar className="border-outline-variant size-12 border">
+    <div className="flex items-center gap-2" aria-hidden="true">
+      <Avatar className="border-outline-variant bg-surface size-8 border">
         {clientIcon ? <AvatarImage src={clientIcon} alt="" /> : null}
-        <AvatarFallback className="text-body-medium font-medium">
+        <AvatarFallback className="text-body-small font-medium">
           {initials(displayName)}
         </AvatarFallback>
       </Avatar>
-      <LinkIcon className="text-on-surface-variant size-5" />
-      <span
-        className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-full text-lg font-semibold"
-        style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
-      >
+      <LinkIcon className="text-on-surface-variant size-3.5" />
+      <span className="bg-primary/10 text-primary font-display wonk text-body-medium flex size-8 items-center justify-center rounded-full font-semibold">
         D
       </span>
     </div>
+  );
+}
+
+/** One labelled row of the request context (`Your account`, `Returns to`). */
+function ContextRow({ label, value }: { label: string; value: string }): JSX.Element {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-on-surface-variant text-label-medium">{label}</dt>
+      {/* `break-words`, not `break-all`: a long address should wrap at the last point that fits,
+          not slice a word in half the moment the column narrows. */}
+      <dd className="text-on-surface text-body-medium break-words">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * One requested permission, as a disclosure row.
+ *
+ * @remarks
+ * Native `<details>`/`<summary>` rather than a bespoke component: it is keyboard-operable and
+ * screen-reader-announced for free, and the repo has no Collapsible primitive to reach for.
+ * Collapsed by default, so a five-scope request reads as a short scannable list instead of five
+ * stacked paragraphs — the label alone says what is being granted, and the detail is one click
+ * away for anyone who wants it.
+ *
+ * A scope the app does not recognize has no detail to reveal, so it renders as a plain row: an
+ * empty disclosure that opens onto nothing is worse than no disclosure at all.
+ */
+function ScopeRow({ scope }: { scope: string }): JSX.Element {
+  const info = SCOPE_INFO[scope];
+  const Icon = info?.icon ?? Cable;
+  const label = info?.label ?? scope;
+
+  const glyph = (
+    <span className="text-on-surface-variant flex size-5 shrink-0 items-center justify-center">
+      <Icon className="size-3.5" />
+    </span>
+  );
+
+  if (!info?.detail) {
+    return (
+      <li className="border-outline-variant flex min-h-11 items-center gap-3 border-b px-3 py-2.5 last:border-b-0">
+        <span aria-hidden="true">{glyph}</span>
+        <span className="text-on-surface text-body-medium min-w-0 font-medium break-words">
+          {label}
+        </span>
+      </li>
+    );
+  }
+
+  return (
+    <li className="border-outline-variant border-b last:border-b-0">
+      <details className="group">
+        <summary className="focus-visible:ring-ring flex min-h-11 cursor-pointer list-none items-center gap-3 px-3 py-2.5 outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
+          <span aria-hidden="true">{glyph}</span>
+          <span className="text-on-surface text-body-medium min-w-0 flex-1 font-medium break-words">
+            {label}
+          </span>
+          <ChevronDown
+            aria-hidden="true"
+            className="text-on-surface-variant size-4 shrink-0 transition-transform group-open:rotate-180"
+          />
+        </summary>
+        {/* `ml-10` aligns the detail under the label rather than the icon (size-7 + gap-3). */}
+        <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{info.detail}</p>
+      </details>
+    </li>
   );
 }
 
@@ -178,6 +251,7 @@ function ConsentPage(): JSX.Element {
   const signature = params.get('sig');
   const clientId = params.get('client_id') ?? '';
   const scopeParam = params.get('scope') ?? '';
+  const returnHost = hostOf(params.get('redirect_uri'));
 
   const requestedScopes = scopeParam
     .split(' ')
@@ -185,7 +259,7 @@ function ConsentPage(): JSX.Element {
     .filter(Boolean);
 
   const [clientMeta, setClientMeta] = useState<{ name: string; icon: string | null } | null>(null);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<'accept' | 'deny' | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Fetch CIMD metadata for URL-form client IDs.
@@ -223,7 +297,7 @@ function ConsentPage(): JSX.Element {
         setError('This authorization link is incomplete. Please try connecting again.');
         return;
       }
-      setPending(true);
+      setPending(accept ? 'accept' : 'deny');
       setError(null);
       try {
         const res = await fetch('/api/auth/oauth2/consent', {
@@ -253,7 +327,7 @@ function ConsentPage(): JSX.Element {
       } catch {
         setError('Something went wrong. Please try again.');
       } finally {
-        setPending(false);
+        setPending(null);
       }
     },
     [signature],
@@ -263,115 +337,123 @@ function ConsentPage(): JSX.Element {
   // consent grant is exactly the wrong thing to abandon over one failed request.
   if (sessionStatus === 'pending' || sessionStatus === 'unreachable') {
     return (
-      <ConsentShell>
-        <div className="text-on-surface-variant text-body-medium">Loading…</div>
-      </ConsentShell>
+      <AuthLayout brand={<Wordmark className="text-2xl" />} intro={null}>
+        <p className="text-on-surface-variant text-body-medium">Loading…</p>
+      </AuthLayout>
     );
   }
 
   if (!session) {
     // The useEffect redirect is running; show nothing to avoid flash.
-    return <ConsentShell>{<></>}</ConsentShell>;
+    return (
+      <AuthLayout brand={<Wordmark className="text-2xl" />} intro={null}>
+        <></>
+      </AuthLayout>
+    );
   }
 
   if (!signature) {
     return (
-      <ConsentShell>
-        <Card className="w-full max-w-sm">
-          <CardHeader className="items-center text-center">
-            <CardTitle>Invalid request</CardTitle>
-            <CardDescription>
-              This authorization link is missing required parameters. Please try connecting your app
-              again.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </ConsentShell>
+      <AuthLayout
+        brand={<Wordmark className="text-2xl" />}
+        intro={<h1 className="text-headline-small text-on-surface font-medium">Invalid request</h1>}
+      >
+        <p className="text-on-surface-variant text-body-medium">
+          This authorization link is missing required parameters. Start the connection again from
+          the app you were trying to connect.
+        </p>
+        {/* The previous version of this state rendered a header and nothing else, leaving the
+            person on a screen with no control of any kind. */}
+        <Link
+          href="/"
+          className="text-primary text-body-medium inline-flex min-h-10 w-fit items-center font-medium underline-offset-4 hover:underline"
+        >
+          Back to Docket
+        </Link>
+      </AuthLayout>
     );
   }
 
   const displayName = clientDisplayName(clientId, clientMeta);
+  // Only call the domain "verified" when the server actually returned validated metadata for this
+  // client id. Without it the hostname is just an attacker-supplied string we happen to be able to
+  // parse, and labelling that as verified is precisely the wrong thing to do on a consent screen.
+  const verifiedHost = clientMeta ? hostOf(clientId) : null;
 
   return (
-    <ConsentShell>
-      <Card className="w-full max-w-sm">
-        <CardHeader className="items-center text-center">
+    <AuthLayout
+      brand={<Wordmark className="text-2xl" />}
+      intro={
+        <>
           <ConnectionHero displayName={displayName} clientIcon={clientMeta?.icon} />
-          <CardTitle className="text-title-large">Authorize access</CardTitle>
-          <CardDescription>
-            <span className="text-on-surface font-medium">{displayName}</span> wants permission to
-            access your Docket account as{' '}
-            <span className="text-on-surface font-medium">{session.user.email}</span>.
-          </CardDescription>
-        </CardHeader>
+          <h1 className="text-headline-small text-on-surface font-medium">
+            {displayName} wants access to your Docket account
+          </h1>
+          <dl className="border-outline-variant mt-1 flex flex-col gap-3 border-t pt-4">
+            {verifiedHost ? <ContextRow label="Verified domain" value={verifiedHost} /> : null}
+            <ContextRow label="Your account" value={session.user.email} />
+            {returnHost ? <ContextRow label="Returns to" value={returnHost} /> : null}
+          </dl>
+        </>
+      }
+    >
+      {requestedScopes.length > 0 ? (
+        <section aria-label="Requested permissions" className="flex min-w-0 flex-col gap-3">
+          <p className="text-on-surface text-label-large">This app will be able to</p>
+          {/* One tonal block rather than a card per permission: the list reads as a single object
+              being granted. Capped and scrollable because the server accepts arbitrary requested
+              scopes, so the row count has no ceiling — without the cap a long list would push the
+              decision buttons off a short viewport, which is the failure this redesign fixes. */}
+          <ul className="bg-surface-container-high max-h-[45dvh] overflow-y-auto rounded-lg">
+            {requestedScopes.map((scope) => (
+              <ScopeRow key={scope} scope={scope} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
-        <CardContent className="flex flex-col gap-6">
-          {requestedScopes.length > 0 ? (
-            <section aria-label="Requested permissions">
-              <p className="text-on-surface-variant mb-3 text-sm font-medium">
-                This app will be able to
-              </p>
-              <ul className="flex flex-col gap-3">
-                {requestedScopes.map((scope) => {
-                  const info = SCOPE_INFO[scope];
-                  const Icon = info?.icon ?? Cable;
-                  return (
-                    <li key={scope} className="flex items-start gap-3">
-                      <span
-                        className="bg-surface-container-high text-on-surface-variant mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full"
-                        aria-hidden="true"
-                      >
-                        <Icon className="size-4" />
-                      </span>
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-on-surface text-body-medium font-medium">
-                          {info?.label ?? scope}
-                        </span>
-                        {info?.detail ? (
-                          <span className="text-on-surface-variant text-xs">{info.detail}</span>
-                        ) : null}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </section>
-          ) : null}
+      {error ? (
+        <p role="alert" className="text-destructive text-body-medium">
+          {error}
+        </p>
+      ) : null}
 
-          {error ? (
-            <p role="alert" className="text-destructive text-body-medium">
-              {error}
-            </p>
-          ) : null}
+      {/* Reversed so the primary lands on the right at width and first when stacked. */}
+      <div className="flex flex-col-reverse gap-2 @3xl:flex-row @3xl:justify-end">
+        <Button
+          type="button"
+          variant="outline"
+          size="lg"
+          disabled={pending !== null}
+          onClick={() => {
+            void decide(false);
+          }}
+        >
+          {pending === 'deny' ? 'Denying…' : 'Deny'}
+        </Button>
+        <Button
+          type="button"
+          size="lg"
+          disabled={pending !== null}
+          onClick={() => {
+            void decide(true);
+          }}
+        >
+          {pending === 'accept' ? 'Authorizing…' : 'Authorize'}
+        </Button>
+      </div>
 
-          <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              disabled={pending}
-              onClick={() => {
-                void decide(true);
-              }}
-            >
-              {pending ? 'Authorizing…' : 'Authorize'}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={pending}
-              onClick={() => {
-                void decide(false);
-              }}
-            >
-              Deny
-            </Button>
-          </div>
-
-          <p className="text-on-surface-variant text-center text-xs">
-            You can revoke this access at any time in Settings → Connected apps.
-          </p>
-        </CardContent>
-      </Card>
-    </ConsentShell>
+      <p className="text-on-surface-variant text-body-small">
+        Revoke access any time in{' '}
+        <Link
+          href="/settings/connected-apps"
+          className="text-primary font-medium underline-offset-4 hover:underline"
+        >
+          Connected apps
+        </Link>
+        .
+      </p>
+    </AuthLayout>
   );
 }
 

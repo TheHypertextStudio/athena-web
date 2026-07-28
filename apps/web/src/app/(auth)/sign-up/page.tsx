@@ -210,10 +210,12 @@ export default function SignUpPage(): JSX.Element {
       ? name.trim().length > 0 && email.trim().length > 0
       : code.trim().length > 0);
 
+  // The description says what this step does rather than repeating the tagline: the seam panel
+  // beside this form already carries it, and the two together put one sentence on screen twice.
   return (
     <AuthShell
       title="Create your account"
-      description="Run every organization from one calm place."
+      description="Start with your email. You'll add a passkey in a moment."
       footer={
         <>
           Already have an account?{' '}
@@ -316,7 +318,8 @@ export default function SignUpPage(): JSX.Element {
           </p>
         ) : null}
 
-        <Button type="submit" disabled={!canSubmit}>
+        {/* `lg` (h-10) clears the craft rubric's 40px mobile touch-target gate. */}
+        <Button type="submit" size="lg" disabled={!canSubmit}>
           {pending ? (
             <>
               <Spinner />
@@ -328,11 +331,6 @@ export default function SignUpPage(): JSX.Element {
             'Verify and create account'
           )}
         </Button>
-
-        <p className="text-on-surface-variant text-center text-xs leading-relaxed">
-          No passwords. Your device&rsquo;s Face ID, Touch ID, or security key becomes your secure
-          key to Docket.
-        </p>
       </form>
     </AuthShell>
   );

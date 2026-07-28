@@ -1,40 +1,19 @@
 'use client';
 
+import { AuthLayout } from '@docket/ui/components';
 import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '@docket/ui/primitives';
+import { Button, Stack } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { authClient, useSession } from '@/lib/auth-client';
 
 import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
-import { signalUnknownPasskey } from '../_lib/webauthn';
-
-/** Whether this browser exposes the WebAuthn API at all. */
-function isWebAuthnSupported(): boolean {
-  return typeof window !== 'undefined' && typeof window.PublicKeyCredential === 'function';
-}
-
-/** Whether the browser supports conditional-mediation (passkey autofill). */
-async function isConditionalMediationSupported(): Promise<boolean> {
-  try {
-    return (
-      isWebAuthnSupported() &&
-      typeof window.PublicKeyCredential.isConditionalMediationAvailable === 'function' &&
-      (await window.PublicKeyCredential.isConditionalMediationAvailable())
-    );
-  } catch {
-    return false;
-  }
-}
+import {
+  isConditionalMediationSupported,
+  isWebAuthnSupported,
+  signalUnknownPasskey,
+} from '../_lib/webauthn';
 
 /**
  * The passwordless, passkey-first operator sign-in screen.
@@ -52,6 +31,17 @@ async function isConditionalMediationSupported(): Promise<boolean> {
  * (via {@link useRedirectIfAuthenticated}) rather than rendering the form or arming a fresh
  * ceremony — otherwise a signed-in operator revisiting `/sign-in` would silently mint a
  * redundant session every time.
+ *
+ * The screen shares {@link AuthLayout} with the product app's auth screens, so both consoles
+ * stack and split identically. The wordmark stays in Plex rather than the product's Fraunces:
+ * the admin console has no marketing half to hand off from, and the face difference is the
+ * honest signal that this is the operator tool. The operator-only restriction sits in the left
+ * panel as standing context rather than as a footnote under the button, where it read as an
+ * afterthought to a control the reader had already decided to press.
+ *
+ * The WebAuthn capability checks come from `@docket/ui/lib/webauthn`, shared with the product
+ * app. This page used to re-implement both of them inline, with a support check that missed
+ * `navigator.credentials`.
  */
 export default function SignInPage(): JSX.Element {
   const router = useRouter();
@@ -136,54 +126,60 @@ export default function SignInPage(): JSX.Element {
   const canSubmit = hydrated && passkeySupported && !pending;
 
   return (
-    <main className="bg-surface-container text-on-surface flex min-h-screen items-center justify-center px-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-title-large">Docket service admin</CardTitle>
-          <CardDescription>Sign in with your operator passkey.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {/* Carries the webauthn autocomplete token so browsers with conditional mediation can
-              surface saved passkeys in their native autofill UI. */}
-          <input
-            type="text"
-            name="passkey"
-            autoComplete="username webauthn"
-            aria-hidden="true"
-            tabIndex={-1}
-            className="sr-only"
-            readOnly
-            value=""
-          />
-
-          {error ? (
-            <p role="alert" className="text-destructive text-body-medium">
-              {error}
-            </p>
-          ) : null}
-
-          {!passkeySupported && hydrated ? (
-            <p className="text-on-surface-variant text-body-medium" role="status">
-              This browser does not support passkeys, so operator sign-in is unavailable here. Use a
-              device with Face ID / Touch ID or a security key.
-            </p>
-          ) : null}
-        </CardContent>
-        <CardFooter className="flex flex-col items-stretch gap-3">
-          <Button
-            type="button"
-            disabled={!canSubmit}
-            onClick={() => {
-              void authenticate(false);
-            }}
-          >
-            {pending ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
-          </Button>
-          <p className="text-on-surface-variant text-center text-xs">
+    <AuthLayout
+      brand={
+        <span className="text-on-surface text-2xl leading-none font-semibold tracking-tight">
+          Docket
+        </span>
+      }
+      intro={
+        <>
+          <h1 className="text-headline-small text-on-surface font-medium">Service admin</h1>
+          <p className="text-on-surface-variant text-body-medium">
             Operator access only. Non-staff accounts are rejected.
           </p>
-        </CardFooter>
-      </Card>
-    </main>
+        </>
+      }
+    >
+      <Stack gap={4}>
+        {/* Carries the webauthn autocomplete token so browsers with conditional mediation can
+            surface saved passkeys in their native autofill UI. */}
+        <input
+          type="text"
+          name="passkey"
+          autoComplete="username webauthn"
+          aria-hidden="true"
+          tabIndex={-1}
+          className="sr-only"
+          readOnly
+          value=""
+        />
+
+        {error ? (
+          <p role="alert" className="text-destructive text-body-medium">
+            {error}
+          </p>
+        ) : null}
+
+        {!passkeySupported && hydrated ? (
+          <p className="text-on-surface-variant text-body-medium" role="status">
+            This browser does not support passkeys, so operator sign-in is unavailable here. Use a
+            device with Face ID / Touch ID or a security key.
+          </p>
+        ) : null}
+
+        {/* `lg` (h-10) clears the craft rubric's 40px mobile touch-target gate. */}
+        <Button
+          type="button"
+          size="lg"
+          disabled={!canSubmit}
+          onClick={() => {
+            void authenticate(false);
+          }}
+        >
+          {pending ? 'Waiting for your passkey…' : 'Sign in with a passkey'}
+        </Button>
+      </Stack>
+    </AuthLayout>
   );
 }

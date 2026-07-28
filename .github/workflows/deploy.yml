@@ -77,7 +77,6 @@ jobs:
           BETTER_AUTH_URL: "${{ vars.API_URL }}"
           BETTER_AUTH_TRUSTED_ORIGINS: "${{ vars.WEB_URL }},${{ vars.ADMIN_URL }}"
           BETTER_AUTH_ALLOWED_HOSTS: "${{ vars.BETTER_AUTH_ALLOWED_HOSTS }}"
-          BETTER_AUTH_COOKIE_DOMAIN: "${{ vars.PASSKEY_RP_ID }}"
           BETTER_AUTH_PASSKEY_RP_ID: "${{ vars.PASSKEY_RP_ID }}"
           BETTER_AUTH_PASSKEY_RP_NAME: Docket
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"

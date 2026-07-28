@@ -42,6 +42,36 @@ vi.mock('@docket/auth', async (importOriginal) => {
 
 export const getSession = mocks.getSession;
 export const verifyAccessToken = mocks.verifyAccessToken;
+export const authHandler = mocks.handler;
+
+/**
+ * A realistic `.well-known/oauth-authorization-server` document body, the shape
+ * `authorizationServerMetadata` (`mcp/server.ts`) fetches via `auth.handler` in-process and
+ * patches `authorization_endpoint` on. Callers that exercise that function should
+ * `authHandler.mockResolvedValueOnce(new Response(JSON.stringify(fakeAsMetadata(issuer))))`.
+ */
+export function fakeAsMetadata(issuer: string): Record<string, unknown> {
+  return {
+    issuer: `${issuer}/api/auth`,
+    authorization_endpoint: `${issuer}/api/auth/oauth2/authorize`,
+    token_endpoint: `${issuer}/api/auth/oauth2/token`,
+    registration_endpoint: `${issuer}/api/auth/oauth2/register`,
+    jwks_uri: `${issuer}/api/auth/jwks`,
+    introspection_endpoint: `${issuer}/api/auth/oauth2/introspect`,
+    revocation_endpoint: `${issuer}/api/auth/oauth2/revoke`,
+    code_challenge_methods_supported: ['S256'],
+    scopes_supported: [
+      'work:read',
+      'work:write',
+      'agents:run',
+      'connectors:link',
+      'offline_access',
+    ],
+    response_types_supported: ['code'],
+    token_endpoint_auth_methods_supported: ['none'],
+    client_id_metadata_document_supported: true,
+  };
+}
 
 /**
  * Restore the default unauthenticated Better Auth boundary for the next test.

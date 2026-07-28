@@ -6,7 +6,7 @@ import type { server as ApiServer } from '../src/server';
 
 // Mock the node server `serve` so importing `server.ts` does not bind a real port,
 // while the shared auth mock keeps the heavy ESM chain out of the test graph.
-import './support/auth-mock';
+import { authHandler, fakeAsMetadata } from './support/auth-mock';
 
 const serve = vi.fn();
 vi.mock('@hono/node-server', () => ({ serve }));
@@ -116,6 +116,12 @@ describe('server boot', () => {
   let log: ReturnType<typeof vi.spyOn>;
   beforeAll(async () => {
     log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    // `env` is captured once at first import, not read live — a sibling test file importing
+    // `../src/server` (and therefore `../env`) before this `beforeAll` runs would otherwise
+    // freeze WEB_URL as whatever it was at THAT import, this stub notwithstanding. Force a
+    // fresh module registry so this describe block's own env stub is what actually lands.
+    vi.resetModules();
+    vi.stubEnv('WEB_URL', 'https://docket.test');
     server = (await import('../src/server')).server;
   });
 
@@ -144,13 +150,29 @@ describe('server boot', () => {
     // (`/api/auth`) — it never probes the bare root when the issuer has a path component. That
     // location 404d in production, so no compliant client could ever learn the real
     // registration_endpoint and DCR failed before it ever reached `/oauth2/register`.
+    // A fresh Response per call: the two requests below each consume a body via `.json()`, and
+    // a Response's body stream can only be read once — `mockResolvedValue` would hand the
+    // second call an already-consumed instance.
+    authHandler.mockImplementation(
+      async () => new Response(JSON.stringify(fakeAsMetadata('https://docket.test'))),
+    );
     const bare = await server.request('/.well-known/oauth-authorization-server');
     const pathAware = await server.request('/.well-known/oauth-authorization-server/api/auth');
-    expect(pathAware.status).toBe(307);
-    expect(pathAware.headers.get('location')).toBe(bare.headers.get('location'));
-    expect(pathAware.headers.get('location')).toContain(
-      '/api/auth/.well-known/oauth-authorization-server',
+    expect(bare.status).toBe(200);
+    expect(pathAware.status).toBe(200);
+    const bareBody = (await bare.json()) as Record<string, unknown>;
+    const pathAwareBody = (await pathAware.json()) as Record<string, unknown>;
+    expect(bareBody).toEqual(pathAwareBody);
+    // Regression coverage for the follow-up incident: authorization_endpoint must be the web
+    // origin (the caller's session cookie is only ever valid on its same-origin /api/auth
+    // rewrite), while every other endpoint stays on the API origin exactly as Better Auth
+    // generated it.
+    expect(bareBody['authorization_endpoint']).toBe(
+      'https://docket.test/api/auth/oauth2/authorize',
     );
+    expect(bareBody['registration_endpoint']).toBe('https://docket.test/api/auth/oauth2/register');
+    authHandler.mockReset();
+    authHandler.mockResolvedValue(new Response('ok'));
   });
 });
 

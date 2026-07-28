@@ -15,6 +15,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
+import { auth } from '@docket/auth';
 import { publicProblemTitle } from '@docket/types';
 import type { Context } from 'hono';
 
@@ -169,16 +170,29 @@ export function protectedResourceMetadata(c: Context): Response {
 }
 
 /**
- * Serve the OAuth 2.0 Authorization Server metadata pointer (RFC 8414).
+ * Serve the OAuth 2.0 Authorization Server metadata document (RFC 8414).
  *
  * @remarks
- * The single Docket AS is Better Auth mounted at `/api/auth`, whose `mcp()` plugin serves
- * the canonical discovery document (with `issuer`, the authorization/token/registration
- * endpoints, and `code_challenge_methods_supported:["S256"]`) at
- * `<issuer>/api/auth/.well-known/oauth-authorization-server` — relative to its base path,
- * NOT at the RFC 8414 root location. This handler 307-redirects there so a client that
- * discovered the AS via the PRM `authorization_servers` entry lands on the live document
- * (mcp-surface.md §2.3) — without re-importing the heavy Better Auth plugin chain.
+ * The single Docket AS is Better Auth mounted at `/api/auth`, whose `oauthProvider` plugin
+ * serves the canonical discovery document (with `issuer`, the authorization/token/registration
+ * endpoints, `jwks_uri`, `introspection_endpoint`, etc.) at
+ * `<issuer>/api/auth/.well-known/oauth-authorization-server` — relative to its base path, NOT
+ * at the RFC 8414 root location. This handler fetches that document IN-PROCESS (`auth.handler`
+ * directly, no network round trip) rather than redirecting to it, because one field needs to be
+ * rewritten before a client ever sees it: `authorization_endpoint`.
+ *
+ * Better Auth generates every URL in its own document from `BETTER_AUTH_URL` — the API origin —
+ * because it has no idea the web app's `next.config.ts` also proxies `/api/auth/*` same-origin.
+ * That proxy is not incidental: it is the ONLY place the caller's session cookie is valid, since
+ * `BETTER_AUTH_COOKIE_DOMAIN` is deliberately unset in production (host-only cookies — sharing
+ * one across `*.hypertext.studio` would also hand it to unrelated sites on that same registrable
+ * domain, e.g. the company's own site). `/oauth2/authorize` is the one AS endpoint that checks
+ * that cookie; every other endpoint here (token, register, jwks, introspect, revoke) is
+ * credential-free PKCE/client-auth and is left exactly as Better Auth generated it, still on the
+ * API origin. Advertising the raw API-origin authorize URL — what shipped before this — sent
+ * every real client's browser straight past the one place the cookie is valid: a user with a
+ * genuinely active session still landed on `/sign-in` because the authorize endpoint they were
+ * sent to could never see it.
  *
  * `server.ts` mounts this at TWO paths, and both matter: the bare
  * `/.well-known/oauth-authorization-server` only covers a client discovering an issuer with NO
@@ -191,23 +205,20 @@ export function protectedResourceMetadata(c: Context): Response {
  * production via `discoverOAuthServerInfo()` from `@modelcontextprotocol/sdk`).
  *
  * @param c - The Hono context.
- * @returns a 307 redirect to the AS's OIDC discovery document.
+ * @returns the AS metadata document, with `authorization_endpoint` repointed at the web origin.
  */
-export function authorizationServerMetadata(c: Context): Response {
+export async function authorizationServerMetadata(c: Context): Promise<Response> {
   const resource = canonicalResourceUrl(c);
   const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
-  if (typeof c.redirect === 'function') {
-    return c.redirect(`${issuer}/api/auth/.well-known/oauth-authorization-server`, 307);
-  }
+  const webOrigin = env.WEB_URL.replace(/\/$/, '');
+  const upstream = await auth.handler(
+    new Request(`${issuer}/api/auth/.well-known/oauth-authorization-server`),
+  );
+  const metadata = (await upstream.json()) as Record<string, unknown>;
   return c.json({
-    issuer: oauthIssuer() ?? `${issuer}/api/auth`,
-    authorization_endpoint: `${issuer}/api/auth/oauth2/authorize`,
-    token_endpoint: `${issuer}/api/auth/oauth2/token`,
-    registration_endpoint: `${issuer}/api/auth/oauth2/register`,
-    code_challenge_methods_supported: ['S256'],
-    scopes_supported: [...CONNECT_SCOPES],
-    token_endpoint_auth_methods_supported: ['none'],
-    client_id_metadata_document_supported: true,
+    ...metadata,
+    issuer: oauthIssuer() ?? metadata['issuer'] ?? `${issuer}/api/auth`,
+    authorization_endpoint: `${webOrigin}/api/auth/oauth2/authorize`,
   });
 }
 

@@ -6,7 +6,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type { CimdDeps } from '../../src/mcp/cimd';
 import type * as CimdModule from '../../src/mcp/cimd';
 import type * as McpServerModule from '../../src/mcp/server';
-import '../support/auth-mock';
+import { authHandler, fakeAsMetadata } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 
 let cimd!: typeof CimdModule;
@@ -15,6 +15,7 @@ let serverMod!: typeof McpServerModule;
 beforeAll(async () => {
   vi.stubEnv('MCP_CIMD_STRICT', 'true');
   vi.stubEnv('MCP_CIMD_TRUST_ALLOWLIST', 'allowed.example');
+  vi.stubEnv('WEB_URL', 'https://docket.test');
   await getMigratedDb();
   cimd = await import('../../src/mcp/cimd');
   serverMod = await import('../../src/mcp/server');
@@ -200,15 +201,18 @@ describe('CIMD authorize preflight middleware', () => {
 
 describe('MCP authorization server metadata', () => {
   it('advertises CIMD support in the root AS metadata document', async () => {
-    const res = serverMod.authorizationServerMetadata({
+    authHandler.mockResolvedValueOnce(
+      new Response(JSON.stringify(fakeAsMetadata('https://api.docket.test'))),
+    );
+    const res = await serverMod.authorizationServerMetadata({
       req: { url: 'https://api.docket.test/.well-known/oauth-authorization-server' },
       json: (body: unknown) => new Response(JSON.stringify(body)),
     } as never);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body['client_id_metadata_document_supported']).toBe(true);
-    expect(body['authorization_endpoint']).toBe(
-      'https://api.docket.test/api/auth/oauth2/authorize',
-    );
+    // The web origin, not the API origin: authorization_endpoint is the one field this handler
+    // rewrites, since it's the only endpoint that checks the caller's session cookie.
+    expect(body['authorization_endpoint']).toBe('https://docket.test/api/auth/oauth2/authorize');
     expect(body['registration_endpoint']).toBe('https://api.docket.test/api/auth/oauth2/register');
     expect(body['code_challenge_methods_supported']).toEqual(['S256']);
   });

@@ -15,7 +15,13 @@ import type { registerResources as RegisterResources } from '../../src/mcp/resou
 import type * as ScopeModule from '../../src/mcp/scope';
 import type * as ServerModule from '../../src/mcp/server';
 import type * as AuthModule from '../../src/mcp/auth';
-import { getSession, resetAuthMocks, verifyAccessToken } from '../support/auth-mock';
+import {
+  authHandler,
+  fakeAsMetadata,
+  getSession,
+  resetAuthMocks,
+  verifyAccessToken,
+} from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 
 let schema!: typeof DbModule;
@@ -30,6 +36,7 @@ beforeAll(async () => {
   // Configure OAuth before importing MCP modules that read the API env slice.
   vi.stubEnv('MCP_ISSUER_URL', 'https://auth.docket.test');
   vi.stubEnv('MCP_RESOURCE_URL', 'https://api.docket.test/mcp');
+  vi.stubEnv('WEB_URL', 'https://docket.test');
   schema = await getMigratedDb();
   db = schema.db;
   registerTools = (await import('../../src/mcp/tools')).registerTools;
@@ -384,11 +391,17 @@ describe('discovery routes (PRM + AS metadata)', () => {
       await app().request('/.well-known/oauth-protected-resource/mcp')
     ).json()) as { scopes_supported: string[] };
 
-    // The AS route 307s to Better Auth in a real deploy; the JSON body is the fallback branch.
-    const asDoc = serverMod.authorizationServerMetadata({
-      req: { url: 'https://api.docket.test/.well-known/oauth-authorization-server' },
-      json: (body: unknown) => body,
-    } as never) as unknown as { scopes_supported: string[] };
+    // The AS route fetches Better Auth's document in-process and patches authorization_endpoint;
+    // scopes_supported passes through from that (mocked) upstream document untouched.
+    authHandler.mockResolvedValueOnce(
+      new Response(JSON.stringify(fakeAsMetadata('https://auth.docket.test'))),
+    );
+    const asDoc = (await (
+      await serverMod.authorizationServerMetadata({
+        req: { url: 'https://api.docket.test/.well-known/oauth-authorization-server' },
+        json: (body: unknown) => new Response(JSON.stringify(body)),
+      } as never)
+    ).json()) as { scopes_supported: string[] };
 
     const challengeScope = /scope="([^"]+)"/.exec(
       scopeMod.challenge401('https://api.docket.test/.well-known/oauth-protected-resource/mcp'),
@@ -407,16 +420,20 @@ describe('discovery routes (PRM + AS metadata)', () => {
     );
   });
 
-  it('redirects AS metadata to the live Better Auth discovery document', async () => {
-    const res = await app().request('/.well-known/oauth-authorization-server', {
-      redirect: 'manual',
-    });
-    expect(res.status).toBe(307);
-    // Better Auth's mcp() plugin serves the document relative to its /api/auth base path,
-    // not at the RFC 8414 root — the redirect must target the route that actually exists.
-    expect(res.headers.get('location')).toBe(
-      'https://auth.docket.test/api/auth/.well-known/oauth-authorization-server',
+  it('serves AS metadata with authorization_endpoint repointed at the web origin', async () => {
+    authHandler.mockResolvedValueOnce(
+      new Response(JSON.stringify(fakeAsMetadata('https://auth.docket.test'))),
     );
+    const res = await app().request('/.well-known/oauth-authorization-server');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    // Every other endpoint stays exactly as Better Auth generated it (still the API origin) —
+    // only authorization_endpoint moves, since that is the one endpoint that checks the
+    // caller's session cookie, and that cookie is only ever valid on the web origin's own
+    // same-origin /api/auth rewrite (BETTER_AUTH_COOKIE_DOMAIN is deliberately unset).
+    expect(body['authorization_endpoint']).toBe('https://docket.test/api/auth/oauth2/authorize');
+    expect(body['token_endpoint']).toBe('https://auth.docket.test/api/auth/oauth2/token');
+    expect(body['registration_endpoint']).toBe('https://auth.docket.test/api/auth/oauth2/register');
   });
 });
 

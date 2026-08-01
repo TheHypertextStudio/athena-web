@@ -2,169 +2,151 @@
  * `@docket/api` — the Linear Agent session-run sweep.
  *
  * @remarks
- * `routes/ingest-linear-agent.ts` is the FIRST writer of `agent_session_run` — it queues a
+ * `routes/ingest-linear-agent.ts` is the first writer of `agent_session_run` — it queues a
  * `status: 'queued'` row synchronously from the webhook handler, but (per that file's own
  * remarks) deliberately never calls {@link driveSession} inline, since the webhook's Cloud Run
  * instance is CPU-throttled to near-zero the instant the HTTP response is sent. This sweep is
- * the other half: it claims queued (or abandoned) runs on a lease, drives each session's turn to
+ * the other half: it finds sessions with runnable generations, drives each session's turn to
  * completion, and relays whatever new activity landed back to the Linear thread
  * ({@link relayLinearAgentActivity}).
  *
- * Lease-guarded exactly like the sibling sweeps in `routes/cron.ts` (`integration-sync.ts`'s
- * `claimLease`, `event-sync.ts`'s `claimEvent`): a claim is an atomic conditional `UPDATE`, so
- * two overlapping sweep ticks (or a retried scheduler invocation) can never double-process the
- * same run.
+ * This sweep does NOT lease the run rows itself. `claimRunGeneration` is the single claimer of a
+ * generation, and it holds the fencing token every generation-owned write is checked against; a
+ * second lease taken here would be invisible to that token and would let two workers believe
+ * they owned the same generation. The sweep therefore selects candidates optimistically and
+ * hands each session to {@link driveSession}, whose claim is the atomic one — two overlapping
+ * sweep ticks resolve there, with the loser seeing a `ConflictError` and moving on.
  */
-import { and, asc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
 
 import { agentSessionRun, db } from '@docket/db';
 
 import { driveSession } from '../agent/loop';
 import { relayLinearAgentActivity } from '../lib/linear-agent-relay';
-import type { SessionRow } from './agent-session-helpers';
 
-/** The selected `agent_session_run` row shape this sweep claims and settles. */
-type RunRow = typeof agentSessionRun.$inferSelect;
+/** A workspace-owned session this tick will try to drive. */
+interface Candidate {
+  readonly sessionId: string;
+  readonly organizationId: string;
+}
 
 /**
- * Rows claimed per sweep tick.
+ * Rows considered per sweep tick.
  *
  * @remarks
- * No sibling sweep claims `agent_session_run` rows today, so there is no existing precedent to
- * match exactly. 25 sits in the middle of a sane 20-50 range: this sweep is registered at a
- * tight once-a-minute cadence (see `scripts/scheduler-setup.ts`), and each claimed row runs a
- * full multi-turn agentic loop (LLM calls + tool execution) rather than a cheap row update, so a
- * smaller batch keeps one invocation's wall-clock time predictable.
+ * 25 sits in the middle of a sane 20-50 range: this sweep is registered at a tight once-a-minute
+ * cadence (see `scripts/scheduler-setup.ts`), and each candidate runs a full multi-turn agentic
+ * loop (LLM calls + tool execution) rather than a cheap row update, so a smaller batch keeps one
+ * invocation's wall-clock time predictable.
  */
 const BATCH_LIMIT = 25;
 
-/**
- * How long a claimed run holds its lease before another sweep tick may reclaim it.
- *
- * @remarks
- * `driveSession` is a full multi-turn agentic loop, not a single cheap request — 10 minutes is
- * comfortably longer than any plausible single run (bounded by `AGENT_MAX_TURNS`) while still
- * reclaiming a genuinely crashed worker well within the hour. Matches the task's suggested
- * "safely longer than a single `driveSession` call could plausibly take" 5–10 minute range, at
- * the generous end since a turn can include slow tool calls (remote MCP connectors).
- */
-const LEASE_MS = 10 * 60 * 1000;
-
 /** The outcome of one sweep tick. */
 export interface LinearAgentSweepResult {
-  /** Runs claimed (won the atomic claim) this tick. */
+  /** Candidates this tick actually took on (won the generation claim). */
   readonly claimed: number;
-  /** Claimed runs whose `driveSession` call returned without throwing. */
+  /** Candidates whose `driveSession` call returned without throwing. */
   readonly succeeded: number;
-  /** Claimed runs whose `driveSession` call threw. */
+  /** Candidates whose `driveSession` call threw after being claimed. */
   readonly failed: number;
 }
 
 /**
- * The `agent_session_run` rows eligible to claim: queued, or `running` past its own recorded
- * lease expiry.
+ * The `agent_session_run` rows worth trying: queued, or `running` past their recorded lease.
  *
  * @remarks
+ * Workspace-owned runs only. A run row carries either an organization or an owning user, never
+ * both, and the owner-attributed ones are personal Athena work with no Linear thread to relay to
+ * — they are driven by the durable runner instead. Picking them up here would both steal them
+ * from that path and leave this sweep with no workspace to drive them in.
+ *
  * Unlike sibling sweeps (`event-sync.ts`'s `claimEvent`, `integration-sync.ts`'s `claimLease`),
- * which derive staleness from "processing started more than a fixed window ago" (`now -
- * LEASE_STALE_MS`), this table stores the lease's own absolute expiry (`leaseExpiresAt`, set to
- * `now + LEASE_MS` at claim time — see {@link claimRun}). Eligibility is therefore a direct
- * comparison against `now`, NOT `now - LEASE_MS`: a lease that expired even one second ago is
- * already fair game, and re-subtracting the lease window here would wrongly require it to have
- * been expired for a FULL extra `LEASE_MS` before reclaiming it.
+ * which derive staleness from "processing started more than a fixed window ago", this table
+ * stores the lease's own absolute expiry. Eligibility is therefore a direct comparison against
+ * `now`: a lease that expired even one second ago is already fair game.
  */
-function claimableCondition(now: Date) {
-  return or(
-    eq(agentSessionRun.status, 'queued'),
-    and(
-      eq(agentSessionRun.status, 'running'),
-      or(isNull(agentSessionRun.leaseExpiresAt), lt(agentSessionRun.leaseExpiresAt, now)),
+function runnableCondition(now: Date) {
+  return and(
+    isNotNull(agentSessionRun.organizationId),
+    or(
+      eq(agentSessionRun.status, 'queued'),
+      and(
+        eq(agentSessionRun.status, 'running'),
+        or(isNull(agentSessionRun.leaseExpiresAt), lt(agentSessionRun.leaseExpiresAt, now)),
+      ),
     ),
   );
 }
 
 /**
- * Atomically claim one run: flip it to `running`, stamp a fresh lease, and bump `attempt`.
+ * Record a terminal failure on a session's still-unclaimed run rows.
  *
  * @remarks
- * The `WHERE` re-asserts the exact eligibility condition the candidate was selected under, so a
- * concurrent sweep tick that already claimed this row first makes this `UPDATE` affect zero rows
- * — the caller sees `null` and moves on rather than double-processing.
+ * Only reached when `claimRunGeneration` refused the session outright, so no worker holds a
+ * fencing token for these rows and settling them here cannot race one. Scoped to `queued` rows
+ * and to `running` rows whose lease has already lapsed, which is exactly the set this tick was
+ * willing to pick up.
  */
-async function claimRun(id: string, now: Date): Promise<RunRow | null> {
-  const [claimed] = await db
+async function settleUnclaimableRuns(sessionId: string, message: string): Promise<void> {
+  await db
     .update(agentSessionRun)
-    .set({
-      status: 'running',
-      startedAt: now,
-      leaseExpiresAt: new Date(now.getTime() + LEASE_MS),
-      attempt: sql`${agentSessionRun.attempt} + 1`,
-    })
-    .where(and(eq(agentSessionRun.id, id), claimableCondition(now)))
-    .returning();
-  return claimed ?? null;
+    .set({ status: 'failed', lastError: message, completedAt: new Date() })
+    .where(
+      and(
+        eq(agentSessionRun.sessionId, sessionId),
+        isNull(agentSessionRun.leaseToken),
+        or(eq(agentSessionRun.status, 'queued'), eq(agentSessionRun.status, 'running')),
+      ),
+    );
 }
 
 /**
- * Map a settled session's status onto the run's own status vocabulary.
+ * Errors that mean another worker got there first, rather than that this run is broken.
  *
  * @remarks
- * `agent_session_run_status` carries a dedicated `waiting` value distinct from `completed` — a
- * session that settled `awaiting_input`/`awaiting_approval` did NOT fail and did NOT finish; it
- * is genuinely parked pending a human. Collapsing that into `completed` would make the run
- * history lie about why the generation stopped without producing a final answer; collapsing it
- * into `failed` would page/alert on completely ordinary human-in-the-loop behavior. A `canceled`
- * session (an explicit pause/cancel taken mid-run) is passed through as `canceled` for the same
- * reason.
+ * Every one of these leaves the generation owned and progressing somewhere else, so the right
+ * response is to drop the candidate and look again next tick. Anything else — most importantly
+ * "not in a runnable state", raised when the session settled before its queued run was ever
+ * driven — is terminal for this run and must be recorded, or the row stays queued forever and
+ * the sweep retries it every minute for the life of the deployment.
  */
-function runStatusFor(sessionStatus: SessionRow['status']): RunRow['status'] {
-  switch (sessionStatus) {
-    case 'completed':
-      return 'completed';
-    case 'failed':
-      return 'failed';
-    case 'canceled':
-      return 'canceled';
-    case 'awaiting_input':
-    case 'awaiting_approval':
-    case 'pending':
-    case 'running':
-      return 'waiting';
-  }
-}
+const RACE_MESSAGES =
+  /generation is already running|generation changed during|concurrent run limit/i;
 
 /**
- * Drive one claimed run's session forward, settle the run row, and relay whatever activity
- * landed — regardless of the drive outcome.
+ * Drive one candidate's session forward and relay whatever activity landed.
+ *
+ * @remarks
+ * On the success path `driveSession` claims the generation, settles the run row, and releases
+ * the lease, so this function deliberately does not touch `agent_session_run` — writing a status
+ * there would race the very worker holding the fencing token. The one exception is a terminal
+ * failure raised *before* any claim succeeded, where no token exists and nobody else will ever
+ * settle the row; {@link settleUnclaimableRuns} handles exactly that case.
  */
-async function processRun(run: RunRow): Promise<'succeeded' | 'failed'> {
+async function processCandidate(
+  candidate: Candidate,
+): Promise<'succeeded' | 'failed' | 'unclaimed'> {
   let outcome: 'succeeded' | 'failed';
   try {
-    const settled = await driveSession(run.organizationId, run.sessionId);
-    await db
-      .update(agentSessionRun)
-      .set({ status: runStatusFor(settled.status), completedAt: new Date() })
-      .where(eq(agentSessionRun.id, run.id));
+    await driveSession(candidate.organizationId, candidate.sessionId);
     outcome = 'succeeded';
   } catch (err) {
+    if (err instanceof Error && RACE_MESSAGES.test(err.message)) return 'unclaimed';
     const message = err instanceof Error ? err.message : 'agent session run failed';
-    await db
-      .update(agentSessionRun)
-      .set({ status: 'failed', lastError: message, completedAt: new Date() })
-      .where(eq(agentSessionRun.id, run.id));
+    await settleUnclaimableRuns(candidate.sessionId, message);
     outcome = 'failed';
   }
 
   // Relay whatever landed regardless of the drive outcome: a turn that crashed partway through
   // still very likely wrote thought/response/action rows worth mirroring to Linear, and a
   // completed/waiting/failed turn certainly did. Isolated in its own try/catch so a relay
-  // failure (e.g. a revoked Linear install) never overwrites — or masks — the run status this
-  // function just recorded above; it is simply retried from its own watermark next tick.
+  // failure (e.g. a revoked Linear install) never masks the outcome above; it is simply retried
+  // from its own watermark next tick.
   try {
-    await relayLinearAgentActivity(run.organizationId, run.sessionId);
+    await relayLinearAgentActivity(candidate.organizationId, candidate.sessionId);
   } catch (err) {
     console.warn('[linear-agent-sweep] relay failed for session', {
-      sessionId: run.sessionId,
+      sessionId: candidate.sessionId,
       error: err instanceof Error ? err.message : String(err),
     });
   }
@@ -173,28 +155,41 @@ async function processRun(run: RunRow): Promise<'succeeded' | 'failed'> {
 }
 
 /**
- * Sweep once: claim due `agent_session_run` rows, drive each session, and relay the result.
+ * Sweep once: find due `agent_session_run` rows, drive each session, and relay the result.
  *
  * @param now - The sweep's reference time (read at request time, never module scope).
  */
 export async function sweepLinearAgentSessions(now: Date): Promise<LinearAgentSweepResult> {
-  const candidates = await db
-    .select({ id: agentSessionRun.id })
+  const rows = await db
+    .select({
+      sessionId: agentSessionRun.sessionId,
+      organizationId: agentSessionRun.organizationId,
+    })
     .from(agentSessionRun)
-    .where(claimableCondition(now))
+    .where(runnableCondition(now))
     .orderBy(asc(agentSessionRun.queuedAt))
     .limit(BATCH_LIMIT);
+
+  // One generation per session per tick: the newest runnable row wins, since driving the session
+  // settles whatever generation `claimRunGeneration` picks anyway.
+  const bySession = new Map<string, Candidate>();
+  for (const row of rows) {
+    if (row.organizationId === null || bySession.has(row.sessionId)) continue;
+    bySession.set(row.sessionId, {
+      sessionId: row.sessionId,
+      organizationId: row.organizationId,
+    });
+  }
 
   let claimed = 0;
   let succeeded = 0;
   let failed = 0;
 
-  for (const candidate of candidates) {
-    const run = await claimRun(candidate.id, now);
-    if (!run) continue; // lost the race to a concurrent sweep tick.
+  for (const candidate of bySession.values()) {
+    const outcome = await processCandidate(candidate);
+    if (outcome === 'unclaimed') continue; // lost the race to a concurrent worker.
     claimed += 1;
-
-    if ((await processRun(run)) === 'succeeded') succeeded += 1;
+    if (outcome === 'succeeded') succeeded += 1;
     else failed += 1;
   }
 

@@ -73,7 +73,7 @@ async function propose(
       },
     },
   });
-  const groups = await listProposalGroups(seed.orgId, seed.sessionId);
+  const groups = await listProposalGroups(seed.sessionId);
   return groups[0]!;
 }
 

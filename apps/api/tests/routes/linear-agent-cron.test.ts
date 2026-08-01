@@ -112,7 +112,7 @@ async function seedSessionWithRun(
         sessionId: session.id,
         organizationId: org.id,
         generation: 0,
-        workflowInstanceId: `placeholder:${schema.genId()}`,
+        workflowInstanceId: `${session.id}:0`,
         status: opts.runStatus ?? 'queued',
         queuedAt: opts.queuedAt ?? new Date(),
         leaseExpiresAt: opts.leaseExpiresAt,

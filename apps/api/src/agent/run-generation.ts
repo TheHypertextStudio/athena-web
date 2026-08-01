@@ -62,9 +62,15 @@ function expiresAt(now: Date, leaseDurationMs: number): Date {
  *
  * @remarks
  * A fresh running generation rejects duplicate callers. An expired generation is recovered in
- * place with an incremented attempt and a new fencing token. Otherwise a new deterministic
+ * place with an incremented attempt and a new fencing token. A generation another writer left
+ * `queued` is adopted rather than duplicated. Otherwise a new deterministic
  * `sessionId:generation` record is inserted. Athena owner admission is enforced in the same
  * transaction; registered agents retain compatibility without a per-user ceiling.
+ *
+ * This is the only place a run generation is claimed. Callers that merely know a session needs
+ * work — the Linear cron sweep, the durable runner — hand it here rather than leasing the row
+ * themselves, because two lease-holders on one generation is exactly the race the fencing token
+ * exists to detect.
  */
 export async function claimRunGeneration(
   session: SessionRow,
@@ -136,7 +142,25 @@ export async function claimRunGeneration(
     }
 
     let claimed: typeof agentSessionRun.$inferSelect | undefined;
-    if (latest?.status === 'running') {
+    if (latest?.status === 'queued') {
+      // A generation someone else enqueued but nobody has run yet — the Linear agent webhook
+      // queues one per inbound delivery. Adopt that row instead of inserting a sibling: the
+      // enqueuer already picked the generation number, and leaving its row behind would strand
+      // it as permanently-queued work no sweep could ever settle.
+      [claimed] = await tx
+        .update(agentSessionRun)
+        .set({
+          status: 'running',
+          attempt: latest.attempt + 1,
+          leaseToken: token,
+          leaseExpiresAt: expiresAt(now, leaseDurationMs),
+          startedAt: now,
+          lastError: null,
+        })
+        .where(and(eq(agentSessionRun.id, latest.id), eq(agentSessionRun.status, 'queued')))
+        .returning();
+      if (!claimed) throw new ConflictError('Session generation changed during admission');
+    } else if (latest?.status === 'running') {
       [claimed] = await tx
         .update(agentSessionRun)
         .set({

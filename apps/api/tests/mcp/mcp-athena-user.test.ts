@@ -98,10 +98,9 @@ describe('Athena internal user principal', () => {
     const seed = await seedUserWorkspace();
     const toolbox = await openToolbox({ kind: 'athena', ownerUserId: seed.userId });
     try {
-      const first = await toolbox.callTool('create_task', {
+      const first = await toolbox.callTool('capture', {
         orgId: seed.orgId,
-        teamId: seed.teamId,
-        title: 'First task',
+        text: 'First task',
       });
       expect(first.isError).toBe(false);
 
@@ -114,10 +113,9 @@ describe('Athena internal user principal', () => {
             eq(schema.grant.subjectId, seed.roleId),
           ),
         );
-      const revoked = await toolbox.callTool('create_task', {
+      const revoked = await toolbox.callTool('capture', {
         orgId: seed.orgId,
-        teamId: seed.teamId,
-        title: 'Denied task',
+        text: 'Denied task',
       });
       expect(revoked.isError).toBe(true);
 
@@ -130,10 +128,9 @@ describe('Athena internal user principal', () => {
         capabilities: ['view', 'contribute'],
         effect: 'allow',
       });
-      const restored = await toolbox.callTool('create_task', {
+      const restored = await toolbox.callTool('capture', {
         orgId: seed.orgId,
-        teamId: seed.teamId,
-        title: 'Restored task',
+        text: 'Restored task',
       });
       expect(restored.isError).toBe(false);
 
@@ -141,10 +138,9 @@ describe('Athena internal user principal', () => {
         .update(schema.actor)
         .set({ status: 'suspended' })
         .where(eq(schema.actor.id, seed.actorId));
-      const membershipRevoked = await toolbox.callTool('create_task', {
+      const membershipRevoked = await toolbox.callTool('capture', {
         orgId: seed.orgId,
-        teamId: seed.teamId,
-        title: 'Former member task',
+        text: 'Former member task',
       });
       expect(membershipRevoked.isError).toBe(true);
     } finally {

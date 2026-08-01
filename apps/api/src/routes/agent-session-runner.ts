@@ -13,7 +13,6 @@ import { driveSession } from '../agent/loop';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import { ensureDefaultAgent } from '../lib/default-agent';
 
-import { loadSession } from './agent-session-helpers';
 import type { SessionRow } from './agent-session-helpers';
 
 /**
@@ -219,11 +218,16 @@ export async function runSession(orgId: string, sessionId: string): Promise<Sess
  * is threaded through the signature so every caller can pass what it actually knows about the
  * reply's author without a later signature change.
  *
- * @param orgId - The active organization id.
- * @param sessionId - The org-scoped session to reply to.
+ * The session is read by id alone. Visibility is the caller's job and is already settled by the
+ * time control reaches here — `loadSessionAccess` for the org routes, the external link row for
+ * the webhook door — because a personal Athena session belongs to a user rather than to the
+ * workspace this function was handed, so an org-scoped lookup would reject its own owner.
+ *
+ * @param orgId - The workspace the reply arrived through; attribution only, not a filter.
+ * @param sessionId - The session to reply to, already established as visible to the caller.
  * @param actorId - The reply's human author, or `null` when the caller cannot resolve one.
  * @param text - The reply's freeform text.
- * @throws {NotFoundError} When the session is not found in the org.
+ * @throws {NotFoundError} When no session exists with that id.
  */
 async function applyReplyToSession(
   orgId: string,
@@ -231,7 +235,9 @@ async function applyReplyToSession(
   actorId: string | null,
   text: string,
 ): Promise<void> {
-  const session = await loadSession(orgId, sessionId);
+  const rows = await db.select().from(agentSession).where(eq(agentSession.id, sessionId)).limit(1);
+  const session = rows[0];
+  if (!session) throw new NotFoundError('Session not found');
   // User-owned Athena work is never attributed to a workspace: the schema's attribution
   // check requires exactly one of owner/org, so an `athena` session's rows carry the owner
   // and a null org even when the caller reached this route through one.

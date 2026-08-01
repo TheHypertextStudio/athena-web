@@ -40,7 +40,7 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { z } from 'zod';
 
-import { agentSession, agentSessionRun, db, genId, integration, task } from '@docket/db';
+import { agentSession, agentSessionRun, db, integration, task } from '@docket/db';
 import { parseLinearAgentWebhook, verifyLinearAgentWebhookSignature } from '@docket/integrations';
 import type {
   LinearAgentPort,
@@ -100,14 +100,14 @@ function sessionDeepLink(orgId: string, sessionId: string): string {
  * Queue a fresh `agent_session_run` generation for the not-yet-built cron sweep to pick up.
  *
  * @remarks
- * This webhook handler is the FIRST real writer of `agent_session_run` — no Cloudflare-
- * orchestrated runner exists yet, so `workflowInstanceId` (`NOT NULL`, uniquely indexed) gets a
- * locally-generated placeholder id rather than a real workflow instance id. `generation`
- * advances past whatever generation already exists for the session (0 for a brand-new session),
- * satisfying the `agent_session_run_generation_uq` unique index. The future cron sweep is
- * expected to claim `status: 'queued'` rows (lease them, run `driveSession`/the reply-and-resume
- * contract documented on `recordInboundReply`) and to replace this placeholder workflow id with
- * a real one once that runner exists.
+ * `generation` advances past whatever generation already exists for the session (0 for a
+ * brand-new session), satisfying the `agent_session_run_generation_uq` unique index.
+ * `workflowInstanceId` is derived as `<sessionId>:<generation>` rather than generated, which is
+ * what `agent_session_run_workflow_check` enforces: a run's workflow instance must be a pure
+ * function of the pair it belongs to, so a retry that reuses the pair cannot address a second
+ * workflow. This handler used to write an opaque placeholder here because no durable runner
+ * existed to give the column meaning; {@link file://../agent/run-generation.ts} now does, and
+ * both writers must agree on the derivation or the constraint rejects the row.
  */
 async function queueAgentSessionRun(orgId: string, sessionId: string): Promise<void> {
   const [last] = await db
@@ -116,12 +116,12 @@ async function queueAgentSessionRun(orgId: string, sessionId: string): Promise<v
     .where(eq(agentSessionRun.sessionId, sessionId))
     .orderBy(desc(agentSessionRun.generation))
     .limit(1);
+  const generation = (last?.generation ?? -1) + 1;
   await db.insert(agentSessionRun).values({
     sessionId,
     organizationId: orgId,
-    generation: (last?.generation ?? -1) + 1,
-    // Placeholder until a real Cloudflare-orchestrated runner exists (see remarks above).
-    workflowInstanceId: `placeholder:${genId()}`,
+    generation,
+    workflowInstanceId: `${sessionId}:${String(generation)}`,
     status: 'queued',
   });
 }

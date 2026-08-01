@@ -11,6 +11,7 @@ import type {
   approveAndResume as ApproveAndResume,
   driveSession as DriveSession,
   executeApprovedActions as ExecuteApprovedActions,
+  GenerationEffectKind,
   LoopDeps,
 } from '../../src/agent/loop';
 import type * as ToolboxModule from '../../src/agent/toolbox';
@@ -143,8 +144,8 @@ function scriptedCreate(seed: Seed): LoopDeps {
               {
                 type: 'tool_use',
                 id: 'toolu_personal_create',
-                name: 'create_task',
-                input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Owned by Ada' },
+                name: 'capture',
+                input: { orgId: seed.orgId, text: 'Owned by Ada' },
               },
             ],
           },
@@ -192,13 +193,6 @@ function blockingTurnRuntime(entered: Deferred<number>, release: Promise<void>):
   return { turnRuntime };
 }
 
-type GenerationEffectKind =
-  | 'thought-activity'
-  | 'response-activity'
-  | 'assistant-turn'
-  | 'action-claim'
-  | 'action-result';
-
 interface GenerationRaceDeps extends LoopDeps {
   readonly beforeGenerationEffect: (kind: GenerationEffectKind) => Promise<void>;
 }
@@ -242,7 +236,7 @@ describe('user-owned Athena loop', () => {
           eq(schema.auditEvent.subjectId, seed.sessionId),
         ),
       );
-    const execution = audits.find((entry) => entry.metadata['tool'] === 'create_task');
+    const execution = audits.find((entry) => entry.metadata['tool'] === 'capture');
     expect(execution?.actorId).toBe(seed.ownerActorId);
     expect(execution?.metadata).toMatchObject({
       executionOrigin: 'athena',
@@ -584,12 +578,12 @@ describe('user-owned Athena loop', () => {
         approvalStatus: 'approved',
         body: {
           action: {
-            kind: 'create_task',
+            kind: 'capture',
             summary: 'Create a task',
             mode: 'proposal',
             toolCall: {
               connection: 'docket',
-              tool: 'create_task',
+              tool: 'capture',
               input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Do not persist' },
               toolUseId: 'toolu_fenced_result',
             },
@@ -654,7 +648,7 @@ describe('user-owned Athena loop', () => {
         driveSession(seed.orgId, seed.sessionId, {
           turnRuntime,
           ...rotateLeaseBefore(seed, effectKind, `${activityType}-takeover`),
-        } as GenerationRaceDeps),
+        }),
       ).rejects.toThrow(/lease was lost/i);
 
       const stale = await db
@@ -681,8 +675,8 @@ describe('user-owned Athena loop', () => {
               {
                 type: 'tool_use',
                 id: 'toolu_stale_turn',
-                name: 'create_task',
-                input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Do not persist' },
+                name: 'capture',
+                input: { orgId: seed.orgId, text: 'Do not persist' },
               },
             ],
           },
@@ -695,7 +689,7 @@ describe('user-owned Athena loop', () => {
       driveSession(seed.orgId, seed.sessionId, {
         turnRuntime,
         ...rotateLeaseBefore(seed, 'assistant-turn', 'turn-takeover'),
-      } as GenerationRaceDeps),
+      }),
     ).rejects.toThrow(/lease was lost/i);
 
     const actions = await db

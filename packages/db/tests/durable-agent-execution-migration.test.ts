@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(
-  resolve(import.meta.dirname, '../drizzle/0042_durable_agent_execution.sql'),
+  resolve(import.meta.dirname, '../drizzle/0053_durable_agent_execution.sql'),
   'utf8',
 );
 

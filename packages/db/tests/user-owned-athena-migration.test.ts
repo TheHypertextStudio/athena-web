@@ -5,7 +5,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 const migrationsFolder = resolve(import.meta.dirname, '../drizzle');
-const migrationName = '0041_user_owned_athena.sql';
+const migrationName = '0052_user_owned_athena.sql';
 const clients: PGlite[] = [];
 const allowedDdlVerbs = new Set(['ALTER', 'COMMENT', 'CREATE', 'DROP']);
 

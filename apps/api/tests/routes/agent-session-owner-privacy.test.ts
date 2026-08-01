@@ -248,13 +248,13 @@ describe('owner-private Athena compatibility routes', () => {
       proposalGroupId: 'group_private',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Create a private task',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_private',
-            input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Private' },
+            input: { orgId: seed.orgId, text: 'Private' },
           },
         },
       },
@@ -427,13 +427,13 @@ describe('owner-private Athena compatibility routes', () => {
       approvalStatus: 'proposed',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Create an allowed task',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_allowed',
-            input: { orgId: seed.orgId, teamId: seed.teamId, title: 'Allowed by contribute' },
+            input: { orgId: seed.orgId, text: 'Allowed by contribute' },
           },
         },
       },

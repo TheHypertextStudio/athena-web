@@ -20,7 +20,6 @@ import { z } from 'zod';
 import {
   admitAthenaGeneration,
   asynchronousRunnerEnabled,
-  persistWaitingAthenaWake,
   queueWaitingAthenaWake,
   wakeWaitingAthenaGeneration,
 } from '../agent/async-runner';

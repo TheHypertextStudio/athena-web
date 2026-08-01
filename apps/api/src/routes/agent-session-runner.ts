@@ -12,6 +12,7 @@ import { NotFoundError } from '../error';
 import {
   admitAthenaGeneration,
   asynchronousRunnerEnabled,
+  persistWaitingAthenaWake,
   wakeWaitingAthenaGeneration,
 } from '../agent/async-runner';
 import { driveSession, driveSessionAfterMessage } from '../agent/loop';

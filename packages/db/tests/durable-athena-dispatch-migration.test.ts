@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = readFileSync(
-  resolve(import.meta.dirname, '../drizzle/0045_durable_athena_dispatch.sql'),
+  resolve(import.meta.dirname, '../drizzle/0056_durable_athena_dispatch.sql'),
   'utf8',
 );
 

@@ -546,7 +546,10 @@ describe('personal Athena assignments', () => {
     const scheduledTrigger = (await scheduledTriggerResponse.json()) as { id: string };
     expect(eventTrigger.id).not.toBe(scheduledTrigger.id);
 
-    const firedAt = new Date('2026-07-16T20:00:00.000Z');
+    // Relative to now, not a fixed date: the scheduled trigger's `nextRunAt` is computed from
+    // the real clock when the trigger is created, so a hardcoded instant only sweeps anything
+    // on the day this test was written.
+    const firedAt = new Date(Date.now() + 60_000);
     await handleAthenaAssignmentEvent(
       {
         organizationId: seedData.orgId,

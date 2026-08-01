@@ -25,6 +25,10 @@ export function registerAthenaAssignmentTools(server: McpRegistrar, ctx: McpCont
       title: 'Pause Athena assignment trigger',
       description: 'Pause one trigger belonging to the current user’s personal Athena assignment.',
       inputSchema: triggerIdentity,
+      outputSchema: {
+        id: z.string().describe('The paused trigger.'),
+        enabled: z.literal(false).describe('Always false — pausing is what this tool does.'),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
@@ -68,6 +72,10 @@ export function registerAthenaAssignmentTools(server: McpRegistrar, ctx: McpCont
       title: 'Remove Athena assignment trigger',
       description: 'Remove one trigger belonging to the current user’s personal Athena assignment.',
       inputSchema: triggerIdentity,
+      outputSchema: {
+        id: z.string().describe('The removed trigger.'),
+        removed: z.literal(true).describe('Always true — the row is gone once this returns.'),
+      },
       annotations: {
         readOnlyHint: false,
         destructiveHint: true,

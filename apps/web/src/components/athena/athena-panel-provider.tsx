@@ -324,7 +324,7 @@ export function AthenaPanelProvider({
               session={selected}
               pending={pending}
               onMessage={(body) => {
-                actions.message(body);
+                actions.sendMessage(body);
               }}
               onLifecycle={(action) => {
                 actions.lifecycle(action);

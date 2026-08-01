@@ -372,12 +372,14 @@ export async function resolveOptional(
   value: string | undefined,
   field?: string,
 ): Promise<string | undefined>;
+/** Nullable overload: a caller clearing a nullable reference keeps its `null`. */
 export async function resolveOptional(
   orgId: string,
   kind: DescriptorKind,
   value: string | null | undefined,
   field?: string,
 ): Promise<string | null | undefined>;
+/** Implementation signature covering both overloads above. */
 export async function resolveOptional(
   orgId: string,
   kind: DescriptorKind,

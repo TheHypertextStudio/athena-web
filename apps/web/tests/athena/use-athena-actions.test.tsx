@@ -32,7 +32,7 @@ function transport(): PersonalAthenaTransport {
     detail: vi.fn(),
     activity: vi.fn(),
     create: vi.fn().mockResolvedValue(failed('create provider secret')),
-    message: vi.fn().mockResolvedValue(failed('message provider secret')),
+    sendMessage: vi.fn().mockResolvedValue(failed('message provider secret')),
     decide: vi.fn().mockResolvedValue(failed('decision provider secret')),
     lifecycle: vi.fn().mockResolvedValue(failed('lifecycle provider secret')),
   };
@@ -54,7 +54,7 @@ function Harness({ api }: { readonly api: PersonalAthenaTransport }): JSX.Elemen
       <button
         type="button"
         onClick={() => {
-          actions.message('Steer it');
+          actions.sendMessage('Steer it');
         }}
       >
         Message
@@ -102,7 +102,7 @@ describe('useAthenaActions', () => {
       expect(screen.getByRole('alert')).not.toHaveTextContent('provider secret');
     }
 
-    vi.mocked(api.message).mockResolvedValueOnce(okResponse(detail));
+    vi.mocked(api.sendMessage).mockResolvedValueOnce(okResponse(detail));
     fireEvent.click(screen.getByRole('button', { name: 'Message' }));
     await waitFor(() => {
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();

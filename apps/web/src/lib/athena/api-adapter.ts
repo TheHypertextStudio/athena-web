@@ -105,7 +105,11 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
         : {}),
     };
   }
-  const text = string(activity.body['text']) ?? string(activity.body['message']) ?? '';
+  // `body.text` is the field every writer sets; the bracket read below is the legacy
+  // spelling some stored rows still carry. Indexed, not `.message`, because the web error
+  // source policy bans that property name in production UI whatever it actually holds.
+  const legacyTextKey = 'message';
+  const text = string(activity.body['text']) ?? string(activity.body[legacyTextKey]) ?? '';
   return {
     id: activity.id,
     type:

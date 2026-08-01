@@ -64,6 +64,7 @@ const LENS_OPTIONS = [
   { id: 'cards' as const, label: 'Cards', icon: LayoutGrid },
 ];
 
+/** The workspace's programs, as a list or a card grid, with inline rename and creation. */
 export default function ProgramsListClient(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string }>();

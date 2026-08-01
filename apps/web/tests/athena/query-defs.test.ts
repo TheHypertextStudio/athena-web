@@ -42,7 +42,7 @@ function transport(): PersonalAthenaTransport {
     ),
     detail: vi.fn().mockResolvedValue(okResponse(detail)),
     activity: vi.fn().mockResolvedValue(okResponse({ items: [] })),
-    message: vi.fn(),
+    sendMessage: vi.fn(),
     create: vi.fn(),
     decide: vi.fn(),
     lifecycle: vi.fn(),

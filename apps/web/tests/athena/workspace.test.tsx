@@ -42,7 +42,7 @@ function transport(): PersonalAthenaTransport {
     ),
     detail: vi.fn((id: string) => Promise.resolve(okResponse(id === 'working' ? working : needs))),
     activity: vi.fn().mockResolvedValue(okResponse({ items: [], nextCursor: undefined })),
-    message: vi.fn().mockResolvedValue(okResponse(working)),
+    sendMessage: vi.fn().mockResolvedValue(okResponse(working)),
     create: vi.fn().mockResolvedValue(okResponse(working)),
     decide: vi.fn().mockResolvedValue(okResponse(needs)),
     lifecycle: vi.fn().mockResolvedValue(okResponse(working)),
@@ -361,7 +361,7 @@ describe('AthenaWorkspace', () => {
         context: canceled.context,
       });
     });
-    expect(api.message).not.toHaveBeenCalled();
+    expect(api.sendMessage).not.toHaveBeenCalled();
   });
 
   it('routes an optionless question answer through its owning session and activity', async () => {

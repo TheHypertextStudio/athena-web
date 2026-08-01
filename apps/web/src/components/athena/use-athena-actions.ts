@@ -37,9 +37,12 @@ export function useAthenaActions({
       success(next);
     },
   });
-  const message = useApiMutation<PersonalAthenaSessionDetail, string>({
+  const sendMessage = useApiMutation<PersonalAthenaSessionDetail, string>({
     mutationFn: (body) =>
-      unwrap(() => transport.message(selectedId, { body }), 'Could not steer this Athena work.'),
+      unwrap(
+        () => transport.sendMessage(selectedId, { body }),
+        'Could not steer this Athena work.',
+      ),
     ...common('Could not steer this Athena work.', onSelected),
   });
   const lifecycle = useApiMutation<PersonalAthenaSessionDetail, PersonalAthenaLifecycle>({
@@ -76,8 +79,8 @@ export function useAthenaActions({
 
   return {
     feedback,
-    pending: message.isPending || lifecycle.isPending || decide.isPending || create.isPending,
-    message: message.mutate,
+    pending: sendMessage.isPending || lifecycle.isPending || decide.isPending || create.isPending,
+    sendMessage: sendMessage.mutate,
     lifecycle: lifecycle.mutate,
     decide: decide.mutate,
     create: create.mutate,

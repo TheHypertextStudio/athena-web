@@ -50,7 +50,7 @@ export interface PersonalAthenaTransport {
     readonly prompt: string;
     readonly context?: PersonalAthenaContext;
   }) => Promise<RpcResponse<PersonalAthenaSessionDetail>>;
-  readonly message: (
+  readonly sendMessage: (
     sessionId: string,
     input: { readonly body: string },
   ) => Promise<RpcResponse<PersonalAthenaSessionDetail>>;
@@ -126,7 +126,7 @@ export const personalAthenaTransport: PersonalAthenaTransport = {
       adaptAthenaDetail,
     );
   },
-  message: (sessionId, input) =>
+  sendMessage: (sessionId, input) =>
     adaptedResponse(
       api.v1.me.athena.sessions[':id'].messages.$post({
         param: { id: sessionId },

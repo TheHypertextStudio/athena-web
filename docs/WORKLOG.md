@@ -1,15 +1,53 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-27
+> **Last Updated**: 2026-07-31
 
 ---
 
 ## Active Tasks
 
+### [ATHENA-OWNERSHIP-001] Make Athena user-owned and ambient
+
+- **Status**: COMPLETED
+- **Started**: 2026-07-15
+- **Completed**: 2026-07-31
+- **Priority**: P0
+- **Description**: Replace workspace-owned Athena agents and shared chat with one private,
+  user-owned assistant that executes with exactly the requesting user's current permissions, then
+  rebuild the Athena experience as an ambient dock and expandable personal operating workspace.
+  Built on a six-branch stack between 2026-07-15 and 07-16; integrated into `main` on 07-31.
+- **Shipped**: user-owned execution contracts and durable run generations; a private personal
+  API under `/v1/me/athena`; owner-only MCP connectors and assignment triggers; a new
+  `apps/runner` Cloudflare Worker carrying the durable Queue/Workflow execution path; and the
+  ambient `/athena` workspace with contextual entry points on task, project, and initiative
+  detail.
+- **ROLLOUT IS DESTRUCTIVE**: the executor constraints (`agent_session_executor_shape_check`,
+  the run attribution and workflow checks) cannot be satisfied by rows written under the old
+  workspace-owned model. `scripts/db-reset.ts` exists for this. A local `.data/docket` rebuilt
+  from scratch applies all 57 migrations cleanly; a database carrying real pre-0052 Athena rows
+  must be reset rather than migrated.
+- **Integration notes**: the branch was validated on 2026-07-16 against a tree that `main` then
+  moved 158 commits past, so most of the integration cost was reconciling four contracts rather
+  than resolving text. `agent_session_run` had grown two competing lease-holders and now has
+  one — `claimRunGeneration`, which also adopts a `queued` generation instead of inserting a
+  sibling. The chat reply door went back through `postReplyAndResume` so the webhook and chat
+  paths cannot drift. The retired `create_task` tool surface was re-expressed as `capture`. And
+  the five migrations were renumbered onto the end of main's chain.
+- **Learnings**: renumbering a migration is not just its index. The journal's `when` stamps
+  decide what `drizzle-kit migrate` actually applies, and entries carrying their original
+  authoring time were silently skipped on any database that had already reached 0051 — which no
+  test caught, because every suite migrates a database that starts empty. Only running the real
+  app surfaced it. The snapshot chain has the same property one level up: the head snapshot is
+  what the next `db:generate` diffs against, and the branch's copy described 96 tables where the
+  schema had 104.
+
+---
+
 ### [AUTH-UX-001] Docket keeps demanding sign-in despite a live session on the device
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
+- **Completed**: 2026-07-31
 - **Started**: 2026-07-26
 - **Priority**: P0
 - **Description**: Reported as "Docket keeps showing me the sign in page and asking me to auth even

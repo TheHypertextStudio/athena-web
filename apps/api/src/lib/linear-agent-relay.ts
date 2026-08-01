@@ -81,7 +81,7 @@ type ActivityRow = typeof sessionActivity.$inferSelect;
  * safe rather than a loss).
  */
 function shouldSkipRelay(row: ActivityRow): boolean {
-  if (row.type === 'response' && row.body['author'] === 'user') return true;
+  if (row.type === 'response' && row.body.author === 'user') return true;
   if (row.type === 'action' && row.approvalStatus === 'proposed') return true;
   return false;
 }

@@ -41,7 +41,6 @@ import {
   approveAndResume,
   approveGroupAndResume,
   approveLatestAndResume,
-  driveSessionAfterMessage,
   resumeSessionExecution,
 } from '../agent/loop';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';

@@ -344,13 +344,13 @@ describe('personal Athena routes', () => {
       proposalGroupId: 'group_personal',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Create draft work',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_edit',
-            input: { orgId: seed.orgA, teamId: seed.teamA, title: 'Draft' },
+            input: { orgId: seed.orgA, text: 'Draft' },
           },
         },
       },
@@ -368,7 +368,7 @@ describe('personal Athena routes', () => {
         method: 'PATCH',
         headers: JSON_HEADERS,
         body: JSON.stringify({
-          input: { orgId: seed.orgA, teamId: seed.teamA, title: 'Edited draft' },
+          input: { orgId: seed.orgA, text: 'Edited draft' },
         }),
       },
     );
@@ -407,13 +407,13 @@ describe('personal Athena routes', () => {
       proposalGroupId: 'group_retarget',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Create retargeted work',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_retarget',
-            input: { orgId: seed.orgA, teamId: seed.teamA, title: 'Original target' },
+            input: { orgId: seed.orgA, text: 'Original target' },
           },
         },
       },
@@ -423,7 +423,7 @@ describe('personal Athena routes', () => {
       method: 'PATCH',
       headers: JSON_HEADERS,
       body: JSON.stringify({
-        input: { orgId: seed.orgB, teamId: seed.teamB, title: 'Retargeted to Beta' },
+        input: { orgId: seed.orgB, text: 'Retargeted to Beta' },
       }),
     });
     expect(edited.status).toBe(200);
@@ -468,13 +468,13 @@ describe('personal Athena routes', () => {
       proposalGroupId: 'group_denied_retarget',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Keep original authority',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_denied_retarget',
-            input: { orgId: seed.orgA, teamId: seed.teamA, title: 'Original authority' },
+            input: { orgId: seed.orgA, text: 'Original authority' },
           },
         },
       },
@@ -489,7 +489,7 @@ describe('personal Athena routes', () => {
       {
         method: 'PATCH',
         headers: JSON_HEADERS,
-        body: JSON.stringify({ input: { teamId: seed.teamB, title: 'No workspace' } }),
+        body: JSON.stringify({ input: { text: 'No workspace' } }),
       },
     );
     expect(missingTarget.status).toBe(409);
@@ -499,7 +499,7 @@ describe('personal Athena routes', () => {
         method: 'PATCH',
         headers: JSON_HEADERS,
         body: JSON.stringify({
-          input: { orgId: seed.orgB, teamId: seed.teamB, title: 'Inaccessible target' },
+          input: { orgId: seed.orgB, text: 'Inaccessible target' },
         }),
       },
     );
@@ -512,7 +512,7 @@ describe('personal Athena routes', () => {
     expect(stored).toMatchObject({ organizationId: seed.orgA, approvalStatus: 'proposed' });
     expect(stored?.body.action?.toolCall?.input).toMatchObject({
       orgId: seed.orgA,
-      title: 'Original authority',
+      text: 'Original authority',
     });
   });
 
@@ -534,16 +534,15 @@ describe('personal Athena routes', () => {
           proposalGroupId: groupId,
           body: {
             action: {
-              kind: 'create_task',
+              kind: 'capture',
               summary: `Mixed target ${String(index)}`,
               toolCall: {
                 connection: 'docket',
-                tool: 'create_task',
+                tool: 'capture',
                 toolUseId: `toolu_group_${decision}_${String(index)}`,
                 input: {
                   orgId: target.orgId,
-                  teamId: target.teamId,
-                  title: `Mixed target ${String(index)}`,
+                  text: `Mixed target ${String(index)}`,
                 },
               },
             },
@@ -597,16 +596,15 @@ describe('personal Athena routes', () => {
             proposalGroupId: `group_${String(index)}`,
             body: {
               action: {
-                kind: 'create_task',
+                kind: 'capture',
                 summary: `Session target ${String(index)}`,
                 toolCall: {
                   connection: 'docket',
-                  tool: 'create_task',
+                  tool: 'capture',
                   toolUseId: `toolu_session_${decision}_${String(index)}`,
                   input: {
                     orgId: target.orgId,
-                    teamId: target.teamId,
-                    title: `Session target ${String(index)}`,
+                    text: `Session target ${String(index)}`,
                   },
                 },
               },
@@ -658,16 +656,15 @@ describe('personal Athena routes', () => {
         proposalGroupId: groupId,
         body: {
           action: {
-            kind: 'create_task',
+            kind: 'capture',
             summary: `Audited target ${String(index)}`,
             toolCall: {
               connection: 'docket',
-              tool: 'create_task',
+              tool: 'capture',
               toolUseId: `toolu_audit_${String(index)}`,
               input: {
                 orgId: target.orgId,
-                teamId: target.teamId,
-                title: `Audited target ${String(index)}`,
+                text: `Audited target ${String(index)}`,
               },
             },
           },
@@ -867,16 +864,15 @@ describe('personal Athena routes', () => {
       approvalStatus: 'proposed',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Create personal approved work',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_personal',
             input: {
               orgId: seed.orgB,
-              teamId: seed.teamB,
-              title: 'Personal approved work',
+              text: 'Personal approved work',
             },
           },
         },
@@ -915,16 +911,15 @@ describe('personal Athena routes', () => {
       approvalStatus: 'proposed',
       body: {
         action: {
-          kind: 'create_task',
+          kind: 'capture',
           summary: 'Create cross-workspace work',
           toolCall: {
             connection: 'docket',
-            tool: 'create_task',
+            tool: 'capture',
             toolUseId: 'toolu_session_shortcut',
             input: {
               orgId: seed.orgB,
-              teamId: seed.teamB,
-              title: 'Cross-workspace approved work',
+              text: 'Cross-workspace approved work',
             },
           },
         },
@@ -947,8 +942,7 @@ describe('personal Athena routes', () => {
               name: 'create_task',
               input: {
                 orgId: seed.orgB,
-                teamId: seed.teamB,
-                title: 'Cross-workspace approved work',
+                text: 'Cross-workspace approved work',
               },
             },
           ],
@@ -986,7 +980,7 @@ describe('personal Athena routes', () => {
       type: 'action',
       organizationId: seed.orgB,
       approvalStatus: 'proposed',
-      body: { action: { kind: 'create_task', summary: 'Do not create this task' } },
+      body: { action: { kind: 'capture', summary: 'Do not create this task' } },
     });
 
     const rejected = await appFor(seed.owner).request(`/sessions/${sessionId}/reject`, {

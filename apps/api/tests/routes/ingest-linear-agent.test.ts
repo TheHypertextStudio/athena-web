@@ -521,11 +521,13 @@ describe('POST /internal/ingest/linear-agent', () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ received: true, processed: true, sessionId });
 
+      // Still settled: reopening a session is now an admission-leased transition, and this
+      // webhook holds no lease. The queued run below is the handoff — the sweep reopens it.
       const [session] = await db
         .select()
         .from(schema.agentSession)
         .where(eq(schema.agentSession.id, sessionId));
-      expect(session?.status).toBe('running');
+      expect(session?.status).toBe('completed');
 
       const activities = await db
         .select()
@@ -540,7 +542,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         activities.some(
           (a) =>
             a.body.text === 'One more thing — also check the staging config.' &&
-            a.body['author'] === 'user',
+            a.body.author === 'user',
         ),
       ).toBe(true);
 
@@ -580,7 +582,8 @@ describe('POST /internal/ingest/linear-agent', () => {
         .from(schema.agentSession)
         .where(eq(schema.agentSession.id, sessionId));
       expect(session?.initiatorId).toBe(linearActorId);
-      expect(session?.status).toBe('running');
+      // Unchanged by the reply: the sweep's admission owns the reopen, not this webhook.
+      expect(session?.status).toBe('awaiting_input');
 
       const runs = await db
         .select()

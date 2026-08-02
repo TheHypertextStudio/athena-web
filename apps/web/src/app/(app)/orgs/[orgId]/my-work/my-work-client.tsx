@@ -124,6 +124,9 @@ export default function MyWorkClient(): JSX.Element {
             : 'border-outline-variant flex-1 overflow-hidden rounded-xl border'
         }
       >
+        {/* placeholder: the rows for the selected tab — which items are assigned to, created by or
+            watched by the caller, and each one's title, state and workspace. The tab strip itself
+            carries static labels and renders before the read. */}
         {loading ? (
           <div className="flex flex-col gap-2 p-3" aria-hidden="true">
             <Skeleton className="h-8 w-full" />

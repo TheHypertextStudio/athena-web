@@ -1,3 +1,24 @@
+---
+surfaces: ['today', 'orgs-[orgId]-agents', 'orgs-[orgId]-athena']
+date: 2026-07-06
+verdict: needs-work
+scores:
+  brand: 2
+  typography: 3
+  spacing: 2
+  hierarchy: 1
+  color: 3
+  motion: 2
+  states: 2
+  detail: 2
+gates:
+  a11y: false
+  responsive: true
+  theme-parity: true
+  no-placeholder: false
+  screenshots: true
+---
+
 # Design review: Athena surfaces (Today, Agents, Athena chat) — 2026-07-06
 
 Screenshots: `apps/web/.data/design-review-shots/` — `today-*`, `orgs-orgId-agents-*`, `orgs-orgId-athena-*` (1440×900 + 390×844, light + dark) plus three states captured live against the dev stack: `athena-conversation-1440x900-{light,dark}.png` (a real user message + tool call) and `athena-proposal-card-1440x900-light.png` (the same turn's proposal-group card, scrolled into view). Fresh account, zero prior data — the account's actual first-run state, not staged demo content.

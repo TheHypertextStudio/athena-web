@@ -230,25 +230,32 @@ export function initiativeOptions(initiatives: readonly InitiativeOut[]): readon
  * Build cycle options from the org's cycles.
  *
  * @remarks
- * A cycle's display name falls back to `Cycle <number>` (vocabulary-skinned by the caller via
- * `cycleNoun`) when it carries no explicit name, and its window dates ride along as the muted
- * `hint`.
+ * The option label is the cycle's server-derived `displayName` — the author's name when it has
+ * one, otherwise its window ("Jul 27 – Aug 2"). It used to fall back to `Cycle <number>`, but that
+ * number is the epoch-anchored auto-roll key (1000137) and means nothing to a reader.
+ *
+ * The window rides along as the muted `hint`, but only when it adds information: for an unnamed
+ * cycle the label *is* the window, so repeating it would print the same string twice in one row.
+ *
+ * The vocabulary-skinned cycle noun is deliberately not a parameter: a cycle now names itself, so
+ * there is nothing left for the noun to prefix.
  *
  * @param cycles - The org's cycles.
- * @param cycleNoun - The vocabulary-skinned singular cycle noun (e.g. "Cycle", "Sprint").
  * @param formatWindow - Formats a cycle's start/end into a short window hint.
  * @returns one {@link PickerOption} per cycle, keyed by id.
  */
 export function cycleOptions(
   cycles: readonly CycleOut[],
-  cycleNoun: string,
   formatWindow: (startsAt: string, endsAt: string) => string,
 ): readonly PickerOption[] {
-  return cycles.map((cycle) => ({
-    value: cycle.id,
-    label: cycle.name ?? `${cycleNoun} ${String(cycle.number)}`,
-    hint: formatWindow(cycle.startsAt, cycle.endsAt),
-  }));
+  return cycles.map((cycle) => {
+    const window = formatWindow(cycle.startsAt, cycle.endsAt);
+    return {
+      value: cycle.id,
+      label: cycle.displayName,
+      ...(window === cycle.displayName ? {} : { hint: window }),
+    };
+  });
 }
 
 /** Build label options from the org's labels, each with its color swatch as its glyph. */

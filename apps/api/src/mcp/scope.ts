@@ -15,18 +15,37 @@
  * handler surfaces as a 403 `insufficient_scope` step-up challenge (§2.6) — the exact path
  * by which a read-only agent escalates to write.
  */
+import {
+  type McpCapabilityScope,
+  OAUTH_ISSUABLE_SCOPES,
+  OFFLINE_ACCESS_SCOPE as ISSUABLE_OFFLINE_ACCESS_SCOPE,
+} from '@docket/types';
+
 import { InsufficientScopeError } from '../error';
 
-/** One of the four flat, global Docket MCP scopes (mcp-surface.md §2.2). */
-export type McpScope = 'work:read' | 'work:write' | 'agents:run' | 'connectors:link';
+/**
+ * One of the four flat, global Docket MCP scopes (mcp-surface.md §2.2).
+ *
+ * @remarks
+ * An alias for `@docket/types`' {@link McpCapabilityScope} rather than a second literal union:
+ * the capability set is declared once, next to the issuable set the authorization server is
+ * built from, so the resource server cannot come to enforce a scope the AS cannot issue (or
+ * vice versa). The local name is kept because every call site in this app spells it `McpScope`.
+ */
+export type McpScope = McpCapabilityScope;
 
-/** The complete, ordered Docket MCP capability scope set. */
-export const MCP_SCOPES: readonly McpScope[] = [
-  'work:read',
-  'work:write',
-  'agents:run',
-  'connectors:link',
-] as const;
+/**
+ * The complete, ordered Docket MCP capability scope set.
+ *
+ * @remarks
+ * Derived from `@docket/types`' `OAUTH_ISSUABLE_SCOPES` minus {@link OFFLINE_ACCESS_SCOPE}, so
+ * this is the issuable set with the one non-capability scope removed rather than an independent
+ * list that has to be kept in step by hand. The type predicate is what keeps `offline_access`
+ * out of {@link McpScope} — see {@link OFFLINE_ACCESS_SCOPE} for why that separation matters.
+ */
+export const MCP_SCOPES: readonly McpScope[] = OAUTH_ISSUABLE_SCOPES.filter(
+  (scope): scope is McpScope => scope !== ISSUABLE_OFFLINE_ACCESS_SCOPE,
+);
 
 /**
  * The OAuth scope that makes the Authorization Server mint a refresh token.
@@ -38,7 +57,7 @@ export const MCP_SCOPES: readonly McpScope[] = [
  * *only* when the granted set contains it — a client that consents without it gets a
  * 15-minute connection and no renewal path.
  */
-export const OFFLINE_ACCESS_SCOPE = 'offline_access';
+export const OFFLINE_ACCESS_SCOPE = ISSUABLE_OFFLINE_ACCESS_SCOPE;
 
 /**
  * Everything a connecting client is asked to consent to, in one screen: the four capability
@@ -50,8 +69,11 @@ export const OFFLINE_ACCESS_SCOPE = 'offline_access';
  * same authorization request and must not disagree: a client that intersects them would drop
  * whatever one of them omits, which is precisely how a connector ends up read-only or
  * non-renewable.
+ *
+ * It is now literally the same array `oauthProvider({ scopes })` is configured from and the same
+ * one the consent screen writes copy for, rather than a fifth hand-maintained copy of it.
  */
-export const CONNECT_SCOPES: readonly string[] = [...MCP_SCOPES, OFFLINE_ACCESS_SCOPE] as const;
+export const CONNECT_SCOPES: readonly string[] = OAUTH_ISSUABLE_SCOPES;
 
 /**
  * The scope each MCP tool requires (mcp-surface.md §3.2 quick-reference table).

@@ -139,16 +139,19 @@ export function initiativeOptions(initiatives: readonly InitiativeOut[]): readon
  * Map a team's cycles into entity options.
  *
  * @remarks
- * A cycle's display name is optional; unnamed cycles read as "Cycle N" off the team-local
- * sequence number, matching how they render everywhere else.
+ * Labels are the cycle's server-derived `displayName` — the author's name when it has one,
+ * otherwise its window ("Jul 27 – Aug 2"), matching how a cycle renders everywhere else. The
+ * vocabulary noun is no longer needed here: an unnamed cycle used to read "Cycle 1000137" off the
+ * auto-roll sequence number, which is an internal idempotency key rather than anything a person
+ * would recognize.
+ *
+ * @param cycles - The cycles to offer.
+ * @returns one {@link PickerOption} per cycle, keyed by id.
  */
-export function cycleOptions(
-  cycles: readonly CycleOut[],
-  cycleNoun = 'Cycle',
-): readonly PickerOption[] {
+export function cycleOptions(cycles: readonly CycleOut[]): readonly PickerOption[] {
   return cycles.map((cycle) => ({
     value: cycle.id,
-    label: cycle.name ?? `${cycleNoun} ${String(cycle.number)}`,
+    label: cycle.displayName,
   }));
 }
 

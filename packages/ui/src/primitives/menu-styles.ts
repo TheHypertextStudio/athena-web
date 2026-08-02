@@ -14,10 +14,18 @@
  * are semantic Tailwind utilities that resolve in light and dark automatically):
  *
  * - **`standard`** — the default, surface-based menu. Neutral `surface-container-low`
- *   container with `on-surface` text; selected rows lift into the `tertiary-container`
+ *   container with `on-surface` text; selected rows lift into the `secondary-container`
  *   accent. This is what almost every menu should use.
  * - **`vibrant`** — a high-emphasis, tertiary-based menu (use sparingly). The whole
  *   container is `tertiary-container`; selected rows escalate to solid `tertiary`.
+ *
+ * ## Selection colour
+ *
+ * A checked row uses **`secondary-container`**, the MD3 selection role — the same role the spec
+ * gives a navigation drawer's active indicator and a selected list item. It was `tertiary-container`
+ * (hue 330), which rendered a checked "Dates" or "Default" row as a magenta block: a decorative
+ * accent on a control whose whole job is to be quiet. `secondary-container` sits on the same hue as
+ * the surface ramp, so a checked row reads as *selected* rather than as *coloured*.
  *
  * ## Menu anatomy → color role
  *
@@ -29,11 +37,11 @@
  * | 4 | container           | `surface-container-low`         | `tertiary-container`          |
  * | 5 | badge               | `on-surface-variant`            | `on-tertiary-container`       |
  * | 6 | trailing text       | `on-surface-variant`            | `on-tertiary-container`       |
- * | 7 | selected item bg    | `tertiary-container`            | `tertiary`                    |
- * | 8 | selected content    | `on-tertiary-container`         | `on-tertiary`                 |
+ * | 7 | selected item bg    | `secondary-container`           | `tertiary`                    |
+ * | 8 | selected content    | `on-secondary-container`        | `on-tertiary`                 |
  * | 9 | label text          | `on-surface-variant`            | `on-tertiary-container`       |
  * | 10| supporting text     | `on-surface-variant`            | `on-tertiary-container`       |
- * | 11| selected divider    | `on-tertiary-container`         | `on-tertiary`                 |
+ * | 11| selected divider    | `on-secondary-container`        | `on-tertiary`                 |
  */
 import { cn } from '../lib/utils';
 
@@ -127,7 +135,7 @@ export function menuItemClass(variant: MenuVariant, options?: MenuItemClassOptio
   return cn(
     menuItemBase,
     selected
-      ? 'bg-tertiary-container text-on-tertiary-container focus:bg-tertiary-container focus:text-on-tertiary-container'
+      ? 'bg-secondary-container text-on-secondary-container focus:bg-secondary-container focus:text-on-secondary-container'
       : 'text-on-surface hover:bg-on-surface/8 focus:bg-on-surface/8',
   );
 }

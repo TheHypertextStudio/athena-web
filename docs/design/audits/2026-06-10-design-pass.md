@@ -1,3 +1,45 @@
+---
+surfaces:
+  [
+    'root',
+    'about',
+    'pricing',
+    'sign-in',
+    'sign-up',
+    'onboarding',
+    'today',
+    'inbox',
+    'portfolio',
+    'orgs-[orgId]-my-work',
+    'orgs-[orgId]-triage',
+    'orgs-[orgId]-projects',
+    'orgs-[orgId]-initiatives',
+    'orgs-[orgId]-programs',
+    'orgs-[orgId]-cycles',
+    'orgs-[orgId]-views',
+    'orgs-[orgId]-agents',
+    'settings',
+    'orgs-[orgId]-settings',
+  ]
+date: 2026-06-10
+verdict: needs-work
+scores:
+  brand: 3
+  typography: 3
+  spacing: 3
+  hierarchy: 3
+  color: 3
+  motion: 3
+  states: 3
+  detail: 3
+gates:
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: false
+  screenshots: true
+---
+
 # Design review: full-product pass — 2026-06-10
 
 First rubric-driven audit after the brand/craft overhaul (craft-rubric.md v1.0.0).

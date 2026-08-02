@@ -1,0 +1,412 @@
+/**
+ * `@docket/api` — the task activity log: what gets written, and what reads back.
+ *
+ * @remarks
+ * Mirrors `routes-harness` (pglite + injected actor context). The bar these tests hold is
+ * ENT-29's: after changing status, assignee, priority, project, due date, anticipated start,
+ * estimate and title, the log lists one entry per change with its label, previous value, new
+ * value, actor and exact timestamp — in order, with nothing omitted or coalesced.
+ */
+import { eq } from 'drizzle-orm';
+import { beforeAll, describe, expect, it } from 'vitest';
+
+import type * as DbModule from '@docket/db';
+
+import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
+import type * as TaskAuditModule from '../../src/lib/task-audit';
+import type tasksRouter from '../../src/routes/tasks';
+
+let schema!: typeof DbModule;
+let db!: typeof DbModule.db;
+let tasks!: typeof tasksRouter;
+let taskAudit!: typeof TaskAuditModule;
+
+beforeAll(async () => {
+  schema = await getDb();
+  db = schema.db;
+  tasks = (await import('../../src/routes/tasks')).default;
+  taskAudit = await import('../../src/lib/task-audit');
+});
+
+/** A valid ULID-shaped id that no seeded row uses (passes id validation, 404s on lookup). */
+const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+
+/** One activity entry as the endpoint returns it. */
+interface ActivityEntry {
+  readonly id: string;
+  readonly taskId: string;
+  readonly actorId: string | null;
+  readonly actorName: string | null;
+  readonly type: 'created' | 'updated';
+  readonly change: {
+    readonly field: string;
+    readonly label: string;
+    readonly from: string | null;
+    readonly to: string | null;
+  } | null;
+  readonly createdAt: string;
+}
+
+/** Create a task through the router and return its id. */
+async function createTask(
+  app: ReturnType<typeof appWithActor>,
+  teamId: string,
+  body: Record<string, unknown> = {},
+): Promise<string> {
+  const res = await app.request('/', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title: 'T', teamId, ...body }),
+  });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { id: string }).id;
+}
+
+/** PATCH a task and assert the mutation itself succeeded. */
+async function patch(
+  app: ReturnType<typeof appWithActor>,
+  id: string,
+  body: Record<string, unknown>,
+): Promise<void> {
+  const res = await app.request(`/${id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  expect(res.status).toBe(200);
+}
+
+/** Read a task's activity log. */
+async function activity(
+  app: ReturnType<typeof appWithActor>,
+  id: string,
+): Promise<readonly ActivityEntry[]> {
+  const res = await app.request(`/${id}/activity`, { method: 'GET' });
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { items: ActivityEntry[] }).items;
+}
+
+describe('task activity log — what is written', () => {
+  it('records a creation entry so a brand-new task already has a history', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+
+    const items = await activity(app, id);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.type).toBe('created');
+    // The creation entry records the task coming into existence, not a field moving.
+    expect(items[0]?.change).toBeNull();
+    expect(items[0]?.actorId).toBe(humanActorId);
+    expect(items[0]?.actorName).toBe('Ada');
+    expect(Number.isNaN(Date.parse(items[0]?.createdAt ?? ''))).toBe(false);
+  });
+
+  it('records ONE entry per changed field for a multi-field patch, in field order', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { title: 'Draft', priority: 'low' });
+
+    await patch(app, id, {
+      title: 'Ship it',
+      priority: 'high',
+      dueDate: '2026-09-01',
+    });
+
+    const changes = (await activity(app, id))
+      .filter((entry) => entry.type === 'updated')
+      .map((entry) => entry.change);
+    // Nothing coalesced: three fields moved, three entries, each with its own before/after.
+    expect(changes).toEqual([
+      { field: 'title', label: 'Title', from: 'Draft', to: 'Ship it' },
+      { field: 'priority', label: 'Priority', from: 'Low', to: 'High' },
+      { field: 'dueDate', label: 'Due date', from: null, to: '2026-09-01' },
+    ]);
+  });
+
+  it('records every one of the eight fields ENT-29 names, in the order applied', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute', 'assign'], humanActorId);
+    const assignee = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Grace' })
+        .returning({ id: schema.actor.id }),
+    );
+    const proj = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Website redesign' })
+        .returning({ id: schema.project.id }),
+    );
+    const id = await createTask(app, teamId, { title: 'Original' });
+
+    // One PATCH per field, exactly as the acceptance criterion applies them.
+    await patch(app, id, { state: 'in_progress' });
+    await patch(app, id, { assigneeId: assignee.id });
+    await patch(app, id, { priority: 'urgent' });
+    await patch(app, id, { projectId: proj.id });
+    await patch(app, id, { dueDate: '2026-09-30' });
+    await patch(app, id, { startDate: '2026-09-10' });
+    await patch(app, id, { estimateMinutes: 90 });
+    await patch(app, id, { title: 'Renamed' });
+
+    const items = await activity(app, id);
+    expect(items[0]?.type).toBe('created');
+    expect(items.slice(1).map((entry) => entry.change)).toEqual([
+      { field: 'state', label: 'Status', from: 'Backlog', to: 'In progress' },
+      { field: 'assigneeId', label: 'Assignee', from: null, to: 'Grace' },
+      { field: 'priority', label: 'Priority', from: 'None', to: 'Urgent' },
+      { field: 'projectId', label: 'Project', from: null, to: 'Website redesign' },
+      { field: 'dueDate', label: 'Due date', from: null, to: '2026-09-30' },
+      { field: 'startDate', label: 'Anticipated start', from: null, to: '2026-09-10' },
+      { field: 'estimateMinutes', label: 'Time estimate', from: null, to: '90' },
+      { field: 'title', label: 'Title', from: 'Original', to: 'Renamed' },
+    ]);
+    // Every entry carries an actor and an exact timestamp, and the log never goes backwards.
+    for (const entry of items) {
+      expect(entry.actorId).toBe(humanActorId);
+      expect(entry.actorName).toBe('Ada');
+      expect(entry.taskId).toBe(id);
+    }
+    const keys = items.map((entry) => `${entry.createdAt}|${entry.id}`);
+    expect([...keys].sort()).toEqual(keys);
+  });
+
+  it('resolves reference ids to the names they had when the change was made', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const prog = one(
+      await db
+        .insert(schema.program)
+        .values({ organizationId: orgId, name: 'Platform' })
+        .returning({ id: schema.program.id }),
+    );
+    const cyc = one(
+      await db
+        .insert(schema.cycle)
+        .values({
+          organizationId: orgId,
+          teamId,
+          number: 7,
+          name: null,
+          startsAt: new Date('2026-07-27T00:00:00.000Z'),
+          endsAt: new Date('2026-08-02T00:00:00.000Z'),
+        })
+        .returning({ id: schema.cycle.id }),
+    );
+    const id = await createTask(app, teamId);
+
+    await patch(app, id, { programId: prog.id, cycleId: cyc.id });
+
+    const changes = (await activity(app, id))
+      .filter((entry) => entry.type === 'updated')
+      .map((entry) => entry.change);
+    expect(changes).toEqual([
+      { field: 'programId', label: 'Program', from: null, to: 'Platform' },
+      // An unnamed cycle is named by its window — its stored `number` means nothing to a reader.
+      { field: 'cycleId', label: 'Cycle', from: null, to: 'Jul 27 – Aug 2' },
+    ]);
+
+    // History is immutable: renaming the program afterwards must NOT rewrite what the log says
+    // happened. This is the whole reason values are resolved to display strings at write time.
+    await db
+      .update(schema.program)
+      .set({ name: 'Platform (retired)' })
+      .where(eq(schema.program.id, prog.id));
+    const reread = (await activity(app, id)).find((entry) => entry.change?.field === 'programId');
+    expect(reread?.change?.to).toBe('Platform');
+  });
+
+  it('writes nothing for an empty patch or a field re-sent at its current value', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { title: 'Steady', priority: 'medium' });
+
+    await patch(app, id, {});
+    await patch(app, id, { title: 'Steady', priority: 'medium' });
+    // A due date re-sent at a different clock time on the same DAY is not a change either.
+    await patch(app, id, { dueDate: '2026-09-01' });
+    await patch(app, id, { dueDate: '2026-09-01' });
+
+    const changes = (await activity(app, id)).filter((entry) => entry.type === 'updated');
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.change).toEqual({
+      field: 'dueDate',
+      label: 'Due date',
+      from: null,
+      to: '2026-09-01',
+    });
+  });
+
+  it('records a status change made through the dedicated state route (board drags, automation)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+
+    const res = await app.request(`/${id}/state`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state: 'done' }),
+    });
+    expect(res.status).toBe(200);
+    // Re-setting the same state is a no-op transition and must not add a second entry.
+    await app.request(`/${id}/state`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ state: 'done' }),
+    });
+
+    const changes = (await activity(app, id))
+      .filter((entry) => entry.type === 'updated')
+      .map((entry) => entry.change);
+    expect(changes).toEqual([{ field: 'state', label: 'Status', from: 'Backlog', to: 'Done' }]);
+  });
+
+  it('records a cleared field as a clear, never as the string "null"', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { dueDate: '2026-09-01' });
+
+    await patch(app, id, { dueDate: null });
+
+    const changes = (await activity(app, id))
+      .filter((entry) => entry.type === 'updated')
+      .map((entry) => entry.change);
+    expect(changes).toEqual([
+      { field: 'dueDate', label: 'Due date', from: '2026-09-01', to: null },
+    ]);
+  });
+});
+
+describe('task activity log — reading it back', () => {
+  it("404s on another org's task rather than revealing that it exists", async () => {
+    const a = await seedBaseOrg(db, schema);
+    const b = await seedBaseOrg(db, schema);
+    const owner = appWithActor(tasks, a.orgId, ['contribute'], a.humanActorId);
+    const outsider = appWithActor(tasks, b.orgId, ['contribute'], b.humanActorId);
+    const id = await createTask(owner, a.teamId);
+
+    expect((await outsider.request(`/${id}/activity`, { method: 'GET' })).status).toBe(404);
+    expect((await owner.request(`/${MISSING_ULID}/activity`, { method: 'GET' })).status).toBe(404);
+  });
+
+  it('skips a ledger row whose metadata is not a change shape instead of failing the read', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+
+    // The ledger is shared: a task-subject row written by another feature (here, an `archived`
+    // event and an `updated` row with foreign metadata) must not blank the task's history.
+    await db.insert(schema.auditEvent).values([
+      {
+        organizationId: orgId,
+        subjectType: 'task',
+        subjectId: id,
+        type: 'archived',
+        metadata: { note: 'from another writer' },
+      },
+      {
+        organizationId: orgId,
+        subjectType: 'task',
+        subjectId: id,
+        type: 'updated',
+        metadata: { unrelated: true },
+      },
+    ]);
+
+    const items = await activity(app, id);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.type).toBe('created');
+  });
+
+  it('reports a system change with no actor rather than inventing one', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+
+    await taskAudit.recordTaskChanges({
+      organizationId: orgId,
+      taskId: id,
+      actorId: null,
+      changes: [{ field: 'state', label: 'Status', from: 'Backlog', to: 'Done' }],
+    });
+
+    const entry = (await activity(app, id)).find((item) => item.type === 'updated');
+    expect(entry?.actorId).toBeNull();
+    expect(entry?.actorName).toBeNull();
+  });
+});
+
+describe('task activity log — the ledger never breaks the mutation', () => {
+  it('still applies (and returns) a patch when the ledger write fails', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const seeder = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(seeder, teamId, { title: 'Before' });
+
+    // `actor_test` is not a real actor row, so every ledger insert this app makes violates the
+    // `audit_event.actor_id` foreign key. The mutation must still succeed.
+    const brokenLedger = appWithActor(tasks, orgId, ['contribute'], 'actor_test');
+    const res = await brokenLedger.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'After' }),
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { title: string }).title).toBe('After');
+
+    // The change is simply absent from history — never a 500, never a rolled-back edit.
+    const changes = (await activity(seeder, id)).filter((entry) => entry.type === 'updated');
+    expect(changes).toHaveLength(0);
+  });
+
+  it('swallows a failed creation-entry write', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    // A non-existent actor violates the ledger's actor foreign key; creating a task must not care.
+    await expect(
+      taskAudit.recordTaskCreated({
+        organizationId: orgId,
+        taskId: MISSING_ULID,
+        actorId: 'actor_test',
+      }),
+    ).resolves.toBeUndefined();
+  });
+});
+
+describe('diffTaskFields', () => {
+  it('ignores untracked columns and same-day timestamp drift', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { dueDate: '2026-09-01' });
+    const before = one(await db.select().from(schema.task).where(eq(schema.task.id, id)).limit(1));
+
+    // `updatedAt` and `completedAt` are not tracked fields; the due date moved only within a day.
+    const after = {
+      ...before,
+      updatedAt: new Date(),
+      completedAt: new Date(),
+      dueDate: new Date('2026-09-01T22:45:00.000Z'),
+    };
+    expect(taskAudit.diffTaskFields(before, after)).toEqual([]);
+
+    // Crossing to the next day IS a change, and the raw values are handed on untouched.
+    const moved = { ...before, dueDate: new Date('2026-09-02T00:30:00.000Z') };
+    expect(taskAudit.diffTaskFields(before, moved)).toEqual([
+      {
+        field: 'dueDate',
+        label: 'Due date',
+        fromRaw: before.dueDate,
+        toRaw: moved.dueDate,
+      },
+    ]);
+  });
+
+  it('falls back to an application-owned label when a reference can no longer be read', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const changes = await taskAudit.resolveTaskChangeLabels(orgId, [
+      { field: 'projectId', label: 'Project', fromRaw: null, toRaw: MISSING_ULID },
+    ]);
+    // Never the raw id, and never a silent "cleared".
+    expect(changes).toEqual([{ field: 'projectId', label: 'Project', from: null, to: 'Unknown' }]);
+  });
+});

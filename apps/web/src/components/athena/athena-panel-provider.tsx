@@ -262,6 +262,9 @@ export function AthenaPanelProvider({
             </p>
           ) : null}
 
+          {/* placeholder: Athena's work queue and the selected session's detail — which sessions
+              are open, what each is doing, and the activity behind the one being viewed. The panel
+              chrome, title and actions around it render from static copy. */}
           {queue.isPending || (detailId && detail.isPending) ? (
             <div className="flex flex-1 flex-col gap-3 p-4" aria-label="Loading Athena work">
               <Skeleton className="h-20 w-full" />

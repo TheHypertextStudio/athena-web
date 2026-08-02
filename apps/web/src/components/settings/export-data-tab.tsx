@@ -82,6 +82,9 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
 
   const focusedPending = Boolean(focusedExportId) && focusedExportQ.isPending;
   if (optionsQ.isPending || exportsQ.isPending || focusedPending) {
+    // placeholder: which data categories and workspaces this account can export, plus its export
+    // history and the status of any export already running. The whole panel is one form built from
+    // those options, so there is no static subset of it that could be shown first.
     return <Skeleton className="h-96 w-full rounded-lg" />;
   }
   if (optionsQ.isError || exportsQ.isError) {

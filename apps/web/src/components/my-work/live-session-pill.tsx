@@ -122,6 +122,9 @@ export function LiveSessionPill({ status, href, className }: LiveSessionPillProp
         className,
       )}
     >
+      {/* placeholder: not a loading stand-in — the pulse reports a session that is genuinely
+          running right now, and the label beside it is already resolved. Inventoried only because
+          the pulse utility is what the inventory scan matches on. */}
       <Glyph className={cn('h-3 w-3', pulse && 'animate-pulse')} />
       <span>{label}</span>
     </Link>

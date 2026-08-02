@@ -221,6 +221,9 @@ export default function ProjectDetailPage(): JSX.Element {
   );
 
   if (detailQ.isPending) {
+    // placeholder: the project's own record — its breadcrumb trail, name, summary, and the
+    // milestone-grouped tasks, updates and resources beneath it (including the per-tab counts).
+    // The route carries only a project id, so none of this has a value to render before the read.
     return (
       <main className="mx-auto flex w-full max-w-7xl flex-col gap-5 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-5 w-72" />

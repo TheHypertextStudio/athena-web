@@ -23,6 +23,7 @@ import {
   verifyAccessToken,
 } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
+import { seedConsentedClient, seedSkipConsentClient } from '../support/oauth-grant';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -311,7 +312,14 @@ describe('resolveMcpContext — Bearer (OAuth RS) path', () => {
   it('resolves an audience-bound token to its exact verified scope set', async () => {
     const s = await seedOrg([]);
     await db.update(schema.user).set({ name: 'Grace' }).where(eq(schema.user.id, s.userId));
-    verifyAccessToken.mockResolvedValueOnce({ sub: s.userId, scope: 'work:read work:write' });
+    // `azp` + a live consent row: the resource server re-checks the grant on every call, so a
+    // token that names no client, or one the person has revoked, is refused before scopes matter.
+    const { clientId } = await seedConsentedClient(schema, s.userId, ['work:read', 'work:write']);
+    verifyAccessToken.mockResolvedValueOnce({
+      sub: s.userId,
+      azp: clientId,
+      scope: 'work:read work:write',
+    });
     const ctx = await authMod.resolveMcpContext(bearer('tok-1'));
     expect(ctx.principal).toEqual({
       kind: 'user',
@@ -338,11 +346,39 @@ describe('resolveMcpContext — Bearer (OAuth RS) path', () => {
   });
 
   it('defaults name/email to null/empty when the token subject has no user row', async () => {
-    verifyAccessToken.mockResolvedValueOnce({ sub: 'no-such-user', scope: 'work:read' });
+    // A `skip_consent` client, because a consent row cannot exist for a subject that has no `user`
+    // row to hang off — and that branch is exactly how a first-party client stays authorized.
+    const { clientId } = await seedSkipConsentClient(schema);
+    verifyAccessToken.mockResolvedValueOnce({
+      sub: 'no-such-user',
+      azp: clientId,
+      scope: 'work:read',
+    });
     const ctx = await authMod.resolveMcpContext(bearer('tok-2'));
     expect(ctx.principal.kind === 'user' ? ctx.principal.userName : 'x').toBeNull();
     expect(ctx.principal.kind === 'user' ? ctx.principal.userEmail : 'x').toBe('');
     expect(ctx.scopes).toEqual(['work:read']);
+  });
+
+  it('rejects a verified token that names no OAuth client → 401', async () => {
+    const s = await seedOrg([]);
+    // No `azp` means no grant can be looked up, so revocation could never be honoured for it.
+    verifyAccessToken.mockResolvedValueOnce({ sub: s.userId, scope: 'work:read' });
+    await expect(authMod.resolveMcpContext(bearer('no-azp'))).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+
+  it('rejects a verified token whose client the caller never authorized → 401', async () => {
+    const s = await seedOrg([]);
+    const other = await seedOrg([]);
+    // The client is registered and enabled, but consented to by somebody else — one person's
+    // grant must never authorize another person's token.
+    const { clientId } = await seedConsentedClient(schema, other.userId, ['work:read']);
+    verifyAccessToken.mockResolvedValueOnce({ sub: s.userId, azp: clientId, scope: 'work:read' });
+    await expect(authMod.resolveMcpContext(bearer('not-mine'))).rejects.toMatchObject({
+      status: 401,
+    });
   });
 });
 
@@ -475,7 +511,8 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
   it('returns a 403 insufficient_scope step-up for a tools/call the token cannot satisfy', async () => {
     const s = await seedOrg(['contribute']);
     // A real, audience-bound read-only token (Bearer path) → the handler resolves scopes.
-    verifyAccessToken.mockResolvedValue({ sub: s.userId, scope: 'work:read' });
+    const { clientId } = await seedConsentedClient(schema, s.userId, ['work:read']);
+    verifyAccessToken.mockResolvedValue({ sub: s.userId, azp: clientId, scope: 'work:read' });
     const body = JSON.stringify({
       jsonrpc: '2.0',
       id: 2,
@@ -503,7 +540,12 @@ describe('/mcp handler — 401 challenge + 403 step-up', () => {
 
   it('does not step-up a tools/call the token can satisfy (proceeds to the transport)', async () => {
     const s = await seedOrg(['contribute']);
-    verifyAccessToken.mockResolvedValue({ sub: s.userId, scope: 'work:read work:write' });
+    const { clientId } = await seedConsentedClient(schema, s.userId, ['work:read', 'work:write']);
+    verifyAccessToken.mockResolvedValue({
+      sub: s.userId,
+      azp: clientId,
+      scope: 'work:read work:write',
+    });
     const body = JSON.stringify({
       jsonrpc: '2.0',
       id: 3,

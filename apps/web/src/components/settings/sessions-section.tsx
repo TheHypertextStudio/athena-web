@@ -89,6 +89,8 @@ export function SessionsSection(): JSX.Element {
   });
 
   if (listQ.isPending) {
+    // placeholder: the account's active sessions — which devices are signed in, from where, and
+    // when they were last seen. Nothing about another device's session is knowable locally.
     return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (listQ.isError) {

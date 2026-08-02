@@ -182,6 +182,8 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
           Workspace settings are temporarily unavailable. We&apos;ll keep checking automatically.
         </p>
       ) : workspaceQ.isPending || draft === null ? (
+        /* placeholder: this workspace's saved name, slug and work-vocabulary overrides — the values
+           the form's fields are *for*. The section heading and description render above it. */
         <Skeleton className="h-[34rem] max-w-2xl rounded-lg" />
       ) : (
         <section className="border-outline-variant flex max-w-2xl flex-col gap-6 rounded-lg border p-5">

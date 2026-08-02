@@ -126,15 +126,14 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     };
   }, [open, teamId, options]);
 
-  // Cycles are org-wide; scope the picker to the chosen team's cadence.
+  // Cycles are org-wide; scope the picker to the chosen team's cadence. The label is the cycle's
+  // server-derived `displayName` (its author name, else its window) — never the stored `number`,
+  // which is the auto-roll idempotency key and reads as "Cycle 1000137".
   const cycleOptionsForTeam = useMemo(() => {
     return options.cycles
       .filter((cycle) => cycle.teamId === teamId)
-      .map((cycle) => ({
-        value: cycle.id,
-        label: cycle.name ?? `${cycleNoun} ${String(cycle.number)}`,
-      }));
-  }, [options.cycles, teamId, cycleNoun]);
+      .map((cycle) => ({ value: cycle.id, label: cycle.displayName }));
+  }, [options.cycles, teamId]);
 
   const statusOptions = useMemo(() => workflowStateOptions(workflowStates), [workflowStates]);
 

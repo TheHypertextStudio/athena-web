@@ -68,8 +68,10 @@ export async function resolveTabTitle(ref: TabRef): Promise<string> {
         const res = await api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} });
         if (res.ok) {
           const { items } = await res.json();
+          // `displayName` is the author's name when set, else the cycle's window — never the
+          // stored `number`, which is the auto-roll idempotency key and read as "Cycle 1000137".
           const found = items.find((c) => c.id === id);
-          if (found) return found.name ?? `Cycle ${String(found.number)}`;
+          if (found) return found.displayName;
         }
         break;
       }

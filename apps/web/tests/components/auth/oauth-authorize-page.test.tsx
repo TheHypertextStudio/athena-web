@@ -1,13 +1,24 @@
 /**
- * Regression test: an unauthenticated visitor to the OAuth consent screen must be sent to
- * sign-in with the consent params preserved via `?callbackURL=`, so a successful sign-in returns
- * them to this exact screen instead of falling back to the home destination and silently
- * abandoning the third-party app's authorization request.
+ * Behaviour contract for the OAuth consent screen.
+ *
+ * @remarks
+ * Started as one regression test — an unauthenticated visitor must be sent to sign-in with the
+ * consent params preserved via `?callbackURL=`, so a successful sign-in returns them to this exact
+ * screen instead of falling back to the home destination and silently abandoning the third-party
+ * app's authorization request.
+ *
+ * It now also covers what the screen SAYS, because this is the surface an outside developer relies
+ * on to tell a person what their app will do with that person's work: every requested permission
+ * renders as a plain-English label with a read/write qualifier and never as a raw identifier, the
+ * two buttons explain themselves, and the request paints before the session read returns.
  */
 import '@testing-library/jest-dom/vitest';
 
+import { OAUTH_ISSUABLE_SCOPES } from '@docket/types';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { OAUTH_SCOPE_COPY } from '@/lib/oauth-scope-copy';
 
 /**
  * The mock mirrors Better Auth's real `useSession` shape, `error` included. It is not decoration:
@@ -162,7 +173,12 @@ describe('OAuthAuthorizePage', () => {
       expect(screen.getByText('callback.example')).toBeInTheDocument();
     });
 
-    it('renders an unrecognized scope rather than dropping it', async () => {
+    it('shows an unrecognized permission in plain English, never its raw identifier', async () => {
+      // The intent of the original test — an unrecognized permission must be SHOWN, because
+      // silently hiding something the app asked for understates the grant — is unchanged. What
+      // changed is the expectation: the row used to render the identifier itself, so a request
+      // for `some:future` put a machine string in front of someone deciding whether to trust an
+      // app. It now resolves through `describeScope`, which has no branch that can echo the input.
       window.history.replaceState(
         null,
         '',
@@ -176,8 +192,95 @@ describe('OAuthAuthorizePage', () => {
 
       render(<OAuthAuthorizePage />);
 
-      // Silently hiding a permission the client asked for would understate the grant.
-      expect(await screen.findByText('some:future')).toBeInTheDocument();
+      expect(await screen.findByText('A permission Docket does not offer')).toBeInTheDocument();
+      // The claim the row makes is true because `OAUTH_ISSUABLE_SCOPES` is the authorization
+      // server's hard ceiling: a permission outside it cannot be granted at all.
+      expect(screen.getByText('Grants nothing')).toBeInTheDocument();
+      expect(screen.queryByText('some:future')).toBeNull();
+    });
+
+    it('renders a readable label for every permission the server can issue', async () => {
+      // The consent screen's half of the SCR-12 enumeration: with all five requested at once,
+      // each one resolves to a label and a read/write qualifier, and none renders as a raw
+      // identifier. `oauth-scope-copy.test.ts` enumerates the copy map itself.
+      window.history.replaceState(
+        null,
+        '',
+        `/oauth/authorize?sig=abc123&client_id=https%3A%2F%2Fclient.example&scope=${encodeURIComponent(
+          OAUTH_ISSUABLE_SCOPES.join(' '),
+        )}`,
+      );
+      useSession.mockReturnValue({
+        data: { user: { email: 'ada@example.com' } },
+        isPending: false,
+        error: null,
+      });
+
+      render(<OAuthAuthorizePage />);
+
+      await screen.findByRole('button', { name: 'Authorize' });
+      for (const scope of OAUTH_ISSUABLE_SCOPES) {
+        expect(screen.getByText(OAUTH_SCOPE_COPY[scope].label)).toBeInTheDocument();
+        expect(screen.queryByText(scope)).toBeNull();
+      }
+      // The qualifier is unexpanded on every row: whether an app is about to read your work or
+      // change it must not be hidden behind a disclosure the skimming reader never opens.
+      expect(screen.getAllByText('Can make changes')).toHaveLength(3);
+      expect(screen.getByText('View only')).toBeInTheDocument();
+      expect(screen.getByText('Ongoing access')).toBeInTheDocument();
+    });
+
+    it('says in plain words what Authorize and Deny each do, naming the app', async () => {
+      metadataGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({ name: 'Client Example', icon: null }),
+      });
+
+      renderSignedRequest();
+
+      const explanation = await screen.findByText(/Authorize lets Client Example/);
+      expect(explanation).toBeInTheDocument();
+      // Both halves of the decision, and where Deny sends you — the return host the screen
+      // already discloses, not a vague "you will be returned".
+      expect(explanation.textContent).toContain('until you disconnect it');
+      expect(explanation.textContent).toContain(
+        'Deny sends you back to callback.example without giving it anything.',
+      );
+    });
+
+    it('paints the request before the session read answers', async () => {
+      // SCR-03's principle applied here: who is asking and what they are asking for come from the
+      // URL, so both are known on the first paint. This screen used to throw all of it away for a
+      // bare "Loading…" until `/get-session` returned. Only the account row and the two decision
+      // buttons may wait on the session.
+      window.history.replaceState(null, '', `/oauth/authorize${SIGNED_QUERY}`);
+      useSession.mockReturnValue({ data: null, isPending: true, error: null });
+
+      render(<OAuthAuthorizePage />);
+
+      expect(
+        screen.getByRole('heading', { name: /wants access to your Docket account/ }),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Read your work')).toBeInTheDocument();
+      expect(screen.getByText('Stay connected')).toBeInTheDocument();
+      expect(screen.getByText('callback.example')).toBeInTheDocument();
+
+      // …and the two things that genuinely need the session are held back rather than guessed at.
+      expect(screen.getByText('Checking your account…')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Authorize' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Deny' })).toBeDisabled();
+    });
+
+    it('keeps the decision reachable when the session read fails outright', async () => {
+      // `unreachable` shares the pending treatment: the read is still retrying, and abandoning a
+      // consent grant over one failed request is exactly the wrong response.
+      window.history.replaceState(null, '', `/oauth/authorize${SIGNED_QUERY}`);
+      useSession.mockReturnValue({ data: null, isPending: false, error: { status: 500 } });
+
+      render(<OAuthAuthorizePage />);
+
+      expect(screen.getByText('Read your work')).toBeInTheDocument();
+      expect(replace).not.toHaveBeenCalled();
     });
 
     it('withholds the verified-domain claim when the server returned no metadata', async () => {

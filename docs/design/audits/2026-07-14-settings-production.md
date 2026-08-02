@@ -1,3 +1,43 @@
+---
+surfaces:
+  [
+    'settings',
+    'settings-profile',
+    'settings-athena',
+    'settings-security',
+    'settings-notifications',
+    'settings-calendar',
+    'settings-connections',
+    'settings-connections-google-calendar',
+    'settings-connected-apps',
+    'settings-data-privacy',
+    'orgs-[orgId]-settings',
+    'orgs-[orgId]-settings-general',
+    'orgs-[orgId]-settings-work-structure',
+    'orgs-[orgId]-settings-automations',
+    'orgs-[orgId]-settings-export',
+    'orgs-[orgId]-settings-danger',
+    'orgs-[orgId]-settings-members',
+  ]
+date: 2026-07-14
+verdict: ship
+scores:
+  brand: 3
+  typography: 3
+  spacing: 3
+  hierarchy: 3
+  color: 3
+  motion: 3
+  states: 3
+  detail: 3
+gates:
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: true
+  screenshots: true
+---
+
 # Design review: production Settings — 2026-07-14
 
 Screenshots: `/Users/williecubed/.codex/visualizations/2026/07/14/019f613d-41a9-71e0-aba7-239c645a3889/settings-production/` — 18 routes, each captured at 1440×900 and 390×844 in light and dark (72 screenshots total). The capture harness also checked every route at 320px and waited for fonts, queries, and skeletons to settle before capture.

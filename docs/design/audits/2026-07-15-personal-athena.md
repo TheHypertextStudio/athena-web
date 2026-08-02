@@ -1,3 +1,24 @@
+---
+surfaces: ['athena']
+date: 2026-07-15
+verdict: ship
+scores:
+  brand: 3
+  typography: 3
+  spacing: 3
+  hierarchy: 4
+  color: 3
+  motion: 3
+  states: 3
+  detail: 3
+gates:
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: true
+  screenshots: true
+---
+
 # Design review: personal Athena — 2026-07-15
 
 Screenshots: `/Users/williecubed/Projects/Hypertext Studio/athena-service/.claude/worktrees/athena-experience/apps/web/test-results/athena-personal-personal-A-6daec-rects-and-responsive-themes-chromium/` — authenticated `/athena` at a 1440×900 desktop viewport and 390×844 mobile viewport in light and dark. The 2026-07-16 spec-review rerun passes 1/1, regenerates all four files after each theme transition settles, checks the final surface at 320px, and adds `athena-mobile-below-fold.png` with the tool outcome, open technical disclosure, and composer visible together.

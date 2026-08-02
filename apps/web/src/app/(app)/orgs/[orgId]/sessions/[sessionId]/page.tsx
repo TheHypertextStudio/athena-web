@@ -45,6 +45,9 @@ export default function SessionViewPage(): JSX.Element {
   } = useSessionDetail(orgId, sessionId);
 
   if (loading) {
+    // placeholder: the agent session's own record — which agent ran, against which work item, the
+    // transcript of what it did, and the proposals awaiting a decision. The route carries only a
+    // session id, so nothing on this screen has a value before the read resolves.
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-5 w-48" />

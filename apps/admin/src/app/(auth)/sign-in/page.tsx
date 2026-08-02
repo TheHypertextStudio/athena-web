@@ -128,7 +128,7 @@ export default function SignInPage(): JSX.Element {
   return (
     <AuthLayout
       brand={
-        <span className="text-on-surface text-2xl leading-none font-semibold tracking-tight">
+        <span className="text-on-surface text-headline-small leading-none font-semibold tracking-tight">
           Docket
         </span>
       }

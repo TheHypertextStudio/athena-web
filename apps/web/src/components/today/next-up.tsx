@@ -12,12 +12,19 @@
  *
  * The selection rule lives in the pure `selectNextUp` (in `./next-up-select`) so it can be
  * unit-tested against fixed timestamps without rendering.
+ *
+ * The section also owns its own **loading** state (SCR-01/SCR-02). It previously did not: the Today
+ * page swapped the whole section out for a four-bar skeleton while the Hub read was in flight, and
+ * the first of those bars stood where the literal heading "Next up" belongs. A grey bar over a
+ * compile-time constant is a loading animation over data that is known ahead of time, so the
+ * heading now paints unconditionally and only the rows beneath it — genuinely unknown until the
+ * fetch resolves — carry a placeholder.
  */
 import type { HubTaskItem } from '@docket/types';
 import { cn } from '@docket/ui';
 import { ArrowRight } from '@docket/ui/icons';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
-import { Stack } from '@docket/ui/primitives';
+import { Skeleton, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import Link from 'next/link';
@@ -40,6 +47,33 @@ export interface NextUpProps {
   orgName: (orgId: string) => string;
   /** Reference instant for "upcoming"; defaults to now. Injectable for tests. */
   now?: Date;
+  /**
+   * Whether the day's blocks and due tasks are still being fetched.
+   *
+   * @remarks
+   * The section owns its own loading treatment rather than being swapped out for one by its parent.
+   * "Next up" is a compile-time constant, so a grey bar over it is strictly less information than
+   * the word itself; only the rows below — the actual unknown-until-fetch content — get a
+   * placeholder. See {@link NextUpRowsPlaceholder}.
+   */
+  loading?: boolean;
+}
+
+/**
+ * The row-shaped stand-in shown beneath the heading while the day's items load.
+ *
+ * @returns Three row-height blocks matching the settled list's rhythm.
+ */
+function NextUpRowsPlaceholder(): JSX.Element {
+  // placeholder: the day's next few timeboxed blocks (or tasks due today) — their count, titles,
+  // start times and owning workspace are all unknown until the Hub read resolves.
+  return (
+    <Stack gap={2} aria-hidden="true">
+      <Skeleton className="h-16 w-full rounded-xl" />
+      <Skeleton className="h-16 w-full rounded-xl" />
+      <Skeleton className="h-16 w-full rounded-xl" />
+    </Stack>
+  );
 }
 
 /** The "Next up" section: the next few timeboxed blocks, or tasks due today, or a clear-day note. */
@@ -49,6 +83,7 @@ export default function NextUp({
   taskTitle,
   orgName,
   now,
+  loading = false,
 }: NextUpProps): JSX.Element {
   const picks = selectNextUp(blocks, dueToday, now ?? new Date());
 
@@ -58,7 +93,9 @@ export default function NextUp({
         Next up
       </h2>
 
-      {picks.length === 0 ? (
+      {loading ? (
+        <NextUpRowsPlaceholder />
+      ) : picks.length === 0 ? (
         <Stack
           align="center"
           gap={2}

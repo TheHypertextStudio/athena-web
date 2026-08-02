@@ -232,6 +232,50 @@ export class ValidationError extends ApiError {
 }
 
 /**
+ * Base used for problem-type URIs when `WEB_URL` is not configured.
+ *
+ * @remarks
+ * `WEB_URL` is a required variable in the API's env contract (`packages/env`'s `sharedServer`
+ * slice), so this is unreachable in any real deployment — it exists only for `SKIP_ENV_VALIDATION`
+ * test runs, which deliberately boot with a partial environment. `.invalid` is the RFC 2606
+ * reserved TLD: a Problem document that somehow escapes with this base announces a misconfigured
+ * process rather than pointing a reader at a real host.
+ */
+const UNCONFIGURED_PROBLEM_BASE = 'https://docket.invalid';
+
+/**
+ * Build the RFC 9457 `type` URI for a Problem response.
+ *
+ * @remarks
+ * Derived from the configured `WEB_URL` rather than a literal hostname, so the domain cutover
+ * (GEN-25) is a configuration change and not a code change. This is the ONLY place a problem-type
+ * URI is built — `mcp/server.ts` calls it too — so repointing the product at its new apex means
+ * editing one environment variable in one place.
+ *
+ * It reads `process.env` directly rather than importing `@docket/env/api`, and that is deliberate:
+ * this module is imported by nearly every route and by most test harnesses, and an `import { env }`
+ * here would evaluate the whole env slice the instant anything touched an error type. Suites that
+ * legitimately configure env in `beforeAll` (`tests/mcp/mcp-auth.test.ts` stubs
+ * `MCP_ALLOWED_ORIGINS` before importing the modules that read it) would then be reading a frozen
+ * snapshot taken before their own setup ran. Nothing is bypassed by reading raw: `WEB_URL` is a
+ * required `z.string().min(1)` in `packages/env`'s `sharedServer` slice, so a process serving
+ * traffic has already refused to boot on a missing or malformed value.
+ *
+ * @param code - The stable Problem code the URI documents.
+ * @returns The absolute `type` URI, e.g. `https://<web-origin>/problems/not_found`.
+ *
+ * @example
+ * ```typescript
+ * problemTypeUrl('not_found'); // 'https://app.example.test/problems/not_found'
+ * ```
+ */
+export function problemTypeUrl(code: string): string {
+  const configured = process.env['WEB_URL']?.trim() ?? '';
+  const base = configured.length > 0 ? configured.replace(/\/+$/, '') : UNCONFIGURED_PROBLEM_BASE;
+  return `${base}/problems/${code}`;
+}
+
+/**
  * The Hono `onError` handler: maps any thrown error to the Problem shape.
  *
  * @remarks
@@ -273,7 +317,7 @@ export function onError(err: Error, c: Context) {
   c.header('Content-Type', 'application/problem+json');
   return c.json(
     {
-      type: `https://docket.hypertext.studio/problems/${apiErr.code}`,
+      type: problemTypeUrl(apiErr.code),
       // `title` stays derived from the closed code catalog — never `apiErr.message`, which can
       // carry config keys, provider payloads, or SQL detail.
       title: publicProblemTitle(apiErr.code),

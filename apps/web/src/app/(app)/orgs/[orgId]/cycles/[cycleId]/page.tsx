@@ -2,24 +2,26 @@
 
 import type { CycleTaskGroupBy, TaskOut } from '@docket/types';
 import { CycleId, TeamId } from '@docket/types';
-import { type EntityTableGroup } from '@docket/ui/components';
+import { EmptyState, type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Badge, Button, Skeleton } from '@docket/ui/primitives';
+import { Activity, RefreshCw } from '@docket/ui/icons';
+import { Button, Skeleton, Tabs, type TabsItem } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import type { ActorDirectory } from '@/components/agents/actor-directory';
 import { CloseCycleDialog } from '@/components/cycles/close-cycle-dialog';
-import { CyclePropertiesPanel } from '@/components/cycles/properties-panel';
-import { STATUS_LABEL, statusBadgeVariant } from '@/components/cycles/cycle-status';
-import { formatWindow, windowProgress } from '@/components/cycles/format-window';
+import { CycleMetadata } from '@/components/cycle-detail/cycle-metadata-row';
+import { CyclePacePanel } from '@/components/cycle-detail/cycle-pace-panel';
+import { formatWindow, windowProgress, windowRunway } from '@/components/cycles/format-window';
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
-import { StatsBanner } from '@/components/cycles/stats-banner';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
+import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
+import { PageContainer } from '@/components/views/page-layout';
 import { buildTaskColumns, TaskTable } from '@/components/views/task-table';
 import { api } from '@/lib/api';
-import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
+import { asNameMap, cycleDetailDef } from '@/lib/fetch-cycle-detail';
 import { queryKeys, unwrap, useApiMutation, useApiQuery, usePrefetchApi } from '@/lib/query';
 import { taskDetailDef } from '@/lib/use-task-detail';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -29,9 +31,28 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 import { STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 import { userErrorMessage } from '@/lib/problem';
 
-const EMPTY_NAME_MAP: ReadonlyMap<string, string> = new Map();
+/** The detail page's two sections. */
+type TabId = 'tasks' | 'pace';
 
-/** CycleDetailPage renders the authenticated cycle page. */
+/**
+ * Cycle detail, composed from the shared entity-detail shell.
+ *
+ * @remarks
+ * Built on {@link EntityDetailLayout} — the same shell Project, Initiative and Program detail
+ * compose — rather than the bespoke `<div>` column this screen used to declare for itself. That is
+ * what resolves the layout defects structurally instead of by tuning numbers: the shell's
+ * {@link PageContainer} owns the measure, the gutters and the single vertical rhythm, so no section
+ * carries a width or a margin of its own (the properties card no longer strands 315px of empty
+ * space beside it, and the five different inter-section gaps collapse to one). The old page also
+ * set `h-full` on that column, which let the browser shrink the pace banner to fit — the direct
+ * cause of the empty plot region on desktop and the hairline "rule separating nothing" on mobile.
+ *
+ * The window is stated exactly once, in the masthead subtitle, from
+ * {@link file://../../../../../../components/cycles/format-window.ts | formatWindow}; the Window
+ * property chip mirrors its day format. The cycle's epoch-anchored `number` is never rendered —
+ * "Cycle 1000135" is not a name a person recognizes, so an unnamed cycle is titled by its window
+ * through `displayName`.
+ */
 export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ orgId: string; cycleId: string }>();
@@ -42,6 +63,8 @@ export default function CycleDetailPage(): JSX.Element {
   const cycleNounLower = cycleNoun.toLowerCase();
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
+  const taskNoun = useVocabulary('task').toLowerCase();
+  const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const detailKey = queryKeys.cycle(orgId, cycleId);
 
@@ -52,8 +75,10 @@ export default function CycleDetailPage(): JSX.Element {
   const cycle = data?.cycle ?? null;
   const burnup = data?.burnup ?? null;
   const tasks = useMemo(() => data?.tasks ?? [], [data]);
-  const projectName = data?.projectName ?? EMPTY_NAME_MAP;
-  const programName = data?.programName ?? EMPTY_NAME_MAP;
+  // Normalized rather than read straight off the query data: a cache restored from IndexedDB has
+  // been through JSON, which turns these lookups into plain objects (see {@link asNameMap}).
+  const projectName = useMemo(() => asNameMap(data?.projectName), [data]);
+  const programName = useMemo(() => asNameMap(data?.programName), [data]);
   const otherCycles = useMemo(() => data?.otherCycles ?? [], [data]);
   const members = data?.members ?? [];
   const roles = data?.roles ?? [];
@@ -63,7 +88,7 @@ export default function CycleDetailPage(): JSX.Element {
   );
 
   const [groupBy, setGroupBy] = useState<CycleTaskGroupBy>('project');
-  const [bannerExpanded, setBannerExpanded] = useState(true);
+  const [tab, setTab] = useState<TabId>('tasks');
 
   const {
     patchCycle,
@@ -169,164 +194,196 @@ export default function CycleDetailPage(): JSX.Element {
     }));
   }, [orderedTasks, groupBy, projectName, programName, projectNoun, programNoun]);
 
+  const tabItems = useMemo<readonly TabsItem[]>(
+    () => [
+      { value: 'tasks', label: 'Tasks', count: orderedTasks.length },
+      { value: 'pace', label: 'Pace' },
+    ],
+    [orderedTasks.length],
+  );
+
   if (detailQ.isPending) {
+    // placeholder: everything on a cycle detail screen is the cycle's own record — its name, its
+    // date range, the progress summary, the grouping axis its board was last left on, and the
+    // tasks in it. The route only carries an opaque cycle id, so none of it can be named earlier.
     return (
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+      <PageContainer>
+        <Skeleton className="size-10 rounded-full" />
         <Skeleton className="h-9 w-72" />
-        <Skeleton className="h-4 w-48" />
-        <Skeleton className="h-44 w-full rounded-xl" />
-        <Skeleton className="h-10 w-48" />
-        <div className="border-outline-variant flex flex-col gap-2 rounded-xl border p-3">
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-          <Skeleton className="h-8 w-full" />
-        </div>
-      </div>
+        <Skeleton className="h-6 w-64" />
+        <Skeleton className="h-10 w-80 rounded-full" />
+        <Skeleton className="h-10 w-56 rounded-xl" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </PageContainer>
     );
   }
 
   if (detailQ.isError) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p
-          role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
-        >
-          {userErrorMessage(detailQ.error, 'Could not load this cycle.')}
+      <PageContainer>
+        <p role="alert" className="text-destructive text-body-medium">
+          {userErrorMessage(detailQ.error, `Could not load this ${cycleNounLower}.`)}
         </p>
-      </div>
+      </PageContainer>
     );
   }
 
   if (!cycle) {
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p className="border-outline-variant text-on-surface-variant text-body-medium rounded-xl border border-dashed p-8 text-center">
-          This {cycleNounLower} could not be found.
-        </p>
-      </div>
+      <PageContainer>
+        <EmptyState
+          icon={RefreshCw}
+          title={`This ${cycleNounLower} could not be found`}
+          body="It may have been removed, or the link may point somewhere that no longer exists."
+        />
+      </PageContainer>
     );
   }
 
-  const title = cycle.name ?? `${cycleNoun} ${String(cycle.number)}`;
   const win = windowProgress(cycle.startsAt, cycle.endsAt);
   const isCompleted = cycle.status === 'completed';
+  const canEditNow = canEditCycle && !isCompleted;
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-title-large">
-              <EditableTitle
-                value={cycle.name ?? ''}
-                onSave={(name) => {
-                  patchCycle({ name });
-                }}
-                canEdit={canEditCycle}
-                ariaLabel={`${cycleNoun} name`}
-                placeholder={`${cycleNoun} ${String(cycle.number)}`}
-                className="text-on-surface text-title-large"
-              />
-            </h1>
-            {cycle.name ? (
-              <span className="text-on-surface-variant text-xs tabular-nums">
-                {cycleNoun} {cycle.number}
-              </span>
-            ) : null}
-            <Badge variant={statusBadgeVariant(cycle.status)}>{STATUS_LABEL[cycle.status]}</Badge>
-          </div>
-          <p className="text-on-surface-variant text-xs">
-            {formatWindow(cycle.startsAt, cycle.endsAt)}
-          </p>
-        </div>
-        {!isCompleted ? (
+    <EntityDetailLayout
+      icon={
+        <span className="flex size-10 shrink-0 items-center justify-center">
+          <span className="bg-surface-container-high text-on-surface-variant flex size-8 items-center justify-center rounded-full">
+            <RefreshCw aria-hidden className="size-4" />
+          </span>
+        </span>
+      }
+      title={
+        <EditableTitle
+          value={cycle.name ?? ''}
+          onSave={(name) => {
+            patchCycle({ name });
+          }}
+          canEdit={canEditCycle}
+          ariaLabel={`${cycleNoun} name`}
+          placeholder={cycle.displayName}
+          className="text-on-surface text-headline-medium font-medium"
+        />
+      }
+      subtitle={`${formatWindow(cycle.startsAt, cycle.endsAt)} · ${windowRunway(win)}`}
+      metadata={
+        <>
+          <EntityMetadataRow ariaLabel={`${cycleNoun} properties`}>
+            <CycleMetadata
+              status={cycle.status}
+              startsAt={cycle.startsAt.slice(0, 10)}
+              endsAt={cycle.endsAt.slice(0, 10)}
+              canEdit={canEditNow}
+              onStatusChange={(status) => {
+                patchCycle({ status });
+              }}
+              onWindowChange={({ start, end }) => {
+                patchCycle({
+                  ...(start ? { startsAt: start } : {}),
+                  ...(end ? { endsAt: end } : {}),
+                });
+              }}
+            />
+          </EntityMetadataRow>
+          {propsError ? (
+            <p role="alert" className="text-destructive text-body-medium">
+              {propsError}
+            </p>
+          ) : null}
+        </>
+      }
+      actions={
+        isCompleted ? null : (
           <Button variant="outline" size="sm" onClick={openCloseDialog}>
             Close {cycleNounLower}
           </Button>
-        ) : null}
-      </header>
-
-      <div className="flex flex-col gap-2 @2xl:max-w-sm">
-        <CyclePropertiesPanel
-          status={cycle.status}
-          startsAt={cycle.startsAt.slice(0, 10)}
-          endsAt={cycle.endsAt.slice(0, 10)}
-          canEdit={canEditCycle && !isCompleted}
-          onStatusChange={(status) => {
-            patchCycle({ status });
+        )
+      }
+      tabs={
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            setTab(value as TabId);
           }}
-          onWindowChange={({ start, end }) => {
-            patchCycle({
-              ...(start ? { startsAt: start } : {}),
-              ...(end ? { endsAt: end } : {}),
-            });
-          }}
+          label={`${cycleNoun} sections`}
+          items={tabItems}
         />
-        {propsError ? (
-          <p role="alert" className="text-destructive text-body-medium px-1">
-            {propsError}
-          </p>
-        ) : null}
-      </div>
+      }
+    >
+      {tab === 'tasks' ? (
+        // The trailing space is deliberate and belongs to the panel rather than to the floating
+        // Athena button: the button is fixed to the viewport, so content scrolled to its end needs
+        // clearance of its own or the last row sits underneath it.
+        <div
+          role="tabpanel"
+          id="tabpanel-tasks"
+          aria-labelledby="tab-tasks"
+          className="flex flex-col gap-4 pb-32"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <GroupByMenu
+              value={groupBy}
+              onChange={setGroupBy}
+              projectNoun={projectNoun}
+              programNoun={programNoun}
+            />
+            <p className="text-on-surface-variant text-label-large flex h-8 items-center tabular-nums">
+              {orderedTasks.length} {orderedTasks.length === 1 ? taskNoun : taskNounPlural}
+            </p>
+          </div>
 
-      {burnup ? (
-        <StatsBanner
-          burnup={burnup}
-          window={win}
-          expanded={bannerExpanded}
-          onToggleExpanded={() => {
-            setBannerExpanded((open) => !open);
-          }}
-          cycleNoun={cycleNounLower}
-        />
+          {orderedTasks.length === 0 ? (
+            <EmptyState
+              icon={RefreshCw}
+              title="Nothing is committed yet"
+              body={`Add the work this ${cycleNounLower} is meant to deliver and it will show up here, grouped by ${projectNoun.toLowerCase()}.`}
+            />
+          ) : (
+            <TaskTable
+              label={`${cycle.displayName} ${taskNounPlural}`}
+              columns={columns}
+              groups={taskGroups}
+              taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
+              onRowPrefetch={(task) => {
+                prefetch(taskDetailDef(orgId, task.id));
+              }}
+              onOpenTask={(task) => {
+                router.push(`/orgs/${orgId}/tasks/${task.id}`);
+              }}
+            />
+          )}
+
+          <QuickAddTaskRow
+            canEdit={canEditNow}
+            placeholder={`Add a ${taskNoun} to this ${cycleNounLower}…`}
+            onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
+          />
+        </div>
       ) : null}
 
-      <div className="flex items-center justify-between gap-3">
-        <GroupByMenu
-          value={groupBy}
-          onChange={setGroupBy}
-          projectNoun={projectNoun}
-          programNoun={programNoun}
-        />
-        <p className="text-on-surface-variant text-xs tabular-nums">
-          {orderedTasks.length} {orderedTasks.length === 1 ? 'task' : 'tasks'}
-        </p>
-      </div>
-
-      {orderedTasks.length === 0 ? (
-        <section
-          aria-label={`${cycleNounLower} tasks`}
-          className="border-outline-variant text-on-surface-variant text-body-medium min-h-[16rem] flex-1 rounded-xl border p-8 text-center"
+      {tab === 'pace' ? (
+        <div
+          role="tabpanel"
+          id="tabpanel-pace"
+          aria-labelledby="tab-pace"
+          className="flex flex-col gap-4 pb-32"
         >
-          Nothing is committed to this {cycleNounLower} yet.
-        </section>
-      ) : (
-        <TaskTable
-          label={`${title} tasks`}
-          columns={columns}
-          groups={taskGroups}
-          taskHref={(task) => `/orgs/${orgId}/tasks/${task.id}`}
-          onRowPrefetch={(task) => {
-            prefetch(taskDetailDef(orgId, task.id));
-          }}
-          onOpenTask={(task) => {
-            router.push(`/orgs/${orgId}/tasks/${task.id}`);
-          }}
-          className="min-h-[16rem] flex-1"
-        />
-      )}
-
-      <QuickAddTaskRow
-        canEdit={canEditCycle && !isCompleted}
-        placeholder={`Add a task to this ${cycleNounLower}…`}
-        onAdd={(title) => createCycleTask.mutateAsync(title).then(() => undefined)}
-      />
+          {burnup ? (
+            <CyclePacePanel burnup={burnup} window={win} cycleNoun={cycleNounLower} />
+          ) : (
+            <EmptyState
+              icon={Activity}
+              title="Pace is unavailable"
+              body={`The burn-up for this ${cycleNounLower} could not be read. Reload the page to try again.`}
+            />
+          )}
+        </div>
+      ) : null}
 
       <CloseCycleDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        cycleName={title}
+        cycleName={cycle.displayName}
         cycleNoun={cycleNounLower}
         items={decisions}
         targets={moveTargets}
@@ -338,6 +395,6 @@ export default function CycleDetailPage(): JSX.Element {
           confirmClose();
         }}
       />
-    </div>
+    </EntityDetailLayout>
   );
 }

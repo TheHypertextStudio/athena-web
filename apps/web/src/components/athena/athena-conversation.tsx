@@ -149,6 +149,8 @@ export default function AthenaConversation({
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pb-4">
+        {/* placeholder: the conversation's own history — how many turns exist, who said what, and
+            how long each message is. The composer below it is interactive from the first paint. */}
         {loading ? (
           <div className="flex flex-col gap-3" aria-hidden="true">
             <Skeleton className="h-10 w-2/3 rounded-xl" />

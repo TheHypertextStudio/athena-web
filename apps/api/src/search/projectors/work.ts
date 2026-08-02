@@ -1,4 +1,4 @@
-import type { SearchDocumentKind } from '@docket/types';
+import { defaultCycleName, type SearchDocumentKind } from '@docket/types';
 
 import { baseRankFor } from '../rank';
 import { entityRoute } from '../routes';
@@ -140,7 +140,14 @@ export const milestoneSearchProjector = preloadedProjector<
   subjectId: row.projectId,
 }));
 
-/** Projector for team cycle search documents. */
+/**
+ * Projector for team cycle search documents.
+ *
+ * @remarks
+ * An unnamed cycle is titled by its window rather than its `number`: the number is the
+ * epoch-anchored auto-roll key (1000137), so indexing it as the title made every unnamed cycle
+ * unsearchable by anything a person would type. `number` stays on the facet as a machine handle.
+ */
 export const cycleSearchProjector = preloadedProjector<
   OrgScopedRow & {
     teamId: string;
@@ -151,7 +158,7 @@ export const cycleSearchProjector = preloadedProjector<
     status: string;
   }
 >('cycle', (row) => ({
-  ...workDocument(row, 'cycle', row.name ?? `Cycle ${row.number}`, {
+  ...workDocument(row, 'cycle', row.name ?? defaultCycleName(row.startsAt, row.endsAt), {
     summary: `${row.startsAt.toISOString()} - ${row.endsAt.toISOString()}`,
     facet: {
       teamId: row.teamId,

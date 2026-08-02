@@ -4,6 +4,7 @@
 import { cycle, db, program, project, task, update } from '@docket/db';
 import {
   CursorQuery,
+  defaultCycleName,
   pageOf,
   ProgramCreate,
   ProgramDetail,
@@ -315,12 +316,21 @@ const programs = new Hono<AppEnv>()
         )
         .orderBy(desc(task.createdAt));
 
-      // Names of any real cycles referenced, for the cycle-group labels.
+      // Names of any real cycles referenced, for the cycle-group labels. The window is selected
+      // alongside the name because an unnamed cycle is named by its dates — the same `displayName`
+      // derivation `cycle-helpers.toOut` applies, so a cycle reads identically on this board and on
+      // the Cycles roster.
       const cycleIds = [...new Set(taskRows.map((t) => t.cycleId).filter((v): v is string => !!v))];
       const cycleRows =
         cycleIds.length > 0
           ? await db
-              .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+              .select({
+                id: cycle.id,
+                name: cycle.name,
+                number: cycle.number,
+                startsAt: cycle.startsAt,
+                endsAt: cycle.endsAt,
+              })
               .from(cycle)
               .where(and(eq(cycle.organizationId, orgId), inArray(cycle.id, cycleIds)))
           : [];
@@ -345,7 +355,14 @@ const programs = new Hono<AppEnv>()
           const cy = cycleKey === ' ' ? null : cycleById.get(cycleKey);
           return {
             cycle:
-              cy == null ? { id: null } : { id: cy.id, name: cy.name ?? null, number: cy.number },
+              cy == null
+                ? { id: null }
+                : {
+                    id: cy.id,
+                    name: cy.name ?? null,
+                    displayName: cy.name ?? defaultCycleName(cy.startsAt, cy.endsAt),
+                    number: cy.number,
+                  },
             segments: [...byProject.entries()].map(([projectKey, tasks]) => ({
               project:
                 projectKey === ' '

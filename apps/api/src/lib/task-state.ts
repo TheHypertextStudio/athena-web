@@ -17,6 +17,8 @@ import { resolveStateTransition } from '../routes/task-helpers';
 import { emitEvent } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 
+import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from './task-audit';
+
 /** The selected `task` row shape. */
 export type TaskRow = typeof task.$inferSelect;
 
@@ -80,6 +82,17 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
     title: next.title,
     subject: { type: 'task', id: next.id, title: next.title },
     detail: { schema: 'docket.state_change', fromState: row.state, toState: next.state },
+  });
+  // Ledger: the status change on the task's own activity log. Recording it here (rather than in
+  // the route) is what makes a board drag and a `task.setStatus` automation run leave the same
+  // entry as an explicit status change. `PATCH /tasks/:id` resolves its state transition inline
+  // and never calls this function, so the two write paths cannot double-record; and a no-op
+  // transition diffs to nothing, so re-setting the current status writes no entry.
+  await recordTaskChanges({
+    organizationId: input.organizationId,
+    taskId: next.id,
+    actorId: input.actorId,
+    changes: await resolveTaskChangeLabels(input.organizationId, diffTaskFields(row, next)),
   });
   await enqueueSearchUpsert(input.organizationId, 'task', next.id);
   return next;

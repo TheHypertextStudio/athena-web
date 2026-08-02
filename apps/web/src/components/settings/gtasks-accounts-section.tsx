@@ -69,6 +69,9 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
         </p>
       ) : null}
 
+      {/* placeholder: the Google Tasks connections on this workspace — which accounts are
+          connected and which task lists they sync. The section heading, the connect action and the
+          empty-state copy are all static and render around this branch. */}
       {loading ? (
         <Skeleton className="h-20 w-full rounded-xl" />
       ) : rows.length === 0 ? (

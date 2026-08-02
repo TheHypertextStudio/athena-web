@@ -27,6 +27,33 @@ export interface CycleDetailData {
 }
 
 /**
+ * Read a `projectName` / `programName` lookup back as a real `Map`, whatever shape it arrives in.
+ *
+ * @remarks
+ * The whole successful query cache is dehydrated to JSON and written to IndexedDB
+ * ({@link file://../components/query-persistence.tsx | QueryPersistence}), then restored on the
+ * next page load. JSON has no `Map`: these lookups come back as plain objects, so a restored cycle
+ * detail rendered `projectName.get is not a function` and the surface died with "This page couldn't
+ * load" — on every visit after the first, at every viewport. Normalizing on read is what makes the
+ * restored cache usable while keeping the resolved data's declared `ReadonlyMap` shape, which the
+ * Cycles overview also consumes.
+ *
+ * @param value - The lookup from a fresh fetch (a `Map`) or a restored cache (a plain record).
+ * @returns the lookup as a `Map`; empty when the value is absent or not a lookup at all.
+ */
+export function asNameMap(value: unknown): ReadonlyMap<string, string> {
+  if (value instanceof Map) return value as ReadonlyMap<string, string>;
+  if (value && typeof value === 'object') {
+    return new Map(
+      Object.entries(value).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string',
+      ),
+    );
+  }
+  return new Map();
+}
+
+/**
  * Typed query definition for the cycle detail — the single source the detail page reads with and
  * list rows prefetch on hover, so they share one cache entry under `queryKeys.cycle`.
  *

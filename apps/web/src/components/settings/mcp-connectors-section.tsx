@@ -104,6 +104,8 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
 
       <h4 className="text-on-surface mt-3 text-sm font-semibold">Connected tools</h4>
 
+      {/* placeholder: the MCP tools connected to this workspace — how many and what each one is.
+          The "Connected tools" heading directly above renders from a static string. */}
       {listQ.isLoading ? (
         <div className="flex flex-col gap-2" aria-hidden="true">
           <Skeleton className="h-16 w-full rounded-lg" />

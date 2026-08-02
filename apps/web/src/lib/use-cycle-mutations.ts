@@ -61,13 +61,17 @@ export function useCycleMutations(
     [tasks],
   );
 
+  // A destination is identified by what a reader recognizes: the author's name when there is one,
+  // qualified by the window it covers. An unnamed cycle's `displayName` *is* its window, so naming
+  // it and then appending the window again would say the same thing twice. The stored `number` is
+  // an epoch-anchored sequence ("cycle 1000137") and is never shown.
   const moveTargets = useMemo<readonly CarryoverTarget[]>(
     () =>
       otherCycles.map((c) => ({
         id: c.id,
-        label: `${c.name ?? `${cycleNounLower} ${String(c.number)}`} · ${formatWindow(c.startsAt, c.endsAt)}`,
+        label: c.name ? `${c.name} · ${formatWindow(c.startsAt, c.endsAt)}` : c.displayName,
       })),
-    [otherCycles, cycleNounLower],
+    [otherCycles],
   );
 
   const openCloseDialog = useCallback(() => {

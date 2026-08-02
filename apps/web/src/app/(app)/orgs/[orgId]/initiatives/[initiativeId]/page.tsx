@@ -211,6 +211,9 @@ export default function InitiativeDetailPage(): JSX.Element {
   });
 
   if (detailQ.isPending)
+    // placeholder: the initiative's own record — its breadcrumb trail, its name, and the projects,
+    // health and timeline beneath it. The route carries only an id, so nothing here has a
+    // compile-time value to render instead.
     return (
       <div className="mx-auto max-w-7xl space-y-5 p-6">
         <Skeleton className="h-5 w-40" />

@@ -19,6 +19,9 @@ export function IntegrationsStatus({
   children,
 }: IntegrationsStatusProps): JSX.Element {
   if (loading) {
+    // placeholder: which integrations this workspace has connected and the state of each. The
+    // first bar stands in for a connected provider's *name*, not a static section heading — the
+    // surrounding page renders its own headings before this component is reached.
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-5 w-40" />

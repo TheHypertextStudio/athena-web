@@ -14,6 +14,7 @@ import { Sidebar } from '../../../src/components/shell/Sidebar';
 const WORKSPACE_LABELS = [
   'My Work',
   'Triage',
+  'Tasks',
   'Stream',
   'Initiatives',
   'Programs',

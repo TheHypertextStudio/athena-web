@@ -16,9 +16,15 @@
  *
  * - **Home** (cross-org, no header): Today · Inbox · Portfolio · Search (opens the command
  *   palette). These route to `/today`, `/inbox`, `/portfolio` regardless of the active org.
- * - **Workspace** (the active org): My Work · Triage · Initiatives · Programs · Projects ·
- *   Cycles · Teams · Views · Settings — entity-noun labels skinned per org via
+ * - **Workspace** (the active org): My Work · Triage · Tasks · Stream · Initiatives · Programs ·
+ *   Projects · Cycles · Teams · Views · Graph · Settings — entity-noun labels skinned per org via
  *   `useVocabulary`, linking to `/orgs/<activeOrgId>/…`.
+ *
+ * **Tasks appears in both sections, and that is the point.** The Home row is cross-org ("what is
+ * assigned to me anywhere"); the Workspace row is this workspace's task roster, and it sits beside
+ * Projects and Initiatives because a workspace's tasks are a peer destination to them, not
+ * something reachable only by first opening a project. `Stream` already spans both sections the
+ * same way, so this is the established two-altitude pattern rather than a duplicate row.
  *
  * The Workspace section always reflects the active org (route org ?? last-selected ?? personal),
  * so the sidebar is stable on every route and never empties or mode-swaps. Every row is a real
@@ -201,11 +207,14 @@ export function Sidebar({
    * @remarks
    * In a personal workspace the **Teams** row is dropped — a personal space is the user's own
    * space, not an organization with members to organize into teams. Every other row stays, since
-   * each is meaningful for a single person.
+   * each is meaningful for a single person. **Tasks** in particular sits outside that conditional:
+   * a workspace's task roster is exactly as meaningful for one person as for fifty, so it renders
+   * for a personal workspace and a shared org alike, beside Projects and Initiatives.
    */
   const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
     { key: 'triage', label: 'Triage', icon: Inbox },
+    { key: 'tasks', label: 'Tasks', icon: ListChecks },
     { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'initiatives', label: initiatives, icon: Target },
     { key: 'programs', label: programs, icon: Layers },

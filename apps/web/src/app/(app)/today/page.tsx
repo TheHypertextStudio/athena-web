@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Skeleton, Stack } from '@docket/ui/primitives';
+import { Button, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
@@ -82,21 +82,16 @@ export default function TodayPage(): JSX.Element {
         </div>
       ) : null}
 
-      {loading ? (
-        <div className="flex flex-col gap-4" aria-hidden="true">
-          <Skeleton className="h-6 w-28" />
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-16 w-full rounded-xl" />
-          <Skeleton className="h-16 w-full rounded-xl" />
-        </div>
-      ) : (
-        <NextUp
-          blocks={data?.calendar ?? []}
-          dueToday={data?.needsAttention.dueToday ?? []}
-          taskTitle={taskTitle}
-          orgName={orgName}
-        />
-      )}
+      {/* No loading branch around this section. `NextUp` paints its own heading immediately and
+          confines the placeholder to the rows, so the statically-known "Next up" label is never
+          replaced by a grey bar while the Hub read is in flight. */}
+      <NextUp
+        blocks={data?.calendar ?? []}
+        dueToday={data?.needsAttention.dueToday ?? []}
+        taskTitle={taskTitle}
+        orgName={orgName}
+        loading={loading}
+      />
     </div>
   );
 }

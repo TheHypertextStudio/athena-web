@@ -8,13 +8,16 @@
  * into onboarding, where the first create-org call would surface the confusing
  * "Authentication required" notice.
  */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { orgsGet, push, signInPasskey, useSession } = vi.hoisted(() => ({
+const { configGet, orgsGet, push, signInPasskey, signInSocial, useSession } = vi.hoisted(() => ({
+  configGet: vi.fn(),
   orgsGet: vi.fn(),
   push: vi.fn(),
   signInPasskey: vi.fn(),
+  signInSocial: vi.fn(),
   useSession: vi.fn((): { data: { user: { id: string } } | null; isPending: boolean } => ({
     data: null,
     isPending: false,
@@ -26,12 +29,12 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('../../../src/lib/api', () => ({
-  api: { v1: { orgs: { $get: orgsGet } } },
+  api: { v1: { config: { $get: configGet }, orgs: { $get: orgsGet } } },
 }));
 
 vi.mock('../../../src/lib/auth-client', () => ({
   authClient: {
-    signIn: { passkey: signInPasskey },
+    signIn: { passkey: signInPasskey, social: signInSocial },
     useSession,
   },
 }));
@@ -42,7 +45,7 @@ vi.mock('../../../src/app/(auth)/_lib/webauthn', () => ({
   signalUnknownPasskey: vi.fn(),
 }));
 
-import SignInPage from '../../../src/app/(auth)/sign-in/page';
+import { SignInClient } from '../../../src/app/(auth)/sign-in/sign-in-client';
 
 /** A `Response`-like stub whose `ok`/`status`/`json()` the page reads. */
 function jsonResponse(status: number, body: unknown): Response {
@@ -62,6 +65,32 @@ async function expectSessionRecoveryError(): Promise<void> {
     },
     { timeout: 5_000 },
   );
+}
+
+/**
+ * Render `SignInClient` under a `QueryClientProvider`, as `providers.tsx` does in the app.
+ *
+ * @remarks
+ * The screen reads `GET /v1/config` through the shared TanStack Query layer to decide which
+ * identity-provider buttons this deployment can honestly offer, so it needs the provider even
+ * though none of the assertions below are about those buttons. Retry-free, and with a fresh client
+ * per render so one test's cached config never leaks into the next.
+ */
+function renderSignIn(): { rerender: () => void } {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const tree = (
+    <QueryClientProvider client={client}>
+      <SignInClient />
+    </QueryClientProvider>
+  );
+  const { rerender } = render(tree);
+  return {
+    rerender: () => {
+      rerender(tree);
+    },
+  };
 }
 
 const ORIGINAL_LOCATION_DESCRIPTOR = Object.getOwnPropertyDescriptor(window, 'location');
@@ -88,9 +117,16 @@ function mockLocationForHrefCapture(pathname: string, search: string): string[] 
 }
 
 beforeEach(() => {
+  configGet.mockReset();
+  // No provider credentials, so the identity-provider block renders nothing and these tests see
+  // exactly the passkey-only screen they were written against. `OAuthSignIn` has its own suite.
+  configGet.mockResolvedValue(
+    jsonResponse(200, { appMode: 'local', oauthProviders: [], connectors: [], mcpUrl: null }),
+  );
   orgsGet.mockReset();
   push.mockReset();
   signInPasskey.mockReset();
+  signInSocial.mockReset();
   useSession.mockReset();
   useSession.mockReturnValue({ data: null, isPending: false });
   window.history.replaceState(null, '', '/sign-in');
@@ -103,11 +139,11 @@ afterEach(() => {
   }
 });
 
-describe('SignInPage', () => {
+describe('SignInClient', () => {
   it('redirects an already-authenticated browser away without rendering the passkey form', async () => {
     useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
 
-    render(<SignInPage />);
+    renderSignIn();
 
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith('/today');
@@ -118,7 +154,7 @@ describe('SignInPage', () => {
   it('does not redirect while the session check is still pending', () => {
     useSession.mockReturnValue({ data: null, isPending: true });
 
-    render(<SignInPage />);
+    renderSignIn();
 
     expect(push).not.toHaveBeenCalled();
     // Throws if the passkey form isn't rendered — the assertion IS that this doesn't throw.
@@ -129,7 +165,7 @@ describe('SignInPage', () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(jsonResponse(200, { items: [] }));
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -144,7 +180,7 @@ describe('SignInPage', () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(jsonResponse(200, { items: [] }));
 
-    const { rerender } = render(<SignInPage />);
+    const { rerender } = renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -153,7 +189,7 @@ describe('SignInPage', () => {
     push.mockClear();
 
     useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
-    rerender(<SignInPage />);
+    rerender();
 
     expect(push).not.toHaveBeenCalled();
   });
@@ -166,7 +202,7 @@ describe('SignInPage', () => {
       )
       .mockResolvedValueOnce(jsonResponse(200, { items: [] }));
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -182,7 +218,7 @@ describe('SignInPage', () => {
       jsonResponse(401, { code: 'unauthorized', detail: 'Authentication required' }),
     );
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await expectSessionRecoveryError();
@@ -195,7 +231,7 @@ describe('SignInPage', () => {
       jsonResponse(401, { code: 'unauthorized', detail: 'Authentication required' }),
     );
 
-    render(<SignInPage />);
+    renderSignIn();
     const button = screen.getByRole('button', { name: 'Sign in with a passkey' });
     fireEvent.click(button);
 
@@ -218,7 +254,7 @@ describe('SignInPage', () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -230,7 +266,7 @@ describe('SignInPage', () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -247,7 +283,7 @@ describe('SignInPage', () => {
     signInPasskey.mockResolvedValue({ error: null });
     orgsGet.mockResolvedValue(jsonResponse(200, { items: [{ id: 'org_1' }] }));
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -268,7 +304,7 @@ describe('SignInPage', () => {
     const assignments = mockLocationForHrefCapture('/sign-in', search);
     signInPasskey.mockResolvedValue({ error: null });
 
-    render(<SignInPage />);
+    renderSignIn();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with a passkey' }));
 
     await waitFor(() => {
@@ -285,7 +321,7 @@ describe('SignInPage', () => {
     const assignments = mockLocationForHrefCapture('/sign-in', search);
     useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
 
-    render(<SignInPage />);
+    renderSignIn();
 
     await waitFor(() => {
       expect(assignments).toContain(`${origin}/api/auth/oauth2/authorize${search}`);

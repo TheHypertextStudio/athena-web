@@ -50,3 +50,4 @@ export * from './hub';
 export * from './calendar';
 export * from './agenda';
 export * from './time';
+export * from './oauth-scope';

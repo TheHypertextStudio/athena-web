@@ -28,6 +28,7 @@ import {
   team,
   user,
 } from '@docket/db';
+import { defaultCycleName } from '@docket/types';
 import { and, eq, isNull, type SQL } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
@@ -221,16 +222,24 @@ async function candidatesFor(
         .from(label)
         .where(and(eq(label.organizationId, orgId), only(label.id)));
     case 'cycle': {
-      // A cycle's name is nullable and its number is the stable handle, so both are offered.
+      // A cycle's name is nullable, so an unnamed cycle is named by its window (see
+      // `defaultCycleName`). The stored `number` is the auto-roll idempotency key — an
+      // epoch-anchored sequence like 1000137 — so it is neither shown nor offered as a handle;
+      // nobody would say it. The window doubles as the second matchable handle, so "Jul 27 – Aug 2"
+      // resolves a cycle even when its author has named it something else.
       const rows = await db
-        .select({ id: cycle.id, name: cycle.name, number: cycle.number })
+        .select({
+          id: cycle.id,
+          name: cycle.name,
+          startsAt: cycle.startsAt,
+          endsAt: cycle.endsAt,
+        })
         .from(cycle)
         .where(and(eq(cycle.organizationId, orgId), isNull(cycle.archivedAt), only(cycle.id)));
-      return rows.map((row) => ({
-        id: row.id,
-        label: row.name ?? `Cycle ${row.number}`,
-        alt: String(row.number),
-      }));
+      return rows.map((row) => {
+        const window = defaultCycleName(row.startsAt, row.endsAt);
+        return { id: row.id, label: row.name ?? window, alt: window };
+      });
     }
   }
 }

@@ -4,7 +4,7 @@ import { Button } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { appHomeUrl, signInUrl, signUpUrl } from '@/lib/marketing-links';
+import { openAppUrl, signInUrl } from '@/lib/marketing-links';
 
 import { useMarketingAuthState } from './use-marketing-auth';
 
@@ -23,9 +23,28 @@ import { useMarketingAuthState } from './use-marketing-auth';
  * the obvious click took them into `/sign-in` — which is where the passkey prompt lives. The
  * marketing surface was funnelling signed-in people into the auth flow.
  *
- * While the state is `'unknown'` these render the visitor treatment, which is correct for almost
- * everyone reading a public landing page and keeps the statically-served first paint stable. The
- * signed-in swap is therefore additive rather than a visible correction.
+ * **Label and destination are now decided in different places, and that separation is the point.**
+ * While the state is `'unknown'` these still render the visitor *copy*, which is correct for almost
+ * everyone reading a public landing page and keeps the statically-served first paint stable — so the
+ * signed-in swap stays additive rather than a visible correction.
+ *
+ * The same reasoning was flatly wrong for the *destination*, and it shipped a real defect: sampling
+ * the header CTA every 25ms from navigation commit showed `href="/sign-up"` until the client session
+ * read settled at ~345ms. Someone who clicked inside that window — the normal case, not the edge —
+ * was sent into the auth funnel, watched `/sign-up` paint, and was then bounced to `/today`. A
+ * cosmetic label may lag the truth; a link target may not. Every primary CTA therefore points at
+ * {@link openAppUrl} unconditionally, and the server decides where that lands.
+ *
+ * `prefetch={false}` on those links because `/open` is a redirect, not a destination: it reads the
+ * session and throws. Prefetching would run that session read on hover for a route whose entire
+ * output is a `Location`, which is wasted work at best.
+ *
+ * The secondary "Sign in" link still points at `/sign-in`, which is now safe — that route
+ * server-redirects an authenticated visitor with zero paint.
+ *
+ * The primary controls carry `data-testid="open-app"`. The visible label is "Open Docket", which is
+ * the brand-correct wording and stays; the test id is what makes the entry control unambiguously
+ * identifiable to the launch checks that name an "Open app" control.
  */
 
 /**
@@ -40,7 +59,9 @@ export function HeaderActions(): JSX.Element {
     return (
       <div className="flex items-center gap-2">
         <Button asChild size="sm">
-          <Link href={appHomeUrl}>Open Docket</Link>
+          <Link href={openAppUrl} prefetch={false} data-testid="open-app">
+            Open Docket
+          </Link>
         </Button>
       </div>
     );
@@ -52,7 +73,9 @@ export function HeaderActions(): JSX.Element {
         <Link href={signInUrl}>Sign in</Link>
       </Button>
       <Button asChild size="sm">
-        <Link href={signUpUrl}>Get started</Link>
+        <Link href={openAppUrl} prefetch={false} data-testid="open-app">
+          Get started
+        </Link>
       </Button>
     </div>
   );
@@ -70,7 +93,9 @@ export function HeroActions(): JSX.Element {
     return (
       <div className="flex flex-wrap items-center gap-5">
         <Button asChild size="lg">
-          <Link href={appHomeUrl}>Open Docket</Link>
+          <Link href={openAppUrl} prefetch={false} data-testid="open-app">
+            Open Docket
+          </Link>
         </Button>
         <span className="text-ink-muted font-mono text-xs">You&rsquo;re already signed in.</span>
       </div>
@@ -80,7 +105,9 @@ export function HeroActions(): JSX.Element {
   return (
     <div className="flex flex-wrap items-center gap-5">
       <Button asChild size="lg">
-        <Link href={signUpUrl}>Get started — it&rsquo;s free</Link>
+        <Link href={openAppUrl} prefetch={false} data-testid="open-app">
+          Get started — it&rsquo;s free
+        </Link>
       </Button>
       <Link
         href={signInUrl}
@@ -111,10 +138,9 @@ export interface FooterEntryLinkProps {
  */
 export function FooterEntryLink({ className }: FooterEntryLinkProps): JSX.Element {
   const auth = useMarketingAuthState();
-  const signedIn = auth === 'signed-in';
   return (
-    <Link href={signedIn ? appHomeUrl : signUpUrl} className={className}>
-      {signedIn ? 'Open Docket' : 'Get started'}
+    <Link href={openAppUrl} prefetch={false} className={className} data-testid="open-app">
+      {auth === 'signed-in' ? 'Open Docket' : 'Get started'}
     </Link>
   );
 }
@@ -131,7 +157,9 @@ export function CtaBandActions(): JSX.Element {
     return (
       <div className="flex flex-wrap items-center gap-5">
         <Button asChild size="lg" variant="secondary">
-          <Link href={appHomeUrl}>Open Docket</Link>
+          <Link href={openAppUrl} prefetch={false} data-testid="open-app">
+            Open Docket
+          </Link>
         </Button>
         <span className="text-paper/60 font-mono text-xs">Pick up where you left off.</span>
       </div>
@@ -141,7 +169,9 @@ export function CtaBandActions(): JSX.Element {
   return (
     <div className="flex flex-wrap items-center gap-5">
       <Button asChild size="lg" variant="secondary">
-        <Link href={signUpUrl}>Get started — it&rsquo;s free</Link>
+        <Link href={openAppUrl} prefetch={false} data-testid="open-app">
+          Get started — it&rsquo;s free
+        </Link>
       </Button>
       <span className="text-paper/60 font-mono text-xs">No credit card to begin.</span>
     </div>

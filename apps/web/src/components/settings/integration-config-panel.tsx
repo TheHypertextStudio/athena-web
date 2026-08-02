@@ -339,6 +339,8 @@ export function IntegrationConfigPanel({
             onChange={setTeamMapping}
           />
         ) : listsQ.isPending ? (
+          /* placeholder: the containers (lists / projects / boards) this integration exposes, which
+             only the provider can enumerate. The field's own label and help text are static. */
           <Skeleton className="h-16 w-full rounded-lg" />
         ) : listsQ.isError ? (
           <p className="text-destructive text-xs">

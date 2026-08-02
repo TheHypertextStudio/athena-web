@@ -95,6 +95,27 @@ describe('Auth visual contract', () => {
     }
   });
 
+  it('sizes every text node from the MD3 type scale, never a stock Tailwind size', () => {
+    // SCR-11 asks that "every text node maps to an MD3 type token (no ad hoc font-size/weight)".
+    // The scale lives in `packages/ui/src/styles/globals.css` as `--text-{display,headline,title,
+    // body,label}-{large,medium,small}` and deliberately does NOT define Tailwind's stock
+    // `text-xs … text-9xl`. Four call sites passed `text-2xl` to the wordmark (overriding its own
+    // `text-3xl` default) and the sign-up screen's "Use a different email" link was `text-xs`:
+    // sizes that render fine and resolve to nothing, which is exactly the drift a scale exists to
+    // prevent. `text-2xl` is 1.5rem — the same as `text-headline-small` — so the tokens were
+    // available the whole time.
+    //
+    // `Wordmark` is scanned too: it renders inside both auth trees but lives outside them, so the
+    // directory walk alone would miss the size it hands every auth screen.
+    const stockSize = /(?:^|["'\s])text-(?:xs|sm|base|lg|xl|[0-9]xl)(?:["'\s]|$)/m;
+    for (const { path, text } of authSources().concat({
+      path: relative(root, wordmarkPath),
+      text: code(wordmarkPath),
+    })) {
+      expect(`${path}: ${text}`).not.toMatch(stockSize);
+    }
+  });
+
   it('routes the wordmark through the font-display token instead of an inline style', () => {
     for (const { path, text } of authSources()) {
       expect(`${path}: ${text}`).not.toMatch(/fontFamily/);

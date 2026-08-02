@@ -463,6 +463,8 @@ export function ProgramCards({
 
 /** Loading placeholder: plain row-height skeleton blocks, matching the Projects/Initiatives lists. */
 export function ListSkeleton(): JSX.Element {
+  // placeholder: the program rows — how many programs the workspace has and each one's name,
+  // status, health and rolled-up project counts. The list's heading and actions are static.
   return (
     <div className="space-y-2" aria-hidden="true">
       {Array.from({ length: 6 }, (_, i) => (

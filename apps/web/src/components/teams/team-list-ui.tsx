@@ -183,6 +183,8 @@ export function TeamRows({
 
 /** Loading placeholder: plain row-height skeleton blocks, matching the other rosters. */
 export function ListSkeleton(): JSX.Element {
+  // placeholder: the team rows — how many teams the workspace has and each one's name, key and
+  // member count. The roster's heading and "New team" action are static copy.
   return (
     <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-2" aria-hidden="true">
       {[0, 1, 2, 3, 4].map((i) => (

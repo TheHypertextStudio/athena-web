@@ -112,6 +112,10 @@ export function SessionStatusPill({ status, className }: SessionStatusPillProps)
         className,
       )}
     >
+      {/* placeholder: not a loading stand-in at all — the pulse is the live state of a session
+          that is genuinely still running, and `label` beside it is already resolved. It is
+          inventoried because the pulse utility is what the scan matches, not because it hides
+          data. */}
       <Glyph className={cn('h-3 w-3', pulse && 'animate-pulse')} />
       <span>{label}</span>
     </span>

@@ -340,7 +340,12 @@ describe('AppShell rail docking', () => {
   it('opens the panel as an overlay from the activity bar below the dock threshold', async () => {
     renderWithRail((query) => query === '(min-width: 64rem)');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    // Scoped to the activity bar on purpose: the sidebar rendered beside it now carries its own
+    // "Tasks" rows (the cross-org Home one and this workspace's), so an unscoped name query would
+    // be asserting about whichever "Tasks" the tree happened to yield first rather than about the
+    // rail switcher this test is here to exercise.
+    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
+    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
 
     const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
     expect(within(overlay).getByText('Task list')).toBeInTheDocument();
@@ -574,6 +579,55 @@ describe('Sidebar', () => {
         `/orgs/${PERSONAL.id}/${name === 'My Work' ? 'my-work' : name.toLowerCase()}`,
       );
     }
+  });
+
+  it('puts Tasks in the Workspace section beside Projects and Initiatives', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+
+    const workspaceNav = screen.getByRole('navigation', { name: 'Workspace' });
+    const tasks = within(workspaceNav).getByRole('link', { name: 'Tasks' });
+    expect(tasks).toHaveAttribute('href', `/orgs/${ACME.id}/tasks`);
+    // Peer, not a child: it is a top-level row in the same flat section as Projects/Initiatives,
+    // with no group to expand first.
+    expect(tasks.parentElement).toBe(
+      within(workspaceNav).getByRole('link', { name: 'Projects' }).parentElement,
+    );
+    expect(tasks.parentElement).toBe(
+      within(workspaceNav).getByRole('link', { name: 'Initiatives' }).parentElement,
+    );
+    // The cross-org Home row is a different altitude and stays where it is.
+    expect(
+      within(screen.getByRole('navigation', { name: 'Home' })).getByRole('link', { name: 'Tasks' }),
+    ).toHaveAttribute('href', '/tasks');
+  });
+
+  it('keeps the Workspace Tasks row in a personal workspace', () => {
+    render(
+      <ContextProvider initialContext={PERSONAL.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          personalWorkspace
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+        />
+      </ContextProvider>,
+    );
+
+    const workspaceNav = screen.getByRole('navigation', { name: 'Workspace' });
+    expect(within(workspaceNav).getByRole('link', { name: 'Tasks' })).toHaveAttribute(
+      'href',
+      `/orgs/${PERSONAL.id}/tasks`,
+    );
   });
 
   it('never produces an /orgs/null href when no org is bound yet', () => {

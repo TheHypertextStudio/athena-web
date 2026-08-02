@@ -18,6 +18,12 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
+import {
+  diffTaskFields,
+  recordTaskChanges,
+  recordTaskCreated,
+  resolveTaskChangeLabels,
+} from '../lib/task-audit';
 import { setTaskState } from '../lib/task-state';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -38,6 +44,7 @@ import {
   wouldCreateSubtaskCycle,
 } from './task-helpers';
 import { attachmentRoutes } from './attachment-routes';
+import { taskActivityRoutes } from './task-activity-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
 
 async function enqueueTaskSearchIndex(
@@ -145,6 +152,8 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
           subject,
         });
       }
+      // Ledger: the creation entry, so a task has a readable history from the moment it exists.
+      await recordTaskCreated({ organizationId: orgId, taskId: row.id, actorId });
       await enqueueTaskSearchIndex(orgId, row.id);
       return ok(c, TaskOut, toOut(row));
     },
@@ -282,10 +291,14 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         await loadTask(orgId, newParentId);
       }
 
+      // The pre-image, read exactly once: it feeds both the state-transition resolve below and
+      // the activity ledger's before/after diff, so recording history costs no extra read.
+      const before = await loadTask(orgId, id);
+
       // resolveStateTransition validates + derives timestamps; bypassing it would corrupt progress.
       const statePatch =
         body.state !== undefined
-          ? await resolveStateTransition(orgId, (await loadTask(orgId, id)).teamId, body.state)
+          ? await resolveStateTransition(orgId, before.teamId, body.state)
           : undefined;
 
       const patch = {
@@ -356,6 +369,14 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           subject,
         });
       }
+      // Ledger: one entry per field that actually moved. The diff is computed from the pre-image
+      // read above, so a field re-sent at its current value records nothing.
+      await recordTaskChanges({
+        organizationId: orgId,
+        taskId: row.id,
+        actorId: ctx.actorId,
+        changes: await resolveTaskChangeLabels(orgId, diffTaskFields(before, row)),
+      });
       await enqueueTaskSearchIndex(orgId, row.id);
       return ok(c, TaskOut, toOut(row));
     },
@@ -417,6 +438,7 @@ The transition is resolved server-side: entering a terminal state derives \`comp
     },
   )
   .route('/', taskDependencyRoutes)
+  .route('/', taskActivityRoutes)
   .route('/', attachmentRoutes);
 
 export default tasks;

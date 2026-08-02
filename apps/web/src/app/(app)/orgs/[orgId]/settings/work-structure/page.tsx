@@ -55,6 +55,8 @@ export default function WorkStructureSettingsPage({
         description="Keep initiatives strategic by limiting how deeply they can be nested."
       />
 
+      {/* placeholder: the workspace's configured initiative-nesting depth, and whether the caller
+          is permitted to change it. The heading and explanation above are static copy. */}
       {settingsQ.isPending ? (
         <Skeleton className="h-44 max-w-2xl rounded-lg" />
       ) : settingsQ.isError ? (

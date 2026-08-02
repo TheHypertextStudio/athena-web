@@ -13,6 +13,18 @@ import { ORIGIN, TIMEOUTS } from './e2e/helpers/constants';
  *
  * Serial single-worker on purpose: every spec mutates the one shared embedded dev database.
  */
+/**
+ * The default frame every spec runs in.
+ *
+ * @remarks
+ * 1440 is the shell's rail-docking width (`RAIL_DOCK_QUERY` in `@docket/ui`'s `AppShell`), so this
+ * is the layout where the right rail is a panel *beside* `<main>` rather than an overlay — the
+ * arrangement specs assume whenever they reach for the Tasks or Agenda panel, and the width the
+ * design review shoots. Specs that need a narrower frame override it locally with
+ * `test.use({ viewport })`.
+ */
+const VIEWPORT = { width: 1440, height: 900 } as const;
+
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
@@ -35,9 +47,12 @@ export default defineConfig({
     baseURL: ORIGIN,
     ignoreHTTPSErrors: true,
     headless: true,
-    viewport: { width: 1280, height: 900 },
+    viewport: VIEWPORT,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // `devices['Desktop Chrome']` carries its own 1280x720 viewport, and a project-level `use` wins
+  // over the top-level one — so the viewport has to be re-applied *after* the device spread or the
+  // setting above is silently discarded.
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: VIEWPORT } }],
 });

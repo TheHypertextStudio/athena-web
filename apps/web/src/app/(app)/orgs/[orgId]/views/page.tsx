@@ -80,6 +80,8 @@ export default function ViewsPage(): JSX.Element {
         </p>
       </header>
 
+      {/* placeholder: the saved views themselves — how many exist and each one's name, the filter
+          behind it, and whether it is shared. The header and its explanation render immediately. */}
       {loading ? (
         <div className="flex flex-col gap-3" aria-hidden="true">
           <Skeleton className="h-16 w-full rounded-lg" />

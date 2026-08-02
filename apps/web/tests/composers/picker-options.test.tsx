@@ -14,6 +14,7 @@
 import {
   AgentOut,
   CycleOut,
+  defaultCycleName,
   InitiativeOut,
   LabelOut,
   MemberOut,
@@ -148,13 +149,14 @@ describe('picker option mappers', () => {
     expect(initiativeOptions([initiative])).toEqual([{ value: IDS.initiative, label: 'Q3' }]);
   });
 
-  it('labels an unnamed cycle by its number with the cycle noun', () => {
+  it('labels a cycle by its displayName, never its auto-roll number', () => {
     const named = CycleOut.parse({
       id: IDS.cycleNamed,
       organizationId: IDS.org,
       teamId: IDS.team,
-      number: 4,
+      number: 1000004,
       name: 'Launch',
+      displayName: 'Launch',
       startsAt: '2026-07-06',
       endsAt: '2026-07-20',
       status: 'active',
@@ -164,18 +166,21 @@ describe('picker option mappers', () => {
       id: IDS.cycleUnnamed,
       organizationId: IDS.org,
       teamId: IDS.team,
-      number: 7,
+      number: 1000007,
       name: null,
+      displayName: defaultCycleName('2026-07-20', '2026-08-03'),
       startsAt: '2026-07-20',
       endsAt: '2026-08-03',
       status: 'active',
       createdAt: CREATED_AT,
     });
-    const options = cycleOptions([named, unnamed], 'Sprint');
+    const options = cycleOptions([named, unnamed]);
     expect(options).toEqual([
       { value: IDS.cycleNamed, label: 'Launch' },
-      { value: IDS.cycleUnnamed, label: 'Sprint 7' },
+      { value: IDS.cycleUnnamed, label: 'Jul 20 – Aug 3' },
     ]);
+    // The epoch-anchored auto-roll number never reaches a label.
+    expect(options.some((o) => /\d{5,}/.test(o.label))).toBe(false);
   });
 
   it('maps labels to options carrying their color swatch as the icon', () => {

@@ -35,6 +35,17 @@ export interface TaskPatch {
   programId?: string | null;
   milestoneId?: string | null;
   cycleId?: string | null;
+  /**
+   * The anticipated start date as a bare `YYYY-MM-DD` calendar day, or `null` to clear it.
+   *
+   * @remarks
+   * Distinct from {@link TaskPatch.dueDate}: this is when the work is expected to *begin*, which is
+   * what makes a task schedulable rather than merely deadlined. The column is separate in the
+   * database and separate in `TaskUpdate`, so the two never overwrite each other. The API validates
+   * this as `z.iso.date()` and rejects a full datetime with a 422 — send the day only, never an
+   * instant.
+   */
+  startDate?: string | null;
   dueDate?: string | null;
 }
 
@@ -178,6 +189,7 @@ export function useTaskMutations(
         ...(patch.cycleId !== undefined
           ? { cycleId: patch.cycleId === null ? null : CycleId.parse(patch.cycleId) }
           : {}),
+        ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
         ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
       };
       return unwrap(

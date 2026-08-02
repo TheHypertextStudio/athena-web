@@ -20,7 +20,7 @@ import { publicProblemTitle } from '@docket/types';
 import type { Context } from 'hono';
 
 import { env } from '../env';
-import { ApiError, ConflictError, NotFoundError } from '../error';
+import { ApiError, ConflictError, NotFoundError, problemTypeUrl } from '../error';
 import type { McpContext } from './auth';
 import { attachStream, notifyLog } from './notify';
 import { createSession, endSession, resolveSession, SESSION_HEADER } from './session-registry';
@@ -128,7 +128,7 @@ function problem(c: Context, err: unknown): Response {
   }
   return c.json(
     {
-      type: `https://docket.hypertext.studio/problems/${apiErr.code}`,
+      type: problemTypeUrl(apiErr.code),
       title: publicProblemTitle(apiErr.code),
       status: apiErr.status,
       code: apiErr.code,
@@ -436,7 +436,7 @@ function scopeStepUp(c: Context, ctx: McpContext, body: unknown): Response | nul
   c.header('WWW-Authenticate', challenge403(resourceMetadataUrl(c), required, ctx.scopes));
   return c.json(
     {
-      type: 'https://docket.hypertext.studio/problems/insufficient_scope',
+      type: problemTypeUrl('insufficient_scope'),
       title: `This operation requires the '${required}' scope`,
       status: 403,
       code: 'insufficient_scope',

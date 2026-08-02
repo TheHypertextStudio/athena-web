@@ -3,28 +3,41 @@
  *
  * @remarks
  * A cycle is a time window (`startsAt`..`endsAt`). These helpers render that window for the
- * list/detail headers and compute the window's live progress (how far "today" sits between
- * the two ends) so a banner can show how much runway is left. All use the platform `Intl`
- * APIs so phrasing is locale-aware, and treat the bounds as calendar instants in the
- * caller's local zone (matching how the API stores them).
+ * list/overview/detail headers and compute the window's live progress (how far "today" sits
+ * between the two ends) so a banner can show how much runway is left.
+ *
+ * Everything here is anchored to **UTC calendar days**, and the range string is produced by the
+ * shared {@link defaultCycleName} in `@docket/types` — the same function the API uses to derive a
+ * cycle's `displayName`. Both choices fix real defects:
+ *
+ * - The window bounds are UTC instants (`2026-07-27T00:00:00.000Z`). Formatting them with a
+ *   local-zone formatter rendered "Jul 26" anywhere west of Greenwich while the properties panel,
+ *   which slices the ISO string, rendered "Jul 27" — one record showing two start dates on one
+ *   screen. Delegating to the shared, UTC-pinned formatter means there is exactly one
+ *   implementation and every surface agrees.
+ * - A window's `endsAt` is one millisecond before the next window opens, so differencing the two
+ *   instants and rounding counted a 7-day cycle as 8 ("Day 6 of 8"). {@link windowDays} now diffs
+ *   whole UTC calendar days, which yields 7 for the auto-rolled
+ *   `[Mon 00:00:00.000Z, Sun 23:59:59.999Z]` window *and* 7 for a hand-created `[Jul 1, Jul 7]`.
  */
+import { defaultCycleName } from '@docket/types';
 
-/** A formatter for a short, year-less day (e.g. "Jun 7"); reused across the screens. */
-const SHORT_DAY = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+/** Milliseconds in a whole day. */
+const DAY_MS = 86_400_000;
 
-/** A formatter for a short day *with* its year (e.g. "Jun 7, 2026") for cross-year windows. */
-const SHORT_DAY_YEAR = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
-  year: 'numeric',
-});
+/** The UTC midnight of an instant's calendar day, as epoch milliseconds. */
+function utcDayStart(value: Date): number {
+  return Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate());
+}
 
 /**
  * Format a cycle's window as a compact range (e.g. "Jun 7 – Jun 21").
  *
  * @remarks
- * The year is shown only when the two ends fall in different calendar years, keeping the
- * common same-year window terse while staying unambiguous across a year boundary.
+ * Delegates to {@link defaultCycleName} so the window a cycle row shows is byte-identical to the
+ * `displayName` the API derives for an unnamed cycle — a divergent local formatter here is what
+ * made the same cycle read "Jul 26 – Aug 2" in the list and "Jul 27, 2026" in its properties.
+ * The year is shown only when the two ends fall in different UTC years.
  *
  * @param startsAt - ISO start instant.
  * @param endsAt - ISO end instant.
@@ -32,23 +45,30 @@ const SHORT_DAY_YEAR = new Intl.DateTimeFormat(undefined, {
  *
  * @example
  * ```ts
- * formatWindow('2026-06-07T00:00:00Z', '2026-06-21T00:00:00Z'); // 'Jun 7 – Jun 21'
+ * formatWindow('2026-07-27T00:00:00.000Z', '2026-08-02T23:59:59.999Z'); // 'Jul 27 – Aug 2'
  * ```
  */
 export function formatWindow(startsAt: string, endsAt: string): string {
-  const start = new Date(startsAt);
-  const end = new Date(endsAt);
-  const sameYear = start.getFullYear() === end.getFullYear();
-  const fmt = sameYear ? SHORT_DAY : SHORT_DAY_YEAR;
-  return `${fmt.format(start)} – ${fmt.format(end)}`;
+  return defaultCycleName(startsAt, endsAt);
 }
 
-/** The total whole-day span of a cycle window (inclusive of both ends, minimum 1). */
+/**
+ * The total whole-day span of a cycle window, inclusive of both ends (minimum 1).
+ *
+ * @remarks
+ * Counts **UTC calendar days**, not elapsed milliseconds. An auto-rolled window ends at
+ * `23:59:59.999Z` of its last day, so an elapsed-time difference rounds up to an extra day and a
+ * weekly cycle reports 8 days. Diffing the two days' UTC midnights and adding 1 for inclusivity
+ * gives 7 for that window and 7 for a hand-created `[Jul 1, Jul 7]` one alike.
+ *
+ * @param startsAt - ISO start instant.
+ * @param endsAt - ISO end instant.
+ * @returns the inclusive whole-day span, at least 1.
+ */
 export function windowDays(startsAt: string, endsAt: string): number {
-  const start = new Date(startsAt).getTime();
-  const end = new Date(endsAt).getTime();
-  const days = Math.round((end - start) / 86_400_000) + 1;
-  return Math.max(1, days);
+  const start = utcDayStart(new Date(startsAt));
+  const end = utcDayStart(new Date(endsAt));
+  return Math.max(1, Math.round((end - start) / DAY_MS) + 1);
 }
 
 /** A cycle window's live position: where "now" sits relative to its bounds. */
@@ -71,8 +91,11 @@ export interface WindowProgress {
  * Compute where "now" sits within a cycle's window.
  *
  * @remarks
- * Drives the detail banner's "day N of M · K left" runway line and the time-axis marker on
- * the burn-up. `now` is injectable so the calculation is deterministic in tests.
+ * Drives the overview/detail "Day N of M · K days left" runway line and the time-axis marker on
+ * the burn-up. `elapsedDays` counts whole UTC calendar days from the start day (so the first day
+ * of a cycle is day 1 after the `+ 1` a caller applies) and stays clamped to `[0, totalDays]`,
+ * which keeps "Day N of M" from ever exceeding M. `now` is injectable so the calculation is
+ * deterministic in tests.
  *
  * @param startsAt - ISO start instant.
  * @param endsAt - ISO end instant.
@@ -92,7 +115,7 @@ export function windowProgress(
   const fraction = Math.min(1, Math.max(0, rawFraction));
   const elapsedDays = Math.min(
     totalDays,
-    Math.max(0, Math.round((now.getTime() - start) / 86_400_000)),
+    Math.max(0, Math.round((utcDayStart(now) - utcDayStart(new Date(startsAt))) / DAY_MS)),
   );
   return {
     elapsedDays,
@@ -102,4 +125,37 @@ export function windowProgress(
     notStarted: now.getTime() < start,
     ended: now.getTime() > end,
   };
+}
+
+/**
+ * Phrase a cycle window's live position as one short runway clause.
+ *
+ * @remarks
+ * The single implementation, deliberately: the Cycles list overview and the cycle detail masthead
+ * both answer "how much of this cycle is left", and while each owned its own version of this
+ * sentence they disagreed — the same cycle read `Day 7 of 7 · last day` on the list and
+ * `Day 6 of 7 · 1 day left` on its own detail page. It lives beside {@link windowProgress} because
+ * it is window arithmetic phrased for a reader, not a property of either surface.
+ *
+ * The day number is **1-based** — the first day of a cycle is day 1, not day 0 — so "days left"
+ * counts the days still *ahead* of today and the final day says exactly that rather than the
+ * self-contradictory "1 day left". Windows that have not opened or have already closed get their
+ * own sentence instead of a day count that would not mean anything.
+ *
+ * @param progress - The window's live {@link WindowProgress}.
+ * @returns e.g. `Day 5 of 7 · 2 days left`, `Starts in 3 days`, or `Wrapped · ran 7 days`.
+ */
+export function windowRunway(progress: WindowProgress): string {
+  const total = progress.totalDays;
+  if (progress.notStarted) {
+    return total === 1 ? 'Starts soon' : `Starts in ${String(progress.remainingDays)} days`;
+  }
+  if (progress.ended) {
+    return `Wrapped · ran ${String(total)} ${total === 1 ? 'day' : 'days'}`;
+  }
+  const dayNumber = Math.min(total, progress.elapsedDays + 1);
+  const daysLeft = total - dayNumber;
+  const left =
+    daysLeft === 0 ? 'last day' : `${String(daysLeft)} ${daysLeft === 1 ? 'day' : 'days'} left`;
+  return `Day ${String(dayNumber)} of ${String(total)} · ${left}`;
 }

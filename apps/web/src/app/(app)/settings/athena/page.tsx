@@ -77,6 +77,9 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader title="Athena" description="Set how your chief of staff works with you." />
+      {/* placeholder: the caller's saved Athena preferences — their standing instructions and the
+          approval mode. Both are free-form values only the stored record knows; the section
+          heading and description above render immediately. */}
       {preferencesQ.isPending ? (
         <Skeleton className="h-[30rem] max-w-2xl rounded-lg" />
       ) : preferencesQ.isError ? (

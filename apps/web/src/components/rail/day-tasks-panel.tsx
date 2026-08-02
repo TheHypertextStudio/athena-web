@@ -21,7 +21,7 @@ import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { type JSX, useMemo } from 'react';
+import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -115,14 +115,16 @@ function DayTaskRow({
             router.push(href);
           }}
           ariaLabel="Task title"
-          className="text-on-surface min-w-0 flex-1 truncate text-sm"
+          className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
         />
       ) : (
-        <span className="text-on-surface min-w-0 flex-1 truncate text-sm">{task.title}</span>
+        <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
+          {task.title}
+        </span>
       )}
       {task.dueDate ? (
         <span
-          className={`shrink-0 text-xs tabular-nums ${overdue ? 'text-destructive' : 'text-on-surface-variant'}`}
+          className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-destructive' : 'text-on-surface-variant'}`}
         >
           {formatDue(task.dueDate)}
         </span>
@@ -144,25 +146,21 @@ export default function DayTasksPanel(): JSX.Element {
     ),
   );
 
-  const heading = useMemo(
-    () =>
-      new Date().toLocaleDateString(undefined, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-      }),
-    [],
-  );
-
   const plan = todayQ.data?.plan ?? [];
   const error = todayQ.isError ? userErrorMessage(todayQ.error, 'Could not load your day.') : null;
 
   return (
     <section aria-label="Tasks" className="flex h-full min-h-0 flex-col">
+      {/*
+        The panel names *itself*, not the date. Beside an open calendar the long form ("Sunday,
+        August 2") restated the date the grid's own `Sun 2` lane header already carries and the
+        toolbar's `August 2026` already scopes — the same day written three ways within one screen.
+        The rail's job here is "the work you planned for today", so that is what it says.
+      */}
       <header className="shrink-0 px-3 pt-3 pb-2">
-        <h2 className="text-on-surface text-title-small">{heading}</h2>
+        <h2 className="text-on-surface text-title-small">Today&rsquo;s plan</h2>
         {!todayQ.isPending && !error ? (
-          <p className="text-on-surface-variant text-xs">
+          <p className="text-on-surface-variant text-body-small">
             {plan.length === 0
               ? 'Nothing planned'
               : `${String(plan.length)} task${plan.length === 1 ? '' : 's'}`}
@@ -171,6 +169,8 @@ export default function DayTasksPanel(): JSX.Element {
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto px-3 pb-3">
+        {/* placeholder: today's planned tasks — how many there are and each one's title, time and
+            state. The rail's header, its date and its empty-state copy all render immediately. */}
         {todayQ.isPending ? (
           <div className="flex flex-col gap-2">
             {[0, 1, 2, 3].map((i) => (
@@ -178,11 +178,11 @@ export default function DayTasksPanel(): JSX.Element {
             ))}
           </div>
         ) : error ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-destructive text-body-medium">
             {error}
           </p>
         ) : plan.length === 0 ? (
-          <div className="bg-surface-container-low text-on-surface-variant flex flex-col gap-1 rounded-lg p-4 text-sm">
+          <div className="bg-surface-container-low text-on-surface-variant text-body-medium flex flex-col gap-1 rounded-lg p-4">
             <span className="text-on-surface font-medium">Nothing planned for today.</span>
             <span>Tasks due today land here — drag one onto the calendar to timebox it.</span>
           </div>

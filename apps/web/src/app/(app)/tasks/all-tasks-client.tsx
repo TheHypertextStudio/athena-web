@@ -10,6 +10,13 @@
  * user has a distinct actor id in each — by matching the per-org members list. Rows reuse the shared
  * `StatusIcon` glyph + `OrgChip`, so the list reads like the rest of the app. A future `hub/tasks`
  * endpoint would collapse the fan-out into one request without changing this surface.
+ *
+ * Because the read is a fan-out, it has three outcomes rather than two, and the surface renders all
+ * three. Every workspace answered and none had a task for you → the empty state. None answered → a
+ * failure state, never the empty state: "No tasks assigned to you" is a claim about the world, and
+ * with the API unreachable it is a claim we have no standing to make. Some answered → the rows we
+ * do have, above a notice saying the list may be incomplete, because a silently-short list reads as
+ * a complete one.
  */
 import type { Priority, TaskOut } from '@docket/types';
 import { cn } from '@docket/ui';
@@ -29,6 +36,7 @@ import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { entityDragSource } from '@/lib/entity-drag';
 import { myWorkDefs } from '@/lib/my-work-defs';
+import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -98,6 +106,18 @@ export default function AllTasksClient(): JSX.Element {
     taskResults.some((r) => r.isPending) ||
     memberResults.some((r) => r.isPending);
 
+  // "No tasks assigned to you" is a claim about the world, and it is only true if we actually
+  // asked. With the API unreachable every query above errors, `loading` goes false and `mine` is
+  // empty — which used to render the empty state, telling someone they have nothing to do at the
+  // exact moment we could not find out. A read that failed is a failure, not an emptiness.
+  const reads = [...taskResults, ...memberResults];
+  const failure = reads.find((r) => r.isError)?.error ?? null;
+  const loadError = failure ? userErrorMessage(failure, 'Could not load your tasks.') : null;
+  const partial = loadError !== null && sorted.length > 0;
+  const refetchAll = (): void => {
+    for (const r of reads) void r.refetch();
+  };
+
   return (
     <Stack gap={4} className="mx-auto h-full w-full max-w-4xl p-4 @2xl:p-6">
       <Row as="header" justify="between">
@@ -108,11 +128,44 @@ export default function AllTasksClient(): JSX.Element {
         </Row>
       </Row>
 
+      {/* placeholder: the caller's task rows — how many they have and each one's title, state,
+          due date and workspace. Guarded on `mine.length === 0`, so a warm cache renders its rows
+          rather than animating over tasks that are already known. */}
+      {/* Shown above whatever else renders when some workspaces answered and some did not: the
+          rows below are then real but incomplete, and silently presenting a short list as the whole
+          list is the same lie in a quieter voice. */}
+      {partial ? (
+        <div
+          role="alert"
+          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+        >
+          <span>Some workspaces did not answer, so this list may be incomplete.</span>
+          <Button variant="outline" size="sm" onClick={refetchAll}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+
       {loading && mine.length === 0 ? (
         <Stack gap={1} aria-hidden="true">
           {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
           ))}
+        </Stack>
+      ) : loadError && sorted.length === 0 ? (
+        <Stack
+          align="center"
+          gap={2}
+          role="alert"
+          className="border-destructive/40 bg-destructive/5 justify-center rounded-2xl border p-12 text-center"
+        >
+          <p className="text-destructive text-body-medium font-medium">{loadError}</p>
+          <p className="text-on-surface-variant text-body-small max-w-sm">
+            Your tasks are still there — we could not reach them just now.
+          </p>
+          <Button variant="outline" size="sm" onClick={refetchAll}>
+            Try again
+          </Button>
         </Stack>
       ) : sorted.length === 0 ? (
         <Stack
@@ -121,7 +174,7 @@ export default function AllTasksClient(): JSX.Element {
           className="border-outline-variant bg-surface-container-low/60 justify-center rounded-2xl border p-12 text-center"
         >
           <p className="text-on-surface text-body-medium font-medium">No tasks assigned to you</p>
-          <p className="text-on-surface-variant max-w-sm text-xs">
+          <p className="text-on-surface-variant text-body-small max-w-sm">
             Tasks assigned to you across every workspace land here.
           </p>
         </Stack>

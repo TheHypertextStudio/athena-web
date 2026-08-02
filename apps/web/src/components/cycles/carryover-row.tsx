@@ -34,7 +34,7 @@ import { entityDragSource } from '@/lib/entity-drag';
 export interface CarryoverTarget {
   /** The target cycle id. */
   readonly id: string;
-  /** A human label for the target (e.g. "Cycle 7 · Jun 22 – Jul 5"). */
+  /** A human label for the target (e.g. "Hardening · Jun 22 – Jul 5", or just the window). */
   readonly label: string;
 }
 
@@ -128,7 +128,7 @@ export function CarryoverRow({
             <ChevronDown className="h-4 w-4 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[12rem]">
+        <DropdownMenuContent align="end" className="min-w-48">
           <DropdownMenuRadioGroup
             value={item.action}
             onValueChange={(next) => {
@@ -162,7 +162,7 @@ export function CarryoverRow({
               <ChevronDown className="h-4 w-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[14rem]">
+          <DropdownMenuContent align="end" className="min-w-56">
             <DropdownMenuRadioGroup value={item.targetCycleId ?? ''} onValueChange={onTargetChange}>
               {targets.map((target) => (
                 <DropdownMenuRadioItem key={target.id} value={target.id}>

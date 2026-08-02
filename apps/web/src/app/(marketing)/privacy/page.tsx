@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import type { JSX, ReactNode } from 'react';
 
+import { SUPPORT_EMAIL } from '@/lib/support-contact';
+
 /** Privacy-policy metadata. */
 export const metadata: Metadata = {
   title: 'Privacy',
@@ -34,8 +36,8 @@ export default function PrivacyPage(): JSX.Element {
         <p>
           Docket is operated by The Hypertext Studio. Questions, access requests, and deletion
           requests can be sent to{' '}
-          <a className="text-ink underline" href="mailto:support@hypertext.studio">
-            support@hypertext.studio
+          <a className="text-ink underline" href={`mailto:${SUPPORT_EMAIL}`}>
+            {SUPPORT_EMAIL}
           </a>
           .
         </p>

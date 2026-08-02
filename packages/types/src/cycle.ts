@@ -6,6 +6,61 @@ import { z } from 'zod';
 import { CycleId, OrganizationId, ProgramId, ProjectId, TaskId, TeamId } from './primitives';
 import { TaskOut } from './task';
 
+/**
+ * A short, year-less UTC day (e.g. "Jul 27"), used for same-year cycle windows.
+ *
+ * @remarks
+ * Locale and zone are pinned (not left to the host) so the identical string is produced on the
+ * API server, during SSR, and in the browser. See {@link defaultCycleName}.
+ */
+const WINDOW_DAY = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+});
+
+/** A short UTC day *with* its year (e.g. "Dec 28, 2026"), used for cross-year cycle windows. */
+const WINDOW_DAY_YEAR = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'UTC',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+/**
+ * Deterministic, human-meaningful default name for an unnamed cycle: its date window.
+ *
+ * @remarks
+ * Cycles auto-roll, so the stored `number` is an epoch-anchored sequence (see
+ * `apps/api/src/lib/cycle-window.ts`) that is meaningless to a reader — "Cycle 1000137". The
+ * window itself is the thing a person recognizes, so an unnamed cycle is named by its dates.
+ * Pinned to `en-US` + `timeZone: 'UTC'` on purpose: this string is produced on the server AND in
+ * the browser, and a locale- or zone-varying result would both hydrate-mismatch and disagree
+ * between two surfaces showing the same cycle.
+ *
+ * **This is the one documented cycle-naming scheme.** A cycle displays its author-set `name` when
+ * it has one, and otherwise its window — `"Jul 27 – Aug 2"`. The stored `number` is an internal
+ * auto-roll key (it is the idempotency target of `ensureCycleWindow`'s
+ * `onConflictDoNothing({ target: [teamId, number] })` and is unique per team); it is **never**
+ * displayed and no surface may build a label from it.
+ *
+ * @param startsAt - The window start, as a `Date` or an ISO-8601 string.
+ * @param endsAt - The window end, as a `Date` or an ISO-8601 string.
+ * @returns the window range: `"Jul 27 – Aug 2"` when both ends share a UTC year, otherwise
+ *   `"Dec 28, 2026 – Jan 3, 2027"`. The separator is a spaced en dash (U+2013).
+ *
+ * @example
+ * ```ts
+ * defaultCycleName('2026-07-27T00:00:00.000Z', '2026-08-02T23:59:59.999Z'); // 'Jul 27 – Aug 2'
+ * ```
+ */
+export function defaultCycleName(startsAt: Date | string, endsAt: Date | string): string {
+  const start = startsAt instanceof Date ? startsAt : new Date(startsAt);
+  const end = endsAt instanceof Date ? endsAt : new Date(endsAt);
+  const fmt = start.getUTCFullYear() === end.getUTCFullYear() ? WINDOW_DAY : WINDOW_DAY_YEAR;
+  return `${fmt.format(start)} – ${fmt.format(end)}`;
+}
+
 /** Cycle (team cadence) status. */
 export const CycleStatus = z
   .enum(['upcoming', 'active', 'completed'])
@@ -83,6 +138,11 @@ export const CycleOut = z
       .nullable()
       .optional()
       .describe('Display name, or `null`/absent when the cycle is unnamed.'),
+    displayName: z
+      .string()
+      .describe(
+        'Human-readable name to render: the author-set `name`, else the cycle window dates.',
+      ),
     startsAt: z.string().describe('Window start (ISO-8601 timestamp).'),
     endsAt: z.string().describe('Window end (ISO-8601 timestamp).'),
     status: CycleStatus.describe('Current status (`upcoming`/`active`/`completed`).'),

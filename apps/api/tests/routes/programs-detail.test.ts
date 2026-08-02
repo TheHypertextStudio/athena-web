@@ -1,3 +1,4 @@
+import { defaultCycleName } from '@docket/types';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -47,6 +48,11 @@ async function seedProject(
   return proj!.id;
 }
 
+/** The window every seeded cycle covers, shared so the expected `displayName` is derivable. */
+const CYCLE_STARTS_AT = '2026-01-01';
+/** The end of {@link CYCLE_STARTS_AT}'s window. */
+const CYCLE_ENDS_AT = '2026-01-14';
+
 /** Insert a cycle on a team and return its id. `name` may be null (cycles allow it). */
 async function seedCycle(
   orgId: string,
@@ -61,8 +67,8 @@ async function seedCycle(
       teamId,
       number,
       name,
-      startsAt: new Date('2026-01-01'),
-      endsAt: new Date('2026-01-14'),
+      startsAt: new Date(CYCLE_STARTS_AT),
+      endsAt: new Date(CYCLE_ENDS_AT),
     })
     .returning({ id: schema.cycle.id });
   return cy!.id;
@@ -182,7 +188,12 @@ describe('programs detail (GET /:id with roll-up)', () => {
 
 interface WorkOut {
   groups: {
-    cycle: { id: string | null; name?: string | null; number?: number | null };
+    cycle: {
+      id: string | null;
+      name?: string | null;
+      displayName?: string | null;
+      number?: number | null;
+    };
     segments: { project: { id: string | null; name?: string | null }; tasks: { id: string }[] }[];
   }[];
 }
@@ -234,18 +245,24 @@ describe('programs work view (GET /:id/work)', () => {
     expect(allTaskCount).toBe(4);
   });
 
-  it('labels a name-less cycle group with a null name', async () => {
+  it('names a name-less cycle group by its window, never by its auto-roll number', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const reader = appWithActor(programs, orgId, ['view'], humanActorId);
     const programId = await seedProgram(orgId, humanActorId);
-    const namelessCycle = await seedCycle(orgId, teamId, 7, null);
+    const namelessCycle = await seedCycle(orgId, teamId, 1_000_137, null);
     await seedTask({ orgId, teamId, programId, cycleId: namelessCycle });
 
     const body = await json<WorkOut>(await reader.request(`/${programId}/work`, { method: 'GET' }));
     const group = body.groups.find((g) => g.cycle.id === namelessCycle);
     expect(group).toBeDefined();
+    // `name` stays null — it is the author's own field and nothing has set it.
     expect(group!.cycle.name).toBeNull();
-    expect(group!.cycle.number).toBe(7);
+    // …but the board still has something to head the group with. Without `displayName` the web
+    // work board falls back to the bare vocabulary noun, so two unnamed cadences would render an
+    // identical heading; the number is never an answer because it reads as "Cycle 1000137".
+    expect(group!.cycle.displayName).toBe(defaultCycleName(CYCLE_STARTS_AT, CYCLE_ENDS_AT));
+    expect(group!.cycle.displayName).toBe('Jan 1 – Jan 14');
+    expect(group!.cycle.number).toBe(1_000_137);
   });
 
   it('filters by cycleId and projectId', async () => {

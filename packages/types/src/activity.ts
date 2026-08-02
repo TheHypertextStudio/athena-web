@@ -9,7 +9,7 @@
  */
 import { z } from 'zod';
 
-import { ActorId, AuditEventId, OrganizationId } from './primitives';
+import { ActorId, AuditEventId, OrganizationId, TaskId } from './primitives';
 
 /** Audit-feed subject kinds; `agent` is a first-class subject. */
 export const AuditSubjectType = z
@@ -94,3 +94,77 @@ export const AuditEventOut = z
   .meta({ id: 'AuditEventOut', description: 'An entry in an organization activity feed.' });
 /** Audit-event representation value. */
 export type AuditEventOut = z.infer<typeof AuditEventOut>;
+
+/** One field-level metadata change recorded on a task's activity log. */
+export const TaskActivityChange = z
+  .object({
+    field: z
+      .string()
+      .describe(
+        'Stable machine key for the changed field (e.g. `state`, `assigneeId`, `startDate`) — safe to branch on; never rendered.',
+      ),
+    label: z
+      .string()
+      .describe(
+        'Application-owned display label for the field (e.g. "Status", "Assignee", "Anticipated start"). Never a column name and never provider prose.',
+      ),
+    from: z
+      .string()
+      .nullable()
+      .describe('Display-ready previous value, resolved at write time; null when it was unset.'),
+    to: z
+      .string()
+      .nullable()
+      .describe(
+        'Display-ready new value, resolved at write time; null when the field was cleared.',
+      ),
+  })
+  .meta({
+    id: 'TaskActivityChange',
+    description: 'A single before/after field change on a task.',
+  });
+/** Task-activity change value. */
+export type TaskActivityChange = z.infer<typeof TaskActivityChange>;
+
+/**
+ * One entry in a task's activity log — its creation, or one metadata field changing.
+ *
+ * @remarks
+ * `change.from`/`change.to` are **display strings resolved when the entry was written**, not raw
+ * ids. That is deliberate on two counts. History must be immutable: renaming a project later must
+ * not retroactively rewrite what the log says happened last month. And the reader must never have
+ * to resolve an id it may no longer be able to see (a since-archived project, a departed member) —
+ * the entry is self-contained.
+ *
+ * Ordering is ascending by `(createdAt, id)` — oldest first, the way a GitHub issue log reads —
+ * and ids are ULIDs, so entries written inside the same millisecond still order deterministically.
+ */
+export const TaskActivityOut = z
+  .object({
+    id: z.string().describe('The activity entry id (a ULID; the stable tiebreak for ordering).'),
+    taskId: TaskId.describe('The task this entry belongs to.'),
+    actorId: ActorId.nullable().describe(
+      'WHO made the change; null when the change was system- or automation-generated with no attributable actor.',
+    ),
+    actorName: z
+      .string()
+      .nullable()
+      .describe(
+        "The acting actor's display name, resolved server-side so the client never resolves an id; null for system/automation entries.",
+      ),
+    type: z
+      .enum(['created', 'updated'])
+      .describe("`created` for the task's creation entry, `updated` for a metadata field change."),
+    change: TaskActivityChange.nullable().describe(
+      'The field that changed; null on the `created` entry, which records the task coming into existence rather than a field moving.',
+    ),
+    createdAt: z
+      .string()
+      .describe('Exact ISO-8601 timestamp the change was recorded — the ascending sort key.'),
+  })
+  .meta({
+    id: 'TaskActivityOut',
+    description: "An entry in a task's metadata activity log.",
+  });
+/** Task-activity entry value. */
+export type TaskActivityOut = z.infer<typeof TaskActivityOut>;

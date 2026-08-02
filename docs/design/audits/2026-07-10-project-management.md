@@ -1,3 +1,24 @@
+---
+surfaces: ['today', 'portfolio', 'orgs-[orgId]-projects', 'orgs-[orgId]-initiatives']
+date: 2026-07-10
+verdict: needs-work
+scores:
+  brand: 3
+  typography: 2
+  spacing: 2
+  hierarchy: 1
+  color: 3
+  motion: 2
+  states: 2
+  detail: 2
+gates:
+  a11y: false
+  responsive: false
+  theme-parity: false
+  no-placeholder: false
+  screenshots: false
+---
+
 # Design review: Project management and cross-org portfolio — 2026-07-10
 
 Verdict: **BELOW BAR**. Docket has a stronger multi-workspace foundation than Linear, but it does

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import type { JSX, ReactNode } from 'react';
 
+import { SUPPORT_EMAIL } from '@/lib/support-contact';
+
 /** Terms-of-service metadata. */
 export const metadata: Metadata = {
   title: 'Terms',
@@ -92,8 +94,8 @@ export default function TermsPage(): JSX.Element {
         <p>
           We may revise these terms and will post the effective date above. Material changes apply
           prospectively after reasonable notice. Questions can be sent to{' '}
-          <a className="text-ink underline" href="mailto:support@hypertext.studio">
-            support@hypertext.studio
+          <a className="text-ink underline" href={`mailto:${SUPPORT_EMAIL}`}>
+            {SUPPORT_EMAIL}
           </a>
           .
         </p>

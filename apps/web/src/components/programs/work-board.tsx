@@ -78,6 +78,9 @@ export function WorkBoard({
   onAddTask,
 }: WorkBoardProps): JSX.Element {
   if (loading) {
+    // placeholder: the board's own groups and their rows — which milestones or projects exist for
+    // this program and what work sits under each. The group headings are the *data's* names
+    // ("Milestone 2"), not static chrome, which is why the first bar stands in for one.
     return (
       <div className="flex flex-col gap-3" aria-hidden="true">
         <Skeleton className="h-6 w-40" />
@@ -119,9 +122,13 @@ export function WorkBoard({
     <div className="flex flex-col gap-6">
       {groups.map((group, groupIndex) => {
         const cycleId = group.cycle.id;
+        // A cycle group is headed by the server-derived `displayName` — the author's name when it
+        // has one, else the cycle's window ("Jul 27 – Aug 2") — so a cycle reads the same here as
+        // on the Cycles roster. It used to append the cycle's stored `number`, which is the
+        // epoch-anchored auto-roll idempotency key, so an unnamed cadence read "Cycle 1000137".
+        // The bare noun is the last resort only: two unnamed cadences must never share a heading.
         const cycleTitle = cycleId
-          ? (group.cycle.name ??
-            (group.cycle.number != null ? `${cycleLabel} ${group.cycle.number}` : cycleLabel))
+          ? (group.cycle.displayName ?? group.cycle.name ?? cycleLabel)
           : `No ${cycleLabel.toLowerCase()}`;
         const groupCount = group.segments.reduce((s, seg) => s + seg.tasks.length, 0);
 

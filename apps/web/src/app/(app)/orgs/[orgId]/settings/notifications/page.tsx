@@ -135,6 +135,9 @@ export default function NotificationsSettingsPage({
         description={section?.description ?? 'Decide what Docket tells you, and where.'}
       />
 
+      {/* placeholder: the caller's saved notification preferences and their verified contact
+          points — which channels exist, which are on, and which addresses they point at. The
+          section heading and description above render from static copy. */}
       {loading ? (
         <div className="flex flex-col gap-3" aria-label="Loading notification settings">
           <Skeleton className="h-36 w-full rounded-lg" />

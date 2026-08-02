@@ -303,6 +303,9 @@ export function AthenaWorkspace({
         </p>
       ) : null}
 
+      {/* placeholder: the session list and the pane beside it — which Athena sessions exist, how
+          they group, and what the first one contains. The workspace's own header and controls are
+          static and already painted. */}
       {queue.isPending ? (
         <div className="grid min-h-0 flex-1 gap-0 @3xl:grid-cols-[18rem_minmax(0,1fr)]">
           <div className="border-outline-variant flex flex-col gap-3 border-r p-3">
@@ -377,6 +380,8 @@ export function AthenaWorkspace({
           </nav>
 
           <main className="flex min-h-[32rem] min-w-0 shrink-0 flex-col @3xl:min-h-0">
+            {/* placeholder: the selected session's transcript and proposals. Gated on a session
+                actually being selected, so an empty workbench shows its empty state instead. */}
             {effectiveSelectedId && detail.isPending ? (
               <div className="flex flex-col gap-3 p-6">
                 <Skeleton className="h-20 w-full" />

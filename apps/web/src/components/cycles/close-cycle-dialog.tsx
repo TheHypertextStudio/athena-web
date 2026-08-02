@@ -150,7 +150,7 @@ export function CloseCycleDialog({
         ) : null}
 
         <DialogFooter className="border-outline-variant items-center justify-between border-t px-4 py-4 sm:justify-between">
-          <span className="text-on-surface-variant text-xs">
+          <span className="text-on-surface-variant text-label-medium">
             {items.length === 0 ? 'Ready to close' : summary}
           </span>
           <div className="flex items-center gap-2">

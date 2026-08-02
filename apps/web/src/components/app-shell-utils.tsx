@@ -8,6 +8,8 @@ import {
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
+import { sameOriginPath } from '@/lib/same-origin-path';
+
 /** homeKeyFromPath derives a stable app shell storage or navigation key. */
 export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   if (/^\/today(?:\/|$)/.test(pathname)) return 'today';
@@ -30,10 +32,16 @@ export function orgIdFromPath(pathname: string): string | null {
  *
  * Each {@link WorkspaceNavKey} maps 1:1 to its route segment under `/orgs/[orgId]/…`, so the
  * href builder and {@link workspaceKeyFromPath} stay in lockstep with the real route tree.
+ *
+ * Order matters twice over: it is the sidebar's row order, and it is the scan order
+ * {@link workspaceKeyFromPath} uses. `tasks` sits directly after `triage`, mirroring the sidebar's
+ * Workspace section, so `/orgs/:id/tasks` and `/orgs/:id/tasks/:taskId` both resolve to the same
+ * highlighted row — opening one task never blanks the nav that led you to it.
  */
 export const NAV_SEGMENTS: readonly WorkspaceNavKey[] = [
   'my-work',
   'triage',
+  'tasks',
   'stream',
   'initiatives',
   'programs',
@@ -80,25 +88,25 @@ export function signInReturnPath(returnPath: string): string {
 }
 
 /**
- * Resolve `value` against the current origin, rejecting anything that would leave it — the one
- * open-redirect-safe check every auth-adjacent return-path reader shares.
+ * Resolve `value` against the *browser's* origin, rejecting anything that would leave it.
  *
  * @remarks
- * Uses the native `URL` parser instead of hand-rolled prefix checks — it rejects protocol-relative
- * and cross-origin values (including the backslash/unicode tricks a browser normalizes before a
- * manual `startsWith` check would ever see them) by comparing the resolved `origin`, not by
- * pattern-matching the raw string. Returns `null` for a missing/invalid/cross-origin value so each
- * caller picks its own fallback destination rather than this baking one in.
+ * The client-side binding of {@link sameOriginPath}, which owns the URL reasoning; this function
+ * owns only the one thing that is specific to running in a browser — that with no `window` there is
+ * no origin to compare against, and the honest answer is `null` rather than a guess. Every caller
+ * here (the interlock, the sign-in screen) runs in an event handler or an effect, so a `window` is
+ * always present in practice and the guard is a correctness floor, not a code path.
+ *
+ * The server has no `window` and therefore cannot use this. It resolves against a fixed placeholder
+ * origin instead — see `safeServerReturnPath` in `lib/server-session.ts`, which delegates to the
+ * same shared check.
+ *
+ * @param value - The raw candidate, typically a `?callbackURL=` query value.
+ * @returns The safe same-origin path, or `null`.
  */
 export function safeSameOriginPath(value: string | null | undefined): string | null {
-  if (!value || typeof window === 'undefined') return null;
-  try {
-    const resolved = new URL(value, window.location.origin);
-    if (resolved.origin !== window.location.origin) return null;
-    return `${resolved.pathname}${resolved.search}${resolved.hash}`;
-  } catch {
-    return null;
-  }
+  if (typeof window === 'undefined') return null;
+  return sameOriginPath(value, window.location.origin);
 }
 
 /** lastOrgStorageKey derives a stable app shell storage or navigation key. */

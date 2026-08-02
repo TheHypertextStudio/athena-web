@@ -47,6 +47,8 @@ export default function TeamMappingPicker({
   onChange,
 }: TeamMappingPickerProps): JSX.Element {
   if (loading) {
+    // placeholder: the external provider's own teams/containers, which only that provider can
+    // enumerate — the left-hand side of every mapping row.
     return <Skeleton className="h-16 w-full rounded-lg" />;
   }
   if (error) {

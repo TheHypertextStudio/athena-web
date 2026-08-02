@@ -1,3 +1,24 @@
+---
+surfaces: ['orgs-[orgId]-projects-[projectId]']
+date: 2026-07-14
+verdict: ship
+scores:
+  brand: 3
+  typography: 3
+  spacing: 3
+  hierarchy: 3
+  color: 3
+  motion: 3
+  states: 3
+  detail: 3
+gates:
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: true
+  screenshots: true
+---
+
 # Design review: Projects experience — 2026-07-14
 
 Screenshots:

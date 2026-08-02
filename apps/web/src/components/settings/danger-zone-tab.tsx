@@ -64,6 +64,9 @@ export function DangerZoneTab(): JSX.Element {
   });
 
   if (statusQ.isPending) {
+    // placeholder: the account's lifecycle state — whether a deletion is already scheduled and
+    // for when. The whole panel depends on it: the same region is either "schedule deletion" or
+    // "cancel the deletion you scheduled", so there is no correct static copy to show meanwhile.
     return (
       <div className="flex flex-col gap-3">
         <Skeleton className="h-24 w-full rounded-lg" />

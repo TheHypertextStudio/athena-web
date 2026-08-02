@@ -82,6 +82,9 @@ function groupRows(
 
 /** A small loading skeleton for the first page. */
 function FeedSkeleton(): JSX.Element {
+  // placeholder: the stream's first page of activity — how many entries there are and, for each,
+  // who acted, on what and when. Only the first page: later pages append beneath the entries
+  // already on screen rather than replacing them with this.
   return (
     <div className="flex flex-col gap-2" aria-hidden="true">
       {[0, 1, 2, 3, 4].map((i) => (

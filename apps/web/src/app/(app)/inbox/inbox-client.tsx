@@ -256,6 +256,9 @@ function EmptyState({ title, body }: EmptyStateProps): JSX.Element {
 
 /** Loading placeholder for either feed: a short stack of row skeletons. */
 function FeedSkeleton(): JSX.Element {
+  // placeholder: the inbox items themselves — how many are waiting, each one's source icon,
+  // actor, headline and age. Nothing about a feed row is known before the read resolves; the
+  // surrounding tabs, counts-free headings and empty-state copy render from static strings.
   return (
     <div aria-hidden="true" className="flex flex-col gap-2">
       {[0, 1, 2, 3, 4].map((index) => (

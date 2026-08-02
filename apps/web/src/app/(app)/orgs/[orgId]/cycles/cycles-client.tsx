@@ -21,6 +21,16 @@
  * {@link useApiListQuery} results (the stats fan-out is preserved; no manual refresh). The view state
  * is held in the URL by {@link useViewState}, defaulting to a group-by-status grouping so the
  * familiar segmented look is preserved, but now user-changeable.
+ *
+ * The page composes the shared {@link ListPageLayout} — the *same* import Projects, Initiatives and
+ * Programs use — rather than the hand-rolled `max-w-6xl` wrapper and inline `<h1>` it carried
+ * before, so its measure, gutters, header rhythm and title token are the app's and not its own.
+ * It passes **no subtitle**: the orientation line under the title was removed outright, and because
+ * `ListPageLayout` only renders a `PageSubtitle` when one is passed, it leaves no residual gap.
+ *
+ * The roster is headed by the {@link ActiveCycleOverview}, which answers "what is running right
+ * now and how is it going" without a click. The active cycle *also* stays in the roster below —
+ * subordination is by weight, not by hiding, so a filter never lies about what it matched.
  */
 import type { CycleOut, CycleStats } from '@docket/types';
 import { EmptyState, StatusIcon } from '@docket/ui/components';
@@ -32,11 +42,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { ActiveCycleOverview, findActiveCycle } from '@/components/cycles/active-cycle-overview';
 import { buildCycleCatalog } from '@/components/cycles/cycle-catalog';
 import { type CycleRowProps, CycleRows } from '@/components/cycles/cycle-row';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
 import { type FieldOption, type ViewState } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { ListPageLayout } from '@/components/views/page-layout';
 import { useViewState } from '@/components/views/use-view-state';
 import { isEmptyViewState } from '@/components/views/view-state-url';
 import { cycleDetailDef } from '@/lib/fetch-cycle-detail';
@@ -183,24 +195,30 @@ export default function CyclesClient(): JSX.Element {
     [cycleNoun, orgId, statsById, prefetch, canRename, renameCycle, router],
   );
 
-  return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-on-surface text-title-large">{cycleNounPlural}</h1>
-          <p className="text-on-surface-variant text-xs">
-            {`${cycleNounPlural} roll automatically on your cadence — what's live now, what's coming up, and what's wrapped.`}
-          </p>
-        </div>
-      </header>
+  /** The cycle running right now — the overview's subject, when there is one. */
+  const activeCycle = useMemo(() => findActiveCycle(cycles), [cycles]);
 
-      {!loading && !loadError && total > 0 ? (
-        <FilterToolbar
-          catalog={catalog}
-          state={effectiveState}
-          onFiltersChange={setFilters}
-          onGroupByChange={setGroupBy}
-          onSortChange={setSort}
+  return (
+    <ListPageLayout
+      title={cycleNounPlural}
+      toolbar={
+        !loading && !loadError && total > 0 ? (
+          <FilterToolbar
+            catalog={catalog}
+            state={effectiveState}
+            onFiltersChange={setFilters}
+            onGroupByChange={setGroupBy}
+            onSortChange={setSort}
+          />
+        ) : null
+      }
+    >
+      {activeCycle && !loading && !loadError ? (
+        <ActiveCycleOverview
+          orgId={orgId}
+          cycle={activeCycle}
+          stats={statsById[activeCycle.id] ?? null}
+          cycleNoun={cycleNoun}
         />
       ) : null}
 
@@ -234,7 +252,7 @@ export default function CyclesClient(): JSX.Element {
               aria-label={`${group.label} ${cycleNounPlural.toLowerCase()}`}
               className="flex flex-col gap-3"
             >
-              <h2 className="text-on-surface-variant flex items-center gap-2 text-xs font-medium">
+              <h2 className="text-on-surface-variant text-label-medium flex items-center gap-2">
                 {effectiveState.groupBy?.field === 'status' &&
                 group.hint &&
                 group.id !== EMPTY_GROUP_ID ? (
@@ -253,12 +271,15 @@ export default function CyclesClient(): JSX.Element {
       ) : (
         <CycleRows rows={applied.rows.map(toRowProps)} ariaLabel={cycleNounPlural} />
       )}
-    </div>
+    </ListPageLayout>
   );
 }
 
 /** Loading placeholder for the list: two labeled segments of cycle rows. */
 function ListSkeleton(): JSX.Element {
+  // placeholder: the workspace's cycles — which cadence segments exist (past / current /
+  // upcoming), how many cycles sit in each, and every row's name, dates and progress. Cycles
+  // auto-roll on a configurable cadence, so even the segment labels depend on the fetched set.
   return (
     <div className="flex flex-col gap-6" aria-hidden="true">
       {[0, 1].map((section) => (

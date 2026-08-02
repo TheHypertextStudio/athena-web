@@ -221,6 +221,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             </div>
           ) : null}
 
+          {/* placeholder: the search results for what has been typed — how many match and what
+              each one is. Only the results region: the input, the static command actions and the
+              "No matches" copy are all available without a fetch. */}
           {showResultsSkeleton ? (
             <div className="flex flex-col gap-1 p-1.5" aria-hidden="true">
               <Skeleton className="h-8 w-full rounded-md" />

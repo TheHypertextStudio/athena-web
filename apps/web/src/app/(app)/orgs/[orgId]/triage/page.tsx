@@ -69,6 +69,8 @@ export default function TriagePage(): JSX.Element {
         aria-label="Triage queue"
         className="border-outline-variant flex-1 overflow-hidden rounded-xl border"
       >
+        {/* placeholder: the triage queue's rows — what has arrived unsorted, and each item's
+            title, source and age. The queue's own heading and empty-state copy are static. */}
         {loading ? (
           <div className="flex flex-col gap-2 p-3" aria-hidden="true">
             <Skeleton className="h-8 w-full" />

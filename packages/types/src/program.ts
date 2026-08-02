@@ -154,7 +154,17 @@ export const ProgramDetail = ProgramOut.extend({
 /** Detailed program representation value. */
 export type ProgramDetail = z.infer<typeof ProgramDetail>;
 
-/** A lightweight Cycle reference for grouping a Program's work by cadence. */
+/**
+ * A lightweight Cycle reference for grouping a Program's work by cadence.
+ *
+ * @remarks
+ * `displayName` is the field to render, exactly as on {@link CycleOut}: the author's `name` when
+ * the cycle has one, otherwise its date window. It is carried here rather than derived by the
+ * caller because this reference has no dates to derive from, and without it an unnamed cycle's
+ * group heading degrades to the bare vocabulary noun — so two unnamed cadences on one board would
+ * be indistinguishable. `number` remains on the wire as the internal auto-roll key; it is never a
+ * label (an epoch-anchored 1000137 means nothing to a reader).
+ */
 export const ProgramCycleRef = z
   .object({
     id: CycleId.nullable().describe(
@@ -164,14 +174,21 @@ export const ProgramCycleRef = z
       .string()
       .nullable()
       .optional()
-      .describe('The cycle’s display name, when it has one (cycles may be unnamed).'),
+      .describe('The cycle’s author-set name, when it has one (cycles may be unnamed).'),
+    displayName: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'The name to render for this cycle — the author-set `name`, else the cycle’s window dates. Present only when grouped under a real cycle.',
+      ),
     number: z
       .number()
       .int()
       .nullable()
       .optional()
       .describe(
-        'The cycle’s team-local sequence number, present only when grouped under a real cycle.',
+        'The cycle’s auto-roll sequence key, present only when grouped under a real cycle. Internal ordering key — never render it.',
       ),
   })
   .meta({ id: 'ProgramCycleRef', description: 'A cycle reference within a program work view.' });

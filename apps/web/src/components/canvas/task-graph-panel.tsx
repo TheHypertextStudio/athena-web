@@ -322,6 +322,9 @@ export default function TaskGraphPanel({
 
   const body = (() => {
     if (isLoading) {
+      // placeholder: the graph itself — which tasks and dependencies exist, and therefore the
+      // shape of the layout. There is no meaningful partial rendering of a node-link diagram, so
+      // the canvas area is covered while its toolbar and controls stay live.
       return <Skeleton className="absolute inset-2 rounded-lg" />;
     }
     if (error !== null) {

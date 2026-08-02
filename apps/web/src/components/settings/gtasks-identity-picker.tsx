@@ -24,6 +24,8 @@ export interface GtasksIdentityPickerProps {
  */
 export function GtasksIdentityPicker({ picker, orgId }: GtasksIdentityPickerProps): JSX.Element {
   if (picker.loading) {
+    // placeholder: which linked Google identities are still available to connect — a set that
+    // depends on both the account's linked identities and what is already connected here.
     return <Skeleton className="h-16 w-full rounded-xl" />;
   }
   if (picker.available.length === 0) {

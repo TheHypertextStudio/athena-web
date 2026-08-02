@@ -5,12 +5,13 @@
  *
  * @remarks
  * A Cycle is a *team-scoped* time-box, so creating one needs a team, a date range, and an
- * explicit team-local sequence `number` (cycles are "{Cycle} 3", "Sprint 12", …). The composer
- * collects an optional name (the title — unnamed cycles read as "{Cycle} N"), the required start →
- * end timeline (pre-filled to a sensible upcoming two-week window), and an inline strip of compact
+ * explicit team-local sequence `number`. The composer collects an optional name (the title —
+ * unnamed cycles are named by their window, e.g. "Aug 3 – Aug 16"), the required start → end
+ * timeline (pre-filled to a sensible upcoming two-week window), and an inline strip of compact
  * pickers — the team it belongs to and its lifecycle status (upcoming / active / completed). The
- * next `number` is derived from the chosen team's existing cycles via
- * {@link CreateCycleDialogProps.nextNumberForTeam}. Built on the shared {@link ComposerShell}.
+ * `number` is derived from the chosen team's existing cycles via
+ * {@link CreateCycleDialogProps.nextNumberForTeam} and is submitted but never shown: it is the
+ * uniqueness key of the auto-roll, not a label. Built on the shared {@link ComposerShell}.
  *
  * The dialog is *controlled* by the host page so its header "New {cycle}" button and empty-state
  * CTA open the *same* dialog. This component owns only the form's transient field state, which
@@ -21,7 +22,13 @@
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
  */
-import { type CycleOut, type CycleStatus, TeamId, type TeamOut } from '@docket/types';
+import {
+  type CycleOut,
+  type CycleStatus,
+  defaultCycleName,
+  TeamId,
+  type TeamOut,
+} from '@docket/types';
 import { DateRangePicker, EnumPicker } from '@docket/ui/components';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
@@ -112,8 +119,19 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
 
   const teamId = teamOverride ?? defaultTeamId;
 
-  // The team-local sequence number this cycle will take (shown in the placeholder).
-  const nextNumber = teamId ? nextNumberForTeam(teamId) : 1;
+  /**
+   * What an unnamed cycle will be called once created: its window.
+   *
+   * @remarks
+   * The placeholder used to preview the team-local sequence `number` this cycle would take — but
+   * that number is the epoch-anchored auto-roll key, so the composer promised a title like
+   * "Cycle 1000142". It now previews the real default ({@link defaultCycleName}), and falls back to
+   * plain copy until a window is chosen.
+   */
+  const titlePlaceholder =
+    startsAt !== null && endsAt !== null && startsAt.length > 0 && endsAt.length > 0
+      ? `${defaultCycleName(startsAt, endsAt)} — name optional`
+      : 'Name (optional)';
 
   /** Whether the chosen date range is valid (both set, end strictly after start). */
   const rangeValid =
@@ -187,7 +205,7 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
       heading={`New ${cycleNoun.toLowerCase()}`}
       title={name}
       onTitleChange={setName}
-      titlePlaceholder={`${cycleNoun} ${String(nextNumber)} — name optional`}
+      titlePlaceholder={titlePlaceholder}
       body=""
       onBodyChange={() => {
         /* Cycles carry no description; the body field is intentionally hidden. */

@@ -5,3 +5,14 @@ coverage
 pnpm-lock.yaml
 .claude
 apps/runner/worker-configuration.d.ts
+
+# drizzle-kit writes these snapshots itself on every `db:generate` and reads them back to diff the
+# next migration against. Formatting them makes `pnpm format` and `drizzle-kit` fight over the same
+# bytes: prettier rewrites the file, the next generate rewrites it back, and `pnpm format:check`
+# goes red in the `quality` job — which gates `deploy-production` — for a diff no human authored.
+packages/db/drizzle/meta/
+
+# Same story: `scripts/placeholder-inventory.ts` rewrites this document from source on every run,
+# emitting compact Markdown tables. Prettier wants those tables column-aligned, so formatting it
+# puts the generator and `pnpm format:check` in a loop over 150 table rows that no human wrote.
+docs/engineering/placeholder-inventory.md

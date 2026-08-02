@@ -1,0 +1,146 @@
+{
+  "desktop": {
+    "documentHeight": 900,
+    "viewportHeight": 900,
+    "authorize": {
+      "top": 657,
+      "bottom": 697,
+      "height": 40
+    },
+    "deny": {
+      "top": 657,
+      "bottom": 697,
+      "height": 40
+    },
+    "innerText": "Docket\nDA\nD\nDocket Consent Audit wants access to your Docket account\nYour account\nlane+1785672656209-144211@example.com\nReturns to\ndocket-production-launch-ebe2d9.docket.localhost\n\nThis app will be able to\n\nRead your work\nView only\nCreate and update work\nCan make changes\nManage agent sessions\nCan make changes\nLink external items\nCan make changes\nStay connected\nOngoing access\n\nAuthorize lets Docket Consent Audit do the things listed above until you disconnect it. Deny sends you back to docket-production-launch-ebe2d9.docket.localhost without giving it anything.\n\nDeny\nAuthorize\n\nRevoke access any time in Connected apps.",
+    "bannedHits": [],
+    "rawIdentifiers": false,
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "horizontalScroll": false,
+    "overflowing": [],
+    "rowHeights": [58, 58, 58, 58, 58],
+    "rowMismatches": [],
+    "inlineStyledElements": ["SCRIPT", "NEXT-ROUTE-ANNOUNCER"]
+  },
+  "mobile": {
+    "documentHeight": 923,
+    "viewportHeight": 900,
+    "authorize": {
+      "top": 771,
+      "bottom": 811,
+      "height": 40
+    },
+    "deny": {
+      "top": 819,
+      "bottom": 859,
+      "height": 40
+    },
+    "innerText": "Docket\nDA\nD\nDocket Consent Audit wants access to your Docket account\nYour account\nlane+1785672656209-144211@example.com\nReturns to\ndocket-production-launch-ebe2d9.docket.localhost\n\nThis app will be able to\n\nRead your work\nView only\nCreate and update work\nCan make changes\nManage agent sessions\nCan make changes\nLink external items\nCan make changes\nStay connected\nOngoing access\n\nAuthorize lets Docket Consent Audit do the things listed above until you disconnect it. Deny sends you back to docket-production-launch-ebe2d9.docket.localhost without giving it anything.\n\nDeny\nAuthorize\n\nRevoke access any time in Connected apps.",
+    "bannedHits": [],
+    "rawIdentifiers": false,
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "horizontalScroll": false,
+    "overflowing": [],
+    "rowHeights": [58, 58, 58, 58, 58],
+    "rowMismatches": [],
+    "inlineStyledElements": ["SCRIPT", "NEXT-ROUTE-ANNOUNCER"]
+  },
+  "narrow": {
+    "documentHeight": 1011,
+    "viewportHeight": 900,
+    "authorize": {
+      "top": 859,
+      "bottom": 899,
+      "height": 40
+    },
+    "deny": {
+      "top": 907,
+      "bottom": 947,
+      "height": 40
+    },
+    "innerText": "Docket\nDA\nD\nDocket Consent Audit wants access to your Docket account\nYour account\nlane+1785672656209-144211@example.com\nReturns to\ndocket-production-launch-ebe2d9.docket.localhost\n\nThis app will be able to\n\nRead your work\nView only\nCreate and update work\nCan make changes\nManage agent sessions\nCan make changes\nLink external items\nCan make changes\nStay connected\nOngoing access\n\nAuthorize lets Docket Consent Audit do the things listed above until you disconnect it. Deny sends you back to docket-production-launch-ebe2d9.docket.localhost without giving it anything.\n\nDeny\nAuthorize\n\nRevoke access any time in Connected apps.",
+    "bannedHits": [],
+    "rawIdentifiers": false,
+    "scrollWidth": 320,
+    "clientWidth": 320,
+    "horizontalScroll": false,
+    "overflowing": [],
+    "rowHeights": [58, 58, 58, 58, 58],
+    "rowMismatches": [],
+    "inlineStyledElements": ["SCRIPT", "NEXT-ROUTE-ANNOUNCER"]
+  },
+  "unknownScope": {
+    "documentHeight": 900,
+    "viewportHeight": 900,
+    "authorize": {
+      "top": 569,
+      "bottom": 609,
+      "height": 40
+    },
+    "deny": {
+      "top": 569,
+      "bottom": 609,
+      "height": 40
+    },
+    "innerText": "Docket\nDA\nD\nDocket Consent Audit wants access to your Docket account\nYour account\nlane+1785672656209-144211@example.com\nReturns to\ndocket-production-launch-ebe2d9.docket.localhost\n\nThis app will be able to\n\nRead your work\nView only\nA permission Docket does not offer\nGrants nothing\n\nAuthorize lets Docket Consent Audit do the things listed above until you disconnect it. Deny sends you back to docket-production-launch-ebe2d9.docket.localhost without giving it anything.\n\nDeny\nAuthorize\n\nRevoke access any time in Connected apps.",
+    "bannedHits": [],
+    "rawIdentifiers": false,
+    "scrollWidth": 1440,
+    "clientWidth": 1440,
+    "horizontalScroll": false,
+    "overflowing": [],
+    "rowHeights": [58, 58],
+    "rowMismatches": [],
+    "inlineStyledElements": ["SCRIPT", "NEXT-ROUTE-ANNOUNCER"]
+  },
+  "realisticMobile": {
+    "documentHeight": 907,
+    "viewportHeight": 844,
+    "authorize": {
+      "top": 755,
+      "bottom": 795,
+      "height": 40
+    },
+    "deny": {
+      "top": 803,
+      "bottom": 843,
+      "height": 40
+    },
+    "innerText": "Docket\nC\nD\nClaude wants access to your Docket account\nYour account\nlane+1785672656209-144211@example.com\nReturns to\nclaude.ai\n\nThis app will be able to\n\nRead your work\nView only\nCreate and update work\nCan make changes\nManage agent sessions\nCan make changes\nLink external items\nCan make changes\nStay connected\nOngoing access\n\nAuthorize lets Claude do the things listed above until you disconnect it. Deny sends you back to claude.ai without giving it anything.\n\nDeny\nAuthorize\n\nRevoke access any time in Connected apps.",
+    "bannedHits": [],
+    "rawIdentifiers": false,
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "horizontalScroll": false,
+    "overflowing": [],
+    "rowHeights": [58, 58, 58, 58, 58],
+    "rowMismatches": [],
+    "inlineStyledElements": ["SCRIPT", "NEXT-ROUTE-ANNOUNCER"]
+  },
+  "longHostMobile": {
+    "documentHeight": 923,
+    "viewportHeight": 844,
+    "authorize": {
+      "top": 771,
+      "bottom": 811,
+      "height": 40
+    },
+    "deny": {
+      "top": 819,
+      "bottom": 859,
+      "height": 40
+    },
+    "innerText": "Docket\nDA\nD\nDocket Consent Audit wants access to your Docket account\nYour account\nlane+1785672656209-144211@example.com\nReturns to\ndocket-production-launch-ebe2d9.docket.localhost\n\nThis app will be able to\n\nRead your work\nView only\nCreate and update work\nCan make changes\nManage agent sessions\nCan make changes\nLink external items\nCan make changes\nStay connected\nOngoing access\n\nAuthorize lets Docket Consent Audit do the things listed above until you disconnect it. Deny sends you back to docket-production-launch-ebe2d9.docket.localhost without giving it anything.\n\nDeny\nAuthorize\n\nRevoke access any time in Connected apps.",
+    "bannedHits": [],
+    "rawIdentifiers": false,
+    "scrollWidth": 390,
+    "clientWidth": 390,
+    "horizontalScroll": false,
+    "overflowing": [],
+    "rowHeights": [58, 58, 58, 58, 58],
+    "rowMismatches": [],
+    "inlineStyledElements": ["SCRIPT", "NEXT-ROUTE-ANNOUNCER"]
+  }
+}

@@ -11,7 +11,7 @@
  * it only establishes *who* is asking, exactly like {@link orgContextMiddleware}.
  */
 import { auth, verifyAccessToken } from '@docket/auth';
-import { actor, db, user as userTable } from '@docket/db';
+import { actor, db, oauthClient, oauthConsent, user as userTable } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 
 import { env } from '../env';
@@ -150,17 +150,22 @@ function bearerToken(headers: Headers): string | null {
  *
  * @remarks
  * Verifies the token as a locally-checkable JWT via Better Auth's `verifyAccessToken`
- * (`jose`-based signature check against the AS's own `/jwks` endpoint, cached — no DB
- * round-trip per call). `audience`/`issuer` are checked against `MCP_RESOURCE_URL`/
- * `MCP_ISSUER_URL` — a token minted for any other resource or by any other issuer fails
- * verification outright, which IS the RFC 8707 audience binding. The token's `scope` claim
- * becomes the caller's verified scope set; **no scope is granted that the token did not
- * carry** — and the token itself is never forwarded downstream (no passthrough; connector
- * calls use Integration credentials).
+ * (`jose`-based signature check against the AS's own `/jwks` endpoint, cached).
+ * `audience`/`issuer` are checked against `MCP_RESOURCE_URL`/`MCP_ISSUER_URL` — a token minted for
+ * any other resource or by any other issuer fails verification outright, which IS the RFC 8707
+ * audience binding. The token's `scope` claim becomes the caller's verified scope set; **no scope
+ * is granted that the token did not carry** — and the token itself is never forwarded downstream
+ * (no passthrough; connector calls use Integration credentials).
+ *
+ * Signature/audience/expiry are necessary but not sufficient: the grant behind the token must
+ * still stand. {@link isGrantLive} re-checks it on every call, so removing an app from the
+ * Connected apps screen stops it at the very next request rather than whenever its token happens
+ * to expire.
  *
  * @param token - The extracted bearer token string.
  * @returns the resolved {@link McpContext} with the token's verified scopes.
- * @throws {AuthError} When OAuth is not configured or the token fails verification.
+ * @throws {AuthError} When OAuth is not configured, the token fails verification, or the caller
+ * has revoked (or never granted) the client the token names.
  */
 /**
  * The OAuth issuer identifier — Better Auth's mount point, NOT the bare API origin.
@@ -178,6 +183,50 @@ function bearerToken(headers: Headers): string | null {
 export function oauthIssuer(): string | null {
   const origin = env.MCP_ISSUER_URL?.replace(/\/$/, '');
   return origin ? `${origin}/api/auth` : null;
+}
+
+/**
+ * Whether the caller's grant for `clientId` is still standing.
+ *
+ * @remarks
+ * The check that makes revocation **immediate** rather than eventual (MISS-05). Docket's access
+ * tokens are self-contained JWTs, so `verifyAccessToken` alone proves only that this AS minted the
+ * token for this resource and that it has not expired — it says nothing about whether the person
+ * has since removed the app from their Connected apps screen. Without this lookup a revoked client
+ * kept working for the remainder of the token's 15-minute lifetime, which is precisely the window
+ * someone revoking a suspicious app is trying to close.
+ *
+ * The grant record is the `oauthConsent` row `DELETE /v1/me/connected-apps/:clientId` deletes. One
+ * class of client legitimately has none: a client registered with `skip_consent` never runs the
+ * consent screen, so for those the registration itself *is* the authorization and the client row is
+ * what is checked. A `disabled` client fails either way.
+ *
+ * Cost is one indexed read on `(client_id, user_id)` per call, alongside the user read this path
+ * already performs — the earlier "no DB round-trip per call" property was never true of this
+ * function, and correctness on revocation is worth strictly more than the round-trip it saves.
+ *
+ * @param clientId - The `azp` claim: the OAuth client the token was minted for.
+ * @param userId - The token's subject.
+ * @returns true when the client is registered, enabled, and still authorized by this user.
+ */
+async function isGrantLive(clientId: string, userId: string): Promise<boolean> {
+  const clients = await db
+    .select({ disabled: oauthClient.disabled, skipConsent: oauthClient.skipConsent })
+    .from(oauthClient)
+    .where(eq(oauthClient.clientId, clientId))
+    .limit(1);
+
+  const client = clients[0];
+  if (!client || client.disabled === true) return false;
+  if (client.skipConsent === true) return true;
+
+  const consents = await db
+    .select({ id: oauthConsent.id })
+    .from(oauthConsent)
+    .where(and(eq(oauthConsent.clientId, clientId), eq(oauthConsent.userId, userId)))
+    .limit(1);
+
+  return consents.length > 0;
 }
 
 async function resolveBearerContext(token: string): Promise<McpContext> {
@@ -201,6 +250,15 @@ async function resolveBearerContext(token: string): Promise<McpContext> {
 
   const userId = typeof payload.sub === 'string' ? payload.sub : null;
   if (!userId) throw new AuthError();
+
+  // `azp` is the authorized party — the OAuth client the AS minted this token for. Better Auth's
+  // `oauthProvider` stamps it onto every access token it issues, so a token that reaches here
+  // without one did not come from the authorization-code flow and cannot have its grant checked;
+  // refusing is the only answer that keeps revocation meaningful.
+  const clientClaim = payload['azp'];
+  const clientId = typeof clientClaim === 'string' && clientClaim !== '' ? clientClaim : null;
+  if (!clientId) throw new AuthError();
+  if (!(await isGrantLive(clientId, userId))) throw new AuthError();
 
   const scopeClaim = payload['scope'];
   const scopes = (typeof scopeClaim === 'string' ? scopeClaim : '')

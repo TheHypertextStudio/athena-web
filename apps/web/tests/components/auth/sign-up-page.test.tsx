@@ -29,7 +29,7 @@ vi.mock('../../../src/app/(auth)/_lib/webauthn', () => ({
   isWebAuthnSupported: () => true,
 }));
 
-import SignUpPage from '../../../src/app/(auth)/sign-up/page';
+import { SignUpClient } from '../../../src/app/(auth)/sign-up/sign-up-client';
 
 /** Drive step 1: enter name + email and request the code. */
 function submitEmailStep(): void {
@@ -51,11 +51,11 @@ afterEach(() => {
   cleanup();
 });
 
-describe('SignUpPage', () => {
+describe('SignUpClient', () => {
   it('redirects an already-authenticated browser away from the account-creation form', async () => {
     useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     await waitFor(() => {
       expect(push).toHaveBeenCalledWith('/today');
@@ -73,7 +73,7 @@ describe('SignUpPage', () => {
     addPasskey.mockResolvedValue({ error: null });
     signInPasskey.mockResolvedValue({ error: null });
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
 
     submitEmailStep();
 
@@ -109,7 +109,7 @@ describe('SignUpPage', () => {
     addPasskey.mockResolvedValue({ error: null });
     signInPasskey.mockResolvedValue({ error: null });
 
-    const { rerender } = render(<SignUpPage />);
+    const { rerender } = render(<SignUpClient />);
     submitEmailStep();
 
     const codeInput = await screen.findByLabelText('Verification code');
@@ -122,7 +122,7 @@ describe('SignUpPage', () => {
     push.mockClear();
 
     useSession.mockReturnValue({ data: { user: { id: 'user_1' } }, isPending: false });
-    rerender(<SignUpPage />);
+    rerender(<SignUpClient />);
 
     expect(push).not.toHaveBeenCalled();
   });
@@ -130,7 +130,7 @@ describe('SignUpPage', () => {
   it('does not claim an email was sent when the request-code endpoint fails', async () => {
     authFetch.mockResolvedValue({ error: { status: 508, message: 'Infinite loop detected' } });
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
     submitEmailStep();
 
     await waitFor(() => {
@@ -146,7 +146,7 @@ describe('SignUpPage', () => {
   it('keeps the user on the email step when request-code is rate-limited', async () => {
     authFetch.mockResolvedValue({ error: { status: 429, message: 'Too many requests' } });
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
     submitEmailStep();
 
     await waitFor(() => {
@@ -165,7 +165,7 @@ describe('SignUpPage', () => {
       return Promise.resolve({});
     });
 
-    render(<SignUpPage />);
+    render(<SignUpClient />);
     submitEmailStep();
 
     const codeInput = await screen.findByLabelText('Verification code');

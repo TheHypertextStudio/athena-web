@@ -66,8 +66,11 @@ export function CycleRow({
   onRename,
   onOpen,
 }: CycleRowProps): JSX.Element {
-  const numberLabel = `${cycleNoun} ${String(cycle.number)}`;
-  const title = cycle.name ?? numberLabel;
+  // The rendered identity is always the server-derived `displayName` — the author's name when the
+  // cycle has one, otherwise its window ("Jul 27 – Aug 2"). The stored `number` is the auto-roll
+  // idempotency key (1000137) and is never shown; the row used to print it both as the title
+  // fallback and as a trailing chip beside a named cycle.
+  const title = cycle.displayName;
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 
@@ -99,6 +102,9 @@ export function CycleRow({
         <div className="min-w-0">
           <span className="flex min-w-0 items-center gap-2">
             {canRename && onRename ? (
+              // Rename writes `name` and only `name`, so an unnamed cycle opens an EMPTY field
+              // with its window as the placeholder — never pre-filled with a derived title the
+              // author did not write.
               <EditableTitle
                 value={cycle.name ?? ''}
                 onSave={(name) => {
@@ -107,24 +113,24 @@ export function CycleRow({
                 canEdit
                 activate="doubleClick"
                 {...(onOpen ? { onActivate: onOpen } : {})}
-                ariaLabel="Cycle name"
-                placeholder={numberLabel}
-                className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
+                ariaLabel={`${cycleNoun} name`}
+                placeholder={cycle.displayName}
+                className="text-on-surface text-body-medium line-clamp-1 min-w-0 font-medium"
               />
             ) : (
-              <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
+              <span className="text-on-surface text-body-medium line-clamp-1 font-medium">
                 {title}
               </span>
             )}
-            {cycle.name ? (
-              <span className="text-on-surface-variant shrink-0 text-xs font-normal tabular-nums">
-                {numberLabel}
-              </span>
-            ) : null}
           </span>
-          <p className="text-on-surface-variant mt-0.5 text-xs leading-4">
-            {formatWindow(cycle.startsAt, cycle.endsAt)}
-          </p>
+          {/* The window rides under the title only when it adds something: an unnamed cycle's
+              title already *is* its window, so repeating it would print the same string twice in
+              one row. */}
+          {cycle.name ? (
+            <p className="text-on-surface-variant text-body-small mt-0.5">
+              {formatWindow(cycle.startsAt, cycle.endsAt)}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="px-3">
@@ -139,19 +145,22 @@ export function CycleRow({
                 style={{ width: `${taskPct}%` }}
               />
             </div>
-            <span className="text-sm tabular-nums">
+            <span className="text-body-medium tabular-nums">
               <span className="text-on-surface font-medium">{stats.completed}</span>
               <span className="text-on-surface-variant">/{stats.committed}</span>
             </span>
           </div>
         ) : (
+          // placeholder: this cycle's completion stats — the committed/completed counts behind the
+          // progress bar. They come from a separate per-cycle read, so the row's name, dates and
+          // status render immediately and only the numbers wait.
           <div className="flex items-center gap-2">
             <Skeleton className="h-1.5 w-14 rounded-full" />
             <Skeleton className="h-3 w-10" />
           </div>
         )}
       </div>
-      <div className="text-on-surface-variant px-3 text-sm tabular-nums">
+      <div className="text-on-surface-variant text-body-medium px-3 tabular-nums">
         {stats ? (
           stats.carryover > 0 && cycle.status !== 'completed' ? (
             <span className="text-state-started font-medium">{stats.carryover} open</span>
@@ -187,21 +196,24 @@ export function CycleRows({ rows, ariaLabel, className, ...rest }: CycleRowsProp
   return (
     <div {...rest} className={cn('bg-surface-container-low relative rounded-xl p-2', className)}>
       <div className="overflow-x-auto overscroll-x-contain pb-1">
-        <div role="grid" aria-label={ariaLabel} className="min-w-[46rem] text-sm">
+        <div role="grid" aria-label={ariaLabel} className="text-body-medium min-w-[46rem]">
           <div
             role="row"
-            className={cn('text-on-surface-variant grid h-8 items-center text-xs', ROW_GRID)}
+            className={cn(
+              'text-on-surface-variant text-label-medium grid h-8 items-center',
+              ROW_GRID,
+            )}
           >
-            <div role="columnheader" className="px-3 pl-14 font-medium">
+            <div role="columnheader" className="px-3 pl-14">
               Cycle
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className="px-3">
               Status
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className="px-3">
               Progress
             </div>
-            <div role="columnheader" className="px-3 font-medium">
+            <div role="columnheader" className="px-3">
               Points
             </div>
           </div>

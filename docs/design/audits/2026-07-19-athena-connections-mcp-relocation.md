@@ -1,3 +1,24 @@
+---
+surfaces: ['settings-athena', 'settings-connections']
+date: 2026-07-19
+verdict: ship
+scores:
+  brand: 3
+  typography: 3
+  spacing: 4
+  hierarchy: 3
+  color: 4
+  motion: 3
+  states: 3
+  detail: 3
+gates:
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: true
+  screenshots: true
+---
+
 # Design review: Athena settings + Connections (post MCP relocation) — 2026-07-19
 
 Screenshots: `apps/web/.data/design-review/2026-07-19/settings-{athena,connections}-{1440x900,390x844}-{light,dark}.png` — 2 routes (`/settings/athena`, `/settings/connections`), each at 1440×900 and 390×844, light and dark (8 total per pass, 2 passes), captured against a real authenticated session via the repo's own `e2e/tools/capture-shots.ts` + `dev-session.ts`. Both routes passed the 320px horizontal-overflow check in both passes.

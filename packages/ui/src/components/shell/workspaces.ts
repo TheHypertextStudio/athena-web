@@ -50,11 +50,19 @@ export type HomeNavKey =
  *
  * @remarks
  * Each key maps 1:1 to its route segment under `/orgs/[orgId]/…`, so the host's navigation
- * table and active-key resolution stay in lockstep with the real route tree.
+ * table and active-key resolution stay in lockstep with the real route tree. The destinations are
+ * `my-work`, `triage`, `tasks`, `athena`, `stream`, `initiatives`, `programs`, `projects`,
+ * `cycles`, `teams`, `views`, `graph`, `agents`, and `settings`.
+ *
+ * `tasks` is deliberately *also* a {@link HomeNavKey}: the cross-org Home row answers "what is on
+ * my plate anywhere", while this one answers "what work exists in this workspace". They are two
+ * different altitudes over the same noun, exactly as `stream` already is, so a workspace's task
+ * roster is reachable beside its Projects and Initiatives rather than only through them.
  */
 export type WorkspaceNavKey =
   | 'my-work'
   | 'triage'
+  | 'tasks'
   | 'athena'
   | 'stream'
   | 'initiatives'

@@ -16,6 +16,11 @@
  * visible quantity. A vertical "today" marker shows where the window currently sits, so a
  * completed line trailing far below the plan with little runway left reads as off-pace.
  *
+ * A cycle with nothing estimated in it has no trend to draw: both series are flat zero, so the
+ * plot would render as an empty rectangle containing a single dashed "today" rule and nothing for
+ * it to mark against — a stray line, not a chart. In that case the whole plot is replaced by one
+ * application-owned sentence saying why it is empty and what would fill it.
+ *
  * It is a dependency-free, responsive SVG (no chart library): the viewBox is a fixed
  * coordinate space the SVG scales to its container, and every color comes from semantic
  * design tokens via `currentColor`/token utility classes — never hardcoded. A screen-reader
@@ -79,6 +84,14 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
   const titleId = useId();
   const descId = useId();
 
+  // "Is there a trend to draw?" — a series can be present but entirely zero (nothing committed, or
+  // nothing estimated), which plots as two flat lines on the baseline and leaves the "today" marker
+  // as the only mark in the frame.
+  const hasTrend = useMemo(
+    () => burnup.series.some((point) => point.planned > 0 || point.completed > 0),
+    [burnup.series],
+  );
+
   const { plannedPoints, completedPoints, areaPath, maxY, todayX } = useMemo(() => {
     const series = burnup.series;
     const planned = series.map((point) => point.planned);
@@ -118,6 +131,18 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
   )} of ${String(stats.capacity)} planned points complete (${String(pacePct)}%), with ${String(
     stats.carryover,
   )} ${stats.carryover === 1 ? 'task' : 'tasks'} still open.`;
+
+  if (!hasTrend) {
+    return (
+      <figure className={cn('flex flex-col gap-2', className)}>
+        <figcaption className="sr-only">Cycle burn-up</figcaption>
+        <p className="text-on-surface-variant text-body-medium flex h-40 items-center justify-center px-6 text-center">
+          Nothing here is estimated yet, so there is no burn-up to plot. Give the committed work
+          point estimates and completed effort will start tracking against plan.
+        </p>
+      </figure>
+    );
+  }
 
   return (
     <figure className={cn('flex flex-col gap-2', className)}>
@@ -186,7 +211,7 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
         />
       </svg>
 
-      <figcaption className="text-on-surface-variant flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+      <figcaption className="text-on-surface-variant text-label-medium flex flex-wrap items-center gap-x-4 gap-y-1">
         <span className="flex items-center gap-1.5">
           <span aria-hidden="true" className="bg-state-started h-0.5 w-4 rounded-full" />
           Completed

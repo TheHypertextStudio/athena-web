@@ -109,6 +109,9 @@ export function ProviderRow<Provider extends string = string>({
               phase === 'error' ? `Retry connecting ${card.name}` : `Connect ${card.name}`
             }
           >
+            {/* placeholder: whether this provider connects — the outcome of an OAuth round trip
+                that has left the page. Nothing is being hidden; the pulse is progress feedback on
+                the caller's own in-flight action, beside copy that names it. */}
             {phase === 'connecting' ? (
               <>
                 <Cable className="size-4 animate-pulse" />

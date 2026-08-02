@@ -211,6 +211,9 @@ export function UpdatesPanel({
         ) : null}
       </form>
 
+      {/* placeholder: the posted updates — how many there are, who wrote each one, when, and what
+          it says. The composer above stays usable throughout, so someone can post before the
+          history has arrived. */}
       {loading ? (
         <div className="flex flex-col gap-4">
           {[0, 1].map((i) => (

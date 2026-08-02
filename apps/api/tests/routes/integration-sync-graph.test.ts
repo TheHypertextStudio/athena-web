@@ -13,6 +13,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { publicProblemTitle } from '@docket/types';
 
+import { problemTypeUrl } from '../../src/error';
+
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import type * as IntegrationProviderModule from '../../src/routes/integration-provider';
 import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
@@ -322,7 +324,7 @@ describe('Linear write-back scope enforcement', () => {
     expect(denied.status).toBe(409);
     const problem = await jsonBody<{ code: string; title: string }>(denied);
     expect(problem).toEqual({
-      type: 'https://docket.hypertext.studio/problems/linear_write_scope_required',
+      type: problemTypeUrl('linear_write_scope_required'),
       title: publicProblemTitle('linear_write_scope_required'),
       status: 409,
       code: 'linear_write_scope_required',

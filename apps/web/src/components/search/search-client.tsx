@@ -453,6 +453,9 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
               </Button>
             </div>
           ) : loadingInitial ? (
+            /* placeholder: the matches for what has been typed — how many, and what each one is.
+               Only the first search of a query pays this: `loadingInitial` is false while a
+               refetch runs over results already on screen, so typing never animates over them. */
             <Stack gap={1} aria-hidden="true">
               {Array.from({ length: 8 }, (_, i) => (
                 <Skeleton key={i} className="h-20 rounded-lg" />

@@ -208,6 +208,9 @@ export default function ProgramDetailPage(): JSX.Element {
   );
 
   if (detailQ.isPending) {
+    // placeholder: the program's own record — name, summary, the metric strip, which detail tabs
+    // have content (and their counts), and the projects under it. The route carries only a program
+    // id; even the tab row's counts come from the same read.
     return (
       <PageContainer>
         <Skeleton className="h-9 w-72" />

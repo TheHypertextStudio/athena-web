@@ -84,6 +84,8 @@ export function PasskeysSection(): JSX.Element {
     queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY });
 
   if (listQ.isPending) {
+    // placeholder: the passkeys registered to this account — how many, what each is named, and
+    // when it was last used. This is the sign-in method itself, so the list is the whole panel.
     return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (listQ.isError) {

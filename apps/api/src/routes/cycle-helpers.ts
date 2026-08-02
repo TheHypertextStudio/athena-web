@@ -1,6 +1,6 @@
 import { cycle, db, integration, task, team } from '@docket/db';
 import type { CycleOut } from '@docket/types';
-import { type CycleStats, type TaskOut } from '@docket/types';
+import { type CycleStats, defaultCycleName, type TaskOut } from '@docket/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -22,6 +22,13 @@ export type TeamRow = typeof team.$inferSelect;
 /**
  * Project a cycle row into the {@link CycleOut} wire shape.
  *
+ * @remarks
+ * `displayName` is derived here rather than stored: an auto-rolled cycle is inserted with no
+ * `name` (see {@link ensureCycleWindow}), and its `number` is an epoch-anchored auto-roll key that
+ * means nothing to a reader. Every surface renders `displayName`; `name` stays nullable because it
+ * is the author's own name and the only field a rename writes. Deriving on read means no cycle row
+ * is rewritten and no migration is needed — see {@link defaultCycleName} for the naming scheme.
+ *
  * @param cy - The cycle row.
  * @param now - When provided, populates the date-derived `isCurrent` flag; omitted leaves it undefined.
  */
@@ -32,6 +39,7 @@ export function toOut(cy: CycleRow, now?: Date): z.input<typeof CycleOut> {
     teamId: cy.teamId,
     number: cy.number,
     name: cy.name,
+    displayName: cy.name ?? defaultCycleName(cy.startsAt, cy.endsAt),
     startsAt: cy.startsAt.toISOString(),
     endsAt: cy.endsAt.toISOString(),
     status: cy.status,

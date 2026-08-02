@@ -1,13 +1,7 @@
 'use client';
 
 import { type Priority } from '@docket/types';
-import {
-  ActorAvatar,
-  ActorPicker,
-  DatePicker,
-  type ActorKind,
-  type PickerOption,
-} from '@docket/ui/components';
+import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
@@ -16,7 +10,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Separator,
   Skeleton,
 } from '@docket/ui/primitives';
 import { useParams, useRouter } from 'next/navigation';
@@ -32,6 +25,7 @@ import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
 import TaskAttachments from '@/components/task-detail/TaskAttachments';
+import { TaskActivitySection } from '@/components/task-detail/task-activity-section';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
 import {
   cycleOptions as toCycleOptions,
@@ -39,16 +33,11 @@ import {
   programOptions as toProgramOptions,
   projectOptions as toProjectOptions,
 } from '@/components/property-pickers/options';
-import { formatCalendarDate } from '@/lib/format-date';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
-
-function isoDateOf(value: string): string {
-  return value.slice(0, 10);
-}
 
 interface TaskFeedActor {
   name: string;
@@ -138,8 +127,8 @@ export default function TaskDetailPage(): JSX.Element {
     [programs],
   );
   const cycleOptions = useMemo<readonly PickerOption[]>(
-    () => toCycleOptions(cycles, cycleLabel, formatWindow),
-    [cycles, cycleLabel],
+    () => toCycleOptions(cycles, formatWindow),
+    [cycles],
   );
   const milestoneOptions = useMemo<readonly PickerOption[]>(
     () =>
@@ -166,6 +155,9 @@ export default function TaskDetailPage(): JSX.Element {
   );
 
   if (isPending) {
+    // placeholder: the task's own record — its title, the state/priority/assignee controls whose
+    // current values are the whole point of rendering them, its description, and its subtasks,
+    // comments and relations. The route carries only a task id.
     return (
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <Skeleton className="h-9 w-2/3" />
@@ -235,7 +227,6 @@ export default function TaskDetailPage(): JSX.Element {
             }}
             pending={priorityPending}
           />
-          <Separator orientation="vertical" className="h-6" />
           <ActorPicker
             options={memberOptions}
             value={task.assigneeId ?? null}
@@ -259,18 +250,6 @@ export default function TaskDetailPage(): JSX.Element {
               <span className="text-on-surface-variant">{delegate.name}</span>
             </span>
           ) : null}
-          <Separator orientation="vertical" className="h-6" />
-          <DatePicker
-            value={task.dueDate ? isoDateOf(task.dueDate) : null}
-            onChange={(dueDate) => {
-              patchTask({ dueDate });
-            }}
-            placeholder="Set due date"
-            formatLabel={(value) => formatCalendarDate(value) ?? undefined}
-            ariaLabel="Due date"
-            triggerVariant="outline"
-            readOnly={!canEdit}
-          />
           <div className="ml-auto flex items-center gap-2">
             <AthenaContextAction
               label="Have Athena handle this"
@@ -357,6 +336,8 @@ export default function TaskDetailPage(): JSX.Element {
               />
             </div>
           </section>
+
+          <TaskActivitySection orgId={orgId} taskId={taskId} />
         </div>
 
         <TaskPropertiesRail

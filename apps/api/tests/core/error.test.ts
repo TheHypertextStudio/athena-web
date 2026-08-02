@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z, type ZodError } from 'zod';
 
 import type { AppEnv } from '../../src/context';
@@ -15,6 +15,7 @@ import {
   InsufficientScopeError,
   NotFoundError,
   onError,
+  problemTypeUrl,
   ValidationError,
 } from '../../src/error';
 
@@ -110,7 +111,7 @@ describe('onError mapping', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as Record<string, unknown>;
     expect(body).toMatchObject({
-      type: 'https://docket.hypertext.studio/problems/not_found',
+      type: problemTypeUrl('not_found'),
       title: publicProblemTitle('not_found'),
       status: 404,
       code: 'not_found',
@@ -162,5 +163,51 @@ describe('onError mapping', () => {
     expect(body.status).toBe(500);
     expect(body.title).toBe(publicProblemTitle('internal'));
     expect(JSON.stringify(body)).not.toContain(privateDiagnostic);
+  });
+});
+
+/**
+ * `problemTypeUrl` is the ONE place a Problem `type` URI is built (GEN-25).
+ *
+ * @remarks
+ * The point of the helper is that repointing the product at a new apex is a configuration change,
+ * so the tests that matter are the ones proving the URI follows `WEB_URL` and never carries a
+ * hostname the source picked. It reads `process.env` at call time (see its own remarks for why),
+ * which is what lets these assertions use a plain `vi.stubEnv` with no module juggling;
+ * `unstubEnvs` in the shared Vitest preset restores the variable after each test.
+ */
+describe('problemTypeUrl', () => {
+  it('derives the URI from the configured web origin', () => {
+    vi.stubEnv('WEB_URL', 'https://app.example.test');
+    expect(problemTypeUrl('not_found')).toBe('https://app.example.test/problems/not_found');
+    expect(problemTypeUrl('insufficient_scope')).toBe(
+      'https://app.example.test/problems/insufficient_scope',
+    );
+  });
+
+  it('follows a later change to WEB_URL rather than a value frozen at import', () => {
+    vi.stubEnv('WEB_URL', 'https://first.example.test');
+    expect(problemTypeUrl('internal')).toBe('https://first.example.test/problems/internal');
+    vi.stubEnv('WEB_URL', 'https://second.example.test');
+    expect(problemTypeUrl('internal')).toBe('https://second.example.test/problems/internal');
+  });
+
+  it('tolerates a trailing slash on WEB_URL rather than emitting a doubled one', () => {
+    vi.stubEnv('WEB_URL', 'https://app.example.test/');
+    expect(problemTypeUrl('forbidden')).toBe('https://app.example.test/problems/forbidden');
+  });
+
+  it('never emits a hostname the source chose', () => {
+    vi.stubEnv('WEB_URL', 'https://docket.example.test');
+    const emitted = problemTypeUrl('internal');
+    expect(emitted).not.toContain('hypertext.studio');
+    expect(emitted.startsWith('https://docket.example.test/')).toBe(true);
+  });
+
+  it('falls back to a reserved host when WEB_URL is absent, never to a real one', () => {
+    // The env contract makes WEB_URL required, so a serving process cannot reach this. What
+    // matters is that the fallback points nowhere real: `.invalid` is RFC 2606 reserved.
+    vi.stubEnv('WEB_URL', '');
+    expect(problemTypeUrl('internal')).toBe('https://docket.invalid/problems/internal');
   });
 });

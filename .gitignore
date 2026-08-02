@@ -8,6 +8,13 @@ build/
 .next/
 .next.*
 .turbo/
+# Alternate turbo cache directories. `turbo run <task> --cache-dir=<dir>` is how a cache-behaviour
+# experiment avoids trampling the shared `.turbo/`, and each run leaves a few hundred manifest and
+# meta JSON files behind. They are build output exactly as `.turbo/` is — and because Prettier
+# reads this file as an ignore path, leaving them out also made `pnpm format:check` report ~150
+# cache artifacts as unformatted source.
+.turbo-*/
+.scratch-fm/
 .wrangler/
 out/
 *.tsbuildinfo

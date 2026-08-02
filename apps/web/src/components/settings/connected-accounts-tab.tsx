@@ -141,6 +141,8 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
 
       <h2 className="text-on-surface-variant text-xs font-medium">Linked accounts</h2>
 
+      {/* placeholder: which identity providers the caller has actually linked, and under which
+          account. The "Linked accounts" heading and the provider catalog's own names are static. */}
       {loading ? (
         <ul className="flex flex-col gap-2">
           {[0, 1, 2].map((i) => (

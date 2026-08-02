@@ -159,6 +159,9 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
   }, [members, myActorId, roles]);
 
   if (loading) {
+    // placeholder: the workspace roster and role catalog — who is a member, what role each holds,
+    // and whether the caller is permitted to change any of it. That last answer decides which
+    // controls exist at all, so rendering the panel before it arrives would show the wrong one.
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-28 w-full rounded-xl" />

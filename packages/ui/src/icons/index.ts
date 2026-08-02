@@ -17,11 +17,13 @@
 import type SvgIcon from '@mui/material/SvgIcon';
 
 export { default as Activity } from '@mui/icons-material/Timeline';
+export { default as Apple } from '@mui/icons-material/Apple';
 export { default as ArrowRight } from '@mui/icons-material/ArrowForward';
 export { default as AtSign } from '@mui/icons-material/AlternateEmail';
 export { default as Building } from '@mui/icons-material/CorporateFare';
 export { default as Cable } from '@mui/icons-material/Cable';
 export { default as Calendar } from '@mui/icons-material/CalendarMonth';
+export { default as CalendarToday } from '@mui/icons-material/Today';
 export { default as Check } from '@mui/icons-material/Check';
 export { default as CheckCircle2 } from '@mui/icons-material/CheckCircle';
 export { default as ChevronDown } from '@mui/icons-material/KeyboardArrowDown';

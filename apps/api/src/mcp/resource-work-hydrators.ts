@@ -11,6 +11,7 @@ import {
   taskDependency,
   update,
 } from '@docket/db';
+import { defaultCycleName } from '@docket/types';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
@@ -297,6 +298,12 @@ export async function hydrateCycle(orgId: string, id: string): Promise<unknown> 
     teamId: cy.teamId,
     number: cy.number,
     name: cy.name,
+    // The same label the resolver offers as this cycle's handle (see `mcp/descriptors.ts`) and the
+    // same one every REST surface renders: the author's `name`, else the window. Without it an
+    // agent that resolved a cycle by its window would hydrate the resource and find `name: null`,
+    // and the only other label available is `number` — an epoch-anchored auto-roll key that reads
+    // as "Cycle 1000137" and matches nothing a person would say.
+    displayName: cy.name ?? defaultCycleName(cy.startsAt, cy.endsAt),
     status: cy.status,
     startsAt: cy.startsAt.toISOString(),
     endsAt: cy.endsAt.toISOString(),

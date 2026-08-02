@@ -95,11 +95,16 @@ export function buildCycleCatalog(deps: CycleCatalogDeps): FieldCatalog<CycleOut
       sortable: true,
     },
     {
+      // Sortable but NOT filterable: `number` is the epoch-anchored auto-roll key (1000137), so
+      // it orders cycles chronologically without a date comparison, but offering it as a filter
+      // would put that meaningless value in front of a person — in the operator menu, and again
+      // on the resulting chip. Cycles are filtered by status, team, and their dates.
       key: 'number',
       label: 'Number',
       type: 'number',
       accessor: (cycle) => cycle.number,
       sortable: true,
+      filterable: false,
     },
   ];
 }

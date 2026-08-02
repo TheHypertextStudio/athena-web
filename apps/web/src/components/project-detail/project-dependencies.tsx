@@ -41,6 +41,9 @@ export function ProjectDependenciesPanel({
         <DecorativeIcon icon={LinkIcon} />
         <h2 className="text-on-surface text-body-medium font-semibold">Dependencies</h2>
       </div>
+      {/* placeholder: what this project blocks and is blocked by — the linked items and their
+          titles and states. The "Dependencies" heading and both column labels are static copy and
+          are rendered above/below this branch, never behind it. */}
       {loading ? (
         <div className="flex flex-col gap-3">
           <Skeleton className="h-24 w-full rounded-xl" />

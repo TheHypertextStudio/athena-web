@@ -52,6 +52,9 @@ function RecoveryCodesSection(): JSX.Element {
   );
 
   if (statusQ.isPending) {
+    // placeholder: whether recovery codes have been generated and how many remain unused. The
+    // panel is either "generate codes" or "you have N left" — opposite copy, so neither can be
+    // shown early without risking telling someone the wrong thing about their account recovery.
     return <Skeleton className="h-40 w-full rounded-lg" />;
   }
   if (statusQ.isError) {

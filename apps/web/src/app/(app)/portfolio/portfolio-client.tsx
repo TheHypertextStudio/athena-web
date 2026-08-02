@@ -225,6 +225,9 @@ export default function PortfolioClient(): JSX.Element {
 
 /** Loading placeholder for the roadmap: an axis header strip over a few swimlane bands. */
 function TimelineSkeleton(): JSX.Element {
+  // placeholder: the roadmap's contents — which time buckets the axis spans (derived from the
+  // work's own dates, not the calendar), which organizations and projects become swimlanes, and
+  // where each bar starts and ends. The page heading and range controls above are static copy.
   return (
     <div className="border-outline-variant bg-surface-container-low overflow-hidden rounded-xl border">
       <div className="border-outline-variant flex items-center gap-6 border-b px-4 py-2.5">

@@ -653,6 +653,9 @@ export default function ProjectsListClient(): JSX.Element {
         onCreated={handleCreated}
       />
 
+      {/* placeholder: the project rows — how many projects the workspace has and each one's name,
+          status, health, lead, cycle and progress. The heading, filters and "New project" action
+          above are static copy and paint immediately. */}
       {overviewQ.isPending ? (
         <div className="space-y-2">
           {Array.from({ length: 6 }, (_, index) => (

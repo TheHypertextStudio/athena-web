@@ -644,6 +644,10 @@ export default function InitiativesListClient(): JSX.Element {
         </div>
       ) : null}
 
+      {/* placeholder: the initiative rows — how many the workspace has and each one's name,
+          status, lead, target date and rolled-up progress. Only the rows are covered: the page
+          heading, the "New initiative" action and the sort control above render immediately from
+          static copy. */}
       {overview.isPending ? (
         <div className="space-y-2">
           {Array.from({ length: 5 }, (_, index) => (

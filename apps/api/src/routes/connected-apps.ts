@@ -8,10 +8,17 @@
  * - `GET /` — list every `oauthConsent` the caller has granted, joined with
  *   `oauthClient` for display name. Returns `{ items: ConnectedAppOut[] }`.
  * - `DELETE /:clientId` — revoke a single consent: deletes the `oauthConsent` row and
- *   every `oauthAccessToken`/`oauthRefreshToken` for (userId, clientId) so the client can
- *   no longer use a live token or silently mint a new one via refresh.
+ *   every `oauthAccessToken`/`oauthRefreshToken` row for (userId, clientId), so the client
+ *   cannot silently mint a new token via refresh and must run the consent flow again.
  *
  * Both routes require an active session; an unauthenticated caller gets HTTP 401.
+ *
+ * **Revocation is immediate.** With the `jwt` plugin mounted the default access token is a
+ * self-contained JWT that never lands in `oauth_access_token`, so deleting rows cannot reach into a
+ * token a client already holds. What closes that window is the resource server: `isGrantLive` in
+ * `apps/api/src/mcp/auth.ts` re-reads the `oauthConsent` row on every Bearer call, so once the
+ * `DELETE` below removes it the client's next request is a 401 regardless of how much life its
+ * token had left. The Connected apps UI states the same guarantee.
  */
 import { db, oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -106,7 +113,9 @@ User-scoped: rows are filtered to \`userId = session.user.id\`, so a caller only
       tag: 'Me',
       summary: 'Revoke a connected app',
       response: RevokeOut,
-      description: `Revoke the caller's authorization for a single OAuth/MCP client identified by \`:clientId\`. **Side effect — full revocation:** deletes every \`oauthAccessToken\` AND \`oauthRefreshToken\` for \`(userId, clientId)\` so the client's live tokens stop working and it cannot silently mint a new one via refresh, then deletes the \`oauthConsent\` row so the grant no longer appears in \`GET /me/connected-apps\`. After this the client must run the consent flow again to regain access.
+      description: `Revoke the caller's authorization for a single OAuth/MCP client identified by \`:clientId\`. **Side effect:** deletes every \`oauthAccessToken\` AND \`oauthRefreshToken\` row for \`(userId, clientId)\` so the client cannot silently mint a new token via refresh, then deletes the \`oauthConsent\` row so the grant no longer appears in \`GET /me/connected-apps\`. After this the client must run the consent flow again to regain access.
+
+**Immediate, including for an access token already issued.** Docket mounts Better Auth's \`jwt\` plugin, so the default access token is a self-contained JWT that is never written to \`oauth_access_token\` at all — deleting rows cannot reach into a credential the client already holds. The cut-off comes from the resource server instead: \`apps/api/src/mcp/auth.ts\` resolves the token's \`azp\` claim and re-checks the caller's \`oauth_consent\` row on **every** Bearer call (\`isGrantLive\`), so the moment this endpoint deletes that row the client's next request answers **401** no matter how much lifetime its token had left. Revocation therefore ends the live credential, the renewal path, and the grant record together.
 
 Scoped to the caller (\`userId = session.user.id\`), so revoking only ever touches the caller's own grants. Idempotent — revoking a client the caller hasn't authorized (or has already revoked) deletes nothing and still returns \`{ revoked: true }\`. Session-only, no capability; **401** when unauthenticated.`,
     }),

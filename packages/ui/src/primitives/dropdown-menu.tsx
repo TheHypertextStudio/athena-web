@@ -264,7 +264,7 @@ export function DropdownMenuCheckboxItem({
         // background + content role (anatomy #7 + #8).
         variant === 'vibrant'
           ? 'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary'
-          : 'data-[state=checked]:bg-tertiary-container data-[state=checked]:text-on-tertiary-container',
+          : 'data-[state=checked]:bg-secondary-container data-[state=checked]:text-on-secondary-container',
         // Reserve the leading indicator gutter.
         'py-1.5 pr-2 pl-8',
         focusRingInset,
@@ -297,7 +297,7 @@ export function DropdownMenuRadioItem({
         // The selected radio row lifts into the variant's selected background + content role.
         variant === 'vibrant'
           ? 'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary'
-          : 'data-[state=checked]:bg-tertiary-container data-[state=checked]:text-on-tertiary-container',
+          : 'data-[state=checked]:bg-secondary-container data-[state=checked]:text-on-secondary-container',
         'py-1.5 pr-2 pl-8',
         focusRingInset,
         className,

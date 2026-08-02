@@ -1,3 +1,24 @@
+---
+surfaces: ['orgs-[orgId]-initiatives', 'orgs-[orgId]-initiatives-[initiativeId]']
+date: 2026-07-13
+verdict: ship
+scores:
+  brand: 3
+  typography: 3
+  spacing: 3
+  hierarchy: 4
+  color: 3
+  motion: 3
+  states: 3
+  detail: 3
+gates:
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: true
+  screenshots: true
+---
+
 # Design review: Initiatives experience — 2026-07-13
 
 Final roster screenshots (real API-backed LVBT fixture):

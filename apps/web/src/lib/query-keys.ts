@@ -12,6 +12,11 @@ export const queryKeys = {
   project: (orgId: string, projectId: string) => ['org', orgId, 'projects', projectId] as const,
   tasks: (orgId: string) => ['org', orgId, 'tasks'] as const,
   task: (orgId: string, taskId: string) => ['org', orgId, 'tasks', taskId] as const,
+  // Nested under the task's own detail key on purpose: every task mutation already invalidates
+  // `queryKeys.task(...)`, and prefix matching carries that through to the history, so editing a
+  // property re-reads the entry it just wrote without any call site knowing the log exists.
+  taskActivity: (orgId: string, taskId: string) =>
+    ['org', orgId, 'tasks', taskId, 'activity'] as const,
   programs: (orgId: string) => ['org', orgId, 'programs'] as const,
   program: (orgId: string, programId: string) => ['org', orgId, 'programs', programId] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,

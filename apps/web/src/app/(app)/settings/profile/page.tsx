@@ -68,6 +68,9 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
         title="Profile"
         description="Manage your name, email, and personal identity."
       />
+      {/* placeholder: the signed-in account's name, email and avatar — unknown until the session
+          resolves. Deliberately a line of copy rather than grey bars: the shape of a profile is
+          not interesting enough to be worth miming. */}
       {isPending ? (
         <p className="text-on-surface-variant text-body-medium" role="status">
           Loading your profile…

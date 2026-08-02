@@ -5,11 +5,13 @@
  *
  * @remarks
  * Incoming work lands in Triage from two kinds of origin, and a triager's first question is
- * always *"where did this come from?"* — so each row leads its trailing metadata with a small
- * token-styled pill encoding the task's {@link TaskProvenance}:
+ * always *"where did this come from?"* — but only one of the two answers is worth a pill:
  *
- * - **Native** — created inside Docket. A calm, muted `outline` badge with a {@link Sparkles}
- *   glyph; it carries no external link.
+ * - **Created in Docket** — no tag at all. This is the default and the overwhelming majority, so a
+ *   badge on every such row costs a column of visual noise to state the unremarkable. It also read
+ *   as the word "Native", which describes the implementation rather than anything a reader can act
+ *   on: a triage row measured as *"Drag Me Today Native LE"*. Absence is the clearer signal — a row
+ *   with no origin pill was made here.
  * - **Linked** — mirrored or imported from an external tool (GitHub, Linear, …) via an
  *   integration. A `secondary` badge naming the provider (resolved to its friendly label),
  *   with a {@link Layers} glyph (an external, upstream source). When the source carries an
@@ -21,7 +23,7 @@
  * hardcoded.
  */
 import type { TaskProvenance } from '@docket/types';
-import { Layers, Sparkles } from '@docket/ui/icons';
+import { Layers } from '@docket/ui/icons';
 import { Badge } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -37,27 +39,22 @@ export interface SourceTagProps {
 }
 
 /**
- * The small "native vs linked-from-<provider>" provenance pill for a Triage row.
+ * The "linked-from-<provider>" provenance pill for a Triage row, or nothing at all.
  *
  * @remarks
- * A linked task with an `externalUrl` renders as an anchor (new tab, `rel="noreferrer"`);
- * `onClick`'s `stopPropagation` keeps the row's open-the-task activation from also firing
- * when the upstream link is clicked. Everything else renders as a static badge.
+ * Returns `null` for a task created in Docket: there is no origin to name, and a pill saying so
+ * would appear on nearly every row while telling the reader nothing. A linked task with an
+ * `externalUrl` renders as an anchor (new tab, `rel="noreferrer"`); `onClick`'s `stopPropagation`
+ * keeps the row's open-the-task activation from also firing when the upstream link is clicked.
+ * Everything else renders as a static badge.
  *
  * @example
  * ```tsx
  * <SourceTag provenance={task.provenance} providerName={providerName} />
  * ```
  */
-export function SourceTag({ provenance, providerName }: SourceTagProps): JSX.Element {
-  if (provenance.source === 'native') {
-    return (
-      <Badge variant="outline" className="text-on-surface-variant gap-1 font-medium">
-        <Sparkles className="h-3 w-3" />
-        Native
-      </Badge>
-    );
-  }
+export function SourceTag({ provenance, providerName }: SourceTagProps): JSX.Element | null {
+  if (provenance.source === 'native') return null;
 
   const name = providerName(provenance.sourceIntegrationId ?? null);
   const label = `Linked · ${name}`;

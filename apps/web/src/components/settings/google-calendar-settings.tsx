@@ -174,6 +174,8 @@ export default function GoogleCalendarSettings(): JSX.Element {
   const googleAvailable = identitiesQuery.data?.googleOAuth?.available === true;
 
   if (query.isPending) {
+    // placeholder: the connected Google accounts and their calendars — which exist, which are
+    // synced, and what each is named. Nothing about a connection roster is knowable in advance.
     return <div className="bg-surface-container-low h-48 animate-pulse rounded-lg" />;
   }
 

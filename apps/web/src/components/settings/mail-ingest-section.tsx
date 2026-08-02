@@ -39,6 +39,8 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
         </p>
       </div>
 
+      {/* placeholder: which inboxes are connected and whether mail ingest is switched on for
+          them. The heading, the explanation and the "no inbox connected" copy are static. */}
       {loading ? (
         <Skeleton className="h-20 w-full rounded-lg" />
       ) : connected.length === 0 ? (

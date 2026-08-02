@@ -1,0 +1,3793 @@
+{
+  "bearerFieldMasked": true,
+  "bearerFieldType": "password",
+  "bearerStoreOutcome": "rejected: Could not connect that server.",
+  "capturedAt": "2026-08-02T10:10:50.840Z",
+  "connectedToolsText": "Ready for Athena\n2 tools available\nConnection details\nVerify\nDisconnect",
+  "storedConnectorOutcome": "existing",
+  "leakingResponses": [],
+  "responses": [
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2578,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/sw.js"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/offline.html"
+    },
+    {
+      "containsToken": false,
+      "length": 366,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/icon.svg"
+    },
+    {
+      "containsToken": false,
+      "length": 2851,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/icons/icon-192.png"
+    },
+    {
+      "containsToken": false,
+      "length": 17744,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/icons/icon-512.png"
+    },
+    {
+      "containsToken": false,
+      "length": 12123,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/icons/icon-512-maskable.png"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 50,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/recovery-codes"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 271,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/members"
+    },
+    {
+      "containsToken": false,
+      "length": 1093,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/roles"
+    },
+    {
+      "containsToken": false,
+      "length": 33,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/hub/preferences"
+    },
+    {
+      "containsToken": false,
+      "length": 33,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/notifications/count"
+    },
+    {
+      "containsToken": false,
+      "length": 18,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp/preview"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 409,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 33,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/notifications/count"
+    },
+    {
+      "containsToken": false,
+      "length": 18,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp/preview"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 409,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 18,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp/preview"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 18,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp/preview"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 18,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp/preview"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 33,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/notifications/count"
+    },
+    {
+      "containsToken": false,
+      "length": 18,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp/preview"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 0,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 184678,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Broot-of-the-server%5D__13qtfjz._.css"
+    },
+    {
+      "containsToken": false,
+      "length": 38182,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/03fc1b4a8d284b5e-s.p.0wiir8udbzjvx.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9515,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/99e609270109b47d-s.p.40sczeszzbjw1.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9565,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/effe91970fc4db64-s.p.0oace-s_gkfks.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9632,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/23b7a97ae3b5c134-s.p.226pwps5o-gq_.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 9592,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/media/a7e15459c1805da0-s.p.3y9b8znjr2455.woff2"
+    },
+    {
+      "containsToken": false,
+      "length": 675,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_00n8p51._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 49773,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/settings/athena"
+    },
+    {
+      "containsToken": false,
+      "length": 746754,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_next-devtools_index_0sbv4as.js"
+    },
+    {
+      "containsToken": false,
+      "length": 176106,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-server-dom-turbopack_0-kl6ju._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1061024,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_react-dom_0hfhuuy._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 150312,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_compiled_099ibrv._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 700,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_1anvha4._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 816904,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_0-ga0vt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 2054,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0vvp_%40swc_helpers_cjs_0vb02wp._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 811,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_layout_tsx_1u_1kef._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 272654,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_1_j1mhu._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 718,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_layout_tsx_1hwpjpx._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 92537,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/turbopack-apps_web_07gq5f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 241,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_layout_tsx_18o7138._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 253,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_app_(app)_settings_athena_page_tsx_1ypb_2e._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 212,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_dist_client_components_builtin_global-error_1hwpjpx.js"
+    },
+    {
+      "containsToken": false,
+      "length": 223056,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qrt_%40mui_material_11hfze9._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 278660,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0g7g_next_1h-8mb6._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 122752,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_1blikul._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 214782,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/13-e_%40mui_system_0vkan7w._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 912809,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_1_bgko5._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 155828,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/0qih_%40tanstack_query-core_build_modern_0i4s6h0._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 350023,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_calendar_09pl_ko._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 244650,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_agenda_1yc8o7m._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 3840,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_ui_src_04sj8f3._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 67035,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_lib_1lo3mc2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159166,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_command-palette_0-92v-2._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 128503,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_athena_0bt-in1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 31970,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/_1jqgj_7._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 153300,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1hn7_tailwind-merge_dist_bundle-mjs_mjs_04a_myf._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 407009,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_scheduling_1td6a3_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 268941,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_components_0g-v2s1._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 159748,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/apps_web_src_0pkqcum._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 443952,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1j9d_%40mui_icons-material_0fbk6ey._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 415207,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1_mtumt._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 853441,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/packages_types_src_1e5j-gc._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1044587,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/1a7c_zod_v4_0_p_dem._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 1585876,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/node_modules__pnpm_1d3wglq._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 15615,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1mojsay._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 289,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_1w32zv_._.js"
+    },
+    {
+      "containsToken": false,
+      "length": 691,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/api/auth/get-session"
+    },
+    {
+      "containsToken": false,
+      "length": 26,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/me/athena/pulse"
+    },
+    {
+      "containsToken": false,
+      "length": 147,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs"
+    },
+    {
+      "containsToken": false,
+      "length": 33,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/notifications/count"
+    },
+    {
+      "containsToken": false,
+      "length": 282,
+      "status": 200,
+      "url": "http://docket-production-launch-ebe2d9.docket.localhost:1355/v1/orgs/01KZ0TDENDESTZ4MT8E0VZHNAH/integrations/mcp"
+    }
+  ],
+  "screenshots": [
+    "connector-bearer-1440x900-light.png",
+    "connector-bearer-390x844-light.png",
+    "connector-bearer-1440x900-dark.png",
+    "connector-bearer-390x844-dark.png",
+    "stored-connector-1440x900-light.png",
+    "stored-connector-390x844-light.png",
+    "stored-connector-1440x900-dark.png",
+    "stored-connector-390x844-dark.png"
+  ],
+  "serverUrl": "https://mcp.sunsama.com/mcp",
+  "token": "dkt_probe_A7F3C1E9B2D64058",
+  "tokenInRenderedText": false,
+  "tokenInWebStorage": false
+}

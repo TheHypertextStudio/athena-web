@@ -62,7 +62,7 @@ export function GroupByMenu({
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[12rem]">
+      <DropdownMenuContent align="start" className="min-w-48">
         <DropdownMenuLabel>Group tasks by</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup

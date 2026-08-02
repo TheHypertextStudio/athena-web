@@ -1,5 +1,18 @@
 /**
  * `@docket/types` — Task slice DTOs.
+ *
+ * @remarks
+ * Two invariants in this file are load-bearing beyond the shapes themselves.
+ *
+ * **Dates.** Every task date is a calendar day, validated as a real one. `z.iso.date()` rejects
+ * both malformed input and days that do not exist (`2026-02-30`, `2025-02-29`), and
+ * {@link assertDateOrder} additionally refuses a window that runs backwards. The database carries
+ * the same rules as CHECK constraints, so an invalid date cannot reach storage through any route,
+ * tool, importer or migration — see `packages/db/src/schema/work.ts`.
+ *
+ * **Provenance is not a task property.** `provenance.source` (`native` | `linked`) is a machine
+ * discriminator the sync engine branches on; it is not user-facing copy. See
+ * {@link taskOriginLabel} for the one sanctioned way to render provenance to a person.
  */
 import { z } from 'zod';
 
@@ -15,6 +28,79 @@ import {
   TaskId,
   TeamId,
 } from './primitives';
+
+/**
+ * The earliest calendar day any task date may name.
+ *
+ * @remarks
+ * A task dated before the Unix epoch is never a date someone meant; it is a typo (`0226-05-01`
+ * for `2026-05-01`) or a unit mix-up that a date input will happily accept. Bounding the range
+ * is the difference between "the string parses" and "the value is possible", which is what the
+ * product means by a date being valid. Mirrored by the `task_start_date_range` /
+ * `task_due_date_range` CHECK constraints so the bound holds for writers that never see a DTO.
+ */
+export const TASK_DATE_MIN = '1970-01-01';
+
+/** The latest calendar day any task date may name. See {@link TASK_DATE_MIN}. */
+export const TASK_DATE_MAX = '2200-12-31';
+
+/** The date fields whose validity {@link checkTaskDates} enforces. */
+interface TaskDateFields {
+  /** Anticipated start day (`YYYY-MM-DD`), null to clear, absent to leave alone. */
+  readonly startDate?: string | null | undefined;
+  /** Due day (`YYYY-MM-DD`), null to clear, absent to leave alone. */
+  readonly dueDate?: string | null | undefined;
+}
+
+/**
+ * Reject task dates that parse but cannot be meant: out-of-range years, and a backwards window.
+ *
+ * @remarks
+ * `z.iso.date()` already refuses malformed input and impossible days — `2026-02-30` and
+ * `2025-02-29` both fail, because the format check knows how long each month is. What it cannot
+ * know is the two product rules layered here: a task date must fall inside
+ * {@link TASK_DATE_MIN}–{@link TASK_DATE_MAX}, and a task may not be due before it is anticipated
+ * to start.
+ *
+ * The ordering rule fires **only when one request supplies both days**. A PATCH that moves the
+ * due date alone cannot be judged against a start date the request never sent, and re-reading the
+ * stored row here would make validation depend on database state — so that case is caught by the
+ * `task_dates_ordered` CHECK constraint instead, which sees the post-update row. The two layers
+ * are deliberate: the DTO returns a precise 422 naming the field, the constraint guarantees the
+ * invariant against every writer including importers and migrations.
+ *
+ * Attached with `.superRefine`, so field schemas stay plain `format: date` in the OpenAPI
+ * document and issues carry the offending field's path.
+ *
+ * @param value - The candidate body's date fields.
+ * @param ctx - Zod's refinement context; issues are added with a field path.
+ *
+ * @example
+ * ```ts
+ * TaskUpdate.parse({ startDate: '2026-09-10', dueDate: '2026-09-01' }); // throws: due before start
+ * ```
+ */
+export function checkTaskDates(value: TaskDateFields, ctx: z.RefinementCtx): void {
+  for (const field of ['startDate', 'dueDate'] as const) {
+    const day = value[field];
+    if (typeof day !== 'string') continue;
+    if (day >= TASK_DATE_MIN && day <= TASK_DATE_MAX) continue;
+    ctx.addIssue({
+      code: 'custom',
+      path: [field],
+      message: `Date must fall between ${TASK_DATE_MIN} and ${TASK_DATE_MAX}`,
+    });
+  }
+  if (typeof value.startDate !== 'string' || typeof value.dueDate !== 'string') return;
+  // Lexicographic comparison is exact for zero-padded `YYYY-MM-DD`, and avoids constructing a
+  // `Date` — which would drag the server's timezone into a question about calendar days.
+  if (value.dueDate >= value.startDate) return;
+  ctx.addIssue({
+    code: 'custom',
+    path: ['dueDate'],
+    message: 'Due date cannot fall before the anticipated start date',
+  });
+}
 
 /** Body for creating a Task; `state` defaults to the team's first workflow state. */
 export const TaskCreate = z
@@ -70,24 +156,42 @@ export const TaskCreate = z
     startDate: z.iso
       .date()
       .optional()
-      .describe('Planned start date (ISO `YYYY-MM-DD`, date-only).'),
-    dueDate: z.iso.date().optional().describe('Target due date (ISO `YYYY-MM-DD`, date-only).'),
+      .describe(
+        'Anticipated start date — the day work is expected to begin (ISO `YYYY-MM-DD`, date-only). A forecast the planner sets, distinct from `dueDate` and from when the task actually moved into a started state (which the activity log records).',
+      ),
+    dueDate: z.iso
+      .date()
+      .optional()
+      .describe(
+        'Target due date — the day the work is expected to be finished (ISO `YYYY-MM-DD`, date-only). Must not fall before `startDate`.',
+      ),
     labels: z
       .array(LabelId)
       .optional()
       .describe('Label ids to tag the task with for classification/filtering.'),
   })
+  .superRefine(checkTaskDates)
   .meta({ id: 'TaskCreate', description: 'Create a task within an organization.' });
 /** Validated task-create body. */
 export type TaskCreate = z.infer<typeof TaskCreate>;
 
-/** A Task's single inline provenance triple (native vs linked-from-an-integration). */
+/**
+ * A Task's single inline provenance triple (native vs linked-from-an-integration).
+ *
+ * @remarks
+ * **This object is machine metadata, not a task property.** It exists so the reconcile engine can
+ * tell a row it owns from a row it mirrors, and so a linked task can deep-link back to its source.
+ * None of its fields is copy: rendering `source` verbatim is what put a badge reading "Native" on
+ * every task in the product, a word describing Docket's own storage that no reader can act on.
+ * {@link taskOriginLabel} is the only sanctioned way to turn provenance into something a person
+ * reads, and it deliberately has nothing to say about a native task.
+ */
 export const TaskProvenance = z
   .object({
     source: z
       .enum(['native', 'linked'])
       .describe(
-        "Origin of the task: 'native' (created in Docket) or 'linked' (mirrored/imported from an external integration such as GitHub or Linear).",
+        "Machine discriminator for the sync engine: 'native' (the row is Docket's own) or 'linked' (mirrored from an external integration). Never render this value — pass it through {@link taskOriginLabel}, which yields null for a native task because there is nothing user-relevant to say about one.",
       ),
     sourceIntegrationId: z
       .string()
@@ -117,6 +221,65 @@ export const TaskProvenance = z
   .meta({ id: 'TaskProvenance', description: "A task's provenance." });
 /** Task provenance value. */
 export type TaskProvenance = z.infer<typeof TaskProvenance>;
+
+/**
+ * The one sanctioned rendering of a task's provenance — or `null` when there is nothing to say.
+ *
+ * @remarks
+ * The product used to show a "Source" row reading **"Native"** on every task. "Native" is a word
+ * about Docket's storage model, not about the reader's work: it is true of everything a person
+ * creates here, so it distinguishes nothing, and a non-technical reader cannot state what it
+ * means. The decision recorded by this function is that **"Native" is removed rather than
+ * renamed** — a native task has no origin worth a row, and the surface renders nothing for it.
+ *
+ * What *is* concrete is the other case: this task is a copy of something that lives in another
+ * tool. That gets a plain-language label naming the tool, so the row a reader sees is
+ * "Linked from GitHub" — a fact they can act on, next to the `externalUrl` that takes them there.
+ *
+ * Returning `null` rather than an empty string is the point: a nullable label makes "render no
+ * row" the structurally obvious branch, so a surface cannot fall back to printing the raw enum.
+ *
+ * @param provenance - The task's provenance triple, straight off {@link TaskOut}.
+ * @param providerName - Display name of the integration's provider (e.g. `PROVIDER_CATALOG.github.name`),
+ *   or null when the caller has not resolved the integration. Application-owned copy, never
+ *   provider-supplied prose.
+ * @returns application-owned label copy, or null when the task has no user-relevant origin.
+ *
+ * @example
+ * ```ts
+ * taskOriginLabel({ source: 'native' }, null);          // null — render nothing
+ * taskOriginLabel({ source: 'linked' }, 'GitHub');      // 'Linked from GitHub'
+ * taskOriginLabel({ source: 'linked' }, null);          // 'Linked from another tool'
+ * ```
+ *
+ * @see {@link TaskProvenance} for why the raw `source` value is not copy.
+ */
+export function taskOriginLabel(
+  provenance: Pick<TaskProvenance, 'source'>,
+  providerName: string | null,
+): string | null {
+  if (provenance.source !== 'linked') return null;
+  return providerName === null || providerName.length === 0
+    ? 'Linked from another tool'
+    : `Linked from ${providerName}`;
+}
+
+/**
+ * The synthetic id of a task activity log's creation entry (`created:<taskId>`).
+ *
+ * @remarks
+ * The creation entry is projected from the task row rather than stored, so it has no ledger id of
+ * its own — but a list entry still needs a stable key to render and to diff against. The grammar
+ * lives here, beside {@link dependencyEdgeId} and {@link subtaskEdgeId}, so the endpoint that
+ * produces it and any client that recognises it cannot drift. The `created:` prefix cannot collide
+ * with a ULID, which is 26 uppercase Crockford-base32 characters and contains no colon.
+ *
+ * @param taskId - The task whose log the entry heads.
+ * @returns the entry's stable synthetic id.
+ */
+export function taskCreationEntryId(taskId: string): string {
+  return `created:${taskId}`;
+}
 
 /** Full task representation returned by reads. */
 export const TaskOut = z
@@ -164,14 +327,16 @@ export const TaskOut = z
       .string()
       .nullable()
       .optional()
-      .describe('Planned start date (ISO date string); null when unset.'),
+      .describe(
+        'Anticipated start date — the day work is expected to begin (ISO date string); null when unset. Distinct from `dueDate`, and distinct from when the task actually started, which is recoverable from its activity log.',
+      ),
     dueDate: z
       .string()
       .nullable()
       .optional()
       .describe('Target due date (ISO date string); null when unset.'),
     provenance: TaskProvenance.describe(
-      'Origin metadata — whether the task is native or linked from an integration. See {@link TaskProvenance}.',
+      'Machine-readable origin metadata for the sync engine — NOT a task property to render. See {@link TaskProvenance} and {@link taskOriginLabel}.',
     ),
     createdAt: z.string().describe('Creation timestamp (ISO 8601).'),
   })
@@ -244,17 +409,22 @@ export const TaskUpdate = z
       .date()
       .nullable()
       .optional()
-      .describe('New start date (ISO `YYYY-MM-DD`), or null to clear. Omit to leave unchanged.'),
+      .describe(
+        'New anticipated start date — the day work is expected to begin (ISO `YYYY-MM-DD`), or null to clear. Omit to leave unchanged. Must not fall after `dueDate`.',
+      ),
     dueDate: z.iso
       .date()
       .nullable()
       .optional()
-      .describe('New due date (ISO `YYYY-MM-DD`), or null to clear. Omit to leave unchanged.'),
+      .describe(
+        'New due date (ISO `YYYY-MM-DD`), or null to clear. Omit to leave unchanged. Must not fall before the anticipated start date.',
+      ),
     labels: z
       .array(LabelId)
       .optional()
       .describe('Replacement set of label ids. Omit to leave the task’s labels unchanged.'),
   })
+  .superRefine(checkTaskDates)
   .meta({ id: 'TaskUpdate', description: 'Update a task.' });
 /** Validated task-update body. */
 export type TaskUpdate = z.infer<typeof TaskUpdate>;
@@ -306,10 +476,17 @@ export const SubtaskCreate = z
       .nullable()
       .optional()
       .describe('Time estimate in minutes (integer), or null.'),
-    startDate: z.iso.date().optional().describe('Planned start date (ISO `YYYY-MM-DD`).'),
-    dueDate: z.iso.date().optional().describe('Target due date (ISO `YYYY-MM-DD`).'),
+    startDate: z.iso
+      .date()
+      .optional()
+      .describe('Anticipated start date — the day work is expected to begin (ISO `YYYY-MM-DD`).'),
+    dueDate: z.iso
+      .date()
+      .optional()
+      .describe('Target due date (ISO `YYYY-MM-DD`). Must not fall before `startDate`.'),
     labels: z.array(LabelId).optional().describe('Label ids to tag the subtask with.'),
   })
+  .superRefine(checkTaskDates)
   .meta({ id: 'SubtaskCreate', description: 'Create a subtask under a parent task.' });
 /** Validated subtask-create body. */
 export type SubtaskCreate = z.infer<typeof SubtaskCreate>;

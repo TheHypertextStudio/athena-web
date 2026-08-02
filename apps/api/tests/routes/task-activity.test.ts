@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { taskCreationEntryId } from '@docket/types';
 
 import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import type * as TaskAuditModule from '../../src/lib/task-audit';
@@ -99,7 +100,51 @@ describe('task activity log — what is written', () => {
     expect(items[0]?.change).toBeNull();
     expect(items[0]?.actorId).toBe(humanActorId);
     expect(items[0]?.actorName).toBe('Ada');
-    expect(Number.isNaN(Date.parse(items[0]?.createdAt ?? ''))).toBe(false);
+    expect(items[0]?.id).toBe(taskCreationEntryId(id));
+    // It is the task's own creation instant, not the moment the log happened to be read.
+    const row = one(await db.select().from(schema.task).where(eq(schema.task.id, id)).limit(1));
+    expect(items[0]?.createdAt).toBe(row.createdAt.toISOString());
+  });
+
+  it('gives a task inserted by any other writer the same creation entry', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    // Athena's capture path, the subtask route, connector import and the email-to-task accept
+    // path all insert straight into `task`. None of them writes a ledger row, and neither did
+    // anything that ran before this endpoint existed — the entry is derived from the row, so all
+    // of them read back identically.
+    const direct = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Captured by Athena',
+          teamId,
+          state: 'backlog',
+          createdBy: humanActorId,
+        })
+        .returning({ id: schema.task.id }),
+    );
+
+    const items = await activity(app, direct.id);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ type: 'created', change: null, actorName: 'Ada' });
+  });
+
+  it('reports an unattributed creation rather than inventing a creator', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    // `createdBy` is null for a system import, and is nulled out when the creating actor is
+    // deleted. Either way the log must say "no actor", never a dangling id.
+    const systemTask = one(
+      await db
+        .insert(schema.task)
+        .values({ organizationId: orgId, title: 'Imported', teamId, state: 'backlog' })
+        .returning({ id: schema.task.id }),
+    );
+
+    const items = await activity(app, systemTask.id);
+    expect(items[0]).toMatchObject({ type: 'created', actorId: null, actorName: null });
   });
 
   it('records ONE entry per changed field for a multi-field patch, in field order', async () => {
@@ -296,8 +341,9 @@ describe('task activity log — reading it back', () => {
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const id = await createTask(app, teamId);
 
-    // The ledger is shared: a task-subject row written by another feature (here, an `archived`
-    // event and an `updated` row with foreign metadata) must not blank the task's history.
+    // The ledger is shared: task-subject rows written by another feature (here, an `archived`
+    // event, an `updated` row with foreign metadata, and a legacy `created` row from before the
+    // creation entry was derived) must neither blank the history nor duplicate the creation.
     await db.insert(schema.auditEvent).values([
       {
         organizationId: orgId,
@@ -313,11 +359,19 @@ describe('task activity log — reading it back', () => {
         type: 'updated',
         metadata: { unrelated: true },
       },
+      {
+        organizationId: orgId,
+        subjectType: 'task',
+        subjectId: id,
+        type: 'created',
+        metadata: {},
+      },
     ]);
 
     const items = await activity(app, id);
     expect(items).toHaveLength(1);
     expect(items[0]?.type).toBe('created');
+    expect(items[0]?.id).toBe(taskCreationEntryId(id));
   });
 
   it('reports a system change with no actor rather than inventing one', async () => {
@@ -328,6 +382,7 @@ describe('task activity log — reading it back', () => {
     await taskAudit.recordTaskChanges({
       organizationId: orgId,
       taskId: id,
+      title: 'T',
       actorId: null,
       changes: [{ field: 'state', label: 'Status', from: 'Backlog', to: 'Done' }],
     });
@@ -358,18 +413,56 @@ describe('task activity log — the ledger never breaks the mutation', () => {
     // The change is simply absent from history — never a 500, never a rolled-back edit.
     const changes = (await activity(seeder, id)).filter((entry) => entry.type === 'updated');
     expect(changes).toHaveLength(0);
+
+    // …and the task still reads back with its creation entry, because that one is derived from
+    // the row rather than from the ledger that just failed.
+    const items = await activity(seeder, id);
+    expect(items).toHaveLength(1);
+    expect(items[0]?.type).toBe('created');
+  });
+});
+
+describe('task activity log — the stream carries the same edit, once', () => {
+  it('emits one field_change per mutation carrying every non-self-announcing field', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { title: 'Draft' });
+
+    await patch(app, id, { title: 'Ship it', dueDate: '2026-09-01', estimateMinutes: 30 });
+
+    // Each test seeds its own org, so the org scope isolates this edit's events exactly.
+    const emitted = await db
+      .select({ kind: schema.event.kind, detail: schema.event.detail })
+      .from(schema.event)
+      .where(eq(schema.event.organizationId, orgId));
+    const fieldChanges = emitted.filter((row) => row.kind === 'field_change');
+    // One event for the whole edit, not one per field: three fields would otherwise mean three
+    // notification fan-outs, three SSE pushes and three reindex jobs for one user action.
+    expect(fieldChanges).toHaveLength(1);
+    expect((fieldChanges[0]?.detail as { fields: string[] }).fields).toEqual([
+      'title',
+      'estimateMinutes',
+      'dueDate',
+    ]);
   });
 
-  it('swallows a failed creation-entry write', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    // A non-existent actor violates the ledger's actor foreign key; creating a task must not care.
-    await expect(
-      taskAudit.recordTaskCreated({
-        organizationId: orgId,
-        taskId: MISSING_ULID,
-        actorId: 'actor_test',
-      }),
-    ).resolves.toBeUndefined();
+  it('does not re-announce a status change that already travels as status_change', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+
+    await patch(app, id, { state: 'in_progress' });
+
+    // The ledger still records it — a task's own history must be complete…
+    const changes = (await activity(app, id)).filter((entry) => entry.type === 'updated');
+    expect(changes.map((entry) => entry.change?.field)).toEqual(['state']);
+    // …but the feed says it once, under the kind that carries its own recipient routing.
+    const emitted = await db
+      .select({ kind: schema.event.kind })
+      .from(schema.event)
+      .where(eq(schema.event.organizationId, orgId));
+    expect(emitted.map((row) => row.kind).filter((kind) => kind === 'field_change')).toEqual([]);
+    expect(emitted.map((row) => row.kind)).toContain('status_change');
   });
 });
 

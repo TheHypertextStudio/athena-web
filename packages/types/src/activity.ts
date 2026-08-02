@@ -141,7 +141,11 @@ export type TaskActivityChange = z.infer<typeof TaskActivityChange>;
  */
 export const TaskActivityOut = z
   .object({
-    id: z.string().describe('The activity entry id (a ULID; the stable tiebreak for ordering).'),
+    id: z
+      .string()
+      .describe(
+        'Stable entry id: a ULID for a recorded change (also the tiebreak for ordering within a millisecond), or the synthetic `created:<taskId>` for the creation entry, which is projected from the task row rather than stored.',
+      ),
     taskId: TaskId.describe('The task this entry belongs to.'),
     actorId: ActorId.nullable().describe(
       'WHO made the change; null when the change was system- or automation-generated with no attributable actor.',

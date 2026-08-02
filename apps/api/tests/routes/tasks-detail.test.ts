@@ -142,8 +142,11 @@ describe('tasks create (POST /)', () => {
           eq(schema.searchIndexJob.status, 'pending'),
         ),
       );
+    // `entity_write` coalesces: two writes to the same task leave one pending job.
     expect(activeUpserts.filter((job) => job.reason === 'entity_write')).toHaveLength(1);
-    expect(activeUpserts.filter((job) => job.reason === 'event_log')).toHaveLength(1);
+    // `event_log` is per event, and a metadata edit now emits one `field_change` alongside the
+    // task's `created` — one event for the whole edit, never one per changed field.
+    expect(activeUpserts.filter((job) => job.reason === 'event_log')).toHaveLength(2);
 
     const archived = await writer.request(`/${id}`, { method: 'DELETE' });
     expect(archived.status).toBe(200);

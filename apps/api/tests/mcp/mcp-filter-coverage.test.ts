@@ -189,8 +189,10 @@ async function seedSubjects(s: Seed): Promise<void> {
       teamId: s.teamId,
       number: 99,
       name: 'Decoy Cycle',
-      startsAt: new Date('2999-01-01'),
-      endsAt: new Date('2999-02-01'),
+      // Far outside every window these tests query, and inside the range `cycle_*_range` allows:
+      // storage now refuses a date no one could have meant, and year 2999 was one.
+      startsAt: new Date('2199-01-01'),
+      endsAt: new Date('2199-02-01'),
     })
     .returning({ id: schema.cycle.id });
   expect(cycleRow?.id).toBeTruthy();

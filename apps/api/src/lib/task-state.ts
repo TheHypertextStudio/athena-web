@@ -91,6 +91,7 @@ export async function setTaskState(input: SetTaskStateInput): Promise<TaskRow | 
   await recordTaskChanges({
     organizationId: input.organizationId,
     taskId: next.id,
+    title: next.title,
     actorId: input.actorId,
     changes: await resolveTaskChangeLabels(input.organizationId, diffTaskFields(row, next)),
   });

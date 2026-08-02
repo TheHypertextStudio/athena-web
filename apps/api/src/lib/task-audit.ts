@@ -8,13 +8,24 @@
  * module is the only writer of task-subject rows into it, so the log's shape can never diverge
  * between the PATCH route, the state route, and the automation engine.
  *
- * Two deliberate choices are worth stating.
+ * Three deliberate choices are worth stating.
  *
- * **We do not emit onto the `event` stream.** `docs/engineering/specs/activity-feed.md` reserves
- * `event` for the cross-tool awareness feed; one `event` per changed field would fan out
- * notifications, SSE pushes, automation runs, and search reindex jobs per field, and several
- * fields changing inside a single PATCH would collide on `event-emit`'s millisecond-resolution
- * dedupe key. The ledger is the right substrate; the stream keeps doing its own job untouched.
+ * **The ledger is the durable history; the stream carries the same edit once.** An earlier version
+ * of this module emitted nothing onto `event`, because one `event` per changed field would have
+ * multiplied notifications, SSE pushes, automation runs and reindex jobs by the number of fields,
+ * and several fields changing inside one PATCH would have collided on `event-emit`'s
+ * millisecond-resolution dedupe key. `emitFieldChange` resolves both: one event per *mutation*
+ * carrying every change, with a stable `dedupeToken`. So each edit is written twice on purpose —
+ * durably here (the task's permanent, per-task history) and once onto the stream (org-wide
+ * awareness) — from the same resolved {@link TaskActivityChange} rows, so the two can never tell
+ * different stories. Fields that already have their own event kind are held back; see
+ * {@link SELF_ANNOUNCING_FIELDS}.
+ *
+ * **A task's creation is not written here.** The task row's own `createdAt`/`createdBy` already
+ * record it, and a dozen call sites insert tasks (the REST create, subtasks, MCP capture,
+ * email-to-task, connector import, calendar promotion, …). The activity endpoint projects the
+ * creation entry from the row instead, so every task has one — including every task that predates
+ * this feature — and no insert site has to remember anything.
  *
  * **Values are resolved to display strings at write time.** A change entry stores "Website
  * redesign", not a project id. History must be immutable — renaming that project next month must
@@ -26,6 +37,7 @@ import { actor, auditEvent, cycle, db, genId, milestone, program, project, task 
 import { defaultCycleName, type TaskActivityChange } from '@docket/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
+import { emitFieldChange } from '../routes/event-emit';
 import type { TaskRow } from '../routes/task-helpers';
 
 /**
@@ -347,30 +359,33 @@ export async function resolveTaskChangeLabels(
   });
 }
 
+/**
+ * Fields that already travel the stream under a kind of their own.
+ *
+ * @remarks
+ * A status change emits `status_change`/`completed` and an assignment emits `assignment`, both
+ * with their own recipient routing. Re-reporting them inside a `field_change` would make the feed
+ * say the same thing twice about one edit. They are still recorded in the durable ledger — the
+ * task's own history must be complete — they are simply not re-announced.
+ */
+const SELF_ANNOUNCING_FIELDS: ReadonlySet<string> = new Set(['state', 'assigneeId']);
+
 /** Input to {@link recordTaskChanges}. */
 export interface RecordTaskChangesInput {
   /** The organization the task belongs to. */
   readonly organizationId: string;
   /** The task whose history is being appended to. */
   readonly taskId: string;
+  /** The task's title after the edit, woven into the stream line. */
+  readonly title: string;
   /** The acting actor; null for unattributed automation. */
   readonly actorId: string | null;
   /** The display-ready changes to record, in the order they should read. */
   readonly changes: readonly TaskActivityChange[];
 }
 
-/** Input to {@link recordTaskCreated}. */
-export interface RecordTaskCreatedInput {
-  /** The organization the task belongs to. */
-  readonly organizationId: string;
-  /** The task that was just created. */
-  readonly taskId: string;
-  /** The actor who created it; null for unattributed automation. */
-  readonly actorId: string | null;
-}
-
 /**
- * Append one ledger row per field change on a task.
+ * Append one ledger row per field change on a task, and announce the edit once on the stream.
  *
  * @remarks
  * All rows are written in a **single** batched insert so a multi-field edit costs one round trip.
@@ -381,11 +396,17 @@ export interface RecordTaskCreatedInput {
  * plain ULID carries a random suffix within its millisecond, so without this the entries of a
  * single edit would come back shuffled.
  *
+ * The stream event is emitted from here rather than from each route so that a PATCH, a board drag
+ * through `POST /:id/state`, and a `task.setStatus` automation all announce an edit identically —
+ * and so the announced changes are byte-identical to the recorded ones.
+ *
  * Best-effort by design: a failure to write history is swallowed rather than propagated. The
  * alternative is worse — a ledger hiccup would 500 a mutation the caller has already had applied,
- * or roll back a legitimate domain write. The log may lag; the task must not break.
+ * or roll back a legitimate domain write. The log may lag; the task must not break. The stream
+ * emit is deliberately skipped when the ledger write failed: announcing an edit that left no
+ * durable trace would produce a feed line no one can click through to.
  *
- * @param input - The org-scoped task, the acting actor, and the resolved changes.
+ * @param input - The org-scoped task, its title, the acting actor, and the resolved changes.
  */
 export async function recordTaskChanges(input: RecordTaskChangesInput): Promise<void> {
   if (input.changes.length === 0) return;
@@ -405,30 +426,15 @@ export async function recordTaskChanges(input: RecordTaskChangesInput): Promise<
     );
   } catch {
     // Best-effort: see the remarks above. History is never worth failing a mutation over.
+    return;
   }
-}
 
-/**
- * Append the ledger row marking a task's creation — the first entry every task's log carries.
- *
- * @remarks
- * Carries an empty `metadata` because nothing changed: the entry records the task coming into
- * existence, which is why a freshly created task already has a readable history. Best-effort for
- * the same reason as {@link recordTaskChanges}.
- *
- * @param input - The org-scoped task and the creating actor.
- */
-export async function recordTaskCreated(input: RecordTaskCreatedInput): Promise<void> {
-  try {
-    await db.insert(auditEvent).values({
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      subjectType: 'task',
-      subjectId: input.taskId,
-      type: 'created',
-      metadata: {},
-    });
-  } catch {
-    // Best-effort: a missing creation entry must never fail the create itself.
-  }
+  // One event for the whole mutation, carrying only the fields that do not already announce
+  // themselves. A status-only or assignment-only edit therefore emits nothing extra here.
+  await emitFieldChange({
+    organizationId: input.organizationId,
+    subject: { type: 'task', id: input.taskId, title: input.title },
+    actorId: input.actorId,
+    changes: input.changes.filter((change) => !SELF_ANNOUNCING_FIELDS.has(change.field)),
+  });
 }

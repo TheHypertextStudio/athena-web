@@ -18,12 +18,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
 import { ok } from '../lib/ok';
-import {
-  diffTaskFields,
-  recordTaskChanges,
-  recordTaskCreated,
-  resolveTaskChangeLabels,
-} from '../lib/task-audit';
+import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
 import { setTaskState } from '../lib/task-state';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -46,6 +41,43 @@ import {
 import { attachmentRoutes } from './attachment-routes';
 import { taskActivityRoutes } from './task-activity-routes';
 import { taskDependencyRoutes } from './task-dependency-routes';
+
+/** Project a stored timestamp column onto the calendar day it names, or null when unset. */
+function dayOf(value: Date | null): string | null {
+  return value === null ? null : value.toISOString().slice(0, 10);
+}
+
+/**
+ * Reject a PATCH that would leave the task due before it is anticipated to start.
+ *
+ * @remarks
+ * {@link TaskUpdate} catches the case where one request supplies both days, but not the sequential
+ * one — moving the anticipated start past a due date already stored, or the due date back before a
+ * start already stored. Only the route can see that, because only the route has the pre-image. It
+ * is checked here rather than as a CHECK constraint on purpose: a constraint violation surfaces as
+ * a storage error with no field attribution, while this is a 422 naming the field the caller sent
+ * and carrying copy the application owns.
+ *
+ * @param before - The task as stored, supplying whichever day the body omits.
+ * @param patch - The columns this request is about to write.
+ * @throws {ValidationError} When the resulting window would run backwards.
+ */
+function assertTaskWindowOrdered(
+  before: { startDate: Date | null; dueDate: Date | null },
+  patch: { startDate?: Date | null; dueDate?: Date | null },
+): void {
+  const start = dayOf(patch.startDate === undefined ? before.startDate : patch.startDate);
+  const due = dayOf(patch.dueDate === undefined ? before.dueDate : patch.dueDate);
+  // Lexicographic comparison is exact for zero-padded `YYYY-MM-DD` and keeps the question about
+  // calendar days rather than about the server's timezone.
+  if (start === null || due === null || due >= start) return;
+  throw new ValidationError([
+    {
+      message: 'Due date cannot fall before the anticipated start date',
+      path: [patch.dueDate === undefined ? 'startDate' : 'dueDate'],
+    },
+  ]);
+}
 
 async function enqueueTaskSearchIndex(
   organizationId: string,
@@ -152,8 +184,8 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
           subject,
         });
       }
-      // Ledger: the creation entry, so a task has a readable history from the moment it exists.
-      await recordTaskCreated({ organizationId: orgId, taskId: row.id, actorId });
+      // No creation entry is written: the row's own `createdAt`/`createdBy` are that record, and
+      // the activity endpoint projects the entry from them (see `lib/task-audit.ts`).
       await enqueueTaskSearchIndex(orgId, row.id);
       return ok(c, TaskOut, toOut(row));
     },
@@ -334,6 +366,10 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         return ok(c, TaskOut, toOut(await loadTask(orgId, id)));
       }
 
+      // Date validity, second layer: the DTO checked the days this request carries against each
+      // other; this checks them against the days already stored.
+      assertTaskWindowOrdered(before, patch);
+
       const where = and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt));
       // Reparenting to a non-null parent: check the acyclic invariant + write atomically under
       // SERIALIZABLE so two concurrent reparents can't each pass and commit a subtask loop.
@@ -374,6 +410,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       await recordTaskChanges({
         organizationId: orgId,
         taskId: row.id,
+        title: row.title,
         actorId: ctx.actorId,
         changes: await resolveTaskChangeLabels(orgId, diffTaskFields(before, row)),
       });

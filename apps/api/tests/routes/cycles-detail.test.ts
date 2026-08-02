@@ -205,9 +205,13 @@ describe('cycle list (GET /) — inline stats', () => {
     });
 
     // Cycle B has no committed tasks → its stats must be all zeros (the empty-bucket path).
+    // Overriding only `startsAt` used to inherit the default `endsAt` of Jan 14, giving cycle B a
+    // window that closed before it opened. `cycle_window_ordered` now refuses that row, so the
+    // fixture states both ends.
     const cycleB = await makeCycle(orgId, teamId, humanActorId, {
       number: 2,
       startsAt: new Date('2026-02-01T00:00:00.000Z'),
+      endsAt: new Date('2026-02-14T00:00:00.000Z'),
     });
 
     // A task on no cycle must leak into neither cycle's roll-up.

@@ -29,7 +29,7 @@ import { PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
-import { oAuthProxy, twoFactor, jwt } from 'better-auth/plugins';
+import { genericOAuth, oAuthProxy, twoFactor, jwt } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
@@ -206,6 +206,34 @@ export async function resolvePasskeyUser(
 
 /** A social provider a user can sign in / link an account with. */
 export type SocialProvider = 'google' | 'github' | 'linear' | 'apple' | 'discord' | 'microsoft';
+
+/**
+ * The `test-oauth` `generic-oauth` provider's OAuth2 client credentials.
+ *
+ * @remarks
+ * Not secrets: this identity provider is Docket's own fake authorization server
+ * (`apps/api/src/lib/oauth-stub-provider.ts`), never Google/GitHub/etc., and it is only ever
+ * reachable when {@link buildAuthOptions} mounts the provider below — `local`/`test` only, see
+ * the gate at its call site. `packages/auth` must never import from `apps/api` (that is the
+ * reverse of the real dependency direction, which runs `apps → packages`), so the two files
+ * hardcode these exact literal values independently rather than sharing a module. A drift
+ * between them fails loudly and immediately: the stub's `/token` endpoint rejects the mismatched
+ * `client_id`/`client_secret` with `invalid_grant`, so the e2e ceremony test that exercises this
+ * provider cannot pass silently on a stale value.
+ */
+const TEST_OAUTH_CLIENT_ID = 'docket-test-oauth-client';
+/** @see {@link TEST_OAUTH_CLIENT_ID} */
+const TEST_OAUTH_CLIENT_SECRET = 'docket-test-oauth-client-secret';
+
+/**
+ * The base URL of the local/test-only fake authorization server the `test-oauth` provider talks
+ * to, derived from `BETTER_AUTH_URL` (never a separate origin/port — see
+ * `apps/api/src/lib/oauth-stub-provider.ts`'s remarks: it is mounted on the exact same Hono
+ * server as `/api/auth/*`, gated the same way in `apps/api/src/server.ts`).
+ */
+function testOAuthStubBaseUrl(betterAuthUrl: string): string {
+  return `${betterAuthUrl.replace(/\/+$/, '')}/api/auth-test/oauth-stub`;
+}
 
 /**
  * The four durable Apple credentials when ALL are real-shaped, else `undefined`.
@@ -462,6 +490,41 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       ...(deps.devEchoSignupCode ? { devEchoCode: true } : {}),
     }),
   ];
+
+  // A REAL OAuth 2.0 client provider (Better Auth's `genericOAuth` plugin) that performs a
+  // genuine authorize → code → token → userinfo ceremony against a fake identity provider Docket
+  // itself runs (`apps/api/src/lib/oauth-stub-provider.ts`) — never against Google, GitHub, or any
+  // real service. Exists solely so SCR-07 ("an OAuth-provider sign-in succeeds") can be proven
+  // with a real Better Auth session mint at the end of a real ceremony: no environment this code
+  // runs in — including CI — has a real third-party OAuth account to complete one against, and the
+  // six `socialProviders` blocks above are out of scope for that fixture (they mount real
+  // providers' endpoints, not a stand-in). Gated exactly like every other local/test-only
+  // shortcut in this codebase (`packages/mail/src/transport.ts`, `devEchoSignupCode` above,
+  // `apps/api/src/lib/slack-app.ts`'s `mockMode`): structurally absent from the `plugins` array
+  // whenever `APP_MODE` is `production` or unset, so there is no code path that can offer, reach,
+  // or complete this ceremony outside `local`/`test`. See
+  // `packages/auth/tests/builder/generic-oauth.test.ts` for the production-absence proof.
+  if (e.APP_MODE === 'local' || e.APP_MODE === 'test') {
+    plugins.push(
+      genericOAuth({
+        config: [
+          {
+            providerId: 'test-oauth',
+            clientId: TEST_OAUTH_CLIENT_ID,
+            clientSecret: TEST_OAUTH_CLIENT_SECRET,
+            authorizationUrl: `${testOAuthStubBaseUrl(e.BETTER_AUTH_URL)}/authorize`,
+            tokenUrl: `${testOAuthStubBaseUrl(e.BETTER_AUTH_URL)}/token`,
+            userInfoUrl: `${testOAuthStubBaseUrl(e.BETTER_AUTH_URL)}/userinfo`,
+            scopes: ['openid', 'email', 'profile'],
+            // No PKCE: the stub AS is a same-process fixture reached over plain server-to-server
+            // HTTP, not a public client — matches none of the six real providers above needing it
+            // either (PKCE is for public/native clients that cannot hold a client secret).
+            pkce: false,
+          },
+        ],
+      }),
+    );
+  }
 
   // The OAuth 2.1 / MCP authorization server. `oauthProvider()` is the single supported
   // successor to the deprecated `mcp()`/`oidcProvider()` pair Docket ran before — it absorbs

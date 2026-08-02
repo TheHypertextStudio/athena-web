@@ -617,12 +617,14 @@ describe('auth config', () => {
     );
   });
 
-  it('mounts passkey + twoFactor + recoveryChallenge + jwt + oauth-provider + nextCookies with placeholder env (passwordless baseline)', async () => {
+  it('mounts passkey + twoFactor + recoveryChallenge + generic-oauth + jwt + oauth-provider + nextCookies with placeholder env (passwordless baseline)', async () => {
     // The live `auth` is built from the test env (optional SOCIAL gates unset) → no social
     // providers/account-linking. The OAuth AS/RS is core functionality, not deploy-specific
     // config (see `@docket/env/api`'s derivation doc): OIDC_LOGIN_PAGE_URL auto-derives from
     // WEB_URL, always required, so `oauth-provider` (with its required `jwt` plugin) is
-    // always on.
+    // always on. `generic-oauth` (the `test-oauth` fixture provider) is on too: the vitest
+    // preset sets `APP_MODE: 'test'` (see `vite.config.ts`), which is exactly the gate that
+    // mounts it — see `generic-oauth.test.ts` for the production-absence proof.
     const { auth } = await import('../../src/index');
     expect(auth.options.socialProviders).toBeUndefined();
     expect(auth.options.account).toBeUndefined();
@@ -632,6 +634,7 @@ describe('auth config', () => {
       'two-factor',
       'recovery-challenge',
       'signup-challenge',
+      'generic-oauth',
       'jwt',
       'oauth-provider',
       'next-cookies',

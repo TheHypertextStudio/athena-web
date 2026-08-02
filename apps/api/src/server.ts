@@ -37,6 +37,7 @@ import integrationsGithub from './routes/integrations-github';
 import integrationsLinearAgentOAuth from './routes/integrations-linear-agent-oauth';
 import integrationsMcpOAuth from './routes/integrations-mcp-oauth';
 import webhooks from './routes/webhooks';
+import oauthStubProvider from './lib/oauth-stub-provider';
 
 const trustedOrigins =
   env.BETTER_AUTH_TRUSTED_ORIGINS?.split(',')
@@ -105,6 +106,15 @@ server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/linear-agent', integrationsLinearAgentOAuth);
 server.route('/internal/integrations/mcp', integrationsMcpOAuth);
 server.route('/internal/cron', cron);
+// The local/test-only fake OAuth 2.0 identity provider behind the `test-oauth` generic-oauth
+// provider (SCR-07's real-ceremony fixture — see `packages/auth/src/auth-builder.ts` and
+// `lib/oauth-stub-provider.ts`'s module remarks). Gated exactly like `startDevScheduler` below:
+// the route is not registered AT ALL outside `local`/`test` (not merely 404ing), so it is
+// structurally impossible to reach in production — `oauth-stub-provider.ts`'s own per-request
+// gate is a second, independent line of defense on top of this one.
+if (env.APP_MODE === 'local' || env.APP_MODE === 'test') {
+  server.route('/api/auth-test/oauth-stub', oauthStubProvider);
+}
 // Provider push-notification webhooks: NOT under `/internal` (Docket registers this exact URL
 // directly with each provider, e.g. Google's `channels.watch`, rather than calling it itself),
 // but still outside `/v1`/OpenAPI — a machine edge like the ones above, self-authed per provider

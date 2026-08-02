@@ -555,6 +555,7 @@ export default function InitiativeDetailPage(): JSX.Element {
             }
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
+            subject={{ type: 'initiative', id: initiativeId, organizationId: orgId }}
           />
         </div>
       ) : null}

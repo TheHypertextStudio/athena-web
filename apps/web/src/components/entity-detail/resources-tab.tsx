@@ -7,6 +7,11 @@ import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
+import {
+  MailAttachmentsPanel,
+  type MailAttachmentSubject,
+} from '@/components/athena/mail-attachments-panel';
+
 /** Props for {@link ResourcesTab}. */
 export interface ResourcesTabProps {
   resources: readonly AttachmentOut[];
@@ -15,6 +20,19 @@ export interface ResourcesTabProps {
   error: string | null;
   onAdd: (resource: { title: string; url: string }) => void;
   onRemove: (resourceId: string) => void;
+  /**
+   * The entity this tab belongs to, so mail Athena received and someone attached here can render.
+   *
+   * @remarks
+   * Optional so a caller that has not been threaded through yet keeps working unchanged; the
+   * section renders nothing when nothing is attached, so passing it costs an idle query and no
+   * layout.
+   */
+  subject?: {
+    readonly type: MailAttachmentSubject;
+    readonly id: string;
+    readonly organizationId: string;
+  };
 }
 
 /** Render URL resources in a dedicated, dense tab rather than burying them in metadata. */
@@ -25,6 +43,7 @@ export function ResourcesTab({
   error,
   onAdd,
   onRemove,
+  subject,
 }: ResourcesTabProps): JSX.Element {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
@@ -137,6 +156,13 @@ export function ResourcesTab({
           No linked resources yet.
         </p>
       )}
+      {subject ? (
+        <MailAttachmentsPanel
+          subjectType={subject.type}
+          subjectId={subject.id}
+          organizationId={subject.organizationId}
+        />
+      ) : null}
       {error ? (
         <p role="alert" className="text-destructive text-sm">
           {error}

@@ -61,6 +61,20 @@ function renderDetail(detail: EventDetail): JSX.Element | null {
       const status = detail.merged ? 'merged' : detail.draft ? 'draft' : 'open';
       return <Pill label={`#${detail.number} · ${status}`} />;
     }
+    case 'docket.inbound_email': {
+      // A received message's sender is not a Docket actor, so it cannot ride in the row's avatar
+      // slot. Naming the address here is what makes "who wrote this" answerable from the feed
+      // without opening anything.
+      const from = detail.fromName
+        ? `${detail.fromName} <${detail.fromAddress}>`
+        : detail.fromAddress;
+      return (
+        <div className="flex flex-col gap-1.5">
+          <Pill label={`From ${from}`} />
+          {detail.snippet ? <Quote text={detail.snippet} /> : null}
+        </div>
+      );
+    }
     case 'generic':
       return detail.summary ? <Quote text={detail.summary} /> : null;
     default:

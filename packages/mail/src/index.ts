@@ -1,11 +1,13 @@
 /**
- * `@docket/mail` - the `Mailer` port.
+ * `@docket/mail` - the `Mailer` (send) and `InboundMailReceiver` (receive) ports.
  *
  * @remarks
- * The single typed edge for transactional email. The real adapter speaks env-driven
- * SMTP / a provider API; the mock is an in-memory `CaptureMailer` whose `outbox` is
- * asserted in tests (and a `ConsoleMailer` for dev). No business logic lives here;
- * only the send edge does.
+ * The two typed edges email crosses. Sending: the real adapter speaks env-driven SMTP / a
+ * provider API; the mock is an in-memory `CaptureMailer` whose `outbox` is asserted in tests
+ * (and a `ConsoleMailer` for dev). Receiving: `ResendInboundReceiver` authenticates the
+ * provider's signed webhook and fetches the message body, while `FixtureInboundReceiver` runs
+ * the identical parsing offline. No business logic lives here; only the two edges do — nothing
+ * in this package knows what a message *means* or who it belongs to.
  */
 
 /** An outbound email message. */
@@ -67,3 +69,41 @@ export type {
   SmtpTransportFactory,
 } from './smtp';
 export type { MailerEnv } from './transport';
+
+export { htmlToText, mailboxHostOf, mailboxKeyOf, parseAddress, snippetOf } from './inbound';
+export type {
+  InboundAttachment,
+  InboundBodyStatus,
+  InboundMailReceiver,
+  InboundMessage,
+  InboundProviderId,
+  InboundReceiveResult,
+  InboundRejectionCode,
+  InboundWebhookRequest,
+} from './inbound';
+export {
+  SVIX_ID_HEADER,
+  SVIX_SECRET_PREFIX,
+  SVIX_SIGNATURE_HEADER,
+  SVIX_TIMESTAMP_HEADER,
+  SVIX_TOLERANCE_SECONDS,
+  signSvixPayload,
+  verifySvixSignature,
+} from './svix-signature';
+export type { SvixVerification, SvixVerificationFailure, SvixVerifyInput } from './svix-signature';
+export {
+  RESEND_INBOUND_EVENT_TYPE,
+  RESEND_RECEIVING_ENDPOINT,
+  ResendInboundReceiver,
+  readResendInboundPayload,
+  toInboundMessage,
+} from './resend-inbound';
+export type {
+  ResendInboundConfig,
+  ResendInboundNotification,
+  ResendPayloadRead,
+} from './resend-inbound';
+export { FixtureInboundReceiver, buildInboundFixturePayload } from './fixture-inbound';
+export type { FixtureInboundConfig, InboundFixtureBody } from './fixture-inbound';
+export { buildInboundReceiverFromEnv } from './inbound-transport';
+export type { InboundMailEnv } from './inbound-transport';

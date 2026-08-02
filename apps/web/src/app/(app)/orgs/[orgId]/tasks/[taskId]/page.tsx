@@ -24,6 +24,7 @@ import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
+import { MailAttachmentsPanel } from '@/components/athena/mail-attachments-panel';
 import TaskAttachments from '@/components/task-detail/TaskAttachments';
 import { TaskActivitySection } from '@/components/task-detail/task-activity-section';
 import { TaskTimerButton } from '@/components/time-tracking';
@@ -319,6 +320,7 @@ export default function TaskDetailPage(): JSX.Element {
           />
 
           <TaskAttachments orgId={orgId} taskId={taskId} canEdit={canEdit} />
+          <MailAttachmentsPanel subjectType="task" subjectId={taskId} organizationId={orgId} />
 
           <Dependencies
             blocking={task.blocking}

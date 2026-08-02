@@ -135,6 +135,10 @@ export default function TaskAttachments({
 }: TaskAttachmentsProps): JSX.Element {
   const { attachments, addUrl, addFile, remove, downloadUrl, isUploading, actionError } =
     useTaskAttachments(orgId, taskId);
+  // Mail Athena received renders in its own section on the page (it carries a sender and a
+  // subject, which this card has nowhere to put). Excluding it keeps one message from
+  // rendering twice.
+  const cards = attachments.filter((a) => a.kind !== 'athena_email');
   const [url, setUrl] = useState('');
   const [title, setTitle] = useState('');
 
@@ -152,11 +156,11 @@ export default function TaskAttachments({
         Attachments
       </h2>
 
-      {attachments.length === 0 ? (
+      {cards.length === 0 ? (
         <p className="text-muted-foreground text-sm">No attachments yet.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {attachments.map((a) => (
+          {cards.map((a) => (
             <AttachmentCard
               key={a.id}
               attachment={a}

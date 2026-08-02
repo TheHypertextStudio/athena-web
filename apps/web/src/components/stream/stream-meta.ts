@@ -142,10 +142,26 @@ export const KIND_LABEL: Record<EventKind, string> = {
  * there's no subject to name (e.g. a workspace-level update), and to "Someone" with no actor.
  */
 export function streamDescription(row: StreamEventRow): string {
-  const actor = row.actorName ?? 'Someone';
+  const actor = row.actorName ?? detailActorName(row.detail) ?? 'Someone';
   const verb = KIND_VERB[row.kind];
   const subject = row.entityTitle;
   return subject ? `${actor} ${verb} ${subject}` : row.title;
+}
+
+/**
+ * The human name a typed detail knows, when the event has no resolved Docket actor.
+ *
+ * @remarks
+ * An email that arrives at Athena's own address is written by a stranger who has no Docket
+ * identity, so `actor` is legitimately null — but the sender is right there in the typed detail,
+ * and "Someone emailed you" when we know exactly who is a worse line than the truth.
+ *
+ * @param detail - The event's typed detail pocket.
+ * @returns the sender's name or address, or `null` when the detail names nobody.
+ */
+function detailActorName(detail: EventDetail | null): string | null {
+  if (detail?.schema !== 'docket.inbound_email') return null;
+  return detail.fromName ?? detail.fromAddress;
 }
 
 /** Canonical entity kinds the stream can deep-link to internally, mapped to their route segment. */

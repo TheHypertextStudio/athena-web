@@ -527,6 +527,7 @@ export default function ProjectDetailPage(): JSX.Element {
             }
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
+            subject={{ type: 'project', id: projectId, organizationId: orgId }}
           />
         </div>
       ) : null}

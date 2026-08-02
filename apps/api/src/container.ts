@@ -47,11 +47,12 @@ import type {
   PushSender,
   SmsSender,
 } from '@docket/integrations';
-import { buildMailerFromEnv } from '@docket/mail';
-import type { Mailer } from '@docket/mail';
+import { buildInboundReceiverFromEnv, buildMailerFromEnv } from '@docket/mail';
+import type { InboundMailReceiver, Mailer } from '@docket/mail';
 import { configureNotificationTransports } from '@docket/notifications/dispatch';
 
 import { env } from './env';
+import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice-provider';
 
 /** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
@@ -67,6 +68,8 @@ export interface AppRuntimeEnv {
   readonly LINEAR_WEBHOOK_SECRET?: string;
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   readonly RESEND_API_KEY?: string;
+  readonly RESEND_INBOUND_WEBHOOK_SECRET?: string;
+  readonly RESEND_RECEIVING_API_BASE?: string;
   readonly SMTP_HOST?: string;
   readonly SMTP_PORT?: string;
   readonly SMTP_SECURE?: string;
@@ -86,6 +89,9 @@ export interface AppRuntimeEnv {
   readonly GOOGLE_GMAIL_API_BASE?: string;
   readonly GOOGLE_CALENDAR_API_BASE?: string;
   readonly GOOGLE_TASKS_API_BASE?: string;
+  readonly OPENAI_API_KEY?: string;
+  readonly VOICE_REALTIME_MODEL?: string;
+  readonly VOICE_REALTIME_VOICE?: string;
 }
 
 /** Service dependencies shared by API route handlers and background execution paths. */
@@ -96,9 +102,13 @@ export interface AppContainer {
   readonly summarizer: Summarizer;
   readonly taskSynthesizer: TaskSynthesizer;
   readonly mailer: Mailer;
+  /** The receiving edge: authenticates and normalizes one inbound-mail webhook request. */
+  readonly inboundMail: InboundMailReceiver;
   readonly mcpConnector: McpConnector;
   readonly sms: SmsSender;
   readonly push: PushSender;
+  /** The realtime speech backend behind Athena's browser voice mode. */
+  readonly voice: VoiceRealtimeProvider;
   readonly blob: BlobStore;
 }
 
@@ -164,6 +174,12 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
       ? { GITHUB_APP_WEBHOOK_SECRET: env.GITHUB_APP_WEBHOOK_SECRET }
       : {}),
     ...(env.RESEND_API_KEY ? { RESEND_API_KEY: env.RESEND_API_KEY } : {}),
+    ...(env.RESEND_INBOUND_WEBHOOK_SECRET
+      ? { RESEND_INBOUND_WEBHOOK_SECRET: env.RESEND_INBOUND_WEBHOOK_SECRET }
+      : {}),
+    ...(env.RESEND_RECEIVING_API_BASE
+      ? { RESEND_RECEIVING_API_BASE: env.RESEND_RECEIVING_API_BASE }
+      : {}),
     ...(env.SMTP_HOST ? { SMTP_HOST: env.SMTP_HOST } : {}),
     ...(env.SMTP_PORT ? { SMTP_PORT: env.SMTP_PORT } : {}),
     ...(env.SMTP_SECURE ? { SMTP_SECURE: env.SMTP_SECURE } : {}),
@@ -178,6 +194,9 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.PUSH_APP_ID ? { PUSH_APP_ID: env.PUSH_APP_ID } : {}),
     ...(env.BLOB_READ_WRITE_TOKEN ? { BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN } : {}),
     ...(env.EXPORT_BUCKET_URL ? { EXPORT_BUCKET_URL: env.EXPORT_BUCKET_URL } : {}),
+    ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
+    ...(env.VOICE_REALTIME_MODEL ? { VOICE_REALTIME_MODEL: env.VOICE_REALTIME_MODEL } : {}),
+    ...(env.VOICE_REALTIME_VOICE ? { VOICE_REALTIME_VOICE: env.VOICE_REALTIME_VOICE } : {}),
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
     ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
     ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
@@ -297,6 +316,28 @@ function buildMailer(runtimeEnv: AppRuntimeEnv): Mailer {
   });
 }
 
+/**
+ * Build the inbound-mail receiver for the current mode.
+ *
+ * @remarks
+ * The receiving mirror of {@link buildMailer}. Local and test always get the offline fixture
+ * adapter, so the whole delivery pipeline runs with no provider account; production requires
+ * both the API key and the webhook signing secret and refuses to construct without them, because
+ * an unauthenticated receiving endpoint is worse than no receiving endpoint.
+ */
+function buildInboundReceiver(runtimeEnv: AppRuntimeEnv): InboundMailReceiver {
+  return buildInboundReceiverFromEnv({
+    APP_MODE: runtimeEnv.APP_MODE ?? 'production',
+    ...(runtimeEnv.RESEND_API_KEY ? { RESEND_API_KEY: runtimeEnv.RESEND_API_KEY } : {}),
+    ...(runtimeEnv.RESEND_INBOUND_WEBHOOK_SECRET
+      ? { RESEND_INBOUND_WEBHOOK_SECRET: runtimeEnv.RESEND_INBOUND_WEBHOOK_SECRET }
+      : {}),
+    ...(runtimeEnv.RESEND_RECEIVING_API_BASE
+      ? { RESEND_RECEIVING_API_BASE: runtimeEnv.RESEND_RECEIVING_API_BASE }
+      : {}),
+  });
+}
+
 function buildSmsSender(runtimeEnv: AppRuntimeEnv): SmsSender {
   if (localMode(runtimeEnv)) return new CaptureSmsSender();
   const smsConfig = smsConfigFromEnv(runtimeEnv);
@@ -355,8 +396,16 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
   );
   const mailer = lazyValue(() => buildMailer(runtimeEnv));
+  // The receiving edge is lazy for the same reason the sending one is: production refuses to
+  // build it without a signing secret, and a deploy that never receives mail should not be
+  // blocked at boot by a credential it does not use.
+  const inboundMail = lazyValue(() => buildInboundReceiver(runtimeEnv));
   const mcpConnector = lazyValue(() => (mock ? new MockMcpConnector() : new RealMcpConnector()));
   const sms = lazyValue(() => buildSmsSender(runtimeEnv));
+  // Voice resolves through the same real/mock seam every other boundary uses, and is lazy for
+  // the same reason the mailer is: a deploy that never opens a voice session must not be blocked
+  // at boot by a credential it does not use.
+  const voice = lazyValue(() => resolveVoiceProvider(runtimeEnv));
   const push = lazyValue(() => buildPushSender(runtimeEnv));
   const blob = lazyValue(() =>
     mock
@@ -386,11 +435,17 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     get mailer() {
       return mailer();
     },
+    get inboundMail() {
+      return inboundMail();
+    },
     get mcpConnector() {
       return mcpConnector();
     },
     get sms() {
       return sms();
+    },
+    get voice() {
+      return voice();
     },
     get push() {
       return push();

@@ -561,6 +561,11 @@ export const searchIndexJobStatus = pgEnum('search_index_job_status', [
  * user-facing activity verb. The forward-looking `calendar_*`/`task_assignment` kinds are
  * reserved now so later providers add no enum migration. Source attribution rides on the
  * separate {@link sourceSystem} axis; "which thing" rides on {@link canonicalEntityKind}.
+ *
+ * Mirrors `EventKind` in `@docket/types` **in order** — values are only ever appended
+ * (`ALTER TYPE … ADD VALUE`), because Postgres cannot remove or reorder an enum value and
+ * stored rows must keep parsing. The `timer_*`, `elicitation_*` and `agent_*` families exist
+ * so the recipient router and notification policy can branch without decoding `detail`.
  */
 export const eventKind = pgEnum('event_kind', [
   'message',
@@ -574,6 +579,21 @@ export const eventKind = pgEnum('event_kind', [
   'calendar_invite',
   'calendar_update',
   'task_assignment',
+  'timer_started',
+  'timer_paused',
+  'timer_resumed',
+  'timer_switched',
+  'timer_stopped',
+  'email_received',
+  'elicitation_requested',
+  'elicitation_answered',
+  'elicitation_expired',
+  'agent_started',
+  'agent_progress',
+  'agent_blocked',
+  'agent_completed',
+  'agent_failed',
+  'field_change',
 ]);
 
 /**
@@ -599,8 +619,10 @@ export const sourceSystem = pgEnum('source_system', [
  *
  * @remarks
  * A deliberate superset of {@link resourceKind} — it adds the external-only kinds
- * (`thread`, `message`, `document`) that have no Docket containment node. Each translator
- * maps its native object types onto this closed taxonomy at the edge.
+ * (`thread`, `message`, `document`) that have no Docket containment node, plus
+ * `agent_session`, the subject an elicitation or an agent milestone is about when the run
+ * has no task attached. Each translator maps its native object types onto this closed
+ * taxonomy at the edge.
  */
 export const canonicalEntityKind = pgEnum('canonical_entity_kind', [
   'work_item',
@@ -614,6 +636,7 @@ export const canonicalEntityKind = pgEnum('canonical_entity_kind', [
   'calendar_event',
   'person',
   'organization',
+  'agent_session',
 ]);
 /** Processing status of one raw inbound event in the durable write-ahead inbox. */
 export const inboundEventStatus = pgEnum('inbound_event_status', [
@@ -647,7 +670,8 @@ export const eventSubscriptionStatus = pgEnum('event_subscription_status', [
  * @remarks
  * The cross-org "concerns me" feed fans out only these targeted reasons; the
  * org-wide firehose (`/orgs/:orgId/stream`) is served by the org query with a
- * null relevance, so there is no `workspace` reason here.
+ * null relevance, so there is no `workspace` reason here. `awaiting_you` is the
+ * strongest: work has halted until this person answers or unblocks it.
  */
 export const streamRelevance = pgEnum('stream_relevance', [
   'mention',
@@ -655,6 +679,7 @@ export const streamRelevance = pgEnum('stream_relevance', [
   'owned',
   'followed',
   'participant',
+  'awaiting_you',
 ]);
 /** Cadence of a generated cross-org summary (lunch / end-of-day / end-of-week). */
 export const summaryCadence = pgEnum('summary_cadence', ['lunch', 'eod', 'eow']);

@@ -59,6 +59,7 @@ const ENTITY_KIND_LABEL: Record<CanonicalEntityKind, string> = {
   calendar_event: 'Calendar event',
   person: 'Person',
   organization: 'Organization',
+  agent_session: 'Agent session',
 };
 
 /** Canonical entity kinds, shown in the Subject filter. */

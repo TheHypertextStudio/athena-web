@@ -87,6 +87,21 @@ const KIND_VERB: Record<EventKind, string> = {
   completed: 'completed',
   calendar_invite: 'invited you to',
   calendar_update: 'updated',
+  timer_started: 'started tracking',
+  timer_paused: 'paused tracking',
+  timer_resumed: 'resumed tracking',
+  timer_switched: 'switched tracking to',
+  timer_stopped: 'stopped tracking',
+  email_received: 'emailed you about',
+  elicitation_requested: 'needs your answer on',
+  elicitation_answered: 'answered a question on',
+  elicitation_expired: 'stopped waiting for an answer on',
+  agent_started: 'started working on',
+  agent_progress: 'made progress on',
+  agent_blocked: 'is blocked on',
+  agent_completed: 'finished working on',
+  agent_failed: 'could not finish',
+  field_change: 'updated',
 };
 
 /** Human label per kind (for filter chips / menus). */
@@ -102,6 +117,21 @@ export const KIND_LABEL: Record<EventKind, string> = {
   completed: 'Completed',
   calendar_invite: 'Calendar invite',
   calendar_update: 'Calendar update',
+  timer_started: 'Tracking started',
+  timer_paused: 'Tracking paused',
+  timer_resumed: 'Tracking resumed',
+  timer_switched: 'Tracking switched',
+  timer_stopped: 'Tracking stopped',
+  email_received: 'Email received',
+  elicitation_requested: 'Question asked',
+  elicitation_answered: 'Question answered',
+  elicitation_expired: 'Question expired',
+  agent_started: 'Agent started',
+  agent_progress: 'Agent progress',
+  agent_blocked: 'Agent blocked',
+  agent_completed: 'Agent finished',
+  agent_failed: 'Agent failed',
+  field_change: 'Field change',
 };
 
 /**
@@ -161,6 +191,8 @@ export function relevanceLabel(relevance: StreamRelevance | null): string | null
       return 'Following';
     case 'participant':
       return "You're involved";
+    case 'awaiting_you':
+      return 'Waiting on you';
     default:
       return null;
   }
@@ -192,6 +224,26 @@ export function kindGlyph(kind: EventKind): KindGlyph {
     case 'calendar_invite':
     case 'calendar_update':
       return { icon: 'calendar', tone: 'text-on-surface-variant' };
+    case 'timer_started':
+    case 'timer_paused':
+    case 'timer_resumed':
+    case 'timer_switched':
+    case 'timer_stopped':
+      return { icon: 'timer', tone: 'text-on-surface-variant' };
+    case 'email_received':
+      return { icon: 'email', tone: 'text-on-surface-variant' };
+    case 'elicitation_requested':
+    case 'elicitation_answered':
+    case 'elicitation_expired':
+      return { icon: 'question', tone: 'text-state-started' };
+    case 'agent_started':
+    case 'agent_progress':
+    case 'agent_blocked':
+    case 'agent_completed':
+    case 'agent_failed':
+      return { icon: 'agent', tone: 'text-state-started' };
+    case 'field_change':
+      return { icon: 'edit', tone: 'text-on-surface-variant' };
     default:
       return { icon: 'created', tone: 'text-on-surface-variant' };
   }

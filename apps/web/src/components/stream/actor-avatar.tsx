@@ -15,9 +15,13 @@ import {
   Calendar,
   CheckCircle2,
   Circle,
+  Edit,
   Heart,
   type LucideIcon,
+  Mail,
+  MessagesSquare,
   MessageSquare,
+  Schedule,
   Sparkles,
 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -35,6 +39,11 @@ const GLYPH_ICON: Record<string, LucideIcon> = {
   reaction: Heart,
   calendar: Calendar,
   created: Circle,
+  timer: Schedule,
+  email: Mail,
+  question: MessagesSquare,
+  agent: Sparkles,
+  edit: Edit,
 };
 
 /** Two uppercase initials from a display name (falls back to a dot). */

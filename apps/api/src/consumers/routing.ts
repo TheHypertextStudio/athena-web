@@ -13,9 +13,15 @@
  * (or an external entity not yet mapped to a Docket twin) simply yields no owners — the
  * external integration-owner fallback (`ownerUserId`) and explicit followers still apply.
  * Adding an entity kind = adding a registry entry, never editing a switch.
+ *
+ * Two policies sit above the registry, stated once here so no producer re-invents them:
+ * **personal kinds** (tracking) route to the acting person alone and never fan out, and
+ * **direct recipients** are delivered verbatim, exempt from the self-exclusion, for events
+ * that address someone by construction (an agent asking *you* a question).
  */
 import {
   actor,
+  agentSession,
   eventRecipient,
   initiative,
   program,
@@ -23,6 +29,7 @@ import {
   streamSubscription,
   task,
 } from '@docket/db';
+import { PERSONAL_EVENT_KINDS } from '@docket/types';
 import type {
   CanonicalEntityKind,
   EventKind,
@@ -37,16 +44,26 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Relevance priority — a lower rank wins when a user qualifies for several reasons. */
 const RELEVANCE_RANK: Record<StreamRelevance, number> = {
-  mention: 0,
-  assignment: 1,
-  owned: 2,
-  followed: 3,
-  participant: 4,
+  awaiting_you: 0,
+  mention: 1,
+  assignment: 2,
+  owned: 3,
+  followed: 4,
+  participant: 5,
 };
 
-/** A subject owner and the role that makes them relevant. */
+/**
+ * A subject owner and the role that makes them relevant.
+ *
+ * @remarks
+ * Most owners are Docket Actors (`actorId`), resolved to their Better Auth user downstream.
+ * An agent session is owned by a *user* directly (`agent_session.owner_user_id`) — a
+ * personal Athena run has no workspace and therefore no Actor — so a rule may return either.
+ */
 interface OwnerCandidate {
-  readonly actorId: string;
+  readonly actorId?: string;
+  /** A Better Auth user id, for subjects owned by a user rather than an org Actor. */
+  readonly userId?: string;
   readonly role: 'assignee' | 'delegate' | 'lead' | 'owner' | 'creator';
 }
 
@@ -80,6 +97,19 @@ export interface RoutableEvent {
    * mention/DM/thread classification). The router still owns strongest-reason-wins merging.
    */
   readonly externalRecipients?: ReadonlyMap<string, StreamRelevance>;
+  /**
+   * Recipients the producer names outright, exempt from the "never surface your own action
+   * to yourself" rule.
+   *
+   * @remarks
+   * The self-exclusion is right for ambient awareness and wrong for addressed delivery. An
+   * agent asking *you* a question acts as your own Athena — its Actor resolves to your user —
+   * so ordinary routing would drop the one person who must see it. Timer transitions are the
+   * same shape inverted: they concern nobody *but* the person who made them. Both cases
+   * supply the audience here, and it survives verbatim. Use it only when the producer knows
+   * the audience by construction; ambient relevance stays the router's job.
+   */
+  readonly directRecipients?: ReadonlyMap<string, StreamRelevance>;
 }
 
 /**
@@ -143,6 +173,21 @@ const OWNER_RULES: Partial<
       [r.createdBy, 'creator'],
     ]);
   },
+  // An agent's run belongs to the human who started it: the owning user for a personal
+  // Athena run (which has no workspace and no Actor), the initiating Actor for a registered
+  // agent working inside an org. Both are returned; the merge keeps the strongest reason.
+  agent_session: async (tx, id) => {
+    const [r] = await tx
+      .select({ ownerUserId: agentSession.ownerUserId, initiatorId: agentSession.initiatorId })
+      .from(agentSession)
+      .where(eq(agentSession.id, id))
+      .limit(1);
+    if (!r) return [];
+    return [
+      ...(r.ownerUserId ? [{ userId: r.ownerUserId, role: 'owner' as const }] : []),
+      ...(r.initiatorId ? [{ actorId: r.initiatorId, role: 'owner' as const }] : []),
+    ];
+  },
 };
 
 /** Build owner candidates from (actorId, role) pairs, dropping nulls. */
@@ -156,8 +201,22 @@ function docketIdOf(entity: RoutableEntity): string | null {
   return entity.docketEntityId ?? null;
 }
 
+/**
+ * Kinds that halt until a human acts — their owners are `awaiting_you`, not merely `owned`.
+ *
+ * @remarks
+ * An unanswered question and a blocked agent are the only two states where somebody else's
+ * work cannot continue without this person. Everything else (progress, completion, failure
+ * the agent already handled) is information, and information does not outrank a halt.
+ */
+const HALTING_KINDS: ReadonlySet<EventKind> = new Set<EventKind>([
+  'elicitation_requested',
+  'agent_blocked',
+]);
+
 /** The relevance reason for an owner role, given the event kind. */
 function reasonForOwner(role: OwnerCandidate['role'], kind: EventKind): StreamRelevance {
+  if (HALTING_KINDS.has(kind)) return 'awaiting_you';
   if (role === 'assignee' && (kind === 'assignment' || kind === 'task_assignment'))
     return 'assignment';
   return 'owned';
@@ -165,6 +224,7 @@ function reasonForOwner(role: OwnerCandidate['role'], kind: EventKind): StreamRe
 
 /** The fallback reason for an external integration-owner recipient, from the event kind. */
 function reasonForExternal(kind: EventKind): StreamRelevance {
+  if (HALTING_KINDS.has(kind)) return 'awaiting_you';
   if (kind === 'mention') return 'mention';
   if (kind === 'assignment' || kind === 'task_assignment') return 'assignment';
   return 'owned';
@@ -184,6 +244,8 @@ export async function resolveRecipients(
   event: RoutableEvent,
 ): Promise<Map<string, StreamRelevance>> {
   const byActor = new Map<string, StreamRelevance>();
+  /** Owners already resolved to a user id (agent sessions own by user, not by Actor). */
+  const byOwnerUser = new Map<string, StreamRelevance>();
   const consider = (actorId: string | null | undefined, reason: StreamRelevance): void => {
     if (!actorId) return;
     const existing = byActor.get(actorId);
@@ -191,13 +253,27 @@ export async function resolveRecipients(
       byActor.set(actorId, reason);
   };
 
+  // Personal kinds (tracking) never fan out: a timer transition is the acting person's own
+  // data, and its only audience is that person plus the assistant reading the live bus. The
+  // event still carries its entity so the item's history reads correctly — it just does not
+  // land in anyone else's feed, whatever they own or follow.
+  if (PERSONAL_EVENT_KINDS.includes(event.kind)) {
+    return new Map(event.directRecipients ?? []);
+  }
+
   // Owners — via the per-entity-kind Strategy, only when the entity is a Docket one.
   if (event.entity) {
     const docketId = docketIdOf(event.entity);
     const rule = OWNER_RULES[event.entity.kind];
     if (docketId && rule) {
       for (const owner of await rule(tx, docketId)) {
-        consider(owner.actorId, reasonForOwner(owner.role, event.kind));
+        const reason = reasonForOwner(owner.role, event.kind);
+        consider(owner.actorId, reason);
+        if (owner.userId) {
+          const existing = byOwnerUser.get(owner.userId);
+          if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing])
+            byOwnerUser.set(owner.userId, reason);
+        }
       }
     }
   }
@@ -224,6 +300,7 @@ export async function resolveRecipients(
     if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) byUser.set(userId, reason);
   };
   for (const [actorId, reason] of byActor) addUser(userByActor.get(actorId) ?? null, reason);
+  for (const [userId, reason] of byOwnerUser) addUser(userId, reason);
 
   // External integration-owner fallback (already a user id; the drain supplies it).
   if (event.ownerUserId) addUser(event.ownerUserId, reasonForExternal(event.kind));
@@ -245,6 +322,13 @@ export async function resolveRecipients(
         ),
       );
     for (const f of followers) addUser(f.userId, 'followed');
+  }
+
+  // Directly addressed recipients — merged last and exempt from the self-exclusion, because
+  // the producer named them on purpose (see `RoutableEvent.directRecipients`).
+  for (const [userId, reason] of event.directRecipients ?? []) {
+    const existing = byUser.get(userId);
+    if (!existing || RELEVANCE_RANK[reason] < RELEVANCE_RANK[existing]) byUser.set(userId, reason);
   }
 
   return byUser;

@@ -23,6 +23,10 @@ import { ListQuery, pageOf } from './pagination';
  * @remarks
  * Mirrors the `stream_relevance` DB enum. The per-workspace firehose has no relevance
  * (it shows every org event), so {@link StreamEventOut.relevance} is `.nullable()`.
+ *
+ * `awaiting_you` is the strongest reason there is: something has stopped and cannot continue
+ * until this person acts (an agent asked them a question, or an agent is blocked on them).
+ * It outranks `mention` because a mention is information, while this is a halt.
  */
 export const StreamRelevance = z.enum([
   'mention',
@@ -30,6 +34,7 @@ export const StreamRelevance = z.enum([
   'owned',
   'followed',
   'participant',
+  'awaiting_you',
 ]);
 /** Stream-relevance value. */
 export type StreamRelevance = z.infer<typeof StreamRelevance>;

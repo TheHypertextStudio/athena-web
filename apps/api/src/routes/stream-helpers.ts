@@ -24,17 +24,33 @@ function categoryFor(kind: EventKind): string {
     case 'comment':
     case 'message':
     case 'reaction':
+    case 'email_received':
       return 'social';
     case 'assignment':
     case 'task_assignment':
+    case 'elicitation_requested':
+    case 'agent_blocked':
       return 'inbound';
     case 'status_change':
     case 'completed':
     case 'created':
+    case 'field_change':
+    case 'elicitation_answered':
+    case 'elicitation_expired':
+    case 'agent_started':
+    case 'agent_progress':
+    case 'agent_completed':
+    case 'agent_failed':
       return 'progress';
     case 'calendar_invite':
     case 'calendar_update':
       return 'calendar';
+    case 'timer_started':
+    case 'timer_paused':
+    case 'timer_resumed':
+    case 'timer_switched':
+    case 'timer_stopped':
+      return 'tracking';
     default:
       return 'other';
   }

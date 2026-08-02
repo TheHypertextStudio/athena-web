@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./dispatch": "./src/dispatch/index.ts",
     "./schemas": "./src/schemas/index.ts",
-    "./testing": "./src/testing/index.ts"
+    "./testing": "./src/testing/index.ts",
+    "./webpush": "./src/webpush/index.ts",
+    "./webpush/node": "./src/webpush/node.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

@@ -44,19 +44,119 @@ export const DOCKET_CONNECTION = 'docket';
 /** The loop-owned elicitation tool name (never dispatched to the MCP server). */
 export const ASK_USER_TOOL = 'ask_user';
 
-/** The `ask_user` definition surfaced to the model alongside the Docket tools. */
+/**
+ * The `ask_user` definition surfaced to the model alongside the Docket tools.
+ *
+ * @remarks
+ * The input is flat and JSON-Schema-describable because that is all a tool definition can carry;
+ * `elicitationRequestFromToolInput` turns it into the recursive control spec the renderer and the
+ * server-side validator share. Three fields are load-bearing rather than decorative:
+ *
+ * - `actionSummary` is required. An elicitation authorizes an action taken on someone's behalf, and
+ *   a request that does not say what it will do is not consent.
+ * - `responseType` is what makes the answer typed. Declaring `confirm` or `select` is also what
+ *   lets the question be answered from a notification, since only a bounded option set fits on one.
+ * - `timeoutPolicy` decides what a deadline may do. It defaults to `ambiguous`, which *parks* the
+ *   work — a model that forgets to think about the timeout gets the safe behaviour, never a guess.
+ */
 export const ASK_USER_DEF: TurnToolDef = {
   name: ASK_USER_TOOL,
   description:
-    'Ask the human principal ONE concise question and wait for their answer. Use this ' +
-    'when you are blocked on a decision only they can make. The session pauses until ' +
-    "they reply; their reply is returned as this tool call's result.",
+    'Ask the human principal for ONE piece of information you are blocked on, as typed, ' +
+    'schema-validated data. Always state in `actionSummary` the concrete action their answer ' +
+    'authorizes you to take on their behalf. Choose the narrowest `responseType` that fits: ' +
+    'prefer `confirm` or `select` over `text`, because those can be answered from a notification. ' +
+    "The session pauses until they answer; their answer is returned as this call's result. " +
+    'Set `timeoutPolicy: "derivable"` and supply `autoResolveValue` + `autoResolveReason` ONLY ' +
+    'when the context genuinely determines the answer and being wrong is recoverable; use ' +
+    '"destructive" for anything that cannot be undone.',
   inputSchema: {
     type: 'object',
     properties: {
-      question: { type: 'string', description: 'The single question to ask.' },
+      question: { type: 'string', description: 'The single question to ask, in your own words.' },
+      actionSummary: {
+        type: 'string',
+        description:
+          'The concrete action this answer authorizes, as a sentence the person can audit — e.g. "Post the sprint update to the Acme project channel".',
+      },
+      responseType: {
+        type: 'string',
+        enum: ['text', 'confirm', 'select', 'datetime', 'file', 'form'],
+        description: 'The shape of the answer you need.',
+      },
+      confirmLabel: { type: 'string', description: 'For `confirm`: the affirmative button label.' },
+      declineLabel: { type: 'string', description: 'For `confirm`: the negative button label.' },
+      options: {
+        type: 'array',
+        description: 'For `select`: the predefined options. Values are what you receive back.',
+        items: {
+          type: 'object',
+          properties: {
+            value: { type: 'string' },
+            label: { type: 'string' },
+            description: { type: 'string' },
+          },
+          required: ['value', 'label'],
+        },
+      },
+      multiple: { type: 'boolean', description: 'For `select`/`file`: allow more than one.' },
+      precision: {
+        type: 'string',
+        enum: ['date', 'time', 'datetime'],
+        description: 'For `datetime`: how precise the answer must be.',
+      },
+      timeZone: { type: 'string', description: 'For `datetime`: the IANA zone to interpret in.' },
+      accept: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'For `file`: accepted MIME types. Omit to accept anything.',
+      },
+      fields: {
+        type: 'array',
+        description: 'For `form`: one entry per field.',
+        items: {
+          type: 'object',
+          properties: {
+            key: { type: 'string' },
+            label: { type: 'string' },
+            description: { type: 'string' },
+            required: { type: 'boolean' },
+            type: {
+              type: 'string',
+              enum: ['text', 'confirm', 'select', 'datetime', 'file'],
+            },
+            options: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { value: { type: 'string' }, label: { type: 'string' } },
+                required: ['value', 'label'],
+              },
+            },
+          },
+          required: ['key', 'label', 'type'],
+        },
+      },
+      timeoutPolicy: {
+        type: 'string',
+        enum: ['derivable', 'ambiguous', 'destructive'],
+        description:
+          'What may happen when nobody answers in time. `derivable` lets you record your own answer; the other two park the work and tell them.',
+      },
+      autoResolveValue: {
+        description:
+          'Required with `derivable`: the answer you would record, in the shape `responseType` declares.',
+      },
+      autoResolveReason: {
+        type: 'string',
+        description: 'Required with `derivable`: why that answer is defensible. Shown to them.',
+      },
+      timeSensitive: {
+        type: 'boolean',
+        description: 'True when waiting has a cost; sends them an actionable notification.',
+      },
     },
-    required: ['question'],
+    required: ['question', 'actionSummary', 'responseType'],
   },
 };
 

@@ -13,6 +13,26 @@ import type {
 } from './mcp-clients';
 import { MCP_CLIENTS, detectOS } from './mcp-clients';
 
+/** One grid cell shared by both copy-button labels, so the wider one fixes the button's width. */
+const STACKED_LABEL = 'col-start-1 row-start-1';
+
+/**
+ * A code snippet with a copy control.
+ *
+ * @remarks
+ * The copy button is a flex *sibling* of the `<pre>`, not an overlay on top of it. Absolutely
+ * positioning it and reserving space with padding only works while the snippet is short enough to
+ * fit: `overflow-x-auto` starts the content at the left edge, so padding-right lands at the far end
+ * of the scrollable content where nobody is looking, and a long line — every realistic
+ * `claude mcp add docket http://<host>/mcp` — runs straight underneath the button with both left
+ * unreadable. As a sibling the button owns real horizontal space that the code can never occupy, and
+ * `min-w-0` lets the `<pre>` shrink below its intrinsic width so its own `overflow-x-auto` scrolls
+ * the code instead of shoving the button out of the container.
+ *
+ * The two label states are stacked in a single grid cell so the button is always as wide as the
+ * longer string. Sizing to the current label instead would make the code area reflow every time the
+ * label flipped to "Copied!" — a shift the old overlay avoided only by being out of flow.
+ */
 function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): JSX.Element {
   const [copied, setCopied] = useState(false);
 
@@ -26,18 +46,15 @@ function CodeBlock({ code, label = 'Copy' }: { code: string; label?: string }): 
   }, [code]);
 
   return (
-    <div className="bg-surface-container relative rounded-lg">
-      <pre className="text-on-surface text-body-medium overflow-x-auto p-4 pr-24 font-mono leading-relaxed">
+    <div className="bg-surface-container flex items-start gap-2 rounded-lg p-3">
+      <pre className="text-on-surface text-body-medium min-w-0 flex-1 overflow-x-auto py-1 font-mono leading-relaxed">
         <code>{code}</code>
       </pre>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={copy}
-        className="absolute top-2 right-2 text-xs"
-      >
-        {copied ? 'Copied!' : label}
+      <Button type="button" variant="ghost" size="sm" onClick={copy} className="shrink-0 text-xs">
+        <span className="grid">
+          <span className={copied ? `invisible ${STACKED_LABEL}` : STACKED_LABEL}>{label}</span>
+          <span className={copied ? STACKED_LABEL : `invisible ${STACKED_LABEL}`}>Copied!</span>
+        </span>
       </Button>
     </div>
   );

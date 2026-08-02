@@ -11,6 +11,7 @@ export type Slice =
   | 'ops'
   | 'connector'
   | 'hosts'
+  | 'voice'
   | 'client';
 /** Whether a var is server-only or a public client var. */
 export type Scope = 'server' | 'client';

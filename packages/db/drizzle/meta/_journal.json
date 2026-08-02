@@ -421,6 +421,34 @@
       "when": 1785698118869,
       "tag": "0059_work_data_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1785703757556,
+      "tag": "0060_weekly_scheduling_and_directive",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1785703804915,
+      "tag": "0061_orange_george_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1785703891158,
+      "tag": "0062_colossal_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1785705347134,
+      "tag": "0063_lattice_byo_model",
+      "breakpoints": true
     }
   ]
 }

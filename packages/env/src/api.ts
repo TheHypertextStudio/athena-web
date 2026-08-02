@@ -22,6 +22,7 @@ import {
   opsServer,
   sharedServer,
   stripeServer,
+  voiceServer,
 } from './slices';
 
 const rawEnv = createEnv({
@@ -35,6 +36,7 @@ const rawEnv = createEnv({
     ...opsServer,
     ...connectorServer,
     ...hostsServer,
+    ...voiceServer,
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

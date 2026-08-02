@@ -11,9 +11,9 @@ import { z } from 'zod';
 
 /** The social providers a user can link an identity from (mirrors Better Auth `socialProviders`). */
 export const IdentityProvider = z
-  .enum(['google', 'github', 'linear'])
+  .enum(['google', 'github', 'linear', 'notion'])
   .describe(
-    'The external social provider an identity is linked from: `google` (OIDC — supplies email/name/picture), `github`, or `linear`. Mirrors the configured Better Auth `socialProviders` and gates which connectors are available.',
+    'The external social provider an identity is linked from: `google` (OIDC — supplies email/name/picture), `github`, `linear`, or `notion`. Mirrors the configured Better Auth `socialProviders` and gates which connectors are available.',
   );
 /** Identity-provider value. */
 export type IdentityProvider = z.infer<typeof IdentityProvider>;

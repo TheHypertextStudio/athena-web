@@ -211,8 +211,20 @@ export const attachmentSubjectType = pgEnum('attachment_subject_type', [
  * title/favicon). `calendar_event` is a first-party Google Calendar event pointer used when
  * a user creates a task from an event. `file` is an uploaded file whose bytes live in blob
  * storage (`blob_key`) with `file_name`/`mime_type`/`byte_size` metadata on the row.
+ *
+ * `athena_email` is a message Docket itself received at Athena's address, whose content Docket
+ * owns outright (`athena_inbound_message`, referenced by `external_id`). It is a separate value
+ * from `email` precisely because the two are separate stores with separate lifetimes: `email`
+ * dies with its integration and dedupes on `(source_integration_id, external_id)`, and an
+ * Athena-received message belongs to no integration at all.
  */
-export const attachmentKind = pgEnum('attachment_kind', ['email', 'url', 'calendar_event', 'file']);
+export const attachmentKind = pgEnum('attachment_kind', [
+  'email',
+  'url',
+  'calendar_event',
+  'file',
+  'athena_email',
+]);
 /**
  * Lifecycle of an Athena-synthesized task suggestion drawn from an email.
  *

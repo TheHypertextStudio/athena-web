@@ -11,7 +11,14 @@ import {
 
 describe('provider catalog', () => {
   test('separates connector, directory, and webhook provider ids', () => {
-    expect(CONNECTOR_PROVIDER_IDS).toEqual(['gmail', 'gtasks', 'calendar', 'github', 'linear']);
+    expect(CONNECTOR_PROVIDER_IDS).toEqual([
+      'gmail',
+      'gtasks',
+      'calendar',
+      'github',
+      'linear',
+      'notion',
+    ]);
     expect(DIRECTORY_PROVIDER_IDS).toEqual([...CONNECTOR_PROVIDER_IDS]);
     expect(WEBHOOK_PROVIDER_IDS).toEqual(['github', 'linear']);
   });

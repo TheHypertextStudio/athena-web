@@ -60,8 +60,30 @@ export const INFRA_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: opsServer.RESEND_API_KEY,
-    where: 'Resend API key for production transactional email over HTTPS.',
+    where:
+      'Resend API key — production transactional email over HTTPS, and reading inbound message bodies.',
     sensitive: true,
+  },
+  {
+    name: 'RESEND_INBOUND_WEBHOOK_SECRET',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.RESEND_INBOUND_WEBHOOK_SECRET,
+    where:
+      "Svix signing secret (whsec_…) for Athena's inbound-mail webhook. Required in production with RESEND_API_KEY; absent ⇒ the offline fixture receiver.",
+    sensitive: true,
+  },
+  {
+    name: 'RESEND_RECEIVING_API_BASE',
+    slice: 'ops',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: opsServer.RESEND_RECEIVING_API_BASE,
+    where:
+      "Inbound receiving-API base. Absent ⇒ Resend's own https://api.resend.com/emails/receiving.",
   },
   {
     name: 'SMTP_HOST',

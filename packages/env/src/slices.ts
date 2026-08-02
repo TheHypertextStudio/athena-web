@@ -102,6 +102,33 @@ export const authServer = {
   GITHUB_APP_WEBHOOK_SECRET: z.string().optional(),
   LINEAR_CLIENT_ID: z.string().optional(),
   LINEAR_CLIENT_SECRET: z.string().optional(),
+  /**
+   * Lovelace OAuth app client id, registered at `developer.uselovelace.com`. Funds "Sign in with
+   * Lovelace" so a person can authorize Athena to run model turns on their own Lattice devices.
+   * Absent ⇒ the Lattice section in Settings renders as unavailable and the Connect control never
+   * appears; Athena stays on the routed default backend for everyone.
+   */
+  LATTICE_CLIENT_ID: z.string().optional(),
+  /** Lovelace OAuth app client secret — paired with `LATTICE_CLIENT_ID`. */
+  LATTICE_CLIENT_SECRET: z.string().optional(),
+  /**
+   * Lovelace accounts issuer origin. Defaults to `https://accounts.uselovelace.com`; set only to
+   * point a non-production Docket at a staging Lovelace.
+   */
+  LATTICE_ACCOUNTS_ISSUER: z.string().optional(),
+  /**
+   * Lattice gateway origin. Defaults to `https://lattice.uselovelace.com`; set only to point a
+   * non-production Docket at a staging or local gateway.
+   */
+  LATTICE_GATEWAY_URL: z.string().optional(),
+  /**
+   * Notion public-integration OAuth client id. Funds BOTH sign-in linking and the Notion
+   * connector's API calls — Notion's grant is a single workspace bot token with read+write, so
+   * (unlike Linear) there is no additional scope to request before two-way sync works.
+   */
+  NOTION_CLIENT_ID: z.string().optional(),
+  /** Notion public-integration OAuth client secret — paired with `NOTION_CLIENT_ID`. */
+  NOTION_CLIENT_SECRET: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
   /**
@@ -209,6 +236,34 @@ export const agentServer = {
   DOCKET_TO_CLOUDFLARE_HMAC_SECRET: z.string().min(32).optional(),
 };
 
+/**
+ * Live voice and inbound telephony (Athena's voice mode and phone number).
+ *
+ * @remarks
+ * Every var is optional, and that is the seam rather than an oversight: with none of them set the
+ * API runs the fixture-backed realtime and telephony doubles, so the whole voice + phone stack is
+ * developable and testable with zero external accounts. Supplying values is what promotes it to
+ * the real providers — the local/production difference is values, never code paths.
+ *
+ * `TWILIO_AUTH_TOKEN` is the shared secret every inbound call webhook is authenticated with; a
+ * production deploy that sets `TWILIO_ACCOUNT_SID` without it is refused at boot, because an
+ * unauthenticated telephony webhook lets anyone on the internet impersonate a caller.
+ */
+export const voiceServer = {
+  /** Realtime speech credential for the browser voice channel (ephemeral secrets are minted from it). */
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  /** Realtime model id; defaults to the adapter's pinned model when absent. */
+  VOICE_REALTIME_MODEL: z.string().min(1).optional(),
+  /** Synthesized voice id; defaults to the adapter's pinned voice when absent. */
+  VOICE_REALTIME_VOICE: z.string().min(1).optional(),
+  /** Twilio account the Athena phone number belongs to. */
+  TWILIO_ACCOUNT_SID: z.string().min(1).optional(),
+  /** Twilio auth token — the key every inbound webhook signature is verified against. */
+  TWILIO_AUTH_TOKEN: z.string().min(1).optional(),
+  /** The E.164 number people call to reach Athena. */
+  TWILIO_PHONE_NUMBER: z.string().min(1).optional(),
+};
+
 /** Cron secret, observability, blob/export storage, and transactional email. */
 export const opsServer = {
   CRON_SECRET: z.string().min(1),
@@ -216,8 +271,19 @@ export const opsServer = {
   BLOB_READ_WRITE_TOKEN: z.string().optional(),
   EXPORT_BUCKET_URL: z.string().optional(),
   EXPORT_BUCKET_TOKEN: z.string().optional(),
-  /** Resend API key for production transactional email over HTTPS. */
+  /** Resend API key for production transactional email over HTTPS, and inbound body reads. */
   RESEND_API_KEY: z.string().min(1).optional(),
+  /**
+   * Signing secret (`whsec_…`) for Athena's inbound-mail webhook endpoint.
+   *
+   * @remarks
+   * Required in production alongside `RESEND_API_KEY` before inbound mail will run at all:
+   * an unauthenticated receiving endpoint would let anyone on the internet write into a
+   * person's Athena inbox. Absent in local/test, where the fixture adapter runs offline.
+   */
+  RESEND_INBOUND_WEBHOOK_SECRET: z.string().min(1).optional(),
+  /** Receiving-API base override for inbound message bodies. Absent ⇒ Resend's own endpoint. */
+  RESEND_RECEIVING_API_BASE: z.string().min(1).optional(),
   /**
    * SMTP relay host for transactional email (`SmtpMailer`). Local: Mailpit (`localhost`).
    * Absent/placeholder ⇒ the mock `CaptureMailer` is used. Lenient (`min(1)`, optional);

@@ -18,6 +18,7 @@ import {
   pgTable,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
@@ -681,5 +682,106 @@ export const athenaTrigger = pgTable(
       sql`(${t.type} = 'event' AND ${t.scheduleMinutes} IS NULL AND cardinality(${t.eventKinds}) > 0)
         OR (${t.type} = 'scheduled' AND ${t.scheduleMinutes} >= 5 AND cardinality(${t.eventKinds}) = 0)`,
     ),
+  ],
+);
+
+/**
+ * One person's authorization to run Athena's model work on their own Lovelace Lattice devices.
+ *
+ * @remarks
+ * Per Better Auth user, not per organization, and deliberately so: the thing authorized is a
+ * person's own hardware and their own Lovelace account. An org-scoped row would imply a coworker
+ * could point the team's Athena at a laptop they do not own.
+ *
+ * `deviceId` is the `lat_…` id of the personal runtime the person picked. It is nullable because
+ * the grant and the device choice are two separate decisions — someone can connect Lovelace,
+ * discover they have no paired machine yet, pair one, and come back. A null here is the
+ * `no_device_selected` state, which the settings surface renders as an instruction rather than as
+ * a failure.
+ *
+ * `status` is Docket's own view of the connection, refreshed whenever the gateway is read.
+ * `lastFailureReason` holds a stable {@link LatticeUnavailableReason} code, never provider text,
+ * so the surface can render application-owned copy for it.
+ *
+ * @see `docs/engineering/specs/lattice-byo-model.md`
+ */
+export const latticeConnection = pgTable(
+  'lattice_connection',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** Docket's view of the grant: `pending` while consent is in flight. */
+    status: integrationStatus('status').notNull().default('pending'),
+    /** Whether Athena's turns should actually run on this connection right now. */
+    enabled: boolean('enabled').notNull().default(false),
+    /** The `lat_…` personal runtime the person chose; null until they pick one. */
+    deviceId: text('device_id'),
+    /** The device's display name at selection time, so the UI can name it before a gateway read. */
+    deviceName: text('device_name'),
+    /** Live device status from the last gateway read. */
+    deviceStatus: text('device_status'),
+    /** The scope string Lovelace actually granted. */
+    grantedScope: text('granted_scope'),
+    /** The Lovelace account the grant belongs to, when the gateway has reported it. */
+    accountId: text('account_id'),
+    /** Stable `LatticeUnavailableReason` code from the last failure; never provider prose. */
+    lastFailureReason: text('last_failure_reason'),
+    /** When that failure happened. */
+    lastFailureAt: timestamp('last_failure_at'),
+    /** When Docket last successfully read the gateway with this grant. */
+    lastVerifiedAt: timestamp('last_verified_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    // One Lovelace grant per person. Two rows would make "which device answers Athena" ambiguous.
+    uniqueIndex('lattice_connection_owner_uq').on(t.ownerUserId),
+    // A table CONSTRAINT rather than a unique index, deliberately: `lattice_credential`'s compound
+    // foreign key references these two columns, and Postgres requires the referenced uniqueness to
+    // exist before the FK is added. Drizzle emits constraints inside `CREATE TABLE` but emits
+    // unique indexes *after* the `ALTER TABLE … ADD CONSTRAINT` statements, so an index here makes
+    // the generated migration fail with `42830` whenever the batch also contains other new tables.
+    unique('lattice_connection_id_owner_uq').on(t.id, t.ownerUserId),
+    // A connection cannot be switched on without a device to run on: `enabled` is what the turn
+    // path reads, and an enabled row with no target would fail every turn at dispatch time
+    // instead of being visibly incomplete in Settings.
+    check(
+      'lattice_connection_enabled_needs_device_check',
+      sql`${t.enabled} = false OR ${t.deviceId} IS NOT NULL`,
+    ),
+  ],
+);
+
+/** AES-256-GCM sealed OAuth tokens for one owner-matched Lattice connection. */
+export const latticeCredential = pgTable(
+  'lattice_credential',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    connectionId: text('connection_id').notNull(),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** The `v1:gcm:…` envelope holding the serialized credential record. */
+    ciphertext: text('ciphertext').notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('lattice_credential_connection_uq').on(t.connectionId),
+    // The compound FK is what makes it impossible to seal one person's tokens against another
+    // person's connection row, even through a bug in the route layer.
+    foreignKey({
+      columns: [t.connectionId, t.ownerUserId],
+      foreignColumns: [latticeConnection.id, latticeConnection.ownerUserId],
+      name: 'lattice_credential_connection_owner_fk',
+    }).onDelete('cascade'),
   ],
 );

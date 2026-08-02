@@ -1,7 +1,7 @@
-import { agentServer, mcpServer, stripeServer } from './slices';
+import { agentServer, mcpServer, stripeServer, voiceServer } from './slices';
 import type { VarSpec } from './registry-types';
 
-/** Stripe + MCP + agent variable specs. */
+/** Stripe + MCP + agent + voice/telephony variable specs. */
 export const SERVICE_VARS: readonly VarSpec[] = [
   // stripe
   {
@@ -231,5 +231,63 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     zod: agentServer.DOCKET_TO_CLOUDFLARE_HMAC_SECRET,
     where: 'Distinct HMAC secret authenticating Docket execution dispatches to Cloudflare',
     sensitive: true,
+  },
+
+  // voice + telephony
+  {
+    name: 'OPENAI_API_KEY',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.OPENAI_API_KEY,
+    where: 'Realtime speech credential for Athena voice mode; absent runs the fixture double',
+    sensitive: true,
+  },
+  {
+    name: 'VOICE_REALTIME_MODEL',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.VOICE_REALTIME_MODEL,
+    where: 'Realtime model id for Athena voice mode',
+  },
+  {
+    name: 'VOICE_REALTIME_VOICE',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.VOICE_REALTIME_VOICE,
+    where: 'Synthesized voice id for Athena voice mode',
+  },
+  {
+    name: 'TWILIO_ACCOUNT_SID',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.TWILIO_ACCOUNT_SID,
+    where: 'Twilio account that owns the Athena phone number',
+  },
+  {
+    name: 'TWILIO_AUTH_TOKEN',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.TWILIO_AUTH_TOKEN,
+    where: 'Twilio auth token; every inbound call webhook signature is verified against it',
+    sensitive: true,
+  },
+  {
+    name: 'TWILIO_PHONE_NUMBER',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.TWILIO_PHONE_NUMBER,
+    where: 'The E.164 number people call to reach Athena',
   },
 ] as const;

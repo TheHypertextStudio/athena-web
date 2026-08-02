@@ -15,7 +15,17 @@ export const API_TEST_ENV = {
   // zod — it fails the whole process with an unhandled rejection instead.
   BETTER_AUTH_URL: 'https://api.docket.localhost',
   CRON_SECRET: 'test-cron-secret',
+  // Both are required by the API's own env contract (`sharedServer`), and the host-config
+  // contract derives every product host from them — without WEB_URL, `requireOrigin(…, 'app')`
+  // throws, so any code that dictates a product URL (the phone gating announcement) could not be
+  // exercised at all. Tests that care about their absence stub them per-case.
+  WEB_URL: 'https://docket.localhost',
+  API_URL: 'https://api.docket.localhost',
   SKIP_ENV_VALIDATION: '1',
   AGENT_MAX_TURNS: '8',
   ATHENA_ASYNC_RUNNER_ENABLED: 'false',
+  // Athena's receiving domain. The host contract deliberately never derives this, so without a
+  // value `resolveHost(apiHostConfig, 'athena-mail')` is undefined and every inbound-mail test
+  // would exercise the "no inbox configured" branch instead of the pipeline.
+  ATHENA_INBOUND_MAIL_HOST: 'inbox.athena.docket.localhost',
 } as const satisfies Record<string, string>;

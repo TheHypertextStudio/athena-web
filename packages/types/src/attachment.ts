@@ -18,8 +18,16 @@ export const AttachmentSubjectType = z.enum(['task', 'initiative', 'project']);
 /** Attachment subject-type value. */
 export type AttachmentSubjectType = z.infer<typeof AttachmentSubjectType>;
 
-/** The kind of resource an Attachment references. */
-export const AttachmentKind = z.enum(['email', 'url', 'calendar_event', 'file']);
+/**
+ * The kind of resource an Attachment references.
+ *
+ * @remarks
+ * `athena_email` is a message Docket received at Athena's own address, stored in full in
+ * `athena_inbound_message` and referenced by `externalId`. It is a distinct value from `email`
+ * (an integration-backed Gmail pointer) because the two live in different stores with different
+ * lifetimes — see `packages/db/src/schema/athena-mail.ts`.
+ */
+export const AttachmentKind = z.enum(['email', 'url', 'calendar_event', 'file', 'athena_email']);
 /** Attachment kind value. */
 export type AttachmentKind = z.infer<typeof AttachmentKind>;
 

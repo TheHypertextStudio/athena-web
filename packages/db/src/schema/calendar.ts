@@ -274,6 +274,22 @@ export const calendarItem = pgTable(
     lastPushedAt: timestamp('last_pushed_at'),
     syncState: text('sync_state').notNull().default('clean'),
     conflict: jsonb('conflict').$type<CalendarItemConflict>(),
+    /**
+     * The `WorkShape` this block represents, when it is shaped work rather than a generic
+     * block. Null for provider events and for anything created before the taxonomy existed —
+     * the six shapes are how the planner tells a shoot from a bus ride, and a null simply means
+     * "unshaped", never "generic block type".
+     */
+    workShape: text('work_shape'),
+    /**
+     * What put this block on the calendar: `user` (a manual gesture), `scheduler` (the weekly
+     * planner), `agent` (Athena acting on the day), or `provider` (synced in). Defaults to
+     * `user` so every pre-existing row keeps the only attribution that was ever true of it, and
+     * so a regeneration can never mistake a hand-placed block for one of its own.
+     */
+    origin: text('origin').notNull().default('user'),
+    /** The `schedule_run` that placed this block; null for anything not placed by a run. */
+    scheduleRunId: text('schedule_run_id'),
     archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
@@ -283,6 +299,7 @@ export const calendarItem = pgTable(
   },
   (t) => [
     index('calendar_item_user_starts_idx').on(t.userId, t.startsAt),
+    index('calendar_item_schedule_run_idx').on(t.scheduleRunId),
     index('calendar_item_user_all_day_idx').on(t.userId, t.allDayStartDate),
     index('calendar_item_layer_idx').on(t.layerId),
     index('calendar_item_user_sync_state_idx').on(t.userId, t.syncState),

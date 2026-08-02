@@ -41,7 +41,11 @@ const CONNECTORS_BY_PROVIDER: Partial<Record<SocialProvider, readonly string[]>>
 /** Keep dormant Better Auth providers out of the public active-provider contract. */
 function isPublicSignInProvider(provider: SocialProvider): provider is SignInProvider {
   return (
-    provider === 'google' || provider === 'github' || provider === 'linear' || provider === 'apple'
+    provider === 'google' ||
+    provider === 'github' ||
+    provider === 'linear' ||
+    provider === 'notion' ||
+    provider === 'apple'
   );
 }
 

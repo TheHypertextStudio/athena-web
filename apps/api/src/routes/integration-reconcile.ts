@@ -30,6 +30,7 @@ import { ConflictError } from '../error';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { type IntegrationRow } from './integration-provider';
+import { recordSyncConflict } from './sync-notion';
 
 /** A linked task projected to just the fields reconciliation needs to decide a direction. */
 export interface ReconcileLocalTask {
@@ -57,6 +58,33 @@ export interface ReconcileLocalTask {
   readonly externalListId: string | null;
 }
 
+/**
+ * The record of a genuine two-sided conflict: both Docket and the provider changed the same
+ * linked item since the last sync.
+ *
+ * @remarks
+ * Emitted by {@link planTaskReconcile} alongside the `push` it resolves to, so the losing remote
+ * values are *data* the caller persists rather than something discarded on the way to a decision.
+ * `remoteTitle`/`remoteDueDate`/`remoteCompleted` are the provider's values at the moment they
+ * lost — the conflict log's whole reason to exist (see {@link recordSyncConflict}).
+ */
+export interface TaskSyncConflict {
+  /** The provider's external id for the conflicted item. */
+  readonly externalId: string;
+  /** The provider's last-write timestamp (RFC3339) that lost. */
+  readonly remoteUpdatedAt: string;
+  /** Docket's `updatedAt` at the moment it won (ISO-8601). */
+  readonly localUpdatedAt: string;
+  /** The provider's title at the moment it lost. */
+  readonly remoteTitle: string;
+  /** The provider's body/description at the moment it lost, when it carried one. */
+  readonly remoteBody: string | null;
+  /** The provider's due date at the moment it lost (`null` = explicitly unset, `undefined` = absent). */
+  readonly remoteDueDate: string | null | undefined;
+  /** The provider's completion flag at the moment it lost, when the provider carries one. */
+  readonly remoteCompleted: boolean | undefined;
+}
+
 /** One reconciliation decision for a (local, remote) pair. */
 export type ReconcileAction =
   | { readonly kind: 'noop' }
@@ -64,8 +92,14 @@ export type ReconcileAction =
   | { readonly kind: 'insert' }
   /** Remote is the newer side → apply its fields to the local task. */
   | { readonly kind: 'pull' }
-  /** Local is the newer/dirty side → push its fields to the provider. */
-  | { readonly kind: 'push' }
+  /**
+   * Local is the newer/dirty side → push its fields to the provider.
+   *
+   * @remarks
+   * `conflict` is set only when the REMOTE ALSO changed since the last sync and Docket won
+   * anyway. An ordinary uncontested push carries no conflict.
+   */
+  | { readonly kind: 'push'; readonly conflict?: TaskSyncConflict }
   /** Local task was canceled → delete it at the provider. */
   | { readonly kind: 'pushDelete' }
   /** Remote tombstone → archive the local linked task. */
@@ -88,6 +122,16 @@ function isDirty(local: ReconcileLocalTask): boolean {
  * A remote is only ever *archived* on an explicit tombstone (`removed`), never on mere absence —
  * a task missing from the pull is most likely filtered out by the integration's `listIds`, not
  * deleted, so absence must not destroy local work.
+ *
+ * **Docket is the source of truth on conflict.** When BOTH sides changed since the last sync,
+ * Docket's value wins regardless of which timestamp is newer, and the losing remote values are
+ * returned on the action as a {@link TaskSyncConflict} so the caller can record them. This
+ * replaces the previous last-write-wins tie-break, under which a later external edit silently
+ * overwrote local work and the losing value was kept nowhere — the opposite of what a two-way
+ * sync whose purpose is to let Docket supersede the incumbent tool has to do.
+ *
+ * A one-sided remote change is NOT a conflict: if Docket is clean, the provider's newer value is
+ * simply pulled. "Docket wins" settles contested edits; it does not stop Docket from learning.
  *
  * @param local - The local linked task, or `undefined` when the provider has one we don't.
  * @param remote - The pulled item, or `undefined` when we have a linked task the pull didn't return.
@@ -120,9 +164,24 @@ export function planTaskReconcile(
 
   if (opts.writeBack && dirty) {
     if (local.stateType === 'canceled') return { kind: 'pushDelete' };
+    // `remoteNewer` is only ever true when `remoteMs` is a real number (see its definition), so
+    // this single check narrows both facts at once.
     if (!remoteNewer) return { kind: 'push' };
-    // Both sides changed since the last sync: the newer timestamp wins.
-    return local.updatedAt.getTime() >= remoteMs ? { kind: 'push' } : { kind: 'pull' };
+    // Both sides changed since the last sync. Docket is the source of truth, so Docket's value
+    // wins even when the remote edit is newer — and the remote's losing values ride along so the
+    // caller can record them instead of dropping them.
+    return {
+      kind: 'push',
+      conflict: {
+        externalId: local.externalId,
+        remoteUpdatedAt: new Date(remoteMs).toISOString(),
+        localUpdatedAt: local.updatedAt.toISOString(),
+        remoteTitle: remote.title,
+        remoteBody: remote.body ?? null,
+        remoteDueDate: remote.dueDate,
+        remoteCompleted: remote.completed,
+      },
+    };
   }
   return remoteNewer ? { kind: 'pull' } : { kind: 'noop' };
 }
@@ -164,6 +223,14 @@ export interface ReconcileResult {
   readonly archived: number;
   /** Native tasks created at the provider and converted to linked. */
   readonly created: number;
+  /**
+   * Two-sided edits Docket won this pass, each written to the sync conflict log.
+   *
+   * @remarks
+   * Always equal to the number of `audit_event` conflict rows written by this pass — the tally
+   * and the durable record cannot disagree, because they are incremented by the same branch.
+   */
+  readonly conflicts: number;
 }
 
 /** Options for {@link reconcileTasks}. */
@@ -225,7 +292,15 @@ export async function reconcileTasks(
   const remoteById = new Map<string, ImportedItem>();
   for (const item of items) remoteById.set(item.provenance.externalId, item);
 
-  const tally = { inserted: 0, pulled: 0, pushed: 0, deleted: 0, archived: 0, created: 0 };
+  const tally = {
+    inserted: 0,
+    pulled: 0,
+    pushed: 0,
+    deleted: 0,
+    archived: 0,
+    created: 0,
+    conflicts: 0,
+  };
 
   const externalIds = new Set<string>([...localById.keys(), ...remoteById.keys()]);
   for (const externalId of externalIds) {
@@ -258,6 +333,11 @@ export async function reconcileTasks(
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pulled += 1;
     } else if (action.kind === 'push' && local && writable) {
+      // Record the losing remote value BEFORE overwriting it — see `recordSyncConflict`.
+      if (action.conflict) {
+        await recordSyncConflict(orgId, actorId, row.id, row.provider, local.id, action.conflict);
+        tally.conflicts += 1;
+      }
       await pushUpdate(row, local, writable);
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pushed += 1;

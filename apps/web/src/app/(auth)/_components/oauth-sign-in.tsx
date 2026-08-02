@@ -26,7 +26,7 @@
  * @see {@link file://./sign-in-client.tsx} for the passkey ceremony this sits beneath.
  */
 import type { PublicConfigOut, SignInProvider } from '@docket/types';
-import { Apple, Github, Google, Layers, type LucideIcon } from '@docket/ui/icons';
+import { Apple, Github, Google, Layers, ListChecks, type LucideIcon } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
@@ -66,18 +66,19 @@ interface ProviderPresentation {
  * @remarks
  * Keyed by {@link SignInProvider} so adding a provider to the shared enum fails to typecheck until
  * it has a label and a glyph here — the catalog cannot silently fall behind the contract. Linear
- * has no brand glyph in the curated icon set, so it borrows the `Layers` mark the Connected
- * accounts directory already uses for it.
+ * and Notion have no brand glyph in the curated icon set, so they borrow the marks the Connected
+ * accounts directory already uses for them.
  */
 const PROVIDERS: Readonly<Record<SignInProvider, ProviderPresentation>> = {
   google: { id: 'google', name: 'Google', icon: Google },
   apple: { id: 'apple', name: 'Apple', icon: Apple },
   github: { id: 'github', name: 'GitHub', icon: Github },
   linear: { id: 'linear', name: 'Linear', icon: Layers },
+  notion: { id: 'notion', name: 'Notion', icon: ListChecks },
 };
 
 /** Display order — the two consumer identities first, then the work ones. */
-const PROVIDER_ORDER: readonly SignInProvider[] = ['google', 'apple', 'github', 'linear'];
+const PROVIDER_ORDER: readonly SignInProvider[] = ['google', 'apple', 'github', 'linear', 'notion'];
 
 /**
  * Whether this deployment can actually complete a sign-in with `provider` for an unknown person.

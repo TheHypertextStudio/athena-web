@@ -101,7 +101,7 @@ describe('integrations directory', () => {
     const dir = await body<DirectoryRes>(res);
 
     const providers = dir.providers.map((p) => p.provider).sort();
-    expect(providers).toEqual(['calendar', 'github', 'gmail', 'gtasks', 'linear']);
+    expect(providers).toEqual(['calendar', 'github', 'gmail', 'gtasks', 'linear', 'notion']);
 
     const github = dir.providers.find((p) => p.provider === 'github')!;
     expect(github.name).toBe('GitHub');

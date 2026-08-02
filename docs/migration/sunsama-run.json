@@ -1,0 +1,117 @@
+{
+  "ranAt": "2026-08-02T21:43:54.460Z",
+  "source": "fixture",
+  "endpoint": "https://sunsama.fixture.localhost/mcp",
+  "applied": false,
+  "sunsamaActiveCount": 7,
+  "sunsamaArchivedCount": 1,
+  "docketMatchedCount": 0,
+  "unmatchedSunsamaIds": ["su-001", "su-002", "su-003", "su-007", "su-004", "su-006", "su-005"],
+  "unmatchedDocketIds": [],
+  "workspaces": [
+    {
+      "workspace": "Las Vegans for Better Transit",
+      "routed": 3,
+      "created": 0,
+      "alreadyPresent": 0
+    },
+    {
+      "workspace": "The Willie Diaries",
+      "routed": 2,
+      "created": 0,
+      "alreadyPresent": 0
+    },
+    {
+      "workspace": "Personal Life",
+      "routed": 1,
+      "created": 0,
+      "alreadyPresent": 0
+    },
+    {
+      "workspace": "Hypertext Studio",
+      "routed": 1,
+      "created": 0,
+      "alreadyPresent": 0
+    }
+  ],
+  "routing": {
+    "label": "Sunsama → Docket, 2026-08",
+    "fallbackWorkspace": "Personal Life",
+    "expectedFallbackTaskCount": 1,
+    "observedFallbackTaskCount": 1,
+    "matchesDeclaration": true,
+    "unroutedCount": 0
+  },
+  "mcpInvocations": [
+    {
+      "capability": "listStreams",
+      "tool": "get_streams",
+      "input": {},
+      "taskCount": 0
+    },
+    {
+      "capability": "listBacklog",
+      "tool": "get_backlog_tasks",
+      "input": {},
+      "taskCount": 4
+    },
+    {
+      "capability": "listByDay",
+      "tool": "get_tasks_by_day",
+      "input": {
+        "day": "2026-08-03"
+      },
+      "taskCount": 2
+    },
+    {
+      "capability": "listByDay",
+      "tool": "get_tasks_by_day",
+      "input": {
+        "day": "2026-08-04"
+      },
+      "taskCount": 1
+    },
+    {
+      "capability": "listArchived",
+      "tool": "get_archived_tasks",
+      "input": {},
+      "taskCount": 1
+    }
+  ],
+  "missingCapabilities": [],
+  "plannedDayWindow": ["2026-08-03", "2026-08-04"],
+  "preservedFields": {
+    "su-001": {
+      "actualTimeMinutes": 0,
+      "sunsamaCreatedAt": "2026-07-02T15:04:00.000Z",
+      "sunsamaStreamIds": ["str-transit"]
+    },
+    "su-002": {
+      "sunsamaCreatedAt": "2026-07-10T18:00:00.000Z",
+      "sunsamaStreamIds": ["str-transit"]
+    },
+    "su-003": {
+      "sunsamaCreatedAt": "2026-06-20T12:00:00.000Z",
+      "sunsamaStreamIds": ["str-newsletter"]
+    },
+    "su-007": {
+      "sunsamaCreatedAt": "2026-07-19T14:00:00.000Z"
+    },
+    "su-004": {
+      "actualTimeMinutes": 25,
+      "sunsamaCreatedAt": "2026-07-25T08:00:00.000Z",
+      "sunsamaStreamIds": ["str-transit"]
+    },
+    "su-006": {
+      "recurringDefinitionId": "rec-newsletter-monday",
+      "sunsamaCreatedAt": "2026-05-01T09:00:00.000Z",
+      "sunsamaStreamIds": ["str-newsletter"]
+    },
+    "su-005": {
+      "actualTimeMinutes": 120,
+      "sunsamaCreatedAt": "2026-07-28T09:00:00.000Z",
+      "sunsamaSourceIntegration": "github:hypertext-studio/athena-web#412",
+      "sunsamaStreamIds": ["str-docket"]
+    }
+  }
+}

@@ -4,6 +4,7 @@ import {
   Calendar,
   Github,
   Layers,
+  ListChecks,
   type LucideIcon,
   Mail,
   Sparkles,
@@ -17,6 +18,7 @@ export const PROVIDER_ICON: Record<string, LucideIcon> = {
   gmail: Mail,
   calendar: Calendar,
   gtasks: TaskAlt,
+  notion: ListChecks,
 };
 
 /**
@@ -60,7 +62,9 @@ export const STATUS_LABEL: Record<
  * grant; GitHub and Linear each have their own. Used to decide which
  * provider's OAuth redirect to launch when finishing/repairing a connection.
  */
-export function socialProviderForConnector(provider: string): 'google' | 'github' | 'linear' {
+export function socialProviderForConnector(
+  provider: string,
+): 'google' | 'github' | 'linear' | 'notion' {
   const connectorProvider = CONNECTOR_PROVIDER_IDS.find((p) => p === provider);
   const identityProvider = connectorProvider
     ? connectorIdentityProvider(connectorProvider)
@@ -170,6 +174,20 @@ export const CONNECTOR_COPY: Record<string, ConnectorCopy> = {
     connectBlurb: 'Mirror Linear issues, projects, and cycles into Docket.',
     usesTeamMapping: true,
   },
+  notion: {
+    containerNoun: 'database',
+    containerNounPlural: 'databases',
+    checklistNoun: 'database',
+    checklistNounPlural: 'databases',
+    direction: {
+      importOnly: 'Pull Notion database rows into Docket. Local edits stay in Docket.',
+      // Notion is the one connector where Docket, not the source tool, settles a conflict.
+      twoWay:
+        'Edits, completions, and deletions sync in both directions. If the same field changes on both sides, Docket wins and the Notion value is kept in the sync history.',
+    },
+    connectBlurb: 'Keep Notion databases and Docket tasks in step, with Docket in charge.',
+    usesTeamMapping: false,
+  },
 };
 
 /** connectorCopy returns the config-panel wording for a provider, falling back to generic copy. */
@@ -217,6 +235,10 @@ const CONNECTION_CARD_COPY: Record<string, ConnectionCardCopy> = {
     effect: 'Athena links pull requests and issues to your work.',
     mechanics: 'Reads your repositories',
   },
+  notion: {
+    effect: 'Athena keeps your Notion databases and Docket tasks in step.',
+    mechanics: 'Two-way sync — Docket wins conflicts',
+  },
 };
 
 /** The generic fallback shown for a provider with no dedicated card copy above. */
@@ -237,9 +259,9 @@ export function connectionCardCopy(provider: string): ConnectionCardCopy {
  * @remarks
  * Google Tasks is excluded here even though it has a config panel — it renders its own dedicated
  * multi-account section (`GtasksAccountsSection`) instead of the generic provider-card list, so
- * wiring it through this flag would double-render its picker. Linear is the first (and so far
- * only) provider whose config lives on the generic card.
+ * wiring it through this flag would double-render its picker. Linear and Notion both configure on
+ * the generic card: Notion's picker is the list of Notion databases to sync.
  */
 export function hasInlineConfigPanel(provider: string): boolean {
-  return provider === 'linear';
+  return provider === 'linear' || provider === 'notion';
 }

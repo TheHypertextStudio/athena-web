@@ -1,0 +1,226 @@
+# Notion sync
+
+> **Status**: Shipped (connector + two-way sync + Docket-wins conflict resolution)
+> **Owner surface**: `packages/integrations/src/notion*.ts`, `apps/api/src/routes/sync-notion.ts`
+> **Related**: [`integration-sync.md`](./integration-sync.md) (the shared sync spine),
+> [`../../migration/sunsama-to-docket.md`](../../migration/sunsama-to-docket.md)
+
+Docket syncs Notion databases — including Notion's built-in task database — with Docket's own
+tasks, in both directions, **with Docket as the source of truth on conflict**.
+
+That last clause is the whole point, and it is not a default that fell out of the existing
+machinery. Before this connector, every Docket connector resolved a two-sided edit by _last write
+wins_: a later edit in the external tool silently overwrote local work, and the losing value was
+kept nowhere. A sync built to let Docket **supersede** the incumbent tool cannot behave that way —
+if the external tool can still overwrite you, you have not replaced it, you have added a second
+place your work can be changed from behind your back.
+
+---
+
+## 1. Why Notion is a connector, not a migration
+
+Docket models two relationships with an external tool:
+
+- **migration** — a one-time replace: import the work, then stop talking to the tool.
+- **connector** — an ongoing relationship: keep both sides current.
+
+Notion is registered as a `connector` (`packages/types/src/provider-catalog.ts`), because the
+requirement is ongoing two-way sync, and only the connector pattern carries the `syncMode` /
+`writeBack` semantics that drive it. **That Docket holds the source of truth is a property of the
+conflict policy, not of the pattern** — see §5.
+
+The sequencing this enables is the "embrace, extend, extinguish" arc:
+
+| Phase          | What is true                    | What Docket does                                                                                                                                                                |
+| -------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Embrace**    | The team still works in Notion. | Pull every row, continuously, into Docket tasks with a stored Notion page id.                                                                                                   |
+| **Extend**     | Work exists in both.            | Cycles, portfolio, Athena and scheduling operate on imported rows with the same affordances as native ones — imported tasks are ordinary Docket tasks with provenance.          |
+| **Extinguish** | Docket is where work happens.   | Every Docket edit is pushed to Notion, and a contested edit resolves in Docket's favour. Notion stays current until the day it is switched off, and nothing is lost when it is. |
+
+Disconnecting the integration does not touch the migrated tasks: `task.source_integration_id` is
+`ON DELETE SET NULL`, so a disconnected workspace keeps every previously synced row, fully editable.
+
+---
+
+## 2. Notion's data model, as the adapter meets it
+
+Notion API version **`2025-09-03`** (`NOTION_API_VERSION`), the release that introduced _data
+sources_. Under it, a **database** owns one or more **data sources**, and rows, schemas and page
+parents are all data-source scoped. So:
+
+- `ResourceRef.id` (what Docket calls a "list", what the UI calls a database) is a **data source
+  id**.
+- It is stored per task as `task.external_list_id`, so a write-back always addresses the collection
+  the row actually lives in.
+
+Endpoints used, all with the mandatory `Notion-Version` header:
+
+| Purpose                      | Call                                                                         |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| Identity + workspace binding | `GET /v1/users/me`                                                           |
+| Enumerate databases to sync  | `POST /v1/search` `{ filter: { property: 'object', value: 'data_source' } }` |
+| Read a database's schema     | `GET /v1/data_sources/{id}`                                                  |
+| Read rows                    | `POST /v1/data_sources/{id}/query` (twice — see §4)                          |
+| Update a page                | `PATCH /v1/pages/{id}`                                                       |
+| Create a page                | `POST /v1/pages` with `parent: { type: 'data_source_id', data_source_id }`   |
+| Delete a page                | `PATCH /v1/pages/{id}` `{ in_trash: true }`                                  |
+
+Notion exposes **no entity tag**, so the two-way anchor is `last_edited_time` alone and
+`task.external_etag` stays null for Notion rows. The adapter does not invent one.
+
+---
+
+## 3. The field mapping is derived, not hard-coded
+
+Notion has no fixed task schema — every database declares its own property names and types. So the
+mapping is derived from each data source's own schema at sync time (`readNotionSchema`), and every
+other mapping function is a pure function of the derived `NotionSchema`.
+
+Roles are resolved **by property type, with a name preference**, so a workspace that calls its date
+property "Due" gets the same treatment as one that calls it "Due date".
+
+### Property → Docket
+
+| Notion property type                  | Chosen by                                                     | Docket destination                                                                                              |
+| ------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `title` (exactly one per data source) | structural                                                    | `task.title` — a blank Notion title becomes `Untitled`, because `task.title` is NOT NULL with a not-blank CHECK |
+| `status`                              | structural (preferred over checkbox)                          | completion, via the **groups** — see below                                                                      |
+| `checkbox`                            | only when there is no `status` property                       | completion                                                                                                      |
+| `date`                                | name preference: `due date`, `due`, `deadline`, `due on`      | `task.due_date`                                                                                                 |
+| `rich_text`                           | name preference: `description`, `notes`, `details`, `summary` | `task.description`                                                                                              |
+| `select`                              | name preference: `priority`, `urgency`                        | read and reported (Docket's priority enum is not Notion's option set, so it is not written blindly)             |
+| `people`                              | name preference: `assignee`, `assigned to`, `owner`, `person` | read as Notion user ids for external-actor resolution                                                           |
+| `last_edited_time`                    | structural (the page field, not the property)                 | `task.external_updated_at` — the sync anchor                                                                    |
+
+### Completion reads Notion's status **groups**, not option names
+
+Notion's status property groups its options into `to_do` / `in_progress` / `complete`. The option
+_names_ are workspace-authored ("Done", "Shipped", "Substantially complete"); the _groups_ are
+Notion's own semantics. So:
+
+- **Reading**: a page is complete iff its status option belongs to the `complete` group.
+- **Writing**: completing a task writes the **first option in the target group**, so a workspace
+  whose done column is called "Shipped" gets "Shipped" — never a literal `"Done"` that its schema
+  does not contain (Notion would reject that with a 400).
+
+Both the array shape the REST API returns (`groups: [{ name, option_ids }]` + a flat `options`
+list) and the keyed shape (`groups: { to_do: [...] }`) are understood.
+
+### Properties with no Docket destination
+
+Every property the mapping does not carry is recorded on `NotionSchema.unmappedProperties` with its
+type, so the sync surface can name it rather than dropping it silently. On the real LVBT `Tasks
+Tracker` database those are:
+
+| Property                                      | Type               | Why it does not map                                                                                                                                |
+| --------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Effort level`                                | `select`           | Docket's estimate is a duration (`estimate_minutes`), not a T-shirt size; there is no non-arbitrary conversion from Small/Medium/Large to minutes. |
+| `Project`                                     | `relation`         | Notion relations point at other Notion pages. Resolving one to a Docket project requires a project-level mapping the connector does not yet have.  |
+| `Parent Task` / `Subtasks`                    | `relation`         | Same: the Docket parent must exist before the child can point at it, which needs a second reconciliation pass.                                     |
+| `Updated at`                                  | `last_edited_time` | Already carried, as the page-level `last_edited_time` anchor — mapping the property too would double-count it.                                     |
+| `Source` (on Notion's built-in task database) | `rollup`           | A rollup is a computed view of another database's rows; it has no independent value to store.                                                      |
+
+---
+
+## 4. Deletions arrive as data, not as absence
+
+The default data-source query returns only live pages. A trashed page simply stops appearing —
+indistinguishable, to the reconciler, from a page filtered out by the integration's database
+selection. And the reconciler is right to leave those alone: absence must never destroy local work.
+
+So the adapter runs the query **twice** per data source — once normally, once with
+`is_archived: true` — and maps a trashed page to a tombstone (`ImportedItem.removed`). Reconciliation
+then archives the local linked task on an explicit tombstone.
+
+The two partitions are disjoint by definition, but results are de-duplicated by page id with the
+**live copy winning**, so a page that moved to the trash mid-pagination cannot archive a Docket task
+on the strength of a race.
+
+---
+
+## 5. Docket wins. And the losing value is written down.
+
+`planTaskReconcile` (`apps/api/src/routes/integration-reconcile.ts`) decides direction per task from
+two facts: whether the local task is **dirty** (`updated_at > external_updated_at`) and whether the
+remote is **newer than the anchor**.
+
+| Local dirty | Remote newer | Action                                                                             |
+| ----------- | ------------ | ---------------------------------------------------------------------------------- |
+| no          | no           | `noop`                                                                             |
+| no          | yes          | `pull` — a one-sided remote change is not a conflict; Docket still learns          |
+| yes         | no           | `push`                                                                             |
+| **yes**     | **yes**      | **`push`, with a `conflict`** — Docket wins regardless of which timestamp is later |
+
+The previous rule for the last row was `local.updatedAt >= remoteMs ? push : pull`. That is
+last-write-wins, and it is now gone from both the task reconciler and the work-graph reconciler
+(`planWorkItemReconcile`), with one deliberate exception: a genuinely newer remote **tombstone**
+still archives locally, because a deleted page cannot be resurrected by pushing a title at it.
+
+### The conflict log
+
+A decision that discards the other side's value without recording it is the "silently overwrote your
+work" failure the launch requirements name. So the losing remote values ride along on the action as
+a `TaskSyncConflict` and are persisted **before** the push that overwrites them
+(`recordSyncConflict`, `apps/api/src/routes/sync-notion.ts`):
+
+```
+audit_event
+  subject_type = 'task'
+  subject_id   = <the Docket task that won>
+  type         = 'updated'
+  metadata     = {
+    kind: 'sync_conflict',
+    provider, integrationId,
+    resolution: 'docket_wins',
+    externalId, remoteUpdatedAt, localUpdatedAt,
+    remoteTitle, remoteBody, remoteDueDate, remoteCompleted
+  }
+```
+
+**Why `audit_event` and not a new table.** It is already the universal, org-scoped,
+actor-attributed feed with a JSONB payload and an index on `(subject_type, subject_id)` — every
+property a conflict record needs. Reusing it means this capability ships with **no migration at
+all** against a database holding live production data, and a conflict appears in the task's own
+history rather than in a side channel nobody opens. `listSyncConflicts` filters on the JSONB
+discriminator in SQL, so an integration with a long ordinary audit history is not scanned in memory.
+
+`ReconcileResult.conflicts` counts them, and the count and the durable rows cannot disagree —
+they are incremented by the same branch.
+
+---
+
+## 6. Connecting it
+
+Notion is a native Better Auth social provider, gated on `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`
+(both optional — absent means Notion is simply not offered). Notion's OAuth has **no scope
+parameter**: a public integration's capabilities are declared on the integration itself and the
+person chooses which pages to share during consent. So, unlike Linear, there is no read-vs-write
+scope gate and Notion **defaults `writeBack` on** at connect (`WRITE_BACK_CAPABLE_PROVIDERS`).
+
+Configuration is per workspace, like every other connector: the integration row is org-scoped, and
+`config.listIds` holds the Notion data source ids that workspace syncs. A workspace with no Notion
+integration row shows Notion unconnected; connecting it in one workspace changes nothing in another.
+
+Setup:
+
+1. Create a **public integration** at <https://www.notion.com/my-integrations> with the
+   _Read content_, _Update content_ and _Insert content_ capabilities.
+2. Set its redirect URI to `<API_URL>/api/auth/callback/notion`.
+3. Put its client id/secret in `NOTION_CLIENT_ID` / `NOTION_CLIENT_SECRET`.
+4. In Docket: **Settings → Connections → Notion → Connect**, then pick the databases to sync.
+
+---
+
+## 7. Files
+
+| Path                                                    | What it holds                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `packages/integrations/src/notion-mapping.ts`           | The pure schema derivation and property mapping (no HTTP).                                 |
+| `packages/integrations/src/notion.ts`                   | `NotionProviderClient` — the provider I/O edge, read + write.                              |
+| `packages/integrations/tests/notion/notion-fixtures.ts` | The real LVBT `Tasks Tracker` and `My Tasks` schemas, transcribed from the live workspace. |
+| `packages/integrations/tests/notion/*.test.ts`          | 36 tests over the mapping and the client.                                                  |
+| `apps/api/src/routes/sync-notion.ts`                    | The sync conflict log: `recordSyncConflict`, `listSyncConflicts`.                          |
+| `apps/api/src/routes/integration-reconcile.ts`          | `planTaskReconcile` — where Docket wins.                                                   |
+
+Everything else — the lease, the `sync_run` rows, the cron sweep, the cursor bookkeeping — is the
+shared spine in [`integration-sync.md`](./integration-sync.md). Notion adds no parallel engine.

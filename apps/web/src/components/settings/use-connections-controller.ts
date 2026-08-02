@@ -14,7 +14,7 @@ import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@doc
 import { useMemo, useState } from 'react';
 
 import { groupDirectoryByCategory, visibleProviderConnections } from './integrations-selectors';
-import { categoryLabel, connectionCardCopy } from './integrations-config';
+import { categoryLabel, connectionCardCopy, hasInlineConfigPanel } from './integrations-config';
 import type { LinearAddModel } from './linear-add-account-row';
 import type { ProviderRowModel } from './provider-category-section';
 import {
@@ -154,7 +154,7 @@ export function useConnectionsController({
                 connectHint: 'Keep it in sync',
                 effect: copy.effect,
                 mechanics: copy.mechanics,
-                configurable: provider.provider === 'linear',
+                configurable: hasInlineConfigPanel(provider.provider),
                 state: rowState(provider.provider, existing),
                 actions: rowActions(provider, existing, CONNECTOR_PATTERN),
               }),

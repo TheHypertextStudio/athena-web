@@ -187,9 +187,15 @@ export function planWorkItemReconcile(
   const pullAction: WorkItemPullAction = remote.removed ? 'archive' : 'pull';
 
   if (dirty) {
+    // Both sides changed since the last sync. Docket is the source of truth on conflict, so the
+    // local edit is kept and the push phase drains it outward — regardless of which timestamp is
+    // newer. (`planTaskReconcile` makes the same call and additionally records the losing remote
+    // values; here the pull side has no losing *field* values to record, because the local row is
+    // simply left untouched for the push phase.) A remote TOMBSTONE is the one exception: an
+    // item deleted at the provider cannot be resurrected by pushing a title at it, so a genuinely
+    // newer removal still archives locally rather than pretending the push will land.
     if (!remoteNewer) return 'noop'; // local will push
-    // Both sides changed since the last sync: the newer timestamp wins.
-    return local.updatedAt.getTime() >= remoteMs ? 'noop' : pullAction;
+    return remote.removed ? pullAction : 'noop';
   }
   return remoteNewer ? pullAction : 'noop';
 }

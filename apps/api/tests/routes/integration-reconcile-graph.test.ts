@@ -208,7 +208,7 @@ describe('planWorkItemReconcile', () => {
       }),
     ).toBe('noop');
   });
-  it('both-changed → newer wins (remote)', () => {
+  it('both-changed → Docket wins even when the provider edit is newer', () => {
     const local = {
       updatedAt: D('2026-02-01T00:00:00.000Z'),
       externalUpdatedAt: D('2026-01-01T00:00:00.000Z'),
@@ -217,7 +217,19 @@ describe('planWorkItemReconcile', () => {
       planWorkItemReconcile(local, item({ updatedAt: '2026-03-01T00:00:00.000Z' }), {
         writeBack: true,
       }),
-    ).toBe('pull');
+    ).toBe('noop'); // left dirty, so the push phase carries Docket's value outward
+  });
+
+  it('both-changed → a newer provider TOMBSTONE still archives (a push cannot resurrect it)', () => {
+    const local = {
+      updatedAt: D('2026-02-01T00:00:00.000Z'),
+      externalUpdatedAt: D('2026-01-01T00:00:00.000Z'),
+    };
+    expect(
+      planWorkItemReconcile(local, item({ updatedAt: '2026-03-01T00:00:00.000Z', removed: true }), {
+        writeBack: true,
+      }),
+    ).toBe('archive');
   });
   it('a read-only mirror never lets a dirty local win — it yields to the newer provider', () => {
     const local = {

@@ -1,0 +1,18 @@
+{
+  "rationale": "The enumerated corpus scripts/context-strategy-check.ts guards (GEN-22). It is a committed glob list rather than 'whatever is in docs/' so two runs on the same tree give the same answer, and adding a document to the launch means adding it here. It covers every artifact the requirement names: plan and design docs, engineering specs, the work log, migration docs, launch records, agent guidelines, and the source comments of the modules that implement context sync — that last group is where a 'let's just make this read-only' note is most likely to be written and least likely to be read.",
+  "include": [
+    "docs/**/*.md",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "CHANGELOG.md",
+    "packages/integrations/src/*.ts",
+    "apps/api/src/routes/integration-*.ts",
+    "apps/api/src/routes/sync-*.ts",
+    "apps/api/src/routes/integrations*.ts",
+    "apps/web/src/components/settings/*.ts",
+    "apps/web/src/components/settings/*.tsx",
+    "scripts/import-sunsama.ts",
+    "scripts/provision-workspaces.ts"
+  ],
+  "exclude": ["docs/engineering/launch-compliance.md", "docs/engineering/launch-compliance.json"]
+}

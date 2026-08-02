@@ -95,16 +95,52 @@ describe('planTaskReconcile', () => {
     expect(planTaskReconcile(local(), r, { writeBack: true })).toEqual({ kind: 'pull' });
   });
 
-  it('resolves a both-sides-changed conflict by newest timestamp (local wins)', () => {
+  it('resolves a both-sides-changed conflict in Docket’s favour when Docket is also newer', () => {
     const l = local({ updatedAt: D('2026-03-01T00:00:00.000Z') }); // dirty + newest
     const r = remote({ externalUpdatedAt: '2026-02-01T00:00:00.000Z' }); // newer than anchor
+    const action = planTaskReconcile(l, r, { writeBack: true });
+    expect(action.kind).toBe('push');
+  });
+
+  it('resolves a both-sides-changed conflict in Docket’s favour EVEN when the remote is newer', () => {
+    const l = local({ updatedAt: D('2026-02-01T00:00:00.000Z') }); // dirty, older
+    const r = remote({ externalUpdatedAt: '2026-03-01T00:00:00.000Z' }); // newer — used to win
+    expect(planTaskReconcile(l, r, { writeBack: true })).toMatchObject({ kind: 'push' });
+  });
+
+  it('reports the losing remote values on the conflict so they can be logged, not dropped', () => {
+    const l = local({ updatedAt: D('2026-02-01T00:00:00.000Z') });
+    const r = remote({
+      externalUpdatedAt: '2026-03-01T00:00:00.000Z',
+      title: 'Notion’s title',
+      body: 'Notion’s notes',
+      dueDate: '2026-04-01',
+      completed: true,
+    });
+    const action = planTaskReconcile(l, r, { writeBack: true });
+    expect(action).toEqual({
+      kind: 'push',
+      conflict: {
+        externalId: 'gt1',
+        remoteUpdatedAt: '2026-03-01T00:00:00.000Z',
+        localUpdatedAt: '2026-02-01T00:00:00.000Z',
+        remoteTitle: 'Notion’s title',
+        remoteBody: 'Notion’s notes',
+        remoteDueDate: '2026-04-01',
+        remoteCompleted: true,
+      },
+    });
+  });
+
+  it('an uncontested push carries NO conflict — only a genuine two-sided edit does', () => {
+    const l = local({ updatedAt: D('2026-02-01T00:00:00.000Z') }); // dirty
+    const r = remote({ externalUpdatedAt: '2026-01-01T00:00:00.000Z' }); // == anchor, unchanged
     expect(planTaskReconcile(l, r, { writeBack: true })).toEqual({ kind: 'push' });
   });
 
-  it('resolves a both-sides-changed conflict by newest timestamp (remote wins)', () => {
-    const l = local({ updatedAt: D('2026-02-01T00:00:00.000Z') }); // dirty
-    const r = remote({ externalUpdatedAt: '2026-03-01T00:00:00.000Z' }); // newest
-    expect(planTaskReconcile(l, r, { writeBack: true })).toEqual({ kind: 'pull' });
+  it('a one-sided remote change is not a conflict — a clean Docket task still learns', () => {
+    const r = remote({ externalUpdatedAt: '2026-03-01T00:00:00.000Z' });
+    expect(planTaskReconcile(local(), r, { writeBack: true })).toEqual({ kind: 'pull' });
   });
 
   it('a read-only mirror never pushes — a dirty local yields to a newer remote', () => {

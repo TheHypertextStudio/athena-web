@@ -25,7 +25,7 @@ import {
   dispatchNotificationIntent,
   ensureAccountEmailContactPoint,
 } from '@docket/notifications/dispatch';
-import { PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
+import { OAUTH_ISSUABLE_SCOPES, PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
@@ -77,6 +77,8 @@ export interface AuthEnv {
   readonly GITHUB_APP_CLIENT_SECRET?: string | undefined;
   readonly LINEAR_CLIENT_ID?: string | undefined;
   readonly LINEAR_CLIENT_SECRET?: string | undefined;
+  readonly NOTION_CLIENT_ID?: string | undefined;
+  readonly NOTION_CLIENT_SECRET?: string | undefined;
   readonly DISCORD_CLIENT_ID?: string | undefined;
   readonly DISCORD_CLIENT_SECRET?: string | undefined;
   readonly APPLE_CLIENT_ID?: string | undefined;
@@ -205,7 +207,14 @@ export async function resolvePasskeyUser(
 }
 
 /** A social provider a user can sign in / link an account with. */
-export type SocialProvider = 'google' | 'github' | 'linear' | 'apple' | 'discord' | 'microsoft';
+export type SocialProvider =
+  | 'google'
+  | 'github'
+  | 'linear'
+  | 'notion'
+  | 'apple'
+  | 'discord'
+  | 'microsoft';
 
 /**
  * The `test-oauth` `generic-oauth` provider's OAuth2 client credentials.
@@ -287,6 +296,8 @@ export function configuredSocialProviders(e: AuthEnv): SocialProvider[] {
     providers.push('github');
   if (isRealValue(e.LINEAR_CLIENT_ID) && isRealValue(e.LINEAR_CLIENT_SECRET))
     providers.push('linear');
+  if (isRealValue(e.NOTION_CLIENT_ID) && isRealValue(e.NOTION_CLIENT_SECRET))
+    providers.push('notion');
   if (isRealValue(e.DISCORD_CLIENT_ID) && isRealValue(e.DISCORD_CLIENT_SECRET))
     providers.push('discord');
   if (resolveAppleCredentials(e) !== undefined) providers.push('apple');
@@ -385,6 +396,16 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       clientId: e.LINEAR_CLIENT_ID,
       clientSecret: e.LINEAR_CLIENT_SECRET,
       scope: ['read'],
+    };
+  }
+  if (isRealValue(e.NOTION_CLIENT_ID) && isRealValue(e.NOTION_CLIENT_SECRET)) {
+    // Notion has no OAuth scope parameter at all: a public integration's capabilities (read
+    // content, update content, insert content) are declared on the integration itself and the
+    // person picks which pages to share during the consent step. So — unlike Linear — there is
+    // no read-vs-write scope gate here, and the Notion connector can default write-back on.
+    socialProviders.notion = {
+      clientId: e.NOTION_CLIENT_ID,
+      clientSecret: e.NOTION_CLIENT_SECRET,
     };
   }
   if (isRealValue(e.DISCORD_CLIENT_ID) && isRealValue(e.DISCORD_CLIENT_SECRET)) {
@@ -563,7 +584,12 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         // a refresh token (unlike the deprecated mcp() plugin, which issued one unconditionally)
         // — without it a connected client silently degrades to a 15-minute access token with no
         // renewal path, so it belongs in the set every client is offered at consent time.
-        scopes: ['work:read', 'work:write', 'agents:run', 'connectors:link', 'offline_access'],
+        //
+        // The array itself now comes from `@docket/types` (`OAUTH_ISSUABLE_SCOPES`), which is the
+        // one place the issuable set is written down — the resource server's advertised scopes and
+        // the consent screen's plain-language copy derive from the same constant, so this ceiling
+        // and what a person is shown can no longer disagree.
+        scopes: [...OAUTH_ISSUABLE_SCOPES],
         accessTokenExpiresIn: 60 * 15,
         refreshTokenExpiresIn: 60 * 60 * 24 * 30,
         ...(isRealValue(e.MCP_RESOURCE_URL) ? { validAudiences: [e.MCP_RESOURCE_URL] } : {}),

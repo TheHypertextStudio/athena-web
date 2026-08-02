@@ -1,0 +1,159 @@
+# Docket secret-scan rules (gitleaks configuration format) — GEN-06, clause 1.
+#
+# This file is the single source of truth for "what counts as a leaked credential in this
+# repository". It has two consumers, and both must keep working:
+#
+#   1. `pnpm exec tsx scripts/secret-scan.ts` — the pure-Node scanner this repo gates on. It
+#      downloads nothing and makes no network call, so the launch gate cannot be blocked by a
+#      release asset going missing or by a vendor license key. It reads the explicit `[[rules]]`
+#      below and ignores `[extend]` (it carries no bundled ruleset of its own).
+#   2. `gitleaks dir --config .gitleaks.toml --redact=100 .` — the upstream binary, for scanning
+#      git *history* rather than the tracked tree. `[extend].useDefault` gives that run gitleaks'
+#      maintained ruleset on top of the rules below, so the binary is strictly stronger.
+#
+# Every regex here is RE2-compatible (no lookahead, no lookbehind), because Go's regexp engine —
+# which gitleaks uses — rejects them. The one non-RE2 construct permitted is a leading `(?i)`
+# inline flag, which both engines accept.
+#
+# A single line may opt out with a trailing `gitleaks:allow` comment. That is the escape hatch
+# for deliberately fake credentials (the scanner's own rule-fires-correctly fixtures use it).
+# Prefer it over widening a rule or path-allowlisting a whole file, either of which blinds the
+# scan permanently.
+
+title = "Docket secret scan"
+
+[extend]
+# Upstream ruleset, for the binary only. The explicit `[[rules]]` below are what the in-repo
+# scanner enforces, so the CI gate never depends on an external ruleset being fetched.
+useDefault = true
+
+[allowlist]
+description = """
+Paths that are never a source of truth, plus the exact dev-only placeholder values committed to
+.env.local and .env.example.
+
+.env.local is a TRACKED file of committed local defaults (see its own header and
+docs/local-development.md). It is deliberately in version control so `pnpm dev` works with zero
+setup, and `pnpm install` arms it with `git update-index --skip-worktree` so a developer's real
+keys pasted into it are never seen by git. Its committed content is empty placeholders plus one
+self-labelled shared development secret — a value chosen to be obviously inert, that grants
+nothing (it signs sessions for an in-process PGlite database on *.localhost), and that
+production overrides from its own secret store.
+
+The carve-out is written as four exact VALUES rather than as a path, on purpose: allowlisting
+`.env.local` wholesale would stop scanning the one tracked file most likely to receive a real
+key by accident. Every other line of that file is still scanned.
+"""
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.git/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.next/''',
+  '''(^|/)coverage/''',
+  '''^pnpm-lock\.yaml$''',
+]
+regexTarget = "match"
+regexes = [
+  '''dev-local-shared-secret-not-for-production-use-0000''',
+  '''dev-cron-secret-please-change-me''',
+  '''replace-with-openssl-rand-base64-32-min-32-chars''',
+  '''replace-with-a-different-local-secret''',
+]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key — Athena's model-provider credential"
+regex = '''sk-ant-[A-Za-z0-9_\-]{24,}'''
+tags = ["key", "anthropic"]
+
+[[rules]]
+id = "stripe-live-key"
+description = "Stripe LIVE secret or restricted key (sk_live_/rk_live_)"
+regex = '''(?:sk|rk)_live_[A-Za-z0-9]{16,}'''
+tags = ["key", "stripe"]
+
+[[rules]]
+id = "aws-access-key-id"
+description = "AWS access key id"
+regex = '''\bAKIA[0-9A-Z]{16}\b'''
+tags = ["key", "aws"]
+
+[[rules]]
+id = "github-token"
+description = "GitHub token — classic PAT/OAuth/app (ghp_, gho_, ghs_, ghu_, ghr_) or fine-grained (github_pat_)"
+regex = '''\b(?:gh[posur]_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,})\b'''
+tags = ["token", "github"]
+
+[[rules]]
+id = "slack-token"
+description = "Slack bot (xoxb-) or user (xoxp-) token"
+regex = '''\bxox[bp]-[A-Za-z0-9\-]{20,}\b'''
+tags = ["token", "slack"]
+
+[[rules]]
+id = "google-api-key"
+description = "Google API key"
+regex = '''\bAIza[0-9A-Za-z\-_]{35}\b'''
+tags = ["key", "google"]
+
+[[rules]]
+id = "private-key-block"
+description = "PEM private key block — RSA/EC/DSA/OPENSSH/PGP or unqualified"
+regex = '''-----BEGIN [A-Z ]*PRIVATE KEY-----'''
+tags = ["key", "pem"]
+
+[[rules]]
+id = "jwt"
+description = "Serialized JWT — a signed access/ID token pasted into source"
+regex = '''\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{5,}'''
+tags = ["token", "jwt"]
+
+[[rules]]
+id = "resend-api-key"
+description = "Resend API key — Docket's transactional mail sender"
+regex = '''\bre_[A-Za-z0-9_\-]{16,}\b'''
+tags = ["key", "resend"]
+
+[[rules]]
+id = "postgres-connection-string"
+description = "Postgres/Neon connection string carrying a password"
+regex = '''postgres(?:ql)?://[^:@\s/]+:[^@\s/]+@[^\s'"`]+'''
+tags = ["connection-string", "postgres", "neon"]
+  [rules.allowlist]
+  description = "Loopback, reserved documentation hosts, and the placeholder passwords used across docs, .env.example, and tests. A real Neon password is a long random string; these are words."
+  regexTarget = "match"
+  regexes = [
+    '''postgres(?:ql)?://[^:@\s/]+:[^@\s/]+@(?:localhost|127\.0\.0\.1|host|db|postgres)(?:[:/][^\s]*)?$''',
+    '''postgres(?:ql)?://[^:@\s/]+:[^@\s/]+@[^\s]*\.(?:example\.com|example\.org|example\.invalid|invalid|test|localhost)(?:[:/][^\s]*)?$''',
+    '''postgres(?:ql)?://[^:@\s/]+:(?:docket|postgres|password|passwd|pass|pw|test|secret|changeme|example|user|username)@''',
+  ]
+
+[[rules]]
+id = "twilio-account-sid"
+description = "Twilio account SID"
+regex = '''\bAC[0-9a-f]{32}\b'''
+tags = ["key", "twilio"]
+
+[[rules]]
+id = "generic-assigned-secret"
+description = "A long, high-entropy value assigned to a secret-shaped name — catches vendors this file does not enumerate"
+regex = '''(?i)(?:secret|token|api[_-]?key|apikey|password|passwd|credential)["']?\s*[:=]\s*["']?([A-Za-z0-9+/_\-]{32,})'''
+secretGroup = 1
+entropy = 4.5
+tags = ["generic"]
+  [rules.allowlist]
+  description = "Values that announce themselves as non-production. The entropy floor already clears English-shaped placeholders; these stopwords cover random-looking fixtures."
+  stopwords = [
+    "test",
+    "example",
+    "placeholder",
+    "changeme",
+    "replace-with",
+    "sample",
+    "dummy",
+    "fake",
+    "your-",
+    "xxxxxxxx",
+    "aaaaaaaa",
+    "dev-local",
+  ]

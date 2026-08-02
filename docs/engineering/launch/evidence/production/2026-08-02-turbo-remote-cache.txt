@@ -1,0 +1,25 @@
+# SCR-25 — is the turbo remote cache actually configured? Probed 2026-08-02T09:59:19Z
+
+$ gh secret list --repo TheHypertextStudio/athena-web
+NEON_API_KEY	2026-06-09T00:23:55Z
+
+$ gh variable list --repo TheHypertextStudio/athena-web
+ADMIN_URL	https://docket-admin.hypertext.studio	2026-06-09T05:54:16Z
+AGENT_MAX_TURNS	24	2026-07-12T21:36:24Z
+API_URL	https://docket-api.hypertext.studio	2026-06-09T05:54:16Z
+BETTER_AUTH_ALLOWED_HOSTS	docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio	2026-07-10T09:34:08Z
+GCP_PROJECT_ID	athena-services	2026-06-09T05:46:00Z
+GCP_REGION	us-central1	2026-06-09T05:46:01Z
+GCP_SERVICE_ACCOUNT	docket-deploy@athena-services.iam.gserviceaccount.com	2026-06-09T05:50:34Z
+GCP_WIF_PROVIDER	projects/770668668034/locations/global/workloadIdentityPools/github/providers/github-actions	2026-06-09T05:50:34Z
+GOOGLE_OAUTH_PUBLIC	false	2026-07-10T09:34:08Z
+GOOGLE_OAUTH_TEST_EMAILS	willieechalmers@gmail.com	2026-07-10T09:34:09Z
+NEON_PROJECT_ID	rough-star-51665397	2026-06-09T00:23:55Z
+PASSKEY_RP_ID	hypertext.studio	2026-06-15T08:28:28Z
+WEB_URL	https://docket.hypertext.studio	2026-06-09T05:54:15Z
+
+$ gh api repos/TheHypertextStudio/athena-web/actions/secrets --jq ".secrets[].name"
+NEON_API_KEY
+
+# ci.yml reads: TURBO_TOKEN=secrets.TURBO_TOKEN  TURBO_TEAM=vars.TURBO_TEAM
+#              TURBO_API=vars.TURBO_API  TURBO_REMOTE_CACHE_SIGNATURE_KEY=secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY

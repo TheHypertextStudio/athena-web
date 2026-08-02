@@ -1,0 +1,140 @@
+Launch lane integration — independent verification run
+Verifier: launch-lane-integrator (not the implementer of any slice below)
+Slices:   launch-governance, ci-gating, test-standards
+Branch:   claude/docket-production-launch-ebe2d9
+Date:     2026-08-02
+Host:     Darwin 25.5.0  node v24.17.0  pnpm 11.9.0
+
+Every command below was executed by the verifier in this working tree and its output is
+pasted verbatim. Where a claim could NOT be independently reconfirmed, that is said so.
+
+==============================================================================
+1. SCR-19 — every check job gates the production deploy
+
+$ pnpm exec tsx scripts/ci-gate-policy.ts
+CI gate policy (SCR-19 deploy gating, SCR-20 no soft-failed checks)
+  .github/workflows/ci.yml: 7 job(s), check job(s): quality, secret-scan, test, coverage, build, e2e
+    deploy-production.needs = [quality, secret-scan, test, coverage, build, e2e]
+  .github/workflows/deploy.yml: 2 job(s), check job(s): (none)
+  .github/workflows/neon-branch.yml: 3 job(s), check job(s): (none)
+PASS — every check job gates the production deploy, and no gating step is soft-failed.
+exit=0
+
+$ pnpm exec vitest run tests/ci
+ Test Files  2 passed (2)
+      Tests  24 passed (24)
+
+The guard is proven to bite rather than merely to observe a clean file: four synthetic
+workflows in tests/ci/ci-gate-policy.test.ts each break one rule (unwired check job,
+step-level continue-on-error, job-level continue-on-error, || true, if: always()) and
+each is asserted to be reported. A fifth asserts the Codecov/artifact carve-out is NOT
+reported, so the rule is not simply always red.
+
+==============================================================================
+2. GEN-06 clause 1 — the secret scan that CI actually gates on
+
+$ pnpm exec tsx scripts/secret-scan.ts
+Docket secret scan: 2001 tracked file(s), 12 rule(s)
+PASS — 0 findings.
+
+VERIFIER NOTE: this is the in-repo scanner reading .gitleaks.toml, not the gitleaks or
+trufflehog binary GEN-06's acceptance names. Neither binary is installed here. The scan
+covers 'git ls-files' — the tracked tree — and does NOT walk history, so a credential
+committed and later removed would not be caught. GEN-06 clause 1 therefore stands at
+'partial', which is what slices/ci-gating.md claims.
+
+==============================================================================
+3. SCR-17 / SCR-18 / SCR-21 / SCR-22 — test-tree layout and the core-e2e register
+
+$ pnpm --filter @docket/test-utils test
+ Test Files  13 passed (13)
+      Tests  95 passed (95)
+
+$ ls apps/web/e2e/*.spec.ts        # SCR-22: no spec at the e2e root
+
+$ (cd apps/web && pnpm exec playwright test --list | tail -1)
+Total: 42 tests in 25 files
+
+The register in docs/engineering/specs/core-e2e.md is checked against disk in BOTH
+directions by e2e-discipline-policy.test.ts, so the counts above and the document
+cannot drift apart. A second register (docs/engineering/core-e2e-tests.md) graded a
+different set of specs core and was removed during this integration:
+$ ls docs/engineering/core-e2e-tests.md
+ls: docs/engineering/core-e2e-tests.md: No such file or directory
+
+The duplicate SCR-19/SCR-20 guard and its parallel workflow reader were removed too:
+$ ls packages/test-utils/tests/workspace-policies/ci-gating-policy.test.ts
+ls: packages/test-utils/tests/workspace-policies/ci-gating-policy.test.ts: No such file or directory
+$ grep -c parseWorkflowJobs packages/test-utils/tests/workspace-policies/testing-tree.ts
+0
+
+==============================================================================
+4. GEN-18 — Docket is the hub; no external system exchanges work data with another
+
+$ head -1 docs/engineering/hub-architecture.md
+# Docket is the hub
+
+Independent check of the closest candidate path the document names (Linear webhook ->
+Gmail archive): the mail action refuses to run without a Docket subject entity.
+$ sed -n '72,74p' apps/api/src/lib/automation/handlers.ts
+      const event = eventOf(ctx);
+      if (!event.subjectId) return;
+      const action = build(params);
+
+==============================================================================
+5. MISS-01 — every shipped pattern maps to a native counterpart or is an exception
+
+$ sed -n '18,21p' docs/engineering/native-portability.md
+- **Shipped patterns enumerated:** 33
+- **Mapped to a named counterpart on both platforms:** 24
+- **Listed as explicit exceptions (with reason + migration note):** 9
+- **Shipped patterns neither mapped nor excepted: 0** ✅
+
+Arithmetic re-checked by the verifier: 24 mapped + 9 exceptions = 33 enumerated.
+$ grep -cE '^### E[0-9]+ ' docs/engineering/native-portability.md
+9
+
+==============================================================================
+6. GEN-05 — external systems, re-confirmed by the verifier rather than the implementer
+
+$ vercel whoami
+williecubed
+$ (cd apps/runner && pnpm exec wrangler whoami)
+👋 You are logged in with an OAuth Token, associated with the email willie@rebuildingus.org.
+$ gcloud projects list --limit=3
+ERROR: (gcloud.projects.list) There was a problem refreshing your current auth tokens: Reauthentication failed. cannot prompt during non-interactive execution.
+
+VERIFIER NOTE: Vercel and Cloudflare re-confirm live. Google's cached credential has
+since expired and cannot be refreshed without an interactive prompt, so the Google
+capture in external-systems.md could NOT be independently re-run here; it stands on the
+implementer's evidence alone. Notion was not re-checked.
+
+==============================================================================
+7. The launch registers, and the record that grades them
+
+$ pnpm exec tsx scripts/launch-record.ts
+✓ wrote docs/engineering/launch/checklist.md
+requirements=399 closed=12 open=387 slices=4
+
+$ pnpm exec tsx scripts/launch-record.ts --sign-off      # must be RED while work is open
+requirements=399 closed=12 open=387 slices=4
+  unclaimed: 366
+  partial: 16
+  fail: 4
+  not-built: 1
+(exit 1 — the sign-off gate is deliberately red and must stay red until launch)
+
+==============================================================================
+8. Repository gate over the integrated tree
+
+$ pnpm turbo run typecheck
+ Tasks:    18 successful, 18 total
+$ pnpm turbo run lint
+ Tasks:    18 successful, 18 total
+$ pnpm turbo run test
+ Tasks:    18 successful, 18 total
+$ pnpm test:tooling
+ Test Files  7 passed (7)
+      Tests  91 passed (91)
+$ git rev-list --merges --count $(git merge-base main HEAD)..HEAD
+0

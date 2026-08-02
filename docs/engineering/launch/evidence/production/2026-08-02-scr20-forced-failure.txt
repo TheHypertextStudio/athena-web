@@ -1,0 +1,71 @@
+# SCR-20 — empirical proof that a failing check really fails its command
+# Captured 2026-08-02T10:04:57Z on Darwin 25.5.0 arm64
+#
+# Scope note: this is the LOCAL half. The acceptance also asks for a scratch-branch run
+# on GitHub Actions showing the workflow red and deploy-production skipped; that is an
+# author-run step (see docs/engineering/launch/slices/ci-gating.md, SCR-20).
+
+## 1. A forced unit-test failure exits non-zero
+# Method: invert exactly one assertion in tests/ci/ci-gate-policy.test.ts (a file this
+# slice owns, so no other lane's in-flight work is disturbed), run it, restore.
+
+ RUN  v4.1.8 /Users/williecubed/Projects/TheHypertextStudio/athena-web/.claude/worktrees/docket-production-launch-ebe2d9
+ ❯ tests/ci/ci-gate-policy.test.ts (21 tests | 1 failed) 7ms
+     × recognizes the check commands this repo actually runs 2ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+ FAIL  tests/ci/ci-gate-policy.test.ts > gating-command detection > recognizes the check commands this repo actually runs
+AssertionError: expected true to be false // Object.is equality
+- Expected
++ Received
+- false
++ true
+ ❯ tests/ci/ci-gate-policy.test.ts:122:71
+    120| describe('gating-command detection', () => {
+    121|   it('recognizes the check commands this repo actually runs', () => {
+    122|     expect(isGatingCommand('pnpm turbo run test --cache-dir=.turbo')).…
+       |                                                                       ^
+    123|     expect(isGatingCommand('pnpm turbo run test:coverage --cache-dir=.…
+    124|     expect(isGatingCommand('pnpm turbo run lint typecheck --cache-dir=…
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+ Test Files  1 failed (1)
+      Tests  1 failed | 20 passed (21)
+   Start at  03:04:57
+   Duration  101ms (transform 23ms, setup 0ms, import 32ms, tests 7ms, environment 0ms)
+EXITCODE=
+
+$ echo $?
+1
+
+## 2. The file was restored, byte-for-byte
+$ shasum tests/ci/ci-gate-policy.test.ts
+6a2d214e90767eaf927527f63ab2777980c49334  tests/ci/ci-gate-policy.test.ts
+# identical to the pre-experiment backup (6a2d214e90767eaf927527f63ab2777980c49334)
+$ grep -c "FORCED FAILURE" tests/ci/ci-gate-policy.test.ts
+0
+$ pnpm exec vitest run tests/ci >/dev/null 2>&1; echo $?
+0
+
+## 3. A failing task propagates non-zero through `turbo run` — the CI job's actual command
+# Observed on the real coverage gate, which is red today (see coverage-ledger.md):
+$ SKIP_ENV_VALIDATION=1 turbo run test:coverage --cache-dir=.turbo --continue; echo $?
+ Tasks:    3 successful, 16 total
+ Failed:   @docket/agent-runtime#test:coverage, @docket/api#test:coverage, @docket/auth#test:coverage,
+           @docket/billing#test:coverage, @docket/blob-store#test:coverage, @docket/db#test:coverage,
+           @docket/discord-relay#test:coverage, @docket/env#test:coverage, @docket/integrations#test:coverage,
+           @docket/mail#test:coverage, @docket/notifications#test:coverage, @docket/types#test:coverage,
+           @docket/ui#test:coverage
+ ERROR  run failed: command  exited (1)
+1
+
+## 4. No step in any check job can swallow that non-zero
+$ pnpm ci:gate-policy
+CI gate policy (SCR-19 deploy gating, SCR-20 no soft-failed checks)
+
+  .github/workflows/ci.yml: 7 job(s), check job(s): quality, secret-scan, test, coverage, build, e2e
+    deploy-production.needs = [quality, secret-scan, test, coverage, build, e2e]
+  .github/workflows/deploy.yml: 2 job(s), check job(s): (none)
+  .github/workflows/neon-branch.yml: 3 job(s), check job(s): (none)
+
+PASS — every check job gates the production deploy, and no gating step is soft-failed.
+$ echo $?
+0

@@ -1,0 +1,72 @@
+# Independent verification of the security-and-domains slice
+# Verifier: launch-ledger-integrator
+# Captured: 2026-08-02, Darwin 25.5.0 arm64, branch claude/docket-production-launch-ebe2d9
+#
+# Why this file exists: docs/engineering/launch/verification-log.md named a verifier for three
+# of the four slices and had no entry at all for security-and-domains, so GEN-07 and GEN-23
+# were graded 'pass' by the slice that implemented them and by nobody else. This agent wrote
+# neither docs/engineering/domains.md nor the credential-masking work. Everything below is
+# captured output; the negative findings are recorded alongside the passing ones.
+
+## 1 — GEN-23: candidate domains, availability, recommended pick
+
+$ grep -c '^| `' <Docket candidates table>
+20
+$ grep -c '^| `' <Athena candidates table>
+16
+
+$ grep -E '\*\*free\*\*|\*\*likely free\*\*' docs/engineering/domains.md | wc -l   # candidates recorded available
+9
+
+$ grep -nE '^### (Docket|Athena) → ' docs/engineering/domains.md
+158:### Docket → `docket.place`
+189:### Athena → `athena.day`
+
+# Independent re-probe of both recommended picks (not copied from the document):
+$ dig docket.place NS +noall +comment
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 12334
+$ dig athena.day NS +noall +comment
+;; ->>HEADER<<- opcode: QUERY, status: NXDOMAIN, id: 16484
+$ whois -h whois.verisign-grs.com runthedocket.com | head -1
+No match for domain "RUNTHEDOCKET.COM".
+$ whois -h whois.verisign-grs.com athenaday.com | head -1
+No match for domain "ATHENADAY.COM".
+
+VERDICT GEN-23: holds. The acceptance asks for >=3 candidates per product with a checked
+availability result each, plus one recommended pick per product with rationale. The document
+records 20 Docket and 16 Athena candidate rows, each with registrar/WHOIS or DNS evidence, and
+names docket.place and athena.day as the picks with rationale. Both picks re-probe NXDOMAIN
+from this machine, and two of the .com 'free' rows re-probe 'No match' at the registry.
+
+## 2 — GEN-07: credentials are never rendered in plaintext
+
+$ python3 -c "...probe-report.json key fields..."
+  bearerFieldMasked: True
+  bearerFieldType: password
+  tokenInRenderedText: False
+  tokenInWebStorage: False
+  storedConnectorOutcome: existing
+  responses captured: 628
+  leakingResponses: []
+  responses containing the probe token: 0
+
+$ ls docs/design/audits/screenshots/2026-08-02-credential-masking/*.png | wc -l
+       8
+$ ls docs/design/audits/screenshots/2026-08-02-credential-masking/surfaces/*.png | wc -l
+       8
+
+# The PNGs were READ, not merely counted:
+#   connector-bearer-1440x900-light.png — Settings > Athena > 'Add a connector' dialog. The
+#     'Bearer token' field renders as filled dots; Server URL and Name render in clear, which
+#     is correct, they are not credentials.
+#   stored-connector-1440x900-light.png — the same surface with a STORED connector expanded
+#     ('Connected tools' > Sunsama > 'Connection details'). It renders Server
+#     https://mcp.sunsama.com/mcp and no credential field at all, which is stronger than the
+#     'last-4 only' the acceptance would have settled for.
+
+VERDICT GEN-07: holds for the UI and API-response clauses. Input is type=password and masked
+in both themes at both widths; zero of the captured responses contain the probe token;
+leakingResponses is empty; the stored-connector surface renders no key material.
+RESIDUAL, recorded not glossed: the acceptance also names 'server logs for the same session
+contain no key material'. The probe captures HTTP responses and DOM, not API stdout, so the
+log clause rests on the sealCredential() code path rather than a captured log sweep.

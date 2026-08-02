@@ -1,0 +1,201 @@
+{
+  "capturedAt": "2026-08-02T10:05:46.131Z",
+  "localCommit": null,
+  "freshness": {
+    "productionOrigin": "https://docket-api.hypertext.studio",
+    "localOrigin": "http://docket-production-launch-ebe2d9.api.docket.localhost:1355",
+    "productionPathCount": 204,
+    "localPathCount": 236,
+    "missingInProduction": [
+      "/v1/me/athena",
+      "/v1/me/athena/assignments",
+      "/v1/me/athena/assignments/{id}",
+      "/v1/me/athena/assignments/{id}/triggers",
+      "/v1/me/athena/assignments/{id}/triggers/{triggerId}",
+      "/v1/me/athena/chat",
+      "/v1/me/athena/chat/messages",
+      "/v1/me/athena/chat/new",
+      "/v1/me/athena/connections",
+      "/v1/me/athena/connections/preview",
+      "/v1/me/athena/connections/{id}",
+      "/v1/me/athena/connections/{id}/authorize",
+      "/v1/me/athena/connections/{id}/reconnect",
+      "/v1/me/athena/pulse",
+      "/v1/me/athena/sessions",
+      "/v1/me/athena/sessions/{id}",
+      "/v1/me/athena/sessions/{id}/activity",
+      "/v1/me/athena/sessions/{id}/activity/{activityId}/approve",
+      "/v1/me/athena/sessions/{id}/activity/{activityId}/proposal",
+      "/v1/me/athena/sessions/{id}/activity/{activityId}/reject",
+      "/v1/me/athena/sessions/{id}/activity/{activityId}/reply",
+      "/v1/me/athena/sessions/{id}/approve",
+      "/v1/me/athena/sessions/{id}/cancel",
+      "/v1/me/athena/sessions/{id}/messages",
+      "/v1/me/athena/sessions/{id}/pause",
+      "/v1/me/athena/sessions/{id}/proposals",
+      "/v1/me/athena/sessions/{id}/proposals/{groupId}/approve",
+      "/v1/me/athena/sessions/{id}/proposals/{groupId}/reject",
+      "/v1/me/athena/sessions/{id}/reject",
+      "/v1/me/athena/sessions/{id}/resume",
+      "/v1/me/athena/sessions/{id}/run",
+      "/v1/me/athena/sessions/{id}/stream"
+    ],
+    "missingLocally": [],
+    "inSync": false,
+    "note": null
+  },
+  "probes": [
+    {
+      "id": "api-health",
+      "purpose": "API process is up and serving",
+      "url": "https://docket-api.hypertext.studio/v1/health",
+      "status": 200,
+      "durationMs": 83,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "x-cloud-trace-context": "d6ee1656a2f3dccbe94d51d5daafa87f"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "api-config",
+      "purpose": "Public runtime config the sign-in page reads",
+      "url": "https://docket-api.hypertext.studio/v1/config",
+      "status": 200,
+      "durationMs": 106,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "x-cloud-trace-context": "60b896252092732ae94d51d5daafaca7"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "api-openapi",
+      "purpose": "Deployed API surface (the freshness diff reads this)",
+      "url": "https://docket-api.hypertext.studio/v1/openapi.json",
+      "status": 200,
+      "durationMs": 345,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "x-cloud-trace-context": "4184d205b157d62fe94d51d5daafa6bb"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "api-oauth-metadata",
+      "purpose": "OIDC/MCP authorization-server metadata is published",
+      "url": "https://docket-api.hypertext.studio/api/auth/.well-known/oauth-authorization-server",
+      "status": 200,
+      "durationMs": 104,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "cache-control": "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
+        "x-cloud-trace-context": "c4af706e622f7f00e94d51d5daafa918"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "api-protected-resource",
+      "purpose": "MCP protected-resource metadata is published",
+      "url": "https://docket-api.hypertext.studio/.well-known/oauth-protected-resource",
+      "status": 200,
+      "durationMs": 140,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "x-cloud-trace-context": "ce6f0fcccafd535ae94d51d5daafa9b1"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "api-me-anonymous",
+      "purpose": "Anonymous read of the session user must be refused",
+      "url": "https://docket-api.hypertext.studio/v1/me",
+      "status": 401,
+      "durationMs": 143,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "x-cloud-trace-context": "1220f1195a6c2175e94d51d5daafa0cf"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "api-orgs-anonymous",
+      "purpose": "Anonymous read of workspaces must be refused",
+      "url": "https://docket-api.hypertext.studio/v1/orgs",
+      "status": 401,
+      "durationMs": 142,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "application/json",
+        "x-cloud-trace-context": "67e1d438a92f4712e94d51d5daafadd9"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "web-root",
+      "purpose": "Product web app serves its entry document",
+      "url": "https://docket.hypertext.studio/",
+      "status": 200,
+      "durationMs": 120,
+      "headers": {
+        "server": "Vercel",
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "x-vercel-id": "sfo1::btp22-1785665145934-6d448abe1512",
+        "x-vercel-cache": "HIT",
+        "x-matched-path": "/",
+        "strict-transport-security": "max-age=63072000; includeSubDomains"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "web-sign-in",
+      "purpose": "Sign-in surface renders (the passkey flow starts here)",
+      "url": "https://docket.hypertext.studio/sign-in",
+      "status": 200,
+      "durationMs": 131,
+      "headers": {
+        "server": "Vercel",
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "public, max-age=0, must-revalidate",
+        "x-vercel-id": "sfo1::bntwd-1785665145936-f576d73a46d0",
+        "x-vercel-cache": "HIT",
+        "x-matched-path": "/sign-in",
+        "strict-transport-security": "max-age=63072000; includeSubDomains"
+      },
+      "ok": true,
+      "error": null
+    },
+    {
+      "id": "admin-root",
+      "purpose": "Admin console serves its entry document",
+      "url": "https://docket-admin.hypertext.studio/",
+      "status": 200,
+      "durationMs": 158,
+      "headers": {
+        "server": "cloudflare",
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "s-maxage=31536000",
+        "strict-transport-security": "max-age=63072000; includeSubDomains"
+      },
+      "ok": true,
+      "error": null
+    }
+  ],
+  "failingProbes": [],
+  "pass": false
+}

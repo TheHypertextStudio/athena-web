@@ -1,0 +1,217 @@
+# Independent verification of the launch-governance and test-standards slices
+# Verifier: launch-record-reconciler
+# Captured: 2026-08-02, Darwin 25.5.0 arm64, branch claude/docket-production-launch-ebe2d9
+#
+# Why this file exists: docs/engineering/launch/verification-log.md recorded `launch-governance`
+# as PENDING because every command in slices/launch-governance.md had been run by that slice's own
+# implementer. This agent wrote none of the slices below. Everything here is captured output, not
+# a paraphrase, and the negative findings are recorded alongside the passing ones.
+
+## 1 — pnpm ci:gate-policy  (SCR-19 deploy gating; SCR-20 static half)
+
+$ pnpm ci:gate-policy
+CI gate policy (SCR-19 deploy gating, SCR-20 no soft-failed checks)
+
+  .github/workflows/ci.yml: 7 job(s), check job(s): quality, secret-scan, test, coverage, build, e2e
+    deploy-production.needs = [quality, secret-scan, test, coverage, build, e2e]
+  .github/workflows/deploy.yml: 2 job(s), check job(s): (none)
+  .github/workflows/neon-branch.yml: 3 job(s), check job(s): (none)
+
+PASS — every check job gates the production deploy, and no gating step is soft-failed.
+$ echo $?
+0
+
+VERDICT: SCR-19 holds. SCR-20's static half holds; its empirical half (a scratch-branch run showing
+a forced unit failure and a forced e2e failure each turn the workflow red and stop
+deploy-production) is NOT verified here — no GitHub Actions run was observed, because reaching one
+requires pushing a branch and this run is not permitted to commit. SCR-20 stays in-progress.
+
+## 2 — SCR-21 / SCR-22 layout and discovery
+
+$ ls apps/web/e2e/*.spec.ts
+zsh: no matches found: apps/web/e2e/*.spec.ts
+$ find apps/web/e2e -name '*.spec.ts' | wc -l
+25
+$ git ls-tree --name-only HEAD apps/web/e2e/ | grep -c 'spec.ts'
+23
+$ cd apps/web && pnpm exec playwright test --list | tail -1
+Total: 42 tests in 25 files
+$ echo $?
+0
+
+VERDICT: SCR-21 holds — no spec sits at the root of a testing directory. SCR-22's relocation holds
+and discovery is 25 files / 42 tests against a pre-move baseline of 23 files, so nothing was
+dropped. SCR-22's acceptance also requires the suite to PASS at that count; that run did not happen
+here. `apps/web/playwright.config.ts` is fullyParallel:false / workers:1 with a 180s per-test
+timeout and every spec mutates the single embedded pglite dev database that other agents are
+actively using, so running it would have corrupted their state. SCR-22 stays in-progress. The
+outstanding command, against an isolated stack, is `pnpm --filter @docket/web test:e2e`.
+
+## 3 — SCR-18: exactly one core-e2e register exists
+
+$ ls docs/engineering/core-e2e-tests.md
+ls: docs/engineering/core-e2e-tests.md: No such file or directory
+
+# Every Markdown file under docs/, counting rows whose first table cell is an e2e spec path.
+# That row shape IS a core-e2e register; the two that existed disagreed on 7 specs.
+   25 register rows  docs/engineering/specs/core-e2e.md
+documents tabulating specs by path = 1
+
+VERDICT: SCR-18 holds. The duplicate register and its separate guard are gone, the surviving
+register lists all 25 specs with a Yes/No core column and a journey line each, and
+`e2e-discipline-policy.test.ts` now fails if a second such document reappears anywhere under docs/.
+
+## 4 — GEN-01: the checklist enumerates the whole audit, and 385 ids map to nothing
+
+$ python3 -c "import json;print(len(json.load(open('docs/engineering/launch-compliance.json'))))"
+399
+$ grep -cE '^\| [A-Z]+-[0-9]+ ' docs/engineering/launch/launch-checklist.md
+399
+$ grep -cE '^\| [A-Z]+-[0-9]+ ' docs/engineering/launch/checklist.md
+399
+$ pnpm exec tsx scripts/launch-record.ts
+✓ wrote docs/engineering/launch/checklist.md
+requirements=399 closed=12 open=387 slices=3
+$ shasum docs/engineering/launch/checklist.md
+667a7b13de21dfb2e1f0d489b482bbf7dc5560c5  docs/engineering/launch/checklist.md
+$ pnpm exec tsx scripts/launch-record.ts >/dev/null; shasum docs/engineering/launch/checklist.md
+667a7b13de21dfb2e1f0d489b482bbf7dc5560c5  docs/engineering/launch/checklist.md
+$ pnpm exec tsx scripts/launch-record.ts --sign-off; echo "exit=$?"
+  … every open id named …
+exit=1
+
+$ git status --porcelain -- docs/engineering/launch scripts/launch-record.ts scripts/launch-compliance-record.ts
+?? docs/engineering/launch/
+?? scripts/launch-compliance-record.ts
+?? scripts/launch-record.ts
+
+VERDICT: the checklist is real, complete, and idempotently regenerated, and the sign-off gate is
+genuinely red. GEN-01's acceptance is nonetheless NOT met on two counts and the entry is recorded
+in-progress: the great majority of the 399 ids are still not-started and therefore map to no landed
+commit or shipped deliverable, and nothing this lane produced is committed — the whole
+docs/engineering/launch/ tree and both generator scripts are untracked, because the run that
+produced them was instructed not to commit. Committing them is the remaining step.
+
+## 5 — MISS-07: linear history
+
+$ git rev-list --merges --count origin/main..HEAD
+0
+
+VERDICT: holds.
+
+## 6 — GEN-08: the questions array does not say what its own record said
+
+The GEN-08 entry's evidence read "This slice asked none, so the array is empty." The same file's
+`questions` array holds one entry:
+
+  requirementId        WIL-41
+  candidateOutcomes    2 (Lattice as a local-inference gateway | as an agent-skill platform)
+  whyPlanCannotDecide  present, naming the DNS, grep, and web-search probes that came back empty
+  askedAt              2026-08-02T10:01:00.000Z
+
+VERDICT: `questionViolations()` passes — the question carries all three required fields — but the
+prose contradicted the record it pointed at, and GEN-08's acceptance opens with "The launch run
+reaches production sign-off", while `signOff` is false. The evidence has been rewritten to describe
+the question that was actually asked, and GEN-08 is recorded in-progress until sign-off is reached.
+
+## 7 — GEN-09: the verifier names were the implementer's
+
+Before this run, 7 of 11 closed entries (GEN-01, GEN-03, GEN-04, GEN-05, GEN-08, GEN-09, MISS-07)
+carried owner `launch-governance` and verifiedBy `launch-governance-verifier` — the owner string
+plus a suffix — and cited `launch-record.json` plus `launch-record.test.ts`, both written by the
+implementer, which GEN-09's acceptance excludes.
+
+`verificationViolations()` in packages/test-utils/tests/launch-policies/launch-record-schema.ts now
+rejects both: `namesSameAgent()` collapses casing, separators, and the -verifier / -verification /
+-reviewer / -checker suffix before comparing, and a closed entry must cite at least one artifact
+under docs/engineering/launch/evidence/ or docs/design/audits/screenshots/ — the roots only a
+verifier writes to. This file is that artifact for the launch-governance slice.
+
+## 8 — Final state of the suites this run touched
+
+See §9 below, appended after the record corrections landed.
+
+## 9 — GEN-18 and MISS-01, re-run against the claims their slice makes
+
+GEN-18 — docs/engineering/hub-architecture.md, 19168 bytes, first line "# Docket is the hub".
+
+$ grep -rn 'connectorFor(\|createProviderClient(' apps/api/src --include='*.ts' | wc -l
+8
+
+The document's §"The external-to-external search" enumerates exactly those 8 — seven call sites plus
+the factory at integration-provider.ts:439 — and classifies each by what sits between it and any
+other provider. The count matches the document line for line rather than approximately.
+
+$ grep -rn 'applyMailAction(\|\.pushTask(' apps/api/src packages/integrations/src --include='*.ts' | wc -l
+11
+
+The document's Search 2 names 4 call sites and says the remainder are port definitions and adapter
+implementations; 4 call sites + 7 definitions/implementations = 11, which is what the grep returns.
+Search 3 then traces the one genuinely cross-provider path (a Linear/GitHub webhook causing a Gmail
+write) through inbound_event → event → the `if (!event.subjectId) return;` guard at
+automation/handlers.ts:73, so the write cannot happen without a Docket entity resolving first.
+
+VERDICT: GEN-18 holds.
+
+MISS-01 — docs/engineering/native-portability.md, 34332 bytes.
+
+  "Listed as explicit exceptions (with reason + migration note): 9"
+  "Shipped patterns neither mapped nor excepted: 0"
+
+$ grep -rniE 'voice mode|SpeechRecognition|getUserMedia' apps packages --include='*.ts' --include='*.tsx' | grep -v node_modules
+apps/runner/worker-configuration.d.ts:5007:type AiAutomaticSpeechRecognitionInput = {
+apps/runner/worker-configuration.d.ts:5010:type AiAutomaticSpeechRecognitionOutput = {
+apps/runner/worker-configuration.d.ts:5019:declare abstract class BaseAiAutomaticSpeechRecognition {
+apps/runner/worker-configuration.d.ts:5020:  inputs: AiAutomaticSpeechRecognitionInput;
+apps/runner/worker-configuration.d.ts:5021:  postProcessedOutputs: AiAutomaticSpeechRecognitionOutput;
+
+All five hits are in one generated Cloudflare Workers type declaration file. The slice's claim that
+voice mode is not shipped on web — and therefore is recorded as not-shipped rather than mapped —
+reproduces exactly.
+
+VERDICT: MISS-01 holds.
+
+## 10 — Suite state after the record corrections
+
+$ pnpm --filter @docket/test-utils test
+(see the final summary appended below)
+
+$ pnpm --filter @docket/test-utils test
+ Test Files  13 passed (13)
+      Tests  95 passed (95)
+
+$ pnpm test:tooling
+ Test Files  7 passed (7)
+      Tests  91 passed (91)
+
+$ pnpm --filter @docket/web test
+ Test Files  153 passed (153)
+      Tests  1101 passed (1101)
+
+# The review had recorded the web suite as "1093/1095 — 2 red" and then measured 5 failures across
+# three calendar/scheduling files. Re-measured here in full: zero failures. Those three files pass
+# individually and in the whole-suite run.
+
+$ cd packages/test-utils && pnpm typecheck && pnpm lint
+tsc --noEmit   → exit 0
+eslint .       → exit 0
+
+Record state after this reconciliation: closed=10, in-progress=21, not-started=368, blocked=0.
+Sign-off remains withheld, and the gate names every open id.
+
+## 11 — Mutation proof: the new SCR-18 rule is not vacuous
+
+$ printf '…| `apps/web/e2e/auth/sign-in.spec.ts` | Yes | Planted. |\n' > docs/engineering/zz-mutation-probe.md
+$ pnpm --filter @docket/test-utils exec vitest run tests/workspace-policies/e2e-discipline-policy.test.ts
+     × is the only core-e2e register in the repository 25ms
+AssertionError: SCR-18: docs/engineering/specs/core-e2e.md is the single register of core end-to-end tests.
+docs/engineering/zz-mutation-probe.md: expected [ Array(1) ] to deeply equal []
+      Tests  1 failed | 6 passed (7)
+
+$ rm docs/engineering/zz-mutation-probe.md
+$ pnpm --filter @docket/test-utils exec vitest run tests/workspace-policies/e2e-discipline-policy.test.ts
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+
+VERDICT: planting a second register turns the rule red and names the file; removing it returns the
+suite to green. The green result above is a measurement, not an accident of an empty search.

@@ -1,0 +1,19 @@
+# SCR-24 — turbo build cache, measured 2026-08-02T09:59:07Z
+# Host: Darwin 25.5.0 arm64  turbo 2.10.2
+# Scope: @docket/api + @docket/runner only. @docket/web and @docket/admin build with
+#   `next build` into apps/*/.next, the SAME directories the shared dev stack is
+#   currently serving from; rebuilding them would break other agents' running servers.
+
+$ turbo run build --filter=@docket/api --filter=@docket/runner --cache-dir=.turbo   # run 1
+ Tasks:    2 successful, 2 total
+Cached:    1 cached, 2 total
+  Time:    1.326s 
+
+$ turbo run build --filter=@docket/api --filter=@docket/runner --cache-dir=.turbo   # run 2, no source change
+ Tasks:    2 successful, 2 total
+Cached:    2 cached, 2 total
+  Time:    67ms >>> FULL TURBO
+
+$ turbo run build --filter=@docket/api --filter=@docket/runner --cache-dir=.turbo --dry=json   # per-task cache status
+   @docket/api#build {"local":true,"remote":false,"status":"HIT","source":"LOCAL","timeSaved":1263,"sha":"e3af807243dd4b3bb335d1ce58c9b96a81b8e54c","dirtyHash":"08cb6877106f225dc7299683f883ab99767356624ead9128e1d58e38f0fdb65e"}
+   @docket/runner#build {"local":true,"remote":false,"status":"HIT","source":"LOCAL","timeSaved":1577,"sha":"e3af807243dd4b3bb335d1ce58c9b96a81b8e54c","dirtyHash":"e3a091ffed1b5c46d68553ee3ba39beb225a0ac73a76b675076af7621bd37a40"}

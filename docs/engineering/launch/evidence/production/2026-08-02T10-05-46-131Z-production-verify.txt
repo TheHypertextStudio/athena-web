@@ -1,0 +1,112 @@
+# Production verification — 2026-08-02T10:05:46.131Z
+
+## Freshness: is production serving current code?
+  production   https://docket-api.hypertext.studio  →  204 OpenAPI paths
+  local (HEAD) http://docket-production-launch-ebe2d9.api.docket.localhost:1355  →  236 OpenAPI paths
+  verdict: STALE — 32 path(s) built locally are not deployed
+
+  Present at HEAD, ABSENT from production:
+    - /v1/me/athena
+    - /v1/me/athena/assignments
+    - /v1/me/athena/assignments/{id}
+    - /v1/me/athena/assignments/{id}/triggers
+    - /v1/me/athena/assignments/{id}/triggers/{triggerId}
+    - /v1/me/athena/chat
+    - /v1/me/athena/chat/messages
+    - /v1/me/athena/chat/new
+    - /v1/me/athena/connections
+    - /v1/me/athena/connections/preview
+    - /v1/me/athena/connections/{id}
+    - /v1/me/athena/connections/{id}/authorize
+    - /v1/me/athena/connections/{id}/reconnect
+    - /v1/me/athena/pulse
+    - /v1/me/athena/sessions
+    - /v1/me/athena/sessions/{id}
+    - /v1/me/athena/sessions/{id}/activity
+    - /v1/me/athena/sessions/{id}/activity/{activityId}/approve
+    - /v1/me/athena/sessions/{id}/activity/{activityId}/proposal
+    - /v1/me/athena/sessions/{id}/activity/{activityId}/reject
+    - /v1/me/athena/sessions/{id}/activity/{activityId}/reply
+    - /v1/me/athena/sessions/{id}/approve
+    - /v1/me/athena/sessions/{id}/cancel
+    - /v1/me/athena/sessions/{id}/messages
+    - /v1/me/athena/sessions/{id}/pause
+    - /v1/me/athena/sessions/{id}/proposals
+    - /v1/me/athena/sessions/{id}/proposals/{groupId}/approve
+    - /v1/me/athena/sessions/{id}/proposals/{groupId}/reject
+    - /v1/me/athena/sessions/{id}/reject
+    - /v1/me/athena/sessions/{id}/resume
+    - /v1/me/athena/sessions/{id}/run
+    - /v1/me/athena/sessions/{id}/stream
+
+## Unauthenticated probes
+  [ok  ] 200    83ms  https://docket-api.hypertext.studio/v1/health
+         API process is up and serving
+         server: cloudflare
+         content-type: application/json
+         x-cloud-trace-context: d6ee1656a2f3dccbe94d51d5daafa87f
+  [ok  ] 200   106ms  https://docket-api.hypertext.studio/v1/config
+         Public runtime config the sign-in page reads
+         server: cloudflare
+         content-type: application/json
+         x-cloud-trace-context: 60b896252092732ae94d51d5daafaca7
+  [ok  ] 200   345ms  https://docket-api.hypertext.studio/v1/openapi.json
+         Deployed API surface (the freshness diff reads this)
+         server: cloudflare
+         content-type: application/json
+         x-cloud-trace-context: 4184d205b157d62fe94d51d5daafa6bb
+  [ok  ] 200   104ms  https://docket-api.hypertext.studio/api/auth/.well-known/oauth-authorization-server
+         OIDC/MCP authorization-server metadata is published
+         server: cloudflare
+         content-type: application/json
+         cache-control: public, max-age=15, stale-while-revalidate=15, stale-if-error=86400
+         x-cloud-trace-context: c4af706e622f7f00e94d51d5daafa918
+  [ok  ] 200   140ms  https://docket-api.hypertext.studio/.well-known/oauth-protected-resource
+         MCP protected-resource metadata is published
+         server: cloudflare
+         content-type: application/json
+         x-cloud-trace-context: ce6f0fcccafd535ae94d51d5daafa9b1
+  [ok  ] 401   143ms  https://docket-api.hypertext.studio/v1/me
+         Anonymous read of the session user must be refused
+         server: cloudflare
+         content-type: application/json
+         x-cloud-trace-context: 1220f1195a6c2175e94d51d5daafa0cf
+  [ok  ] 401   142ms  https://docket-api.hypertext.studio/v1/orgs
+         Anonymous read of workspaces must be refused
+         server: cloudflare
+         content-type: application/json
+         x-cloud-trace-context: 67e1d438a92f4712e94d51d5daafadd9
+  [ok  ] 200   120ms  https://docket.hypertext.studio/
+         Product web app serves its entry document
+         server: Vercel
+         content-type: text/html; charset=utf-8
+         cache-control: public, max-age=0, must-revalidate
+         x-vercel-id: sfo1::btp22-1785665145934-6d448abe1512
+         x-vercel-cache: HIT
+         x-matched-path: /
+         strict-transport-security: max-age=63072000; includeSubDomains
+  [ok  ] 200   131ms  https://docket.hypertext.studio/sign-in
+         Sign-in surface renders (the passkey flow starts here)
+         server: Vercel
+         content-type: text/html; charset=utf-8
+         cache-control: public, max-age=0, must-revalidate
+         x-vercel-id: sfo1::bntwd-1785665145936-f576d73a46d0
+         x-vercel-cache: HIT
+         x-matched-path: /sign-in
+         strict-transport-security: max-age=63072000; includeSubDomains
+  [ok  ] 200   158ms  https://docket-admin.hypertext.studio/
+         Admin console serves its entry document
+         server: cloudflare
+         content-type: text/html; charset=utf-8
+         cache-control: s-maxage=31536000
+         strict-transport-security: max-age=63072000; includeSubDomains
+
+## Verdict: FAIL
+  Production is BEHIND HEAD: 32 path(s) exist at HEAD and are not deployed.
+  All probes met their expectations.
+
+## Not covered here
+  Authenticated per-flow evidence (sign-in, workspace/project/task creation, calendar,
+  cycles, Athena session, each connector). Docket is passkey-only, so those require a
+  human WebAuthn gesture against the production hostname. The exact author-run steps are
+  in docs/engineering/launch/production-verification.md.

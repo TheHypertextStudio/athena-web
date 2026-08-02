@@ -7,53 +7,22 @@
  * cross-field rules that a flat per-var schema cannot express. The only delta to
  * production is the *values* — the shape and validation are identical everywhere.
  */
-import { createEnv, type StandardSchemaV1 } from '@t3-oss/env-core';
+import { createEnv } from '@t3-oss/env-core';
 
+import { reportInvalidEnv } from './env-error';
+import { assertHostConfigIsolated, resolveHostConfig } from './hosts';
 import { isRealValue } from './real-value';
 import {
   agentServer,
   authServer,
   connectorServer,
   dbServer,
+  hostsServer,
   mcpServer,
   opsServer,
   sharedServer,
   stripeServer,
 } from './slices';
-
-/** The variable name an issue refers to, or `'(unknown)'` for an issue with no path. */
-function issueVarName(issue: StandardSchemaV1.Issue): string {
-  const first = issue.path?.[0];
-  if (first === undefined) return '(unknown)';
-  const key = typeof first === 'object' && 'key' in first ? first.key : first;
-  return String(key);
-}
-
-/**
- * Fail with a message that says which variables are wrong and where to fix them.
- *
- * @remarks
- * The default handler logs the raw Zod issues and throws `Invalid environment variables`, which
- * names the vars but not the file — and the resulting failure is genuinely confusing in dev, because
- * only the API process dies. `pnpm dev` keeps the web app serving 200, so the first visible symptom
- * is `/api/auth/get-session` returning 502 and the app behaving as though auth is broken. Naming the
- * file to edit, and the contract to copy from, turns a misleading multi-minute hunt into a one-line
- * fix.
- *
- * @param issues - The validation issues reported by the composed schema.
- * @throws {Error} Always — this is the fail-fast path.
- */
-function reportInvalidEnv(issues: readonly StandardSchemaV1.Issue[]): never {
-  const detail = issues.map((issue) => `  - ${issueVarName(issue)}: ${issue.message}`).join('\n');
-  throw new Error(
-    `Invalid environment variables for the Docket API:\n${detail}\n\n` +
-      'Set these in the repository-root `.env.local` (the committed local defaults) or in this ' +
-      "deployment's environment. `.env.example` is the contract and carries a safe value for " +
-      'every required variable — `packages/env/tests/env-files/env-files.test.ts` keeps the two in step.\n' +
-      'Note: only the API refuses to boot on this. The web app will keep serving pages, so ' +
-      '`/api/auth/get-session` failing is a symptom of this, not an auth bug.',
-  );
-}
 
 const rawEnv = createEnv({
   server: {
@@ -65,6 +34,7 @@ const rawEnv = createEnv({
     ...agentServer,
     ...opsServer,
     ...connectorServer,
+    ...hostsServer,
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,
@@ -106,6 +76,36 @@ export const env: typeof rawEnv = {
     ? { OIDC_LOGIN_PAGE_URL: rawEnv.OIDC_LOGIN_PAGE_URL ?? `${stripSlash(rawEnv.WEB_URL)}/sign-in` }
     : {}),
 };
+
+/**
+ * The resolved user-facing host contract for this API process.
+ *
+ * @remarks
+ * The single place server-side code asks "what host serves published briefs?", "where does
+ * Athena receive mail?", or "what apex are we on?". Features must read this rather than build a
+ * hostname from a literal — that is what makes the domain cutover an environment change instead
+ * of a code change (GEN-25, ACH-23). See `packages/env/src/hosts.ts` for the derivation rules.
+ *
+ * @example
+ * ```ts
+ * import { apiHostConfig } from '@docket/env/api';
+ * import { requireHost, requireOrigin } from '@docket/env/hosts';
+ *
+ * const briefOrigin = requireOrigin(apiHostConfig, 'brief');
+ * const inboundMail = requireHost(apiHostConfig, 'athena-mail').host;
+ * ```
+ */
+export const apiHostConfig = resolveHostConfig({
+  rootDomain: env.PUBLIC_ROOT_DOMAIN,
+  appUrl: env.WEB_URL,
+  apiUrl: env.API_URL,
+  adminUrl: env.ADMIN_URL,
+  briefHost: env.PUBLIC_BRIEF_HOST,
+  athenaInboundMailHost: env.ATHENA_INBOUND_MAIL_HOST,
+  customDomainTarget: env.CUSTOM_DOMAIN_CNAME_TARGET,
+  passkeyRpId: env.BETTER_AUTH_PASSKEY_RP_ID,
+  supportEmail: env.SUPPORT_EMAIL,
+});
 
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
@@ -152,6 +152,12 @@ function assertCrossFieldRules(e: typeof env): void {
   }
 
   if (e.APP_MODE === 'production') {
+    // A domain cutover moves several variables, and the dangerous state is the half-applied one:
+    // `WEB_URL` on the new apex while `ADMIN_URL` or `API_URL` still answer on the old. That
+    // deploy looks healthy and quietly keeps a user-facing host on the domain GEN-25 requires
+    // Docket to leave. Refusing to boot turns it into a deploy failure instead.
+    assertHostConfigIsolated(apiHostConfig);
+
     for (const [name, value] of Object.entries(e)) {
       if (typeof value === 'string' && !isRealValue(value)) {
         fail(`${name} must not contain an empty or placeholder value.`);

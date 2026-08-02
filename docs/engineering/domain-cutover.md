@@ -15,6 +15,52 @@
 
 ---
 
+## 0a. The host contract — what a cutover actually changes
+
+Before the step-by-step, the shape of the thing. Every user-facing host now comes from one place,
+`packages/env/src/hosts.ts`, and derives from **a single variable**:
+
+```bash
+PUBLIC_ROOT_DOMAIN=<docket-apex>
+```
+
+| Role                 | Variable                                                  | Derived when unset             |
+| -------------------- | --------------------------------------------------------- | ------------------------------ |
+| apex                 | `PUBLIC_ROOT_DOMAIN` / `NEXT_PUBLIC_ROOT_DOMAIN`          | last two labels of `WEB_URL`   |
+| app                  | `WEB_URL` / `NEXT_PUBLIC_APP_URL`                         | the apex itself                |
+| api                  | `API_URL` / `NEXT_PUBLIC_API_URL`                         | `api.<apex>`                   |
+| admin                | `ADMIN_URL`                                               | `admin.<apex>`                 |
+| published briefs     | `PUBLIC_BRIEF_HOST` / `NEXT_PUBLIC_BRIEF_HOST`            | `briefs.<apex>`                |
+| Athena inbox         | `ATHENA_INBOUND_MAIL_HOST`                                | **never** — stays unconfigured |
+| custom-domain target | `CUSTOM_DOMAIN_CNAME_TARGET`                              | the brief host                 |
+| support address      | `SUPPORT_EMAIL` / `NEXT_PUBLIC_SUPPORT_EMAIL`             | `support@<apex>`               |
+| passkey RP id        | `BETTER_AUTH_PASSKEY_RP_ID` / `NEXT_PUBLIC_PASSKEY_RP_ID` | the apex — **see §0/§5**       |
+
+Three consequences worth reading before executing anything below:
+
+1. **No feature hard-codes a hostname.** `apps/api` reads `apiHostConfig` from `@docket/env/api`;
+   the browser reads `browserHostConfig()` from `@docket/env/hosts`. A regression is caught by
+   `packages/env/tests/hosts/legacy-host-policy.test.ts`, which fails if any legacy hostname
+   appears anywhere under `apps/*/src`, `packages/*/src`, or `services/*/src`.
+2. **A half-applied cutover refuses to boot.** In production the API asserts that every
+   user-facing host sits at or under `PUBLIC_ROOT_DOMAIN`. Moving `WEB_URL` and forgetting
+   `ADMIN_URL` is now a failed deploy naming the stray host, not a healthy deploy that quietly
+   keeps a surface on the old domain. The Athena mail host is exempt — that is GEN-25's one
+   permitted exception, and the only one.
+3. **The Athena inbox is never derived.** Absent means unconfigured, because a derived mail host
+   would have no MX records and every inbound message would bounce while the config looked
+   complete.
+
+Verify the resolved contract at any point with:
+
+```bash
+pnpm domain:check hosts     # the resolved host table + the isolation invariant
+pnpm domain:check probe     # HTTPS status and TLS SAN coverage for every web host
+pnpm domain:check legacy    # legacy references OUTSIDE shipped source, i.e. what is left to repoint
+```
+
+---
+
 ## 0. Read this first — the one step that can lock the author out
 
 > **Changing `PASSKEY_RP_ID` invalidates every existing passkey. Docket is passkey-only. A botched
@@ -137,22 +183,39 @@ does not trust it.
 The two hardcoded hostnames in production code paths are gone; both now derive from configuration,
 so the cutover is a variable change rather than a patch:
 
-| Was                                                        | Now                                                             |
-| ---------------------------------------------------------- | --------------------------------------------------------------- |
-| `apps/api/src/error.ts` — literal problem-type URI         | `problemTypeUrl(code)`, derived from `env.WEB_URL`              |
-| `apps/api/src/mcp/server.ts` ×2 — same literal             | calls the same helper                                           |
-| `apps/web/.../privacy/page.tsx`, `terms/page.tsx` — mailto | `SUPPORT_EMAIL` from `NEXT_PUBLIC_SUPPORT_EMAIL`, same fallback |
+| Was                                                        | Now                                                 |
+| ---------------------------------------------------------- | --------------------------------------------------- |
+| `apps/api/src/error.ts` — literal problem-type URI         | `problemTypeUrl(code)`, derived from `env.WEB_URL`  |
+| `apps/api/src/mcp/server.ts` ×2 — same literal             | calls the same helper                               |
+| `apps/web/.../privacy/page.tsx`, `terms/page.tsx` — mailto | `SUPPORT_EMAIL`, now derived from the host contract |
 
 `problemTypeUrl` is the only place in the codebase that builds a problem-type URI. Its tests assert
 the URI follows `WEB_URL` and contains no hostname the source chose
 (`apps/api/tests/core/error.test.ts`).
 
+**The support address no longer has a hard-coded fallback**, and that closes a gap the first pass
+left open. `apps/web/src/lib/support-contact.ts` now resolves it through
+`requireSupportEmail(browserHostConfig())`, so it follows whatever apex the app is served from:
+`support@hypertext.studio` today (byte-identical to the old fallback), `support@<docket-apex>` the
+moment `NEXT_PUBLIC_APP_URL` moves — with no variable to remember and no build to ship.
+`NEXT_PUBLIC_SUPPORT_EMAIL` remains available for a mailbox that is not `support@`.
+
+The whole class of regression is now enforced rather than reviewed:
+`packages/env/tests/hosts/legacy-host-policy.test.ts` fails if a legacy hostname appears anywhere
+under `apps/*/src`, `packages/*/src`, or `services/*/src`.
+
 ### 3.2 Cutover items
 
-- [ ] **Set `NEXT_PUBLIC_SUPPORT_EMAIL`** in the Vercel `docket` project to the new support address
-      (e.g. `support@<docket-apex>`). Until it is set, the privacy and terms pages fall back to
-      `support@hypertext.studio` — the fallback is deliberate so this change is inert until the
-      mailbox exists, but it means **the variable is required for GEN-25 to actually close**.
+- [ ] **Set `NEXT_PUBLIC_SUPPORT_EMAIL`** in the Vercel `docket` project _only if_ the support
+      mailbox is not `support@<docket-apex>`. Otherwise nothing to do: the address follows the
+      apex automatically once `NEXT_PUBLIC_APP_URL` moves. Confirm with
+      `curl -s https://<docket-apex>/privacy | grep -o 'mailto:[^"]*'`.
+- [ ] **Repoint the operator scripts and deployment configuration.** These sit outside shipped
+      source, so the policy test deliberately does not police them; run `pnpm domain:check legacy`
+      for the current list. As of 2026-08-02 it reports ten references across
+      `scripts/bootstrap.ts`, `scripts/integrations-setup.ts`, `scripts/production-verify.ts`
+      (its `DEFAULT_PRODUCTION_*` origins — the ones a launch verification would otherwise check
+      against the wrong domain), `scripts/tunnel.ts`, and `infra/slack/docket-app-manifest.yaml`.
 - [ ] **Redirect the old host.** `curl -I https://docket.hypertext.studio` must answer 301 or 308 to
       `https://<docket-apex>` (or the host must be retired). In Vercel: keep
       `docket.hypertext.studio` attached to the project and set it to redirect to the new domain,
@@ -164,11 +227,9 @@ curl -s https://<docket-apex>/            | grep -o 'hypertext\.studio' | wc -l 
 curl -s https://<docket-apex>/sitemap.xml | grep -o 'hypertext\.studio' | wc -l   # want 0
 curl -s https://<docket-apex>/robots.txt  | grep -o 'hypertext\.studio' | wc -l   # want 0
 `
-- [ ] **`packages/env/src/registry-vars-infra.ts:121`** documents `MAIL_FROM` with the example
-      `"Docket <no-reply@service.hypertext.studio>"`. That is a documentation string, not runtime
-      behavior, but it is a `hypertext.studio` reference in production configuration and should be
-      updated to the new mail domain at cutover. (Recorded here rather than changed now: the file
-      belongs to another work lane.)
+- [x] **`packages/env/src/registry-vars-infra.ts`** documented `MAIL_FROM` with an example on the
+      studio apex. Rewritten to reference `$ATHENA_INBOUND_MAIL_HOST` instead, so the contract no
+      longer teaches the old domain.
 - [ ] **`packages/auth/tests/builder/auth.test.ts:1293`** uses `usedocket.app` as a fixture allowed
       host. It is somebody else's live domain (see `domains.md` §3) — harmless as a fixture, but
       worth swapping for the real apex or an `.invalid` name while you are in there.
@@ -179,7 +240,12 @@ curl -s https://<docket-apex>/robots.txt  | grep -o 'hypertext\.studio' | wc -l 
   operator's name, not a URL. Changing it would misstate who operates the service.
 - **The interim Athena inbound-mail host**, if one is stood up before the final domain lands. GEN-25
   permits exactly this one exception, provided it appears only as an environment value and is listed
-  as a cutover item — which is §7's first checkbox.
+  as a cutover item — which is §7's first checkbox. It is now expressible: set
+  `ATHENA_INBOUND_MAIL_HOST` and the inbox feature reads it through
+  `requireHost(apiHostConfig, 'athena-mail')`. The variable is the only place the host exists, so
+  replacing it with the final Athena domain is a one-line environment change (ACH-23). The
+  production isolation assertion exempts this role by name, so an off-apex mail host does not block
+  a deploy — and nothing else does.
 
 ---
 
@@ -442,4 +508,46 @@ impossible.
 | 15  | Redirect `docket.hypertext.studio` 301/308 to the new apex             | GEN-25      | step 11                             |
 | 16  | Re-crawl for `hypertext.studio` hostnames; expect zero                 | GEN-25      | step 15                             |
 | 17  | Prune old hosts from `BETTER_AUTH_ALLOWED_HOSTS` and old redirect URIs | GEN-26      | step 11                             |
-| 18  | Diff the DNS zone against step 2; confirm `hypertext.studio` is 200    | GEN-27      | step 15                             |
+| 18  | Diff the DNS zone against step 2; confirm the studio apex is 200       | GEN-27      | step 15                             |
+| 19  | `pnpm domain:check legacy`; repoint every script/CI reference it lists | GEN-25      | step 3                              |
+| 20  | `pnpm domain:check hosts` and `probe`; both exit 0                     | GEN-24/25   | step 9                              |
+
+Set `PUBLIC_ROOT_DOMAIN` at step 9 alongside `WEB_URL`/`API_URL`: it is what makes `admin`, the
+brief host, the custom-domain target, and the support address follow without four more variables,
+and it is what the production isolation assertion checks the others against.
+
+---
+
+## 9. Per-workspace custom domains
+
+A workspace can serve its published briefs from a domain it owns. The contract lives in
+`packages/env/src/custom-domain.ts`; the feature that stores domains and serves briefs calls it
+rather than re-deriving any of it.
+
+**Normalize before you store or compare.** `acceptCustomDomain(input, apiHostConfig)` collapses
+every spelling of one claim — scheme, case, trailing dot, port, `www.`, Unicode — to a single
+canonical host. That host is the uniqueness key: index it with a unique constraint and CORE-30's
+"one workspace, one domain" is enforceable. Skip it in one call site and it silently is not,
+because `Example.com` and `https://www.example.com/` will occupy two rows.
+
+It also refuses, with a stable code, anything that cannot work: wildcards, IP literals, single
+labels, over-length names, and — importantly — any host at or under Docket's own apex, which would
+otherwise let a workspace serve its content from an origin the browser already trusts.
+
+**Verification is DNS, and it is re-run rather than cached.**
+
+```ts
+const token = generateCustomDomainToken(); // 128 bits, per domain row
+const record = domainVerificationRecord(host, token); // show type/name/value verbatim (CORE-31)
+const routing = domainRoutingRecord(host, apiHostConfig); // the CNAME that makes it serve (MISS-04)
+
+const result = await verifyCustomDomain({ host, token, lookupTxt: resolveTxt });
+```
+
+`result.failure` is one of `lookup-failed` / `no-record` / `token-mismatch`, and `observedCount` is
+a **count, not the values** — a resolver returns strings from a domain Docket does not own, so
+rendering them would put third-party text into application copy. The count is the only distinction
+a user needs: zero means "not published yet", one or more means "wrong or stale token".
+
+Operationally, `pnpm domain:check verify <host> <token>` runs the identical check against real DNS,
+so a support question is answered with the same code path the product uses.

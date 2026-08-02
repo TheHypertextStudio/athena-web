@@ -1,4 +1,4 @@
-import { clientShared, connectorServer, opsServer } from './slices';
+import { clientShared, connectorServer, hostsServer, opsServer } from './slices';
 import { APP, type VarSpec } from './registry-types';
 
 /** Ops + connector + client variable specs. */
@@ -118,7 +118,8 @@ export const INFRA_VARS: readonly VarSpec[] = [
     required: false,
     zod: opsServer.MAIL_FROM,
     where:
-      'From-address for transactional email, e.g. "Docket <no-reply@service.hypertext.studio>".',
+      'From-address for transactional email, e.g. "Athena <no-reply@$ATHENA_INBOUND_MAIL_HOST>". ' +
+      'Must be a Docket/Athena-owned mail domain with SPF, DKIM, and DMARC published (GEN-28).',
   },
   {
     name: 'SMS_ENDPOINT',
@@ -236,6 +237,64 @@ export const INFRA_VARS: readonly VarSpec[] = [
     where: 'Google Tasks REST API base override. Absent ⇒ https://tasks.googleapis.com/tasks/v1',
   },
 
+  // hosts — the user-facing domain contract (`packages/env/src/hosts.ts` resolves these)
+  {
+    name: 'PUBLIC_ROOT_DOMAIN',
+    slice: 'hosts',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: hostsServer.PUBLIC_ROOT_DOMAIN,
+    where:
+      'The apex Docket owns, e.g. docket.place. Every other host derives from it. Absent ⇒ derived from WEB_URL.',
+  },
+  {
+    name: 'ADMIN_URL',
+    slice: 'hosts',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: hostsServer.ADMIN_URL,
+    where: 'Operator back-office origin. Absent ⇒ https://admin.<PUBLIC_ROOT_DOMAIN>',
+  },
+  {
+    name: 'PUBLIC_BRIEF_HOST',
+    slice: 'hosts',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: hostsServer.PUBLIC_BRIEF_HOST,
+    where: 'Host serving slug-based published briefs. Absent ⇒ briefs.<PUBLIC_ROOT_DOMAIN>',
+  },
+  {
+    name: 'ATHENA_INBOUND_MAIL_HOST',
+    slice: 'hosts',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: hostsServer.ATHENA_INBOUND_MAIL_HOST,
+    where:
+      'Domain Athena receives mail on (needs MX at a verified provider). Never derived — absent ⇒ the inbox is unconfigured.',
+  },
+  {
+    name: 'CUSTOM_DOMAIN_CNAME_TARGET',
+    slice: 'hosts',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: hostsServer.CUSTOM_DOMAIN_CNAME_TARGET,
+    where: "Host a workspace's verified custom domain CNAMEs to. Absent ⇒ the brief host.",
+  },
+  {
+    name: 'SUPPORT_EMAIL',
+    slice: 'hosts',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: hostsServer.SUPPORT_EMAIL,
+    where: 'Support address the legal pages publish. Absent ⇒ support@<PUBLIC_ROOT_DOMAIN>',
+  },
+
   // client
   {
     name: 'NEXT_PUBLIC_API_URL',
@@ -263,5 +322,33 @@ export const INFRA_VARS: readonly VarSpec[] = [
     required: true,
     zod: clientShared.NEXT_PUBLIC_PASSKEY_RP_ID,
     where: 'Browser-visible mirror of BETTER_AUTH_PASSKEY_RP_ID',
+  },
+  {
+    name: 'NEXT_PUBLIC_ROOT_DOMAIN',
+    slice: 'client',
+    scope: 'client',
+    targets: APP,
+    required: false,
+    zod: clientShared.NEXT_PUBLIC_ROOT_DOMAIN,
+    where:
+      'Browser-visible mirror of PUBLIC_ROOT_DOMAIN. Absent ⇒ derived from NEXT_PUBLIC_APP_URL.',
+  },
+  {
+    name: 'NEXT_PUBLIC_BRIEF_HOST',
+    slice: 'client',
+    scope: 'client',
+    targets: APP,
+    required: false,
+    zod: clientShared.NEXT_PUBLIC_BRIEF_HOST,
+    where: 'Browser-visible mirror of PUBLIC_BRIEF_HOST, for links to a published brief.',
+  },
+  {
+    name: 'NEXT_PUBLIC_SUPPORT_EMAIL',
+    slice: 'client',
+    scope: 'client',
+    targets: APP,
+    required: false,
+    zod: clientShared.NEXT_PUBLIC_SUPPORT_EMAIL,
+    where: 'Support address printed on the privacy and terms pages. Absent ⇒ support@<apex>.',
   },
 ] as const;

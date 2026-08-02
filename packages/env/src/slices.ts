@@ -257,12 +257,52 @@ export const opsServer = {
   STAFF_BOOTSTRAP_EMAILS: z.string().optional(),
 };
 
+/**
+ * The user-facing host contract — the variables `./hosts` resolves every product host from.
+ *
+ * @remarks
+ * All optional, and that is the design: `PUBLIC_ROOT_DOMAIN` alone moves the entire product to
+ * a new apex, because every other host derives from it (`api.<apex>`, `admin.<apex>`,
+ * `briefs.<apex>`). The per-host variables exist so the staged cutover in
+ * `docs/engineering/domain-cutover.md` can move one host at a time, and so today's production —
+ * where `WEB_URL` and `API_URL` are unrelated names on a shared apex — keeps working unchanged.
+ *
+ * `ATHENA_INBOUND_MAIL_HOST` is the one GEN-25 exception: the interim receiving domain may sit
+ * off the product apex, and it is a configuration value precisely so the final domain replaces
+ * it without a code change (ACH-23).
+ */
+export const hostsServer = {
+  /** Registrable apex Docket owns, e.g. `docket.place`. Absent ⇒ derived from `WEB_URL`. */
+  PUBLIC_ROOT_DOMAIN: z.string().min(1).optional(),
+  /** Operator back-office origin. Absent ⇒ `https://admin.<apex>`. */
+  ADMIN_URL: z.string().min(1).optional(),
+  /** Host serving slug-based published briefs. Absent ⇒ `briefs.<apex>`. */
+  PUBLIC_BRIEF_HOST: z.string().min(1).optional(),
+  /**
+   * Domain Athena receives mail on (an `inbox.athena.*` host on the interim apex today, the
+   * final Athena apex later — `docs/engineering/domain-cutover.md` §7 carries the exact value).
+   * Never derived: a derived value would claim a host with no MX records,
+   * and every inbound message would bounce while the config looked healthy.
+   */
+  ATHENA_INBOUND_MAIL_HOST: z.string().min(1).optional(),
+  /** Host a workspace's verified custom domain must `CNAME` to. Absent ⇒ the brief host. */
+  CUSTOM_DOMAIN_CNAME_TARGET: z.string().min(1).optional(),
+  /** Support address the legal pages publish. Absent ⇒ `support@<apex>`. */
+  SUPPORT_EMAIL: z.string().min(1).optional(),
+};
+
 /** Public client vars (Next.js `NEXT_PUBLIC_*`). */
 export const clientShared = {
   NEXT_PUBLIC_API_URL: z.string().min(1),
   NEXT_PUBLIC_APP_URL: z.string().min(1),
   /** Browser-visible mirror of `BETTER_AUTH_PASSKEY_RP_ID` for WebAuthn Signal API calls. */
   NEXT_PUBLIC_PASSKEY_RP_ID: z.string().min(1),
+  /** Browser-visible mirror of `PUBLIC_ROOT_DOMAIN`. Absent ⇒ derived from `NEXT_PUBLIC_APP_URL`. */
+  NEXT_PUBLIC_ROOT_DOMAIN: z.string().min(1).optional(),
+  /** Browser-visible mirror of `PUBLIC_BRIEF_HOST`, for links to a published brief. */
+  NEXT_PUBLIC_BRIEF_HOST: z.string().min(1).optional(),
+  /** Browser-visible mirror of `SUPPORT_EMAIL`, printed on the privacy and terms pages. */
+  NEXT_PUBLIC_SUPPORT_EMAIL: z.string().min(1).optional(),
 };
 
 /**

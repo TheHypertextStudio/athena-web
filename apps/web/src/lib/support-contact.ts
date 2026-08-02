@@ -4,26 +4,33 @@
  * @remarks
  * The privacy policy and terms of service are the only user-facing surfaces that publish a
  * contact address, and both used to hard-code it. GEN-25 requires that no user-facing Docket URL
- * or identity stay pinned to `hypertext.studio` in source, so the address is read from
- * configuration: when the final domain lands, the cutover is setting one environment variable in
- * the Vercel project, not editing two React components and shipping a build.
+ * or identity stay pinned to the legacy studio apex in source, so the address is resolved from
+ * configuration through the shared host contract: when the final domain lands, the cutover is an
+ * environment change, not an edit to two React components and a rebuild.
+ *
+ * There is no hard-coded fallback, and that is the point. The address follows whatever apex the
+ * app is actually served from (`NEXT_PUBLIC_APP_URL` → `support@<apex>`), so it is already
+ * correct today and stays correct after the move without anyone remembering to touch it.
+ * `NEXT_PUBLIC_SUPPORT_EMAIL` overrides it when the mailbox is not `support@`.
  *
  * `NEXT_PUBLIC_` because these are statically rendered marketing pages — the value is inlined at
- * build time and is public by definition (it is printed on the page). The fallback keeps today's
- * behavior byte-for-byte while the new domain is still pending, so this change is inert until the
- * variable is set. See `docs/engineering/domain-cutover.md` for the cutover item that sets it.
+ * build time and is public by definition (it is printed on the page). See
+ * `docs/engineering/domain-cutover.md` §3.2 for the cutover item, and
+ * `packages/env/src/hosts.ts` for the derivation rules.
  */
+import { browserHostConfig, requireSupportEmail } from '@docket/env/hosts';
 
 /**
  * Address shown on the privacy and terms pages, and used in their `mailto:` links.
  *
  * @remarks
- * Read from `NEXT_PUBLIC_SUPPORT_EMAIL`, falling back to the address in use today.
+ * Resolved once at module load. Throws if neither `NEXT_PUBLIC_SUPPORT_EMAIL` nor an app URL is
+ * configured — a build that cannot name its own support address would otherwise ship a broken
+ * `mailto:` to every visitor, which is worse than failing the build.
  *
  * @example
  * ```tsx
  * <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
  * ```
  */
-export const SUPPORT_EMAIL: string =
-  process.env['NEXT_PUBLIC_SUPPORT_EMAIL'] ?? 'support@hypertext.studio';
+export const SUPPORT_EMAIL: string = requireSupportEmail(browserHostConfig());

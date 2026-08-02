@@ -185,7 +185,7 @@ export function protectedResourceMetadata(c: Context): Response {
  * because it has no idea the web app's `next.config.ts` also proxies `/api/auth/*` same-origin.
  * That proxy is not incidental: it is the ONLY place the caller's session cookie is valid, since
  * `BETTER_AUTH_COOKIE_DOMAIN` is deliberately unset in production (host-only cookies — sharing
- * one across `*.hypertext.studio` would also hand it to unrelated sites on that same registrable
+ * one across `*.<apex>` would also hand it to unrelated sites on that same registrable
  * domain, e.g. the company's own site). `/oauth2/authorize` is the one AS endpoint that checks
  * that cookie; every other endpoint here (token, register, jwks, introspect, revoke) is
  * credential-free PKCE/client-auth and is left exactly as Better Auth generated it, still on the

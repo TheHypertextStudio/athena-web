@@ -10,6 +10,7 @@ export type Slice =
   | 'agent'
   | 'ops'
   | 'connector'
+  | 'hosts'
   | 'client';
 /** Whether a var is server-only or a public client var. */
 export type Scope = 'server' | 'client';

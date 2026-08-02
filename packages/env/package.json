@@ -10,7 +10,9 @@
     "./api": "./src/api.ts",
     "./web": "./src/web.ts",
     "./admin": "./src/admin.ts",
-    "./registry": "./src/registry.ts"
+    "./registry": "./src/registry.ts",
+    "./hosts": "./src/hosts.ts",
+    "./custom-domain": "./src/custom-domain.ts"
   },
   "main": "./src/index.ts",
   "types": "./src/index.ts",

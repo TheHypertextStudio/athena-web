@@ -56,6 +56,17 @@ const config = docketVitest({
     // The persisted-cache key derivation is what keeps two accounts' work data apart on a shared
     // device, so the per-user scoping and the availability guard are gated on their own.
     'src/lib/query-persist.ts',
+    // The interaction substrate every list, board, calendar and timeline is built from. Each of
+    // these is pure logic that decides what a gesture MEANS — which object was addressed, which
+    // rows a shift-click covers, whether a drop may mutate anything, which cursor tells the truth
+    // about what a row will do. All of it must stay correct independent of the React tree, and a
+    // silent regression here misroutes or discards a person's work rather than merely misdrawing.
+    'src/lib/actions/object.ts',
+    'src/lib/actions/registry.ts',
+    'src/lib/actions/cursor.ts',
+    'src/components/selection/selection-model.ts',
+    'src/components/selection/selection-registry.ts',
+    'src/components/dnd/drag-payload.ts',
   ],
 });
 

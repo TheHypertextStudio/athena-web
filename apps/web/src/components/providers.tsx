@@ -6,6 +6,7 @@ import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { InteractionProvider } from '@/lib/actions';
 import { probeSession } from '@/lib/auth-client';
 import { createQueryClient } from '@/lib/query';
 import { SessionExpiredError } from '@/lib/query';
@@ -39,7 +40,13 @@ export interface ProvidersProps {
  * 4. TanStack Query's `QueryClientProvider` — the dynamic-data layer that backs every
  *    read/mutation hook in `@/lib/query`, so data surfaces auto-refetch on window focus
  *    and after mutations instead of needing a manual "Refresh" button.
- * 5. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ * 5. {@link InteractionProvider} — the app's single action registry, drag record, and
+ *    document-level right-click handler. Mounted exactly once, and here rather than in the
+ *    authenticated shell, because "exactly one" is the whole point: two registries would mean two
+ *    context menus and two answers to what a gesture does. It is inert until a surface registers
+ *    an action domain — with nothing registered, a right-click resolves to no actions and the
+ *    browser's own menu is deliberately left alone.
+ * 6. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
  *    authenticated shell. Offline support has to be installed before it is needed, and someone
  *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
  *
@@ -68,7 +75,9 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
           <AuthenticationInterlockProvider>
             <QueryClientProvider client={queryClient}>
               <UnauthorizedWatcher handlerRef={handleCacheError} />
-              <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+              <InteractionProvider>
+                <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+              </InteractionProvider>
             </QueryClientProvider>
           </AuthenticationInterlockProvider>
         </TooltipProvider>

@@ -31,6 +31,7 @@
     "integrations": "tsx scripts/integrations-setup.ts",
     "env:check": "tsx scripts/env-check.ts",
     "domain:check": "tsx scripts/domain-check.ts",
+    "workspaces:provision": "tsx scripts/provision-workspaces.ts",
     "scheduler:setup": "dotenv -e .env.local -- tsx scripts/scheduler-setup.ts",
     "proxy:install": "portless service install",
     "proxy:status": "portless service status",

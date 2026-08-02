@@ -57,6 +57,7 @@ import {
   Search,
   Settings,
   Target,
+  User,
   Users,
   Workflow,
 } from '../../icons';
@@ -205,11 +206,17 @@ export function Sidebar({
    * The org-scoped Workspace rows, vocabulary-skinned for entity nouns.
    *
    * @remarks
-   * In a personal workspace the **Teams** row is dropped — a personal space is the user's own
-   * space, not an organization with members to organize into teams. Every other row stays, since
-   * each is meaningful for a single person. **Tasks** in particular sits outside that conditional:
-   * a workspace's task roster is exactly as meaningful for one person as for fifty, so it renders
-   * for a personal workspace and a shared org alike, beside Projects and Initiatives.
+   * In a personal workspace the **Teams** and **People** rows are dropped — a personal space is
+   * the user's own space, not an organization with a roster to keep or teams to organize it into.
+   * Every other row stays, since each is meaningful for a single person. **Tasks** in particular
+   * sits outside that conditional: a workspace's task roster is exactly as meaningful for one
+   * person as for fifty, so it renders for a personal workspace and a shared org alike, beside
+   * Projects and Initiatives.
+   *
+   * **People** is a workspace destination rather than a Settings page because the people a
+   * workspace works with are not configuration. It lists everyone the workspace tracks in one
+   * name-ordered list — the volunteer who never signs in beside the staffer who does — which is
+   * why it sits with the work rows and not behind an admin gate.
    */
   const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
     { key: 'my-work', label: 'My Work', icon: Home },
@@ -220,7 +227,12 @@ export function Sidebar({
     { key: 'programs', label: programs, icon: Layers },
     { key: 'projects', label: projects, icon: FolderKanban },
     { key: 'cycles', label: cycles, icon: RefreshCw },
-    ...(personalWorkspace ? [] : [{ key: 'teams' as const, label: teams, icon: Users }]),
+    ...(personalWorkspace
+      ? []
+      : [
+          { key: 'teams' as const, label: teams, icon: Users },
+          { key: 'people' as const, label: 'People', icon: User },
+        ]),
     { key: 'views', label: 'Views', icon: LayoutGrid },
     { key: 'graph', label: 'Graph', icon: Workflow },
     { key: 'settings', label: 'Settings', icon: Settings },

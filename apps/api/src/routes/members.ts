@@ -2,16 +2,27 @@
  * `@docket/api` — members router (mounted at `/v1/orgs/:orgId/members`).
  *
  * @remarks
- * Members are human {@link actor}s carrying a role. New membership flows through
- * invitations: create a pending row (`POST /invitations` or the legacy `POST /invite`),
- * list the pending ones (`GET /invitations`), accept by token (`POST /invitations/:token/accept`
- * or the legacy `POST /accept-invite`) which materializes the human Actor for the
- * accepting User, or revoke a pending one (`DELETE /invitations/:id`). Role/status
- * patches and member removal (`DELETE /:actorId`) run the {@link lastOwnerGuard} so an
- * org always retains an active Owner; inviting into a personal org is blocked.
- * `manage` is required to mutate.
+ * Members are the workspace's **people**: every human {@link actor} carrying a role. There are
+ * two ways one comes into being and the resulting rows are indistinguishable:
+ *
+ * - **With an account** — invite by email (`POST /invitations`, or the legacy `POST /invite`),
+ *   list the pending ones (`GET /invitations`), accept by token
+ *   (`POST /invitations/:token/accept` or the legacy `POST /accept-invite`) which materializes
+ *   the human Actor for the accepting User, or revoke a pending one (`DELETE /invitations/:id`).
+ * - **Without an account** — `POST /` records the person directly (`user_id` stays null). This
+ *   is the volunteer/contractor case: someone the workspace tracks and assigns work to who will
+ *   never sign in. They are returned by `GET /`, are assignable through the same
+ *   `task.assignee_id` / `project.lead_id` / `initiative.owner_id` references, and carry the
+ *   same profile (`GET /:actorId`) as anyone else.
+ *
+ * Role/status patches and member removal (`DELETE /:actorId`) run the {@link lastOwnerGuard} so
+ * an org always retains an active Owner; adding people to a personal org is blocked either way
+ * (an org-of-one has no roster). `manage` is required to mutate.
+ *
+ * @see {@link file://../../../../docs/engineering/specs/people.md} for the full enumeration of
+ * where account-holders and account-less people are deliberately treated differently.
  */
-import { actor, db, invitation, role } from '@docket/db';
+import { actor, db, invitation, organization, role } from '@docket/db';
 import { lastOwnerGuard, LastOwnerError } from '@docket/authz';
 import {
   InvitationAccept,
@@ -23,7 +34,7 @@ import {
   MemberUpdate,
   pageOf,
 } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
@@ -34,6 +45,7 @@ import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
+import { loadPersonProfile, PersonCreate, PersonProfileOut, PersonUpdate } from './actors';
 import {
   acceptInvitation,
   actorIdParam,
@@ -52,17 +64,96 @@ const members = new Hono<AppEnv>()
       tag: 'Members',
       summary: 'List members',
       response: pageOf(MemberOut),
-      description: `List the organization's members — every **human Actor** (\`kind = 'human'\`) in the org, each carrying its display name, avatar, status (\`active\` | \`suspended\`), role id, and backing \`userId\`. Agents (\`kind = 'agent'\`) and team actors (\`kind = 'team'\`) are excluded; this endpoint is the people roster, not the full actor set. Both \`active\` and \`suspended\` members are returned so an admin can see and re-activate suspended seats.
+      description: `List the workspace's people — every **human Actor** (\`kind = 'human'\`) in the org, each carrying its display name, avatar, status (\`active\` | \`suspended\`), role id, and backing \`userId\`. Agents (\`kind = 'agent'\`) and team actors (\`kind = 'team'\`) are excluded; this endpoint is the people roster, not the full actor set. Both \`active\` and \`suspended\` people are returned so an admin can see and re-activate suspended seats.
+
+**Account-holders and account-less people are one list.** A person added by \`POST /\` carries \`userId: null\`; a person who redeemed an invitation carries their Better Auth user id. Nothing filters on that column, and the ordering is a plain case-insensitive sort by \`displayName\` — never by account presence, join date, or insertion order — so the two kinds interleave by name and no client can accidentally render them as two groups.
 
 Requires only org membership (no \`manage\`): any member, resolved by \`orgContextMiddleware\`, may see who else is in the org. Returns the standard \`{ items }\` page envelope of \`MemberOut\`. To enumerate non-human actors see the agents router; to see outstanding invitations (people not yet members) see \`GET /invitations\`.`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      // Sorted by name, case-insensitively, so an account-less person lands exactly where their
+      // name puts them. Insertion order would have grouped every account-less person after every
+      // account-holder purely because the create path is newer — a second-class ordering nobody
+      // chose. `lower(...)` keeps "ada" beside "Ada" instead of after "Zoë".
       const rows = await db
         .select()
         .from(actor)
-        .where(and(eq(actor.organizationId, orgId), eq(actor.kind, 'human')));
+        .where(and(eq(actor.organizationId, orgId), eq(actor.kind, 'human')))
+        .orderBy(asc(sql`lower(${actor.displayName})`), asc(actor.id));
       return ok(c, pageOf(MemberOut), { items: rows.map(toMemberOut) });
+    },
+  )
+  .post(
+    '/',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: 'Add a person without an account',
+      capability: 'manage',
+      response: MemberOut,
+      description: `Record a person this workspace tracks who does **not** hold a Docket account — a volunteer, a contractor, a colleague who will never sign in. It inserts a human Actor with \`user_id = null\`, which is the *only* difference from a member who accepted an invitation. That person is then assignable exactly like anyone else: \`task.assignee_id\`, \`project.lead_id\` and \`initiative.owner_id\` all reference \`actor.id\` and none of them consults \`user_id\`.
+
+Requires the \`manage\` capability — adding someone to the roster is the same authority as inviting them. The \`organizationId\` comes from the verified actor context, never the body. A supplied \`roleId\` MUST belong to THIS org (404, existence-hiding, otherwise) for the same reason \`POST /invitations\` validates it: \`actor.role_id → role.id\` is a bare global FK, so an unvalidated cross-org role would confer another tenant's capabilities. When \`roleId\` is omitted the org's \`member\` role is used if it exists, so the person sorts and reads like every other member rather than as a role-less oddity.
+
+Adding a person to a **personal organization** is rejected with **409**, matching \`POST /invitations\`: a personal workspace is an org-of-one and has no roster. Returns the created \`MemberOut\` — the identical shape \`GET /\` and \`POST /invitations/:token/accept\` return. To give this person an account later, invite their email; to edit their name use \`PATCH /:actorId/profile\`; to remove them use \`DELETE /:actorId\`.`,
+    }),
+    zJson(PersonCreate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const body = c.req.valid('json');
+
+      const orgRows = await db
+        .select({ isPersonal: organization.isPersonal })
+        .from(organization)
+        .where(eq(organization.id, orgId))
+        .limit(1);
+      const org = orgRows[0];
+      /* v8 ignore next -- @preserve org context middleware proved the workspace exists */
+      if (!org) throw new NotFoundError('Organization not found');
+      if (org.isPersonal) {
+        throw new ConflictError('Cannot add people to a personal workspace');
+      }
+
+      // Same cross-org role guard `createInvitation` applies: `actor.role_id → role.id` is a bare
+      // global FK, and org context resolves capabilities through it.
+      let roleId: string | null = body.roleId ?? null;
+      if (roleId !== null) {
+        const roleRows = await db
+          .select({ id: role.id })
+          .from(role)
+          .where(and(eq(role.id, roleId), eq(role.organizationId, orgId)))
+          .limit(1);
+        if (!roleRows[0]) throw new NotFoundError('Role not found');
+      } else {
+        // Default to the org's `member` role so an account-less person holds the same baseline
+        // as everyone else. A role on someone who never signs in confers nothing at
+        // authentication time; what it does is make them read and sort identically — and it is
+        // already correct the moment an account is linked to them.
+        const memberRole = await db
+          .select({ id: role.id })
+          .from(role)
+          .where(and(eq(role.organizationId, orgId), eq(role.key, 'member')))
+          .limit(1);
+        roleId = memberRole[0]?.id ?? null;
+      }
+
+      const inserted = await db
+        .insert(actor)
+        .values({
+          organizationId: orgId,
+          kind: 'human',
+          displayName: body.displayName,
+          avatar: body.avatar ?? null,
+          userId: null,
+          roleId,
+        })
+        .returning();
+      const row = inserted[0];
+      /* v8 ignore next -- @preserve defensive: insert always returns a row */
+      if (!row) throw new Error('person actor insert returned no row');
+      await enqueueSearchUpsert(orgId, 'actor', row.id);
+      return ok(c, MemberOut, toMemberOut(row));
     },
   )
   .post(
@@ -200,6 +291,69 @@ Returns **404** when no pending invitation with that id exists in the org (it wa
       const row = updated[0];
       if (!row) throw new NotFoundError('Pending invitation not found');
       return ok(c, InvitationRevokeOut, { id: row.id, revoked: true });
+    },
+  )
+  .get(
+    '/:actorId/profile',
+    apiDoc({
+      tag: 'Members',
+      summary: "Get a person's workspace profile",
+      response: PersonProfileOut,
+      description: `Fetch one person's profile: their name, avatar, participation status, the org role they hold (id **and** resolved name), and the work they are on the hook for — active tasks assigned to them, projects they lead, and initiatives they own, each org-scoped and each sorted for reading rather than by insertion.
+
+The target must be a human Actor in this org; anything else 404s (existence-hiding), which covers a cross-tenant id, an agent actor, and a team actor alike. Requires only org membership (no \`manage\`): who someone is and what they are carrying is roster information, the same as \`GET /\`.
+
+**This endpoint answers the same question for every person.** It has no field reporting whether the person holds a Docket account, so a client cannot branch its rendering on that — an account-less volunteer's profile resolves, renders and lists assigned work exactly like an account-holder's. Their \`userId\` is available on \`GET /\` for the few surfaces that genuinely need it (see \`docs/engineering/specs/people.md\`).`,
+    }),
+    zParam(actorIdParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { actorId } = c.req.valid('param');
+      return ok(c, PersonProfileOut, await loadPersonProfile(orgId, actorId));
+    },
+  )
+  .patch(
+    '/:actorId/profile',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Members',
+      summary: "Update a person's name or avatar",
+      capability: 'manage',
+      response: PersonProfileOut,
+      description: `Rename a person or re-point their avatar. Both fields are optional; an absent key leaves the column untouched and \`avatar: null\` clears it. Requires \`manage\`, and the target must be a human Actor in this org (404 otherwise, existence-hiding).
+
+This writes \`actor.display_name\` / \`actor.avatar\` — the **workspace-owned** identity, which every human Actor has. For an account-less person it is the only place their name lives. For an account-holder it is the copy taken from their account at join time and never re-synced, so editing it renames them in this workspace without touching their account; their own Settings → Profile still governs their account name. The operation is offered on the same terms to both, so there is no person in the roster whose name the workspace cannot correct.
+
+Role and status live on \`PATCH /:actorId\` (they carry the last-owner guard); this endpoint deliberately cannot change either. Returns the person's refreshed {@link PersonProfileOut}.`,
+    }),
+    zParam(actorIdParam),
+    zJson(PersonUpdate),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { actorId } = c.req.valid('param');
+      const body = c.req.valid('json');
+
+      const targetRows = await db
+        .select({ id: actor.id })
+        .from(actor)
+        .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId), eq(actor.kind, 'human')))
+        .limit(1);
+      if (!targetRows[0]) throw new NotFoundError('Person not found');
+
+      const values = {
+        ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
+        ...(body.avatar !== undefined ? { avatar: body.avatar } : {}),
+      };
+      // An empty patch is a valid no-op: skip the UPDATE and re-read, exactly as the org and
+      // project patches do, rather than issuing a SET with nothing in it.
+      if (Object.keys(values).length > 0) {
+        await db
+          .update(actor)
+          .set(values)
+          .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)));
+        await enqueueSearchUpsert(orgId, 'actor', actorId);
+      }
+      return ok(c, PersonProfileOut, await loadPersonProfile(orgId, actorId));
     },
   )
   .patch(

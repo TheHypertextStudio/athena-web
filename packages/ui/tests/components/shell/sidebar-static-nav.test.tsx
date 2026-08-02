@@ -21,6 +21,7 @@ const WORKSPACE_LABELS = [
   'Projects',
   'Cycles',
   'Teams',
+  'People',
   'Views',
   'Graph',
   'Settings',

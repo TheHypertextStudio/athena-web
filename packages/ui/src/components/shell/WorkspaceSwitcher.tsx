@@ -124,7 +124,13 @@ function WorkspaceMenuRow({
       className={cn('gap-2', active && 'bg-surface-container-highest text-on-surface')}
     >
       <WorkspaceAvatar workspace={workspace} />
-      <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+      {/* A real workspace name can be longer than any menu: "Willie Enterprises (dba Vibe Code
+          Cleanup Company)" is 49 characters. It ellipsizes rather than wrapping or widening the
+          menu, so `title` carries the full value for the hover/assistive reveal — an ellipsis with
+          no way to see what was cut is a name the reader cannot verify they are switching to. */}
+      <span title={workspace.name} className="min-w-0 flex-1 truncate">
+        {workspace.name}
+      </span>
       <AttentionBadge count={workspace.attentionCount ?? 0} label="need attention" />
     </DropdownMenuItem>
   );
@@ -194,7 +200,10 @@ export function WorkspaceSwitcher({
           {loading ? (
             <Skeleton className="h-4 w-24" aria-hidden="true" />
           ) : (
-            <span className="text-body-medium min-w-0 flex-1 truncate text-left font-semibold">
+            <span
+              title={triggerLabel}
+              className="text-body-medium min-w-0 flex-1 truncate text-left font-semibold"
+            >
               {triggerLabel}
             </span>
           )}

@@ -132,18 +132,22 @@ export class ProviderHttp {
    * @param path - URL path appended to the provider's API base.
    * @param body - Request body, serialized as JSON.
    * @param auth - `'bearer'` (default) prefixes the token; `'raw'` sends it verbatim.
+   * @param extraHeaders - Additional headers merged onto the defaults (e.g. Notion's mandatory
+   *   `Notion-Version`, which that API requires on every request including writes).
    * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
    */
   async postJson<T = unknown>(
     path: string,
     body: unknown,
     auth: 'bearer' | 'raw' = 'bearer',
+    extraHeaders: Record<string, string> = {},
   ): Promise<T> {
     return this.request<T>('POST', path, {
       headers: {
         Authorization: auth === 'bearer' ? `Bearer ${this.accessToken}` : this.accessToken,
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        ...extraHeaders,
       },
       body: JSON.stringify(body),
     });
@@ -154,14 +158,21 @@ export class ProviderHttp {
    *
    * @param path - URL path appended to the provider's API base.
    * @param body - Request body (typically a partial of the resource), serialized as JSON.
+   * @param extraHeaders - Additional headers merged onto the defaults (e.g. Notion's mandatory
+   *   `Notion-Version`).
    * @throws {ConnectorError} On network failure, non-2xx status, or an unparseable body.
    */
-  async patchJson<T = unknown>(path: string, body: unknown): Promise<T> {
+  async patchJson<T = unknown>(
+    path: string,
+    body: unknown,
+    extraHeaders: Record<string, string> = {},
+  ): Promise<T> {
     return this.request<T>('PATCH', path, {
       headers: {
         Authorization: `Bearer ${this.accessToken}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        ...extraHeaders,
       },
       body: JSON.stringify(body),
     });

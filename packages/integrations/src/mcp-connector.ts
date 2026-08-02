@@ -4,9 +4,71 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import {
+  MCP_UI_EXTENSION,
+  MCP_UI_META_KEY,
+  MCP_UI_MIME_TYPE,
+  type McpUiClientCapability,
+  type McpUiResourceMeta,
+  type McpUiToolMeta,
+} from '@docket/types';
 
 import { SUNSAMA_BACKLOG } from './fixtures';
 import { mcpSafeFetch } from './mcp-network';
+
+/**
+ * The MCP Apps capability Docket declares when it opens a remote session.
+ *
+ * @remarks
+ * Servers are told to check this before registering UI-enabled tools: a server that does not see
+ * it registers text-only variants. Declaring it is therefore the difference between a connected
+ * server offering Docket a widget and offering it JSON, and it costs nothing when the server does
+ * not implement the extension.
+ */
+export const MCP_UI_CLIENT_CAPABILITY: McpUiClientCapability = {
+  mimeTypes: [MCP_UI_MIME_TYPE],
+};
+
+/**
+ * Read a tool's UI metadata from its `_meta`.
+ *
+ * @remarks
+ * The stable specification puts this under `_meta.ui`. Hosts written against the pre-stable
+ * drafts looked under the full extension identifier instead, and some servers still emit only
+ * that, so both are read — `_meta.ui` first, because it is the spelling the published text uses.
+ *
+ * @param meta - A tool's or resource's `_meta`, as the server sent it.
+ * @returns the UI metadata, or `null` when the tool declares none.
+ */
+export function readUiToolMeta(meta: unknown): McpUiToolMeta | null {
+  if (typeof meta !== 'object' || meta === null) return null;
+  for (const key of [MCP_UI_META_KEY, MCP_UI_EXTENSION]) {
+    const candidate: unknown = Reflect.get(meta, key);
+    if (typeof candidate === 'object' && candidate !== null) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Spread a tool's UI metadata into a descriptor, or nothing when it declares none.
+ *
+ * @param meta - A tool's `_meta`, as the server sent it.
+ * @returns `{ ui }` or an empty object, so `exactOptionalPropertyTypes` stays satisfied.
+ */
+function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta } {
+  const ui = readUiToolMeta(meta);
+  return ui ? { ui } : {};
+}
+
+/**
+ * Read a UI resource's `_meta.ui`, which carries its CSP and permission declarations.
+ *
+ * @param meta - The `_meta` on a `resources/read` content item.
+ * @returns the resource metadata, or `null` when it declares none.
+ */
+export function readUiResourceMeta(meta: unknown): McpUiResourceMeta | null {
+  return readUiToolMeta(meta) as McpUiResourceMeta | null;
+}
 
 /** A remote MCP endpoint plus its unsealed credential. */
 export interface McpEndpoint {
@@ -36,6 +98,26 @@ export interface RemoteToolDescriptor {
   readonly inputSchema: Record<string, unknown>;
   /** Declared annotations; absent hints classify as writes. */
   readonly annotations?: RemoteToolAnnotations;
+  /**
+   * The tool's MCP Apps metadata, when it declares a widget.
+   *
+   * @remarks
+   * Present means the server offers a `ui://` document to render this tool's result through. The
+   * agent path ignores it; the Athena UI reads `resourceUri` and asks for that resource.
+   */
+  readonly ui?: McpUiToolMeta;
+}
+
+/** One `ui://` document read from a remote server. */
+export interface RemoteUiResource {
+  /** The `ui://` uri. */
+  readonly uri: string;
+  /** The mimeType the server served it as. */
+  readonly mimeType: string;
+  /** The HTML document. */
+  readonly text: string;
+  /** The resource's `_meta.ui`, carrying its declared CSP and permissions. */
+  readonly meta?: McpUiResourceMeta;
 }
 
 /** The serialized outcome of one remote tool call. */
@@ -62,6 +144,23 @@ export interface RemoteMcpSession {
   listTools(): Promise<readonly RemoteToolDescriptor[]>;
   /** Call one tool by its un-namespaced name. */
   callTool(name: string, input: unknown): Promise<RemoteToolResult>;
+  /**
+   * Call one tool and keep the whole `CallToolResult`.
+   *
+   * @remarks
+   * {@link RemoteMcpSession.callTool} flattens to text because that is what the agent loop reads.
+   * A widget needs the structure — `structuredContent`, image blocks, `isError` — so the MCP Apps
+   * host path uses this instead of re-parsing flattened text.
+   */
+  callToolRaw?(name: string, input: unknown): Promise<Record<string, unknown>>;
+  /**
+   * Read a `ui://` document the server advertised.
+   *
+   * @remarks
+   * Optional because a connector that serves no widgets need not implement it; the host treats an
+   * absent implementation as "this server offers no renderable UI".
+   */
+  readUiResource?(uri: string): Promise<RemoteUiResource | null>;
   /** Close the transport. */
   close(): Promise<void>;
 }
@@ -84,6 +183,267 @@ export interface FixtureMcpServer {
   readonly tools: readonly RemoteToolDescriptor[];
   /** Resolve one call by un-namespaced tool name. */
   call(name: string, input: unknown): RemoteToolResult;
+  /** The `ui://` documents this server serves, by uri. */
+  readonly uiResources?: Readonly<Record<string, RemoteUiResource>>;
+  /** The structured result for a call, when the fixture models one. */
+  callRaw?(name: string, input: unknown): Record<string, unknown>;
+}
+
+/**
+ * A widget-bearing fixture server, standing in for a third-party MCP Apps server.
+ *
+ * @remarks
+ * Exists so the MCP Apps host path can be exercised end to end — connect, list, call, render,
+ * click — without depending on someone else's uptime. It is deliberately NOT Docket: the document
+ * is its own HTML with its own styling hooks, it declares its own CSP (nothing, i.e. deny-all),
+ * and its tool is one Docket has no equivalent of.
+ *
+ * The document speaks the extension by hand rather than importing an SDK, because it runs under a
+ * policy with no network. It sends `ui/initialize`, waits for the result, announces
+ * `ui/notifications/initialized`, renders from `ui/notifications/tool-result`, and on a click
+ * calls its own server tool and pushes a `ui/update-model-context` so the agent stops describing
+ * the state the user just changed.
+ */
+export const WIDGET_FIXTURE_HTML = String.raw`<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Release checklist</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0; padding: 14px 16px;
+    font-family: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+    color: var(--color-text-primary, #1a1a1a);
+    background: var(--color-background-primary, #fff);
+  }
+  h1 { font-size: 14px; margin: 0 0 2px; }
+  p.sub { margin: 0 0 12px; font-size: 12px; color: var(--color-text-secondary, #6b6b6b); }
+  ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  li {
+    display: flex; align-items: center; gap: 8px; font-size: 13px;
+    padding: 7px 10px; border-radius: 8px;
+    background: var(--color-background-secondary, #f4f4f5);
+  }
+  li[data-done="true"] .label { text-decoration: line-through; color: var(--color-text-secondary, #6b6b6b); }
+  .count { margin-left: auto; font-size: 12px; color: var(--color-text-secondary, #6b6b6b); }
+  button {
+    font: inherit; font-size: 12px; cursor: pointer;
+    padding: 4px 10px; border-radius: 6px;
+    border: 1px solid var(--color-border-primary, #e4e4e7);
+    background: var(--color-background-primary, #fff);
+    color: var(--color-text-primary, #1a1a1a);
+  }
+  .row { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  a { color: var(--color-text-info, #2563eb); font-size: 12px; }
+</style>
+</head>
+<body>
+<h1 id="title">Release checklist</h1>
+<p class="sub" id="sub">Waiting for data…</p>
+<ul id="items"></ul>
+<div class="row">
+  <button id="advance" type="button">Mark next step done</button>
+  <a id="open" href="#">Open in Acme</a>
+</div>
+<script>
+(() => {
+  const pending = new Map();
+  let next = 1;
+  const post = (m) => window.parent.postMessage(m, '*');
+  const request = (method, params) =>
+    new Promise((resolve, reject) => {
+      const id = 'w' + String(next++);
+      pending.set(id, { resolve, reject });
+      post({ jsonrpc: '2.0', id, method, params });
+    });
+  const notify = (method, params) => post({ jsonrpc: '2.0', method, params });
+
+  const applyStyles = (context) => {
+    const variables = (context && context.styles && context.styles.variables) || {};
+    for (const key of Object.keys(variables)) {
+      if (key.indexOf('--') === 0 && variables[key]) {
+        document.documentElement.style.setProperty(key, String(variables[key]));
+      }
+    }
+  };
+
+  const render = (result) => {
+    const data = (result && result.structuredContent) || {};
+    const steps = data.steps || [];
+    document.getElementById('title').textContent = data.title || 'Release checklist';
+    const done = steps.filter((s) => s.done).length;
+    document.getElementById('sub').textContent = done + ' of ' + steps.length + ' done';
+    const list = document.getElementById('items');
+    list.textContent = '';
+    for (const step of steps) {
+      const li = document.createElement('li');
+      li.setAttribute('data-done', String(Boolean(step.done)));
+      const label = document.createElement('span');
+      label.className = 'label';
+      label.textContent = (step.done ? '✓ ' : '○ ') + step.name;
+      li.appendChild(label);
+      const owner = document.createElement('span');
+      owner.className = 'count';
+      owner.textContent = step.owner || '';
+      li.appendChild(owner);
+      list.appendChild(li);
+    }
+    const sizeTarget = document.body;
+    notify('ui/notifications/size-changed', {
+      width: sizeTarget.scrollWidth,
+      height: sizeTarget.scrollHeight,
+    });
+  };
+
+  window.addEventListener('message', (event) => {
+    const message = event.data;
+    if (!message || message.jsonrpc !== '2.0') return;
+    if (message.id !== undefined && (message.result !== undefined || message.error !== undefined)) {
+      const waiter = pending.get(message.id);
+      if (!waiter) return;
+      pending.delete(message.id);
+      if (message.error) waiter.reject(new Error('refused'));
+      else waiter.resolve(message.result);
+      return;
+    }
+    if (message.method === 'ui/notifications/tool-result') { render(message.params); return; }
+    if (message.method === 'ui/notifications/host-context-changed') { applyStyles(message.params); return; }
+    if (message.method === 'ui/resource-teardown') { post({ jsonrpc: '2.0', id: message.id, result: {} }); return; }
+  });
+
+  document.getElementById('advance').addEventListener('click', () => {
+    request('tools/call', { name: 'advance_release', arguments: {} })
+      .then(() => request('ui/update-model-context', {
+        content: [{ type: 'text', text: 'The user advanced the release checklist from the card.' }],
+      }))
+      .catch(() => {
+        document.getElementById('sub').textContent = 'Acme would not accept that change.';
+      });
+  });
+  document.getElementById('open').addEventListener('click', (event) => {
+    event.preventDefault();
+    request('ui/open-link', { url: 'https://acme.example/releases/4-2' }).catch(() => undefined);
+  });
+
+  request('ui/initialize', {
+    appInfo: { name: 'acme-release-view', version: '1.0.0' },
+    appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+    protocolVersion: '2026-01-26',
+  })
+    .then((result) => {
+      applyStyles(result && result.hostContext);
+      notify('ui/notifications/initialized', {});
+    })
+    .catch(() => {
+      document.getElementById('sub').textContent = 'This card could not reach its host.';
+    });
+})();
+</script>
+</body>
+</html>`;
+
+/** The `ui://` uri the widget fixture serves its card under. */
+export const WIDGET_FIXTURE_URI = 'ui://acme-release/checklist';
+
+const RELEASE_STEPS = [
+  { name: 'Cut the release branch', owner: 'Priya', done: true },
+  { name: 'Run the migration rehearsal', owner: 'Sam', done: true },
+  { name: 'Sign the build', owner: 'Priya', done: false },
+  { name: 'Publish the changelog', owner: 'Wren', done: false },
+];
+
+/**
+ * A third-party fixture server that returns an MCP Apps widget.
+ *
+ * @remarks
+ * Stateful on purpose: `advance_release` really does flip the next step, so a click inside the
+ * card produces a different render rather than a no-op that looks like one.
+ */
+export function createWidgetFixtureServer(): FixtureMcpServer {
+  const steps = RELEASE_STEPS.map((step) => ({ ...step }));
+  const snapshot = (): Record<string, unknown> => ({
+    title: 'Release 4.2 checklist',
+    steps: steps.map((step) => ({ ...step })),
+  });
+  const result = (): Record<string, unknown> => {
+    const remaining = steps.filter((step) => !step.done).length;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Release 4.2 checklist: ${String(steps.length - remaining)} of ${String(steps.length)} steps done.`,
+        },
+      ],
+      structuredContent: snapshot(),
+      isError: false,
+    };
+  };
+
+  return {
+    serverInfo: { name: 'acme-release', title: 'Acme Release Tracker' },
+    tools: [
+      {
+        name: 'release_checklist',
+        description: 'Show the current release checklist as an interactive card.',
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: true },
+        ui: { resourceUri: WIDGET_FIXTURE_URI },
+      },
+      {
+        name: 'advance_release',
+        description: 'Mark the next incomplete release step as done.',
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: false, destructiveHint: false },
+        ui: { resourceUri: WIDGET_FIXTURE_URI, visibility: ['model', 'app'] },
+      },
+      {
+        // Model-only on purpose: the fixture exercises the spec's visibility rule, which is the
+        // one thing a host must enforce that a widget cannot be trusted to respect.
+        name: 'abandon_release',
+        description: 'Abandon the release. The agent may do this; a card may not.',
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: false, destructiveHint: true },
+        ui: { resourceUri: WIDGET_FIXTURE_URI, visibility: ['model'] },
+      },
+    ],
+    uiResources: {
+      [WIDGET_FIXTURE_URI]: {
+        uri: WIDGET_FIXTURE_URI,
+        mimeType: MCP_UI_MIME_TYPE,
+        text: WIDGET_FIXTURE_HTML,
+        // Declares no origins at all, so the host builds a deny-all policy for it.
+        meta: { csp: {}, prefersBorder: true },
+      },
+    },
+    call(name) {
+      if (name === 'abandon_release') {
+        for (const step of steps) step.done = false;
+        return { content: JSON.stringify(snapshot()), isError: false };
+      }
+      if (name === 'release_checklist' || name === 'advance_release') {
+        if (name === 'advance_release') {
+          const next = steps.find((step) => !step.done);
+          if (next) next.done = true;
+        }
+        const raw = result();
+        return { content: JSON.stringify(raw['structuredContent']), isError: false };
+      }
+      return { content: `Unknown tool: ${name}`, isError: true };
+    },
+    callRaw(name) {
+      if (name === 'abandon_release') {
+        for (const step of steps) step.done = false;
+        return result();
+      }
+      if (name === 'advance_release') {
+        const next = steps.find((step) => !step.done);
+        if (next) next.done = true;
+      }
+      if (name === 'release_checklist' || name === 'advance_release') return result();
+      return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
+    },
+  };
 }
 
 /** The Sunsama fixture server: a read-only backlog source for the import flow. */
@@ -127,6 +487,7 @@ export const SUNSAMA_FIXTURE_SERVER: FixtureMcpServer = {
 
 const FIXTURE_SERVERS: Readonly<Record<string, FixtureMcpServer>> = {
   'mcp.sunsama.com': SUNSAMA_FIXTURE_SERVER,
+  'mcp.acme-release.example': createWidgetFixtureServer(),
 };
 
 /** Construction options for {@link MockMcpConnector}. */
@@ -160,6 +521,11 @@ export class MockMcpConnector implements McpConnector {
       serverInfo: () => server.serverInfo ?? { name: host },
       listTools: async () => server.tools,
       callTool: async (name, input) => server.call(name, input),
+      callToolRaw: async (name, input) =>
+        server.callRaw
+          ? server.callRaw(name, input)
+          : { content: [{ type: 'text', text: server.call(name, input).content }] },
+      readUiResource: async (uri) => server.uiResources?.[uri] ?? null,
       close: async () => undefined,
     };
   }
@@ -185,7 +551,12 @@ export class RealMcpConnector implements McpConnector {
         ? { requestInit: { headers: { authorization: `Bearer ${endpoint.bearerToken}` } } }
         : {}),
     });
-    const client = new Client({ name: 'docket-athena', version: '1.0.0' });
+    const client = new Client(
+      { name: 'docket-athena', version: '1.0.0' },
+      // Declaring the MCP Apps extension is what makes a server register its UI-enabled tools
+      // rather than their text-only fallbacks.
+      { capabilities: { extensions: { [MCP_UI_EXTENSION]: MCP_UI_CLIENT_CAPABILITY } } },
+    );
     await client.connect(transport);
     const serverInfo = client.getServerVersion();
     return {
@@ -199,6 +570,7 @@ export class RealMcpConnector implements McpConnector {
           name: tool.name,
           description: tool.description ?? tool.name,
           inputSchema: tool.inputSchema,
+          ...uiMetaSpread(tool._meta),
           ...(tool.annotations
             ? {
                 annotations: {
@@ -222,6 +594,28 @@ export class RealMcpConnector implements McpConnector {
           arguments: (input ?? {}) as Record<string, unknown>,
         })) as CallToolResult;
         return flatten(result);
+      },
+      callToolRaw: async (name, input): Promise<Record<string, unknown>> =>
+        await client.callTool({
+          name,
+          arguments: (input ?? {}) as Record<string, unknown>,
+        }),
+      readUiResource: async (uri): Promise<RemoteUiResource | null> => {
+        const read = await client.readResource({ uri });
+        for (const item of read.contents) {
+          const text: unknown = Reflect.get(item, 'text');
+          if (typeof text !== 'string') continue;
+          const mimeType = typeof item.mimeType === 'string' ? item.mimeType : '';
+          if (!mimeType.includes('profile=mcp-app')) continue;
+          const meta = readUiResourceMeta(item._meta);
+          return {
+            uri: typeof item.uri === 'string' ? item.uri : uri,
+            mimeType,
+            text,
+            ...(meta ? { meta } : {}),
+          };
+        }
+        return null;
       },
       close: async () => {
         await client.close();

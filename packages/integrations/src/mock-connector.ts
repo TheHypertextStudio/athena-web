@@ -15,6 +15,7 @@ import {
   LINEAR_TEAMS,
   LINEAR_WORK_GRAPH,
   MAIL_THREAD_SUMMARIES,
+  NOTION_DATA_SOURCES,
 } from './fixtures';
 import type {
   ConnectInput,
@@ -344,13 +345,15 @@ export class MockConnector implements Connector {
    *
    * @remarks
    * Returns two fixture Google Tasks lists for `gtasks` so the per-account "which lists to sync"
-   * config UI has selectable data offline, and the two {@link LINEAR_TEAMS} for `linear` so team
+   * config UI has selectable data offline, the two {@link LINEAR_TEAMS} for `linear` so team
    * selection has selectable data offline too, matching {@link
    * import('./linear').LinearProviderClient.listContainers}'s team-container
-   * shape. Every other provider has no containers.
+   * shape, and the {@link NOTION_DATA_SOURCES} databases for `notion`. Every other provider has
+   * no containers.
    */
   async listContainers(input: ListContainersInput): Promise<ResourceRef[]> {
     if (input.provider === 'linear') return [...LINEAR_TEAMS];
+    if (input.provider === 'notion') return [...NOTION_DATA_SOURCES];
     if (input.provider !== 'gtasks') return [];
     return [
       { id: '@default', title: 'My Tasks' },

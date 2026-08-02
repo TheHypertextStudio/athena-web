@@ -45,6 +45,7 @@ import { GitHubProviderClient } from './github';
 import { LinearProviderClient } from './linear';
 import { GoogleCalendarProviderClient, GoogleTasksProviderClient } from './google';
 import { GmailProviderClient } from './gmail';
+import { NOTION_API_BASE, NotionProviderClient } from './notion';
 import { ProviderHttp } from './provider-http';
 import {
   isMailActionsProviderClient,
@@ -61,6 +62,7 @@ export {
   GoogleTasksProviderClient,
 };
 export { GmailProviderClient } from './gmail';
+export { NotionProviderClient } from './notion';
 
 /** Validated configuration for {@link RealConnector} (sourced from the connection credential + env). */
 export interface RealConnectorConfig {
@@ -82,6 +84,7 @@ export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
   gmail: 'https://gmail.googleapis.com/gmail/v1',
   calendar: 'https://www.googleapis.com/calendar/v3',
   gtasks: 'https://tasks.googleapis.com/tasks/v1',
+  notion: NOTION_API_BASE,
 };
 
 /**
@@ -103,6 +106,7 @@ export const PROVIDER_CLIENT_FACTORIES: Readonly<
   gmail: (http) => new GmailProviderClient(http),
   calendar: (http) => new GoogleCalendarProviderClient(http),
   gtasks: (http) => new GoogleTasksProviderClient(http),
+  notion: (http) => new NotionProviderClient(http),
 };
 
 /**

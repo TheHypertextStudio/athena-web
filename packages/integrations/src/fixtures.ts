@@ -51,6 +51,28 @@ export const SUNSAMA_BACKLOG: readonly SunsamaBacklogItem[] = [
   { id: 'su-003', title: 'Reply to the partnership email', notes: '' },
 ];
 
+/**
+ * The mock Notion data source (database) id the fixture items belong to.
+ *
+ * @remarks
+ * The real data source id of the "Tasks Tracker" database in the Las Vegans for Better Transit
+ * Notion workspace. Using the real id (rather than a made-up one) means the offline fixtures and
+ * a live run address the same collection, so a mapping bug cannot hide behind a fake id.
+ */
+export const NOTION_TASKS_DATA_SOURCE_ID = '383c7791-208f-802e-9508-000b6d244e57';
+
+/**
+ * The mock Notion databases {@link MockConnector.listContainers} offers for `notion`.
+ *
+ * @remarks
+ * Mirrors what the real workspace exposes: the team's own task database plus Notion's built-in
+ * personal task database, so the "which databases to sync" picker has selectable data offline.
+ */
+export const NOTION_DATA_SOURCES: readonly ResourceRef[] = [
+  { id: NOTION_TASKS_DATA_SOURCE_ID, title: 'Tasks Tracker' },
+  { id: '6f60a403-0e08-47a3-8948-9fa25cdf97be', title: 'My Tasks' },
+];
+
 /** One deterministic imported item per provider, with provenance. */
 export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly ImportedItem[]>> = {
   github: [
@@ -178,6 +200,43 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
         externalUpdatedAt: FIXED_NOW,
         externalEtag: 'etag-gtasks-003',
         externalListId: 'mock-list-work',
+      },
+    },
+  ],
+  // Shaped after the real "Tasks Tracker" database in the Las Vegans for Better Transit Notion
+  // workspace (title/status/due date/description), so the offline mock exercises the same
+  // mapping the live adapter does. Notion has no entity tag, so no `externalEtag` — matching the
+  // real client, which never invents one.
+  notion: [
+    {
+      id: '01HZ0000000000000000NT0001',
+      kind: 'issue',
+      title: 'Submit Form 1023-EZ for 501(c)(3) application',
+      body: 'Attach the bylaws and the EIN letter before filing.',
+      completed: false,
+      dueDate: '2026-02-15',
+      provenance: {
+        provider: 'notion',
+        externalId: '386c7791-208f-80e6-a74e-da40db98177e',
+        externalUrl: 'https://www.notion.so/386c7791208f80e6a74eda40db98177e',
+        importedAt: FIXED_NOW,
+        externalUpdatedAt: FIXED_NOW,
+        externalListId: NOTION_TASKS_DATA_SOURCE_ID,
+      },
+    },
+    {
+      id: '01HZ0000000000000000NT0002',
+      kind: 'issue',
+      title: 'Appoint a Treasurer',
+      completed: false,
+      dueDate: null,
+      provenance: {
+        provider: 'notion',
+        externalId: '386c7791-208f-80f4-9baf-d7eb1d60de23',
+        externalUrl: 'https://www.notion.so/386c7791208f80f49bafd7eb1d60de23',
+        importedAt: FIXED_NOW,
+        externalUpdatedAt: FIXED_NOW,
+        externalListId: NOTION_TASKS_DATA_SOURCE_ID,
       },
     },
   ],

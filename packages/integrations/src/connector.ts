@@ -282,9 +282,14 @@ export interface WritableConnector {
  * mutation is a separate capability, so a mail provider never joins this set. The real
  * connectors' capability is structural (the client implements the writable provider-client
  * interface); a boundary test asserts manifest ⇔ structure agree.
+ *
+ * `notion` joins `gtasks` here because Notion's whole reason for existing as a Docket connector
+ * is that Docket must be able to supersede it: local edits have to reach the Notion page, or the
+ * incumbent tool can never be abandoned. Notion's OAuth grant carries write capability with no
+ * additional scope to request, so — unlike Linear — it can default write-back on at connect.
  */
 export const WRITE_BACK_CAPABLE_PROVIDERS: ReadonlySet<ConnectorProvider> =
-  new Set<ConnectorProvider>(['gtasks']);
+  new Set<ConnectorProvider>(['gtasks', 'notion']);
 
 /**
  * The connector port: a single typed edge for connecting to a provider and pulling /

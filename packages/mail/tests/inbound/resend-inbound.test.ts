@@ -16,7 +16,9 @@ import {
 } from '../../src/resend-inbound';
 import { signSvixPayload } from '../../src/svix-signature';
 
-const SECRET = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw';
+// Credential-shaped but invented: the adapter's real verification runs in these tests, so the
+// fixture has to look exactly like a provider signing secret.
+const SECRET = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw'; // gitleaks:allow
 const NOW = new Date(1_700_000_000_000);
 
 /** Sign a body the way the provider would, so the adapter's own verification runs for real. */

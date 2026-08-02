@@ -14,7 +14,9 @@ import {
   verifySvixSignature,
 } from '../../src/svix-signature';
 
-const SECRET = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw';
+// Credential-shaped but invented: these tests mint their own valid signatures rather than stub
+// verification, so the fixture has to look exactly like a real provider signing secret.
+const SECRET = 'whsec_MfKQ9r8GKYqrTwjUPD8ILPZIo2LaLaSw'; // gitleaks:allow
 const PAYLOAD = '{"type":"email.received","data":{"email_id":"m1"}}';
 const ID = 'msg_2abc';
 

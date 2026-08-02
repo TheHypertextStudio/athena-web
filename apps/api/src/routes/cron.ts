@@ -27,6 +27,7 @@ import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
 import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 import { reapIdleSessions } from '../mcp/session-registry';
+import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
@@ -62,6 +63,15 @@ const cron = new Hono()
   .post('/sync-connectors', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepConnectorSync(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Elicitation deadlines: nothing Athena asks may pend forever. A question whose raiser declared
+  // a defensible default is answered by Athena with her reasoning recorded; every other overdue
+  // question is parked with nothing mutated, and the person is told the work is waiting on them.
+  // Idempotent: a settled question is never re-swept.
+  .post('/elicitation-deadlines', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepElicitations(new Date());
     return c.json({ swept: true, ...result });
   })
   // Email-to-task ingest: pull threads from every opted-in Gmail integration and synthesize

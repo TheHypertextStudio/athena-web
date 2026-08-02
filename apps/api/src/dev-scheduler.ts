@@ -14,6 +14,7 @@ import { db } from '@docket/db';
 import { sweepAccountExports } from './account/export';
 import { sweepAccountDeletions } from './account/lifecycle';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
+import { sweepElicitations } from './services/elicitation-service';
 
 /** How often the dev scheduler runs the account sweeps (short, so exports feel responsive). */
 const TICK_MS = 3000;
@@ -26,6 +27,10 @@ export function startDevScheduler(): void {
       await sweepAccountExports(db, now.toISOString());
       await sweepAccountDeletions(db, now.toISOString());
       await sweepCalendarSync(now);
+      // Locally there is no Cloud Scheduler, so without this a question's deadline would never
+      // arrive and "nothing pends forever" would be false in exactly the environment it is
+      // demonstrated in.
+      await sweepElicitations(now);
     } catch (err) {
       console.error('[dev-cron] sweep failed:', err);
     }

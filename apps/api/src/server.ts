@@ -23,12 +23,15 @@ import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
 import { cimdAuthorizeMiddleware } from './mcp/cimd';
+import { mcpAppSandboxHandler } from './mcp/apps/sandbox';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
 import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
+import inboundMail from './routes/inbound-mail';
 import ingest from './routes/ingest';
 import ingestLinearAgent from './routes/ingest-linear-agent';
+import twilioVoice from './routes/twilio-voice';
 import internalNotifications from './routes/internal-notifications';
 import internalAthenaExecution from './routes/internal-athena-execution';
 import { meAccountExportDownload } from './routes/me-account';
@@ -38,6 +41,7 @@ import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
 import integrationsLinearAgentOAuth from './routes/integrations-linear-agent-oauth';
 import integrationsMcpOAuth from './routes/integrations-mcp-oauth';
+import latticeOAuth from './routes/lattice-oauth';
 import webhooks from './routes/webhooks';
 import oauthStubProvider from './lib/oauth-stub-provider';
 
@@ -66,6 +70,10 @@ server.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
 // `/api/auth`): it carries its own Origin + session guard and is not part of the RPC
 // contract consumed by `hc<AppType>`.
 server.on(['POST', 'GET', 'DELETE'], '/mcp', mcpHandler);
+// The MCP Apps sandbox proxy. The spec requires a web host to wrap third-party widget HTML in a
+// frame served from a DIFFERENT origin than the host page; this API is that origin. The document
+// is inert — no session, no data, and a CSP that forbids it from making any request at all.
+server.get('/mcp/apps/sandbox', mcpAppSandboxHandler);
 // OAuth 2.1 RS discovery (mcp-surface.md §2.3): the Protected Resource Metadata document
 // (RFC 9728, served at both the bare path and the `/mcp` sub-path) the `WWW-Authenticate`
 // challenge points at, plus the Authorization Server metadata pointer (RFC 8414).
@@ -107,6 +115,10 @@ server.route('/internal/athena/execution', internalAthenaExecution);
 server.route('/internal/integrations/github', integrationsGithub);
 server.route('/internal/integrations/linear-agent', integrationsLinearAgentOAuth);
 server.route('/internal/integrations/mcp', integrationsMcpOAuth);
+server.route('/internal/integrations/lattice', latticeOAuth);
+// Inbound telephony. A machine edge like the others: self-authed by the Twilio request
+// signature, outside `/v1`, and never session-gated — the caller is a telephone.
+server.route('/internal/telephony/twilio', twilioVoice);
 server.route('/internal/cron', cron);
 // The local/test-only fake OAuth 2.0 identity provider behind the `test-oauth` generic-oauth
 // provider (SCR-07's real-ceremony fixture — see `packages/auth/src/auth-builder.ts` and
@@ -122,6 +134,10 @@ if (env.APP_MODE === 'local' || env.APP_MODE === 'test') {
 // but still outside `/v1`/OpenAPI — a machine edge like the ones above, self-authed per provider
 // (Google: the channel/token/resource-id headers, never the request body).
 server.route('/webhooks/calendar', calendarWebhook);
+// Athena's inbound mail. Beside the calendar webhook for the same structural reason: Docket
+// registers this exact URL with the receiving provider, so it is a public machine edge that
+// authenticates itself (the provider's signature over the raw body), not an internal call.
+server.route('/webhooks/mail', inboundMail);
 // User-facing non-RPC edges that stay on `/v1`: the SSE live stream, and the binary account
 // export download (GET registered before the typed app so its path matches; the typed app still
 // owns POST /v1/me/account/exports).

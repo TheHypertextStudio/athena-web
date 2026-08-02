@@ -21,6 +21,9 @@ import {
 import { queryKeys, useLiveApiQuery } from '@/lib/query';
 
 import { AthenaConversationBrowser } from './athena-conversation-browser';
+import { ElicitationQueue } from './elicitation-queue';
+import { VoiceLaunch } from './voice-launch';
+import { AthenaMcpPanel } from './athena-mcp-panel';
 import { AthenaWorkbench } from './athena-workbench';
 import { useAthenaActions } from './use-athena-actions';
 
@@ -283,6 +286,9 @@ export function AthenaWorkspace({
             <span>{queue.data.counts.working} working</span>
           </div>
         ) : null}
+        {/* Voice is a mode of this conversation, so its control lives here rather than behind a
+            settings tab or a separate route. */}
+        <VoiceLaunch workspaceId={workspaceFilter ?? null} />
       </header>
 
       {actions.feedback ? (
@@ -330,6 +336,12 @@ export function AthenaWorkspace({
                 topics derived from what you said, a keyword lookup, and a date range. */}
             <div className="border-outline-variant border-b p-3">
               <AthenaConversationBrowser className="max-h-72" />
+            </div>
+            {/* Connecting an MCP server and using what it gave you are one activity, so the
+                connect flow and the cards it brings live on the Athena surface itself. The route
+                never changes and the conversation stays behind the dialog. */}
+            <div className="border-outline-variant border-b">
+              <AthenaMcpPanel />
             </div>
             {groups.map((group) => (
               <section key={group.key} aria-labelledby={`athena-lane-${group.key}`}>
@@ -386,6 +398,13 @@ export function AthenaWorkspace({
           </nav>
 
           <main className="flex min-h-[32rem] min-w-0 shrink-0 flex-col @3xl:min-h-0">
+            {/* What Athena is waiting on sits above the work log, inside the conversation that
+                raised it — a question exists to unblock the work you are already looking at, so
+                filing it on a surface of its own would recreate the context hunt. */}
+            <ElicitationQueue
+              organizationId={workbenchSession?.workspace?.id ?? workspaceFilter}
+              className="px-4 pt-4 @2xl:px-6"
+            />
             {/* placeholder: the selected session's transcript and proposals. Gated on a session
                 actually being selected, so an empty workbench shows its empty state instead. */}
             {effectiveSelectedId && detail.isPending ? (

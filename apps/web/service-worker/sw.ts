@@ -22,6 +22,7 @@
  * `SKIP_WAITING`, the worker activate, and the page reload. Swapping the worker out from under a
  * live tab would otherwise mix old chunks with new ones mid-session.
  */
+import { answerEndpoint, readPushPayload, resolveNotificationIntent } from './elicitation-push';
 import { routeRequest } from './routing';
 import { cacheFirst, navigateWithFallback, staleWhileRevalidate } from './strategies';
 
@@ -31,6 +32,8 @@ declare const self: ServiceWorkerGlobalScope;
 declare const __SW_BUILD_ID__: string;
 /** Replaced at build time: `'production'` or `'development'`. */
 declare const __SW_MODE__: string;
+/** Replaced at build time with `NEXT_PUBLIC_API_URL` — a worker cannot read the app's env. */
+declare const __SW_API_ORIGIN__: string;
 
 const VERSION = __SW_BUILD_ID__;
 const PRODUCTION = __SW_MODE__ === 'production';
@@ -121,6 +124,83 @@ self.addEventListener('fetch', (event) => {
       );
       return;
   }
+});
+
+/**
+ * Show one of Athena's questions as an actionable notification.
+ *
+ * @remarks
+ * `actions` is what makes this more than a nudge: a confirmation or a short selection arrives with
+ * its own answers as buttons, so the question can be settled from the banner. `renotify` is off and
+ * `tag` is the question id, so re-announcing a question replaces its banner instead of stacking.
+ */
+self.addEventListener('push', (event) => {
+  const payload = readPushPayload(event.data?.text() ?? null);
+  if (!payload) return;
+  // `actions` is only declared on the ServiceWorker flavour of `NotificationOptions`, which this
+  // project's TS lib does not carry; the cast is the narrowest place to acknowledge that.
+  const options = {
+    body: payload.body,
+    tag: payload.tag,
+    data: payload.data,
+    icon: '/icons/icon-192.png',
+    badge: '/icon.svg',
+    requireInteraction: payload.requireInteraction,
+    actions: payload.actions.map((action) => ({ ...action })),
+  } as NotificationOptions;
+  event.waitUntil(self.registration.showNotification(payload.title, options));
+});
+
+/**
+ * Answer from the banner, or land on the question in the context of its task.
+ *
+ * @remarks
+ * The answer POST is cross-origin to the API but same-site, so the session cookie rides along with
+ * `credentials: 'include'`. If it does not (a revoked session, an offline device), the worker falls
+ * back to opening the question — the person still gets there, and nothing silently reports an
+ * answer that was never recorded.
+ */
+self.addEventListener('notificationclick', (event) => {
+  const notification = event.notification;
+  notification.close();
+  const intent = resolveNotificationIntent(
+    event.action,
+    (notification.data ?? {}) as Record<string, unknown>,
+  );
+  if (intent.kind === 'ignore') return;
+
+  event.waitUntil(
+    (async () => {
+      if (intent.kind === 'answer') {
+        try {
+          const response = await fetch(answerEndpoint(__SW_API_ORIGIN__, intent.elicitationId), {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: intent.value }),
+          });
+          if (response.ok) return;
+        } catch {
+          // Fall through to opening the question.
+        }
+      }
+      const url = intent.url;
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of windows) {
+        if (client.url.includes(url)) {
+          await client.focus();
+          return;
+        }
+      }
+      const existing = windows[0];
+      if (existing) {
+        await existing.navigate(url);
+        await existing.focus();
+        return;
+      }
+      await self.clients.openWindow(url);
+    })(),
+  );
 });
 
 export {};

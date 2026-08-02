@@ -18,20 +18,30 @@ import { db } from '@docket/db';
 import { Hono } from 'hono';
 
 import agenda from './routes/agenda';
+import athenaMail from './routes/athena-mail';
 import config from './routes/config';
 import connectedApps from './routes/connected-apps';
 import { createContactPointRoutes } from './routes/contact-points';
+import { createPhoneNumberRoutes } from './routes/phone-numbers';
+import { PhoneVerificationService } from './routes/phone-verification';
+import { createVoiceRoutes } from './routes/voice-sessions';
+import { getContainer } from './container';
 import type { AppEnv } from './context';
 import dailyPlan from './routes/daily-plan';
+import scheduleWeek from './routes/schedule-week';
+import directiveFeed from './routes/schedule-week-directive';
 import hubRouter from './routes/hub';
 import meAccount from './routes/me-account';
+import elicitations, { webPushRoutes } from './routes/elicitations';
 import meAthena from './routes/me-athena';
 import meCalendar from './routes/me-calendar';
 import meIdentities from './routes/me-identities';
 import { createMeNotificationsRoutes } from './routes/me-notifications';
 import meRecovery from './routes/me-recovery';
 import meSessions from './routes/me-sessions';
+import lattice from './routes/lattice';
 import personalAthena from './routes/personal-athena';
+import mcpAppHostRoutes from './mcp/apps/host-routes';
 import time from './routes/time';
 import { createAdminRoutes } from './routes/admin';
 import { createAdminNotificationRoutes } from './routes/admin-notifications';
@@ -62,6 +72,9 @@ const notificationInbox = new NotificationInboxService(db);
 const notificationIntents = new NotificationIntentService(db);
 const notificationPreferences = new NotificationPreferenceService(db);
 const notificationContactPoints = new NotificationContactPointService(db);
+// Phone verification and voice both resolve their boundary adapters from the one container, so
+// local runs use the capturing SMS double and the fixture realtime provider with no accounts.
+const phoneVerification = new PhoneVerificationService({ sms: getContainer().sms });
 
 /** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -70,6 +83,8 @@ const routes = app
   .route('/orgs', orgs)
   .route('/notifications', createNotificationsRoutes(notificationInbox, notificationIntents))
   .route('/daily-plan', dailyPlan)
+  .route('/schedule-week', scheduleWeek)
+  .route('/directive', directiveFeed)
   .route('/agenda', agenda)
   .route('/time', time)
   .route('/hub', hubRouter)
@@ -82,11 +97,24 @@ const routes = app
     createNotificationPreferenceRoutes(notificationPreferences),
   )
   .route('/me/contact-points', createContactPointRoutes(notificationContactPoints))
+  .route('/me/phone-numbers', createPhoneNumberRoutes(phoneVerification))
+  // Registered before `/me/athena` so the more specific voice prefix is matched first.
+  .route('/me/athena/voice', createVoiceRoutes(getContainer().voice))
   .route('/me/account', meAccount)
   .route('/me/athena', meAthena)
+  .route('/me/elicitations', elicitations)
+  .route('/me/web-push', webPushRoutes)
   .route('/me/recovery-codes', meRecovery)
   .route('/me/sessions', meSessions)
   .route('/me/athena', personalAthena)
+  .route('/me/athena', lattice)
+  // Athena's own inbox. Mounted at the same `/me/athena` prefix as the two routers above (Hono
+  // composes sibling sub-apps on one prefix) so a received message reads as part of Athena rather
+  // than as a separate mail product.
+  .route('/me/athena/mail', athenaMail)
+  // Docket's MCP Apps host: the browser asks these for a connected server's widget document and
+  // for the tool calls a rendered widget issues, so no remote credential ever leaves this process.
+  .route('/me/athena/mcp-apps', mcpAppHostRoutes)
   .route('/oauth/clients', oauthClients);
 
 /** The public Hono RPC contract consumed by the web app via `hc<AppType>`. */

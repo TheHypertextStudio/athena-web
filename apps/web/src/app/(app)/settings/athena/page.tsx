@@ -12,6 +12,10 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
+import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
+
+import { LatticeSection } from './lattice-section';
+
 /** The user-owned Athena preferences destination. */
 export default function GlobalAthenaSettingsPage(): JSX.Element {
   const orgId = usePersonalWorkspaceId();
@@ -141,6 +145,8 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
           )}
         </section>
       )}
+      <VoicePhoneNumbers />
+      <LatticeSection />
       {orgId ? <McpConnectorsSection orgId={orgId} canManage={canManage} /> : null}
     </div>
   );

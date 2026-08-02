@@ -35,13 +35,17 @@ import type { AthenaApprovalMode, SessionApprovalDecision, TurnContentBlock } fr
 import { and, asc, desc, eq } from 'drizzle-orm';
 
 import { assertAgentSessionsEntitled } from '../billing/entitlement';
-import { getContainer } from '../container';
 import { ConflictError, NotFoundError } from '../error';
 import { env } from '../env';
 import { internalUserContext } from '../mcp/internal-session';
 import { resolveActor } from '../mcp/auth';
 import { decideActivity, decideProposalGroup } from '../routes/agent-session-approval';
 import type { SessionRow } from '../routes/agent-session-helpers';
+import { resolveOwnerTurnRuntime } from '../routes/lattice-backend';
+import {
+  elicitationRequestFromToolInput,
+  materializeElicitations,
+} from '../services/elicitation-service';
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
 import { buildSystemPrompt } from './system-prompt';
 import {
@@ -295,10 +299,20 @@ async function reconcileToolUse(sessionId: string, use: ToolUse): Promise<Reconc
       .from(sessionActivity)
       .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
       .orderBy(asc(sessionActivity.createdAt));
-    const reply =
-      replies.find((candidate) => candidate.body['toolUseId'] === use.id)?.body.text ??
-      replies.find((candidate) => candidate.createdAt.getTime() > prompt.createdAt.getTime())?.body
-        .text;
+    const answered =
+      replies.find((candidate) => candidate.body['toolUseId'] === use.id) ??
+      replies.find((candidate) => candidate.createdAt.getTime() > prompt.createdAt.getTime());
+    if (!answered) return { kind: 'await_input' };
+    // A typed elicitation delivers the *parsed value* the server validated — `true`, `"acme"`, an
+    // object — so the model reads back exactly what the schema promised. The prose beside it is
+    // for the person reading the transcript, and is only the fallback for a legacy free-text reply.
+    if ('elicitationAnswer' in answered.body) {
+      return {
+        kind: 'result',
+        result: { content: JSON.stringify(answered.body['elicitationAnswer']), isError: false },
+      };
+    }
+    const reply = answered.body.text;
     if (!reply) return { kind: 'await_input' };
     return { kind: 'result', result: { content: reply, isError: false } };
   }
@@ -432,7 +446,10 @@ async function driveSessionWithAdmission(
   );
   let generationTurns = 0;
 
-  const turnRuntime = deps.turnRuntime ?? getContainer().agentTurn;
+  // Per-owner backend resolution: a personal Athena whose owner pointed it at their own Lattice
+  // device runs this turn there; everyone else gets the container's process-level runtime. See
+  // `routes/lattice-backend.ts` — it never falls back, so "my machine answered" stays honest.
+  const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
   let toolbox: Awaited<ReturnType<typeof openToolbox>> | null = null;
   try {
     const openedToolbox = await openToolbox(executor);
@@ -622,6 +639,7 @@ async function driveSessionWithAdmission(
 
       // Persist the transcript and the gated/elicitation rows atomically, so a crash
       // between "model asked" and "rows exist" cannot strand an unanswerable tool_use.
+      const askedUser = uses.some((use) => use.name === ASK_USER_TOOL);
       await persistGenerationEffect(lease, deps, 'assistant-turn', async (tx) => {
         await saveTranscript(
           tx,
@@ -632,12 +650,22 @@ async function driveSessionWithAdmission(
         );
         for (const use of uses) {
           if (use.name === ASK_USER_TOOL) {
-            const input = use.input as { question?: string };
+            const request = elicitationRequestFromToolInput(use.input);
+            // The whole tool input rides in the body, because the typed request behind this row is
+            // materialized after the fence — this transaction may not reach outside itself to
+            // create the task the question hangs off.
             await tx.insert(sessionActivity).values({
               sessionId,
               organizationId: generalActivityOrganizationId(session),
               type: 'elicitation',
-              body: { text: input.question ?? 'The agent needs your input.', toolUseId: use.id },
+              body: {
+                ...(use.input && typeof use.input === 'object'
+                  ? (use.input as Record<string, unknown>)
+                  : {}),
+                text: request.question,
+                actionSummary: request.actionSummary,
+                toolUseId: use.id,
+              },
             });
             continue;
           }
@@ -672,6 +700,11 @@ async function driveSessionWithAdmission(
           });
         }
       });
+      // Give each question raised this turn its typed request: a task to hang off, a deadline, a
+      // timeout policy, and — when it is time-sensitive — an actionable notification. Deliberately
+      // outside the fence, because creating a task is not part of this generation's transaction;
+      // it is idempotent and re-runs on the next turn if this process dies here.
+      if (askedUser) await materializeElicitations(sessionId);
       // The loop's next iteration claims every immediately runnable action before dispatch,
       // then reconciles results or parks on a proposal/elicitation.
     }

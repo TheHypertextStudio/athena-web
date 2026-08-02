@@ -185,6 +185,29 @@ export {
   translateEvents,
 } from './real-agent-runtime';
 export type { BlockBuffer, RealProviderRuntimeConfig } from './real-agent-runtime';
+export {
+  DEFAULT_LATTICE_MAX_TOKENS,
+  LatticeAgentTurnRuntime,
+  buildLatticeTurnMessages,
+  countToolUses,
+  flattenTranscript,
+  toLatticeStopReason,
+} from './lattice-turn';
+export type {
+  LatticeChatMessage,
+  LatticeChatPort,
+  LatticeChatPortRequest,
+  LatticeChatPortResult,
+  LatticeTurnRuntimeConfig,
+} from './lattice-turn';
+export {
+  latticeToolUseId,
+  parseLatticeReply,
+  renderToolCall,
+  renderToolInstructions,
+  renderToolResult,
+} from './lattice-tool-protocol';
+export type { LatticeToolParse } from './lattice-tool-protocol';
 export { RealSummarizer } from './real-summarizer';
 export type { RealSummarizerConfig } from './real-summarizer';
 export { RealTaskSynthesizer } from './real-task-synthesizer';

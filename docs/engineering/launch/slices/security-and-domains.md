@@ -147,7 +147,9 @@ synthetic single-line fixtures, one per rule (structurally realistic: `AIza` + e
 `ghp_` + exactly 36), and assert the expected ruleId comes back; the rest prove the allowlists
 suppress only what they claim (`postgres://docket:docket@localhost:5433/docket` and
 `postgres://user:pw@db.example.invalid/docket` clear;
-`postgres://neondb_owner:npg_...@ep-....neon.tech/docket` does not), that an inline
+`postgres://neondb_owner:npg_...@ep-....neon.tech/docket` does not <!-- gitleaks:allow: redacted
+illustration of a string the allowlist deliberately refuses; the scanner flagging it here is the
+behaviour this sentence documents -->), that an inline
 `gitleaks:allow` exempts its own line and not the next one, that `node_modules/` is path-exempt
 while the same bytes elsewhere still fail, that redaction never prints more than 4 characters, and
 that a config with no `[[rules]]` throws rather than passing vacuously.

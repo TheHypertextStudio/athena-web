@@ -52,6 +52,44 @@ jobs:
 
       - run: pnpm format:check
 
+      # SCR-19/SCR-20 guard: fails when a job that runs tests or checks is added to this file
+      # without being added to deploy-production.needs, or when a gating step is soft-failed
+      # (continue-on-error, `|| true`, `if: always()`). See scripts/ci-gate-policy.ts.
+      - run: pnpm ci:gate-policy
+
+  # GEN-06 clause 1: no credential may reach the default branch. Fails the run — and therefore
+  # the production deploy, via deploy-production.needs — on any finding.
+  #
+  # The gate is `scripts/secret-scan.ts`, the in-repo scanner, NOT gitleaks/gitleaks-action.
+  # The action is free for personal accounts but requires a licence key for org-owned
+  # repositories (this one is), so wiring it in as the gate would mean a job that fails on
+  # every run until someone sets GITLEAKS_LICENSE — a security gate nobody can turn green gets
+  # disabled, not fixed. The in-repo scanner reads the same `.gitleaks.toml` rules, downloads
+  # nothing, and is itself proven to fire by packages/test-utils/tests/security/secret-scan.test.ts.
+  # Scanning git *history* with the upstream binary remains a licensed follow-on; see
+  # docs/engineering/ci-gating.md.
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history so the licensed `gitleaks dir`/`gitleaks git` second opinion can be run
+          # on this same checkout without re-cloning.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+
+      - run: npm install -g corepack@0.35.0 && corepack enable
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - run: pnpm secret-scan
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -78,6 +116,12 @@ jobs:
 
       - run: pnpm turbo run test --cache-dir=.turbo
 
+      # `turbo run test` only runs *package* suites. The repository-level suites under `tests/`
+      # — the CI gate policy (tests/ci) and the launch-record reconciler (tests/launch) — belong
+      # to no workspace package, so turbo never sees them. Without this step the guards that
+      # protect this very file would not run in CI at all.
+      - run: pnpm test:tooling
+
       - id: coverage
         if: always()
         run: |
@@ -93,6 +137,38 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
+
+  # SCR-15: the repo's *gating* test command. `turbo run test` (the `test` job above) runs the
+  # suites but enforces no thresholds — every package's `test` script is a bare `vitest run`, on
+  # purpose, so the inner loop (`pnpm --filter <pkg> test`) stays fast. The thresholds in
+  # tooling/vitest/preset.ts (90 default, 100 for the trust-spine packages) only fire under each
+  # package's `test:coverage` script, so THIS is the job that makes a coverage regression fail
+  # the build. It is listed in deploy-production.needs; do not soft-fail it.
+  # Current per-package numbers and the debt this gate exposes: docs/engineering/coverage-ledger.md
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    env:
+      SKIP_ENV_VALIDATION: '1'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+
+      - run: npm install -g corepack@0.35.0 && corepack enable
+
+      - uses: actions/cache@v5
+        with:
+          path: .turbo
+          key: turbo-coverage-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-coverage-${{ runner.os }}-
+
+      - run: pnpm install --no-frozen-lockfile
+
+      - run: pnpm turbo run test:coverage --cache-dir=.turbo
 
   build:
     name: Build
@@ -205,10 +281,13 @@ jobs:
             apps/web/test-results/
           retention-days: 7
 
+  # SCR-19: `needs` must name EVERY job above that runs tests or checks. Adding a check job
+  # without adding it here would let a red check ship to production; `pnpm ci:gate-policy`
+  # (run in the `quality` job, and by tests/ci/ci-gate-policy.test.ts) fails when that happens.
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [quality, test, build, e2e]
+    needs: [quality, secret-scan, test, coverage, build, e2e]
     permissions:
       contents: read
       id-token: write

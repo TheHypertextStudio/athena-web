@@ -15,10 +15,10 @@
  */
 import { startAuthorization } from '@modelcontextprotocol/sdk/client/auth.js';
 
-import { newUser, signOut, signUp } from './helpers/app';
-import { TIMEOUTS } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { discover, exchangeCode, MCP_URL, REDIRECT_URI, registerClient } from './helpers/mcp';
+import { newUser, signOut, signUp } from '../helpers/app';
+import { TIMEOUTS } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { discover, exchangeCode, MCP_URL, REDIRECT_URI, registerClient } from '../helpers/mcp';
 
 test('an unauthenticated MCP authorize request resumes to consent after sign-in, not /today', async ({
   page,

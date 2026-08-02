@@ -12,10 +12,10 @@
  * across calls. The session state is asserted by re-reading the session resource
  * instead — the polling pattern a stateless client actually uses in production.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { expect, test } from './helpers/fixtures';
-import { discover, mcpReadResource, mcpToolCall, mintToken, registerClient } from './helpers/mcp';
-import { apiJson } from './helpers/net';
+import { signUpAndOnboard } from '../helpers/app';
+import { expect, test } from '../helpers/fixtures';
+import { discover, mcpReadResource, mcpToolCall, mintToken, registerClient } from '../helpers/mcp';
+import { apiJson } from '../helpers/net';
 
 test('an MCP client can trigger an agent session and approve its proposed action', async ({
   page,

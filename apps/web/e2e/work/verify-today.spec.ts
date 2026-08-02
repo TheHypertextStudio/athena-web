@@ -5,9 +5,9 @@
  * Throwaway spec: onboards, seeds a few timeboxed daily-plan tasks so the calendar and "Next up"
  * have real content, then screenshots the Today surface and the agenda rail (timeline + list).
  */
-import { signUpAndOnboard } from './helpers/app';
-import { expect, test } from './helpers/fixtures';
-import { apiJson } from './helpers/net';
+import { signUpAndOnboard } from '../helpers/app';
+import { expect, test } from '../helpers/fixtures';
+import { apiJson } from '../helpers/net';
 
 const DAY = new Date().toISOString().slice(0, 10);
 const at = (h: number, m = 0): string =>

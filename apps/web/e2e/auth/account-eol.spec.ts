@@ -7,9 +7,9 @@
  */
 import { readFile } from 'node:fs/promises';
 
-import { signUpAndOnboard } from './helpers/app';
-import { TIMEOUTS, settingsHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { TIMEOUTS, settingsHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
 
 test.describe('account end-of-life', () => {
   test('exports account data as a downloadable ZIP', async ({ page }) => {

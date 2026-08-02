@@ -1,12 +1,12 @@
 /** Layered-calendar page coverage over browser-visible deterministic provider fixtures. */
 import type { CalendarItemOut } from '@docket/types';
 
-import { signUpAndOnboard } from './helpers/app';
-import { CALENDAR_IDS, makeCalendarItem, makeCalendarLayer } from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
-import { scheduleItem } from './helpers/calendar-ui';
-import { orgHref, settingsHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { CALENDAR_IDS, makeCalendarItem, makeCalendarLayer } from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
+import { scheduleItem } from '../helpers/calendar-ui';
+import { orgHref, settingsHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
 
 test.describe('layered calendar', () => {
   test('read-only provider items stay visible and openable without move or resize affordances', async ({
@@ -162,6 +162,10 @@ test.describe('layered calendar', () => {
     await page.getByRole('button', { name: 'New', exact: true }).click();
     await page.getByLabel('Title').fill('Refresh layer controls');
     await page.getByRole('button', { name: 'Create event' }).click();
+    // Layer controls live in the toolbar's Calendars popover now — a permanent side column for
+    // them was costing the schedule a fifth of the page width.
+    const calendars = page.getByRole('button', { name: /^Calendars/ });
+    if ((await calendars.count()) > 0) await calendars.first().click();
     const toggle = page.getByRole('checkbox', { name: 'Toggle Focus blocks visibility' });
     await expect(toggle).toBeVisible();
 

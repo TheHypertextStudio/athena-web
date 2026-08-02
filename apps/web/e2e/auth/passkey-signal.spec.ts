@@ -8,11 +8,11 @@
  * The credential lives only in the virtual authenticator, so registration and sign-in share the one
  * test `page` (and its context).
  */
-import { newUser, signOut, signUp } from './helpers/app';
-import { RP_ID } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { apiFetch, apiJson, waitForApiResponse } from './helpers/net';
-import { installSignalSpy } from './helpers/webauthn';
+import { newUser, signOut, signUp } from '../helpers/app';
+import { RP_ID } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { apiFetch, apiJson, waitForApiResponse } from '../helpers/net';
+import { installSignalSpy } from '../helpers/webauthn';
 
 /** The passkey rows returned by `/api/auth/passkey/list-user-passkeys`. */
 interface PasskeyRow {

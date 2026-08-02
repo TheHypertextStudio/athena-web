@@ -1,14 +1,14 @@
 /** Drawer-focused layered-calendar relationships, writeback, and conflict recovery coverage. */
-import { signUpAndOnboard } from './helpers/app';
+import { signUpAndOnboard } from '../helpers/app';
 import {
   CALENDAR_IDS,
   makeCalendarItem,
   makeCalendarLayer,
   todayAt,
-} from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
-import { scheduleItem } from './helpers/calendar-ui';
-import { expect, test } from './helpers/fixtures';
+} from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
+import { scheduleItem } from '../helpers/calendar-ui';
+import { expect, test } from '../helpers/fixtures';
 
 test.describe('layered calendar drawer', () => {
   test('one calendar item can create a task and link an existing task', async ({ page }) => {

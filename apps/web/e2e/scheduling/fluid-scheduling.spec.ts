@@ -1,14 +1,14 @@
 /** Browser-level zoom, region creation, and DST contracts for the fluid scheduling canvas. */
 import type { Locator } from '@playwright/test';
 
-import { signUpAndOnboard } from './helpers/app';
+import { signUpAndOnboard } from '../helpers/app';
 import {
   CALENDAR_IDS,
   makeCalendarItem,
   makeCalendarLayer,
   shiftDate,
-} from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
+} from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import {
   attachCalendarScreenshot,
   dragScheduleRegion,
@@ -18,8 +18,8 @@ import {
   scheduleItem,
   scheduleLane,
   scheduleViewport,
-} from './helpers/calendar-ui';
-import { expect, test } from './helpers/fixtures';
+} from '../helpers/calendar-ui';
+import { expect, test } from '../helpers/fixtures';
 
 const ANCHOR_DATE = '2026-07-13';
 const ANCHOR_TIME = `${ANCHOR_DATE}T17:00:00.000Z`;
@@ -131,46 +131,71 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect(schedule).toHaveAttribute('data-lane-count', String(expandedRange.dayCount));
     await expect.poll(() => hasRangeSummary(state.rangeRequests, expandedRange)).toBe(true);
 
-    await page.getByRole('button', { name: 'Overview', exact: true }).click();
-    await expect(schedule).toHaveAttribute('data-snap-minutes', '30');
-    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(24);
-    expect(await lane.evaluate((element) => Number.parseFloat(element.style.height))).toBe(576);
-    await expect(schedule.locator('[data-schedule-label="120"]')).toContainText('2:00');
-    await expect(schedule.locator('[data-schedule-label="60"]')).toHaveCount(0);
+    // Zoom lives in exactly one place now: the Display menu. No preset button group, no `<select>`
+    // duplicate of it, and — the goal doc's specific complaint — no slider exposed on the toolbar.
+    const display = page.getByRole('button', { name: 'Display settings' });
+    await expect(page.getByRole('slider')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Standard', exact: true })).toHaveCount(0);
+    const laneHeight = async (): Promise<number> =>
+      lane.evaluate((element) => Number.parseFloat(element.style.height));
+    const chooseDensity = async (label: string): Promise<void> => {
+      await display.click();
+      await page.getByRole('menuitemradio', { name: label }).click();
+      await expect(page.getByRole('menu')).toHaveCount(0);
+    };
 
-    await page.getByRole('button', { name: 'Standard', exact: true }).click();
+    await chooseDensity('Compact');
     await expect(schedule).toHaveAttribute('data-snap-minutes', '10');
-    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(72);
-    expect(await lane.evaluate((element) => Number.parseFloat(element.style.height))).toBe(1728);
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(48);
+    expect(await laneHeight()).toBe(24 * 48);
     await expect(schedule.locator('[data-schedule-label="60"]')).toContainText('1:00');
 
-    await page.getByRole('button', { name: 'Detail', exact: true }).click();
+    await chooseDensity('Spacious');
     await expect(schedule).toHaveAttribute('data-snap-minutes', '5');
-    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(144);
-    expect(await lane.evaluate((element) => Number.parseFloat(element.style.height))).toBe(3456);
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(108);
+    expect(await laneHeight()).toBe(24 * 108);
     await expect(schedule.locator('[data-schedule-label="30"]')).toContainText('12:30');
 
-    const slider = page.getByRole('slider', { name: 'Calendar zoom' });
-    await slider.focus();
-    await slider.press('Home');
-    for (let value = 24; value < 97; value += 1) await slider.press('ArrowRight');
-    await expect(slider).toHaveValue('97');
-    await slider.blur();
-    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(97);
-    await expect(schedule).toHaveAttribute('data-snap-minutes', '5');
-    expect(await lane.evaluate((element) => Number.parseFloat(element.style.height))).toBe(2328);
-    await expect(page.getByRole('button', { name: 'Detail' })).toHaveAttribute(
-      'aria-pressed',
-      'false',
-    );
+    await chooseDensity('Default');
+    await expect(schedule).toHaveAttribute('data-snap-minutes', '10');
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(72);
+    expect(await laneHeight()).toBe(24 * 72);
 
-    await slider.focus();
-    await slider.press('End');
-    await slider.blur();
-    await expect(slider).toHaveValue('240');
+    // The compact stepper: an arbitrary value between presets is a legal state, reported as a
+    // quiet "Custom" hint rather than as a fourth thing to pick.
+    await display.click();
+    await page.getByRole('button', { name: 'Zoom in' }).click();
+    await expect(page.getByText('Custom · 125%')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(90);
+    expect(await laneHeight()).toBe(24 * 90);
+
+    // Stepping down clamps honestly: the control disables itself at the floor rather than
+    // pretending a press did something.
+    await display.click();
+    await page.getByRole('menuitem', { name: 'Reset to default' }).click();
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(72);
+    expect(await laneHeight()).toBe(24 * 72);
+
+    // Both clamps disable their own control rather than pretending a press did something.
+    const stepToBound = async (name: 'Zoom in' | 'Zoom out'): Promise<void> => {
+      await display.click();
+      const step = page.getByRole('button', { name });
+      for (let press = 0; press < 20 && !(await step.isDisabled()); press += 1) await step.click();
+      await expect(step).toBeDisabled();
+      await page.keyboard.press('Escape');
+      await expect(page.getByRole('menu')).toHaveCount(0);
+    };
+
+    await stepToBound('Zoom out');
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(24);
+    expect(await laneHeight()).toBe(24 * 24);
+
+    await stepToBound('Zoom in');
     await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(240);
     await expect(schedule).toHaveAttribute('data-snap-minutes', '5');
-    expect(await lane.evaluate((element) => Number.parseFloat(element.style.height))).toBe(5760);
+    expect(await laneHeight()).toBe(24 * 240);
 
     await schedule.evaluate((element) => {
       element.scrollTop = (10 * 60 * 240) / 60 - element.clientHeight / 2;
@@ -221,20 +246,29 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect(schedule).toBeVisible();
     await expect.poll(() => measuredLaneCount(schedule)).toBe(1);
     expect(page.viewportSize()).toEqual({ width: 390, height: 844 });
-    const narrowPreset = page.getByRole('combobox', { name: 'Calendar zoom preset' });
-    await narrowPreset.selectOption('144');
-    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(144);
-    for (const control of [
+    // On a phone the same one Display menu is still the only zoom control — there is no separate
+    // narrow-width `<select>` duplicate of it any more.
+    await expect(page.getByRole('combobox', { name: /zoom/i })).toHaveCount(0);
+    await chooseDensity('Spacious');
+    await expect.poll(() => state.preferencePatches.at(-1)?.calendar?.pixelsPerHour).toBe(108);
+
+    // The row never wraps at 390px, and every control in it keeps a real touch target.
+    const rowControls = [
       page.getByRole('button', { name: 'Today', exact: true }),
-      page.getByRole('button', { name: 'dates', exact: true }),
-      narrowPreset,
+      page.getByRole('button', { name: 'Calendars' }),
+      display,
       page.getByRole('button', { name: 'New', exact: true }),
-      page.getByRole('slider', { name: 'Calendar zoom' }),
-    ]) {
+    ];
+    for (const control of rowControls) {
       await expect
         .poll(async () => (await control.boundingBox())?.height ?? 0)
         .toBeGreaterThanOrEqual(40);
     }
+    const rowTops = await Promise.all(
+      rowControls.map(async (control) => (await control.boundingBox())?.y ?? -1),
+    );
+    // Inline neighbours share one row and one height — the old toolbar stacked into four rows here.
+    expect(Math.max(...rowTops) - Math.min(...rowTops)).toBeLessThanOrEqual(1);
     await expect
       .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
       .toBe(true);

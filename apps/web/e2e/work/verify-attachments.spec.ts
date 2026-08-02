@@ -7,10 +7,10 @@
  * `tasks/[taskId]`; a hard `page.goto` hits a Turbopack-dev catch-all), then screenshots the
  * attachments section empty and after a file upload.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { myWorkHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { apiJson } from './helpers/net';
+import { signUpAndOnboard } from '../helpers/app';
+import { myWorkHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { apiJson } from '../helpers/net';
 
 const TITLE = 'Attachments demo task';
 

@@ -3,15 +3,15 @@ import { CalendarItemId } from '@docket/types';
 import type { OrgCreateResult, ScheduleComparisonOut } from '@docket/types';
 import type { Locator, Page } from '@playwright/test';
 
-import { signUpAndOnboard } from './helpers/app';
+import { signUpAndOnboard } from '../helpers/app';
 import {
   CALENDAR_IDS,
   makeCalendarItem,
   makeCalendarLayer,
   shiftDate,
   utcAt,
-} from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
+} from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import {
   attachCalendarScreenshot,
   dragScheduleItemToLane,
@@ -19,9 +19,10 @@ import {
   scheduleItem,
   scheduleViewport,
   waitForSheetCompositorStability,
-} from './helpers/calendar-ui';
-import { expect, test } from './helpers/fixtures';
-import { apiJson } from './helpers/net';
+} from '../helpers/calendar-ui';
+import { orgHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { apiJson } from '../helpers/net';
 
 const ANCHOR_DATE = '2026-07-13';
 const NEXT_DATE = shiftDate(ANCHOR_DATE, 1);
@@ -31,6 +32,19 @@ const COLLISION_IDS = [
   CalendarItemId.parse('F5NV2AHRZ6ENW3BJS08FPX4CKT'),
   CalendarItemId.parse('F6NV2AHRZ6ENW3BJS08FPX4CKT'),
 ] as const;
+
+/**
+ * Switch the calendar's axis through the consolidated Display menu.
+ *
+ * @remarks
+ * The bare `Dates|People` pill group is gone: axis, density, and zoom all live in the one Display
+ * menu now, so there is a single place a test — or a person — looks for any of them.
+ */
+async function selectCalendarAxis(page: Page, axis: 'Dates' | 'People'): Promise<void> {
+  await page.getByRole('button', { name: 'Display settings' }).click();
+  await page.getByRole('menuitemradio', { name: axis }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+}
 
 /** Prove every critical drawer control remains inside a horizontally contained workspace. */
 async function expectDrawerContentContained(page: Page, drawer: Locator): Promise<void> {
@@ -267,7 +281,7 @@ test.describe('fluid scheduling interaction contract', () => {
     });
     await installCalendarRoutes(page, state);
     await page.goto('/calendar', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: 'people' }).click();
+    await selectCalendarAxis(page, 'People');
 
     await scheduleItem(page, CALENDAR_IDS.readOnlyEvent).body.click();
     const dialog = page.getByRole('dialog', { name: 'Shared roadmap review' });
@@ -282,7 +296,7 @@ test.describe('fluid scheduling interaction contract', () => {
     page,
   }, testInfo) => {
     await page.clock.setFixedTime(`${ANCHOR_DATE}T17:00:00.000Z`);
-    await signUpAndOnboard(page, 'FluidSafeError');
+    const { orgId } = await signUpAndOnboard(page, 'FluidSafeError');
     const state = calendarRouteState({
       layers: [makeCalendarLayer({ id: CALENDAR_IDS.nativeLayer, title: 'Docket' })],
       items: [],
@@ -335,15 +349,10 @@ test.describe('fluid scheduling interaction contract', () => {
         }),
       )
       .toBe(true);
-    // The calendar rail defaults to the Tasks panel; switch to the Agenda panel to assert its
-    // own degraded-state notice alongside the calendar's.
-    await page.getByRole('button', { name: 'Agenda' }).click();
-    const agenda = page.getByRole('complementary', { name: 'Agenda' });
-    await expect(agenda).toBeVisible();
-    await expect(agenda.getByRole('region', { name: 'Schedule' })).toBeVisible();
-    const agendaNotice = agenda.getByRole('status').filter({ hasText: safeCopy });
-    await expect(agendaNotice).toBeVisible();
-    await expect(agendaNotice.getByRole('button', { name: 'Retry' })).toBeEnabled();
+    // The Agenda panel is not registered on the calendar at all — it mounts the same scheduling
+    // canvas, so offering it here put two live time grids side by side. Exactly one, always.
+    await expect(page.locator('[aria-label="Schedule"]')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Agenda' })).toHaveCount(0);
     await expect(page.locator('body')).not.toContainText('Internal server error');
     await expect(page.locator('body')).not.toContainText('AGENT_MAX_TURNS');
     await attachCalendarScreenshot(page, testInfo, 'fluid-safe-error-overlay');
@@ -381,6 +390,18 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect.poll(() => schedule.locator('[data-schedule-tick]').count()).toBeGreaterThan(0);
 
     await expect(page.locator('body')).not.toContainText('Internal server error');
+    await expect(page.locator('body')).not.toContainText('AGENT_MAX_TURNS');
+
+    // The Agenda rail keeps its own fail-soft notice; it is simply asserted where the panel
+    // actually lives now, rather than beside the calendar it used to duplicate.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(orgHref(orgId, 'my-work'), { waitUntil: 'domcontentloaded' });
+    const agenda = page.getByRole('complementary', { name: 'Agenda' });
+    await expect(agenda).toBeVisible();
+    await expect(agenda.getByRole('region', { name: 'Schedule' })).toBeVisible();
+    const agendaNotice = agenda.getByRole('status').filter({ hasText: safeCopy });
+    await expect(agendaNotice).toBeVisible();
+    await expect(agendaNotice.getByRole('button', { name: 'Retry' })).toBeEnabled();
     await expect(page.locator('body')).not.toContainText('AGENT_MAX_TURNS');
   });
 });

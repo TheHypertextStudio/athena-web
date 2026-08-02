@@ -1,13 +1,15 @@
 /** Native browser drag coverage for scheduling a task by dropping it onto empty grid time. */
-import { signUpAndOnboard } from './helpers/app';
-import { CALENDAR_IDS, makeCalendarLayer } from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
-import { dragLocatorToLocator, scheduleLane } from './helpers/calendar-ui';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { CALENDAR_IDS, makeCalendarLayer } from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
+import { dragLocatorToLocator, scheduleLane } from '../helpers/calendar-ui';
+import { expect, test } from '../helpers/fixtures';
 
 const ANCHOR_DATE = '2026-07-13';
 
-test.use({ timezoneId: 'UTC' });
+// Dragging a task onto the grid needs the rail and the calendar on screen at the same time, so this
+// runs at the width where the shell actually docks the rail (below it the panel is an overlay).
+test.use({ timezoneId: 'UTC', viewport: { width: 1440, height: 900 } });
 
 test('schedules a task by dropping it from the Tasks rail onto the calendar grid', async ({
   page,

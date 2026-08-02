@@ -5,10 +5,10 @@
  * attaches light/dark/discard screenshots as test artifacts. Asserts the composer actually opens
  * (so a broken flow fails the run); the screenshots are for human review.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { myWorkHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { attachShot } from './helpers/ui';
+import { signUpAndOnboard } from '../helpers/app';
+import { myWorkHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { attachShot } from '../helpers/ui';
 
 test.describe('new-task composer', () => {
   test('opens and renders (light, dark, discard)', async ({ page }, testInfo) => {

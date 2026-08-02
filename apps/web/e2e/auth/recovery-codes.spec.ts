@@ -8,10 +8,10 @@
  * land back in the app, signed in; and a used code can't be replayed. Before/after stills are
  * attached to the report.
  */
-import { loseDevice, signOut, signUpAndOnboard } from './helpers/app';
-import { TIMEOUTS, settingsHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { attachShot, expectAlert } from './helpers/ui';
+import { loseDevice, signOut, signUpAndOnboard } from '../helpers/app';
+import { TIMEOUTS, settingsHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { attachShot, expectAlert } from '../helpers/ui';
 
 test.describe('recovery codes', () => {
   test('generate recovery codes, then recover a locked-out account', async ({ page }, testInfo) => {

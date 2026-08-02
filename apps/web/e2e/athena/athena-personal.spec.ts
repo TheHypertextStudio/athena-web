@@ -1,7 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
-import { signUpAndOnboard } from './helpers/app';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { expect, test } from '../helpers/fixtures';
 
 const createdAt = '2026-07-15T15:00:00.000Z';
 

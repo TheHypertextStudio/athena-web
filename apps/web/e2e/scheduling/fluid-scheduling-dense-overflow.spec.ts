@@ -1,11 +1,11 @@
 /** Browser proof that dense calendar clusters retain every direct-edit interaction. */
 import { CalendarItemId } from '@docket/types';
 
-import { signUpAndOnboard } from './helpers/app';
-import { makeCalendarItem, makeCalendarLayer, utcAt } from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
-import { attachCalendarScreenshot, scheduleItem, scheduleViewport } from './helpers/calendar-ui';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { makeCalendarItem, makeCalendarLayer, utcAt } from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
+import { attachCalendarScreenshot, scheduleItem, scheduleViewport } from '../helpers/calendar-ui';
+import { expect, test } from '../helpers/fixtures';
 
 const ANCHOR_DATE = '2026-07-13';
 const DENSE_ITEM_IDS = [

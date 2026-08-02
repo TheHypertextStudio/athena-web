@@ -1,10 +1,10 @@
 /**
  * E2E: notification preferences and contact points are manageable from the settings UI.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { TIMEOUTS, settingsHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { waitForApiResponse } from './helpers/net';
+import { signUpAndOnboard } from '../helpers/app';
+import { TIMEOUTS, settingsHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { waitForApiResponse } from '../helpers/net';
 
 test.describe('notification settings', () => {
   test('lets a user manage channels and contact points', async ({ page }) => {

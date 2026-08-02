@@ -19,10 +19,10 @@
  * The seeded case additionally pins the other half of the contract: a host-supplied default
  * (`defaultProjectId`) must be re-derived on reopen, not blanked along with the draft.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { myWorkHref, orgHref } from './helpers/constants';
-import { expect, test } from './helpers/fixtures';
-import { attachShot } from './helpers/ui';
+import { signUpAndOnboard } from '../helpers/app';
+import { myWorkHref, orgHref } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { attachShot } from '../helpers/ui';
 
 test.describe('create composers reopen pristine', () => {
   test('a seeded composer clears its draft but keeps its defaults', async ({ page }, testInfo) => {

@@ -8,8 +8,8 @@
  * (verified back through the typed `/v1` API). Also the live verification that
  * tokens are audience-bound and scope-limited by the real Better Auth AS.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { expect, test } from '../helpers/fixtures';
 import {
   authorizeInBrowser,
   discover,
@@ -19,8 +19,8 @@ import {
   mcpToolCall,
   mintToken,
   registerClient,
-} from './helpers/mcp';
-import { apiJson } from './helpers/net';
+} from '../helpers/mcp';
+import { apiJson } from '../helpers/net';
 
 test('an MCP client can discover, register, consent, read, step up, and write', async ({
   page,

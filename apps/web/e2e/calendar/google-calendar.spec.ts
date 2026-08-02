@@ -6,8 +6,8 @@
  * test's boundary; the mocked `/v1/me/calendar` + `/v1/agenda` responses stand in for linked Google
  * accounts/events while keeping the shell, routing, TanStack Query, and rendering real.
  */
-import { signUpAndOnboard } from './helpers/app';
-import { expect, test } from './helpers/fixtures';
+import { signUpAndOnboard } from '../helpers/app';
+import { expect, test } from '../helpers/fixtures';
 
 const CONNECTION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const CALENDAR_ID = '01BX5ZZKBKACTAV9WEVGEMMVRZ';

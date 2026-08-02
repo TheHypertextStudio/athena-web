@@ -2,16 +2,16 @@
 import { CalendarItemId } from '@docket/types';
 import type { Locator, Page } from '@playwright/test';
 
-import { signUpAndOnboard } from './helpers/app';
+import { signUpAndOnboard } from '../helpers/app';
 import {
   CALENDAR_IDS,
   makeCalendarItem,
   makeCalendarLayer,
   shiftDate,
-} from './helpers/calendar-fixtures';
-import { calendarRouteState, installCalendarRoutes } from './helpers/calendar-routes';
-import { attachCalendarScreenshot, scheduleLane } from './helpers/calendar-ui';
-import { expect, test } from './helpers/fixtures';
+} from '../helpers/calendar-fixtures';
+import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
+import { attachCalendarScreenshot, scheduleLane } from '../helpers/calendar-ui';
+import { expect, test } from '../helpers/fixtures';
 
 const ANCHOR_DATE = '2026-07-13';
 const NEXT_DATE = shiftDate(ANCHOR_DATE, 1);

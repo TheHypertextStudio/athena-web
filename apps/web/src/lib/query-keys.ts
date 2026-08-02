@@ -67,6 +67,10 @@ export const queryKeys = {
   recoveryCodes: () => ['me', 'recovery-codes'] as const,
   notificationPreferences: () => ['me', 'notification-preferences'] as const,
   contactPoints: () => ['me', 'contact-points'] as const,
+  /** The caller's bound phone numbers — the identities Athena answers calls from. */
+  phoneNumbers: () => ['me', 'phone-numbers'] as const,
+  /** The recent conversation a voice session continues. */
+  voiceTranscript: () => ['me', 'athena', 'voice', 'transcript'] as const,
   activeSessions: () => ['me', 'active-sessions'] as const,
   orgs: () => ['me', 'orgs'] as const,
   organization: (orgId: string) => ['org', orgId, 'detail'] as const,
@@ -82,6 +86,8 @@ export const queryKeys = {
   athena: () => ['me', 'athena'] as const,
   athenaPulse: () => ['me', 'athena', 'pulse'] as const,
   athenaSession: (sessionId: string) => ['me', 'athena', 'sessions', sessionId] as const,
+  latticeConnection: () => ['me', 'athena', 'lattice'] as const,
+  latticeDevices: () => ['me', 'athena', 'lattice', 'devices'] as const,
   calendarLayers: () => ['me', 'calendar-layers'] as const,
   calendarShares: (organizationId: string) => ['me', 'calendar-shares', organizationId] as const,
   scheduleComparison: (
@@ -123,4 +129,15 @@ export const queryKeys = {
   timeBreakdown: (params: string) => ['me', 'time', 'breakdown', params] as const,
   timeTimeline: (params: string) => ['me', 'time', 'timeline', params] as const,
   timeShareTokens: () => ['me', 'time', 'share-tokens'] as const,
+  // Weekly auto-scheduling and the daily loop. Everything nests under one `['me','plan']` prefix
+  // so a single invalidation after a planning run, a check-in answer or a review step refreshes
+  // the week, the day's directive and the review together — the three surfaces that would
+  // otherwise disagree about the same day.
+  scheduleWeek: (weekStartDate: string) => ['me', 'plan', 'week', weekStartDate] as const,
+  schedulePreferences: () => ['me', 'plan', 'preferences'] as const,
+  workShapes: () => ['me', 'plan', 'shapes'] as const,
+  dayDirective: (date: string) => ['me', 'plan', 'day', date, 'directive'] as const,
+  dayStart: (date: string) => ['me', 'plan', 'day', date, 'start'] as const,
+  dayCheckIns: (date: string) => ['me', 'plan', 'day', date, 'check-ins'] as const,
+  dayReview: (date: string) => ['me', 'plan', 'day', date, 'review'] as const,
 } as const;

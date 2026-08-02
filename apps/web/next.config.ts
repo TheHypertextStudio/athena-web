@@ -40,6 +40,12 @@ function authAllowedDevOrigins(): string[] {
  * need a nonce pipeline first) and would be introduced in report-only mode. HSTS is honored only
  * over HTTPS (ignored on localhost). `publickey-credentials-*` are intentionally NOT restricted so
  * passkeys keep working.
+ *
+ * `microphone=(self)` — not `()` — because Athena's voice mode calls `getUserMedia` from this
+ * origin. `()` blocks it outright, which the browser reports only as a permissions-policy
+ * violation in the console while the UI shows a permission denial the person cannot fix from
+ * their own browser settings. `self` still forbids every embedded third-party frame from asking.
+ * The camera and geolocation stay fully denied: nothing in Docket uses either.
  */
 const securityHeaders = [
   { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
@@ -47,7 +53,7 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(self), geolocation=()' },
 ];
 
 /**

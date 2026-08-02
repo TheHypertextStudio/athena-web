@@ -49,7 +49,7 @@ function reportInvalidEnv(issues: readonly StandardSchemaV1.Issue[]): never {
     `Invalid environment variables for the Docket API:\n${detail}\n\n` +
       'Set these in the repository-root `.env.local` (the committed local defaults) or in this ' +
       "deployment's environment. `.env.example` is the contract and carries a safe value for " +
-      'every required variable — `packages/env/tests/env-files.test.ts` keeps the two in step.\n' +
+      'every required variable — `packages/env/tests/env-files/env-files.test.ts` keeps the two in step.\n' +
       'Note: only the API refuses to boot on this. The web app will keep serving pages, so ' +
       '`/api/auth/get-session` failing is a symptom of this, not an auth bug.',
   );

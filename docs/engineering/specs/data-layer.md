@@ -215,7 +215,7 @@ Only the **today** screen is unconverted (active WIP). All adoption here is veri
 
 The **fetch-in-effect anti-pattern** — `api.v1.*` or `fetch` inside a `useEffect` (the hand-rolled loading the query layer replaces) — is an **ESLint error** across the authed product app (`apps/web/src/app/(app)/**` + `components/**`), via `dataLayerConfig` in the shared `@docket/eslint-config` preset. Auth/OAuth/onboarding flows are intentionally out of scope (they legitimately `fetch` in effects for passkey/consent ceremonies, not product data). A blanket `api.v1` ban is deliberately _not_ imposed — the toolkit legitimately calls `api.v1` inside `apiQueryOptions` within page/component files — so the rule targets the effect-driven pattern; it can broaden once query definitions are relocated into `*.query.ts` data modules.
 
-- `packages/test-utils/tests/web-error-source-policy.test.ts` scans all production TypeScript in
+- `packages/test-utils/tests/workspace-policies/web-error-source-policy.test.ts` scans all production TypeScript in
   `apps/web` and `apps/admin`. CI rejects direct `.message`, `.lastError`, `error_description`, and
   legacy string-reader use. The only explicit raw-message exemptions are the central classifier and
   query boundary files; feature code cannot add local exemptions.

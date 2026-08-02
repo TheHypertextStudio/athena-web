@@ -204,3 +204,33 @@ describe('tool → widget linkage', () => {
     expect(meta?.[UI_EXTENSION]).toBeUndefined();
   });
 });
+
+describe('spec spelling of the tool → widget metadata', () => {
+  it('carries the linkage under the stable spec key as well as the extension id', async () => {
+    const client = await connect(await seedCtx());
+    const tools = await allTools(client);
+    const meta = tools.find((t) => t.name === 'list_work')?._meta as
+      | Record<string, { resourceUri?: string }>
+      | undefined;
+
+    // The stable specification (2026-01-26) spells the linkage `_meta.ui`. The full extension id
+    // is kept alongside it for hosts written against the pre-stable drafts; `_meta` is an open
+    // map, so carrying both is how one declaration renders in either generation of host.
+    expect(meta?.['ui']?.resourceUri).toBe('ui://docket/work-list');
+    expect(meta?.[UI_EXTENSION]?.resourceUri).toBe('ui://docket/work-list');
+  });
+
+  it('leaves visibility unset, which the spec reads as model and app', async () => {
+    const client = await connect(await seedCtx());
+    const tools = await allTools(client);
+    for (const tool of tools) {
+      const meta = tool._meta as Record<string, Record<string, unknown>> | undefined;
+      const ui = meta?.['ui'];
+      if (!ui) continue;
+      // Every Docket widget tool is one a person could ask for in words, so narrowing visibility
+      // would remove a capability to gain nothing — and the absent field is the spec's own way of
+      // saying `["model", "app"]`.
+      expect(ui['visibility'], `${tool.name} narrows visibility`).toBeUndefined();
+    }
+  });
+});

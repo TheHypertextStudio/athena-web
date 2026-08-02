@@ -18,6 +18,8 @@
  */
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 
+import { MCP_UI_META_KEY } from '@docket/types';
+
 import type { McpRegistrar } from '../catalog';
 import { CHANGE_REPORT_HTML } from './change-report';
 import { ENTITY_HTML } from './entity';
@@ -43,11 +45,17 @@ export const WIDGET = {
  * here is one a person could reasonably ask for in words, so hiding any of them from the model
  * would remove a capability to gain nothing.
  *
+ * TWO keys are emitted for one declaration. The stable specification (2026-01-26) spells the
+ * linkage `_meta.ui`; hosts written against the pre-stable drafts looked under the full extension
+ * identifier instead, and several shipped that way. `_meta` is an open map, so carrying both
+ * costs a few bytes and means a widget renders in either generation of host rather than silently
+ * degrading to JSON in one of them. Readers must prefer `_meta.ui`.
+ *
  * @param resourceUri - The widget's `ui://` uri.
  * @returns the `_meta` object to spread into a tool config.
  */
 export function widgetMeta(resourceUri: string): Record<string, unknown> {
-  return { [UI_EXTENSION]: { resourceUri } };
+  return { [MCP_UI_META_KEY]: { resourceUri }, [UI_EXTENSION]: { resourceUri } };
 }
 
 /** Every widget document, by uri. */

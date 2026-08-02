@@ -1,0 +1,47 @@
+{
+  "retrievedAt": "2026-08-02",
+  "files": {
+    "mcp-apps-2026-01-26.mdx": {
+      "url": "https://raw.githubusercontent.com/modelcontextprotocol/ext-apps/main/specification/2026-01-26/apps.mdx",
+      "version": "2026-01-26",
+      "description": "MCP Apps (SEP-1865), Stable",
+      "sha256": "ee452a7d1b9b7fb900acfeb4d6932d3963375b0f3f37d196a4b93eb80312af0e",
+      "retrievedAt": "2026-08-02"
+    },
+    "mcp-apps-2026-01-26.spec.types.txt": {
+      "url": "https://raw.githubusercontent.com/modelcontextprotocol/ext-apps/main/src/spec.types.ts",
+      "version": "2026-01-26",
+      "description": "MCP Apps protocol types (source of truth for the generated schemas)",
+      "sha256": "2ae52b6156f0f1fd2387717f15a8de968501d264e200d5409f09055297f8bc24",
+      "retrievedAt": "2026-08-02"
+    },
+    "mcp-tasks-draft.md": {
+      "url": "https://raw.githubusercontent.com/modelcontextprotocol/ext-tasks/main/specification/draft/tasks.md",
+      "version": "draft",
+      "description": "MCP Tasks extension specification",
+      "sha256": "ae908a883d8489f1ebfee47496dd8818f182b467a4196c17df98b40a3d8b2b11",
+      "retrievedAt": "2026-08-02"
+    },
+    "mcp-tasks-draft.schema.txt": {
+      "url": "https://raw.githubusercontent.com/modelcontextprotocol/ext-tasks/main/schema/draft/schema.ts",
+      "version": "draft",
+      "description": "MCP Tasks extension schema types",
+      "sha256": "2203cc75469e32a92a60f4b7b4de949577e25f18fafff69aa92ec06773ab70f6",
+      "retrievedAt": "2026-08-02"
+    }
+  },
+  "extensions": {
+    "io.modelcontextprotocol/ui": {
+      "version": "2026-01-26",
+      "landingPage": "https://apps.extensions.modelcontextprotocol.io/api/",
+      "specFile": "mcp-apps-2026-01-26.mdx",
+      "typesFile": "mcp-apps-2026-01-26.spec.types.txt"
+    },
+    "io.modelcontextprotocol/tasks": {
+      "version": "draft",
+      "landingPage": "https://modelcontextprotocol.io/extensions/tasks/overview",
+      "specFile": "mcp-tasks-draft.md",
+      "typesFile": "mcp-tasks-draft.schema.txt"
+    }
+  }
+}

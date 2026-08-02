@@ -7,10 +7,11 @@
  * than bundled from a package — the host serves these documents under a deny-all CSP, so there is
  * no network to fetch a library from, and a widget that cannot boot shows the user nothing.
  *
- * The handshake is the spec's, not a convention: the view sends `ui/initialize`, the host answers
- * with its capabilities and `hostContext`, the view announces `ui/notifications/initialized`, and
- * only then does the host deliver `ui/notifications/tool-result`. Rendering before that last step
- * would paint an empty card.
+ * The handshake is the spec's, not a convention: the view sends `ui/initialize` carrying
+ * `appInfo`, `appCapabilities`, and `protocolVersion`; the host answers with its capabilities and
+ * `hostContext`; the view announces `ui/notifications/initialized`; and only then does the host
+ * deliver `ui/notifications/tool-input` and `ui/notifications/tool-result`. Rendering before that
+ * last step would paint an empty card.
  */
 
 /** The literal extension id, used for the `_meta` key and the capability declaration. */
@@ -96,16 +97,26 @@ export const RUNTIME_JS = String.raw`
       if (resultHandler) resultHandler(msg.params);
       return;
     }
+    if (msg.method === 'ui/notifications/tool-cancelled') {
+      // No result is coming. A card that keeps its spinner forever is worse than one that says so.
+      if (resultHandler) resultHandler({ content: [], isError: true, cancelled: true });
+      return;
+    }
     if (msg.method === 'ui/notifications/host-context-changed') {
-      applyTheme(msg.params && msg.params.hostContext);
+      // The spec's params ARE the partial host context, not a wrapper around one.
+      applyTheme(msg.params);
+      return;
+    }
+    if (msg.method === 'ui/resource-teardown' && msg.id !== undefined) {
+      post({ jsonrpc: '2.0', id: msg.id, result: {} });
       return;
     }
   });
 
   const ready = request('ui/initialize', {
     protocolVersion: '2026-01-26',
-    capabilities: {},
-    clientInfo: { name: 'docket-widget', version: '1.0.0' },
+    appInfo: { name: 'docket-widget', version: '1.0.0' },
+    appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
   })
     .then((result) => {
       applyTheme(result && result.hostContext);
@@ -133,7 +144,14 @@ export const RUNTIME_JS = String.raw`
       return request('ui/open-link', { url });
     },
     say(text) {
-      return request('ui/message', { content: [{ type: 'text', text }] });
+      // The spec requires a role, and only 'user' is permitted.
+      return request('ui/message', { role: 'user', content: [{ type: 'text', text }] });
+    },
+    resize() {
+      notify('ui/notifications/size-changed', {
+        width: document.body.scrollWidth,
+        height: document.body.scrollHeight,
+      });
     },
   };
 })();

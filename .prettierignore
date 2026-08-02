@@ -16,3 +16,13 @@ packages/db/drizzle/meta/
 # emitting compact Markdown tables. Prettier wants those tables column-aligned, so formatting it
 # puts the generator and `pnpm format:check` in a loop over 150 table rows that no human wrote.
 docs/engineering/placeholder-inventory.md
+
+# Same story again: `packages/integrations/tests/mcp/emit-conformance-matrix.ts` regenerates this
+# matrix from the committed MCP Apps specification on every run, and the conformance test asserts
+# the committed file is byte-identical to what the generator produces. Prettier wants the table
+# columns aligned, which would put the generator and `pnpm format:check` in a permanent loop.
+docs/engineering/specs/mcp-apps-conformance.md
+
+# Verbatim upstream specification copies. Their bytes are hashed by the conformance suite to prove
+# nobody edited a spec to agree with the implementation; reformatting them breaks that proof.
+docs/engineering/specs/vendor/

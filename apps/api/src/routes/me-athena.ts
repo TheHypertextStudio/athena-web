@@ -44,6 +44,20 @@ import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 
 import { decideActivity, decideProposalGroup, replyToElicitation } from './agent-session-approval';
+import { subscribeAgentUpdates, type AgentUpdate } from './agent-bus';
+import {
+  dispatchAthenaWork,
+  interruptAthenaWork,
+  resolveCanonicalConversation,
+  rotateCanonicalConversation,
+} from './agent-dispatch';
+import {
+  AthenaSearchOut,
+  AthenaSegmentsOut,
+  athenaConversationSearch,
+  athenaConversationSegments,
+  conversationSearchQuery,
+} from './me-athena-conversation';
 import {
   activityParam,
   idParam,
@@ -524,43 +538,36 @@ async function overview(
   };
 }
 
-/** Create a private chat row, optionally carrying validated workspace focus. */
+/**
+ * Close the caller's conversation and open its successor, atomically.
+ *
+ * @remarks
+ * Kept as a route because clients call it, but it can no longer produce a second *concurrent*
+ * conversation: {@link rotateCanonicalConversation} closes the predecessor in the same
+ * transaction that opens the successor. History is preserved and stays readable.
+ */
 async function createChat(
   ownerUserId: string,
   context?: z.input<typeof AthenaFreshChatBody>['context'],
 ): Promise<SessionRow> {
   const invocation = await resolveAthenaInvocation(ownerUserId, context);
-  const [created] = await db
-    .insert(agentSession)
-    .values({
-      executorKind: 'athena',
-      ownerUserId,
-      contextOrganizationId: invocation.context?.workspaceId ?? null,
-      kind: 'chat',
-      trigger: 'delegation',
-      status: 'pending',
-      initiatorId: invocation.actorId,
-    })
-    .returning();
-  if (!created) throw new Error('chat session insert returned no row');
-  return created;
+  return rotateCanonicalConversation(
+    ownerUserId,
+    invocation.context?.workspaceId ?? null,
+    invocation.actorId,
+  );
 }
 
-/** Load the newest personal chat, creating the first one lazily. */
+/**
+ * The caller's one open Athena conversation.
+ *
+ * @remarks
+ * Every door — the standalone page, the slide-over panel, a second browser tab, an MCP client —
+ * calls this and gets the same id. Convergence (not just "newest wins") lives in
+ * {@link resolveCanonicalConversation}, so a stray extra open row is closed rather than tolerated.
+ */
 async function currentChat(ownerUserId: string): Promise<SessionRow> {
-  const rows = await db
-    .select()
-    .from(agentSession)
-    .where(
-      and(
-        eq(agentSession.executorKind, 'athena'),
-        eq(agentSession.ownerUserId, ownerUserId),
-        eq(agentSession.kind, 'chat'),
-      ),
-    )
-    .orderBy(desc(agentSession.createdAt))
-    .limit(1);
-  return rows[0] ?? createChat(ownerUserId);
+  return resolveCanonicalConversation(ownerUserId);
 }
 
 /** Append a human message to activity and the durable provider transcript. */
@@ -749,6 +756,105 @@ const meAthena = new Hono<AppEnv>()
       );
     },
   )
+  .get(
+    '/chat/segments',
+    apiDoc({
+      tag: 'Athena',
+      summary: 'List the conversation’s topics',
+      response: AthenaSegmentsOut,
+      description:
+        'Return the automatically derived topic segments of the caller’s one Athena conversation, oldest first. Segments are computed from the conversation itself — there is no “new topic” action — and each carries the activity id to jump to.',
+    }),
+    async (c) => {
+      const owner = requestOwner(c);
+      const conversation = await currentChat(owner);
+      return ok(c, AthenaSegmentsOut, await athenaConversationSegments(owner, conversation.id));
+    },
+  )
+  .get(
+    '/chat/search',
+    apiDoc({
+      tag: 'Athena',
+      summary: 'Search the conversation',
+      response: AthenaSearchOut,
+      description:
+        'Search every Athena conversation the caller owns by keyword, by inclusive date range, or by both. Every message containing a query term is returned with the matched character ranges; a query that matches nothing returns an empty result rather than a partial one.',
+    }),
+    zQuery(conversationSearchQuery),
+    async (c) =>
+      ok(c, AthenaSearchOut, await athenaConversationSearch(requestOwner(c), c.req.valid('query'))),
+  )
+  .get(
+    '/agents/stream',
+    describeRoute({
+      tags: ['Athena'],
+      summary: 'Stream every running agent’s updates (SSE)',
+      description:
+        'One subscription onto the shared agent bus: the merged, ordered stream of every agent Athena has spawned for this caller, each update carrying its own agent and task identity. Updates published before the subscription attached are replayed first, so an agent that finished in the moment before the connection opened is still visible. Pass Last-Event-ID to resume strictly after a sequence.',
+      parameters: [
+        {
+          name: 'Last-Event-ID',
+          in: 'header',
+          required: false,
+          description: 'Resume strictly after this bus sequence; omit to replay retained history.',
+          schema: { type: 'string' },
+        },
+      ],
+      responses: {
+        200: {
+          description: 'Merged agent updates as Server-Sent Events.',
+          content: { 'text/event-stream': { schema: { type: 'string' } } },
+        },
+      },
+    }),
+    async (c) => {
+      const owner = requestOwner(c);
+      const resumeFrom = Number.parseInt(c.req.header('last-event-id') ?? '', 10);
+      return streamSSE(c, async (stream) => {
+        const queued: AgentUpdate[] = [];
+        const detach = subscribeAgentUpdates(
+          {
+            ownerUserId: owner,
+            ...(Number.isFinite(resumeFrom) ? { since: resumeFrom } : {}),
+          },
+          (update) => queued.push(update),
+        );
+        try {
+          let lastHeartbeat = Date.now();
+          for (;;) {
+            if (stream.aborted) return;
+            while (queued.length > 0) {
+              const update = queued.shift();
+              /* v8 ignore next -- @preserve defensive: length was just checked */
+              if (!update) break;
+              await stream.writeSSE({
+                id: String(update.sequence),
+                event: update.kind,
+                data: JSON.stringify({
+                  sequence: update.sequence,
+                  sessionId: update.sessionId,
+                  parentSessionId: update.parentSessionId,
+                  taskId: update.taskId,
+                  agentName: update.agentName,
+                  milestone: update.milestone,
+                  progress: update.progress,
+                  reasonCode: update.reasonCode,
+                  at: update.at.toISOString(),
+                }),
+              });
+            }
+            if (Date.now() - lastHeartbeat >= STREAM_HEARTBEAT_MS) {
+              await stream.write(': heartbeat\n\n');
+              lastHeartbeat = Date.now();
+            }
+            await stream.sleep(STREAM_POLL_MS);
+          }
+        } finally {
+          detach();
+        }
+      });
+    },
+  )
   .post(
     '/chat/new',
     apiDoc({
@@ -812,29 +918,48 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const body = c.req.valid('json');
       const invocation = await resolveAthenaInvocation(owner, body.context);
-      const [created] = await db
-        .insert(agentSession)
-        .values({
-          executorKind: 'athena',
-          ownerUserId: owner,
-          contextOrganizationId: invocation.context?.workspaceId ?? null,
-          kind: 'job',
-          trigger: 'delegation',
-          status: 'pending',
-          initiatorId: invocation.actorId,
-        })
-        .returning();
-      if (!created) throw new Error('session insert returned no row');
-      await db.insert(sessionActivity).values({
-        sessionId: created.id,
-        organizationId: null,
-        type: 'response',
-        body: {
-          text: body.prompt,
-          author: 'user',
-          ...(invocation.context ? { context: invocation.context } : {}),
-        },
+      const conversation = await resolveCanonicalConversation(
+        owner,
+        invocation.context?.workspaceId ?? null,
+        invocation.actorId,
+      );
+      // Every piece of tracked work goes through the one dispatcher: it creates the Docket task,
+      // files it under an existing objective when one plausibly applies, and spawns the agent
+      // beneath the caller's single conversation.
+      const dispatched = await dispatchAthenaWork({
+        ownerUserId: owner,
+        prompt: body.prompt,
+        organizationId: invocation.context?.workspaceId ?? null,
+        initiatorActorId: invocation.actorId,
+        parentSessionId: conversation.id,
       });
+      const created = dispatched.session;
+      const [opening] = await db
+        .insert(sessionActivity)
+        .values({
+          sessionId: created.id,
+          organizationId: null,
+          type: 'response',
+          body: {
+            text: body.prompt,
+            author: 'user',
+            ...(invocation.context ? { context: invocation.context } : {}),
+          },
+        })
+        .returning({ createdAt: sessionActivity.createdAt });
+      if (dispatched.linkageNote) {
+        // Said out loud, always. Silently filing work nowhere is the failure this prevents.
+        // Stamped strictly after the opening message: the session's objective is derived from
+        // its FIRST visible row, and two rows written in the same millisecond would let the
+        // note about where the work was filed masquerade as the work itself.
+        await db.insert(sessionActivity).values({
+          sessionId: created.id,
+          organizationId: null,
+          type: 'response',
+          body: { text: dispatched.linkageNote, author: 'athena' },
+          ...(opening ? { createdAt: new Date(opening.createdAt.getTime() + 1) } : {}),
+        });
+      }
       const admission = await admitAthenaGeneration(created, { runnableStatuses: ['pending'] });
       if (admission.mode === 'sync') {
         await runSession(invocation.context?.workspaceId ?? '', created.id);
@@ -1235,7 +1360,7 @@ const meAthena = new Hono<AppEnv>()
       summary: 'Cancel personal Athena work',
       response: AthenaSessionSummaryOut,
       description:
-        'Cancel only caller-owned non-terminal Athena work, stamp its terminal time, and return the updated private summary.',
+        'Interrupt caller-owned Athena work and everything it dispatched: every spawned agent beneath it is stopped, its live run generation canceled, and the interrupt watermark stamped so nothing keeps running or writing afterwards.',
     }),
     zParam(idParam),
     async (c) => {
@@ -1249,6 +1374,9 @@ const meAthena = new Hono<AppEnv>()
         'cancel',
         shouldWake ? { queueWake: true } : {},
       );
+      // Athena is the dispatcher for all tracked work, so stopping her has to reach the work she
+      // dispatched. Cancelling only the row the user is looking at leaves spawned agents running.
+      await interruptAthenaWork(session.id, owner);
       if (shouldWake) {
         await wakeWaitingAthenaGeneration(session.id);
         return accepted(

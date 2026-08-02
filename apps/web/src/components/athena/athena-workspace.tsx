@@ -20,6 +20,7 @@ import {
 } from '@/lib/athena/presentation';
 import { queryKeys, useLiveApiQuery } from '@/lib/query';
 
+import { AthenaConversationBrowser } from './athena-conversation-browser';
 import { AthenaWorkbench } from './athena-workbench';
 import { useAthenaActions } from './use-athena-actions';
 
@@ -325,6 +326,11 @@ export function AthenaWorkspace({
             aria-label="Athena work queue"
             className="border-outline-variant bg-surface-container-low max-h-[34vh] shrink-0 overflow-y-auto border-b @3xl:max-h-none @3xl:border-r @3xl:border-b-0"
           >
+            {/* The one conversation is browsable from the same column the work queue lives in:
+                topics derived from what you said, a keyword lookup, and a date range. */}
+            <div className="border-outline-variant border-b p-3">
+              <AthenaConversationBrowser className="max-h-72" />
+            </div>
             {groups.map((group) => (
               <section key={group.key} aria-labelledby={`athena-lane-${group.key}`}>
                 <div className="border-outline-variant bg-surface-container-low sticky top-0 z-10 flex items-center justify-between border-b px-3 py-2">

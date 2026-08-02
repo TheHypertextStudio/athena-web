@@ -1,14 +1,13 @@
 import {
   MockAgentRuntime,
-  MockAgentTurnRuntime,
   MockSummarizer,
   MockTaskSynthesizer,
-  RealAgentTurnRuntime,
   RealProviderRuntime,
   RealSummarizer,
   RealTaskSynthesizer,
 } from '@docket/agent-runtime';
-import type { AnthropicClientConfig } from '@docket/agent-runtime';
+import { resolveModelBackend } from '@docket/agent-runtime';
+import type { AnthropicClientConfig, ModelBackendEnv } from '@docket/agent-runtime';
 import type {
   AgentRuntime,
   AgentTurnRuntime,
@@ -110,6 +109,26 @@ function localMode(runtimeEnv: AppRuntimeEnv): boolean {
 function required(name: string, value: string | undefined): string {
   if (!isRealValue(value)) throw new Error(`Missing required production config: ${name}`);
   return value;
+}
+
+/**
+ * Project the container's runtime configuration onto the model-backend seam's own input.
+ *
+ * @remarks
+ * The seam reads a deliberately small slice — which tier, which endpoint, which credential — so
+ * that adding a backend never means widening this container's environment surface.
+ */
+export function toModelBackendEnv(runtimeEnv: AppRuntimeEnv): ModelBackendEnv {
+  return {
+    ...(runtimeEnv.APP_MODE ? { APP_MODE: runtimeEnv.APP_MODE } : {}),
+    ...(runtimeEnv.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: runtimeEnv.ANTHROPIC_API_KEY } : {}),
+    ...(runtimeEnv.CLOUDFLARE_AI_GATEWAY_BASE_URL
+      ? { CLOUDFLARE_AI_GATEWAY_BASE_URL: runtimeEnv.CLOUDFLARE_AI_GATEWAY_BASE_URL }
+      : {}),
+    ...(runtimeEnv.CLOUDFLARE_AI_GATEWAY_TOKEN
+      ? { CLOUDFLARE_AI_GATEWAY_TOKEN: runtimeEnv.CLOUDFLARE_AI_GATEWAY_TOKEN }
+      : {}),
+  };
 }
 
 /** Resolve the shared direct-or-Gateway Anthropic configuration for live Athena adapters. */
@@ -323,11 +342,12 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const agentRuntime = lazyValue(() =>
     mock ? new MockAgentRuntime() : new RealProviderRuntime(anthropicConfigFromEnv(runtimeEnv)),
   );
-  const agentTurn = lazyValue(() =>
-    mock
-      ? new MockAgentTurnRuntime()
-      : new RealAgentTurnRuntime(anthropicConfigFromEnv(runtimeEnv)),
-  );
+  // Athena's turns go through the model-backend seam rather than being constructed here, so
+  // "which model, reached how, paid for by whom" is one decision with one implementation:
+  // Cloudflare's model router on Docket's keys by default, an operator's own Lovelace Lattice
+  // instance when they configure one, and the deterministic script locally.
+  const modelBackend = lazyValue(() => resolveModelBackend(toModelBackendEnv(runtimeEnv)));
+  const agentTurn = lazyValue(() => modelBackend().turnRuntime());
   const summarizer = lazyValue(() =>
     mock ? new MockSummarizer() : new RealSummarizer(anthropicConfigFromEnv(runtimeEnv)),
   );

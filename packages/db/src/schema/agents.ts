@@ -19,6 +19,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
 
 import {
@@ -40,6 +41,41 @@ import { task } from './work';
 
 /** Directional secret boundary represented by a persisted replay nonce. */
 export type ExecutionRequestDirection = 'cloudflare_to_docket' | 'docket_to_cloudflare';
+
+/**
+ * How a session is tied to the work model, as a database-enforced claim.
+ *
+ * @remarks
+ * `'task'` asserts the session is doing tracked work and therefore MUST carry `task_id`;
+ * `'conversation'` asserts it is Athena talking, which does no work of its own and therefore
+ * must be a `chat`. The pair is checked by `agent_session_work_linkage_check`, so "any work
+ * that is done must have a task created for it" is a constraint rather than a habit.
+ *
+ * `'unclassified'` exists ONLY for rows written before that constraint shipped. It is the
+ * column default purely so adding the constraint could not reject existing production rows;
+ * no dispatcher path writes it, and {@link agentSession}'s own tests assert that.
+ */
+export type AgentSessionWorkLinkage = 'task' | 'conversation' | 'unclassified';
+
+/**
+ * The dispatcher admission path that created one run.
+ *
+ * @remarks
+ * Athena is the grand dispatcher for all tracked work, which is only true if every run row can
+ * name the admission that produced it. A `NOT NULL` column with a closed CHECK makes a run
+ * inserted by some future side path either name itself or fail to insert.
+ *
+ * `'unclassified'` means "not produced by an Athena dispatch admission". It covers exactly two
+ * populations: rows written before this column existed (it is the default, so adding the column
+ * to a live table could not reject them), and runs materialized by an external front door —
+ * today Linear's Agent platform — where the admission decision was made by the provider rather
+ * than by Athena. It is never the answer for work Athena herself dispatched.
+ */
+export type AgentRunDispatchOrigin =
+  | 'athena_admission'
+  | 'execution_advance'
+  | 'lease_recovery'
+  | 'unclassified';
 /** Opaque Cloudflare side effect recoverable from an agent run row. */
 export type AgentSessionDispatchAction = 'enqueue' | 'wake';
 /** Delivery lifecycle for a Docket-owned execution outbox intent. */
@@ -91,12 +127,69 @@ export const agentSession = pgTable(
     status: sessionStatus('status').notNull().default('pending'),
     initiatorId: text('initiator_id').references(() => actor.id, { onDelete: 'set null' }),
     externalRunRef: text('external_run_ref'),
+    /**
+     * The session that spawned this one.
+     *
+     * @remarks
+     * Athena is a singular agent that spawns agents for specific tasks. This edge is what makes
+     * that literal: it is how an interrupt reaches the work she dispatched (cancel walks the
+     * tree), how the activity surface groups spawned work under the request that caused it, and
+     * how a milestone reports its lineage. Without it, a spawned agent is unreachable from the
+     * dispatcher and keeps running after the human said stop.
+     */
+    parentSessionId: text('parent_session_id').references((): AnyPgColumn => agentSession.id, {
+      onDelete: 'cascade',
+    }),
+    /**
+     * The specific task this agent was spawned for, in the words a person will read.
+     *
+     * @remarks
+     * Deliberately not a generated label: a spawned agent is presented as "Athena, working on
+     * <this>", never as a separate assistant with a name of its own.
+     */
+    spawnLabel: text('spawn_label'),
+    /**
+     * What this session is doing right now, in one human-readable line.
+     *
+     * @remarks
+     * A lifecycle status answers "is it running"; this answers "what is it doing", which is the
+     * question a person actually asks. Persisted rather than derived so it survives a reload and
+     * so a surface that polls sees the same label the stream does.
+     */
+    currentStep: text('current_step'),
+    /** When {@link agentSession.currentStep} last changed. */
+    currentStepAt: timestamp('current_step_at'),
+    /**
+     * When an interrupt reached this session.
+     *
+     * @remarks
+     * Distinct from `endedAt`: this is the instant the human said stop, and it is the watermark
+     * every "did anything keep writing after the interrupt" check compares against. Set on the
+     * interrupted session AND on every session beneath it.
+     */
+    interruptedAt: timestamp('interrupted_at'),
+    /** Database-enforced claim about how this session is tied to the work model. */
+    workLinkage: text('work_linkage')
+      .$type<AgentSessionWorkLinkage>()
+      .notNull()
+      .default('unclassified'),
     startedAt: timestamp('started_at'),
     endedAt: timestamp('ended_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => [
     index('agent_session_org_idx').on(t.organizationId),
+    index('agent_session_parent_idx').on(t.parentSessionId),
+    check(
+      'agent_session_work_linkage_check',
+      sql`(${t.workLinkage} = 'task' AND ${t.taskId} IS NOT NULL)
+        OR (${t.workLinkage} = 'conversation' AND ${t.kind} = 'chat')
+        OR ${t.workLinkage} = 'unclassified'`,
+    ),
+    check(
+      'agent_session_no_self_parent_check',
+      sql`${t.parentSessionId} IS NULL OR ${t.parentSessionId} <> ${t.id}`,
+    ),
     index('agent_session_owner_idx').on(t.ownerUserId, t.createdAt),
     index('agent_session_context_org_idx').on(t.contextOrganizationId, t.createdAt),
     index('agent_session_agent_idx').on(t.agentId),
@@ -150,12 +243,27 @@ export const agentSessionRun = pgTable(
     leaseToken: text('lease_token'),
     leaseExpiresAt: timestamp('lease_expires_at'),
     lastError: text('last_error'),
+    /**
+     * Which dispatcher admission created this run.
+     *
+     * @remarks
+     * The dispatch reference every run carries. `'unclassified'` is the column default and
+     * exists solely so this column could be added to a live table; no code path writes it.
+     */
+    dispatchOrigin: text('dispatch_origin')
+      .$type<AgentRunDispatchOrigin>()
+      .notNull()
+      .default('unclassified'),
     queuedAt: timestamp('queued_at').notNull().defaultNow(),
     startedAt: timestamp('started_at'),
     completedAt: timestamp('completed_at'),
   },
   (t) => [
     uniqueIndex('agent_session_run_generation_uq').on(t.sessionId, t.generation),
+    check(
+      'agent_session_run_dispatch_origin_check',
+      sql`${t.dispatchOrigin} in ('athena_admission', 'execution_advance', 'lease_recovery', 'unclassified')`,
+    ),
     uniqueIndex('agent_session_run_workflow_uq').on(t.workflowInstanceId),
     index('agent_session_run_org_status_idx').on(t.organizationId, t.status),
     index('agent_session_run_owner_status_idx').on(t.ownerUserId, t.status),
@@ -282,6 +390,68 @@ export const sessionActivity = pgTable(
   (t) => [
     index('session_activity_session_idx').on(t.sessionId, t.createdAt),
     index('session_activity_proposal_group_idx').on(t.sessionId, t.proposalGroupId),
+  ],
+);
+
+/**
+ * One automatically derived topic span of a user's single infinite Athena conversation.
+ *
+ * @remarks
+ * There is one conversation per person and it never ends, so the only way to browse it is by
+ * topic — and the only acceptable way to get topics is to derive them, because asking the user
+ * to press "new topic" is the chore this product exists to delete. Rows here are therefore a
+ * *cache of a derivation*, not user data: they are recomputed from `session_activity` and can
+ * be dropped and rebuilt at any time without losing anything a person wrote.
+ *
+ * `revision` is what makes recomputation safe under concurrency: a rebuild writes a new
+ * revision and deletes the older one, so a reader never sees half of two segmentations.
+ */
+export const athenaConversationSegment = pgTable(
+  'athena_conversation_segment',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    sessionId: text('session_id')
+      .notNull()
+      .references(() => agentSession.id, { onDelete: 'cascade' }),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** Which recomputation produced this row; the highest revision is the live one. */
+    revision: integer('revision').notNull().default(1),
+    /** Position of this span in the conversation, oldest first. */
+    ordinal: integer('ordinal').notNull(),
+    /** Derived name, taken from what the person asked when the topic opened. */
+    title: text('title').notNull(),
+    /** The terms that distinguish this span from the rest of the conversation. */
+    keywords: text('keywords')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    /** First activity in the span. */
+    startActivityId: text('start_activity_id').notNull(),
+    /** Last activity in the span. */
+    endActivityId: text('end_activity_id').notNull(),
+    /** When the span opened. */
+    startedAt: timestamp('started_at').notNull(),
+    /** When the span last had activity. */
+    endedAt: timestamp('ended_at').notNull(),
+    /** How many visible activities the span covers. */
+    messageCount: integer('message_count').notNull(),
+    /** How sharp the topic change at this span's start was, 0–1 scaled to hundredths. */
+    boundaryScore: integer('boundary_score').notNull().default(0),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('athena_conversation_segment_position_uq').on(t.sessionId, t.revision, t.ordinal),
+    index('athena_conversation_segment_owner_idx').on(t.ownerUserId, t.startedAt),
+    index('athena_conversation_segment_session_idx').on(t.sessionId, t.revision),
+    foreignKey({
+      columns: [t.sessionId, t.ownerUserId],
+      foreignColumns: [agentSession.id, agentSession.ownerUserId],
+      name: 'athena_conversation_segment_owner_fk',
+    }).onDelete('cascade'),
+    check('athena_conversation_segment_span_check', sql`${t.messageCount} > 0`),
+    check('athena_conversation_segment_order_check', sql`${t.ordinal} >= 0 AND ${t.revision} >= 1`),
   ],
 );
 

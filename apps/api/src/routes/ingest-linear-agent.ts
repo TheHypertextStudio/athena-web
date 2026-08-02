@@ -123,6 +123,9 @@ async function queueAgentSessionRun(orgId: string, sessionId: string): Promise<v
     generation,
     workflowInstanceId: `${sessionId}:${String(generation)}`,
     status: 'queued',
+    // Not an Athena dispatch: Linear's Agent platform decided this run should exist. Named
+    // explicitly rather than left to the column default so the run still says where it came from.
+    dispatchOrigin: 'unclassified',
   });
 }
 

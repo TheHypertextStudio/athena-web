@@ -74,6 +74,84 @@ export interface AgentRuntime {
   startSession(input: StartSessionInput): AsyncIterable<SessionActivity>;
 }
 
+export {
+  AGENT_UPDATE_KINDS,
+  DEFAULT_AGENT_BUS_RETENTION,
+  InMemoryAgentBus,
+  TERMINAL_AGENT_UPDATE_KINDS,
+  agentIntervalsOverlap,
+  projectAgentStates,
+} from './agent-bus';
+export type {
+  AgentBus,
+  AgentBusFilter,
+  AgentBusListener,
+  AgentIdentity,
+  AgentUpdate,
+  AgentUpdateInput,
+  AgentUpdateKind,
+  InMemoryAgentBusOptions,
+} from './agent-bus';
+export {
+  DEFAULT_DEPTH_TOLERANCE,
+  DEFAULT_MIN_SEGMENT_SIZE,
+  DEFAULT_SEGMENT_WINDOW,
+  LexicalCohesionSegmenter,
+  SEGMENT_TITLE_MAX,
+  stemWord,
+  topicTerms,
+} from './conversation-segmenter';
+export type {
+  ConversationMessage,
+  ConversationSegment,
+  ConversationSegmenter,
+  LexicalCohesionSegmenterOptions,
+} from './conversation-segmenter';
+export {
+  cosineSimilarity,
+  matchSpans,
+  searchConversation,
+  withinRange,
+} from './conversation-search';
+export type {
+  ConversationEmbedder,
+  ConversationSearchHit,
+  ConversationSearchOptions,
+  ConversationSearchQuery,
+  ConversationSearchResult,
+  ConversationVectors,
+  TextSpan,
+} from './conversation-search';
+export {
+  DEFAULT_ATHENA_MODEL,
+  MOCK_ATHENA_MODEL,
+  MODEL_BACKEND_IDS,
+  ModelBackendConfigError,
+  resolveModelBackend,
+  selectModelBackendId,
+} from './model-backend';
+export type {
+  LatticeBackendConfig,
+  ModelBackend,
+  ModelBackendDescriptor,
+  ModelBackendEnv,
+  ModelBackendId,
+  ResolveModelBackendOptions,
+} from './model-backend';
+export {
+  DEFAULT_DESCRIPTION_WEIGHT,
+  DEFAULT_PARENT_THRESHOLD,
+  WORK_PARENT_KINDS,
+  describeParentResolution,
+  resolveWorkParent,
+} from './work-linkage';
+export type {
+  ParentCandidate,
+  ParentResolution,
+  ParentResolutionReason,
+  ResolveWorkParentOptions,
+  WorkParentKind,
+} from './work-linkage';
 export type {
   SummarizeInput,
   SummarizeResult,

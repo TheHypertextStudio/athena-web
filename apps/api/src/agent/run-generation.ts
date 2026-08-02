@@ -210,6 +210,9 @@ export async function enqueueRunGeneration(
         generation,
         workflowInstanceId: `${current.id}:${String(generation)}`,
         status: 'queued',
+        // The dispatch reference every run carries: which admission produced it. Athena is the
+        // dispatcher for all tracked work only if a run can name the admission it came from.
+        dispatchOrigin: 'athena_admission',
       })
       .returning();
     if (!queued) throw new Error('queued run generation insert returned no row');
@@ -474,6 +477,9 @@ export async function claimRunGeneration(
           leaseToken: token,
           leaseExpiresAt: expiresAt(now, leaseDurationMs),
           startedAt: now,
+          // The recovery path materializes a generation for a session whose queued row was lost.
+          // It names itself so the run is still attributable to a dispatch decision.
+          dispatchOrigin: 'lease_recovery',
         })
         .returning();
     }

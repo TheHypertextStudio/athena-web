@@ -1,15 +1,68 @@
+import { HydrationBoundary } from '@tanstack/react-query';
+import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { type JSX, type ReactNode } from 'react';
 
 import { AppShellFrame } from '@/components/app-shell-frame';
+import { unwrap } from '@/lib/query-core';
+import { queryKeys } from '@/lib/query-keys';
+import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
+import { readServerSession } from '@/lib/server-session';
+
+/** Where a signed-out request is returned to when the middleware could not supply its path. */
+const DEFAULT_RETURN_PATH = '/today';
 
 /**
  * Layout for the authenticated `(app)` route group.
  *
  * @remarks
- * A thin Server Component that wraps every authenticated page in the one persistent client
+ * A Server Component that wraps every authenticated page in the one persistent client
  * {@link AppShellFrame}. Session, workspace, and page loading update regions inside that shared
  * shell; the layout itself is never replaced by a loading or Suspense fallback.
+ *
+ * The access check is server-side, and that is the whole point: a client-side check necessarily
+ * paints first — a `useEffect` runs after the browser has already committed a frame — so the person
+ * sees a screen for a beat before being moved off it. Deciding here means the browser receives a
+ * redirect instead of a document, and there is nothing to flash. It is also what makes
+ * protected-route enforcement real: before this, a signed-out browser navigating to `/today` stayed
+ * on `/today` behind a dismissible "Sign in to continue" dialog.
+ *
+ * Only `'signed-out'` redirects. `'unknown'` — the server could not reach its own API — renders
+ * normally with no server-confirmed identity, because redirecting on "could not ask" is exactly how
+ * an app ends up shoving a sign-in screen at someone whose session is perfectly valid.
+ *
+ * The caller's organizations are prefetched here under the same `queryKeys.orgs()` key
+ * {@link AppShellFrame} reads, so the sidebar's workspace switcher hydrates from data rather than a
+ * skeleton. A failed prefetch degrades gracefully: nothing is cached and the client fetches it.
+ *
+ * @param props - The route group's children.
+ * @returns The authenticated shell wrapping the active page.
  */
-export default function AppGroupLayout({ children }: { children: ReactNode }): JSX.Element {
-  return <AppShellFrame>{children}</AppShellFrame>;
+export default async function AppGroupLayout({
+  children,
+}: {
+  children: ReactNode;
+}): Promise<JSX.Element> {
+  const session = await readServerSession();
+
+  if (session.state === 'signed-out') {
+    const headerStore = await headers();
+    const returnPath = headerStore.get('x-docket-pathname') ?? DEFAULT_RETURN_PATH;
+    redirect(`/sign-in?${new URLSearchParams({ callbackURL: returnPath }).toString()}`);
+  }
+
+  const queryClient = getServerQueryClient();
+  const api = await getServerApi();
+  await queryClient.prefetchQuery({
+    queryKey: queryKeys.orgs(),
+    queryFn: () => unwrap(() => api.v1.orgs.$get(), 'Could not load your organizations.'),
+  });
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <AppShellFrame initialSession={session.state === 'authenticated' ? session.user : null}>
+        {children}
+      </AppShellFrame>
+    </HydrationBoundary>
+  );
 }

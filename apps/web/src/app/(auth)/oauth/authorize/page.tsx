@@ -34,6 +34,11 @@
  * off-screen. The server accepts arbitrary requested scopes, so the row count has no ceiling — only
  * bounding the list keeps the decision reachable at any viewport height.
  *
+ * **Copy.** Every word describing a permission comes from `@/lib/oauth-scope-copy`, which is keyed
+ * by the closed issuable set in `@docket/types` and enumerated by a test. This screen never prints
+ * a raw permission identifier: the page is read by someone deciding whether to trust an app, and
+ * `connectors:link` in front of that person is noise that reads as something official.
+ *
  * This file lives under the `(auth)` route group — which does not change its `/oauth/authorize`
  * URL — so it inherits the layout publishing `--font-fraunces`. Outside the group the wordmark's
  * display face silently resolved to Georgia.
@@ -58,8 +63,10 @@ import {
   RefreshCw,
   Sparkles,
   TaskAlt,
+  XCircle,
 } from '@docket/ui/icons';
-import { Avatar, AvatarFallback, AvatarImage, Button } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage, Button, focusRingInset } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ComponentType, type JSX, Suspense, useCallback, useEffect, useState } from 'react';
@@ -68,42 +75,30 @@ import { signInReturnPath } from '@/components/app-shell-utils';
 import Wordmark from '@/components/wordmark';
 import { api } from '@/lib/api';
 import { useSession } from '@/lib/auth-client';
+import { describeScope, OAUTH_SCOPE_ACCESS_LABEL } from '@/lib/oauth-scope-copy';
 import { resolveSessionStatus } from '@/lib/session-status';
 
-/** Human-readable label, description, and icon for each Docket MCP scope. */
-const SCOPE_INFO: Record<
-  string,
-  { label: string; detail: string; icon: ComponentType<{ className?: string }> }
-> = {
-  'work:read': {
-    label: 'Read your work',
-    detail: 'View your tasks, projects, programs, initiatives, and cycles.',
-    icon: TaskAlt,
-  },
-  'work:write': {
-    label: 'Create and update work',
-    detail: 'Create tasks, update projects, post comments and status updates.',
-    icon: Edit,
-  },
-  'agents:run': {
-    label: 'Manage agent sessions',
-    detail: 'Trigger agent sessions, approve or reject proposed actions.',
-    icon: Sparkles,
-  },
-  'connectors:link': {
-    label: 'Link external items',
-    detail: 'Connect external tools and link items from integrated services.',
-    icon: Cable,
-  },
-  // Not a Docket capability — this is the standard OAuth scope that lets the app refresh its
-  // own access without prompting again. Described in plain terms because the person reading
-  // this screen is deciding whether to trust an app, not reading an OAuth spec.
-  offline_access: {
-    label: 'Stay connected',
-    detail: 'Keep working on your behalf without asking you to sign in again.',
-    icon: RefreshCw,
-  },
+/**
+ * The glyph for each permission Docket can grant.
+ *
+ * @remarks
+ * Icons are presentation, so they live with the screen while the words live in
+ * `@/lib/oauth-scope-copy` — which keeps that module free of React and trivially testable. Keyed
+ * by the permission string rather than folded into the copy entries for the same reason.
+ *
+ * The fallback is deliberately a "no" glyph: a request Docket cannot satisfy should not borrow
+ * the icon of a capability it does not have.
+ */
+const SCOPE_ICON: Readonly<Record<string, ComponentType<{ className?: string }>>> = {
+  'work:read': TaskAlt,
+  'work:write': Edit,
+  'agents:run': Sparkles,
+  'connectors:link': Cable,
+  offline_access: RefreshCw,
 };
+
+/** Shown while the session read is still in flight, in place of the account address. */
+const ACCOUNT_PENDING_LABEL = 'Checking your account…';
 
 /** Fetch the server-validated display metadata for an OAuth client. Returns `null` on any failure. */
 async function fetchClientMetadata(
@@ -170,14 +165,36 @@ function ConnectionHero({
   );
 }
 
-/** One labelled row of the request context (`Your account`, `Returns to`). */
-function ContextRow({ label, value }: { label: string; value: string }): JSX.Element {
+/**
+ * One labelled row of the request context (`Your account`, `Returns to`).
+ *
+ * @remarks
+ * `muted` is for the one row that can be waiting on a network read: the account address. It is a
+ * de-emphasis, not a skeleton, because the row keeps its shape either way and a shimmering block
+ * where an email will be says less than a sentence saying what is happening.
+ */
+function ContextRow({
+  label,
+  value,
+  muted = false,
+}: {
+  label: string;
+  value: string;
+  muted?: boolean;
+}): JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-on-surface-variant text-label-medium">{label}</dt>
       {/* `break-words`, not `break-all`: a long address should wrap at the last point that fits,
           not slice a word in half the moment the column narrows. */}
-      <dd className="text-on-surface text-body-medium break-words">{value}</dd>
+      <dd
+        className={cn(
+          'text-body-medium break-words',
+          muted ? 'text-on-surface-variant' : 'text-on-surface',
+        )}
+      >
+        {value}
+      </dd>
     </div>
   );
 }
@@ -192,46 +209,56 @@ function ContextRow({ label, value }: { label: string; value: string }): JSX.Ele
  * stacked paragraphs — the label alone says what is being granted, and the detail is one click
  * away for anyone who wants it.
  *
- * A scope the app does not recognize has no detail to reveal, so it renders as a plain row: an
- * empty disclosure that opens onto nothing is worse than no disclosure at all.
+ * Every row carries the read/write qualifier under its label, unexpanded. Whether an app is about
+ * to look at your work or change it is the single most consequential fact on this screen, and
+ * putting it behind a disclosure means the common case — a person who skims and approves — never
+ * sees it. It sits under the label rather than beside it so a long label wraps into the row's own
+ * column instead of colliding with it at 390px.
+ *
+ * Every permission resolves through `describeScope`, including ones Docket cannot grant, so this
+ * component has no branch that can print a raw identifier.
  */
 function ScopeRow({ scope }: { scope: string }): JSX.Element {
-  const info = SCOPE_INFO[scope];
-  const Icon = info?.icon ?? Cable;
-  const label = info?.label ?? scope;
-
-  const glyph = (
-    <span className="text-on-surface-variant flex size-5 shrink-0 items-center justify-center">
-      <Icon className="size-3.5" />
-    </span>
-  );
-
-  if (!info?.detail) {
-    return (
-      <li className="border-outline-variant flex min-h-11 items-center gap-3 border-b px-3 py-2.5 last:border-b-0">
-        <span aria-hidden="true">{glyph}</span>
-        <span className="text-on-surface text-body-medium min-w-0 font-medium break-words">
-          {label}
-        </span>
-      </li>
-    );
-  }
+  const { label, detail, access } = describeScope(scope);
+  const Icon = SCOPE_ICON[scope] ?? XCircle;
 
   return (
     <li className="border-outline-variant border-b last:border-b-0">
       <details className="group">
-        <summary className="focus-visible:ring-ring flex min-h-11 cursor-pointer list-none items-center gap-3 px-3 py-2.5 outline-none focus-visible:ring-2 [&::-webkit-details-marker]:hidden">
-          <span aria-hidden="true">{glyph}</span>
-          <span className="text-on-surface text-body-medium min-w-0 flex-1 font-medium break-words">
-            {label}
-          </span>
-          <ChevronDown
+        {/* `items-stretch`: the glyph column, the text column, and the chevron column are all the
+            row's full height, so no inline sibling is a different size than the ones beside it.
+
+            `focusRingInset`, not the standalone `focus-visible:ring-2` this used to carry. The list
+            is a scroll container (`overflow-y-auto`), which clips anything drawn outside a child's
+            box — so the outer ring on the first and last rows lost three of its four edges and the
+            remaining one read as a divider rather than as focus. The design system already has an
+            answer for dense rows packed flush against their neighbours; use it. */}
+        <summary
+          className={cn(
+            'flex min-h-11 cursor-pointer list-none items-stretch gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden',
+            focusRingInset,
+          )}
+        >
+          <span
             aria-hidden="true"
-            className="text-on-surface-variant size-4 shrink-0 transition-transform group-open:rotate-180"
-          />
+            className="text-on-surface-variant flex w-5 shrink-0 items-center justify-center"
+          >
+            <Icon className="size-3.5" />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+            <span className="text-on-surface text-body-medium font-medium break-words">
+              {label}
+            </span>
+            <span className="text-on-surface-variant text-label-medium">
+              {OAUTH_SCOPE_ACCESS_LABEL[access]}
+            </span>
+          </span>
+          <span aria-hidden="true" className="flex w-4 shrink-0 items-center justify-center">
+            <ChevronDown className="text-on-surface-variant size-4 transition-transform group-open:rotate-180" />
+          </span>
         </summary>
-        {/* `ml-10` aligns the detail under the label rather than the icon (size-7 + gap-3). */}
-        <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{info.detail}</p>
+        {/* `ml-8` aligns the detail under the label rather than the icon (w-5 + gap-3 = 2rem). */}
+        <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{detail}</p>
       </details>
     </li>
   );
@@ -333,29 +360,12 @@ function ConsentPage(): JSX.Element {
     [signature],
   );
 
-  // `unreachable` shares the pending treatment on purpose: the session read is still retrying, and a
-  // consent grant is exactly the wrong thing to abandon over one failed request.
-  if (sessionStatus === 'pending' || sessionStatus === 'unreachable') {
-    return (
-      <AuthLayout brand={<Wordmark className="text-2xl" />} intro={null}>
-        <p className="text-on-surface-variant text-body-medium">Loading…</p>
-      </AuthLayout>
-    );
-  }
-
-  if (!session) {
-    // The useEffect redirect is running; show nothing to avoid flash.
-    return (
-      <AuthLayout brand={<Wordmark className="text-2xl" />} intro={null}>
-        <></>
-      </AuthLayout>
-    );
-  }
-
+  // Checked before anything session-shaped: whether the link is well-formed is derived entirely
+  // from the URL, so waiting on a network read to say so only delays a message that cannot change.
   if (!signature) {
     return (
       <AuthLayout
-        brand={<Wordmark className="text-2xl" />}
+        brand={<Wordmark />}
         intro={<h1 className="text-headline-small text-on-surface font-medium">Invalid request</h1>}
       >
         <p className="text-on-surface-variant text-body-medium">
@@ -374,15 +384,37 @@ function ConsentPage(): JSX.Element {
     );
   }
 
+  if (sessionStatus === 'signed-out') {
+    // The useEffect redirect is running; show nothing to avoid flash.
+    return (
+      <AuthLayout brand={<Wordmark />} intro={null}>
+        <></>
+      </AuthLayout>
+    );
+  }
+
   const displayName = clientDisplayName(clientId, clientMeta);
   // Only call the domain "verified" when the server actually returned validated metadata for this
   // client id. Without it the hostname is just an attacker-supplied string we happen to be able to
   // parse, and labelling that as verified is precisely the wrong thing to do on a consent screen.
   const verifiedHost = clientMeta ? hostOf(clientId) : null;
 
+  // Everything above this line comes from the URL. Who is asking and what they are asking for are
+  // therefore knowable on the first paint, and this screen used to throw all of it away for a bare
+  // "Loading…" until `/get-session` answered. `unreachable` is treated as still-pending on purpose:
+  // the session read is retrying, and a consent grant is exactly the wrong thing to abandon over
+  // one failed request. Only the account row and the two decision buttons wait.
+  const accountEmail = session?.user.email ?? null;
+  const sessionSettled = sessionStatus === 'authenticated';
+  const returnTarget = returnHost ?? displayName;
+  const grantSentence =
+    requestedScopes.length > 0
+      ? `Authorize lets ${displayName} do the things listed above until you disconnect it.`
+      : `Authorize connects ${displayName} to your Docket account until you disconnect it.`;
+
   return (
     <AuthLayout
-      brand={<Wordmark className="text-2xl" />}
+      brand={<Wordmark />}
       intro={
         <>
           <ConnectionHero displayName={displayName} clientIcon={clientMeta?.icon} />
@@ -391,7 +423,11 @@ function ConsentPage(): JSX.Element {
           </h1>
           <dl className="border-outline-variant mt-1 flex flex-col gap-3 border-t pt-4">
             {verifiedHost ? <ContextRow label="Verified domain" value={verifiedHost} /> : null}
-            <ContextRow label="Your account" value={session.user.email} />
+            <ContextRow
+              label="Your account"
+              value={accountEmail ?? ACCOUNT_PENDING_LABEL}
+              muted={accountEmail === null}
+            />
             {returnHost ? <ContextRow label="Returns to" value={returnHost} /> : null}
           </dl>
         </>
@@ -418,13 +454,20 @@ function ConsentPage(): JSX.Element {
         </p>
       ) : null}
 
+      {/* What each button actually does, in the same words a person would use. Two bare verbs on
+          a consent screen ask someone to guess whether Deny cancels the connection or cancels the
+          whole sign-in, and whether Authorize is permanent. */}
+      <p className="text-on-surface-variant text-body-small">
+        {grantSentence} Deny sends you back to {returnTarget} without giving it anything.
+      </p>
+
       {/* Reversed so the primary lands on the right at width and first when stacked. */}
       <div className="flex flex-col-reverse gap-2 @3xl:flex-row @3xl:justify-end">
         <Button
           type="button"
           variant="outline"
           size="lg"
-          disabled={pending !== null}
+          disabled={pending !== null || !sessionSettled}
           onClick={() => {
             void decide(false);
           }}
@@ -434,7 +477,7 @@ function ConsentPage(): JSX.Element {
         <Button
           type="button"
           size="lg"
-          disabled={pending !== null}
+          disabled={pending !== null || !sessionSettled}
           onClick={() => {
             void decide(true);
           }}

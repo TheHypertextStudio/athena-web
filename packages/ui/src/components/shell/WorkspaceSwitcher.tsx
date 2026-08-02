@@ -166,6 +166,9 @@ export function WorkspaceSwitcher({
 
   const triggerLabel = loading ? 'Loading workspaces' : (active?.name ?? 'Workspace');
 
+  // placeholder: the active workspace's name and avatar — the one value in the sidebar that cannot
+  // be known before `GET /v1/orgs` resolves. The trigger *button* itself is static chrome and is
+  // always rendered (disabled while the list is unknown); only its identity is stood in for.
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>

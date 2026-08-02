@@ -25,6 +25,13 @@
  * anchor (via {@link SidebarNavItem} `asChild`) whose `href` comes from the host's builders, so
  * navigation is keyboard-accessible and the host's router owns routing; the Search row is a
  * button that opens the palette.
+ *
+ * **The sidebar never renders a placeholder in place of a label it already has.** Every nav label
+ * in both sections is a compile-time constant, so the only thing a fetch can change is a row's
+ * `href` — and an un-navigable row carrying its real text and icon tells the reader strictly more
+ * than a grey bar of the same height. The single unknown-until-fetch value in this component is
+ * the active workspace's *name* (and the switcher's list of workspaces to choose from), which is
+ * why `loading` reaches {@link WorkspaceSwitcher} and nothing else.
  */
 import * as React from 'react';
 
@@ -48,7 +55,6 @@ import {
   Workflow,
 } from '../../icons';
 import { useVocabulary } from '../../hooks/useVocabulary';
-import { Skeleton } from '../../primitives';
 import { useContextState } from './ContextProvider';
 import { useShellDrawer } from './ShellDrawerContext';
 import { SidebarNavItem } from './SidebarNavItem';
@@ -77,7 +83,16 @@ export interface SidebarProps {
   readonly onCreateWorkspace: () => void;
   /** Open the command palette (the Search Home row). */
   readonly onOpenSearch: () => void;
-  /** Keep stable shell navigation visible while workspace-bound controls resolve. */
+  /**
+   * Whether the caller's workspace list is still unknown.
+   *
+   * @remarks
+   * Narrow by design: it gates only the things that genuinely cannot be known before the fetch
+   * resolves — the switcher's workspace *name* and its list, and whether a Workspace row can be
+   * given an `href`. It never withholds a label. The Workspace rows' text and icons are
+   * compile-time constants, so they render at `loading` too, merely non-navigable until an active
+   * workspace exists.
+   */
   readonly loading?: boolean;
   /**
    * Whether the active workspace is the caller's personal space.
@@ -236,9 +251,14 @@ export function Sidebar({
       </nav>
 
       <GroupLabel>Workspace</GroupLabel>
-      {loading ? (
-        <WorkspaceNavigationSkeleton />
-      ) : activeOrgId ? (
+      {/* Every label in `workspaceRows` is a compile-time constant, so there is nothing here to
+          wait for: the rows paint immediately and only their `href` depends on the resolved
+          workspace. A grey bar in place of the word "Projects" is strictly less information than
+          the word "Projects" — it hides a label we already know in order to reserve the space that
+          label would have occupied. While `activeOrgId` is unresolved the same rows render
+          non-navigable (same text, same icons, same heights), so the section's rhythm is held by
+          real content rather than by a placeholder standing in for it. */}
+      {activeOrgId ? (
         <nav aria-label="Workspace" className="flex flex-col space-y-1" onClick={handleNavActivate}>
           {workspaceRows.map((row) => {
             const href = hrefForWorkspace(activeOrgId, row.key);
@@ -256,24 +276,23 @@ export function Sidebar({
             );
           })}
         </nav>
+      ) : loading || workspaces.length > 0 ? (
+        // `workspaces.length > 0` with no `activeOrgId` is the one-frame gap between the list
+        // arriving and the host binding an active workspace to it. Falling through to
+        // `WorkspaceEmpty` there would flash "No workspace yet" at someone who plainly has one —
+        // the false empty state the old skeleton existed to avoid, which is avoided here by
+        // showing the real rows instead of a placeholder.
+        <nav aria-label="Workspace" className="flex flex-col space-y-1">
+          {workspaceRows.map((row) => (
+            <SidebarNavItem key={row.key} label={row.label} icon={row.icon} disabled />
+          ))}
+        </nav>
       ) : (
         <WorkspaceEmpty />
       )}
 
       {footer ? <div className="mt-auto pt-2">{footer}</div> : null}
     </aside>
-  );
-}
-
-/** Reserve the workspace navigation rhythm without flashing a false empty state. */
-function WorkspaceNavigationSkeleton(): React.JSX.Element {
-  return (
-    <div className="flex flex-col gap-2 px-3 py-1" aria-hidden="true">
-      <Skeleton className="h-8 w-full rounded-md" />
-      <Skeleton className="h-8 w-5/6 rounded-md" />
-      <Skeleton className="h-8 w-full rounded-md" />
-      <Skeleton className="h-8 w-3/4 rounded-md" />
-    </div>
   );
 }
 

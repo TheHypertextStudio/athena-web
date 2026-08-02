@@ -38,6 +38,12 @@
  *   row closes it via {@link ShellDrawerProvider}). The main panel goes **full-bleed** (no gutter,
  *   no rounding) so content uses the full width. The tab bar still scrolls horizontally and never
  *   forces horizontal page overflow.
+ *
+ * @remarks Rail docking is a **separate, higher threshold** than the shell frame — see
+ * {@link RAIL_DOCK_QUERY}. A docked rail is a flex sibling that takes its width out of `<main>`, so
+ * docking it the moment the sidebar appears made a *wider* window produce a *narrower* content
+ * panel. Below the dock threshold the same panels open as a right overlay {@link Sheet} instead,
+ * which costs `<main>` nothing.
  */
 import * as React from 'react';
 
@@ -53,6 +59,22 @@ import { ShellDrawerProvider } from './ShellDrawerContext';
 /** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
 const RAIL_ACTIVE_KEY = 'docket.rail.active';
 const RAIL_COLLAPSED_KEY = 'docket.rail.collapsed';
+
+/**
+ * The width at which the right rail is allowed to **dock** as a flex sibling of `<main>`.
+ *
+ * @remarks
+ * Deliberately far above the `lg` shell threshold. A docked rail is 22rem of panel plus the 3rem
+ * activity bar, and the static sidebar is another 16rem, so docking at `lg` left `<main>` with
+ * ~344px at 1024px wide — a *wider* window produced a *three-times narrower* content panel, and any
+ * multi-column page (the calendar most visibly) collapsed to a single clipped column.
+ *
+ * 90rem is the smallest width at which the sidebar, a docked rail, and a content panel that is
+ * still the largest region on screen all fit. Below it the same panels are one click away as a
+ * right overlay {@link Sheet} from the always-visible {@link ShellActivityBar}, which takes nothing
+ * from `<main>` — so widening the window never shrinks the content.
+ */
+const RAIL_DOCK_QUERY = '(min-width: 90rem)';
 
 /** The persisted active-panel id, or null when unset / unavailable (SSR). */
 function readRailActive(): string | null {
@@ -157,8 +179,9 @@ export function AppShell({
 }: AppShellProps): React.JSX.Element {
   const { orgAccent, density, activeOrgId } = useContextState();
   const isLgUp = useMediaQuery('(min-width: 64rem)');
+  const canDockRail = useMediaQuery(RAIL_DOCK_QUERY);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
-  const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
+  const [overlayPanelOpen, setOverlayPanelOpen] = React.useState(false);
 
   // Rail state is shell-owned and persisted across sessions: which native panel is active, and
   // whether the panel host is collapsed (the activity bar always stays visible). The persisted
@@ -178,8 +201,18 @@ export function AppShell({
 
   // Click a panel icon: collapse if it is the already-active, visible panel; otherwise switch to it
   // and expand. Only explicit clicks persist, so passive resolution never overwrites a real choice.
+  //
+  // Below the dock threshold the bar drives the *overlay* instead, so the identical affordance never
+  // takes width away from `<main>` at the sizes where `<main>` cannot spare any.
   const handlePanelIconClick = React.useCallback(
     (id: string) => {
+      if (!canDockRail) {
+        const closing = id === activePanelIdResolved && overlayPanelOpen;
+        setActivePanelId(id);
+        writeRailState(RAIL_ACTIVE_KEY, id);
+        setOverlayPanelOpen(!closing);
+        return;
+      }
       if (id === activePanelIdResolved && !railCollapsed) {
         setRailCollapsed(true);
         writeRailState(RAIL_COLLAPSED_KEY, '1');
@@ -190,7 +223,7 @@ export function AppShell({
       writeRailState(RAIL_ACTIVE_KEY, id);
       writeRailState(RAIL_COLLAPSED_KEY, '0');
     },
-    [activePanelIdResolved, railCollapsed],
+    [activePanelIdResolved, canDockRail, overlayPanelOpen, railCollapsed],
   );
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
@@ -277,9 +310,9 @@ export function AppShell({
             type="button"
             aria-label={`Show ${activePanel.label}`}
             aria-controls={SHELL_ASIDE_ID}
-            aria-expanded={mobileSheetOpen}
+            aria-expanded={overlayPanelOpen}
             onClick={() => {
-              setMobileSheetOpen(true);
+              setOverlayPanelOpen(true);
             }}
             className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
           >
@@ -324,7 +357,12 @@ export function AppShell({
             // the iOS home indicator when installed. It resolves to `0px` in a browser tab and on
             // desktop, so `<main>`'s "a page's `h-full` means all the space `<main>` has left"
             // contract is unchanged there — and still holds when inset, just `inset` px shorter.
-            'bg-surface lg:border-outline-variant @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto pb-[env(safe-area-inset-bottom)] outline-none lg:rounded-xl lg:border lg:shadow-sm',
+            //
+            // No border and no shadow: the tonal step from the `surface-container` canvas onto
+            // `surface` is the separation, exactly as every other panel in the shell does it. A
+            // border plus a drop shadow on the outermost frame drew a second box around content
+            // that already had one.
+            'bg-surface @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto pb-[env(safe-area-inset-bottom)] outline-none lg:rounded-xl',
             rebinding && 'animate-org-rebind',
           )}
         >
@@ -332,28 +370,30 @@ export function AppShell({
         </main>
       </div>
 
-      {/* Right-hand rail (desktop): the collapsible panel host beside the always-visible activity
-          bar on the far edge, at `lg` and up. The bar stays put and is the peek/reopen affordance. */}
+      {/* Right-hand rail: the panel host docks only above {@link RAIL_DOCK_QUERY}; the activity bar
+          is present from `lg` either way, so the affordance does not move when the panel changes
+          from a docked sibling to an overlay. */}
+      {activePanel && canDockRail ? (
+        <ShellAside panel={activePanel} collapsed={railCollapsed} />
+      ) : null}
       {activePanel && isLgUp ? (
-        <>
-          <ShellAside panel={activePanel} collapsed={railCollapsed} />
-          <ShellActivityBar
-            panels={panels}
-            activeId={activePanelIdResolved}
-            collapsed={railCollapsed}
-            onIconClick={handlePanelIconClick}
-          />
-        </>
+        <ShellActivityBar
+          panels={panels}
+          activeId={activePanelIdResolved}
+          collapsed={canDockRail ? railCollapsed : !overlayPanelOpen}
+          onIconClick={handlePanelIconClick}
+        />
       ) : null}
 
-      {/* The same panels as a right-anchored modal Sheet below `lg`, opened from the top-bar trigger.
-          Mutually exclusive with the inline rail (the `isLgUp` gate), so the shared id stays unique.
-          A compact horizontal switcher stands in for the desktop activity bar when there's more than
-          one panel. Escape/backdrop dismiss closes it. */}
+      {/* The same panels as a right-anchored modal Sheet whenever the rail cannot dock — opened from
+          the mobile top-bar trigger below `lg`, and from the activity bar above it. Mutually
+          exclusive with the inline host (the `canDockRail` gate), so the shared id stays unique. A
+          compact horizontal switcher stands in for the activity bar on mobile, where there is none.
+          Escape/backdrop dismiss closes it. */}
       <Sheet
-        open={activePanel != null && !isLgUp && mobileSheetOpen}
+        open={activePanel != null && !canDockRail && overlayPanelOpen}
         onOpenChange={(next) => {
-          if (!next) setMobileSheetOpen(false);
+          if (!next) setOverlayPanelOpen(false);
         }}
       >
         <SheetContent
@@ -361,10 +401,10 @@ export function AppShell({
           id={SHELL_ASIDE_ID}
           aria-label={activePanel?.label}
           aria-describedby={undefined}
-          className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden lg:hidden"
+          className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden"
         >
           <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
-          {panels.length > 1 ? (
+          {panels.length > 1 && !isLgUp ? (
             <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 px-2 pb-2">
               {panels.map((panel) => {
                 const isActive = panel.id === activePanelIdResolved;

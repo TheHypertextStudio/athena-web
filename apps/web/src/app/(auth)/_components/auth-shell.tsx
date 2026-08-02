@@ -38,7 +38,7 @@ export interface AuthShellProps {
 export function AuthShell({ title, description, children, footer }: AuthShellProps): JSX.Element {
   return (
     <AuthLayout
-      brand={<Wordmark className="text-2xl" />}
+      brand={<Wordmark />}
       intro={
         <>
           <span

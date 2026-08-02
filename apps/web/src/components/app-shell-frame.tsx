@@ -41,6 +41,9 @@ import {
   readSessionSnapshot,
   writeSessionSnapshot,
 } from '@/lib/session-snapshot';
+// Type-only: `server-session.ts` reaches for `next/headers`, so a value import would drag a
+// server-only module into this `'use client'` boundary. The type is erased at compile time.
+import type { ServerSessionUser } from '@/lib/server-session';
 import { resolveSessionStatus } from '@/lib/session-status';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
@@ -68,6 +71,26 @@ import {
   writeLastOrg,
 } from './app-shell-utils';
 
+/** Props for {@link AppShellFrame}. */
+export interface AppShellFrameProps {
+  /** The active page, rendered inside the shell's `<main>`. */
+  readonly children: ReactNode;
+  /**
+   * The server-confirmed identity for this request, or `null` when the server read was `'unknown'`.
+   *
+   * @remarks
+   * Required rather than optional, deliberately. The `(app)` layout already resolved who this is
+   * before the document was sent, so the shell has no reason to ask again before it can draw an
+   * account row or a workspace name — and a caller that simply forgot to pass it would silently
+   * reintroduce the identity skeleton on every entry. Making it required forces the omission to be
+   * an explicit `null`, which means "the server could not ask", not "nobody bothered".
+   *
+   * `null` never implies signed-out. Only the client session resolving to *no session* does, and
+   * only that opens the interlock.
+   */
+  readonly initialSession: ServerSessionUser | null;
+}
+
 /**
  * The authenticated app-shell frame: the single flattened sidebar, the multi-document tab bar,
  * and the active workspace.
@@ -82,8 +105,24 @@ import {
  *
  * The orgs and the bound org's vocabulary skin are exposed to descendant pages through
  * {@link useActiveOrg} so they can render org chips and resolve entity nouns without refetching.
+ *
+ * **The shell never withholds statically-known chrome, or the page's own content, behind a data
+ * fetch.** The navigation labels, the tab bar, the mobile search control and every page's heading
+ * and toolbar are compile-time constants or route-derived, so they paint on the first frame. What a
+ * fetch can legitimately gate is narrow and is tracked by exactly two flags:
+ *
+ * - {@link identityUnknown} — no live session, no `initialSession`, and no offline snapshot. Only
+ *   this may stand in for the account row and the rail's identity-bound panels.
+ * - {@link workspacesUnknown} — the org list has not arrived. Only this may stand in for the
+ *   workspace switcher's *name* and its list of workspaces to switch between.
+ *
+ * Nothing else is gated by either. An earlier version collapsed both into one `shellLoading` flag
+ * that also gated `children`, the tab bar, the mobile search button and the whole Workspace nav,
+ * which cost a statically-known page heading ~420ms on every entry and put four grey bars where the
+ * words "Initiatives / Programs / Projects / Cycles" already belonged. Each page owns an in-region
+ * loading treatment for its own data; the shell adds nothing by blocking on top of it.
  */
-export function AppShellFrame({ children }: { children: ReactNode }): JSX.Element {
+export function AppShellFrame({ children, initialSession }: AppShellFrameProps): JSX.Element {
   const pathname = usePathname();
   const { data: session, isPending, error: sessionError, refetch } = authClient.useSession();
   const { requireAuthentication } = useAuthenticationInterlock();
@@ -171,13 +210,19 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   }, [online, refetch]);
 
   // The caller's orgs drive the sidebar's workspace switcher — read once through the shared query
-  // layer and gated on an authenticated session. The frame itself stays mounted while this settles.
+  // layer and gated on a known identity. The frame itself stays mounted while this settles.
+  //
+  // A server-confirmed `initialSession` is enough to start it: the `(app)` layout already
+  // prefetched this exact key into the hydration boundary, so in the normal case the data is
+  // present on the first client render and this never fetches at all. Waiting for the client
+  // session to echo back an identity the server already resolved would only delay the workspace
+  // name by a round trip.
   const orgsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.orgs(),
       () => api.v1.orgs.$get(),
       'Could not load your organizations.',
-      { enabled: Boolean(session), staleTime: STALE.static },
+      { enabled: Boolean(session) || Boolean(initialSession), staleTime: STALE.static },
     ),
   );
   const orgs = useMemo(() => orgsQ.data?.items ?? [], [orgsQ.data]);
@@ -189,12 +234,28 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   // status ignores it, so it can never keep a signed-out person inside the shell.
   const offlineIdentity = status === 'unreachable' ? snapshot : null;
 
-  const userId = session?.user.id ?? offlineIdentity?.userId ?? null;
+  const userId = session?.user.id ?? initialSession?.userId ?? offlineIdentity?.userId ?? null;
   const routeOrgId = orgIdFromPath(pathname);
-  // Offline, `orgsQ` is disabled and will never settle, so gating on it would pin the shell to its
-  // loading treatment forever. Anything the query layer has cached still renders; the rest degrades
-  // to empty, with the offline banner explaining why.
-  const shellLoading = offlineIdentity ? false : !session || orgsQ.isPending;
+
+  // We do not know who this is: no live session, no server-confirmed identity, no cached snapshot.
+  // The ONLY thing this may gate is identity-bound chrome (the account row and the rail's
+  // identity-bound panels). With the layout's server-side guard in place it is false on essentially
+  // every real entry, so those fallbacks are now genuinely-unknown-only rather than the default.
+  const identityUnknown = !session && !initialSession && !offlineIdentity;
+
+  // The workspace list has not arrived. The ONLY thing this may gate is the switcher's workspace
+  // name and its list — never a nav label, which is a compile-time constant.
+  //
+  // Offline, `orgsQ` is disabled and will never settle, so gating on it would pin the switcher to
+  // its loading treatment forever. Anything the query layer has cached still renders; the rest
+  // degrades to empty, with the offline banner explaining why.
+  const workspacesUnknown = offlineIdentity ? false : orgsQ.isPending;
+
+  // The server answered, definitively, that there is no session. This is an authorization decision,
+  // not a loading state: the interlock is opening over the shell, and painting a page's private
+  // content behind it would show data the viewer is no longer entitled to. Distinct from every
+  // "still resolving" case, all of which now render the page.
+  const sessionRejected = status === 'signed-out';
 
   // Unreachable with no cached identity: there is no workspace to populate, but that is NOT a
   // reason to replace the application with an error page. The shell's chrome — navigation, the
@@ -208,27 +269,35 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
     pathname.startsWith('/settings/') ||
     pathname.endsWith('/settings') ||
     pathname.includes('/settings/');
-  // The calendar surface (`/calendar` or `/orgs/<id>/calendar`) defaults its rail to the Tasks
-  // day-plan panel instead of the Agenda, which would just duplicate the calendar's own timeline.
+  // The calendar surface (`/calendar` or `/orgs/<id>/calendar`) does not register the Agenda panel
+  // at all — the calendar's own timeline IS the schedule, so offering the Agenda beside it would put
+  // a second live scheduling canvas on screen. Its rail is the Tasks day-plan panel alone.
   // `(^|/)calendar$` excludes settings' `google-calendar` (preceded by `-`, not `/`).
   const calendarSurface = /(^|\/)calendar$/.test(pathname);
-  const initialOrgId = routeOrgId ?? readLastOrg(userId);
+
+  // Bind the active workspace during render, from the route and the layout-hydrated workspace list.
+  // Doing it here rather than only in `AppShellInner`'s effect is what lets the Workspace rows be
+  // real links on the very first paint; when this was effect-only the rows spent ~350ms rendered
+  // inert and visibly dimmed while an effect caught up with data that was already in hand.
+  //
+  // `readLastOrg` is deliberately NOT consulted here. It reads `localStorage`, which the server
+  // render cannot see, so seeding from it would make the server and the first client render
+  // disagree about every Workspace href — a hydration mismatch. The persisted preference is a
+  // refinement, and `AppShellInner`'s effect applies it.
+  const initialOrgId = routeOrgId ?? resolveActiveOrg(null, orgs, null);
 
   return (
-    <ContextProvider
-      initialContext={shellLoading ? null : initialOrgId}
-      initialDensity={readDensity(userId)}
-    >
-      <ActiveOrgContext
-        orgs={shellLoading ? [] : orgs}
-        activeOrgId={shellLoading ? null : routeOrgId}
-        orgsError={orgsError}
-      >
-        <CommandPaletteProvider enabled={!shellLoading}>
+    <ContextProvider initialContext={initialOrgId} initialDensity={readDensity(userId)}>
+      <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
+        {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
+            know whose workspace to search — not once every workspace has loaded. */}
+        <CommandPaletteProvider enabled={!identityUnknown}>
           <QueryPersistence userId={userId} />
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
-              loading={shellLoading}
+              identityUnknown={identityUnknown}
+              workspacesUnknown={workspacesUnknown}
+              sessionRejected={sessionRejected}
               settingsSurface={settingsSurface}
               calendarSurface={calendarSurface}
               showAthenaPulse={pathname !== '/athena'}
@@ -258,32 +327,18 @@ export function AppShellFrame({ children }: { children: ReactNode }): JSX.Elemen
   );
 }
 
-/** Main-panel loading treatment shaped like a page header and a short working set. */
-function AppShellContentSkeleton(): JSX.Element {
-  return (
-    <div
-      role="status"
-      aria-label="Loading your workspace"
-      aria-busy="true"
-      className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-5 py-6 sm:px-8 sm:py-8"
-    >
-      <span className="sr-only">Loading your workspace</span>
-      <div className="flex flex-col gap-3" aria-hidden="true">
-        <Skeleton className="h-7 w-44 rounded-md" />
-        <Skeleton className="h-4 w-72 max-w-full rounded-md" />
-      </div>
-      <div className="grid gap-4" aria-hidden="true">
-        <Skeleton className="h-20 w-full rounded-xl" />
-        <Skeleton className="h-20 w-full rounded-xl" />
-        <Skeleton className="h-20 w-4/5 rounded-xl" />
-      </div>
-    </div>
-  );
-}
-
-/** Inert account-area placeholder that preserves the sidebar's vertical balance. */
+/**
+ * Inert account-area placeholder, shown only while the viewer's identity is genuinely unknown.
+ *
+ * @remarks
+ * Rendered when there is no live session, no server-confirmed `initialSession` and no offline
+ * snapshot — i.e. nobody can say whose name and avatar belong here. Every one of those three
+ * sources is absent only on a cold entry that bypassed the layout's server-side session read, so in
+ * practice this is a fallback rather than a first-paint treatment.
+ */
 function AppShellAccountSkeleton(): JSX.Element {
   return (
+    // placeholder: the signed-in account's name, email and avatar — unknown until a session resolves
     <div className="flex items-center gap-2 px-2 py-2" aria-hidden="true">
       <Skeleton className="size-7 shrink-0 rounded-full" />
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
@@ -294,9 +349,17 @@ function AppShellAccountSkeleton(): JSX.Element {
   );
 }
 
-/** Query-free agenda placeholder used to keep the desktop rail geometry stable. */
+/**
+ * Rail placeholder used while the viewer's identity is unknown.
+ *
+ * @remarks
+ * The Agenda and the Tasks day-plan are both per-person reads keyed by the signed-in user, so
+ * neither can be mounted before there is a user to key them by. Gated on identity alone — never on
+ * the workspace list, which the rail does not need.
+ */
 function AppShellAgendaSkeleton(): JSX.Element {
   return (
+    // placeholder: the signed-in person's agenda and day plan — per-user reads with no viewer yet
     <div className="flex flex-col gap-4 p-4" aria-hidden="true">
       <Skeleton className="h-5 w-20 rounded" />
       <Skeleton className="h-16 w-full rounded-lg" />
@@ -307,28 +370,60 @@ function AppShellAgendaSkeleton(): JSX.Element {
 
 /**
  * The curated, Docket-native rail panels for a surface. Internal-only by design — the Tasks
- * day-plan and the Agenda — never an integration add-on gallery. The calendar defaults to Tasks
- * (its own timeline already covers the schedule); everywhere else the Agenda is the sole panel.
+ * day-plan and the Agenda — never an integration add-on gallery.
+ *
+ * @remarks
+ * On the calendar the Agenda is **not registered at all**, not merely demoted from the default.
+ * `<Agenda />` mounts `AgendaCanvas` → `TimelineArrangement` → a `SchedulingCanvas`, the very
+ * primitive the calendar page mounts, and `ShellActivityBar` gives every registered panel a
+ * one-click button — so registering it here put two full time grids on screen side by side, each
+ * with its own date navigator, the rail one frequently taller than the primary. The calendar
+ * surface therefore offers the Tasks day-plan alone, which is also the drag source for dropping a
+ * task into a timebox. Everywhere else the Agenda is the sole panel.
+ *
+ * Both panels are per-person reads, so they are swapped for a placeholder on `identityUnknown`
+ * alone. The workspace list is irrelevant to either — gating them on it would have held an empty
+ * rail open for an org fetch neither panel consumes.
+ *
+ * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
+ * @param calendarSurface - Whether the active route is the full calendar view.
+ * @returns The rail panel set and the panel shown until the viewer picks another.
  */
-function railAsideFor(loading: boolean, calendarSurface: boolean): AppShellAside {
+function railAsideFor(identityUnknown: boolean, calendarSurface: boolean): AppShellAside {
+  if (calendarSurface) {
+    const tasks: RailPanel = {
+      id: 'tasks',
+      label: 'Tasks',
+      icon: <ListChecks aria-hidden="true" />,
+      node: identityUnknown ? <AppShellAgendaSkeleton /> : <DayTasksPanel />,
+    };
+    return { panels: [tasks], defaultPanelId: 'tasks' };
+  }
   const agenda: RailPanel = {
     id: 'agenda',
     label: 'Agenda',
     icon: <Calendar aria-hidden="true" />,
-    node: loading ? <AppShellAgendaSkeleton /> : <Agenda />,
+    node: identityUnknown ? <AppShellAgendaSkeleton /> : <Agenda />,
   };
-  if (!calendarSurface) return { panels: [agenda], defaultPanelId: 'agenda' };
-  const tasks: RailPanel = {
-    id: 'tasks',
-    label: 'Tasks',
-    icon: <ListChecks aria-hidden="true" />,
-    node: loading ? <AppShellAgendaSkeleton /> : <DayTasksPanel />,
-  };
-  return { panels: [tasks, agenda], defaultPanelId: 'tasks' };
+  return { panels: [agenda], defaultPanelId: 'agenda' };
 }
 
 interface AppShellInnerProps {
-  loading: boolean;
+  /**
+   * No live session, no server-confirmed identity, and no offline snapshot. Gates the account row
+   * and the rail's per-person panels — and nothing else.
+   */
+  identityUnknown: boolean;
+  /**
+   * The caller's workspace list has not arrived. Gates the workspace switcher's name and list —
+   * and nothing else. Never a nav label, a heading, the tab bar or the page's content.
+   */
+  workspacesUnknown: boolean;
+  /**
+   * The session query settled with *no session*. Withholds the page's private content while the
+   * interlock opens over the shell. An authorization decision, never a loading state.
+   */
+  sessionRejected: boolean;
   settingsSurface: boolean;
   calendarSurface: boolean;
   showAthenaPulse: boolean;
@@ -361,7 +456,9 @@ interface AppShellInnerProps {
  * mirrored into the shell context (driving the org accent + the Workspace section's hrefs).
  */
 function AppShellInner({
-  loading,
+  identityUnknown,
+  workspacesUnknown,
+  sessionRejected,
   settingsSurface,
   calendarSurface,
   showAthenaPulse,
@@ -391,7 +488,7 @@ function AppShellInner({
       queryKeys.notificationsCount(),
       () => api.v1.notifications.count.$get(),
       'Could not load notifications.',
-      { enabled: !loading, staleTime: STALE.volatile },
+      { enabled: !identityUnknown, staleTime: STALE.volatile },
     ),
     60_000,
   );
@@ -434,13 +531,14 @@ function AppShellInner({
 
   // The personal org owns the account-level Security settings the recovery-codes nudge links to.
 
+  // Bind the resolved workspace as soon as one exists, and never unbind it. The context was
+  // previously cleared to `null` on every loading tick, which is what forced the Workspace nav
+  // through an "unknown workspace" state on each entry even when the route already named the org.
+  // Once a workspace is bound it stays bound; `resolveActiveOrg` returns the route's org whenever
+  // the route has one, so a real navigation still rebinds immediately.
   useEffect(() => {
-    if (loading) {
-      setContext(null);
-    } else if (resolvedOrgId) {
-      setContext(resolvedOrgId);
-    }
-  }, [loading, resolvedOrgId, setContext]);
+    if (resolvedOrgId) setContext(resolvedOrgId);
+  }, [resolvedOrgId, setContext]);
 
   useEffect(() => {
     if (resolvedOrgId) writeLastOrg(userId, resolvedOrgId);
@@ -462,7 +560,9 @@ function AppShellInner({
 
   const sidebar = (
     <Sidebar
-      loading={loading}
+      // The sidebar's only unknown-until-fetch value is the workspace *name* and the list to switch
+      // between; its nav labels are compile-time constants and render regardless.
+      loading={workspacesUnknown}
       workspaces={workspaces}
       activeHomeKey={homeKey}
       activeWorkspaceKey={workspaceKey}
@@ -475,7 +575,7 @@ function AppShellInner({
       onOpenSearch={openPalette}
       personalWorkspace={resolvedOrgIsPersonal}
       footer={
-        loading ? (
+        identityUnknown ? (
           <AppShellAccountSkeleton />
         ) : (
           <>
@@ -487,7 +587,9 @@ function AppShellInner({
     />
   );
 
-  const tabBar = loading ? undefined : (
+  // Chrome, not data. An empty tab list renders as an empty bar, which is the truth — withholding
+  // the bar entirely made the whole shell reflow the moment the session resolved.
+  const tabBar = (
     <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
   );
 
@@ -496,17 +598,16 @@ function AppShellInner({
     [workspaces, resolvedOrgId],
   );
 
-  const mobileBrand = loading ? (
-    <span className="text-body-medium font-semibold">Docket</span>
-  ) : (
+  // Statically known: the product name is the correct label until a workspace name displaces it.
+  const mobileBrand = (
     <span className="text-body-medium truncate font-semibold">
       {activeWorkspaceName ?? 'Docket'}
     </span>
   );
 
-  const mobileActions = loading ? (
-    <Skeleton className="size-9 rounded-lg" aria-hidden="true" />
-  ) : (
+  // The search control needs no data at all — `openPalette` is a local handler — so it is rendered
+  // outright rather than stood in for by a grey square of the same size.
+  const mobileActions = (
     <button
       type="button"
       aria-label="Search"
@@ -518,14 +619,12 @@ function AppShellInner({
   );
 
   return (
-    <VocabularyProvider skin={loading ? null : skin}>
+    <VocabularyProvider skin={skin}>
       <AthenaPanelProvider
         showPulse={showAthenaPulse}
         locationKey={locationKey}
         context={
-          loading || !resolvedOrgId
-            ? null
-            : { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
+          resolvedOrgId ? { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName } : null
         }
       >
         <AppShell
@@ -547,13 +646,16 @@ function AppShellInner({
               <UpdateBanner onApply={applyUpdate} />
             ) : undefined
           }
-          aside={settingsSurface ? undefined : railAsideFor(loading, calendarSurface)}
+          aside={settingsSurface ? undefined : railAsideFor(identityUnknown, calendarSurface)}
         >
+          {/* The page renders unconditionally while the session and workspace list resolve. Each
+              surface already paints its own heading and toolbar from static copy and owns an
+              in-region treatment for its own data, so a shell-level gate on top only delayed
+              content that was ready. The two exceptions are not loading states: `unavailable` has
+              nothing to show, and `sessionRejected` must not show it. */}
           {unavailable ? (
             <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
-          ) : loading ? (
-            <AppShellContentSkeleton />
-          ) : (
+          ) : sessionRejected ? null : (
             children
           )}
         </AppShell>

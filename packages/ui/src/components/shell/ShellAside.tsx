@@ -62,10 +62,11 @@ export function ShellAside({ panel, collapsed }: ShellAsideProps): React.JSX.Ele
       aria-label={panel.label}
       inert={open ? undefined : true}
       className={cn(
-        // Tonal surface (no border — the surface step off the canvas carries the separation); width is
+        // Tonal surface (no border and no shadow — the surface step off the canvas carries the
+        // separation, and a second shadowed box beside `<main>` framed the content twice); width is
         // the only animated property, and it's a flex sibling of `<main>`, so the panel reflows in one
         // continuous motion. Collapsed → zero width; the always-visible activity bar is the reopen.
-        'bg-surface @container h-full min-h-0 shrink-0 overflow-hidden rounded-xl shadow-sm transition-[width] duration-(--dur-slow) ease-in-out',
+        'bg-surface @container h-full min-h-0 shrink-0 overflow-hidden rounded-xl transition-[width] duration-(--dur-slow) ease-in-out',
         open ? 'w-[22rem]' : 'w-0',
       )}
     >

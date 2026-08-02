@@ -1,335 +1,35 @@
-'use client';
+import type { JSX } from 'react';
 
-import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
-import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
-
-import { safeSameOriginPath } from '@/components/app-shell-utils';
-import { api } from '@/lib/api';
-import { authClient } from '@/lib/auth-client';
-
-import { AuthError, Spinner } from '../_components/auth-feedback';
-import { AuthShell } from '../_components/auth-shell';
-import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
 import {
-  isConditionalMediationSupported,
-  isWebAuthnSupported,
-  signalUnknownPasskey,
-} from '../_lib/webauthn';
+  type AuthScreenSearchParams,
+  redirectAuthenticatedVisitor,
+} from '../_lib/server-entry-guard';
 
-/** The Hub cockpit a returning user lands in once signed in. */
-const HOME_DESTINATION = '/today';
-
-/** Where a signed-in user with no organization is routed instead of the cockpit. */
-const ONBOARDING_DESTINATION = '/onboarding';
-
-/** How many times to retry the first authenticated read after Better Auth reports success. */
-const SESSION_SETTLE_ATTEMPTS = 4;
-
-/** Delay between session-cookie read attempts after a passkey ceremony succeeds. */
-const SESSION_SETTLE_DELAY_MS = 125;
-
-const SESSION_COOKIE_ERROR = 'We could not finish signing you in. Please try again.';
+import { SignInClient } from './sign-in-client';
 
 /**
- * The safe `?callbackURL=` return-to path, or `null`.
+ * `/sign-in` — the server half: bounce an already-authenticated visitor before anything renders.
  *
  * @remarks
- * A mid-session expiry redirect (see `authentication-interlock.tsx`) sends the user to
- * `/sign-in?callbackURL=<where they were>`; honoring it lands them back on that surface after
- * re-authenticating instead of always dumping them at {@link HOME_DESTINATION}. Open-redirect
- * safety comes from {@link safeSameOriginPath}, the one implementation every auth-adjacent return
- * path shares.
- */
-function safeCallbackPath(): string | null {
-  if (typeof window === 'undefined') return null;
-  return safeSameOriginPath(new URLSearchParams(window.location.search).get('callbackURL'));
-}
-
-/**
- * The full same-origin URL to resume an in-flight MCP/OAuth authorization, or `null`.
+ * The screen is split in two on purpose. The passkey ceremony is irreducibly client-side, so it
+ * lives in {@link SignInClient}; the *decision* about whether this person should be looking at a
+ * sign-in screen at all is made on the server, by
+ * {@link redirectAuthenticatedVisitor} — the one guard `/sign-up` also runs, so the two routes
+ * cannot drift apart on which sessions are bounced or which return-paths are honoured.
  *
- * @remarks
- * Better Auth's `oauthProvider` plugin redirects an unauthenticated visitor here directly from
- * its own `/api/auth/oauth2/authorize` endpoint (see `loginPage` in `packages/auth`) - and does
- * so by appending the *original* OAuth request's raw query string verbatim (`response_type`,
- * `client_id`, `redirect_uri`, `scope`, `state`, …), not our `?callbackURL=` convention. That
- * plugin also arms a signed cookie meant to auto-resume the flow server-side once a new session
- * cookie appears - but that mechanism only fires on a real top-level navigation, and our sign-in
- * ceremony completes via `fetch()` (`authClient.signIn.passkey()`), which never moves the address
- * bar. Left alone, the ceremony "succeeds" from the browser's perspective while the OAuth request
- * it was answering is silently abandoned, and the user lands wherever `routeAfterSignIn` would
- * otherwise send them.
+ * That split is the fix for a real, measured defect. When the whole route was a Client Component,
+ * its redirect ran in a `useEffect` — which by construction runs after the browser has already
+ * painted — so a person with a valid session opening the app from the landing page saw the complete
+ * sign-in card at ~75ms and only reached `/today` at ~483ms.
  *
- * Detecting Better Auth's own `response_type`/`client_id` params and replaying the exact same
- * query against the *same authorize endpoint*, now with a valid session, sidesteps that gap
- * entirely: Better Auth's server-side handler re-runs for real and issues its own correct
- * redirect to the consent screen (`/oauth/authorize?consent_code=…`).
+ * @param props - The route's `searchParams` promise.
+ * @returns The sign-in screen, for anyone who should still be seeing it.
  */
-function oidcAuthorizeResumeUrl(): string | null {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has('response_type') || !params.has('client_id')) return null;
-  return `${window.location.origin}/api/auth/oauth2/authorize${window.location.search}`;
-}
-
-/**
- * Navigate to `destination`. A `/api/auth/...` target is Better Auth's server handler, not a
- * Next.js route - it needs a real page load (not client-side routing) so the fresh session
- * cookie is actually sent and `authorize()` re-runs for real.
- */
-function navigateAfterSignIn(router: ReturnType<typeof useRouter>, destination: string): void {
-  if (destination.includes('/api/auth/')) {
-    window.location.href = destination;
-    return;
-  }
-  router.push(destination);
-}
-
-type OrgsResponse = Awaited<ReturnType<typeof api.v1.orgs.$get>>;
-
-/** Wait briefly for the browser/proxy cookie path to settle. */
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-/** Load orgs after sign-in, tolerating a short-lived missing-session read. */
-async function loadOrgsAfterSignIn(): Promise<OrgsResponse> {
-  let lastResponse: OrgsResponse | null = null;
-  for (let attempt = 0; attempt < SESSION_SETTLE_ATTEMPTS; attempt += 1) {
-    const response = await api.v1.orgs.$get();
-    if (response.status !== 401) return response;
-    lastResponse = response;
-    if (attempt < SESSION_SETTLE_ATTEMPTS - 1) {
-      await delay(SESSION_SETTLE_DELAY_MS);
-    }
-  }
-  return lastResponse ?? api.v1.orgs.$get();
-}
-
-/**
- * The passwordless, passkey-first sign-in screen.
- *
- * @remarks
- * A Client Component. The primary action is "Sign in with a passkey", which runs a WebAuthn
- * authentication ceremony via `authClient.signIn.passkey()` — no email, no password. Where the
- * browser supports conditional mediation, a passkey autofill prompt is ALSO armed on mount
- * (`autoFill: true`) so saved passkeys surface in the browser's own UI; both paths converge on
- * {@link routeAfterSignIn}. On success it routes to {@link HOME_DESTINATION} (or
- * {@link ONBOARDING_DESTINATION} when the user belongs to no organization yet); the membership
- * lookup rides the freshly-set session cookie through the typed RPC client.
- *
- * Robustness:
- * - An already-authenticated browser is redirected away immediately (see the session-check effect)
- *   rather than rendering the form or arming a fresh passkey ceremony — this is also what stops a
- *   signed-in user from silently minting a redundant session every time they land on `/sign-in`.
- * - WebAuthn support is feature-detected; unsupported browsers see a clear message and the
- *   passkey button is disabled. Passkeys are the only sign-in method — there is deliberately no
- *   OAuth/social fallback.
- * - The conditional-UI prompt is armed at most once and only when supported.
- * - Errors are surfaced in an assertive `role="alert"` region; a user-cancelled ceremony is
- *   treated as a no-op rather than an error.
- */
-export default function SignInPage(): JSX.Element {
-  const router = useRouter();
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const [passkeySupported, setPasskeySupported] = useState(true);
-  const conditionalArmed = useRef(false);
-  const { data: existingSession, isPending: sessionPending } = authClient.useSession();
-
-  /** Route into the cockpit, or onboarding when the user has no organization yet. */
-  const routeAfterSignIn = useCallback(async (): Promise<void> => {
-    // An in-flight MCP/OAuth authorization takes priority over the normal landing logic - it
-    // must resume against Better Auth's own endpoint, not our org-membership routing below.
-    const resumeUrl = oidcAuthorizeResumeUrl();
-    if (resumeUrl) {
-      window.location.href = resumeUrl;
-      return;
-    }
-    try {
-      const res = await loadOrgsAfterSignIn();
-      if (res.ok) {
-        const { items } = await res.json();
-        if (items.length === 0) {
-          router.push(ONBOARDING_DESTINATION);
-          return;
-        }
-        // Honor a safe return-to from a session-expiry redirect; otherwise land in the cockpit.
-        router.push(safeCallbackPath() ?? HOME_DESTINATION);
-        return;
-      }
-      if (res.status === 401) {
-        setError(SESSION_COOKIE_ERROR);
-        return;
-      }
-      setError('We could not load your workspaces. Please try signing in again.');
-      return;
-    } catch {
-      setError('We could not load your workspaces. Please try signing in again.');
-      return;
-    }
-  }, [router]);
-
-  /**
-   * Run a passkey authentication ceremony and route on success.
-   *
-   * @param autoFill - When `true`, arm the browser's conditional-UI autofill prompt instead of
-   * opening the modal picker; the promise resolves once the user selects a passkey.
-   */
-  const authenticate = useCallback(
-    async (autoFill: boolean): Promise<void> => {
-      if (!autoFill) setPending(true);
-      setError(null);
-      try {
-        const result = await authClient.signIn.passkey({ autoFill, returnWebAuthnResponse: true });
-        const passkeyError = result.error;
-        if (passkeyError) {
-          // When the server no longer holds the presented credential (deleted passkey), tell the
-          // platform authenticator to prune it via the WebAuthn Signal API — even on the silent
-          // autofill path, so the stale passkey stops surfacing in the browser's own UI.
-          if (isPasskeyUnknownToServer(passkeyError) && 'webauthn' in result) {
-            void signalUnknownPasskey(result.webauthn.response.id);
-          }
-          // A user-cancelled or timed-out conditional prompt should not nag the user. For the
-          // explicit button path a 5xx (e.g. the API/database is down) surfaces an outage-aware
-          // message instead of a bare "please try again".
-          if (!autoFill) {
-            setError(
-              passkeyErrorMessage(
-                passkeyError,
-                'Could not sign in with that passkey. Please try again.',
-              ),
-            );
-          }
-          return;
-        }
-        await routeAfterSignIn();
-      } catch (caught) {
-        if (!autoFill) {
-          setError(
-            passkeyErrorMessage(caught, 'Something went wrong signing in. Please try again.'),
-          );
-        }
-      } finally {
-        if (!autoFill) setPending(false);
-      }
-    },
-    [routeAfterSignIn],
-  );
-
-  // An already-authenticated browser landing here (a stale bookmark, a tab left open, a
-  // session-expiry redirect that resolved before this mounted) should never see the sign-in form
-  // or have a fresh passkey ceremony triggered — redirect immediately. This is also what stops the
-  // conditional-mediation autofill below from silently minting a redundant session every time a
-  // signed-in user's browser happens to land on `/sign-in`.
-  //
-  // `useRedirectIfAuthenticated` checks exactly once, not for the component's whole lifetime —
-  // `useSession()` also reports the session this very page's own passkey ceremony just minted, so
-  // a live-for-the-lifetime effect would race `routeAfterSignIn`'s deliberate navigation with a
-  // second, less-informed one.
-  useRedirectIfAuthenticated(
-    existingSession,
-    sessionPending,
-    (destination) => {
-      navigateAfterSignIn(router, destination);
-    },
-    () => oidcAuthorizeResumeUrl() ?? safeCallbackPath() ?? HOME_DESTINATION,
-  );
-
-  // After hydration, reflect real WebAuthn capability and, where supported, arm the
-  // conditional-UI autofill prompt exactly once — only once we're sure there's no existing
-  // session to redirect away with instead (see the effect above).
-  useEffect(() => {
-    setHydrated(true);
-    const supported = isWebAuthnSupported();
-    setPasskeySupported(supported);
-    if (!supported) return;
-    if (sessionPending || existingSession) return;
-    void (async () => {
-      if (conditionalArmed.current) return;
-      if (await isConditionalMediationSupported()) {
-        conditionalArmed.current = true;
-        void authenticate(true);
-      }
-    })();
-  }, [authenticate, existingSession, sessionPending]);
-
-  const canSubmit = hydrated && passkeySupported && !pending;
-
-  return (
-    <AuthShell
-      title="Welcome back"
-      description="Sign in to your Docket workspace."
-      footer={
-        <>
-          New to Docket?{' '}
-          <Link
-            href="/sign-up"
-            className="text-primary font-medium underline-offset-4 hover:underline"
-          >
-            Create an account
-          </Link>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-4">
-        {/* A hidden field carries the webauthn autocomplete token so browsers that support
-            conditional mediation can surface saved passkeys in their native autofill UI. */}
-        <input
-          type="text"
-          name="passkey"
-          autoComplete="username webauthn"
-          aria-hidden="true"
-          tabIndex={-1}
-          className="sr-only"
-          readOnly
-          value=""
-        />
-
-        <AuthError message={error} />
-
-        {!passkeySupported && hydrated ? (
-          <p className="text-on-surface-variant text-body-medium" role="status">
-            This browser does not support passkeys. Try a different browser or device to sign in.
-          </p>
-        ) : null}
-
-        {/* `lg` (h-10) rather than the default h-9: the craft rubric's a11y gate requires 40px
-            touch targets on mobile, and this is the screen's only control. */}
-        <Button
-          type="button"
-          size="lg"
-          disabled={!canSubmit}
-          onClick={() => {
-            void authenticate(false);
-          }}
-        >
-          {pending ? (
-            <>
-              <Spinner />
-              Waiting for your passkey…
-            </>
-          ) : (
-            'Sign in with a passkey'
-          )}
-        </Button>
-      </div>
-
-      <p className="text-on-surface-variant text-body-medium">
-        Can&apos;t sign in?{' '}
-        <Link
-          href="/recover"
-          className="text-primary font-medium underline-offset-4 hover:underline"
-        >
-          Recover your account
-        </Link>
-      </p>
-    </AuthShell>
-  );
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: AuthScreenSearchParams;
+}): Promise<JSX.Element> {
+  await redirectAuthenticatedVisitor(searchParams);
+  return <SignInClient />;
 }

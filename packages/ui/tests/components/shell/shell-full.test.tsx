@@ -10,7 +10,7 @@ import {
   within,
 } from '@testing-library/react';
 import * as React from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Home } from '../../../src/icons';
 import { AppShell } from '../../../src/components/shell/AppShell';
@@ -189,11 +189,12 @@ describe('AppShell', () => {
     expect(root).toHaveClass('bg-surface-container', 'text-on-surface', 'lg:p-2');
     expect(root).not.toHaveClass('bg-background', 'bg-card');
     // The main content is the single distinct surface panel: it carries the panel surface tone
-    // always, and the rounded/bordered/elevated panel chrome at the desktop breakpoint, going
-    // full-bleed (no rounding/border) below `lg`.
+    // always and rounds at the desktop breakpoint, going full-bleed below `lg`. Separation is the
+    // tonal step from the canvas onto `surface` and nothing else — no border and no drop shadow,
+    // which together drew a second box around content that already read as a panel.
     const main = screen.getByRole('main');
-    expect(main).toHaveClass('bg-surface', 'lg:rounded-xl', 'lg:border-outline-variant');
-    expect(main).not.toHaveClass('bg-background', 'bg-card');
+    expect(main).toHaveClass('bg-surface', 'lg:rounded-xl');
+    expect(main).not.toHaveClass('bg-background', 'bg-card', 'lg:border', 'lg:shadow-sm');
   });
 
   it('renders a mobile menu trigger and the static desktop sidebar (the same nav node)', () => {
@@ -260,6 +261,99 @@ describe('AppShell', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe('AppShell rail docking', () => {
+  // These tests replace the suite-wide `matchMedia` stub; put the non-matching default back so a
+  // later test never inherits a viewport this block invented.
+  afterEach(() => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+  });
+
+  const TASKS_PANEL = {
+    id: 'tasks',
+    label: 'Tasks',
+    icon: <Home />,
+    node: <div>Task list</div>,
+  };
+
+  /** Render the shell with one rail panel, with `matchMedia` answering per query. */
+  function renderWithRail(matches: (query: string) => boolean): void {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: matches(query),
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+          aside={{ panels: [TASKS_PANEL], defaultPanelId: 'tasks' }}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+  }
+
+  it('docks the rail beside <main> only above the dock threshold', () => {
+    renderWithRail(() => true);
+
+    // At 90rem and up the panel is a flex sibling of `<main>`, so both are on screen at once —
+    // which is what makes dragging a task from the rail onto the grid possible at all.
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Panels' })).toBeInTheDocument();
+  });
+
+  it('never docks the rail at desktop widths that cannot spare 22rem', () => {
+    // `lg` matches (the static sidebar is up) but the dock query does not: exactly the 1024–1439
+    // band where docking used to collapse `<main>` from 1023px to 344px across one pixel.
+    renderWithRail((query) => query === '(min-width: 64rem)');
+
+    expect(screen.queryByRole('complementary', { name: 'Tasks' })).not.toBeInTheDocument();
+    // The switcher stays, so the affordance does not move — it just opens an overlay instead.
+    expect(screen.getByRole('navigation', { name: 'Panels' })).toBeInTheDocument();
+  });
+
+  it('opens the panel as an overlay from the activity bar below the dock threshold', async () => {
+    renderWithRail((query) => query === '(min-width: 64rem)');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+
+    const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
+    expect(within(overlay).getByText('Task list')).toBeInTheDocument();
+  });
+
+  it('collapses the docked rail when its own active icon is pressed', () => {
+    renderWithRail(() => true);
+
+    const aside = screen.getByRole('complementary', { name: 'Tasks' });
+    expect(aside).toHaveClass('w-[22rem]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Tasks' }));
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
   });
 });
 
@@ -496,8 +590,9 @@ describe('Sidebar', () => {
     for (const link of screen.getAllByRole('link')) {
       expect(link.getAttribute('href')).not.toContain('/orgs/null');
     }
-    // The Workspace section degrades to a calm empty treatment rather than emitting bad hrefs.
-    expect(screen.getByText('No workspace yet')).toBeInTheDocument();
+    // The Workspace section keeps its real labels and makes them inert rather than emitting bad
+    // hrefs — the workspaces exist, so an empty treatment here would be false.
+    expect(screen.getByRole('button', { name: 'Projects' })).toBeDisabled();
   });
 });
 

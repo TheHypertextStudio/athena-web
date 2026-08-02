@@ -2,14 +2,55 @@
  * `@docket/ui/primitives` — barrel for the shadcn "new-york" primitives.
  *
  * @remarks
- * Re-exports every hand-authored primitive (button, input, card, badge, avatar,
- * skeleton, dropdown-menu, context-menu, dialog, sheet, separator, popover, tooltip,
- * hover-card) plus the shared focus-ring convention so consumers can import from a single
- * subpath: `import { Button, Card, focusRing } from '@docket/ui/primitives'`.
+ * Re-exports every hand-authored primitive plus the three modules that define the system's
+ * closed vocabularies — `control` (the height scale), `text` (the MD3 type scale), and `field`
+ * (the input family) — so consumers import from a single subpath:
+ * `import { Button, Chip, ControlGroup, Text } from '@docket/ui/primitives'`.
+ *
+ * The design contract every screen builds against is written up in `docs/design/design-system.md`;
+ * `packages/test-utils/tests/design-policies/design-token-policy.test.ts` enforces it in CI.
  */
 export { Avatar, AvatarFallback, AvatarImage } from './avatar';
-export { Badge, badgeVariants, type BadgeProps } from './badge';
-export { Button, buttonVariants, type ButtonProps } from './button';
+export {
+  Badge,
+  BADGE_VARIANTS,
+  type BadgeProps,
+  type BadgeVariant,
+  badgeVariants,
+  type BadgeVariantsOptions,
+} from './badge';
+export {
+  BUTTON_VARIANTS,
+  Button,
+  type ButtonProps,
+  type ButtonVariant,
+  buttonVariants,
+  type ButtonVariantsOptions,
+  type LegacyButtonSize,
+} from './button';
+export {
+  CHIP_TONES,
+  CHIP_VARIANTS,
+  Chip,
+  type ChipLeadingExemption,
+  type ChipProps,
+  type ChipTone,
+  type ChipVariant,
+} from './chip';
+export {
+  CONTAINER_RADIUS,
+  CONTROL,
+  CONTROL_RADIUS,
+  CONTROL_SIZES,
+  ControlGroup,
+  type ControlGroupProps,
+  type ControlMetrics,
+  type ControlSize,
+  controlChrome,
+  DEFAULT_CONTROL_SIZE,
+  useControlMetrics,
+  useControlSize,
+} from './control';
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
 export { Checkbox, type CheckboxProps } from './checkbox';
 export {
@@ -59,10 +100,23 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './dropdown-menu';
+export {
+  Field,
+  FIELD_VARIANTS,
+  type FieldProps,
+  type FieldSurfaceOptions,
+  type FieldVariant,
+  fieldSurface,
+  Input,
+  type InputProps,
+  Select,
+  type SelectProps,
+  Textarea,
+  type TextareaProps,
+} from './field';
 export { focusRing, focusRingInset } from './focus';
 export { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
-export { Input, type InputProps } from './input';
-export { Row, type RowProps, Stack, type StackProps } from './layout';
+export { Row, type RowProps, Stack, type StackProps, Toolbar, type ToolbarProps } from './layout';
 export {
   Popover,
   PopoverAnchor,
@@ -94,4 +148,14 @@ export {
   type TabsItem,
   type TabsProps,
 } from './tabs';
+export {
+  Text,
+  TEXT_TONES,
+  type TextProps,
+  type TextTone,
+  TYPE_TOKENS,
+  type TypeToken,
+  toneClass,
+  typeClass,
+} from './text';
 export { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';

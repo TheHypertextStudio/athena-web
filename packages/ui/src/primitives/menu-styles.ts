@@ -44,6 +44,32 @@
  * | 11| selected divider    | `on-secondary-container`        | `on-tertiary`                 |
  */
 import { cn } from '../lib/utils';
+import { CONTROL } from './control';
+
+/**
+ * The menu row's metrics: the `lg` step of the shared control scale.
+ *
+ * Exported so the primitive tests can assert that the literal class strings below and the control
+ * scale have not drifted apart — the strings must stay literal for Tailwind's static extractor,
+ * which means the only way to keep them honest is to check them.
+ *
+ * @remarks
+ * Verified against the Material Web token source rather than recalled:
+ * `tokens/_md-comp-menu.scss` gives `container-elevation: level2` (a 3dp shadow — menus are the
+ * one surface where a shadow is correct, because they float over arbitrary content),
+ * `container-shape: corner-extra-small`, and `top-space`/`bottom-space` of `8px`.
+ * `tokens/versions/v0_192/_md-comp-list.scss` gives the row anatomy: `list-item-leading-space`
+ * and `list-item-trailing-space` of `16px`, `list-item-leading-icon-size` of `24px`, and
+ * `list-item-one-line-container-height` of `56px`.
+ *
+ * Docket keeps MD3's *total* 16px leading inset — 8px of menu padding plus 8px of row padding —
+ * but takes the row height and icon size from the `lg` control step (36px rows, 18px icons)
+ * rather than MD3's phone-scale 56px rows and 24px icons. A 56px menu row in a desktop command
+ * surface is not a faithful implementation of the spec, it is a spec applied to the wrong device.
+ * The container radius steps up to the container radius (10px) rather than MD3's 4px so the menu
+ * reads as a container holding 8px-radius controls, not as another control.
+ */
+export const MENU_METRICS = CONTROL.lg;
 
 /** Which MD3 tonal family a menu surface renders in. See the module remarks. */
 export type MenuVariant = 'standard' | 'vibrant';
@@ -58,7 +84,7 @@ export type MenuVariant = 'standard' | 'vibrant';
  * `origin-[…]` transform) are appended by each menu file after this base.
  */
 const menuContentBase =
-  'z-[120] min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md ' +
+  'z-[120] min-w-[8rem] overflow-hidden rounded-lg border p-2 shadow-md ' +
   'data-[state=open]:animate-in data-[state=closed]:animate-out ' +
   'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ' +
   'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 ' +
@@ -90,10 +116,10 @@ export function menuContentClass(variant: MenuVariant): string {
 
 /** Shared, variant-independent structural classes for an interactive menu row. */
 const menuItemBase =
-  'relative flex min-h-9 cursor-default items-center gap-2 rounded-sm px-2 py-1.5 ' +
+  'relative flex min-h-9 cursor-default items-center gap-2 rounded-md px-2 py-1.5 ' +
   'text-body-medium transition-colors outline-none select-none ' +
   'data-[disabled]:pointer-events-none data-[disabled]:opacity-50 ' +
-  '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0';
+  '[&_svg]:pointer-events-none [&_svg]:size-4.5! [&_svg]:shrink-0';
 
 /** Options accepted by {@link menuItemClass}. */
 export interface MenuItemClassOptions {
@@ -158,7 +184,7 @@ export function menuLeadingIcon(variant: MenuVariant): string {
  */
 export function menuLabel(variant: MenuVariant): string {
   return cn(
-    'text-label-medium px-2 py-1.5 font-semibold',
+    'text-label-medium px-2 py-1.5',
     variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface-variant',
   );
 }
@@ -171,7 +197,7 @@ export function menuLabel(variant: MenuVariant): string {
  * @returns The separator's geometry + tinted background.
  */
 export function menuSeparator(variant: MenuVariant): string {
-  return cn('-mx-1 my-1 h-px', variant === 'vibrant' ? 'bg-on-tertiary/25' : 'bg-outline-variant');
+  return cn('-mx-2 my-1 h-px', variant === 'vibrant' ? 'bg-on-tertiary/25' : 'bg-outline-variant');
 }
 
 /**
@@ -195,7 +221,7 @@ export function menuBadge(variant: MenuVariant): string {
  */
 export function menuTrailingText(variant: MenuVariant): string {
   return cn(
-    'ml-auto text-label-small tracking-widest',
+    'ml-auto text-label-small',
     variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface-variant',
   );
 }

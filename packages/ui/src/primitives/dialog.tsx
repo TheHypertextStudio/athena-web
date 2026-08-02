@@ -242,7 +242,7 @@ export function DialogTitle({
 }: React.ComponentProps<typeof DialogPrimitive.Title>): React.JSX.Element {
   return (
     <DialogPrimitive.Title
-      className={cn('text-on-surface text-base font-semibold', className)}
+      className={cn('text-on-surface text-title-medium', className)}
       {...props}
     />
   );

@@ -17,6 +17,7 @@ import { type VariantProps, cva } from 'class-variance-authority';
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import { ControlGroup, type ControlSize } from './control';
 
 /** The shared `gap` scale (Tailwind gap-* steps). Keep small and intentional. */
 const GAP = {
@@ -97,4 +98,78 @@ export function Row({
   ...props
 }: RowProps): React.JSX.Element {
   return <Component className={cn(rowVariants({ gap, align, justify }), className)} {...props} />;
+}
+
+/** Props for {@link Toolbar}. */
+export interface ToolbarProps extends Omit<React.HTMLAttributes<HTMLElement>, 'children'> {
+  /**
+   * The view's own controls — tabs, a lens switcher, a title. Sits flush against the container's
+   * leading padding edge.
+   */
+  readonly leading?: React.ReactNode;
+  /**
+   * Controls that act *on* the view — filter, display, sort, density, create. Sits flush against
+   * the container's trailing padding edge.
+   */
+  readonly trailing?: React.ReactNode;
+  /** The height step both groups adopt. Omit to inherit from an enclosing `ControlGroup`. */
+  readonly controlSize?: ControlSize;
+  /** The element to render (default `div`); use `header` or `nav` where the semantics fit. */
+  readonly as?: React.ElementType;
+}
+
+/**
+ * A view header: primary controls at the leading edge, view-modifying controls at the trailing
+ * edge, and nothing bunched.
+ *
+ * @param props - See {@link ToolbarProps}.
+ * @returns A full-width row with two {@link ControlGroup}s pushed to opposite edges.
+ *
+ * @remarks
+ * The launch review measured the same defect on six routes: `/portfolio`'s title row left 536px of
+ * empty trailing space, `/orgs/:orgId/cycles` left 457px, and on `/orgs/:orgId/projects` the view
+ * switcher and the Filter/Display controls were all packed against the left edge with 134px of
+ * dead space to their right. Every one of those rows was a bare `<div className="flex items-center
+ * gap-2">`, which has exactly one behaviour: pile everything at the start.
+ *
+ * A toolbar has two ends. Making them two named props means a screen cannot express the bunched
+ * layout by accident — there is nowhere to put a control except one edge or the other. Both groups
+ * share one control size, so the tabs on the left and the Display button on the right are the same
+ * height, which was the other half of the finding.
+ *
+ * @example
+ * ```tsx
+ * <Toolbar
+ *   controlSize="md"
+ *   leading={<Tabs items={lenses} />}
+ *   trailing={
+ *     <>
+ *       <Chip icon={<Filter />} variant="filter">Add filter</Chip>
+ *       <Button variant="ghost" iconOnly aria-label="Display"><TuneRounded /></Button>
+ *     </>
+ *   }
+ * />
+ * ```
+ */
+export function Toolbar({
+  as: Component = 'div',
+  leading,
+  trailing,
+  controlSize,
+  className,
+  ...props
+}: ToolbarProps): React.JSX.Element {
+  return (
+    <Component
+      className={cn('flex w-full min-w-0 items-center justify-between', className)}
+      {...props}
+    >
+      <ControlGroup controlSize={controlSize} className="min-w-0">
+        {leading}
+      </ControlGroup>
+      <ControlGroup controlSize={controlSize} className="shrink-0">
+        {trailing}
+      </ControlGroup>
+    </Component>
+  );
 }

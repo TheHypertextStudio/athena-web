@@ -16,18 +16,20 @@ import { cn } from '../lib/utils';
  *
  * @remarks
  * In the MD3 tonal system a card sits ABOVE a `bg-surface` panel, so it steps up the
- * container ramp (`surface-container-low`) and uses an `outline-variant` hairline rather
- * than the flat `bg-card` tone (which is near-indistinguishable from the panel). The same
- * utilities read correctly in both light (a darker step) and dark (a lighter step) because
- * the surface tokens encode that direction.
+ * container ramp (`surface-container-low`). The same utility reads correctly in both light
+ * (a darker step) and dark (a lighter step) because the surface tokens encode that direction.
+ *
+ * The hairline border and the `shadow-sm` this used to carry are both gone. A tonal step already
+ * separates the card from the panel underneath it, so the border was a second, redundant
+ * separator and the shadow was a third — and a grid of shadowed cards is the single most reliable
+ * way to make a dense product look like a template. Where a card genuinely needs a hard edge (it
+ * sits on a surface at the same tone), reach for `border-outline-variant` explicitly at that
+ * callsite and say why; do not put it back here.
  */
 export function Card({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element {
   return (
     <div
-      className={cn(
-        'bg-surface-container-low text-on-surface border-outline-variant rounded-xl border shadow-sm',
-        className,
-      )}
+      className={cn('bg-surface-container-low text-on-surface rounded-xl', className)}
       {...props}
     />
   );
@@ -41,9 +43,16 @@ export function CardHeader({
   return <div className={cn('flex flex-col gap-1 p-4', className)} {...props} />;
 }
 
-/** Card title — prominent heading text within a {@link CardHeader}. */
+/**
+ * Card title — the heading inside a {@link CardHeader}.
+ *
+ * @remarks
+ * `title-medium` (16 / 24, weight 500) — one MD3 role, which sets size, line-height, weight, and
+ * tracking together. It replaces `leading-none font-semibold tracking-tight`: three raw utilities
+ * that together described a type style nobody named and nothing else in the product shared.
+ */
 export function CardTitle({ className, ...props }: React.ComponentProps<'div'>): React.JSX.Element {
-  return <div className={cn('leading-none font-semibold tracking-tight', className)} {...props} />;
+  return <div className={cn('text-title-medium', className)} {...props} />;
 }
 
 /** Card description — muted supporting text within a {@link CardHeader}. */

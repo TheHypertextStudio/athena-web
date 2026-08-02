@@ -1,87 +1,177 @@
 /**
- * `@docket/ui` — Button primitive (shadcn "new-york").
+ * `@docket/ui` — Button primitive.
  *
  * @remarks
- * Hand-authored from the canonical shadcn "new-york" source. Uses
- * `class-variance-authority` for variant/size styling and Radix `Slot` so callers can
- * render the button styles onto a child element via `asChild`. All colors come from the
- * semantic design tokens in `@docket/ui/styles/globals.css`.
+ * Height, horizontal padding, gap, radius, label type token, and icon size all come from the
+ * shared control-size scale in `./control`, so a button and the chip, select, or menu trigger
+ * beside it are the same height without anyone choosing a number. Only the *colour* treatment is
+ * the button's own decision, and that is the `variant` axis.
+ *
+ * ## Variants (MD3 button styles)
+ *
+ * | Variant       | MD3 name      | Use for |
+ * |---------------|---------------|---------|
+ * | `default`     | Filled        | the one primary action on a surface |
+ * | `secondary`   | Filled tonal  | a secondary action that still needs weight |
+ * | `outline`     | Outlined      | a secondary action on a busy surface |
+ * | `ghost`       | Text          | tertiary actions, toolbar and row affordances |
+ * | `link`        | Text (inline) | navigation rendered inside prose |
+ * | `destructive` | Filled, error | the confirm action of a destructive flow |
+ *
+ * MD3's **Elevated** button — the one MD3 button style that carries a shadow (`level1`) — is
+ * deliberately not offered. It existed here as a `shadow-sm`/`hover:shadow` variant, had zero
+ * callsites in the entire monorepo, and the only thing it could do was reintroduce the drop
+ * shadows the rest of this file removed.
+ *
+ * ## No size-changing interaction states
+ *
+ * Nothing in this recipe scales, grows, or re-pads on hover, focus, or press. Feedback is the
+ * colour state layer plus the shared focus ring; the box is fixed. The design-token policy test
+ * fails the build on any `hover:scale-*` / `active:scale-*` / `hover:p-*` in production source, so
+ * this is enforced rather than remembered.
  */
 import { Slot } from '@radix-ui/react-slot';
-import { type VariantProps, cva } from 'class-variance-authority';
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import { controlChrome, type ControlSize, useControlSize } from './control';
 import { focusRing } from './focus';
 
+/** The colour treatments a button may take. */
+export const BUTTON_VARIANTS = [
+  'default',
+  'secondary',
+  'outline',
+  'ghost',
+  'link',
+  'destructive',
+] as const;
+
+/** One of the button colour treatments. See {@link BUTTON_VARIANTS}. */
+export type ButtonVariant = (typeof BUTTON_VARIANTS)[number];
+
+const BUTTON_COLOR: Readonly<Record<ButtonVariant, string>> = {
+  default: 'bg-primary text-primary-foreground hover:bg-primary/90',
+  secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
+  outline:
+    'border-outline-variant hover:bg-surface-container-high hover:text-on-surface border bg-transparent',
+  ghost: 'hover:bg-surface-container-high hover:text-on-surface',
+  link: 'text-primary underline-offset-4 hover:underline',
+  destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+};
+
 /**
- * Class-variance-authority recipe for {@link Button}.
+ * The button's pre-scale size vocabulary, retained so existing callsites keep their exact pixel
+ * height while screens migrate to `controlSize`.
  *
  * @remarks
- * Exposes `variant` (`default` | `elevated` | `destructive` | `outline` | `secondary` | `ghost` |
- * `link`) and `size` (`default` | `sm` | `lg` | `icon`). Exported so callers can apply
- * button styling to non-button elements (e.g. an anchor) without rendering a `Button`.
- * The keyboard-focus treatment is the shared standalone {@link focusRing}.
+ * This is a **name mapping onto the control scale**, not a second scale — each value resolves to
+ * one of the five steps and the geometry still comes from a single place. `icon` additionally
+ * implies the square, label-less shape, which is why the new API splits that concern out into the
+ * independent `iconOnly` prop: under the old vocabulary "a small icon button" was unexpressible,
+ * because shape and height shared one axis.
  *
- * MD3 (Material Design 3, including the 2025 Expressive refresh) treats a shadow/elevation as ONE
- * specific button style — the dedicated **Elevated** button, used sparingly (e.g. a button
- * floating over a busy or colored surface that needs visual separation) — never the resting state
- * of a Filled, Filled Tonal, Outlined, or Text button. This recipe previously carried `shadow`/
- * `shadow-sm` on `default`/`destructive`/`outline`/`secondary` (a shadcn default, not an MD3 one),
- * so every button in the app read as "raised" regardless of context. Those variants are now flat
- * (Filled / Filled Tonal / Outlined, per MD3), and `elevated` is a new, explicit opt-in for the
- * rare case that genuinely wants the shadow treatment.
+ * Delete this axis (and {@link LEGACY_BUTTON_SIZE}) once no callsite passes `size`.
  */
-export const buttonVariants = cva(
-  cn(
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-body-medium font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-6 [&_svg]:shrink-0',
-    focusRing,
-  ),
-  {
-    variants: {
-      variant: {
-        default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        elevated:
-          'bg-surface-container-low text-primary shadow-sm hover:bg-surface-container hover:shadow',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-        outline:
-          'border-outline-variant border bg-transparent hover:bg-surface-container-high hover:text-on-surface',
-        secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
-        ghost: 'hover:bg-surface-container-high hover:text-on-surface',
-        link: 'text-primary underline-offset-4 hover:underline',
-      },
-      size: {
-        default: 'h-9 px-4 py-2',
-        sm: 'h-8 rounded-md px-3 text-xs',
-        lg: 'h-10 rounded-md px-8',
-        icon: 'h-10 w-10',
-      },
-    },
-    defaultVariants: {
-      variant: 'default',
-      size: 'default',
-    },
-  },
-);
+export type LegacyButtonSize = 'default' | 'sm' | 'lg' | 'icon';
 
-/** Props for {@link Button}: native button props plus the CVA variants and `asChild`. */
-export interface ButtonProps
-  extends React.ComponentProps<'button'>, VariantProps<typeof buttonVariants> {
-  /** When `true`, render styling onto the single child element via Radix `Slot`. */
-  asChild?: boolean;
+/** Legacy size name → control step. Chosen so every existing callsite renders unchanged. */
+const LEGACY_BUTTON_SIZE: Readonly<Record<LegacyButtonSize, ControlSize>> = {
+  default: 'lg',
+  sm: 'md',
+  lg: 'xl',
+  icon: 'xl',
+};
+
+/** Options accepted by {@link buttonVariants}. */
+export interface ButtonVariantsOptions {
+  /** The colour treatment. Default `default`. */
+  readonly variant?: ButtonVariant | null;
+  /** Legacy size name. See {@link LegacyButtonSize}. */
+  readonly size?: LegacyButtonSize | null;
+  /** The control step, when the caller already speaks the new vocabulary. */
+  readonly controlSize?: ControlSize;
+  /** Extra classes appended last. */
+  readonly className?: string;
 }
 
 /**
- * Themeable button. Pass `asChild` to apply button styling to a custom child element
- * (e.g. a Next.js `Link`) instead of rendering a native `<button>`.
+ * Build a button's complete class string without rendering a {@link Button}.
+ *
+ * @param options - See {@link ButtonVariantsOptions}.
+ * @returns Geometry from the control scale plus the variant's colour role.
+ *
+ * @remarks
+ * For elements that must look like a button but cannot be one — a router `Link`, an anchor
+ * rendered by a third-party component. Prefer `<Button asChild>` when the child is under your
+ * control, because `asChild` also carries the disabled and focus behaviour.
+ */
+export function buttonVariants(options?: ButtonVariantsOptions): string {
+  const variant = options?.variant ?? 'default';
+  const legacy = options?.size ?? null;
+  const step: ControlSize =
+    options?.controlSize ?? (legacy === null ? 'md' : LEGACY_BUTTON_SIZE[legacy]);
+  return cn(
+    controlChrome(step, { iconOnly: legacy === 'icon' }),
+    BUTTON_COLOR[variant],
+    focusRing,
+    options?.className,
+  );
+}
+
+/** Props for {@link Button}. */
+export interface ButtonProps extends Omit<React.ComponentProps<'button'>, 'color'> {
+  /** The colour treatment. Default `default`. */
+  readonly variant?: ButtonVariant | null;
+  /** Legacy size name. Prefer {@link ButtonProps.controlSize}. See {@link LegacyButtonSize}. */
+  readonly size?: LegacyButtonSize | null;
+  /**
+   * The height step. Omit to inherit from the enclosing `ControlGroup`, which is how a button ends
+   * up the same height as the chips and selects beside it without anyone measuring.
+   */
+  readonly controlSize?: ControlSize;
+  /** Render a square, label-less button sized to the resolved control step. */
+  readonly iconOnly?: boolean;
+  /** When `true`, render styling onto the single child element via Radix `Slot`. */
+  readonly asChild?: boolean;
+}
+
+/**
+ * Themeable button.
+ *
+ * @param props - See {@link ButtonProps}.
+ * @returns A `<button>`, or the child element when `asChild` is set.
+ *
+ * @example
+ * ```tsx
+ * <Button onClick={save}>Save</Button>
+ * <Button variant="ghost" iconOnly aria-label="More actions"><Ellipsis /></Button>
+ * <Button asChild variant="link"><Link href="/settings">Settings</Link></Button>
+ * ```
  */
 export function Button({
   className,
   variant,
   size,
+  controlSize,
+  iconOnly = false,
   asChild = false,
   ...props
 }: ButtonProps): React.JSX.Element {
+  // An explicit legacy `size` wins over the ambient group so a migrated toolbar cannot silently
+  // resize a button that still names its own height.
+  const explicit = controlSize ?? (size ? LEGACY_BUTTON_SIZE[size] : undefined);
+  const step = useControlSize(explicit);
   const Comp = asChild ? Slot : 'button';
-  return <Comp className={cn(buttonVariants({ variant, size, className }))} {...props} />;
+  return (
+    <Comp
+      className={cn(
+        controlChrome(step, { iconOnly: iconOnly || size === 'icon' }),
+        BUTTON_COLOR[variant ?? 'default'],
+        focusRing,
+        className,
+      )}
+      {...props}
+    />
+  );
 }

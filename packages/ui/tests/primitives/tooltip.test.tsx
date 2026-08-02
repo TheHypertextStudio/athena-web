@@ -63,7 +63,7 @@ describe('Tooltip family', () => {
     await waitFor(() => {
       const styled = document.querySelector('.tip-x');
       expect(styled).not.toBeNull();
-      expect(styled).toHaveClass('bg-surface-container-highest', 'rounded-lg', 'text-xs');
+      expect(styled).toHaveClass('bg-surface-container-highest', 'rounded-lg', 'text-body-small');
     });
   });
 });

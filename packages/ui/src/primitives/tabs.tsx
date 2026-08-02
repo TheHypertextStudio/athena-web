@@ -268,9 +268,12 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         onValueChange(value);
       }}
       className={cn(
-        'text-body-medium relative inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 transition-colors disabled:pointer-events-none disabled:opacity-50',
+        // One type token for both states. Bolding the selected tab would change the label's
+        // rendered width, which shifts every tab after it — a size change on interaction, and the
+        // reason a tab strip appears to "breathe" as you click along it.
+        'text-label-large relative inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 transition-colors disabled:pointer-events-none disabled:opacity-50',
         selected
-          ? 'bg-surface-container-highest text-on-surface font-medium'
+          ? 'bg-surface-container-highest text-on-surface'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
         focusRing,
         className,
@@ -280,7 +283,7 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
       {count !== undefined ? (
         <span
           className={cn(
-            'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
+            'text-label-small inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 tabular-nums',
             selected
               ? 'bg-surface-container text-on-surface'
               : 'bg-surface-container-high text-on-surface-variant',

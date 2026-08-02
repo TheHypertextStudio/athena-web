@@ -42,8 +42,9 @@ describe('Button', () => {
     expect(button).toBeInTheDocument();
     expect(button).toHaveClass('bg-primary');
     expect(button).toHaveClass('text-primary-foreground');
-    // Default size.
-    expect(button).toHaveClass('h-9');
+    // The context-free default step is `md` (32px) — the same height a Chip, Input, and Select
+    // fall back to, so a bare row of mixed controls still lines up.
+    expect(button).toHaveClass('h-8');
   });
 
   it('asChild renders the styling onto a child anchor', () => {
@@ -70,6 +71,7 @@ describe('Button', () => {
   });
 
   it.each<[NonNullable<ButtonProps['size']>, string]>([
+    // The legacy size vocabulary maps onto the control scale without changing any pixel height.
     ['default', 'h-9'],
     ['sm', 'h-8'],
     ['lg', 'h-10'],
@@ -95,9 +97,9 @@ describe('Badge', () => {
 
   it.each<[NonNullable<BadgeProps['variant']>, string]>([
     ['default', 'bg-primary'],
-    ['secondary', 'bg-secondary'],
-    ['destructive', 'bg-destructive'],
-    ['outline', 'text-on-surface'],
+    ['secondary', 'bg-surface-container-high'],
+    ['destructive', 'bg-error-container'],
+    ['outline', 'text-on-surface-variant'],
   ])('applies the %s variant class', (variant, cls) => {
     render(<Badge variant={variant}>{variant}</Badge>);
     expect(screen.getByText(variant)).toHaveClass(cls);
@@ -148,7 +150,7 @@ describe('Card family', () => {
         <CardFooter className="footer-x">Footer</CardFooter>
       </Card>,
     );
-    expect(screen.getByText('Title')).toHaveClass('font-semibold', 'title-x');
+    expect(screen.getByText('Title')).toHaveClass('text-title-medium', 'title-x');
     expect(screen.getByText('Description')).toHaveClass('text-on-surface-variant', 'desc-x');
     expect(screen.getByText('Body')).toHaveClass('content-x');
     expect(screen.getByText('Footer')).toHaveClass('footer-x');

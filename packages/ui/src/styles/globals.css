@@ -129,7 +129,6 @@
   --outline: oklch(0.6 0.01 264);
   --outline-variant: oklch(0.9 0.008 264);
 
-
   /*
    * Motion durations (design-system.md §"Motion"). Referenced via the arbitrary-value
    * syntax `duration-(--dur-base)` / `delay-(--dur-fast)` etc. `--dur-fast` is also the
@@ -140,6 +139,23 @@
   --dur-fast: 120ms;
   --dur-base: 180ms;
   --dur-slow: 240ms;
+
+  /*
+   * Control-height scale (design-system.md §"Control heights"). Five steps, 4px apart, and the
+   * single answer to "how tall is this thing". `--control-h-md` (32px) is MD3's chip container
+   * height and the product default; everything else steps from it.
+   *
+   * These custom properties are the CSS-side mirror of the `CONTROL` table in
+   * `packages/ui/src/primitives/control.tsx`. TypeScript consumers read the table (and get the
+   * Tailwind class); anything that has to compute a height in CSS or in a virtualizer reads these.
+   * `packages/ui/tests/primitives/design-contract.test.tsx` asserts the two agree, so they cannot
+   * drift silently the way `--row-h` and `DENSITY_ROW_HEIGHT` once could.
+   */
+  --control-h-xs: 1.5rem;
+  --control-h-sm: 1.75rem;
+  --control-h-md: 2rem;
+  --control-h-lg: 2.25rem;
+  --control-h-xl: 2.5rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -288,7 +304,6 @@
   --color-on-surface-variant: var(--on-surface-variant);
   --color-outline: var(--outline);
   --color-outline-variant: var(--outline-variant);
-
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -459,6 +474,30 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+
+  /*
+   * MD3 menu leading-icon column.
+   *
+   * MD3 reserves a leading slot on every row of a menu in which *any* row has a leading icon, so
+   * the labels share one left axis instead of stair-stepping around whichever rows happen to carry
+   * a glyph. Doing that in React means every row would have to know what its siblings render —
+   * cross-child coordination through context, threaded through DropdownMenu, ContextMenu, and
+   * every picker built on them.
+   *
+   * `:has()` does it structurally instead, with zero component churn: when a menu contains a row
+   * whose first child is an icon, every row in that menu that does NOT lead with an icon is
+   * indented by exactly the icon column's width. The selectors key off the ARIA roles Radix
+   * already emits (`role="menu"` on the content, `role="menuitem"` on plain rows), so nothing has
+   * to opt in.
+   *
+   * Checkbox and radio rows are excluded on purpose — they carry their own leading indicator and
+   * are already on the axis. The width is the `lg` control step's icon (18px) plus the row gap
+   * (8px), matching `menuItemBase` in `primitives/menu-styles.ts`.
+   */
+  [role='menu']:has(> [role='menuitem'] > svg:first-child)
+    > [role='menuitem']:not(:has(> svg:first-child)) {
+    padding-inline-start: calc(0.5rem + 1.125rem + 0.5rem);
   }
 
   * {

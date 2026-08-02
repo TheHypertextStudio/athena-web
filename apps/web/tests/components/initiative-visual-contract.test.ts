@@ -15,6 +15,7 @@ const detailPath = join(
 const typographyPath = join(root, 'packages/ui/src/styles/globals.css');
 const buttonPath = join(root, 'packages/ui/src/primitives/button.tsx');
 const dialogPath = join(root, 'packages/ui/src/primitives/dialog.tsx');
+const controlPath = join(root, 'packages/ui/src/primitives/control.tsx');
 const iconPickerPath = join(root, 'apps/web/src/components/initiatives/initiative-icon-picker.tsx');
 const pageLayoutPath = join(root, 'apps/web/src/components/views/page-layout.tsx');
 const entityDetailLayoutPath = join(root, 'apps/web/src/components/views/entity-detail-layout.tsx');
@@ -169,7 +170,14 @@ describe('Initiative visual contract', () => {
     const picker = source(iconPickerPath);
     const button = source(buttonPath);
     const dialog = source(dialogPath);
-    expect(button).toContain("icon: 'h-10 w-10'");
+    // `size="icon"` no longer carries its own literal geometry: it maps onto the shared control
+    // scale (`packages/ui/src/primitives/control.tsx`), whose `xl` step is the 40px target. The
+    // assertion follows the mapping to the scale so the 40px guarantee is still checked at its
+    // real source rather than at a string that has moved.
+    const control = source(controlPath);
+    expect(button).toContain("icon: 'xl'");
+    expect(control).toMatch(/xl:\s*\{[^}]*height: 'h-10'/);
+    expect(control).toMatch(/xl:\s*\{[^}]*width: 'w-10'/);
     expect(dialog).toContain('h-10 w-10');
     expect(overview).toContain('size="icon"');
     expect(picker).toContain('flex size-10 shrink-0 items-center justify-center');

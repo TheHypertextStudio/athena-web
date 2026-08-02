@@ -18,6 +18,7 @@ import { adminApp, app } from './app';
 import { sessionMiddleware } from './auth/session-middleware';
 import type { AppEnv } from './context';
 import { buildCorsMiddleware } from './cors';
+import { getContainer } from './container';
 import { startDevScheduler } from './dev-scheduler';
 import { env } from './env';
 import { onError } from './error';
@@ -121,6 +122,16 @@ server.route('/', app);
 server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));
 registerOpenapi(server, app, adminApp);
 server.onError(onError);
+
+// `getContainer()` is memoized-lazy, so `configureNotificationTransports` (a container-build side
+// effect — see container.ts) previously ran only once *something* happened to call `getContainer()`
+// first. Most requests do, transitively, but `POST /v1/me/recovery-codes` dispatches a notification
+// directly and never touches the container — so on a cold process, hitting it before anything else
+// did left the module-level transports unset and the route 500'd with "Notification transports were
+// never configured". Forcing the build here, unconditionally, before the server accepts its first
+// request, makes the container's own stated contract ("configured once via
+// configureNotificationTransports... at process startup") actually true instead of order-dependent.
+getContainer();
 
 const nodeServer = serve({ fetch: server.fetch, port: env.PORT });
 

@@ -7,6 +7,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
   Button,
+  ControlGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -30,6 +31,7 @@ import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
+import { PublishAction } from '@/components/publishing/publish-action';
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
@@ -307,31 +309,39 @@ export default function ProgramDetailPage(): JSX.Element {
         </div>
       }
       actions={
-        canEdit ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 shrink-0"
-                aria-label={`${programLabel} actions`}
-              >
-                <Ellipsis className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[12rem]">
-              <DropdownMenuItem
-                className="text-destructive focus:text-destructive"
-                onSelect={() => {
-                  setConfirmDeleteOpen(true);
-                }}
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete {programLabel.toLowerCase()}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null
+        // One ControlGroup at the row level, and no control inside it declares a height. That is
+        // what makes the publish icon and the overflow icon provably the same size (CORE-28)
+        // rather than the same size until someone edits one of them.
+        <ControlGroup controlSize="xl">
+          <PublishAction
+            orgId={orgId}
+            subjectKind="program"
+            subjectId={programId}
+            title={program.name}
+            noun={programLabel}
+            canPublish={canEdit}
+          />
+          {canEdit ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" iconOnly aria-label={`${programLabel} actions`}>
+                  <Ellipsis />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[12rem]">
+                <DropdownMenuItem
+                  className="text-destructive focus:text-destructive"
+                  onSelect={() => {
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete {programLabel.toLowerCase()}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </ControlGroup>
       }
       tabs={
         <Tabs

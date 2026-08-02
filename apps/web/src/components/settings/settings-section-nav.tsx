@@ -26,6 +26,7 @@ import { usePathname } from 'next/navigation';
 import { useActiveOrg } from '@/components/active-org';
 
 import { type SettingsSection, sectionHref, settingsSectionGroups } from './sections';
+import { useCanManageOrg } from './use-can-manage-org';
 
 /** Props for {@link SettingsSectionNav}. */
 export interface SettingsSectionNavProps {
@@ -46,8 +47,16 @@ const ROW_BASE =
 export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Element {
   const pathname = usePathname();
   const { activeOrg } = useActiveOrg();
+  const { canManage } = useCanManageOrg(orgId);
   // Default to the org registry while the active org is still loading (isPersonal unknown).
-  const groups = settingsSectionGroups(activeOrg?.isPersonal ?? false);
+  // Administrator-only sections stay hidden until management is positively resolved, so the nav
+  // fails closed rather than flashing a row the person cannot use.
+  const groups = settingsSectionGroups(activeOrg?.isPersonal ?? false)
+    .map((group) => ({
+      ...group,
+      sections: group.sections.filter((section) => canManage || section.requiresManage !== true),
+    }))
+    .filter((group) => group.sections.length > 0);
 
   /** Whether a section's route is the one currently shown. */
   function isActive(section: SettingsSection): boolean {

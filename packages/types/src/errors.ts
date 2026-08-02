@@ -32,6 +32,8 @@ export const ProblemCode = z
     'card_required',
     'billing_frozen',
     'agent_plan_required',
+    'domain_already_claimed',
+    'public_name_taken',
     'internal',
   ])
   .describe(
@@ -58,6 +60,8 @@ export const ProblemCode = z
       '- `deletion_blocked` (HTTP 409): account deletion is blocked by unresolved sole-owner shared orgs that must be transferred or deleted first.',
       '- `card_required` (HTTP 402): the action needs payment details / an active subscription that is not on file.',
       "- `billing_frozen` (HTTP 402): the org's billing lifecycle currently blocks writes (e.g. past-due/export-window) — reads still work.",
+      '- `domain_already_claimed` (HTTP 409): the custom domain is already claimed by a workspace, so it cannot be claimed again — one host belongs to exactly one workspace.',
+      '- `public_name_taken` (HTTP 409): the requested public name (a workspace name or a brief path) is already in use or is a reserved system name.',
       '- `internal` (HTTP 500): an unexpected server error; safe to retry.',
     ].join('\n'),
   );
@@ -105,6 +109,8 @@ export const PUBLIC_PROBLEM_TITLES = {
   card_required: 'Payment details are required to continue.',
   billing_frozen: 'Billing currently prevents this change.',
   agent_plan_required: 'An active plan is required to use Athena.',
+  domain_already_claimed: 'That domain is already claimed by a workspace.',
+  public_name_taken: 'That name is already taken.',
   internal: 'Something went wrong on our side.',
 } as const satisfies Record<ProblemCode, string>;
 
@@ -145,6 +151,8 @@ const PROBLEM_RECOVERY: Record<ProblemCode, ProblemRecovery> = {
   card_required: 'billing',
   billing_frozen: 'billing',
   agent_plan_required: 'billing',
+  domain_already_claimed: 'review',
+  public_name_taken: 'review',
   internal: 'retry',
 };
 
@@ -171,6 +179,8 @@ const PROBLEM_STATUS: Record<ProblemCode, number> = {
   card_required: 402,
   billing_frozen: 402,
   agent_plan_required: 402,
+  domain_already_claimed: 409,
+  public_name_taken: 409,
   internal: 500,
 };
 

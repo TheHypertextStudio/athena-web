@@ -1,0 +1,171 @@
+/**
+ * The published-brief document skin (CORE-33, CORE-34).
+ *
+ * This file is deliberately organised as two disjoint halves:
+ *
+ *   1. `@media screen` — everything a person sees in a browser, including the dark variant.
+ *   2. `@media print`  — everything a person sees on paper.
+ *
+ * They share nothing but the markup. Every screen rule is inside a `screen` query, so no
+ * screen colour, background, hover state, or dark-mode override can leak onto a page. That is
+ * what makes the printed sheet black-on-white regardless of the reader's colour scheme: the
+ * dark rules are not "overridden" for print, they never apply to print in the first place.
+ *
+ * The brief also does not use the app's design tokens. Those tokens describe a product
+ * interface — tinted surface containers, elevated panels, an accent colour that means
+ * "interactive". A brief is a document, and a document's palette is ink on paper. Its four
+ * local variables below are the whole system.
+ */
+
+/* ── 1. Screen ─────────────────────────────────────────────────────────────────────────── */
+
+@media screen {
+  .brief {
+    /* Ink on paper, warm rather than pure, so a full page of it is not glaring. */
+    --brief-paper: oklch(0.985 0.003 85);
+    --brief-ink: oklch(0.24 0.012 264);
+    --brief-ink-muted: oklch(0.48 0.012 264);
+    --brief-rule: oklch(0.9 0.006 264);
+
+    background: var(--brief-paper);
+    color: var(--brief-ink);
+    min-height: 100dvh;
+  }
+
+  .brief-muted {
+    color: var(--brief-ink-muted);
+  }
+
+  .brief-rule {
+    border-color: var(--brief-rule);
+  }
+
+  .brief-link {
+    color: var(--brief-ink);
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--brief-rule);
+  }
+
+  .brief-link:hover {
+    text-decoration-color: var(--brief-ink);
+  }
+
+  /* The reader's own preference, honoured — but only on a screen. */
+  @media (prefers-color-scheme: dark) {
+    .brief {
+      --brief-paper: oklch(0.17 0.008 264);
+      --brief-ink: oklch(0.93 0.006 264);
+      --brief-ink-muted: oklch(0.7 0.008 264);
+      --brief-rule: oklch(0.3 0.01 264);
+    }
+  }
+
+  /* A finished row reads as settled rather than shouted; the rule is screen-only because on
+     paper a strike-through survives photocopying better than a tint does. */
+  .brief-done .brief-done-title {
+    color: var(--brief-ink-muted);
+  }
+}
+
+/* ── 2. Print ──────────────────────────────────────────────────────────────────────────── */
+
+@media print {
+  /* Generous outer margins: a brief is read in a folder, and a stapled or hole-punched edge
+     eats the first 12mm of the page. */
+  @page {
+    margin: 18mm 16mm 20mm;
+  }
+
+  /* Force the light document even when the reader's browser is in dark mode. Without this the
+     UA composites the dark background into the PDF and the sheet arrives as white-on-black —
+     unreadable on paper and a genuine waste of toner.
+
+     The `*` is load-bearing and was found by looking at a real print preview from a dark
+     browser: the tone utilities on individual elements (`text-on-surface`, `text-primary`, …)
+     are colours in their own right, so resetting only the root left every paragraph, status,
+     and date rendering in a dark-mode light grey ON white — technically "black on white" at the
+     root and unreadable everywhere it mattered. Blanket-resetting descendants and then
+     re-asserting the two deliberate exceptions is the only form that survives a token being
+     added to this subtree later. */
+  html,
+  body,
+  .brief,
+  .brief * {
+    background-color: transparent !important;
+    color: #000 !important;
+  }
+
+  html,
+  body,
+  .brief {
+    background-color: #fff !important;
+  }
+
+  .brief-muted {
+    /* Not #000: the masthead labels must stay subordinate to the values they label, and 40%
+       grey survives a laser printer's halftone where a lighter grey would disappear. */
+    color: #444 !important;
+  }
+
+  .brief-rule {
+    border-color: #bbb !important;
+  }
+
+  /* Interactive chrome has no meaning on paper. */
+  .brief-no-print,
+  .brief nav,
+  .brief button {
+    display: none !important;
+  }
+
+  /* A heading stranded at the foot of a page is the classic printed-document defect. */
+  .brief h1,
+  .brief h2,
+  .brief h3 {
+    break-after: avoid-page;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    color: #000 !important;
+  }
+
+  /* One row of work never straddles a page break. */
+  .brief-row,
+  .brief-fact {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* On paper the page box is the measure: `@page`'s 16mm side margins leave ~180mm of text on
+     both Letter and A4, which is ~80 characters at the body size — inside the readable band
+     without the screen column's cap, which would otherwise print as a narrow strip against a
+     wide white margin. `100%` rather than `none` so the article can never exceed the page box
+     and clip at the margin. The screen padding goes because `@page` already supplies it. */
+  .brief-column {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* A link is useless on paper unless its target is printed. Only absolute targets are worth
+     the ink — an in-page anchor prints as noise. */
+  .brief-link[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 0.75em;
+    color: #444;
+    word-break: break-all;
+  }
+
+  .brief-link {
+    color: #000 !important;
+    text-decoration: underline;
+  }
+
+  /* Struck rather than tinted: a photocopy loses a grey, but never loses a line. */
+  .brief-done .brief-done-title {
+    text-decoration: line-through;
+    color: #444 !important;
+  }
+}

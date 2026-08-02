@@ -1,0 +1,244 @@
+'use client';
+
+/**
+ * `publishing` — the publish control that sits beside a detail header's overflow menu (CORE-28).
+ *
+ * @remarks
+ * The author asked for "an icon that is a sibling to the overflow menu", and the word *sibling*
+ * is doing real work. Publishing is not a rarely-used administrative action to be buried three
+ * clicks deep in a "…" menu; it is a first-class thing you do to a record, and it belongs at the
+ * same level of the interface as the record's other top-level actions. So this renders as a
+ * peer `<Button iconOnly>` in the same control row — never a `DropdownMenuItem`.
+ *
+ * Because it is a sibling, its geometry must match its siblings exactly. It takes no size of its
+ * own: the enclosing `ControlGroup` (supplied by the detail header) sets the step, and `iconOnly`
+ * makes the button square at that step. That is how the identical height, icon size, and hit
+ * area CORE-28 asks for are guaranteed rather than eyeballed — there is no number here to drift.
+ *
+ * The state it can be in is genuinely three-valued, and the icon says which: never published,
+ * published, withdrawn. The dialog behind it is where the address, the live URLs, and the
+ * withdraw action live, because a header has no room to explain any of that and a person about
+ * to publish work to the open internet deserves to see exactly what will be reachable.
+ */
+import type { PublicationSubjectKind } from '@docket/types';
+import { suggestPublicSlug } from '@docket/types';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Field,
+  Input,
+  Text,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@docket/ui/primitives';
+import { Globe } from '@docket/ui/icons';
+import { useState, type JSX } from 'react';
+
+import { userErrorMessage } from '@/lib/problem';
+
+import {
+  usePublicationState,
+  usePublishMutation,
+  useWithdrawMutation,
+  useMoveBriefMutation,
+} from './use-publishing';
+
+/** Props for {@link PublishAction}. */
+export interface PublishActionProps {
+  /** The workspace the record belongs to. */
+  readonly orgId: string;
+  /** Which kind of record is being published. */
+  readonly subjectKind: PublicationSubjectKind;
+  /** The record id. */
+  readonly subjectId: string;
+  /** The record's title, used to propose an address. */
+  readonly title: string;
+  /** The workspace's word for this kind of record, e.g. "Initiative". */
+  readonly noun: string;
+  /** Whether the caller may publish (the `contribute` capability). */
+  readonly canPublish: boolean;
+}
+
+/**
+ * The publish icon button and its dialog.
+ *
+ * @param props - The {@link PublishActionProps}.
+ * @returns The control, or `null` when the caller cannot publish.
+ */
+export function PublishAction({
+  orgId,
+  subjectKind,
+  subjectId,
+  title,
+  noun,
+  canPublish,
+}: PublishActionProps): JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  const { publication } = usePublicationState(orgId, subjectKind, subjectId);
+  const publish = usePublishMutation(orgId);
+  const withdraw = useWithdrawMutation(orgId);
+  const move = useMoveBriefMutation(orgId);
+  const [slug, setSlug] = useState('');
+
+  if (!canPublish) return null;
+
+  // One narrowed binding rather than a boolean plus a nullable object: every branch below needs
+  // both facts together, and splitting them is how a "published but no row" impossible state
+  // gets written by accident.
+  const live = publication?.published === true ? publication : null;
+  const published = live !== null;
+  const lower = noun.toLowerCase();
+  const label = published ? `Published to the web — manage` : `Publish this ${lower} to the web`;
+  const proposed = publication?.slug ?? suggestPublicSlug(title);
+  const pending = publish.isPending || withdraw.isPending || move.isPending;
+  const error = publish.error ?? withdraw.error ?? move.error;
+
+  return (
+    <>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            iconOnly
+            aria-label={label}
+            data-published={published ? 'true' : 'false'}
+            // Colour, never geometry: a published record's icon takes the accent, and the button
+            // stays exactly the size of its siblings in both states.
+            className={published ? 'text-primary' : undefined}
+            onClick={() => {
+              publish.reset();
+              withdraw.reset();
+              move.reset();
+              setSlug(proposed);
+              setOpen(true);
+            }}
+          >
+            <Globe />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {published ? 'Published to the web' : `Publish this ${lower}`}
+            </DialogTitle>
+            <DialogDescription>
+              {published
+                ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
+                : `Anyone with the link will be able to read a brief of this ${lower}. It stays in step with the record: there is no separate copy to keep up to date.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4">
+            <Field
+              label="Address"
+              description="Lowercase letters, numbers, and hyphens. This is the last part of the link."
+              {...(error ? { error: userErrorMessage(error, 'Could not save this address.') } : {})}
+            >
+              <Input
+                controlSize="lg"
+                value={slug}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(event) => {
+                  setSlug(event.target.value);
+                }}
+              />
+            </Field>
+
+            {live ? (
+              live.urls.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  <Text as="p" token="label-medium" tone="muted">
+                    Reachable at
+                  </Text>
+                  {live.urls.map((url) => (
+                    <Text as="p" token="body-small" key={url}>
+                      <a
+                        className="underline underline-offset-2"
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {url}
+                      </a>
+                    </Text>
+                  ))}
+                </div>
+              ) : (
+                <Text as="p" token="body-small" tone="muted">
+                  {/* Honest rather than reassuring: a published brief with no workspace address and
+                      no verified domain genuinely is not reachable yet, and saying "published"
+                      without saying that would be the exact "shows success when nothing happened"
+                      failure this product refuses. */}
+                  This page is published but not reachable yet — give the workspace a public
+                  address, or verify a custom domain, in Settings → Publishing.
+                </Text>
+              )
+            ) : null}
+          </div>
+
+          <DialogFooter>
+            {live ? (
+              <>
+                <Button
+                  variant="ghost"
+                  disabled={pending}
+                  onClick={() => {
+                    withdraw.mutate(live.id, {
+                      onSuccess: () => {
+                        setOpen(false);
+                      },
+                    });
+                  }}
+                >
+                  Unpublish
+                </Button>
+                <Button
+                  disabled={pending || slug === live.slug}
+                  onClick={() => {
+                    move.mutate(
+                      { publicationId: live.id, slug },
+                      {
+                        onSuccess: () => {
+                          setOpen(false);
+                        },
+                      },
+                    );
+                  }}
+                >
+                  Save address
+                </Button>
+              </>
+            ) : (
+              <Button
+                disabled={pending || slug.length === 0}
+                onClick={() => {
+                  publish.mutate(
+                    { subjectKind, subjectId, slug },
+                    {
+                      onSuccess: () => {
+                        setOpen(false);
+                      },
+                    },
+                  );
+                }}
+              >
+                Publish
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

@@ -32,6 +32,8 @@ import ingestLinearAgent from './routes/ingest-linear-agent';
 import internalNotifications from './routes/internal-notifications';
 import internalAthenaExecution from './routes/internal-athena-execution';
 import { meAccountExportDownload } from './routes/me-account';
+import publicBriefs from './routes/publish-public';
+import timePublic from './routes/time-public';
 import streamSse from './routes/stream-sse';
 import integrationsGithub from './routes/integrations-github';
 import integrationsLinearAgentOAuth from './routes/integrations-linear-agent-oauth';
@@ -125,6 +127,15 @@ server.route('/webhooks/calendar', calendarWebhook);
 // owns POST /v1/me/account/exports).
 server.route('/v1/stream', streamSse);
 server.route('/v1/me/account/exports', meAccountExportDownload);
+// The anonymous published-brief read. Mounted HERE, before the typed `/v1` app, precisely so it
+// is not inside it: the `/v1` app gates every route it owns on a session, and carving a prefix
+// exemption into that gate would make "no `/v1` route is accidentally public" a claim about a
+// pattern match rather than about structure. See `routes/publish-public.ts`.
+server.route('/v1/public', publicBriefs);
+// The token-authorized "what am I working on" read, mounted for the same structural reason as
+// the published brief above: it must not live inside the session-gated `/v1` app. Its
+// credential-free CORS policy is declared by path in `cors.ts`. See `routes/time-public.ts`.
+server.route('/v1/public/time', timePublic);
 // The internal staff back-office (`AdminAppType`) under `/admin`, self-gated by staffMiddleware
 // — separate from the public `/v1` app and absent from the public spec.
 server.route('/', adminApp);

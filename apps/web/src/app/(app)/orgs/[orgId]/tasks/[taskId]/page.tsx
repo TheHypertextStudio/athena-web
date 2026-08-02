@@ -26,6 +26,7 @@ import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
 import TaskAttachments from '@/components/task-detail/TaskAttachments';
 import { TaskActivitySection } from '@/components/task-detail/task-activity-section';
+import { TaskTimerButton } from '@/components/time-tracking';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
 import {
   cycleOptions as toCycleOptions,
@@ -251,6 +252,11 @@ export default function TaskDetailPage(): JSX.Element {
             </span>
           ) : null}
           <div className="ml-auto flex items-center gap-2">
+            {/* Track this task. Deliberately unconditional on workflow state and on `canEdit`:
+                time tracking is the viewer's own personal record of what they did, so it is not a
+                content mutation and a task being blocked, done or someone else's does not stop a
+                person having spent real time on it. */}
+            <TaskTimerButton taskId={taskId} title={task.title} controlSize="md" />
             <AthenaContextAction
               label="Have Athena handle this"
               context={{

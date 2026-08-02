@@ -66,6 +66,8 @@ import members from './members';
 import milestones from './milestones';
 import programs from './programs';
 import projects from './projects';
+import publications from './publish';
+import publishingAddresses from './domains';
 import projectRollup from './project-rollup';
 import projectResources from './project-resources';
 import roles from './roles';
@@ -460,6 +462,8 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/integrations/linear-agent', integrationsLinearAgent)
   .route('/:orgId/integrations', integrations)
   .route('/:orgId/billing', billing)
+  .route('/:orgId/publications', publications)
+  .route('/:orgId/publishing', publishingAddresses)
   .route('/:orgId/activity', activity)
   .route('/:orgId/stream', stream);
 

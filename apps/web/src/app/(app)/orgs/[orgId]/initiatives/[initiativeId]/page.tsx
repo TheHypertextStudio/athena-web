@@ -14,6 +14,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
   Button,
+  ControlGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -42,6 +43,7 @@ import {
 } from '@/components/initiatives/properties-panel';
 
 import { memberActorOptions } from '@/components/property-pickers/options';
+import { PublishAction } from '@/components/publishing/publish-action';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
@@ -364,7 +366,10 @@ export default function InitiativeDetailPage(): JSX.Element {
         </div>
       }
       actions={
-        <>
+        // One ControlGroup at the row level, and no control inside it declares a height. That is
+        // what makes the publish icon and the overflow icon provably the same size (CORE-28)
+        // rather than the same size until someone edits one of them.
+        <ControlGroup controlSize="xl">
           <AthenaContextAction
             label={`Open Athena for this ${initiativeNoun.toLowerCase()}`}
             context={{
@@ -373,16 +378,19 @@ export default function InitiativeDetailPage(): JSX.Element {
             }}
             variant="ghost"
           />
+          <PublishAction
+            orgId={orgId}
+            subjectKind="initiative"
+            subjectId={initiativeId}
+            title={detail.name}
+            noun={initiativeNoun}
+            canPublish={canEdit}
+          />
           {canManage ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  className="min-h-10"
-                  variant="ghost"
-                  size="icon"
-                  aria-label={`${initiativeNoun} actions`}
-                >
-                  <Ellipsis className="size-4" />
+                <Button variant="ghost" iconOnly aria-label={`${initiativeNoun} actions`}>
+                  <Ellipsis />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -399,7 +407,7 @@ export default function InitiativeDetailPage(): JSX.Element {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-        </>
+        </ControlGroup>
       }
       tabs={
         <Tabs

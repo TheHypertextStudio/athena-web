@@ -6,7 +6,7 @@
  * The nav, the layout, and the section-root redirect all derive from this registry.
  * `settingsSectionGroups` picks the correct registry for the active workspace type.
  */
-import { Inbox, Settings, Sparkles, Users, Workflow } from '@docket/ui/icons';
+import { Globe, Inbox, Settings, Sparkles, Users, Workflow } from '@docket/ui/icons';
 
 export type { SettingsSection, SettingsSectionGroup } from './sections-personal';
 export {
@@ -63,6 +63,19 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Rules that act on your email suggestions and tasks.',
         icon: Sparkles,
         href: 'automations',
+      },
+    ],
+  },
+  {
+    label: 'On the web',
+    sections: [
+      {
+        key: 'publishing',
+        label: 'Publishing',
+        description: 'Choose the web address your published pages answer on.',
+        icon: Globe,
+        href: 'publishing',
+        requiresManage: true,
       },
     ],
   },

@@ -97,12 +97,13 @@ describe('shared workspace sections', () => {
       'work-structure',
       'import',
       'automations',
+      'publishing',
     ]);
   });
 
   it('frames shared settings as workspace administration', () => {
     const groupLabels = settingsSectionGroups(false).map((g) => g.label);
-    expect(groupLabels).toEqual(['Workspace', 'Workflows']);
+    expect(groupLabels).toEqual(['Workspace', 'Workflows', 'On the web']);
     expect(
       [...groupLabels, ...orgSections.map((section) => section.description)]
         .join(' ')

@@ -17,6 +17,16 @@ export const queryKeys = {
   // property re-reads the entry it just wrote without any call site knowing the log exists.
   taskActivity: (orgId: string, taskId: string) =>
     ['org', orgId, 'tasks', taskId, 'activity'] as const,
+  // Publishing keys nest under one `publishing` segment so a publish/withdraw can invalidate the
+  // whole area (a brief's reachable URLs depend on the workspace's domains AND its public name)
+  // with a single coarse prefix, while a detail read still has its own targeted key.
+  publications: (orgId: string) => ['org', orgId, 'publishing', 'publications'] as const,
+  publication: (orgId: string, subjectKind: string, subjectId: string) =>
+    ['org', orgId, 'publishing', 'publications', subjectKind, subjectId] as const,
+  workspaceDomains: (orgId: string) => ['org', orgId, 'publishing', 'domains'] as const,
+  workspacePublicName: (orgId: string) => ['org', orgId, 'publishing', 'public-name'] as const,
+  workspaceSuggestedName: (orgId: string) =>
+    ['org', orgId, 'publishing', 'suggested-name'] as const,
   programs: (orgId: string) => ['org', orgId, 'programs'] as const,
   program: (orgId: string, programId: string) => ['org', orgId, 'programs', programId] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,
@@ -104,4 +114,13 @@ export const queryKeys = {
   // coarse `['me','stream']` / `['org',orgId,'stream']` prefixes invalidate every variant.
   streamMe: (params: string) => ['me', 'stream', params] as const,
   streamOrg: (orgId: string, params: string) => ['org', orgId, 'stream', params] as const,
+  // The universal timer. `timeActive` is read by the shell on every authenticated surface, so the
+  // whole family is nested under one `['me','time']` prefix: one invalidation after any timer
+  // transition refreshes the running control, the analytics totals and the breakdown together,
+  // which is what stops the header saying "running" while the report still says "idle".
+  timeActive: () => ['me', 'time', 'active'] as const,
+  timeSummary: (params: string) => ['me', 'time', 'summary', params] as const,
+  timeBreakdown: (params: string) => ['me', 'time', 'breakdown', params] as const,
+  timeTimeline: (params: string) => ['me', 'time', 'timeline', params] as const,
+  timeShareTokens: () => ['me', 'time', 'share-tokens'] as const,
 } as const;

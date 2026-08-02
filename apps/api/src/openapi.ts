@@ -223,6 +223,11 @@ const TAGS = [
       "Billing exposes the org's subscription and lifecycle (plan, status, trial/period dates), an embedded Stripe checkout, and the customer portal. Gated by `manage`; when billing is disabled by environment, these return a typed 402 rather than a stub. Stripe webhooks arrive on a separate signature-verified endpoint.",
   },
   {
+    name: 'Publishing',
+    description:
+      "Publishing turns an initiative, program, or project into a brief anyone can read on the web. A publication row records only THAT a record is public and WHERE it answers — never a copy of what it says, so a brief is always projected live from the same work tables the app reads and can never drift. Publishing and withdrawing need `contribute` (a brief is a view of work the caller already authors, and withdrawal is immediate). How a workspace is *addressed* is separate and administrator-only (`manage`): a verified custom domain, or a claimed public name on Docket's shared brief host. A domain is globally unique across all workspaces and serves nothing until a DNS `TXT` record proves ownership.",
+  },
+  {
     name: 'Activity',
     description:
       'The per-org activity feed: a chronological stream of observations (created, status changes, assignments, completions) emitted by work mutations across the org. The substrate the Hub and notifications are built on.',

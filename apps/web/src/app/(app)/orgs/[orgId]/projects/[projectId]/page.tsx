@@ -14,6 +14,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
   Button,
+  ControlGroup,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -46,6 +47,7 @@ import { projectStatusOf } from '@/components/project-detail/project-config';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useActiveOrg } from '@/components/active-org';
 import { CreateTaskDialog } from '@/components/tasks/create-task';
+import { PublishAction } from '@/components/publishing/publish-action';
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -330,7 +332,10 @@ export default function ProjectDetailPage(): JSX.Element {
         </>
       }
       actions={
-        <>
+        // One ControlGroup at the row level, and no control inside it declares a height. That is
+        // what makes the publish icon and the overflow icon provably the same size (CORE-28)
+        // rather than the same size until someone edits one of them.
+        <ControlGroup controlSize="xl">
           <AthenaContextAction
             label="Open Athena for this project"
             context={{
@@ -339,16 +344,19 @@ export default function ProjectDetailPage(): JSX.Element {
             }}
             variant="ghost"
           />
+          <PublishAction
+            orgId={orgId}
+            subjectKind="project"
+            subjectId={projectId}
+            title={project.name}
+            noun={projectNoun}
+            canPublish={canEdit}
+          />
           {canDelete ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0"
-                  aria-label={`${projectNoun} actions`}
-                >
-                  <Ellipsis className="size-5" />
+                <Button variant="ghost" iconOnly aria-label={`${projectNoun} actions`}>
+                  <Ellipsis />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -364,7 +372,7 @@ export default function ProjectDetailPage(): JSX.Element {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-        </>
+        </ControlGroup>
       }
       tabs={
         <Tabs

@@ -12,6 +12,12 @@
  *
  * The panel set is **internal-only** — a curated list of Docket-native panels supplied by the host
  * app — never an exhaustive gallery of third-party integration add-ons.
+ *
+ * @remarks **Layout contract.** The bar is a fixed 3rem column, hidden below `lg` **in CSS** (below
+ * it the panels are reached from the mobile top bar instead). Fixed and always-present is the point:
+ * it is the only part of the rail that costs `<main>` width unconditionally, and a *constant* cost
+ * makes `<main>`'s share of the viewport strictly increase as the window widens. A bar that appeared
+ * at a threshold, or grew with the viewport, would put a step or a slope into that curve.
  */
 import * as React from 'react';
 
@@ -38,7 +44,10 @@ export function ShellActivityBar({
   onIconClick,
 }: ShellActivityBarProps): React.JSX.Element {
   return (
-    <nav aria-label="Panels" className="flex h-full w-12 shrink-0 flex-col items-center gap-1 py-2">
+    <nav
+      aria-label="Panels"
+      className="hidden h-full w-12 shrink-0 flex-col items-center gap-1 py-2 lg:flex"
+    >
       {panels.map((panel) => {
         const isActive = panel.id === activeId;
         // Filled highlight only when this panel is both selected AND visible; while collapsed every

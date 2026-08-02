@@ -264,10 +264,11 @@ describe('AppShell', () => {
   });
 });
 
-describe('AppShell rail docking', () => {
+describe('AppShell rail', () => {
   // These tests replace the suite-wide `matchMedia` stub; put the non-matching default back so a
   // later test never inherits a viewport this block invented.
   afterEach(() => {
+    window.localStorage.clear();
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: false,
       media: query,
@@ -318,47 +319,59 @@ describe('AppShell rail docking', () => {
     );
   }
 
-  it('docks the rail beside <main> only above the dock threshold', () => {
+  it('renders the panel host and switcher at EVERY width, hiding them in CSS below lg', () => {
+    // The old shell mounted these on a JS media query, so crossing the query added a whole column
+    // of chrome in one pixel of window growth. They are unconditional now: the layout the server
+    // paints is already the final one, and the desktop chrome is the same width at 1024 as at 1920.
+    renderWithRail(() => false);
+
+    const host = screen.getByRole('complementary', { name: 'Tasks' });
+    const bar = screen.getByRole('navigation', { name: 'Panels' });
+    expect(host).toHaveClass('hidden', 'lg:block');
+    expect(bar).toHaveClass('hidden', 'lg:flex');
+  });
+
+  it('opens to a share of the viewport, never a fixed column', () => {
     renderWithRail(() => true);
 
-    // At 90rem and up the panel is a flex sibling of `<main>`, so both are on screen at once —
-    // which is what makes dragging a task from the rail onto the grid possible at all.
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: 'Panels' })).toBeInTheDocument();
+    // A viewport *share* capped at 22rem. The bare fixed width this replaced is what let a docked
+    // rail take 352px out of a 1024px window the moment a media query flipped.
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-[min(17vw,22rem)]');
   });
 
-  it('never docks the rail at desktop widths that cannot spare 22rem', () => {
-    // `lg` matches (the static sidebar is up) but the dock query does not: exactly the 1024–1439
-    // band where docking used to collapse `<main>` from 1023px to 344px across one pixel.
-    renderWithRail((query) => query === '(min-width: 64rem)');
-
-    expect(screen.queryByRole('complementary', { name: 'Tasks' })).not.toBeInTheDocument();
-    // The switcher stays, so the affordance does not move — it just opens an overlay instead.
-    expect(screen.getByRole('navigation', { name: 'Panels' })).toBeInTheDocument();
-  });
-
-  it('opens the panel as an overlay from the activity bar below the dock threshold', async () => {
-    renderWithRail((query) => query === '(min-width: 64rem)');
-
-    // Scoped to the activity bar on purpose: the sidebar rendered beside it now carries its own
-    // "Tasks" rows (the cross-org Home one and this workspace's), so an unscoped name query would
-    // be asserting about whichever "Tasks" the tree happened to yield first rather than about the
-    // rail switcher this test is here to exercise.
-    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
-    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-
-    const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
-    expect(within(overlay).getByText('Task list')).toBeInTheDocument();
-  });
-
-  it('collapses the docked rail when its own active icon is pressed', () => {
+  it('collapses and re-expands from its own activity-bar icon', () => {
     renderWithRail(() => true);
-
-    const aside = screen.getByRole('complementary', { name: 'Tasks' });
-    expect(aside).toHaveClass('w-[22rem]');
 
     fireEvent.click(screen.getByRole('button', { name: 'Collapse Tasks' }));
     expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
+
+    const activityBar = screen.getByRole('navigation', { name: 'Panels' });
+    fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-[min(17vw,22rem)]');
+  });
+
+  it('adopts a persisted collapsed choice after mount rather than at hydration', () => {
+    // React does not patch attribute mismatches it finds while hydrating, so reading storage in
+    // `useState`'s initializer left the server's class on the element forever and the viewer's saved
+    // choice was silently dropped — visible now that the rail is server-rendered at every width.
+    window.localStorage.setItem('docket.rail.collapsed', '1');
+    renderWithRail(() => true);
+
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
+  });
+
+  it('presents the panels as a modal sheet below lg, costing <main> nothing', async () => {
+    renderWithRail(() => false);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Tasks' }));
+
+    const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
+    expect(within(overlay).getByText('Task list')).toBeInTheDocument();
+    // The docked host is `display: none` at these widths, so it is not a column and takes no width
+    // from `<main>` however wide its class says it would be. Queried by id rather than by role
+    // because the open modal `aria-hidden`s the rest of the tree — which is also why the two
+    // presentations can no longer share one id.
+    expect(document.getElementById('shell-aside')).toHaveClass('hidden');
   });
 });
 

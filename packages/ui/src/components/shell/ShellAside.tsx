@@ -13,17 +13,63 @@
  *
  * Each panel owns its **own** header (the Agenda its day navigator, the Tasks panel its day + progress
  * header), so the host renders no title row — that avoids the double-header the old single-panel rail
- * had. Which panel is active, and the collapsed state, are shell-owned and passed in; {@link AppShell}
- * renders this only on `lg` and up. Below `lg` the same panels are presented by the shell's right
- * {@link Sheet}. The activity bar is deliberately **internal-only** — a curated set of Docket-native
- * panels, never a gallery of third-party integration add-ons.
+ * had. Which panel is active, and the collapsed state, are shell-owned and passed in. This host is
+ * present in the layout at **every** desktop width (`lg` and up) and hidden below it, where the same
+ * panels are presented by the shell's modal right {@link Sheet}. The activity bar is deliberately
+ * **internal-only** — a curated set of Docket-native panels, never a gallery of third-party add-ons.
+ *
+ * @remarks **The width law.** The rail's inline size is {@link RAIL_INLINE_SIZE} — a *share* of the
+ * viewport, floored at nothing and ceilinged at 22rem — never a fixed width that appears at a
+ * breakpoint. This is the whole fix for the shell's worst layout bug: a fixed 22rem rail that docked
+ * at a threshold made `<main>` **narrower at a wider window** (measured: 1119px of main at 1439px of
+ * viewport, 760px at 1440px). A width that is continuous and monotonically increasing in the viewport
+ * cannot do that — see the contract on {@link AppShell}. Concretely `<main>` = viewport − 328px of
+ * fixed chrome − this rail, so the share is chosen such that `<main>` keeps a **majority of the
+ * viewport at every width the rail can dock at**, and that share only grows as the window widens.
  */
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
 
-/** Stable id for the panel host, referenced by the activity bar / mobile trigger `aria-controls`. */
+/** Stable id for the docked panel host, referenced by the activity bar's `aria-controls`. */
 export const SHELL_ASIDE_ID = 'shell-aside';
+
+/**
+ * Stable id for the **modal sheet** presentation of the same panels, referenced by the mobile
+ * trigger's `aria-controls`.
+ *
+ * @remarks
+ * Distinct from {@link SHELL_ASIDE_ID} because the two are no longer mutually exclusive: the docked
+ * host is now in the DOM at every width (CSS-hidden below `lg`), which is what keeps the desktop
+ * chrome a constant width — so the sheet cannot borrow its id without duplicating one.
+ */
+export const SHELL_ASIDE_SHEET_ID = 'shell-aside-sheet';
+
+/**
+ * The rail's inline size as a CSS length: a viewport share, capped at 22rem.
+ *
+ * @remarks
+ * Exported so the shell's layout contract is one number rather than a class string repeated in two
+ * places, and so tests can assert against the same source the component renders from.
+ *
+ * `17vw` is the largest share that leaves `<main>` a majority of the viewport at the narrowest width
+ * the rail docks at (1024px: 1024 − 328px of chrome − 174px of rail = 522px of `<main>`, 50.9%). The
+ * `min()` caps the rail at 22rem so it stops growing on very wide displays and hands the surplus to
+ * `<main>` — which only ever *raises* `<main>`'s share, so the cap cannot break monotonicity.
+ */
+export const RAIL_INLINE_SIZE = 'min(17vw, 22rem)';
+
+/** The share of the viewport the rail takes before its 22rem cap applies. Mirrors {@link RAIL_INLINE_SIZE}. */
+export const RAIL_VIEWPORT_SHARE = 0.17;
+
+/** The rail's maximum inline size in px (the `22rem` cap in {@link RAIL_INLINE_SIZE}). */
+export const RAIL_MAX_INLINE_SIZE_PX = 352;
+
+/** The Tailwind width utility for {@link RAIL_INLINE_SIZE}; kept literal so the scanner emits it. */
+const RAIL_WIDTH_CLASS = 'w-[min(17vw,22rem)]';
+
+/** How long the collapse/expand motion is armed for — matches the `--dur-slow` token (240ms). */
+const RAIL_TOGGLE_DURATION_MS = 240;
 
 /** One supplemental panel the rail can show: its content plus the activity-bar switcher metadata. */
 export interface RailPanel {
@@ -53,9 +99,45 @@ export interface ShellAsideProps {
   readonly collapsed: boolean;
 }
 
-/** The desktop panel host: a width-animated surface rendering the active panel; the bar handles toggling. */
+/**
+ * The desktop panel host: a width-animated surface rendering the active panel; the bar handles toggling.
+ *
+ * @remarks
+ * Hidden below `lg` **in CSS, not in JS**, and rendered by {@link AppShell} at every desktop width.
+ * Both details are load-bearing for the layout contract: a CSS-only presence means the first paint is
+ * already the final layout (no hydration reflow), and being present at every desktop width — even
+ * collapsed, at zero width — keeps the shell's fixed chrome the *same* 328px at 1024px as at 1920px.
+ * When the host was conditionally mounted, its flex gap alone made `<main>` 7px narrower at 1440 than
+ * at 1439.
+ *
+ * The panel body sees a `@container` context, so a panel lays itself out against the rail's real
+ * inline size (which is a share of the viewport, not a constant) rather than a viewport breakpoint.
+ */
 export function ShellAside({ panel, collapsed }: ShellAsideProps): React.JSX.Element {
   const open = !collapsed;
+
+  // The width transition is armed ONLY for the collapse/expand toggle, never for a resize. The rail's
+  // width is a share of the viewport, so a permanently-armed `transition-[width]` would also animate
+  // every pixel of a window drag — the rail (and therefore `<main>`, its flex sibling) would rubber-
+  // band 240ms behind the window edge the whole time it moved. Derived during render, not in an
+  // effect, so the class is present on the very render that changes the width; cleared once the
+  // motion is over.
+  const previousCollapsed = React.useRef(collapsed);
+  const [animating, setAnimating] = React.useState(false);
+  if (previousCollapsed.current !== collapsed) {
+    previousCollapsed.current = collapsed;
+    if (!animating) setAnimating(true);
+  }
+  React.useEffect(() => {
+    if (!animating) return undefined;
+    const timer = setTimeout(() => {
+      setAnimating(false);
+    }, RAIL_TOGGLE_DURATION_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [animating]);
+
   return (
     <aside
       id={SHELL_ASIDE_ID}
@@ -66,12 +148,14 @@ export function ShellAside({ panel, collapsed }: ShellAsideProps): React.JSX.Ele
         // separation, and a second shadowed box beside `<main>` framed the content twice); width is
         // the only animated property, and it's a flex sibling of `<main>`, so the panel reflows in one
         // continuous motion. Collapsed → zero width; the always-visible activity bar is the reopen.
-        'bg-surface @container h-full min-h-0 shrink-0 overflow-hidden rounded-xl transition-[width] duration-(--dur-slow) ease-in-out',
-        open ? 'w-[22rem]' : 'w-0',
+        'bg-surface @container hidden h-full min-h-0 shrink-0 overflow-hidden rounded-xl lg:block',
+        animating && 'transition-[width] duration-(--dur-slow) ease-in-out',
+        open ? RAIL_WIDTH_CLASS : 'w-0',
       )}
     >
-      {/* Fixed-width inner so the content never reflows while the wrapper animates its width. */}
-      <div className="h-full min-h-0 w-[22rem] overflow-hidden">{panel.node}</div>
+      {/* Inner pinned to the expanded width so the content never reflows while the wrapper animates
+          its width — it slides out of view instead of relaying out on every frame. */}
+      <div className={cn('h-full min-h-0 overflow-hidden', RAIL_WIDTH_CLASS)}>{panel.node}</div>
     </aside>
   );
 }

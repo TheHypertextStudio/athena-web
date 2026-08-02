@@ -88,8 +88,22 @@ export {
   type TaskRowProps,
 } from './views/ListRow';
 export { ListSubGroup, type ListSubGroupProps } from './views/ListSubGroup';
-export { AppShell, type AppShellProps } from './shell/AppShell';
-export { type AppShellAside, type RailPanel } from './shell/ShellAside';
+export {
+  AppShell,
+  type AppShellProps,
+  SHELL_DESKTOP_CHROME_PX,
+  SHELL_DESKTOP_MIN_PX,
+  SHELL_DESKTOP_QUERY,
+  SHELL_MAIN_MIN_VIEWPORT_SHARE,
+  shellMainInlineSize,
+} from './shell/AppShell';
+export {
+  type AppShellAside,
+  RAIL_INLINE_SIZE,
+  RAIL_MAX_INLINE_SIZE_PX,
+  RAIL_VIEWPORT_SHARE,
+  type RailPanel,
+} from './shell/ShellAside';
 export {
   ContextProvider,
   type ContextProviderProps,

@@ -39,11 +39,35 @@
  *   no rounding) so content uses the full width. The tab bar still scrolls horizontally and never
  *   forces horizontal page overflow.
  *
- * @remarks Rail docking is a **separate, higher threshold** than the shell frame — see
- * {@link RAIL_DOCK_QUERY}. A docked rail is a flex sibling that takes its width out of `<main>`, so
- * docking it the moment the sidebar appears made a *wider* window produce a *narrower* content
- * panel. Below the dock threshold the same panels open as a right overlay {@link Sheet} instead,
- * which costs `<main>` nothing.
+ * @remarks **The layout contract `<main>` is entitled to.** Every surface in Docket renders into this
+ * `<main>`, so the shell — not the screen — owns how much of the window a screen gets. Three
+ * guarantees, in force at every width, in every rail state, after any sequence of interactions:
+ *
+ * 1. **Floor.** `<main>` is never narrower than half the viewport. Below `lg` it is the *entire*
+ *    viewport; at `lg` and up it is the viewport minus a constant 328px of chrome (240px sidebar,
+ *    48px activity bar, 40px of gutters) minus the rail, and the rail's width law
+ *    ({@link RAIL_INLINE_SIZE}) is chosen so the remainder is a majority at the narrowest desktop
+ *    width. Measured floor: 50.9% at 1024px with the rail expanded.
+ * 2. **Monotonicity.** Within a layout regime, widening the window never narrows `<main>` — neither
+ *    in pixels nor as a share of the viewport. The rail contributes no step to that curve at any
+ *    width, because it never *appears* at a threshold: it is in the layout at every desktop width,
+ *    and its width is `min(17vw, 22rem)` — continuous, and with a slope below 1 so `<main>` still
+ *    gains from every pixel the window gains.
+ * 3. **No occlusion.** At `lg` and up the rail is a flex *sibling* of `<main>`, never a layer over
+ *    it, so `<main>`'s rect is also its usable area. Below `lg` the rail is a modal {@link Sheet}
+ *    that costs `<main>` nothing.
+ *
+ * The single discontinuity in the whole shell is the `lg` boundary, where persistent navigation
+ * replaces the drawer, and it is unavoidable rather than incidental: any shell whose nav is a drawer
+ * below a breakpoint and a docked column above it must give up `nav + gutters` px of `<main>` at that
+ * breakpoint, and no choice of breakpoint makes a 1px-wider window repay 320px. It is a nav decision,
+ * it costs a bounded 320px, and below it `<main>` already holds 100% of the viewport — the most it
+ * can ever hold. The rail adds nothing to it: the rail's own presentation does not change at `lg`
+ * either (it is docked at every width at and above it, modal at every width below).
+ *
+ * This is what replaced a fixed 22rem rail that docked at a threshold. That rail made a *wider*
+ * window produce a *narrower* content panel — measured at 1119px of `<main>` at a 1439px viewport
+ * and 760px at 1440px — because 400px of chrome arrived in a single pixel of window growth.
  */
 import * as React from 'react';
 
@@ -53,7 +77,13 @@ import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
 import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
-import { SHELL_ASIDE_ID, ShellAside, type AppShellAside } from './ShellAside';
+import {
+  RAIL_MAX_INLINE_SIZE_PX,
+  RAIL_VIEWPORT_SHARE,
+  SHELL_ASIDE_SHEET_ID,
+  ShellAside,
+  type AppShellAside,
+} from './ShellAside';
 import { ShellDrawerProvider } from './ShellDrawerContext';
 
 /** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
@@ -61,38 +91,125 @@ const RAIL_ACTIVE_KEY = 'docket.rail.active';
 const RAIL_COLLAPSED_KEY = 'docket.rail.collapsed';
 
 /**
- * The width at which the right rail is allowed to **dock** as a flex sibling of `<main>`.
+ * The one breakpoint in the shell: at and above it the navigation and the rail are persistent
+ * columns; below it both are overlays and `<main>` is the whole viewport.
  *
  * @remarks
- * Deliberately far above the `lg` shell threshold. A docked rail is 22rem of panel plus the 3rem
- * activity bar, and the static sidebar is another 16rem, so docking at `lg` left `<main>` with
- * ~344px at 1024px wide — a *wider* window produced a *three-times narrower* content panel, and any
- * multi-column page (the calendar most visibly) collapsed to a single clipped column.
+ * There is deliberately **no second, higher threshold** for the rail. A rail that switched from
+ * overlay to docked partway up the range put a cliff in `<main>`'s width exactly where the switch
+ * happened — the whole bug this shell was rebuilt to make unrepresentable. The rail is a docked
+ * sibling at every width at or above this query and a modal {@link Sheet} at every width below it,
+ * so no amount of resizing changes which of the two the viewer gets *within* a regime.
  *
- * 90rem is the smallest width at which the sidebar, a docked rail, and a content panel that is
- * still the largest region on screen all fit. Below it the same panels are one click away as a
- * right overlay {@link Sheet} from the always-visible {@link ShellActivityBar}, which takes nothing
- * from `<main>` — so widening the window never shrinks the content.
+ * This constant only gates the **modal** presentation, which needs JS because a Radix Sheet's
+ * overlay, scroll-lock, and focus-trap must not activate on desktop even when CSS-hidden. The
+ * docked columns are hidden/shown in CSS by the components themselves, so the very first paint is
+ * already the final layout.
  */
-const RAIL_DOCK_QUERY = '(min-width: 90rem)';
+export const SHELL_DESKTOP_QUERY = '(min-width: 64rem)';
 
-/** The persisted active-panel id, or null when unset / unavailable (SSR). */
-function readRailActive(): string | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    return window.localStorage.getItem(RAIL_ACTIVE_KEY);
-  } catch {
-    return null;
-  }
+/** {@link SHELL_DESKTOP_QUERY}'s threshold in px — the same `lg` breakpoint, for arithmetic. */
+export const SHELL_DESKTOP_MIN_PX = 1024;
+
+/**
+ * The fixed chrome, in px, that the desktop shell takes out of the viewport before the rail:
+ * the 240px sidebar, the 48px activity bar, and 40px of gutters (16px of shell padding + three
+ * 8px column gaps).
+ *
+ * @remarks
+ * Exported because it is half of the shell's layout contract: `<main>` = viewport − this − rail.
+ * It is a *constant*, which is what makes `<main>`'s share of the viewport strictly increase with
+ * viewport width. Documented and asserted rather than merely true today — see
+ * `tests/components/shell/shell-layout-contract.test.tsx`.
+ */
+export const SHELL_DESKTOP_CHROME_PX = 328;
+
+/**
+ * The share of the viewport `<main>` is guaranteed at **every** width, in **every** rail state,
+ * after any sequence of interactions — a majority, and the floor the shell's layout test enforces
+ * over every integer width from 320px to 3840px.
+ *
+ * @remarks
+ * A screen may size itself against this without asking the shell anything: whatever the window is,
+ * at least this much of it is the screen's. The binding case is the narrowest desktop width with the
+ * rail open (1024px → 522px of `<main>`, 50.9%); every other width has more headroom, and the share
+ * only rises from there.
+ */
+export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.5;
+
+/**
+ * `<main>`'s inline size, in px, for a viewport width and rail state — the shell's layout contract
+ * expressed as arithmetic.
+ *
+ * @remarks
+ * This is the *specification*, not a measurement: it says what the CSS is required to produce. The
+ * shell's layout test pins it to reality from both ends — it asserts the rendered rail carries
+ * exactly {@link RAIL_INLINE_SIZE}, and it drives this function across a width sweep to prove the
+ * guarantees (monotone in width, never below {@link SHELL_MAIN_MIN_VIEWPORT_SHARE}) hold for *every*
+ * width rather than the handful a browser sweep can sample. The browser probe over the running app
+ * is what confirms the CSS actually matches it.
+ *
+ * @param viewportWidth - The viewport's inline size in CSS px.
+ * @param railExpanded - Whether the viewer has the rail's panel host expanded.
+ * @returns `<main>`'s inline size in CSS px.
+ *
+ * @example
+ * ```ts
+ * shellMainInlineSize(1440, true); // 867 — a majority of the viewport
+ * ```
+ */
+export function shellMainInlineSize(viewportWidth: number, railExpanded: boolean): number {
+  // Below the one breakpoint the nav is a drawer and the rail is modal, so `<main>` is the viewport.
+  if (viewportWidth < SHELL_DESKTOP_MIN_PX) return viewportWidth;
+  const rail = railExpanded
+    ? Math.min(RAIL_VIEWPORT_SHARE * viewportWidth, RAIL_MAX_INLINE_SIZE_PX)
+    : 0;
+  return viewportWidth - SHELL_DESKTOP_CHROME_PX - rail;
 }
 
-/** The persisted collapsed flag (defaults to expanded). */
-function readRailCollapsed(): boolean {
-  if (typeof window === 'undefined') return false;
+/** The shell-owned, persisted rail state: which panel is active, and whether its host is collapsed. */
+interface RailState {
+  /** The persisted panel id, resolved against the route's panels at render time. */
+  readonly activeId: string | null;
+  /** Whether the panel host is collapsed to zero width. */
+  readonly collapsed: boolean;
+}
+
+/**
+ * The rail state every first render uses — on the server and on the client's hydrating render.
+ *
+ * @remarks
+ * Expanded, matching the product: the day plan sits beside the calendar so a task can be dragged
+ * onto the grid, which needs both on screen at once. The floor in {@link SHELL_MAIN_MIN_VIEWPORT_SHARE}
+ * is therefore an *unconditional* guarantee rather than one that depends on the viewer closing a
+ * panel — `<main>` keeps a majority of the window at every width **with the rail open**, with no
+ * interaction at all.
+ *
+ * It is deliberately *width-independent*, which the layout contract depends on: a default that
+ * varied by viewport would put the cliff this shell exists to prevent back in, across page loads
+ * instead of across a resize.
+ */
+const INITIAL_RAIL_STATE: RailState = { activeId: null, collapsed: false };
+
+/**
+ * The persisted rail state, or {@link INITIAL_RAIL_STATE} when unset / unreadable.
+ *
+ * @remarks
+ * Read in an effect rather than in `useState`'s initializer, because the rail is now server-rendered
+ * (that is what keeps the desktop chrome a constant width from the very first paint). React does not
+ * patch up attribute mismatches it finds while hydrating, so an initializer that returned the
+ * *persisted* value on the client and the *default* on the server left the DOM stuck on whichever
+ * class the server emitted — the rail silently ignored the viewer's saved choice.
+ */
+function readRailState(): RailState {
+  if (typeof window === 'undefined') return INITIAL_RAIL_STATE;
   try {
-    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === '1';
+    return {
+      activeId: window.localStorage.getItem(RAIL_ACTIVE_KEY),
+      collapsed: window.localStorage.getItem(RAIL_COLLAPSED_KEY) === '1',
+    };
   } catch {
-    return false;
+    return INITIAL_RAIL_STATE;
   }
 }
 
@@ -142,6 +259,12 @@ export interface AppShellProps {
    * on the far edge plus a collapsible {@link ShellAside} panel host beside it; below `lg` the same
    * panels are presented in a right-anchored {@link Sheet} opened from the mobile top bar. Omit it
    * (or pass no panels) and no rail renders.
+   *
+   * @remarks
+   * A panel supplies content only. It never sizes itself: the rail's inline size is the shell's
+   * ({@link RAIL_INLINE_SIZE}), because a panel that could choose its own width could break
+   * `<main>`'s guaranteed share. Panels get a `@container` context instead and lay out against the
+   * rail's real inline size.
    */
   aside?: AppShellAside;
   /** Extra class names for the root shell element. */
@@ -163,9 +286,11 @@ export interface AppShellProps {
  *
  * The optional **right-hand rail** (`aside`) is a host-wired slot, exactly like `sidebar`/`tabBar`:
  * at `lg` and up it renders as a third floating sibling surface in the shell row
- * (`sidebar | content | aside`), narrowing the main panel; below `lg` the *same* slot is a
- * right-anchored {@link Sheet} opened from the mobile top bar. Its open-state lives here — the rail
- * is collapsible (shown by default), the sheet is modal (hidden by default) — not in any context.
+ * (`sidebar | content | aside | activity bar`), narrowing the main panel by its share of the
+ * viewport; below `lg` the *same* slot is a right-anchored modal {@link Sheet} opened from the
+ * mobile top bar. Its state lives here — active panel and collapsed, both persisted, both
+ * width-independent — not in any context. The rail defaults to open, which is why the floor below is
+ * stated with it open: an untouched shell already satisfies it.
  */
 export function AppShell({
   sidebar,
@@ -178,8 +303,10 @@ export function AppShell({
   children,
 }: AppShellProps): React.JSX.Element {
   const { orgAccent, density, activeOrgId } = useContextState();
-  const isLgUp = useMediaQuery('(min-width: 64rem)');
-  const canDockRail = useMediaQuery(RAIL_DOCK_QUERY);
+  // Drives only the *modal* presentations (the nav drawer's and the rail sheet's focus traps), which
+  // cannot be a CSS concern. Every docked column hides itself in CSS, so the layout never depends on
+  // this having resolved.
+  const isDesktop = useMediaQuery(SHELL_DESKTOP_QUERY);
   const [drawerOpen, setDrawerOpen] = React.useState(false);
   const [overlayPanelOpen, setOverlayPanelOpen] = React.useState(false);
 
@@ -189,11 +316,17 @@ export function AppShell({
   // available panels below rather than clobbered — switching to Agenda on one page shouldn't lose
   // the Tasks default on the calendar.
   const panels = aside?.panels ?? [];
-  const [activePanelId, setActivePanelId] = React.useState<string | null>(readRailActive);
-  const [railCollapsed, setRailCollapsed] = React.useState<boolean>(readRailCollapsed);
+  const [rail, setRail] = React.useState<RailState>(INITIAL_RAIL_STATE);
+  const railCollapsed = rail.collapsed;
+
+  // Adopt the persisted choice once the DOM the server produced is safely hydrated. See
+  // {@link readRailState} for why this cannot be `useState`'s initializer.
+  React.useEffect(() => {
+    setRail(readRailState());
+  }, []);
 
   const activePanel =
-    panels.find((panel) => panel.id === activePanelId) ??
+    panels.find((panel) => panel.id === rail.activeId) ??
     panels.find((panel) => panel.id === aside?.defaultPanelId) ??
     panels[0] ??
     null;
@@ -202,28 +335,20 @@ export function AppShell({
   // Click a panel icon: collapse if it is the already-active, visible panel; otherwise switch to it
   // and expand. Only explicit clicks persist, so passive resolution never overwrites a real choice.
   //
-  // Below the dock threshold the bar drives the *overlay* instead, so the identical affordance never
-  // takes width away from `<main>` at the sizes where `<main>` cannot spare any.
+  // The activity bar exists only at desktop widths (it hides itself in CSS), so this always means
+  // "toggle the docked panel" — there is no width at which the same control does something else.
   const handlePanelIconClick = React.useCallback(
     (id: string) => {
-      if (!canDockRail) {
-        const closing = id === activePanelIdResolved && overlayPanelOpen;
-        setActivePanelId(id);
-        writeRailState(RAIL_ACTIVE_KEY, id);
-        setOverlayPanelOpen(!closing);
-        return;
-      }
       if (id === activePanelIdResolved && !railCollapsed) {
-        setRailCollapsed(true);
+        setRail((current) => ({ ...current, collapsed: true }));
         writeRailState(RAIL_COLLAPSED_KEY, '1');
         return;
       }
-      setActivePanelId(id);
-      setRailCollapsed(false);
+      setRail({ activeId: id, collapsed: false });
       writeRailState(RAIL_ACTIVE_KEY, id);
       writeRailState(RAIL_COLLAPSED_KEY, '0');
     },
-    [activePanelIdResolved, canDockRail, overlayPanelOpen, railCollapsed],
+    [activePanelIdResolved, railCollapsed],
   );
 
   // Stable dismiss callback handed to the drawer-rendered sidebar so a nav selection closes the
@@ -309,7 +434,7 @@ export function AppShell({
           <button
             type="button"
             aria-label={`Show ${activePanel.label}`}
-            aria-controls={SHELL_ASIDE_ID}
+            aria-controls={SHELL_ASIDE_SHEET_ID}
             aria-expanded={overlayPanelOpen}
             onClick={() => {
               setOverlayPanelOpen(true);
@@ -370,41 +495,46 @@ export function AppShell({
         </main>
       </div>
 
-      {/* Right-hand rail: the panel host docks only above {@link RAIL_DOCK_QUERY}; the activity bar
-          is present from `lg` either way, so the affordance does not move when the panel changes
-          from a docked sibling to an overlay. */}
-      {activePanel && canDockRail ? (
-        <ShellAside panel={activePanel} collapsed={railCollapsed} />
-      ) : null}
-      {activePanel && isLgUp ? (
-        <ShellActivityBar
-          panels={panels}
-          activeId={activePanelIdResolved}
-          collapsed={canDockRail ? railCollapsed : !overlayPanelOpen}
-          onIconClick={handlePanelIconClick}
-        />
+      {/* Right-hand rail. Both columns are rendered at EVERY width whenever the route offers panels
+          and hide themselves below `lg` in CSS — no JS gate, no conditional mount. That is what
+          holds the desktop chrome at a constant 328px across the whole desktop range: when the host
+          was mounted conditionally its flex gap alone cost `<main>` 7px the moment the condition
+          flipped, and the panel itself cost 352px more. Collapsed the host is still here, at zero
+          width, so collapsing and expanding move exactly one number. */}
+      {activePanel ? (
+        <>
+          <ShellAside panel={activePanel} collapsed={railCollapsed} />
+          <ShellActivityBar
+            panels={panels}
+            activeId={activePanelIdResolved}
+            collapsed={railCollapsed}
+            onIconClick={handlePanelIconClick}
+          />
+        </>
       ) : null}
 
-      {/* The same panels as a right-anchored modal Sheet whenever the rail cannot dock — opened from
-          the mobile top-bar trigger below `lg`, and from the activity bar above it. Mutually
-          exclusive with the inline host (the `canDockRail` gate), so the shared id stays unique. A
-          compact horizontal switcher stands in for the activity bar on mobile, where there is none.
-          Escape/backdrop dismiss closes it. */}
+      {/* The same panels as a right-anchored modal Sheet below `lg`, opened from the mobile top-bar
+          trigger — the only presentation there, since the docked columns are CSS-hidden at those
+          widths. Mounted only when the desktop query does *not* match, so Radix's focus trap and
+          scroll-lock never activate over a docked rail; it carries its own id
+          ({@link SHELL_ASIDE_SHEET_ID}) because the docked host is now in the DOM at every width and
+          the two can no longer share one. A compact horizontal switcher stands in for the activity
+          bar. Escape/backdrop dismiss closes it. */}
       <Sheet
-        open={activePanel != null && !canDockRail && overlayPanelOpen}
+        open={activePanel != null && !isDesktop && overlayPanelOpen}
         onOpenChange={(next) => {
           if (!next) setOverlayPanelOpen(false);
         }}
       >
         <SheetContent
           side="right"
-          id={SHELL_ASIDE_ID}
+          id={SHELL_ASIDE_SHEET_ID}
           aria-label={activePanel?.label}
           aria-describedby={undefined}
           className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden"
         >
           <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
-          {panels.length > 1 && !isLgUp ? (
+          {panels.length > 1 && !isDesktop ? (
             <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 px-2 pb-2">
               {panels.map((panel) => {
                 const isActive = panel.id === activePanelIdResolved;
@@ -415,7 +545,7 @@ export function AppShell({
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => {
-                      setActivePanelId(panel.id);
+                      setRail((current) => ({ ...current, activeId: panel.id }));
                       writeRailState(RAIL_ACTIVE_KEY, panel.id);
                     }}
                     className={cn(

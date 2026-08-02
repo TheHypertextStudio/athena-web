@@ -329,11 +329,23 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(canvasProps().error).toBeNull();
   });
 
-  it('fills the shell-owned remaining height instead of subtracting a magic viewport offset', () => {
+  it('fills the shell-owned remaining height and never falls below its readable floor', () => {
     renderSurface();
 
     expect(canvasProps().viewportHeight).toBe('100%');
-    expect(screen.getByRole('region', { name: 'Schedule' }).parentElement).toHaveClass('min-h-0');
+    // `flex-1` takes every pixel the page column has left; the explicit minimum is the guarantee
+    // that no rail, notice, or comparison control can squeeze the schedule into a sliver.
+    const wrapper = screen.getByRole('region', { name: 'Schedule' }).parentElement;
+    expect(wrapper).toHaveClass('flex-1', 'min-w-0', 'min-h-[max(16rem,45dvh)]');
+  });
+
+  it('renders exactly one schedule region and no side column beside it', () => {
+    renderSurface();
+
+    expect(screen.getAllByRole('region', { name: 'Schedule' })).toHaveLength(1);
+    // Layer controls belong in the toolbar's popover; a permanent 16rem column that usually said
+    // "No calendar layers yet." was costing the schedule a fifth of its width.
+    expect(document.querySelector('aside')).toBeNull();
   });
 
   it.each([

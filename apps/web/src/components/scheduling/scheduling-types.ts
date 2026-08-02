@@ -208,4 +208,10 @@ export interface SchedulingCanvasProps {
   readonly onDropObjectOnItem?: (request: ScheduleObjectDrop) => void;
   /** Schedule a cross-surface object dropped onto empty grid time as a new block at that time. */
   readonly onDropObjectOnGrid?: (request: ScheduleObjectGridDrop) => void;
+  /**
+   * Receive a pinch / ctrl+wheel zoom intent as a multiplicative scale factor.
+   * `> 1` zooms in (more pixels per hour), `< 1` zooms out. The canvas emits raw intent only;
+   * the consumer owns clamping, rounding, and persistence.
+   */
+  readonly onZoomGesture?: (scale: number) => void;
 }

@@ -138,7 +138,7 @@ function CalendarItemDrawerContent({
         <SheetDescription className="sr-only">
           Calendar item details could not load.
         </SheetDescription>
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-destructive text-body-medium">
           We couldn&apos;t load this calendar item. Please try again.
         </p>
       </div>

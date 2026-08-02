@@ -5,6 +5,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
 
+/**
+ * Locate one lane's sticky header cell by lane id.
+ *
+ * @remarks
+ * Selected structurally rather than by its visible text: the header now renders a weekday/day
+ * pair derived from the lane's date (never the raw label), so matching on text would couple these
+ * geometry assertions to date formatting.
+ */
+function laneHeader(laneId: string): HTMLElement {
+  const element = document.querySelector<HTMLElement>(`[data-schedule-lane-header="${laneId}"]`);
+  if (!element) throw new Error(`No rendered lane header for ${laneId}`);
+  return element;
+}
+
 /** Build an empty date lane for horizontal viewport assertions. */
 function lane(id: string, label: string): ScheduleLane {
   return {
@@ -54,9 +68,7 @@ describe('SchedulingCanvas horizontal viewport', () => {
     );
     const result = render(canvas(0));
     const viewport = screen.getByRole('region', { name: 'Schedule' });
-    const laneWidth = Number.parseFloat(
-      screen.getByText('July 13').parentElement?.style.width ?? '0',
-    );
+    const laneWidth = Number.parseFloat(laneHeader('anchor').style.width);
     Object.defineProperty(viewport, 'scrollLeft', {
       configurable: true,
       writable: true,
@@ -86,15 +98,12 @@ describe('SchedulingCanvas horizontal viewport', () => {
     );
     const result = render(canvas(dates(10)));
     const viewport = screen.getByRole('region', { name: 'Schedule' });
-    const laneWidth = Number.parseFloat(
-      screen.getByText('July 13').parentElement?.style.width ?? '0',
-    );
+    const laneWidth = Number.parseFloat(laneHeader('2026-07-13').style.width);
     viewport.scrollLeft = laneWidth * 6;
 
     result.rerender(canvas(dates(13)));
 
-    expect(screen.getByText('July 13')).toBeInTheDocument();
-    expect(screen.getByText('July 16')).toBeInTheDocument();
+    expect(laneHeader('2026-07-16')).toBeInTheDocument();
     expect(viewport.scrollLeft).toBe(laneWidth * 3);
   });
 
@@ -172,7 +181,7 @@ describe('SchedulingCanvas horizontal viewport', () => {
     );
 
     const viewport = screen.getByRole('region', { name: 'Schedule' });
-    const laneWidth = Number.parseFloat(screen.getByText('One').parentElement?.style.width ?? '0');
+    const laneWidth = Number.parseFloat(laneHeader('one').style.width);
     Object.defineProperties(viewport, {
       clientWidth: { configurable: true, value: 500 },
       scrollLeft: { configurable: true, writable: true, value: laneWidth * 1.25 },
@@ -204,11 +213,10 @@ describe('SchedulingCanvas horizontal viewport', () => {
 
     const viewport = screen.getByRole('region', { name: 'Schedule' });
     const gutter = screen.getByText('All day');
-    const anchorLane = screen.getByText('July 13').parentElement;
-    expect(anchorLane).not.toBeNull();
+    const anchorLane = laneHeader('anchor');
 
     const gutterWidth = Number.parseFloat(gutter.style.width);
-    const laneWidth = Number.parseFloat(anchorLane?.style.width ?? '0');
+    const laneWidth = Number.parseFloat(anchorLane.style.width);
     const anchorViewportLeft = gutterWidth + 2 * laneWidth - viewport.scrollLeft;
 
     expect(anchorViewportLeft).toBe(gutterWidth);

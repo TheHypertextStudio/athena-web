@@ -1,50 +1,126 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
+/**
+ * `(app)/calendar/calendar-toolbar` — the calendar's single, never-wrapping control row.
+ *
+ * @remarks
+ * This bar used to be `flex flex-wrap` wrapping a second `flex flex-wrap` cluster, and it stacked
+ * into four rows the moment `<main>` narrowed: navigation, then a `Dates | People` pill group, then
+ * an `Overview | Standard | Detail` pill group, then a zoom slider with a density readout — with
+ * the create affordance reflowed onto a fifth line. Five bands of chrome above a grid that had
+ * shrunk to 13.92% of the viewport.
+ *
+ * It is now exactly one row that cannot wrap at any width:
+ *
+ * ```text
+ * [Today] [◀] [▶] [ August 2026 ——— flexible, truncates ]  [Calendars ▾] [People ▾]* [Display ▾] [+ New]
+ * ```
+ *
+ * Three rules hold that shape:
+ *
+ * - **`flex-nowrap` with one flexible child.** The heading is the only element allowed to give up
+ *   width (`min-w-0 flex-1 truncate`); every control is `shrink-0`. Narrowing squeezes the label,
+ *   never the layout.
+ * - **Controls collapse to their glyph, not to a new line.** Below `@2xl` each trailing control
+ *   renders icon-only with an `aria-label`, so four controls cost ~4 × 40px on a phone.
+ * - **One control per concern.** Presentation options live inside {@link CalendarViewSettings}, so
+ *   a new view capability lands in a menu rather than beside it. Layers and people moved into their
+ *   own popovers for the same reason.
+ *
+ * Sizing is uniform on purpose — inline neighbours must share a height exactly: text controls are
+ * `min-h-10 … @2xl:min-h-8`, icon controls `size-10 … @2xl:size-8`, and every glyph is `size-4`
+ * (the `Button` base sets `[&_svg]:size-6`, which is far too large here). Breakpoints are
+ * `@`-prefixed container queries because `<main>` is a `@container` — the row responds to the
+ * space it actually has, not to the window.
+ *
+ * @see {@link CalendarViewSettings} for the consolidated Display menu.
+ * @see {@link calendarRangeLabel} for the heading, the page's single date atom.
+ */
+import { CalendarToday, ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import { type JSX, type ReactNode, useRef } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import type { CalendarAxis } from './calendar-schedule-model';
+import { CALENDAR_CONTROL_CLASS, CalendarViewSettings } from './calendar-view-settings';
 
-const MIN_PIXELS_PER_HOUR = 24;
-const MAX_PIXELS_PER_HOUR = 240;
-const STANDARD_PIXELS_PER_HOUR = 72;
-const ZOOM_SHORTCUTS = [
-  { label: 'Overview', value: 24 },
-  { label: 'Standard', value: STANDARD_PIXELS_PER_HOUR },
-  { label: 'Detail', value: 144 },
-] as const;
-const PLAIN_CONTROL_CLASS =
-  'hover:bg-surface-container-highest focus-visible:ring-ring min-h-10 rounded outline-none transition-colors focus-visible:ring-2 focus-visible:ring-offset-1 motion-reduce:transition-none';
+/**
+ * Shared geometry for every icon-only control in the row.
+ *
+ * @remarks
+ * Same fluid-with-a-floor rule as {@link CALENDAR_CONTROL_CLASS}: a 40px basis that may compress to
+ * 36px when the row is genuinely tight, never below. `flex-nowrap` on the row — not `shrink-0` on
+ * the children — is what forbids a second line.
+ */
+const ROW_ICON_CONTROL =
+  'h-10 w-10 min-w-9 shrink [&_svg]:size-4 @2xl:h-8 @2xl:w-8 @2xl:min-w-8 @2xl:shrink-0';
 
-/** Describe a continuous zoom value with the nearest recognizable density preset. */
-function zoomDensityLabel(pixelsPerHour: number): (typeof ZOOM_SHORTCUTS)[number]['label'] {
-  return ZOOM_SHORTCUTS.reduce((nearest, candidate) =>
-    Math.abs(candidate.value - pixelsPerHour) < Math.abs(nearest.value - pixelsPerHour)
-      ? candidate
-      : nearest,
-  ).label;
+/** Props for {@link TrailingSlot}. */
+interface TrailingSlotProps {
+  /** The caller-supplied control to pin into the row. */
+  readonly children: ReactNode;
 }
 
-/** Props for the fluid calendar's navigation, axis, zoom, and create controls. */
+/**
+ * Pin a caller-supplied control into the row as a non-shrinking child.
+ *
+ * @remarks
+ * The one-row guarantee is structural rather than a convention slot authors have to remember: a
+ * control handed in as a `ReactNode` cannot be given `shrink-0` from here, so it is wrapped in an
+ * element that already has it.
+ *
+ * @param props - The {@link TrailingSlotProps}.
+ * @returns the wrapped control, or nothing when the slot is empty.
+ */
+function TrailingSlot({ children }: TrailingSlotProps): JSX.Element | null {
+  if (children === undefined || children === null) return null;
+  return <span className="flex shrink-0 items-center gap-1 @2xl:gap-2">{children}</span>;
+}
+
+/** Props for the calendar's navigation, view-settings, and create controls. */
 export interface CalendarToolbarProps {
+  /** Month/year context for the visible range — never a weekday or an ISO date. */
   readonly heading: string;
+  /**
+   * The same context abbreviated (`Aug 2026`), shown below `@2xl`.
+   *
+   * @remarks
+   * Truncation is the row's release valve, but a clipped `August 2...` drops the year while an
+   * abbreviated month keeps the whole answer. Defaults to {@link CalendarToolbarProps.heading}.
+   */
+  readonly headingShort?: string;
+  /** Which lane axis the canvas is drawing. */
   readonly axis: CalendarAxis;
+  /** The live, continuous row height in pixels per hour. */
   readonly pixelsPerHour: number;
+  /** The Calendars popover; rendered only on the date axis. */
+  readonly layersControl?: ReactNode;
+  /** The People popover; rendered only on the people axis. */
+  readonly comparisonControl?: ReactNode;
+  /** The create affordance; rendered only on the date axis, where creating makes sense. */
   readonly createControl?: ReactNode;
   readonly onToday: () => void;
   readonly onPrevious: () => void;
   readonly onNext: () => void;
   readonly onAxisChange: (axis: CalendarAxis) => void;
+  /** Apply a new zoom locally (fires on every step). */
   readonly onZoomChange: (pixelsPerHour: number) => void;
+  /** Persist a settled zoom (fires once per deliberate change). */
   readonly onZoomCommit: (pixelsPerHour: number) => void;
 }
 
-/** Render calendar controls without owning a named date view or lane count. */
+/**
+ * Render the calendar's one control row.
+ *
+ * @param props - The {@link CalendarToolbarProps}.
+ * @returns the toolbar header element.
+ */
 export function CalendarToolbar({
   heading,
+  headingShort,
   axis,
   pixelsPerHour,
+  layersControl,
+  comparisonControl,
   createControl,
   onToday,
   onPrevious,
@@ -53,138 +129,74 @@ export function CalendarToolbar({
   onZoomChange,
   onZoomCommit,
 }: CalendarToolbarProps): JSX.Element {
-  const lastSliderCommitRef = useRef<number | null>(null);
-  const densityLabel = zoomDensityLabel(pixelsPerHour);
-  const zoomPercentage = Math.round((pixelsPerHour / STANDARD_PIXELS_PER_HOUR) * 100);
-  const activeShortcut = ZOOM_SHORTCUTS.find(({ value }) => value === pixelsPerHour);
-  const commitSliderZoom = (value: number): void => {
-    if (lastSliderCommitRef.current === value) return;
-    lastSliderCommitRef.current = value;
-    onZoomCommit(value);
-  };
   return (
-    <header className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-      <div className="flex items-center gap-1.5">
-        <Button className="min-h-10" size="sm" variant="outline" onClick={onToday}>
-          Today
-        </Button>
-        <Button
-          className="min-h-10 min-w-10"
-          size="icon"
-          variant="ghost"
-          aria-label="Previous dates"
-          onClick={onPrevious}
-        >
-          <ChevronLeft />
-        </Button>
-        <Button
-          className="min-h-10 min-w-10"
-          size="icon"
-          variant="ghost"
-          aria-label="Next dates"
-          onClick={onNext}
-        >
-          <ChevronRight />
-        </Button>
-        <h1 className="text-on-surface ml-1 text-lg font-semibold">{heading}</h1>
-      </div>
+    <header className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 @2xl:gap-2">
+      {/*
+        `Today` follows the same collapse rule as every other labelled control in the row — glyph
+        below `@2xl`, word above it. It was the one text button that kept its label at every width,
+        which on a 320px row cost 51px the heading needed.
+      */}
+      <Button
+        className={CALENDAR_CONTROL_CLASS}
+        size="sm"
+        variant="outline"
+        aria-label="Today"
+        onClick={onToday}
+      >
+        <CalendarToday className="size-4 @2xl:hidden" aria-hidden="true" />
+        <span className="hidden @2xl:inline">Today</span>
+      </Button>
+      <Button
+        className={ROW_ICON_CONTROL}
+        size="icon"
+        variant="ghost"
+        aria-label="Previous dates"
+        onClick={onPrevious}
+      >
+        <ChevronLeft className="size-4" aria-hidden="true" />
+      </Button>
+      <Button
+        className={ROW_ICON_CONTROL}
+        size="icon"
+        variant="ghost"
+        aria-label="Next dates"
+        onClick={onNext}
+      >
+        <ChevronRight className="size-4" aria-hidden="true" />
+      </Button>
 
-      <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
-        <div
-          role="group"
-          aria-label="Calendar lane axis"
-          className="border-outline-variant flex rounded-md border p-0.5"
-        >
-          {(['dates', 'people'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={axis === value}
-              onClick={() => {
-                onAxisChange(value);
-              }}
-              className={
-                axis === value
-                  ? `bg-surface-container-high text-on-surface px-2.5 py-1 text-xs font-medium capitalize ${PLAIN_CONTROL_CLASS}`
-                  : `text-on-surface-variant px-2.5 py-1 text-xs font-medium capitalize ${PLAIN_CONTROL_CLASS}`
-              }
-            >
-              {value}
-            </button>
-          ))}
-        </div>
-        <div
-          role="group"
-          aria-label="Calendar zoom shortcuts"
-          className="border-outline-variant hidden rounded-md border p-0.5 sm:flex"
-        >
-          {ZOOM_SHORTCUTS.map(({ label, value }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={pixelsPerHour === value}
-              className={
-                pixelsPerHour === value
-                  ? `bg-surface-container-high text-on-surface px-2 py-1 text-[11px] font-medium ${PLAIN_CONTROL_CLASS}`
-                  : `text-on-surface-variant px-2 py-1 text-[11px] font-medium ${PLAIN_CONTROL_CLASS}`
-              }
-              onClick={() => {
-                onZoomChange(value);
-                onZoomCommit(value);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <select
-          aria-label="Calendar zoom preset"
-          className={`border-outline-variant bg-surface text-on-surface min-h-10 rounded-md border px-2 text-xs sm:hidden ${PLAIN_CONTROL_CLASS}`}
-          value={activeShortcut ? String(activeShortcut.value) : 'custom'}
-          onChange={(event) => {
-            if (event.target.value === 'custom') return;
-            const value = Number(event.target.value);
-            onZoomChange(value);
-            onZoomCommit(value);
-          }}
-        >
-          <option value="custom">Custom zoom</option>
-          {ZOOM_SHORTCUTS.map(({ label, value }) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <label className="text-on-surface-variant flex items-center gap-2 text-xs">
-          <span className="sr-only sm:not-sr-only">Zoom</span>
-          <input
-            id="calendar-zoom"
-            aria-label="Calendar zoom"
-            aria-valuetext={`${densityLabel} density, ${String(zoomPercentage)}% zoom`}
-            name="calendarZoom"
-            type="range"
-            min={MIN_PIXELS_PER_HOUR}
-            max={MAX_PIXELS_PER_HOUR}
-            step={1}
-            value={pixelsPerHour}
-            className="h-10 w-24 sm:w-28"
-            onChange={(event) => {
-              lastSliderCommitRef.current = null;
-              onZoomChange(Number(event.target.value));
-            }}
-            onPointerUp={(event) => {
-              commitSliderZoom(Number(event.currentTarget.value));
-            }}
-            onBlur={(event) => {
-              commitSliderZoom(Number(event.currentTarget.value));
-            }}
-          />
-          <output htmlFor="calendar-zoom" className="hidden min-w-24 text-right lg:block">
-            {densityLabel} density
-          </output>
-        </label>
-        {axis === 'dates' ? createControl : null}
-      </div>
+      {/*
+        The flexible child, but no longer the *only* thing that gives: it holds a `min-w-16` floor —
+        enough for `Aug 2026` at the small-title step — and the glyph controls beside it compress
+        instead. Below `@2xl` it renders the abbreviated month, which survives the squeeze intact
+        where the long form would clip to `August 2...` and lose the year; `title` keeps the full
+        month recoverable either way. Both spans are `aria-hidden` and the accessible name comes from
+        `aria-label`, so assistive tech reads one unabbreviated heading rather than the two the CSS
+        toggles between.
+      */}
+      <h1
+        aria-label={heading}
+        title={heading}
+        className="text-title-small text-on-surface @sm:text-title-medium min-w-16 flex-1 truncate"
+      >
+        <span aria-hidden="true" className="@2xl:hidden">
+          {headingShort ?? heading}
+        </span>
+        <span aria-hidden="true" className="hidden @2xl:inline">
+          {heading}
+        </span>
+      </h1>
+
+      {axis === 'dates' ? <TrailingSlot>{layersControl}</TrailingSlot> : null}
+      {axis === 'people' ? <TrailingSlot>{comparisonControl}</TrailingSlot> : null}
+      <CalendarViewSettings
+        axis={axis}
+        pixelsPerHour={pixelsPerHour}
+        onAxisChange={onAxisChange}
+        onZoomChange={onZoomChange}
+        onZoomCommit={onZoomCommit}
+      />
+      {axis === 'dates' ? <TrailingSlot>{createControl}</TrailingSlot> : null}
     </header>
   );
 }

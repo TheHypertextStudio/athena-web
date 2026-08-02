@@ -29,18 +29,18 @@ export function CalendarItemRelationsSection({
 
   return (
     <section className="flex flex-col gap-3">
-      <h3 className="text-on-surface text-sm font-semibold">Calendar relationships</h3>
+      <h3 className="text-on-surface text-title-small">Calendar relationships</h3>
       {relationsQuery.isPending ? (
         <div className="flex flex-col gap-2">
           <Skeleton className="h-8 w-full rounded-md" />
           <Skeleton className="h-8 w-full rounded-md" />
         </div>
       ) : relationsQuery.isError ? (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-destructive text-body-small">
           We couldn&apos;t load related calendar items. Please try again.
         </p>
       ) : (contained?.length ?? 0) === 0 && (related?.length ?? 0) === 0 ? (
-        <p className="text-on-surface-variant text-xs">No calendar items attached yet.</p>
+        <p className="text-on-surface-variant text-body-small">No calendar items attached yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
           <RelationGroup
@@ -77,7 +77,7 @@ function RelationGroup({
   if (relations.length === 0) return null;
   return (
     <div className="flex flex-col gap-1.5">
-      <p className="text-on-surface-variant text-xs font-medium">{title}</p>
+      <p className="text-on-surface-variant text-label-medium">{title}</p>
       {relations.map((relation) => (
         <RelationRow
           key={relation.targetItemId}
@@ -108,7 +108,7 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
           onClick={() => {
             onOpenItem(relation.targetItemId);
           }}
-          className="focus-visible:ring-ring min-w-0 flex-1 truncate rounded-sm text-left text-sm focus-visible:ring-2 focus-visible:outline-none"
+          className="focus-visible:ring-ring text-body-medium min-w-0 flex-1 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none"
         >
           {title}
         </button>
@@ -130,7 +130,7 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
         </Button>
       </div>
       {detach.isError ? (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-destructive text-body-small">
           We couldn&apos;t remove this relationship. Please try again.
         </p>
       ) : null}

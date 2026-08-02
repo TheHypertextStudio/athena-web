@@ -195,19 +195,23 @@ export default function CalendarItemCard({
         />
         {block ? (
           <>
-            <span className="text-on-surface truncate text-sm font-medium">{item.title}</span>
-            <span className="text-on-surface-variant truncate text-xs tabular-nums">{time}</span>
-            <span className="text-on-surface-variant mt-auto truncate text-xs">{metaLine}</span>
+            <span className="text-on-surface text-title-small truncate">{item.title}</span>
+            <span className="text-on-surface-variant text-body-small truncate tabular-nums">
+              {time}
+            </span>
+            <span className="text-on-surface-variant text-body-small mt-auto truncate">
+              {metaLine}
+            </span>
           </>
         ) : (
           <>
-            <span className="text-on-surface-variant w-14 shrink-0 pt-0.5 text-xs tabular-nums">
+            <span className="text-on-surface-variant text-body-small w-14 shrink-0 pt-0.5 tabular-nums">
               {time}
             </span>
-            <span className="text-on-surface flex-1 truncate text-sm font-medium">
-              {item.title}
+            <span className="text-on-surface text-title-small flex-1 truncate">{item.title}</span>
+            <span className="text-on-surface-variant text-body-small max-w-28 truncate">
+              {metaLine}
             </span>
-            <span className="text-on-surface-variant max-w-28 truncate text-xs">{metaLine}</span>
           </>
         )}
       </button>
@@ -229,7 +233,7 @@ export default function CalendarItemCard({
             aria-label={syncMeta.label}
             title={syncMeta.label}
             className={cn(
-              'flex items-center gap-1 text-xs',
+              'text-body-small flex items-center gap-1',
               item.hasConflict || item.syncState === 'provider_error'
                 ? 'text-destructive'
                 : 'text-on-surface-variant',

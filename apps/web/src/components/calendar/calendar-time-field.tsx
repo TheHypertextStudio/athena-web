@@ -1,6 +1,7 @@
 'use client';
 
-import { Input } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { focusRingInset, Input } from '@docket/ui/primitives';
 import { type JSX, useId } from 'react';
 
 import { type LocalInputOccurrence, resolveLocalInputValue } from './datetime-input';
@@ -44,8 +45,8 @@ export function CalendarTimeField({
   const candidates = resolution?.kind === 'repeated' ? resolution.candidates : null;
 
   return (
-    <div className="flex min-w-0 flex-col gap-1 text-xs font-medium">
-      <label htmlFor={inputId} className="text-on-surface-variant">
+    <div className="flex min-w-0 flex-col gap-1">
+      <label htmlFor={inputId} className="text-label-medium text-on-surface-variant">
         {label}
       </label>
       <Input
@@ -59,11 +60,15 @@ export function CalendarTimeField({
           onValueChange(event.target.value);
         }}
       />
+      {/*
+        A DST fold is the only time this appears, so it reads as a segmented control on a recessed
+        tonal track rather than another outlined box stacked under the field.
+      */}
       {candidates ? (
         <div
           role="group"
           aria-label={`${label} occurrence`}
-          className="border-outline-variant grid grid-cols-2 gap-0.5 rounded-md border p-0.5"
+          className="bg-surface-container grid grid-cols-2 gap-0.5 rounded-md p-0.5"
         >
           {candidates.map((candidate) => {
             const selected = occurrence === candidate.occurrence;
@@ -77,11 +82,13 @@ export function CalendarTimeField({
                 onClick={() => {
                   onOccurrenceChange(candidate.occurrence);
                 }}
-                className={
+                className={cn(
+                  'text-label-medium min-h-10 min-w-0 truncate rounded px-1 transition-colors motion-reduce:transition-none',
                   selected
-                    ? 'bg-primary/15 text-on-surface focus-visible:ring-ring min-h-10 min-w-0 rounded px-1 text-[11px] font-semibold focus-visible:ring-2 focus-visible:outline-none'
-                    : 'text-on-surface-variant hover:bg-surface-container-high focus-visible:ring-ring min-h-10 min-w-0 rounded px-1 text-[11px] focus-visible:ring-2 focus-visible:outline-none'
-                }
+                    ? 'bg-surface-container-highest text-on-surface'
+                    : 'text-on-surface-variant hover:bg-surface-container-high',
+                  focusRingInset,
+                )}
               >
                 {occurrenceLabel} · {candidate.zoneLabel}
               </button>

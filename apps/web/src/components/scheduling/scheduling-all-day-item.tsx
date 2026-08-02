@@ -96,7 +96,7 @@ export function SchedulingAllDayItem({
         dropActive
           ? `${DRAGGABLE} ring-primary bg-primary-container group relative flex max-w-full items-center rounded ring-2 ${edgePadding}`
           : gesture.preview
-            ? `${DRAGGABLE} border-primary bg-primary-container ring-primary/40 group relative z-40 flex max-w-full items-center rounded border shadow-lg ring-2 ${edgePadding}`
+            ? `${DRAGGABLE} bg-primary-container ring-primary group relative z-40 flex max-w-full items-center rounded ring-2 ${edgePadding}`
             : `${DRAGGABLE} bg-secondary-container group relative flex max-w-full items-center rounded ${edgePadding}`
       }
       data-schedule-all-day-item={item.id}
@@ -131,9 +131,9 @@ export function SchedulingAllDayItem({
           <button
             type="button"
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-            className={`text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left text-[10px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
+            className={`text-on-secondary-container text-label-medium focus-visible:ring-ring hover:bg-surface-container-high min-w-0 flex-1 touch-none truncate rounded px-1.5 py-0.5 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:min-h-10 ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
             data-schedule-item-body={item.id}
-            style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
+            style={item.color ? { borderLeft: `4px solid ${item.color}` } : undefined}
             onPointerDown={gesture.onBodyPointerDown}
             onClick={gesture.onBodyClick}
           >
@@ -145,9 +145,9 @@ export function SchedulingAllDayItem({
         ) : (
           <span
             aria-describedby={!editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined}
-            className="text-on-secondary-container min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left text-[10px]"
+            className="text-on-secondary-container text-label-medium min-w-0 flex-1 truncate rounded px-1.5 py-0.5 text-left"
             data-schedule-item-body={item.id}
-            style={item.color ? { borderLeft: `3px solid ${item.color}` } : undefined}
+            style={item.color ? { borderLeft: `4px solid ${item.color}` } : undefined}
           >
             {renderItem?.({ item, lane, allDay: true, density: 'compact' }) ?? item.title}
           </span>
@@ -155,7 +155,7 @@ export function SchedulingAllDayItem({
         {!editable && item.readOnlyLabel ? (
           <span
             id={readOnlyDescriptionId}
-            className="text-on-secondary-container pointer-events-none shrink-0 px-1 text-[9px] leading-none font-semibold"
+            className="text-on-secondary-container text-label-medium pointer-events-none shrink-0 px-1"
           >
             {item.readOnlyLabel}
           </span>

@@ -30,7 +30,14 @@ export function CreateBlockTimeFields({
 }: CreateBlockTimeFieldsProps): JSX.Element {
   return (
     <>
-      <div className="grid grid-cols-2 gap-2">
+      {/*
+        Stacked, not side by side: a native `datetime-local` renders a full localized date AND time
+        (`08/02/2026, 02:00 AM`), which clipped mid-value in half the popover's 320px width. A
+        two-up grid saves a little height and costs the value being readable, which is the wrong
+        trade for the field the whole form exists to set — and it breaks again in any locale with a
+        longer date format.
+      */}
+      <div className="grid grid-cols-1 gap-2">
         <CalendarTimeField
           label="Starts"
           value={draft.startsAt}
@@ -53,7 +60,7 @@ export function CreateBlockTimeFields({
         />
       </div>
       {error ? (
-        <p id={errorId} role="alert" className="text-destructive text-xs">
+        <p id={errorId} role="alert" className="text-destructive text-body-small">
           {error}
         </p>
       ) : null}

@@ -27,7 +27,7 @@ const EMPTY_LANE: ScheduleLane = {
 afterEach(cleanup);
 
 describe('SchedulingCanvas notice', () => {
-  it('keeps a degraded-data notice attached below a variable all-day header', () => {
+  it('pins a degraded-data notice to the far edge of the viewport, clear of the grid', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -48,17 +48,21 @@ describe('SchedulingCanvas notice', () => {
     viewport.scrollTop = 600;
     fireEvent.scroll(viewport);
 
+    // Stays on screen at any scroll position, but from the *bottom* edge rather than glued under
+    // the sticky header — where the canvas auto-scrolls the current-time indicator to, and where an
+    // opaque notice used to chop the red now-line into two stubs.
     expect(notice).toBeVisible();
-    expect(header).toContainElement(notice);
-    expect(header).toHaveClass('sticky', 'top-0');
-    expect(notice).toHaveClass('sticky', 'break-words');
-    expect(notice).toHaveClass('border-destructive', 'border-l-2');
-    expect(notice).not.toHaveClass('rounded-lg', 'shadow-sm');
-    expect(notice.parentElement).toHaveClass('absolute', 'top-full', 'pointer-events-none');
+    expect(header).not.toContainElement(notice);
+    const pin = notice.parentElement;
+    expect(pin).toHaveClass('sticky', 'bottom-0', 'pointer-events-none');
+    // Its height is cancelled by a matching negative margin, so it claims no layout.
+    expect(pin).toHaveClass('h-20', '-mt-20');
+    // Last flow child of the scrolled content — that is what makes `bottom-0` ride the fold.
+    expect(pin?.parentElement?.lastElementChild).toBe(pin);
     expect(screen.getByLabelText('Today time grid')).toBeInTheDocument();
   });
 
-  it('caps the visible notice inside a narrow schedule viewport', () => {
+  it('centres the notice on the visible viewport, not the full scrollable width', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -69,8 +73,14 @@ describe('SchedulingCanvas notice', () => {
       />,
     );
 
-    const notice = screen.getByRole('alert');
-    expect(notice).toHaveStyle({ left: '80px', maxWidth: '184px' });
+    // The scrolled content is wider than the viewport, so centring on the content would push the
+    // notice off screen. It is sized to what the reader can actually see.
+    const pin = screen.getByRole('alert').parentElement;
+    expect(pin).toHaveStyle({ width: '280px' });
+    expect(pin).toHaveClass('justify-center');
+    expect(screen.getByRole('alert')).toHaveClass('max-w-full', 'text-center');
+    // Wraps instead of clamping: a truncated hint is unreadable on the narrowest canvas.
+    expect(screen.getByRole('alert').className).not.toContain('truncate');
   });
 
   it('treats a blank error as absent and renders the empty-state message', () => {
@@ -87,7 +97,9 @@ describe('SchedulingCanvas notice', () => {
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('No calendar items yet.');
-    expect(screen.getByRole('status')).toHaveClass('italic');
+    // The empty note is distinguished by tone, not by an italic face — one shared type token.
+    expect(screen.getByRole('status')).toHaveClass('text-on-surface-variant', 'text-body-small');
+    expect(screen.getByRole('status')).not.toHaveClass('italic');
   });
 
   it('keeps the time grid visible without rendering deliberately blank empty copy', () => {

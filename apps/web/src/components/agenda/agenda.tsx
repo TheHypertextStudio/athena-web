@@ -68,6 +68,9 @@ function AgendaViewport({ children }: AgendaViewportProps): JSX.Element {
 
 /** A quiet disclosure that enrichment is loading while the usable calendar structure stays put. */
 function AgendaLoadingNotice(): JSX.Element {
+  // placeholder: the day's events and blocks, which arrive from the calendar read. Deliberately a
+  // single line of copy rather than skeleton rows: the agenda's own structure (its hours, its
+  // date, its column) is statically known and stays on screen, so only the enrichment is absent.
   return (
     <div
       role="status"

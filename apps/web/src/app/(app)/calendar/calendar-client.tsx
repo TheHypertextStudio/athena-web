@@ -6,10 +6,27 @@
  * @remarks
  * Geometry, data loading, controls, and gesture persistence live in focused collaborators. This
  * component owns only page-level state; it does not define day/week modes or a fixed lane count.
+ *
+ * ## Page layout contract
+ *
+ * The page is a two-child column: one never-wrapping {@link CalendarToolbar} and the scheduling
+ * surface. Nothing else is allowed to take a band of vertical budget above the grid — layer
+ * visibility and people comparison were both inline blocks here and are now popovers hanging off
+ * the toolbar row, because "which calendars / which people" is a setting and the events are the
+ * content. Padding is deliberately modest (`p-3` → `p-6`) and the column scrolls
+ * (`overflow-y-auto`), so the canvas's minimum height is honoured rather than clipped no matter how
+ * the shell around it is sized.
+ *
+ * ## Zoom
+ *
+ * `pixelsPerHour` is a continuous, per-user persisted number with two writers: the Display menu
+ * (discrete, commits immediately) and a trackpad pinch on the canvas (continuous, commits on a
+ * trailing debounce so a gesture does not fire one PATCH per wheel event). Both funnel through
+ * {@link clampPixelsPerHour}, so no path can persist an illegal height.
  */
 import type { CalendarPreferences, HubPreferences } from '@docket/types';
 import { useRouter } from 'next/navigation';
-import { type JSX, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
@@ -17,7 +34,6 @@ import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import CreateBlockForm from '@/components/calendar/create-block-form';
 import { resolveScheduleTimezone, useScheduleDisplayDate } from '@/components/scheduling';
 import { api } from '@/lib/api';
-import { formatCalendarDate } from '@/lib/format-date';
 import {
   apiQueryOptions,
   queryKeys,
@@ -29,6 +45,8 @@ import {
 import { useNow } from '@/lib/use-now';
 
 import { CalendarComparisonControls } from './calendar-comparison-controls';
+import { CalendarLayersMenu } from './calendar-layers-menu';
+import { calendarRangeLabel } from './calendar-range-label';
 import type { CalendarAxis } from './calendar-schedule-model';
 import {
   type CalendarCanvasRegionSelection,
@@ -39,10 +57,18 @@ import {
   type SharedCalendarItemDetail,
 } from './calendar-shared-item-details';
 import { CalendarToolbar } from './calendar-toolbar';
+import { clampPixelsPerHour, DEFAULT_PIXELS_PER_HOUR } from './calendar-view-settings';
 import { useCalendarDateAxis } from './use-calendar-date-axis';
 import { useCalendarPeopleAxis } from './use-calendar-people-axis';
 
-const DEFAULT_PIXELS_PER_HOUR = 72;
+/**
+ * Trailing debounce applied to a pinch-driven zoom write.
+ *
+ * @remarks
+ * A trackpad pinch emits a wheel event every few milliseconds. Persisting each one would spend a
+ * PATCH per frame for a value the user is still adjusting, so only the settled value is written.
+ */
+const ZOOM_GESTURE_COMMIT_MS = 300;
 
 /** Render the unified calendar page over the shared scheduling canvas. */
 export default function CalendarClient(): JSX.Element {
@@ -56,6 +82,10 @@ export default function CalendarClient(): JSX.Element {
   const selectionAnchorRef = useRef<HTMLDivElement>(null);
   const [pixelsPerHour, setPixelsPerHour] = useState(DEFAULT_PIXELS_PER_HOUR);
   const pixelsPerHourEdited = useRef(false);
+  // Mirrors `pixelsPerHour` so a burst of wheel events compounds off the newest value rather than
+  // off whatever the last committed render happened to hold.
+  const pixelsPerHourRef = useRef(pixelsPerHour);
+  const zoomCommitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [visibleDateRange, setVisibleDateRange] = useState<{
     readonly startDate: string;
     readonly endDate: string;
@@ -83,11 +113,18 @@ export default function CalendarClient(): JSX.Element {
     preferencesReady: hubPreferences !== undefined,
     now,
   });
+
+  /** Apply a zoom to the canvas, keeping the gesture mirror in step with React state. */
+  const applyPixelsPerHour = useCallback((next: number): void => {
+    pixelsPerHourRef.current = next;
+    setPixelsPerHour(next);
+  }, []);
+
   useEffect(() => {
     if (!pixelsPerHourEdited.current && preferences?.pixelsPerHour !== undefined) {
-      setPixelsPerHour(preferences.pixelsPerHour);
+      applyPixelsPerHour(preferences.pixelsPerHour);
     }
-  }, [preferences?.pixelsPerHour]);
+  }, [applyPixelsPerHour, preferences?.pixelsPerHour]);
 
   const savePreferences = useApiMutation<HubPreferences, CalendarPreferences>({
     mutationFn: (calendar) =>
@@ -97,6 +134,31 @@ export default function CalendarClient(): JSX.Element {
       ),
     invalidateKeys: [queryKeys.hubPreferences()],
   });
+
+  /** Cancel a pending pinch write so a deliberate commit is never overwritten by a stale one. */
+  const cancelPendingZoomCommit = useCallback((): void => {
+    if (zoomCommitTimer.current === null) return;
+    clearTimeout(zoomCommitTimer.current);
+    zoomCommitTimer.current = null;
+  }, []);
+  useEffect(() => cancelPendingZoomCommit, [cancelPendingZoomCommit]);
+
+  const saveZoom = savePreferences.mutate;
+  /** Persist a settled zoom immediately. */
+  const commitZoom = useCallback(
+    (nextPixelsPerHour: number): void => {
+      cancelPendingZoomCommit();
+      saveZoom({ ...(preferences ?? {}), pixelsPerHour: nextPixelsPerHour });
+    },
+    [cancelPendingZoomCommit, preferences, saveZoom],
+  );
+  // Read through a ref inside the debounce so a gesture that outlives a preferences refetch still
+  // writes against the newest preferences object instead of a captured stale one.
+  const commitZoomRef = useRef(commitZoom);
+  useEffect(() => {
+    commitZoomRef.current = commitZoom;
+  }, [commitZoom]);
+
   const dateAxis = useCalendarDateAxis(anchorDate, visibleLaneCount, displayTimezone);
   const peopleAxis = useCalendarPeopleAxis(axis, anchorDate, displayTimezone);
   useEffect(() => {
@@ -112,10 +174,11 @@ export default function CalendarClient(): JSX.Element {
     axis === 'dates'
       ? (visibleDateRange?.endDate ?? shiftISODate(anchorDate, Math.max(0, visibleLaneCount - 1)))
       : anchorDate;
-  const heading =
-    visibleStart === visibleEnd
-      ? (formatCalendarDate(visibleStart) ?? visibleStart)
-      : `${formatCalendarDate(visibleStart) ?? visibleStart} – ${formatCalendarDate(visibleEnd) ?? visibleEnd}`;
+  // Month/year only. The grid's lane headers carry weekday and day-of-month, so between them each
+  // date atom appears exactly once on screen.
+  const heading = calendarRangeLabel(visibleStart, visibleEnd);
+  // The same context abbreviated, for widths where the long form would clip mid-month.
+  const headingShort = calendarRangeLabel(visibleStart, visibleEnd, 'short');
   const navigate = (direction: 'previous' | 'next'): void => {
     const magnitude = axis === 'people' ? 1 : visibleLaneCount;
     const currentStart = visibleDateRangeRef.current?.startDate ?? anchorDate;
@@ -125,9 +188,10 @@ export default function CalendarClient(): JSX.Element {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-y-auto p-3 @2xl:p-4 @4xl:p-6">
       <CalendarToolbar
         heading={heading}
+        headingShort={headingShort}
         axis={axis}
         pixelsPerHour={pixelsPerHour}
         onToday={() => {
@@ -145,22 +209,52 @@ export default function CalendarClient(): JSX.Element {
         onAxisChange={setAxis}
         onZoomChange={(nextPixelsPerHour) => {
           pixelsPerHourEdited.current = true;
-          setPixelsPerHour(nextPixelsPerHour);
+          applyPixelsPerHour(nextPixelsPerHour);
         }}
-        onZoomCommit={(nextPixelsPerHour) => {
-          savePreferences.mutate({ ...(preferences ?? {}), pixelsPerHour: nextPixelsPerHour });
-        }}
+        onZoomCommit={commitZoom}
+        layersControl={
+          <CalendarLayersMenu layers={dateAxis.layers} layersError={dateAxis.layersError} />
+        }
+        comparisonControl={
+          <CalendarComparisonControls
+            workspaces={peopleAxis.sharedWorkspaces}
+            workspaceId={peopleAxis.comparisonOrgId}
+            members={peopleAxis.activeMembers}
+            selectedActorIds={peopleAxis.selectedActorIds}
+            membersPending={peopleAxis.membersPending}
+            onWorkspaceChange={peopleAxis.selectWorkspace}
+            onActorChange={peopleAxis.toggleActor}
+          />
+        }
         createControl={
-          <div className="flex items-center gap-2">
-            <AthenaContextAction
-              label={openItemId ? 'Open Athena for this calendar item' : 'Open Athena for Calendar'}
-              context={
-                openItemId
-                  ? { source: { type: 'calendar_item', id: openItemId, label: heading } }
-                  : null
-              }
-              variant="ghost"
-            />
+          <>
+            {/*
+              The contextual Athena door collapses to its glyph like every other trailing control
+              rather than disappearing. It used to be hidden below `@4xl`, which meant that on a
+              1440px desktop with the rail docked — a perfectly ordinary layout — it was the one
+              control in the row that vanished while Calendars, Display and New sat beside it as
+              icons. Now only its *wording* is conditional.
+
+              `AthenaContextAction` hard-codes `min-h-10` and inherits `Button`'s 24px glyph, which
+              would make it the one control in the row at a different height, so the row's shared
+              geometry is imposed from this wrapper: the descendant selectors outrank the button's
+              own utilities, which is what actually lands it.
+            */}
+            <span className="hidden shrink-0 @lg:flex [&_button_svg]:size-4 [&>button]:min-h-8">
+              <AthenaContextAction
+                label={
+                  openItemId ? 'Open Athena for this calendar item' : 'Open Athena for Calendar'
+                }
+                text="Athena"
+                labelFrom="@4xl"
+                context={
+                  openItemId
+                    ? { source: { type: 'calendar_item', id: openItemId, label: heading } }
+                    : null
+                }
+                variant="ghost"
+              />
+            </span>
             <CreateBlockForm
               displayTimezone={displayTimezone}
               layers={dateAxis.layers}
@@ -171,21 +265,9 @@ export default function CalendarClient(): JSX.Element {
                 setSelection(null);
               }}
             />
-          </div>
+          </>
         }
       />
-
-      {axis === 'people' ? (
-        <CalendarComparisonControls
-          workspaces={peopleAxis.sharedWorkspaces}
-          workspaceId={peopleAxis.comparisonOrgId}
-          members={peopleAxis.activeMembers}
-          selectedActorIds={peopleAxis.selectedActorIds}
-          membersPending={peopleAxis.membersPending}
-          onWorkspaceChange={peopleAxis.selectWorkspace}
-          onActorChange={peopleAxis.toggleActor}
-        />
-      ) : null}
 
       <CalendarSchedulingSurface
         axis={axis}
@@ -218,6 +300,17 @@ export default function CalendarClient(): JSX.Element {
           setVisibleDateRange(null);
           // Recenter on the lanes already in view so overscan extends without dropping a drag source.
           setAnchorDate(currentStart);
+        }}
+        onZoomGesture={(scale) => {
+          pixelsPerHourEdited.current = true;
+          const next = clampPixelsPerHour(pixelsPerHourRef.current * scale);
+          if (next === pixelsPerHourRef.current) return;
+          applyPixelsPerHour(next);
+          cancelPendingZoomCommit();
+          zoomCommitTimer.current = setTimeout(() => {
+            zoomCommitTimer.current = null;
+            commitZoomRef.current(next);
+          }, ZOOM_GESTURE_COMMIT_MS);
         }}
         onSelectRegion={setSelection}
         onOpenItem={setOpenItemId}

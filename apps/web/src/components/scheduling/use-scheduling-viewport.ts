@@ -20,7 +20,15 @@ import { SchedulingHorizontalBoundary } from './scheduling-horizontal-boundary';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 import { visibleScheduleLaneRange } from './scheduling-visible-lanes';
 
-const HOUR_GUTTER_WIDTH = 64;
+/**
+ * Width of the sticky hour-label gutter.
+ *
+ * @remarks
+ * Sized so a 12px `12:00 AM` fits on one line with real padding. At the previous 64px the label
+ * wrapped to two lines at the readable type size, which is exactly the "text is almost unreadable"
+ * complaint arriving by a different route.
+ */
+const HOUR_GUTTER_WIDTH = 76;
 
 interface UseSchedulingViewportOptions {
   readonly lanes: readonly ScheduleLane[];
@@ -35,11 +43,30 @@ interface UseSchedulingViewportOptions {
   readonly onReachBoundary?: SchedulingCanvasProps['onReachBoundary'];
 }
 
+/** The minute-of-day under a zoom pointer, plus where that pointer sat in the viewport. */
+interface ScheduleZoomAnchor {
+  /** Wall-clock minute-of-day the pointer was over when the gesture fired. */
+  readonly minutes: number;
+  /** Pixels between the viewport's top edge and the pointer. */
+  readonly pointerOffset: number;
+}
+
 interface SchedulingViewportController {
   readonly viewportRef: RefObject<HTMLDivElement | null>;
   readonly timedGridRef: RefObject<HTMLDivElement | null>;
   readonly observedWidth: number;
   readonly geometry: ScheduleLaneGeometry;
+  /**
+   * Record the time under a zoom pointer so the next `pixelsPerHour` change keeps it in place.
+   *
+   * @remarks
+   * Consumed exactly once, by the next zoom-driven layout pass. A zoom that arrives without a
+   * pointer — from the Display menu, say — finds no anchor and falls back to preserving the
+   * viewport's vertical centre.
+   *
+   * @param clientY - Viewport-relative pointer position, in CSS pixels.
+   */
+  readonly captureZoomAnchor: (clientY: number) => void;
   readonly onScroll: (event: ReactUIEvent<HTMLElement>) => void;
 }
 
@@ -68,6 +95,7 @@ export function useSchedulingViewport({
   const initializedVerticalScrollRef = useRef(false);
   const previousPixelsPerHourRef = useRef(pixelsPerHour);
   const viewportCenterMinutesRef = useRef<number | undefined>(undefined);
+  const zoomAnchorRef = useRef<ScheduleZoomAnchor | undefined>(undefined);
   const visibleLaneRangeKeyRef = useRef<string | undefined>(undefined);
   const horizontalBoundaryRef = useRef(new SchedulingHorizontalBoundary());
   // Zero represents an unmeasured container. Assuming a desktop width here would briefly report
@@ -100,6 +128,19 @@ export function useSchedulingViewport({
     [lanes.length, minimumLaneWidth, observedWidth, viewportWidth],
   );
   const hasMeasuredViewport = viewportWidth !== undefined || observedWidth > 0;
+
+  const captureZoomAnchor = useCallback((clientY: number): void => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const timedGridOffset = timedGridRef.current?.offsetTop ?? 0;
+    const pointerOffset = clientY - viewport.getBoundingClientRect().top;
+    zoomAnchorRef.current = {
+      minutes:
+        ((viewport.scrollTop + pointerOffset - timedGridOffset) * 60) /
+        Math.max(1, previousPixelsPerHourRef.current),
+      pointerOffset,
+    };
+  }, []);
 
   const reportVisibleLaneRange = useCallback(
     (viewport: HTMLElement): void => {
@@ -158,14 +199,27 @@ export function useSchedulingViewport({
       initializedVerticalScrollRef.current = true;
     } else if (previousPixelsPerHourRef.current !== pixelsPerHour) {
       const previous = Math.max(1, previousPixelsPerHourRef.current);
-      const centerMinutes =
-        viewportCenterMinutesRef.current ??
-        ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) / previous) * 60;
-      viewport.scrollTop = Math.max(
-        0,
-        timedGridOffset + minutesToPixels(centerMinutes, pixelsPerHour) - viewport.clientHeight / 2,
-      );
+      // A pinch anchors on the time under the pointer; every other zoom anchors on the viewport's
+      // vertical centre. Zoom that discards the moment you were looking at reads as broken.
+      const anchor = zoomAnchorRef.current;
+      if (anchor) {
+        viewport.scrollTop = Math.max(
+          0,
+          timedGridOffset + minutesToPixels(anchor.minutes, pixelsPerHour) - anchor.pointerOffset,
+        );
+      } else {
+        const centerMinutes =
+          viewportCenterMinutesRef.current ??
+          ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) / previous) * 60;
+        viewport.scrollTop = Math.max(
+          0,
+          timedGridOffset +
+            minutesToPixels(centerMinutes, pixelsPerHour) -
+            viewport.clientHeight / 2,
+        );
+      }
     }
+    zoomAnchorRef.current = undefined;
     viewportCenterMinutesRef.current =
       ((viewport.scrollTop + viewport.clientHeight / 2 - timedGridOffset) / pixelsPerHour) * 60;
     previousPixelsPerHourRef.current = pixelsPerHour;
@@ -187,6 +241,7 @@ export function useSchedulingViewport({
     timedGridRef,
     observedWidth,
     geometry,
+    captureZoomAnchor,
     onScroll: (event) => {
       const viewport = event.currentTarget;
       reportVisibleLaneRange(viewport);

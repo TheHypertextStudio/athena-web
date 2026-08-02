@@ -100,11 +100,10 @@ describe('SchedulingCanvas item presentation', () => {
     fireEvent.pointerDown(body, { button: 0, pointerId: 7, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 100, clientY: 115 });
 
-    expect(document.querySelector('[data-schedule-item="focus"]')).toHaveClass(
-      'ring-2',
-      'shadow-lg',
-      'z-40',
-    );
+    // A live preview is marked by a primary ring and a raised tone — never a drop shadow.
+    const preview = document.querySelector('[data-schedule-item="focus"]');
+    expect(preview).toHaveClass('ring-2', 'ring-primary', 'bg-surface-container-high', 'z-40');
+    expect(preview?.className).not.toMatch(/shadow-/);
   });
 
   it('uses recognizable, touch-sized move and relationship affordances', () => {

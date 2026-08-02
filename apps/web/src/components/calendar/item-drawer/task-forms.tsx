@@ -55,7 +55,7 @@ export function CreateTaskForm({
         onChange={setOrganizationId}
         organizations={orgs}
       />
-      <label className="flex flex-col gap-1 text-xs font-medium">
+      <label className="text-label-medium flex flex-col gap-1">
         <span className="text-on-surface-variant">Title (optional)</span>
         <Input
           value={title}
@@ -65,7 +65,7 @@ export function CreateTaskForm({
           placeholder={fallbackTitle}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs font-medium">
+      <label className="text-label-medium flex flex-col gap-1">
         <span className="text-on-surface-variant">Role</span>
         <select
           value={role}
@@ -89,7 +89,7 @@ export function CreateTaskForm({
         pendingLabel="Creating…"
       />
       {create.isError ? (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-destructive text-body-small">
           We couldn&apos;t create and link this task. Please try again.
         </p>
       ) : null}
@@ -127,7 +127,7 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
         onChange={setOrganizationId}
         organizations={orgs}
       />
-      <label className="flex flex-col gap-1 text-xs font-medium">
+      <label className="text-label-medium flex flex-col gap-1">
         <span className="text-on-surface-variant">Task ID</span>
         <Input
           value={taskIdInput}
@@ -137,7 +137,7 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
           placeholder="01ARZ3NDEKTSV4RRFFQ69G5FAV"
         />
         {taskIdInput.length > 0 && !parsedTaskId.success ? (
-          <span className="text-destructive text-xs">Enter a valid task id.</span>
+          <span className="text-destructive text-body-small">Enter a valid task id.</span>
         ) : null}
       </label>
       <TaskFormActions
@@ -148,7 +148,7 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
         pendingLabel="Linking…"
       />
       {link.isError ? (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-destructive text-body-small">
           We couldn&apos;t link this task. Please try again.
         </p>
       ) : null}
@@ -168,7 +168,7 @@ function OrganizationPicker({
   organizations,
 }: OrganizationPickerProps): JSX.Element {
   return (
-    <label className="flex flex-col gap-1 text-xs font-medium">
+    <label className="text-label-medium flex flex-col gap-1">
       <span className="text-on-surface-variant">Organization</span>
       <select
         value={organizationId ?? ''}

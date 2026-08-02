@@ -13,7 +13,7 @@ export interface CalendarCanvasRegionSelection extends CalendarRegionSelection {
   readonly canvasRegion: ScheduleRegionSelection;
 }
 
-/** Props for the shared canvas and its axis-specific status/sidebar affordances. */
+/** Props for the shared canvas and its axis-specific status affordances. */
 export interface CalendarSchedulingSurfaceProps {
   readonly axis: CalendarAxis;
   readonly visibleLaneCount: number;
@@ -35,4 +35,10 @@ export interface CalendarSchedulingSurfaceProps {
   readonly onSelectRegion: (selection: CalendarCanvasRegionSelection) => void;
   readonly onOpenItem: (itemId: string) => void;
   readonly onOpenSharedItem: (detail: SharedCalendarItemDetail) => void;
+  /**
+   * Receive a pinch / ctrl+wheel zoom intent as a multiplicative scale factor.
+   * `> 1` zooms in (more pixels per hour), `< 1` zooms out. The canvas emits raw intent only;
+   * the consumer owns clamping, rounding, and persistence.
+   */
+  readonly onZoomGesture?: (scale: number) => void;
 }

@@ -31,7 +31,6 @@ import {
   calendarSchedulingError,
 } from './calendar-scheduling-copy';
 import { CalendarReadFailureNotice } from './calendar-read-failure-notice';
-import { CalendarSchedulingSidebar } from './calendar-scheduling-sidebar';
 import { CalendarScheduleItemContent } from './calendar-schedule-item-content';
 import { CalendarSyncAlert } from './calendar-sync-alert';
 
@@ -58,6 +57,14 @@ const MINUTES_PER_DAY = 24 * 60;
  * @remarks
  * Error and empty states remain overlays owned by the canvas, so service failures never replace
  * the basic time grid.
+ *
+ * The surface is a single flex column with exactly one growing child — the canvas — and an
+ * unbroken `flex-1` + `min-h-0` chain from the page root down to `<section aria-label="Schedule">`,
+ * plus a hard `min-h-[max(16rem,45dvh)]` floor on the canvas wrapper. That combination is what
+ * makes it structurally impossible for a rail, a notice, or a comparison control to squeeze the
+ * schedule into a sliver. Layer controls deliberately live in the toolbar's popover rather than in
+ * a permanent side column: a 16rem column that usually rendered "No calendar layers yet." was
+ * costing the schedule a fifth of its width at exactly the widths where it had least to spare.
  */
 export function CalendarSchedulingSurface({
   axis,
@@ -77,6 +84,7 @@ export function CalendarSchedulingSurface({
   onSelectRegion,
   onOpenItem,
   onOpenSharedItem,
+  onZoomGesture,
 }: CalendarSchedulingSurfaceProps): JSX.Element {
   const updateItem = useUpdateCalendarItemById();
   const linkTask = useLinkTaskToCalendarItem();
@@ -159,7 +167,7 @@ export function CalendarSchedulingSurface({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
       <CalendarSyncAlert
         conflictCount={dateAxis.conflictCount}
         failedCount={dateAxis.failedCount}
@@ -167,142 +175,141 @@ export function CalendarSchedulingSurface({
 
       <CalendarReadFailureNotice message={readError} onRetry={retryRead} retrying={readRetrying} />
 
-      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 gap-4 @4xl:grid-cols-[minmax(0,1fr)_16rem]">
-        <div className="min-h-0 min-w-0">
-          <SchedulingCanvas
-            displayTimezone={displayTimezone}
-            lanes={axis === 'dates' ? dateAxis.lanes : peopleAxis.lanes}
-            pixelsPerHour={pixelsPerHour}
-            now={now}
-            viewportHeight="100%"
-            minimumLaneWidth={minLaneWidth}
-            initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
-            horizontalAnchorKey={axis === 'dates' ? horizontalAnchorKey : undefined}
-            selectedRegion={selectedRegion}
-            selectedRegionAnchorRef={selectedRegionAnchorRef}
-            error={calendarSchedulingError(axis, inlineMutationFailed, false, false)}
-            emptyMessage={calendarSchedulingEmptyMessage(
-              axis,
-              dateAxis.itemsPending,
-              peopleAxis.comparisonPending,
-              peopleAxis.selectedActorIds.length,
-            )}
-            onViewportGeometry={({ visibleLaneCount: next }) => {
-              if (axis === 'dates' && next > 0 && next !== visibleLaneCount) {
-                onVisibleLaneCountChange(next);
-              }
-            }}
-            onVisibleLaneRange={({ startLane, endLane }) => {
-              if (axis === 'dates') {
-                onVisibleDateRangeChange({
-                  startDate: startLane.date,
-                  endDate: endLane.date,
-                });
-              }
-            }}
-            onOpenItem={({ item }: { item: ScheduleItem }) => {
-              if (axis === 'people') {
-                const detail = peopleAxis.detailByItemId.get(item.id);
-                if (detail) onOpenSharedItem(detail);
-                return;
-              }
-              onOpenItem(item.id);
-            }}
-            {...(axis === 'dates'
-              ? {
-                  onReachBoundary,
-                  onSelectRegion: (canvasRegion: ScheduleRegionSelection) => {
-                    const { lane, startMinutes, endMinutes } = canvasRegion;
-                    const startsAt = resolveWallInstant(lane.date, startMinutes);
-                    const endsAt = resolveWallInstant(lane.date, endMinutes);
-                    if (!startsAt || !endsAt) return;
-                    onSelectRegion({
-                      startsAt,
-                      endsAt,
-                      canvasRegion,
-                    });
-                  },
-                  onMoveItem: ({ item, toLane, startMinutes }: ScheduleItemMove) => {
-                    if (toLane.editable === false) return;
-                    moveBounds(item.id, toLane.date, startMinutes);
-                  },
-                  onResizeItem: ({
-                    item,
-                    lane,
-                    edge,
-                    startMinutes,
-                    endMinutes,
-                  }: ScheduleItemResize) => {
-                    if (lane.editable === false) return;
-                    resizeBounds(item, lane, edge, startMinutes, endMinutes);
-                  },
-                  onMoveAllDayItem: ({ item, startDate, endDate }) => {
-                    persistAllDayBounds(item.id, startDate, endDate);
-                  },
-                  onResizeAllDayItem: ({ item, startDate, endDate }) => {
-                    persistAllDayBounds(item.id, startDate, endDate);
-                  },
-                  // Drop a task from the rail onto empty grid time: create a timebox at that
-                  // moment titled after the task, then link the task into it.
-                  onDropObjectOnGrid: ({ object, lane, startMinutes }: ScheduleObjectGridDrop) => {
-                    if (object.kind !== 'task') return;
-                    const endMinutes = Math.min(
-                      startMinutes + DROPPED_TASK_TIMEBOX_MINUTES,
-                      MINUTES_PER_DAY,
-                    );
-                    const startsAt = resolveWallInstant(lane.date, startMinutes);
-                    const endsAt = resolveWallInstant(lane.date, endMinutes);
-                    if (!startsAt || !endsAt) return;
-                    clearInlineFailures();
-                    createItem.mutate(
-                      { intent: 'timebox', title: object.title, startsAt, endsAt },
-                      {
-                        onSuccess: (created) => {
-                          linkTask.mutate({
-                            itemId: created.id,
-                            taskId: object.taskId,
-                            organizationId: object.organizationId,
-                            role: 'contained',
-                          });
-                        },
+      {/* The schedule's floor. `flex-1` claims every pixel the column has left, and the explicit
+          minimum keeps it readable even when notices above it are all showing at once. */}
+      <div className="min-h-[max(16rem,45dvh)] min-w-0 flex-1">
+        <SchedulingCanvas
+          displayTimezone={displayTimezone}
+          lanes={axis === 'dates' ? dateAxis.lanes : peopleAxis.lanes}
+          pixelsPerHour={pixelsPerHour}
+          now={now}
+          viewportHeight="100%"
+          minimumLaneWidth={minLaneWidth}
+          initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}
+          horizontalAnchorKey={axis === 'dates' ? horizontalAnchorKey : undefined}
+          selectedRegion={selectedRegion}
+          selectedRegionAnchorRef={selectedRegionAnchorRef}
+          error={calendarSchedulingError(axis, inlineMutationFailed, false, false)}
+          emptyMessage={calendarSchedulingEmptyMessage(
+            axis,
+            dateAxis.itemsPending,
+            peopleAxis.comparisonPending,
+            peopleAxis.selectedActorIds.length,
+          )}
+          onViewportGeometry={({ visibleLaneCount: next }) => {
+            if (axis === 'dates' && next > 0 && next !== visibleLaneCount) {
+              onVisibleLaneCountChange(next);
+            }
+          }}
+          onVisibleLaneRange={({ startLane, endLane }) => {
+            if (axis === 'dates') {
+              onVisibleDateRangeChange({
+                startDate: startLane.date,
+                endDate: endLane.date,
+              });
+            }
+          }}
+          onOpenItem={({ item }: { item: ScheduleItem }) => {
+            if (axis === 'people') {
+              const detail = peopleAxis.detailByItemId.get(item.id);
+              if (detail) onOpenSharedItem(detail);
+              return;
+            }
+            onOpenItem(item.id);
+          }}
+          {...(axis === 'dates'
+            ? {
+                onReachBoundary,
+                onSelectRegion: (canvasRegion: ScheduleRegionSelection) => {
+                  const { lane, startMinutes, endMinutes } = canvasRegion;
+                  const startsAt = resolveWallInstant(lane.date, startMinutes);
+                  const endsAt = resolveWallInstant(lane.date, endMinutes);
+                  if (!startsAt || !endsAt) return;
+                  onSelectRegion({
+                    startsAt,
+                    endsAt,
+                    canvasRegion,
+                  });
+                },
+                onMoveItem: ({ item, toLane, startMinutes }: ScheduleItemMove) => {
+                  if (toLane.editable === false) return;
+                  moveBounds(item.id, toLane.date, startMinutes);
+                },
+                onResizeItem: ({
+                  item,
+                  lane,
+                  edge,
+                  startMinutes,
+                  endMinutes,
+                }: ScheduleItemResize) => {
+                  if (lane.editable === false) return;
+                  resizeBounds(item, lane, edge, startMinutes, endMinutes);
+                },
+                onMoveAllDayItem: ({ item, startDate, endDate }) => {
+                  persistAllDayBounds(item.id, startDate, endDate);
+                },
+                onResizeAllDayItem: ({ item, startDate, endDate }) => {
+                  persistAllDayBounds(item.id, startDate, endDate);
+                },
+                // Drop a task from the rail onto empty grid time: create a timebox at that
+                // moment titled after the task, then link the task into it.
+                onDropObjectOnGrid: ({ object, lane, startMinutes }: ScheduleObjectGridDrop) => {
+                  if (object.kind !== 'task') return;
+                  const endMinutes = Math.min(
+                    startMinutes + DROPPED_TASK_TIMEBOX_MINUTES,
+                    MINUTES_PER_DAY,
+                  );
+                  const startsAt = resolveWallInstant(lane.date, startMinutes);
+                  const endsAt = resolveWallInstant(lane.date, endMinutes);
+                  if (!startsAt || !endsAt) return;
+                  clearInlineFailures();
+                  createItem.mutate(
+                    { intent: 'timebox', title: object.title, startsAt, endsAt },
+                    {
+                      onSuccess: (created) => {
+                        linkTask.mutate({
+                          itemId: created.id,
+                          taskId: object.taskId,
+                          organizationId: object.organizationId,
+                          role: 'contained',
+                        });
                       },
-                    );
-                  },
-                }
-              : {})}
-            renderItem={({ item, density }) => {
-              const source = dateAxis.itemById.get(item.id);
-              return source ? (
-                <CalendarScheduleItemContent item={source} density={density} />
-              ) : (
-                item.title
-              );
-            }}
-            onDropObjectOnItem={({ object, targetItem }) => {
-              const target = dateAxis.itemById.get(targetItem.id);
-              if (!target || !RELATIONSHIP_TARGET_KINDS.has(target.kind)) return;
-              if (object.kind === 'calendar_item' && object.itemId === target.id) return;
-              clearInlineFailures();
-              const role = target.kind === 'timebox' ? 'contained' : 'related';
-              if (object.kind === 'task') {
-                linkTask.mutate({
-                  itemId: target.id,
-                  taskId: object.taskId,
-                  organizationId: object.organizationId,
-                  role,
-                });
-              } else {
-                relateItems.mutate({
-                  sourceItemId: target.id,
-                  targetItemId: object.itemId,
-                  role,
-                });
+                    },
+                  );
+                },
               }
-            }}
-          />
-        </div>
-
-        <CalendarSchedulingSidebar axis={axis} dateAxis={dateAxis} />
+            : {})}
+          renderItem={({ item, density }) => {
+            const source = dateAxis.itemById.get(item.id);
+            return source ? (
+              <CalendarScheduleItemContent item={source} density={density} />
+            ) : (
+              item.title
+            );
+          }}
+          onDropObjectOnItem={({ object, targetItem }) => {
+            const target = dateAxis.itemById.get(targetItem.id);
+            if (!target || !RELATIONSHIP_TARGET_KINDS.has(target.kind)) return;
+            if (object.kind === 'calendar_item' && object.itemId === target.id) return;
+            clearInlineFailures();
+            const role = target.kind === 'timebox' ? 'contained' : 'related';
+            if (object.kind === 'task') {
+              linkTask.mutate({
+                itemId: target.id,
+                taskId: object.taskId,
+                organizationId: object.organizationId,
+                role,
+              });
+            } else {
+              relateItems.mutate({
+                sourceItemId: target.id,
+                targetItemId: object.itemId,
+                role,
+              });
+            }
+          }}
+          onZoomGesture={onZoomGesture}
+        />
       </div>
     </div>
   );

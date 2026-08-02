@@ -99,7 +99,7 @@ export function SchedulingRelationshipTargetControl({
         mode.activateTarget(item, lane);
       }}
     >
-      <span className="bg-primary text-on-primary pointer-events-none rounded-full px-2 py-1 text-[10px] font-semibold shadow-sm">
+      <span className="bg-primary text-on-primary text-label-medium pointer-events-none rounded-full px-2 py-1">
         Link here
       </span>
     </button>

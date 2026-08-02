@@ -18,7 +18,7 @@ export function CalendarReadFailureNotice({
   return (
     <div
       role="status"
-      className="border-border bg-muted/40 text-muted-foreground text-caption flex flex-wrap items-center justify-between gap-3 rounded-lg border px-3 py-2"
+      className="bg-surface-container-high text-on-surface-variant text-body-small flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
     >
       <span>{message}</span>
       <Button

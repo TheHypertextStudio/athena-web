@@ -1,9 +1,18 @@
 'use client';
 
 import { useMediaQuery } from '@docket/ui/hooks';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type JSX,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { SchedulingCanvasHeader } from './scheduling-canvas-header';
+import { SchedulingCanvasNotice } from './scheduling-canvas-notice';
 import { arrangeDenseScheduleItems } from './scheduling-dense-overflow';
 import { SchedulingDenseOverflow } from './scheduling-dense-overflow-ui';
 import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
@@ -12,6 +21,7 @@ import { deriveInitialScheduleScrollMinutes } from './scheduling-initial-scroll'
 import { SchedulingItemCard } from './scheduling-item-card';
 import { positionScheduleLaneItems } from './scheduling-overlap-layout';
 import { presentSchedulingRegion, SchedulingRegionPreview } from './scheduling-region-preview';
+import { scheduleWallPositionForInstant } from './scheduling-time-axis';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
 import type { ScheduleRegionSelection, SchedulingCanvasProps } from './scheduling-types';
 import { useSchedulingDensePromotion } from './use-scheduling-dense-promotion';
@@ -22,6 +32,14 @@ export type { ScheduleItemRenderContext, SchedulingCanvasProps } from './schedul
 const MINIMUM_LANE_WIDTH = 220;
 const MINIMUM_INTERACTIVE_PIXELS = 18;
 const MINIMUM_COARSE_POINTER_PIXELS = 40;
+/**
+ * Wheel delta that corresponds to one e-fold of zoom.
+ *
+ * @remarks
+ * A macOS trackpad pinch arrives as `ctrlKey` wheel events of a few pixels each; dividing by 180
+ * makes a full two-finger spread land near a 2x change without any single event feeling jumpy.
+ */
+const ZOOM_GESTURE_DELTA_SCALE = 180;
 /** Render a 24-hour fluid grid while consumers own data, persistence, and policy. */
 export default function SchedulingCanvas({
   displayTimezone,
@@ -50,8 +68,26 @@ export default function SchedulingCanvas({
   onResizeAllDayItem,
   onDropObjectOnItem,
   onDropObjectOnGrid,
+  onZoomGesture,
 }: SchedulingCanvasProps): JSX.Element {
   const [gestureAnnouncement, setGestureAnnouncement] = useState('');
+  // The sticky lane header covers the top of the scrollport, so an item that has scrolled partly
+  // out of view has to pin its title below the header rather than under it. Measured (the header
+  // grows with all-day items) and published as a CSS variable the item bodies consume.
+  const headerRef = useRef<HTMLElement | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+  useEffect(() => {
+    const node = headerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setHeaderHeight(Math.round(entry.contentRect.height));
+    });
+    observer.observe(node);
+    setHeaderHeight(Math.round(node.getBoundingClientRect().height));
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   const usesCoarsePointer = useMediaQuery('(pointer: coarse)');
   const minimumInteractivePixels = usesCoarsePointer
     ? MINIMUM_COARSE_POINTER_PIXELS
@@ -64,18 +100,39 @@ export default function SchedulingCanvas({
     displayTimezone,
     lanes,
   });
-  const { viewportRef, timedGridRef, observedWidth, geometry, onScroll } = useSchedulingViewport({
-    lanes,
-    pixelsPerHour: effectivePixelsPerHour,
-    viewportWidth,
-    minimumLaneWidth,
-    initialLaneIndex,
-    horizontalAnchorKey,
-    initialScrollMinutes: resolvedInitialScrollMinutes,
-    onViewportGeometry,
-    onVisibleLaneRange,
-    onReachBoundary,
-  });
+  const { viewportRef, timedGridRef, observedWidth, geometry, captureZoomAnchor, onScroll } =
+    useSchedulingViewport({
+      lanes,
+      pixelsPerHour: effectivePixelsPerHour,
+      viewportWidth,
+      minimumLaneWidth,
+      initialLaneIndex,
+      horizontalAnchorKey,
+      initialScrollMinutes: resolvedInitialScrollMinutes,
+      onViewportGeometry,
+      onVisibleLaneRange,
+      onReachBoundary,
+    });
+  // Trackpad pinch / ctrl+wheel zoom. React's synthetic `onWheel` is attached passively at the
+  // root, so it cannot cancel the browser's own page zoom — the listener has to be registered
+  // manually with `{ passive: false }`. The canvas emits raw multiplicative intent only; the
+  // consumer owns clamping, rounding, and persistence.
+  useEffect(() => {
+    const node = viewportRef.current;
+    if (!node || !onZoomGesture) return;
+    const onWheel = (event: WheelEvent): void => {
+      // macOS reports a trackpad pinch as a wheel event with `ctrlKey` set, and no pinch gesture
+      // ever produces a plain wheel — so this one test covers pinch and ctrl/⌘+wheel alike.
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      captureZoomAnchor(event.clientY);
+      onZoomGesture(Math.exp(-event.deltaY / ZOOM_GESTURE_DELTA_SCALE));
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      node.removeEventListener('wheel', onWheel);
+    };
+  }, [captureZoomAnchor, onZoomGesture, viewportRef]);
   const relationshipMode = useSchedulingRelationshipMode({
     viewportRef,
     onDropObjectOnItem,
@@ -122,6 +179,9 @@ export default function SchedulingCanvas({
       : null;
   }, [displayTimezone, lanes, selectedRegion]);
   const fullWidth = geometry.gutterWidth + geometry.contentWidth;
+  const todayDate = now
+    ? (scheduleWallPositionForInstant(now, displayTimezone)?.date ?? undefined)
+    : undefined;
   const arrangedLaneItems = useMemo(
     () =>
       lanes.map((lane) =>
@@ -154,8 +214,15 @@ export default function SchedulingCanvas({
     <section
       ref={viewportRef}
       aria-label="Schedule"
-      className={`border-outline-variant/60 bg-surface relative overflow-auto overscroll-contain rounded-xl border ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
-      style={viewportHeight === undefined ? undefined : { height: viewportHeight }}
+      // No outer border: the tonal step from the page canvas onto `bg-surface` carries the
+      // separation, exactly as the shell's own panels do.
+      className={`bg-surface relative overflow-auto overscroll-contain rounded-xl ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
+      style={
+        {
+          '--schedule-sticky-top': `${String(headerHeight)}px`,
+          ...(viewportHeight === undefined ? {} : { height: viewportHeight }),
+        } as CSSProperties
+      }
       data-lane-count={lanes.length}
       data-visible-lane-count={geometry.visibleLaneCount}
       data-snap-minutes={snapMinutes}
@@ -166,15 +233,14 @@ export default function SchedulingCanvas({
       </p>
       <div className="min-w-full" style={{ width: fullWidth }}>
         <SchedulingCanvasHeader
+          headerRef={headerRef}
           lanes={lanes}
           displayTimezone={displayTimezone}
+          todayDate={todayDate}
           viewportRef={viewportRef}
           gutterWidth={geometry.gutterWidth}
           contentWidth={geometry.contentWidth}
           laneWidth={geometry.laneWidth}
-          viewportWidth={viewportWidth ?? observedWidth}
-          emptyMessage={emptyMessage}
-          error={error}
           renderItem={renderItem}
           onOpenItem={onOpenItem}
           onMoveAllDayItem={onMoveAllDayItem}
@@ -198,7 +264,9 @@ export default function SchedulingCanvas({
                 <div
                   key={lane.id}
                   aria-label={`${lane.label} time grid`}
-                  className="border-outline-variant/50 relative shrink-0 touch-none border-r"
+                  // A single hairline between lanes, and none after the last one — the separator
+                  // exists to divide days, not to draw a box around the grid.
+                  className={`relative shrink-0 touch-none ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
                   data-schedule-lane={lane.id}
                   style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
                   onPointerDown={(event) => {
@@ -299,6 +367,14 @@ export default function SchedulingCanvas({
             </div>
           </SchedulingTimeGrid>
         </div>
+        {/* Last flow child so `sticky bottom-0` rides the visible bottom edge at every scroll
+            position; its own height is cancelled by the notice's negative margin. */}
+        <SchedulingCanvasNotice
+          emptyMessage={emptyMessage}
+          error={error}
+          isEmpty={lanes.every((lane) => lane.items.length === 0)}
+          viewportWidth={viewportWidth ?? observedWidth}
+        />
       </div>
     </section>
   );

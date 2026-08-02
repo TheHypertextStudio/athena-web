@@ -2024,7 +2024,7 @@ describe('SchedulingCanvas', () => {
     expect(buttons[1]).toHaveAccessibleName(/Duplicate.*9:30.*10:30/);
   });
 
-  it('elevates on hover without translating exact time or collision geometry', () => {
+  it('marks hover with tone alone, never a shadow or a transform', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -2034,12 +2034,14 @@ describe('SchedulingCanvas', () => {
       />,
     );
 
+    // Colour and stacking only: no shadow at any state, and no scale/translate — growing on
+    // hover is never how interactivity is signalled here.
     expect(renderedItem('focus')).toHaveClass(
       'hover:z-20',
-      'hover:shadow-md',
+      'hover:bg-surface-container',
       'motion-reduce:transition-none',
     );
-    expect(renderedItem('focus')).not.toHaveClass('motion-safe:hover:-translate-y-px');
+    expect(renderedItem('focus').className).not.toMatch(/shadow-|scale-|translate-/);
   });
 
   it('keeps the grid mounted when the deterministic clock is absent or invalid', () => {

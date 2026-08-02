@@ -161,12 +161,15 @@ export function SchedulingItemCard({
 
   return (
     <article
+      // The card carries exactly one intentional border — the left colour bar identifying its
+      // layer. Everything else is tone and ring: no drop shadows at rest, on hover, while dragging,
+      // or while targeted, and never a transform (scale/lift never signals interactivity here).
       className={`${DRAGGABLE} ${
         dropActive
-          ? 'border-primary bg-primary-container ring-primary/30 group absolute z-30 overflow-visible rounded-md border shadow-md ring-2'
+          ? 'bg-primary-container ring-primary group absolute z-30 overflow-visible rounded-md ring-2'
           : gesture.preview
-            ? 'border-primary bg-surface-container-low ring-primary/35 group absolute z-40 overflow-visible rounded-md border shadow-lg ring-2 transition-[box-shadow,transform] motion-reduce:transition-none'
-            : 'border-l-outline-variant bg-surface-container-low group absolute z-10 overflow-visible rounded-md border-l shadow-sm transition-shadow focus-within:z-20 focus-within:shadow-md hover:z-20 hover:shadow-md motion-reduce:transition-none'
+            ? 'bg-surface-container-high ring-primary group absolute z-40 overflow-visible rounded-md ring-2'
+            : 'border-l-outline-variant bg-surface-container-low hover:bg-surface-container focus-within:bg-surface-container group absolute z-10 overflow-visible rounded-md border-l transition-colors focus-within:z-20 hover:z-20 motion-reduce:transition-none'
       }`}
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -197,8 +200,8 @@ export function SchedulingItemCard({
         ...horizontalStyle,
         height: visibleHeight,
         transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
-        borderLeftWidth: 3,
-        // The 3px left stripe is the card's single identity marker — no full border. A colored
+        borderLeftWidth: 4,
+        // The 4px left stripe is the card's single identity marker — no full border. A colored
         // event also gets a faint color-mix fill; an uncolored one keeps the neutral stripe.
         ...(item.color && !dropActive
           ? {
@@ -244,7 +247,7 @@ export function SchedulingItemCard({
         {!editable && item.readOnlyLabel ? (
           <span
             id={readOnlyDescriptionId}
-            className="bg-surface/90 text-on-surface-variant pointer-events-none absolute right-0.5 bottom-0.5 z-30 max-w-[calc(100%-0.25rem)] truncate rounded px-1 py-0.5 text-[9px] leading-none font-semibold"
+            className="bg-surface/90 text-on-surface-variant text-label-medium pointer-events-none absolute right-0.5 bottom-0.5 z-30 max-w-[calc(100%-0.25rem)] truncate rounded px-1 py-0.5"
           >
             {item.readOnlyLabel}
           </span>

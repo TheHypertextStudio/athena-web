@@ -38,8 +38,8 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
         role="alert"
         className="border-destructive/40 bg-destructive/10 flex flex-col gap-2 rounded-lg border p-3"
       >
-        <p className="text-destructive text-sm font-medium">Sync conflict</p>
-        <p className="text-on-surface-variant text-xs">
+        <p className="text-destructive text-title-small">Sync conflict</p>
+        <p className="text-on-surface-variant text-body-small">
           Local changes and the provider diverged. Open the item in the provider to review, or retry
           pushing your local changes.
         </p>
@@ -62,7 +62,7 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
           </Button>
         </div>
         {retry.isError ? (
-          <p className="text-destructive text-xs">
+          <p className="text-destructive text-body-small">
             We couldn&apos;t retry this calendar update. Please try again.
           </p>
         ) : null}
@@ -72,7 +72,7 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
 
   const meta = SYNC_STATE_META[item.syncState];
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs">
+    <div className="text-body-small flex flex-wrap items-center gap-2">
       {meta ? (
         <span
           className={cn(

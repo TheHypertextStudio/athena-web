@@ -54,7 +54,7 @@ export function CalendarItemWorkspace({
           >
             <KindIcon />
           </span>
-          <SheetTitle className="text-on-surface min-w-0 flex-1 text-base font-semibold">
+          <SheetTitle className="text-on-surface text-title-medium min-w-0 flex-1">
             {item.title}
           </SheetTitle>
           <CalendarDrawerClose label="Close calendar item" onClick={onClose} />
@@ -62,7 +62,9 @@ export function CalendarItemWorkspace({
             Calendar item details, relationships, and linked tasks.
           </SheetDescription>
         </div>
-        <p className="text-on-surface-variant text-sm">{itemTimeLabel(item, displayTimezone)}</p>
+        <p className="text-on-surface-variant text-body-medium">
+          {itemTimeLabel(item, displayTimezone)}
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           {layer ? (
             <Badge variant="outline" className="gap-1.5 font-normal">
@@ -82,7 +84,7 @@ export function CalendarItemWorkspace({
               href={item.htmlLink}
               target="_blank"
               rel="noreferrer"
-              className="text-primary text-xs hover:underline"
+              className="text-primary text-body-small hover:underline"
             >
               Open in provider
             </a>
@@ -93,7 +95,7 @@ export function CalendarItemWorkspace({
       <SyncStatusSection item={item} />
 
       <section className="flex flex-col gap-2">
-        <h3 className="text-on-surface text-sm font-semibold">Details</h3>
+        <h3 className="text-on-surface text-title-small">Details</h3>
         <CoreFieldsForm
           displayTimezone={displayTimezone}
           item={item}
@@ -105,8 +107,8 @@ export function CalendarItemWorkspace({
       <LinkedTasksSection item={item} onOpenTask={onOpenTask} />
 
       <section className="flex flex-col gap-1.5">
-        <h3 className="text-on-surface text-sm font-semibold">Provider metadata</h3>
-        <p className="text-on-surface-variant text-xs">
+        <h3 className="text-on-surface text-title-small">Provider metadata</h3>
+        <p className="text-on-surface-variant text-body-small">
           {[
             layer?.provider ? `Provider: ${layer.provider}` : null,
             layer?.accessRole ? `Access: ${layer.accessRole}` : null,

@@ -15,9 +15,11 @@ import {
   type CalendarLayerOut,
   type CalendarPreferences,
 } from '@docket/types';
+import { cn } from '@docket/ui';
 import { Plus } from '@docket/ui/icons';
 import {
   Button,
+  focusRing,
   Input,
   Popover,
   PopoverAnchor,
@@ -47,6 +49,31 @@ import { CreateBlockTypeSelector } from './create-block-type-selector';
 import { useCreateCalendarItem } from './calendar-mutations';
 
 export type { CalendarRegionSelection } from './calendar-time-draft';
+
+/**
+ * The app's MD3 `<select>` recipe, matching `settings/team-mapping-picker.tsx`.
+ *
+ * @remarks
+ * Replaces the legacy `border-input` / `bg-background` pair this control used to carry, which put
+ * two token systems inside one popover. Every property is now the {@link Input} recipe verbatim —
+ * `h-9`, `rounded-md`, one `outline-variant` hairline, a transparent fill, no elevation — so a text
+ * field, a `<select>`, and a `datetime-local` stacked in this form are indistinguishable except for
+ * what they do. They previously differed in both fill and box-shadow.
+ */
+const SELECT_CLASS =
+  'border-outline-variant text-on-surface text-body-medium h-9 w-full rounded-md border bg-transparent px-3';
+
+/**
+ * The calendar toolbar row's shared control geometry.
+ *
+ * @remarks
+ * Deliberately a copy of `(app)/calendar/calendar-view-settings.tsx`'s `CALENDAR_CONTROL_CLASS`
+ * rather than an import: this is a `components/` module and must not depend on an `app/` route
+ * module. Keep the two in step — the row's never-wrap guarantee depends on every control in it
+ * being `shrink-0` at the same height.
+ */
+const CALENDAR_CONTROL_CLASS =
+  'min-h-10 w-10 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {
@@ -184,8 +211,15 @@ export default function CreateBlockForm({
     >
       {selection && selectionAnchorRef ? <PopoverAnchor virtualRef={selectionAnchorRef} /> : null}
       <PopoverTrigger asChild>
-        <Button className="min-h-10" size="sm" variant="outline">
-          <Plus /> New
+        {/*
+          The label is conditional below `@2xl`, so the button carries its own accessible name. The
+          `Button` base already sets `whitespace-nowrap`; `shrink-0` is what actually keeps this off
+          a second row, since the bug was never the text breaking — it was the button being
+          reflowed by a wrapping toolbar.
+        */}
+        <Button className={CALENDAR_CONTROL_CLASS} size="sm" variant="outline" aria-label="New">
+          <Plus className="size-4" aria-hidden="true" />
+          <span className="hidden @2xl:inline">New</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent aria-label="Create calendar item" className="w-80 p-3" align="start">
@@ -198,8 +232,8 @@ export default function CreateBlockForm({
             }}
           />
 
-          <label className="flex flex-col gap-1 text-xs font-medium">
-            <span className="text-on-surface-variant">Title</span>
+          <label className="flex flex-col gap-1">
+            <span className="text-label-medium text-on-surface-variant">Title</span>
             <Input
               value={title}
               onChange={(event) => {
@@ -211,15 +245,15 @@ export default function CreateBlockForm({
           </label>
 
           {intent === 'event' ? (
-            <label className="flex flex-col gap-1 text-xs font-medium">
-              <span className="text-on-surface-variant">Calendar</span>
+            <label className="flex flex-col gap-1">
+              <span className="text-label-medium text-on-surface-variant">Calendar</span>
               <select
                 value={layerId}
                 onChange={(event) => {
                   layerEdited.current = true;
                   setLayerId(event.target.value ? CalendarLayerId.parse(event.target.value) : '');
                 }}
-                className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                className={cn(SELECT_CLASS, focusRing)}
               >
                 <option value="">Docket calendar</option>
                 {destinations.map((layer) => (
@@ -229,7 +263,7 @@ export default function CreateBlockForm({
                 ))}
               </select>
               {!configuredLayerAvailable ? (
-                <span className="text-on-surface-variant text-[11px]">
+                <span className="text-body-small text-on-surface-variant">
                   Your saved calendar is unavailable, so this will use Docket.
                 </span>
               ) : null}
@@ -276,11 +310,28 @@ export default function CreateBlockForm({
               setTimeError(null);
             }}
           />
-          <Button type="submit" size="sm" disabled={!title.trim() || create.isPending}>
-            {create.isPending ? 'Creating…' : `Create ${intent}`}
-          </Button>
+          {/*
+            `h-9` matches the fields it sits under — a 32px button below a column of 36px inputs
+            read as a different form. The hint is adjacent rather than a tooltip so the one reason
+            the button is disabled is legible without hovering it.
+          */}
+          <div className="flex flex-col gap-1">
+            <Button
+              type="submit"
+              size="sm"
+              className="h-9"
+              disabled={!title.trim() || create.isPending}
+            >
+              {create.isPending ? 'Creating…' : `Create ${intent}`}
+            </Button>
+            {!title.trim() && !create.isPending ? (
+              <p className="text-on-surface-variant text-body-small">
+                Add a title to create this {intent}.
+              </p>
+            ) : null}
+          </div>
           {create.isError ? (
-            <p role="alert" className="text-destructive text-xs">
+            <p role="alert" className="text-destructive text-body-small">
               Could not create this calendar item. Try again.
             </p>
           ) : null}

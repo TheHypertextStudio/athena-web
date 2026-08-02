@@ -18,7 +18,7 @@ export function CalendarSyncAlert({
   return (
     <div
       role="alert"
-      className="border-destructive/40 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm font-medium"
+      className="bg-error-container text-on-error-container text-body-medium shrink-0 rounded-lg px-3 py-2"
     >
       {[conflicts, failures].filter(Boolean).join(' · ')}
     </div>

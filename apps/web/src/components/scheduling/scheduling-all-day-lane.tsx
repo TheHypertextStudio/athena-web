@@ -70,12 +70,13 @@ export function SchedulingAllDayLane({
         </div>
       ))}
       {overflow.length > 0 ? (
-        <details className="relative z-50 max-w-full text-[10px]">
-          <summary className="text-primary hover:bg-primary/10 focus-visible:ring-ring flex cursor-pointer list-none items-center rounded px-1.5 py-0.5 font-semibold outline-none focus-visible:ring-2 [@media(pointer:coarse)]:min-h-10">
+        <details className="text-label-medium relative z-50 max-w-full">
+          <summary className="text-primary hover:bg-primary/10 focus-visible:ring-ring flex cursor-pointer list-none items-center rounded px-1.5 py-0.5 outline-none focus-visible:ring-2 [@media(pointer:coarse)]:min-h-10">
             +{String(overflow.length)} more
           </summary>
+          {/* Tone, not a shadow: the raised surface step is what separates the disclosure. */}
           <div
-            className="border-outline-variant bg-surface absolute top-full left-0 mt-1 flex max-h-32 min-w-40 flex-col gap-1 overflow-y-auto rounded-md border p-1.5 shadow-lg"
+            className="bg-surface-container-high absolute top-full left-0 mt-1 flex max-h-32 min-w-40 flex-col gap-1 overflow-y-auto rounded-md p-1.5"
             data-schedule-all-day-overflow=""
           >
             {overflow.map(render)}

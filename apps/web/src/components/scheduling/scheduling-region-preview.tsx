@@ -96,7 +96,7 @@ export function SchedulingRegionPreview({
         height: minutesToPixels(endMinutes - startMinutes, pixelsPerHour),
       }}
     >
-      <span className="bg-surface/95 text-on-surface absolute top-1 left-1 max-w-[calc(100%-0.5rem)] truncate rounded px-1.5 py-0.5 text-[10px] leading-4 font-semibold tabular-nums shadow-sm">
+      <span className="bg-surface/95 text-on-surface text-label-medium absolute top-1 left-1 max-w-[calc(100%-0.5rem)] truncate rounded px-1.5 py-0.5 tabular-nums">
         {presentation.label}
       </span>
     </div>

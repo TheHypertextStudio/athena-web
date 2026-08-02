@@ -88,7 +88,7 @@ export function CalendarSharedItemDetails({
           <div className="flex flex-col gap-5">
             <header className="flex flex-col gap-2">
               <div className="flex items-start gap-2">
-                <SheetTitle className="min-w-0 flex-1 text-base font-semibold">
+                <SheetTitle className="text-title-medium min-w-0 flex-1">
                   {detail.item.title}
                 </SheetTitle>
                 <CalendarDrawerClose label="Close shared calendar item" onClick={onClose} />
@@ -101,17 +101,17 @@ export function CalendarSharedItemDetails({
                 <Badge variant="outline">{KIND_LABEL[detail.item.kind]}</Badge>
               </div>
             </header>
-            <dl className="grid gap-4 text-sm">
+            <dl className="text-body-medium grid gap-4">
               <div>
-                <dt className="text-on-surface-variant text-xs font-medium">When</dt>
+                <dt className="text-on-surface-variant text-label-medium">When</dt>
                 <dd className="text-on-surface mt-1">{timeLabel(detail, displayTimezone)}</dd>
               </div>
               <div>
-                <dt className="text-on-surface-variant text-xs font-medium">Schedule owner</dt>
+                <dt className="text-on-surface-variant text-label-medium">Schedule owner</dt>
                 <dd className="text-on-surface mt-1">{detail.personName}</dd>
               </div>
               <div>
-                <dt className="text-on-surface-variant text-xs font-medium">Timezones</dt>
+                <dt className="text-on-surface-variant text-label-medium">Timezones</dt>
                 <dd className="text-on-surface mt-1">
                   Times shown in {displayTimezone}
                   {detail.personTimezone ? ` · ${detail.personName}: ${detail.personTimezone}` : ''}

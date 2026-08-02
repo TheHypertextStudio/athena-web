@@ -54,7 +54,7 @@ export function SchedulingDenseOverflow({
           <button
             type="button"
             aria-label={`Show ${label}`}
-            className="border-outline-variant bg-surface-container-high text-primary hover:bg-primary-container focus-visible:ring-ring size-full rounded-md border px-1 text-xs font-semibold shadow-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
+            className="bg-surface-container-high text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring size-full rounded-md px-1 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
           >
             +{String(count)}
           </button>
@@ -69,7 +69,7 @@ export function SchedulingDenseOverflow({
             revealingRef.current = false;
           }}
         >
-          <p className="text-on-surface px-2 py-1 text-xs font-semibold">{label}</p>
+          <p className="text-on-surface text-title-small px-2 py-1">{label}</p>
           <div className="flex max-h-72 flex-col overflow-y-auto" role="list">
             {group.items.map(({ item }) => {
               const timeRange =
@@ -87,10 +87,10 @@ export function SchedulingDenseOverflow({
                     style={item.color ? { backgroundColor: item.color } : undefined}
                   />
                   <span className="min-w-0 flex-1">
-                    <span className="text-on-surface block truncate text-xs font-medium">
+                    <span className="text-on-surface text-body-medium block truncate">
                       {content}
                     </span>
-                    <span className="text-on-surface-variant block truncate text-[10px] tabular-nums">
+                    <span className="text-on-surface-variant text-body-small block truncate tabular-nums">
                       {timeRange}
                     </span>
                   </span>
@@ -117,7 +117,7 @@ export function SchedulingDenseOverflow({
                     <button
                       type="button"
                       aria-label={`Show ${item.title} on calendar`}
-                      className="text-primary hover:bg-primary-container focus-visible:ring-ring min-h-11 min-w-11 shrink-0 rounded px-2 text-[10px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                      className="text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring min-h-11 min-w-11 shrink-0 rounded px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset"
                       onClick={() => {
                         revealingRef.current = true;
                         setOpen(false);

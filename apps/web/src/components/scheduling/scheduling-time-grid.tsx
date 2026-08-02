@@ -116,7 +116,9 @@ export function SchedulingTimeGrid({
   return (
     <div className="relative flex" style={{ height: gridHeight }}>
       <div
-        className="border-outline-variant/50 bg-surface sticky left-0 z-[50] shrink-0 border-r"
+        // No rule down the gutter: the labels sit on `bg-surface` with real padding, which reads as
+        // a gutter without drawing a line through the middle of the schedule.
+        className="bg-surface sticky left-0 z-[50] shrink-0"
         style={{ width: gutterWidth }}
       >
         {ticks
@@ -124,7 +126,7 @@ export function SchedulingTimeGrid({
           .map((tick) => (
             <span
               key={tick.wallMinutes}
-              className="text-on-surface-variant absolute right-2 -translate-y-1/2 text-[10px] tabular-nums"
+              className="text-on-surface-variant text-label-medium absolute right-2 -translate-y-1/2 tabular-nums"
               data-schedule-label={tick.wallMinutes}
               style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
             >
@@ -147,7 +149,7 @@ export function SchedulingTimeGrid({
             // positioned element and data attributes (geometry + e2e hooks) but no line.
             className={
               tick.kind === 'major'
-                ? 'border-outline-variant/50 pointer-events-none absolute inset-x-0 border-t'
+                ? 'border-outline-variant/30 pointer-events-none absolute inset-x-0 border-t'
                 : 'pointer-events-none absolute inset-x-0'
             }
             data-hour-line={tick.wallMinutes % 60 === 0 ? tick.wallMinutes / 60 : undefined}
@@ -170,7 +172,9 @@ export function SchedulingTimeGrid({
               {(transitionsByDate.get(lane.date) ?? []).map((band) => (
                 <span
                   key={`${String(band.startWallMinutes)}:${band.transition}`}
-                  className="text-on-surface-variant bg-surface-container-high/50 absolute inset-x-1 border-y border-dashed px-1 text-[9px]"
+                  // The dashed edge is kept deliberately: it marks a wall-clock anomaly, which is
+                  // meaning, not decoration — unlike the structural rules removed elsewhere.
+                  className="text-on-surface-variant bg-surface-container-high/50 border-outline-variant text-label-medium absolute inset-x-1 overflow-hidden border-y border-dashed px-1"
                   data-schedule-transition={band.transition}
                   data-schedule-transition-lane={lane.id}
                   style={{

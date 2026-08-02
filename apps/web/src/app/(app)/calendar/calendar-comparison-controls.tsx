@@ -1,9 +1,67 @@
 'use client';
 
+/**
+ * `(app)/calendar/calendar-comparison-controls` — the People popover.
+ *
+ * @remarks
+ * These controls used to render inline in the page's flex column, above the grid: a bordered
+ * `<section>` holding a bordered `<select>` (styled from the *legacy* `border-input` /
+ * `bg-background` pair, one row away from MD3-tokenized neighbours) and one bordered chip per
+ * person carrying a bare checkbox and a name. It cost roughly 90px of vertical budget whenever the
+ * People axis was active and was a material contributor to the calendar collapsing to 5.55% of the
+ * viewport.
+ *
+ * Choosing who to compare is a *setting*, so it now lives behind a trailing toolbar control that
+ * costs one button of width and nothing when closed. Inside, the border boxes are gone — a popover
+ * already is a surface, and a border drawn inside one is pure noise — and every control resolves to
+ * the same MD3 token system as the rest of the row. Each person reads as a row with an inline
+ * identity glyph and a check on the selected state rather than a bare pill.
+ *
+ * @see {@link CalendarComparisonControls}
+ */
 import type { OrgSummary } from '@docket/types';
-import type { JSX } from 'react';
+import { cn } from '@docket/ui';
+import { Check, ChevronDown, Users } from '@docket/ui/icons';
+import {
+  Avatar,
+  AvatarFallback,
+  Button,
+  focusRing,
+  focusRingInset,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@docket/ui/primitives';
+import { type JSX, useId } from 'react';
 
+import { CALENDAR_CONTROL_CLASS } from './calendar-view-settings';
 import type { ComparisonMember } from './use-calendar-people-axis';
+
+/**
+ * The app's MD3 `<select>` recipe, matching `settings/team-mapping-picker.tsx`.
+ *
+ * @remarks
+ * Written out here so this control resolves to the same token family as its neighbours. The old
+ * markup mixed `border-input` / `bg-background` (legacy) into a view whose every other control used
+ * `border-outline-variant` — two token systems one row apart. No shadow: separation comes from the
+ * tonal step off the popover surface.
+ */
+const SELECT_CLASS =
+  'border-outline-variant bg-surface-container-low text-on-surface text-body-medium h-9 w-full rounded-md border px-2';
+
+/**
+ * Reduce a display name to at most two initials for the avatar fallback.
+ *
+ * @param displayName - The member's rendered name.
+ * @returns one or two uppercase initials, or `'?'` for an empty name.
+ */
+function initials(displayName: string): string {
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+  return `${first}${last}`.toUpperCase();
+}
 
 /** Props for selecting the workspace and people represented by comparison lanes. */
 export interface CalendarComparisonControlsProps {
@@ -16,7 +74,25 @@ export interface CalendarComparisonControlsProps {
   readonly onActorChange: (actorId: string, selected: boolean) => void;
 }
 
-/** Render controls for an arbitrary number of shared schedule lanes. */
+/**
+ * The toolbar's People control — which workspace and which people the lanes compare.
+ *
+ * @param props - The {@link CalendarComparisonControlsProps}.
+ * @returns the trigger and its comparison popover.
+ *
+ * @example
+ * ```tsx
+ * <CalendarComparisonControls
+ *   workspaces={peopleAxis.sharedWorkspaces}
+ *   workspaceId={peopleAxis.comparisonOrgId}
+ *   members={peopleAxis.activeMembers}
+ *   selectedActorIds={peopleAxis.selectedActorIds}
+ *   membersPending={peopleAxis.membersPending}
+ *   onWorkspaceChange={peopleAxis.selectWorkspace}
+ *   onActorChange={peopleAxis.toggleActor}
+ * />
+ * ```
+ */
 export function CalendarComparisonControls({
   workspaces,
   workspaceId,
@@ -26,58 +102,93 @@ export function CalendarComparisonControls({
   onWorkspaceChange,
   onActorChange,
 }: CalendarComparisonControlsProps): JSX.Element {
+  const peopleLabelId = useId();
+
   return (
-    <section
-      aria-label="Schedule comparison controls"
-      className="border-outline-variant flex flex-wrap items-start gap-4 rounded-lg border p-3"
-    >
-      <label className="flex min-w-48 flex-col gap-1 text-xs font-medium">
-        <span className="text-on-surface-variant">Workspace</span>
-        <select
-          name="comparison-workspace"
-          value={workspaceId}
-          onChange={(event) => {
-            onWorkspaceChange(event.target.value);
-          }}
-          className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-        >
-          {workspaces.length === 0 ? <option value="">No shared workspaces</option> : null}
-          {workspaces.map((workspace) => (
-            <option key={workspace.id} value={workspace.id}>
-              {workspace.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <fieldset className="min-w-0 flex-1">
-        <legend className="text-on-surface-variant mb-1 text-xs font-medium">People</legend>
-        <div className="flex flex-wrap gap-2">
-          {members.map((member) => (
-            <label
-              key={member.actorId}
-              className="border-outline-variant hover:bg-surface-container-high focus-within:ring-ring flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors focus-within:ring-2 focus-within:ring-offset-1 motion-reduce:transition-none"
-            >
-              <input
-                name="comparison-actors"
-                type="checkbox"
-                value={member.actorId}
-                checked={selectedActorIds.includes(member.actorId)}
-                onChange={(event) => {
-                  onActorChange(member.actorId, event.target.checked);
-                }}
-              />
-              {member.displayName}
-            </label>
-          ))}
-          {membersPending ? (
-            <span className="text-on-surface-variant text-xs">Loading people…</span>
-          ) : members.length === 0 ? (
-            <span role="status" className="text-on-surface-variant text-xs">
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" aria-label="People" className={CALENDAR_CONTROL_CLASS}>
+          <Users className="size-4" aria-hidden="true" />
+          <span className="hidden @2xl:inline">People</span>
+          <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" aria-label="People" className="flex w-80 flex-col gap-3 p-2">
+        <label className="flex flex-col gap-1">
+          <span className="text-label-medium text-on-surface-variant px-1">Workspace</span>
+          <select
+            name="comparison-workspace"
+            value={workspaceId}
+            onChange={(event) => {
+              onWorkspaceChange(event.target.value);
+            }}
+            className={cn(SELECT_CLASS, focusRing)}
+          >
+            {workspaces.length === 0 ? <option value="">No shared workspaces</option> : null}
+            {workspaces.map((workspace) => (
+              <option key={workspace.id} value={workspace.id}>
+                {workspace.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <div className="flex min-w-0 flex-col gap-1">
+          <span id={peopleLabelId} className="text-label-medium text-on-surface-variant px-1">
+            People
+          </span>
+          {members.length > 0 ? (
+            <ul aria-labelledby={peopleLabelId} className="flex max-h-64 flex-col overflow-y-auto">
+              {members.map((member) => {
+                const selected = selectedActorIds.includes(member.actorId);
+                return (
+                  <li key={member.actorId}>
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={selected}
+                      onClick={() => {
+                        onActorChange(member.actorId, !selected);
+                      }}
+                      className={cn(
+                        'hover:bg-surface-container-highest flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors motion-reduce:transition-none',
+                        focusRingInset,
+                      )}
+                    >
+                      <Avatar aria-hidden="true" className="size-6 shrink-0">
+                        <AvatarFallback className="text-label-medium">
+                          {initials(member.displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-body-medium text-on-surface min-w-0 flex-1 truncate">
+                        {member.displayName}
+                      </span>
+                      {selected ? (
+                        <Check className="text-primary size-4 shrink-0" aria-hidden="true" />
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : membersPending ? (
+            <p className="text-body-small text-on-surface-variant px-1">Loading people…</p>
+          ) : (
+            <p role="status" className="text-body-small text-on-surface-variant px-1">
               No people available.
-            </span>
-          ) : null}
+            </p>
+          )}
         </div>
-      </fieldset>
-    </section>
+
+        {/*
+          The permission model is not obvious from the lanes alone, so it is stated here rather than
+          in a bordered box beside the grid — supporting text inside the control it explains.
+        */}
+        <p className="text-body-small text-on-surface-variant px-1">
+          Details appear only from layers each person shared with this workspace. Private provider
+          events always appear as Busy.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }

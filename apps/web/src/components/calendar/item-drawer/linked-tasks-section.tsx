@@ -50,7 +50,7 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
   return (
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-on-surface text-sm font-semibold">Linked tasks</h3>
+        <h3 className="text-on-surface text-title-small">Linked tasks</h3>
         <div className="flex gap-1">
           <Button
             size="sm"
@@ -76,12 +76,12 @@ export function LinkedTasksSection({ item, onOpenTask }: LinkedTasksSectionProps
       </div>
 
       {grouped.length === 0 ? (
-        <p className="text-on-surface-variant text-xs">No linked tasks yet.</p>
+        <p className="text-on-surface-variant text-body-small">No linked tasks yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
           {grouped.map(({ role, links }) => (
             <div key={role} className="flex flex-col gap-1.5">
-              <p className="text-on-surface-variant text-xs font-medium">{TASK_ROLE_LABEL[role]}</p>
+              <p className="text-on-surface-variant text-label-medium">{TASK_ROLE_LABEL[role]}</p>
               <div className="flex flex-col gap-1.5">
                 {links.map((link) => (
                   <LinkedTaskRow
@@ -155,7 +155,7 @@ function LinkedTaskRow({ itemId, link, onOpenTask }: LinkedTaskRowProps): JSX.El
   const rename = useRenameTask(link.organizationId, [queryKeys.calendarItem(itemId)]);
 
   const titleClass = cn(
-    'min-w-0 flex-1 truncate text-left text-sm',
+    'min-w-0 flex-1 truncate text-left text-body-medium',
     link.done ? 'text-on-surface-variant line-through' : 'text-on-surface',
   );
 

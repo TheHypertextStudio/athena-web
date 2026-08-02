@@ -72,6 +72,9 @@ test('drags a task from the rail into a time block, captured before and after', 
   await expect(block).toBeVisible();
   await expect(block).toContainText(taskTitle);
 
+  // The drop lands at the lane's midpoint, which sits above the canvas's live-time scroll
+  // position — bring it into view so the capture shows the block, not the empty hours below it.
+  await block.scrollIntoViewIfNeeded();
   const after = testInfo.outputPath('drag-2-after.png');
   await page.screenshot({ path: after });
   await testInfo.attach('drag-2-after.png', { path: after, contentType: 'image/png' });

@@ -34,9 +34,31 @@ const PUBLIC_OAUTH_PATHS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * The share-token header a "what am I working on" widget presents.
+ *
+ * @remarks
+ * Duplicated as a literal rather than imported from `time/share` so this module stays free of
+ * route/domain imports — CORS policy is read by people auditing what the server exposes, and it
+ * should be legible without following an import into the Time Ledger.
+ */
+const SHARE_TOKEN_HEADER = 'X-Docket-Share-Token';
+
+/**
+ * Paths a person's own website may read, authorized by a token they minted rather than by their
+ * session cookie.
+ *
+ * @remarks
+ * Exactly one entry, and it answers one question — see `routes/time-public.ts`. It belongs to the
+ * credential-free policy for the same reason the OAuth endpoints do: the caller authenticates
+ * with something it holds, so a browser must never attach Docket's session cookie, and the set of
+ * origins is by definition unknowable in advance (that is what "my personal site" means).
+ */
+const PUBLIC_SHARE_PATHS: ReadonlySet<string> = new Set(['/v1/public/time/status']);
+
+/**
  * Build the root server's CORS middleware: a strict, credentialed allowlist
  * ({@link trustedOrigins}) for every session-cookie route, and an open, credential-free
- * policy for {@link PUBLIC_OAUTH_PATHS}.
+ * policy for {@link PUBLIC_OAUTH_PATHS} and {@link PUBLIC_SHARE_PATHS}.
  */
 export function buildCorsMiddleware(trustedOrigins: readonly string[]): MiddlewareHandler<AppEnv> {
   const sessionCors = cors({
@@ -47,8 +69,11 @@ export function buildCorsMiddleware(trustedOrigins: readonly string[]): Middlewa
   });
   const publicOAuthCors = cors({
     origin: '*',
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowHeaders: ['Content-Type', 'Authorization', SHARE_TOKEN_HEADER],
     exposeHeaders: ['Authorization', 'WWW-Authenticate'],
   });
-  return (c, next) => (PUBLIC_OAUTH_PATHS.has(c.req.path) ? publicOAuthCors : sessionCors)(c, next);
+  return (c, next) =>
+    PUBLIC_OAUTH_PATHS.has(c.req.path) || PUBLIC_SHARE_PATHS.has(c.req.path)
+      ? publicOAuthCors(c, next)
+      : sessionCors(c, next);
 }

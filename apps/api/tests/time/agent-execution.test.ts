@@ -40,6 +40,30 @@ describe('Time Ledger agent execution bridge', () => {
         })
         .returning({ id: schema.agentSession.id }),
     );
+    // Tracking anchors to an ordinary task, and creating one needs the workspace's default team
+    // (every real workspace is seeded with one; this harness's `seedOrg` is not).
+    const teamId = one(
+      await schema.db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Core',
+          key: `K${Math.random().toString(36).slice(2, 6)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    // The dispatch's own record needs a subject too. A taskless session is deliberately given no
+    // ledger entry now that a record is anchored to the Task it is about.
+    const sessionTaskId = one(
+      await schema.db
+        .insert(schema.task)
+        .values({ organizationId: orgId, teamId, title: 'Migration review', state: 'todo' })
+        .returning({ id: schema.task.id }),
+    ).id;
+    await schema.db
+      .update(schema.agentSession)
+      .set({ taskId: sessionTaskId })
+      .where(eq(schema.agentSession.id, session.id));
     const record = await createTimeRecord(userId, {
       context: { label: 'Delegate migration review', contextualRefs: [] },
     });

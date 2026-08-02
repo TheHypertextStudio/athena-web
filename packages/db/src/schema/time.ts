@@ -8,6 +8,7 @@
  */
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   foreignKey,
   index,
   integer,
@@ -32,6 +33,7 @@ import { genId } from '../id';
 import { user } from './auth';
 import { agentSession } from './agents';
 import { hub, organization } from './identity';
+import { task } from './work';
 
 /** User-owned category taxonomy for reflection and reports. */
 export const timeCategory = pgTable(
@@ -64,7 +66,26 @@ export const timeCategory = pgTable(
   ],
 );
 
-/** One user-visible semantic unit of tracked work. */
+/**
+ * One user-visible semantic unit of tracked work, anchored to the Docket Task it tracks.
+ *
+ * @remarks
+ * `taskId` is `NOT NULL` on purpose: the universal timer's whole premise is that a stretch of
+ * tracked time answers "what was I working on?", and a nullable anchor makes an unanswerable
+ * record representable. There is deliberately no timer-only task entity — the anchor points at
+ * the ordinary `task` table, so a task named while tracking is assignable, schedulable,
+ * commentable and completable exactly like every other task in its workspace.
+ *
+ * `title` is kept alongside it rather than always read through the join: it is the *person's own
+ * words at the moment they tracked*, so renaming the task later does not silently rewrite
+ * history. The two are seeded identically and drift only by explicit edit.
+ *
+ * The Time Ledger is Hub-owned while a Task is workspace-owned, so `onDelete: 'cascade'` is the
+ * only referential option that keeps a workspace deletable — `restrict` would make deleting an
+ * organization impossible for anyone who had ever tracked time in it. Nothing in the product
+ * hard-deletes a task (they are archived), so in practice the cascade fires only with the
+ * workspace it belongs to.
+ */
 export const timeRecord = pgTable(
   'time_record',
   {
@@ -75,6 +96,9 @@ export const timeRecord = pgTable(
     createdByUserId: text('created_by_user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => task.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     outcomeNote: text('outcome_note'),
     status: timeRecordStatus('status').notNull().default('open'),
@@ -94,10 +118,27 @@ export const timeRecord = pgTable(
     index('time_record_hub_started_idx').on(t.hubId, t.startedAt),
     index('time_record_user_started_idx').on(t.createdByUserId, t.startedAt),
     index('time_record_hub_status_idx').on(t.hubId, t.status),
+    index('time_record_task_idx').on(t.taskId),
   ],
 );
 
-/** One exact duration fact; active intervals have a null `endedAt`. */
+/**
+ * One exact duration fact; active intervals have a null `endedAt`.
+ *
+ * @remarks
+ * `taskId` is denormalized onto the segment rather than being reached through
+ * {@link timeRecord}. Two reasons, both load-bearing:
+ *
+ * 1. "Which segments were worked on this task?" must be answerable by one indexed predicate. A
+ *    segment is the unit reporting sums, so making it carry its own subject means a breakdown
+ *    never has to trust a join to have preserved attribution.
+ * 2. It makes the sub-minute join rule checkable without widening the query: a resume may extend
+ *    the previous segment only when that segment is on the *same* task, and the segment itself
+ *    is what says so.
+ *
+ * The two can never disagree — every write path sets both from one resolved task, and a record's
+ * anchor is immutable once created.
+ */
 export const timeInterval = pgTable(
   'time_interval',
   {
@@ -108,6 +149,9 @@ export const timeInterval = pgTable(
     hubId: text('hub_id')
       .notNull()
       .references(() => hub.id, { onDelete: 'cascade' }),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => task.id, { onDelete: 'cascade' }),
     actorKind: timeIntervalActorKind('actor_kind').notNull(),
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
     agentExecutionId: text('agent_execution_id'),
@@ -129,6 +173,49 @@ export const timeInterval = pgTable(
         sql`${t.mode} = 'human_active' AND ${t.endedAt} IS NULL AND ${t.supersededById} IS NULL`,
       ),
     index('time_interval_agent_execution_idx').on(t.agentExecutionId),
+    index('time_interval_task_started_idx').on(t.taskId, t.startedAt),
+  ],
+);
+
+/**
+ * A deliberately-minted, revocable token that lets ONE external page read what its owner is
+ * currently tracking — and nothing else.
+ *
+ * @remarks
+ * This exists because "put a widget on my personal website showing what task I'm working on"
+ * must not become "the Time Ledger is public". The token is the entire opt-in: no token, no
+ * external read. Its scope is fixed at the schema level — a reader gets the current task's state
+ * and, only if the owner said so, its title and workspace name. It can never reach a timeline, a
+ * total, another task, or any historical segment.
+ *
+ * Only `tokenHash` is stored. The raw token is shown once at mint time and is unrecoverable
+ * afterwards, so a database read cannot be turned into a working share link.
+ */
+export const timeShareToken = pgTable(
+  'time_share_token',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    hubId: text('hub_id')
+      .notNull()
+      .references(() => hub.id, { onDelete: 'cascade' }),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** SHA-256 of the raw token, hex-encoded. The raw value is never persisted. */
+    tokenHash: text('token_hash').notNull(),
+    /** The owner's own name for this share, so several widgets stay tellable apart. */
+    label: text('label').notNull(),
+    /** When false the reader learns only that tracking is running, never on what. */
+    includeTitle: boolean('include_title').notNull().default(true),
+    /** When false the workspace name is withheld even though the title is shown. */
+    includeWorkspace: boolean('include_workspace').notNull().default(false),
+    lastUsedAt: timestamp('last_used_at'),
+    revokedAt: timestamp('revoked_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('time_share_token_hash_uq').on(t.tokenHash),
+    index('time_share_token_hub_idx').on(t.hubId),
   ],
 );
 

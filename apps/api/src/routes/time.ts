@@ -6,6 +6,8 @@
  * public API that starts, stops, repairs, contextualizes, or allocates actual tracked time; Tasks,
  * Calendar, Agenda, and agents contribute typed context through this same contract.
  */
+import { apiHostConfig } from '@docket/env/api';
+import { resolveHost } from '@docket/env/hosts';
 import {
   TimeActiveOut,
   TimeAllocationReplace,
@@ -20,6 +22,10 @@ import {
   TimeRecordCreate,
   TimeRecordOut,
   TimeRecordUpdate,
+  TimeShareTokenCreate,
+  TimeShareTokenCreated,
+  TimeShareTokenListOut,
+  TimeShareTokenOut,
   TimeSubmissionCreate,
   TimeSubmissionOut,
   TimeTimelineOut,
@@ -33,11 +39,13 @@ import { AuthError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { SHARED_TIMER_STATUS_PATH, sharedTimerEmbedSnippet } from './time-public';
 import {
   addHistoricalInterval,
   addTimeContext,
   createTimeRecord,
   createTimeCategory,
+  createTimeShareToken,
   createTimeSubmission,
   getActiveTime,
   getTimeBreakdown,
@@ -45,9 +53,11 @@ import {
   getTimeSubmission,
   getTimeTimeline,
   listTimeCategories,
+  listTimeShareTokens,
   pauseTimeRecord,
   removeTimeContext,
   replaceTimeAllocations,
+  revokeTimeShareToken,
   startTimeRecord,
   stopTimeRecord,
   updateTimeRecord,
@@ -320,6 +330,61 @@ const time = new Hono<AppEnv>()
       const { user } = requireSession(c);
       const params = c.req.valid('param');
       return ok(c, TimeRecordOut, await removeTimeContext(user.id, params.id, params.contextId));
+    },
+  )
+  .get(
+    '/share-tokens',
+    apiDoc({
+      tag: 'Time',
+      summary: 'List current-task share tokens',
+      response: TimeShareTokenListOut,
+      description:
+        'List the caller’s revocable share tokens, including when each was last read. The secret itself is shown only once, at mint time, and is not recoverable here.',
+    }),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, TimeShareTokenListOut, { items: await listTimeShareTokens(user.id) });
+    },
+  )
+  .post(
+    '/share-tokens',
+    apiDoc({
+      tag: 'Time',
+      summary: 'Mint a current-task share token',
+      response: TimeShareTokenCreated,
+      description:
+        'Mint one revocable token that lets an external page read what the caller is tracking RIGHT NOW — nothing else. The response carries the raw secret and a copy-pasteable embed snippet exactly once; only a hash is stored. `includeTitle: false` shares that tracking is running while withholding what it is on.',
+    }),
+    zJson(TimeShareTokenCreate),
+    async (c) => {
+      const { user } = requireSession(c);
+      const minted = await createTimeShareToken(user.id, c.req.valid('json'));
+      // The configured API host is authoritative when one is set; falling back to the request's
+      // own origin keeps the snippet correct on preview and local stacks, where the widget would
+      // otherwise be handed a URL pointing at production.
+      const origin = resolveHost(apiHostConfig, 'api')?.origin ?? new URL(c.req.url).origin;
+      const statusUrl = `${origin}${SHARED_TIMER_STATUS_PATH}`;
+      return ok(c, TimeShareTokenCreated, {
+        ...minted.stored,
+        token: minted.token,
+        statusUrl,
+        embedSnippet: sharedTimerEmbedSnippet(statusUrl, minted.token),
+      });
+    },
+  )
+  .delete(
+    '/share-tokens/:id',
+    apiDoc({
+      tag: 'Time',
+      summary: 'Revoke a current-task share token',
+      response: TimeShareTokenOut,
+      description:
+        'Revoke one token immediately. The row is retained, not deleted, so the owner keeps a record of what was shared and when it was last read.',
+    }),
+    zParam(recordParam),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, TimeShareTokenOut, await revokeTimeShareToken(user.id, c.req.valid('param').id));
     },
   )
   .put(

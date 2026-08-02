@@ -1,6 +1,6 @@
-/** Time Ledger route contract: exact intervals, personal ownership, and atomic switching. */
+/** Time Ledger route contract: exact segments, task anchoring, personal ownership, switching. */
 import type { TimeRecordOut } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import time from '../../src/routes/time';
@@ -11,6 +11,7 @@ import {
   appWithSession,
   fakeSession,
   getDb,
+  one,
   seedOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
@@ -24,15 +25,57 @@ async function json<T>(response: Response): Promise<T> {
 describe('Time Ledger routes', () => {
   let userId: string;
   let organizationId: string;
+  let teamId: string;
+  let actorId: string;
   let app: ReturnType<typeof appWithSession>;
 
   beforeEach(async () => {
     const schema = await getDb();
     userId = await seedUserWithHub(schema.db, schema, 'TimeLedger');
     organizationId = await seedOrg(schema.db, schema);
-    await addMember(schema.db, schema, organizationId, userId);
+    actorId = await addMember(schema.db, schema, organizationId, userId);
+    // Every real workspace is created with a default team, and the timer creates its task on one.
+    teamId = one(
+      await schema.db
+        .insert(schema.team)
+        .values({
+          organizationId,
+          name: 'Core',
+          key: `K${Math.random().toString(36).slice(2, 6)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
     app = appWithSession(time, fakeSession(userId));
   });
+
+  /** Start tracking, returning the live record. */
+  async function startTracking(body: Record<string, unknown>): Promise<TimeRecordOut> {
+    const response = await app.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(body),
+    });
+    expect(response.status).toBe(200);
+    return json<TimeRecordOut>(response);
+  }
+
+  /** Seed an ordinary Docket task the timer can be pointed at. */
+  async function seedTask(title: string, overrides: Record<string, unknown> = {}): Promise<string> {
+    const schema = await getDb();
+    return one(
+      await schema.db
+        .insert(schema.task)
+        .values({
+          organizationId,
+          teamId,
+          title,
+          state: 'todo',
+          createdBy: actorId,
+          ...overrides,
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+  }
 
   it('requires a session', async () => {
     const anonymous = appWithSession(time, null);
@@ -40,13 +83,7 @@ describe('Time Ledger routes', () => {
   });
 
   it('starts a record from freeform context and publishes it as the active tracker', async () => {
-    const created = await app.request('/records', {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ context: { label: 'Untangle deployment access' } }),
-    });
-    expect(created.status).toBe(200);
-    const record = await json<TimeRecordOut>(created);
+    const record = await startTracking({ context: { label: 'Untangle deployment access' } });
     expect(record.status).toBe('open');
     expect(record.intervals).toHaveLength(1);
     expect(record.intervals[0]).toMatchObject({ actorKind: 'human', mode: 'human_active' });
@@ -59,21 +96,79 @@ describe('Time Ledger routes', () => {
     expect(new Date(body.serverNow).toString()).not.toBe('Invalid Date');
   });
 
+  // CORE-43: the thing a timer names is an ordinary task, not a tracking-only entity.
+  it('creates a first-class Docket task when tracking is started from a freeform name', async () => {
+    const record = await startTracking({
+      context: { label: 'Draft the launch note', organizationId },
+    });
+    expect(record.taskId).toEqual(expect.any(String));
+
+    const schema = await getDb();
+    const created = one(
+      await schema.db
+        .select({
+          id: schema.task.id,
+          title: schema.task.title,
+          organizationId: schema.task.organizationId,
+          teamId: schema.task.teamId,
+          state: schema.task.state,
+          assigneeId: schema.task.assigneeId,
+          source: schema.task.source,
+        })
+        .from(schema.task)
+        .where(eq(schema.task.id, record.taskId)),
+    );
+    // The same row shape every other task has: real workspace, real team, real workflow state,
+    // native provenance — nothing that marks it as belonging to the timer.
+    expect(created).toEqual({
+      id: record.taskId,
+      title: 'Draft the launch note',
+      organizationId,
+      teamId,
+      state: expect.any(String),
+      assigneeId: actorId,
+      source: 'native',
+    });
+  });
+
+  it('tracks an existing task by id without creating a second one', async () => {
+    const taskId = await seedTask('Existing work');
+    const before = (await (await getDb()).db.select().from((await getDb()).task)).length;
+    const record = await startTracking({ context: { label: 'Existing work', taskId } });
+    const after = (await (await getDb()).db.select().from((await getDb()).task)).length;
+    expect(record.taskId).toBe(taskId);
+    expect(after).toBe(before);
+    expect(record.allocations).toEqual([
+      expect.objectContaining({ targetKind: 'task', targetId: taskId, basisPoints: 10_000 }),
+    ]);
+  });
+
+  it('refuses to track a task in a workspace the caller cannot see', async () => {
+    const schema = await getDb();
+    const foreignOrg = await seedOrg(schema.db, schema);
+    const foreignTeam = one(
+      await schema.db
+        .insert(schema.team)
+        .values({ organizationId: foreignOrg, name: 'Other', key: 'OTH' })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const foreignTask = one(
+      await schema.db
+        .insert(schema.task)
+        .values({ organizationId: foreignOrg, teamId: foreignTeam, title: 'Hidden', state: 'todo' })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const response = await app.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ context: { label: 'Peek', taskId: foreignTask } }),
+    });
+    expect(response.status).toBe(404);
+  });
+
   it('atomically switches human tracking without double-counting the prior record', async () => {
-    const first = await json<TimeRecordOut>(
-      await app.request('/records', {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ context: { label: 'First thread' } }),
-      }),
-    );
-    const second = await json<TimeRecordOut>(
-      await app.request('/records', {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ context: { label: 'Second thread' } }),
-      }),
-    );
+    const first = await startTracking({ context: { label: 'First thread' } });
+    const second = await startTracking({ context: { label: 'Second thread' } });
 
     expect(second.status).toBe('open');
     const timeline = await json<{ items: TimeRecordOut[] }>(
@@ -85,6 +180,200 @@ describe('Time Ledger routes', () => {
     expect(
       timeline.items.filter((item) => item.intervals.some((i) => i.endedAt === null)),
     ).toHaveLength(1);
+  });
+
+  // CORE-37: the acceptance sequence, exactly as written.
+  it('persists start/pause/resume/pause/resume/stop as exactly three bounded segments', async () => {
+    const record = await startTracking({ context: { label: 'Segmented work' } });
+    for (const step of ['pause', 'start', 'pause', 'start', 'stop']) {
+      // Each transition is separated by more than the join window so the acceptance's THREE
+      // segments are what the ledger holds; see the sub-minute join test for the other case.
+      await advanceStoredClock(record.id, 5 * 60_000);
+      const response = await app.request(`/records/${record.id}/${step}`, { method: 'POST' });
+      expect(response.status).toBe(200);
+    }
+    const schema = await getDb();
+    const segments = await schema.db
+      .select()
+      .from(schema.timeInterval)
+      .where(eq(schema.timeInterval.timeRecordId, record.id))
+      .orderBy(asc(schema.timeInterval.startedAt));
+    expect(segments).toHaveLength(3);
+    let summed = 0;
+    for (const [index, segment] of segments.entries()) {
+      expect(segment.startedAt).toBeInstanceOf(Date);
+      expect(segment.endedAt).toBeInstanceOf(Date);
+      expect(segment.taskId).toBe(record.taskId);
+      summed += (segment.endedAt?.getTime() ?? 0) - segment.startedAt.getTime();
+      const next = segments[index + 1];
+      // No segment may span a paused gap: each one ends strictly before the next begins.
+      if (next) expect(segment.endedAt?.getTime()).toBeLessThan(next.startedAt.getTime());
+    }
+    const detail = await json<{ items: TimeRecordOut[] }>(
+      await app.request(`/timeline?${WIDE_RANGE}`),
+    );
+    const hydrated = detail.items.find((item) => item.id === record.id);
+    expect(hydrated?.measures.humanEffortMs).toBe(summed);
+  });
+
+  // CORE-38: the segment itself carries the subject, and a task change moves the subject.
+  it('associates every segment with the task it tracked and switches subjects cleanly', async () => {
+    const alpha = await seedTask('Alpha');
+    const beta = await seedTask('Beta');
+    const first = await startTracking({ context: { label: 'Alpha', taskId: alpha } });
+    await advanceStoredClock(first.id, 10 * 60_000);
+    const second = await startTracking({ context: { label: 'Beta', taskId: beta } });
+
+    const schema = await getDb();
+    const segments = await schema.db.select().from(schema.timeInterval);
+    expect(segments.length).toBeGreaterThanOrEqual(2);
+    expect(segments.every((segment) => typeof segment.taskId === 'string')).toBe(true);
+
+    const alphaSegments = segments.filter((segment) => segment.taskId === alpha);
+    const betaSegments = segments.filter((segment) => segment.taskId === beta);
+    expect(alphaSegments).toHaveLength(1);
+    expect(betaSegments).toHaveLength(1);
+    // The old subject's segment is closed; the new subject's is the only one still accruing.
+    expect(alphaSegments[0]?.endedAt).not.toBeNull();
+    expect(betaSegments[0]?.endedAt).toBeNull();
+    expect(betaSegments[0]?.timeRecordId).toBe(second.id);
+  });
+
+  // CORE-39: a restart inside the window continues the stretch; outside it starts a new one.
+  it('joins a restart under a minute and records a break at or beyond one minute', async () => {
+    const taskId = await seedTask('Continuous work');
+    const record = await startTracking({ context: { label: 'Continuous work', taskId } });
+    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+
+    // 59 seconds later: one segment spanning the whole span, no break recorded.
+    await rewindLastSegment(record.id, 59_000);
+    const rejoined = await startTracking({ context: { label: 'Continuous work', taskId } });
+    expect(rejoined.id).toBe(record.id);
+    expect(await segmentCountForTask(taskId)).toBe(1);
+    expect(rejoined.intervals.filter((interval) => interval.endedAt === null)).toHaveLength(1);
+
+    // 61 seconds later: a genuinely separate segment on the same task.
+    await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    await rewindLastSegment(record.id, 61_000);
+    await startTracking({ context: { label: 'Continuous work', taskId } });
+    expect(await segmentCountForTask(taskId)).toBe(2);
+  });
+
+  it('never joins across a task change, however brief the gap', async () => {
+    const alpha = await seedTask('Alpha');
+    const beta = await seedTask('Beta');
+    const first = await startTracking({ context: { label: 'Alpha', taskId: alpha } });
+    await app.request(`/records/${first.id}/stop`, { method: 'POST' });
+    await rewindLastSegment(first.id, 1_000);
+    const second = await startTracking({ context: { label: 'Beta', taskId: beta } });
+    expect(second.id).not.toBe(first.id);
+    expect(await segmentCount(first.id)).toBe(1);
+    expect(await segmentCount(second.id)).toBe(1);
+  });
+
+  // CORE-42: the refusal is the SERVER's, reachable with no UI in the loop.
+  it('refuses to stop a session whose task has no name, and leaves it running', async () => {
+    const record = await startTracking({ context: { label: 'Nameable work' } });
+    const schema = await getDb();
+    // The anchor task cannot be blanked at all — `task_title_not_blank` refuses the write even
+    // from raw SQL, which is a stronger guarantee than the requirement asks for. The record's own
+    // label has no such constraint, so that is the hole the stop guard has to close.
+    await expect(
+      schema.db.update(schema.task).set({ title: '   ' }).where(eq(schema.task.id, record.taskId)),
+    ).rejects.toThrow();
+    // Bypass every client and every validator, exactly as the acceptance requires.
+    await schema.db
+      .update(schema.timeRecord)
+      .set({ title: '   ' })
+      .where(eq(schema.timeRecord.id, record.id));
+
+    const refused = await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    expect(refused.status).toBe(422);
+    const problem = await json<{ code: string; fieldErrors: Record<string, unknown> }>(refused);
+    expect(problem.code).toBe('validation_error');
+    expect(problem.fieldErrors).toHaveProperty('title');
+
+    const stillOpen = one(
+      await schema.db
+        .select({ status: schema.timeRecord.status })
+        .from(schema.timeRecord)
+        .where(eq(schema.timeRecord.id, record.id)),
+    );
+    expect(stillOpen.status).toBe('open');
+
+    // The same call succeeds the moment the work has a name.
+    await schema.db
+      .update(schema.timeRecord)
+      .set({ title: 'Named at last' })
+      .where(eq(schema.timeRecord.id, record.id));
+    const stopped = await app.request(`/records/${record.id}/stop`, { method: 'POST' });
+    expect(stopped.status).toBe(200);
+    expect((await json<TimeRecordOut>(stopped)).status).toBe('closed');
+  });
+
+  it('rejects an empty name at creation and at rename', async () => {
+    const blankCreate = await app.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ context: { label: '   ' } }),
+    });
+    expect(blankCreate.status).toBe(422);
+
+    const record = await startTracking({ context: { label: 'Real work' } });
+    const blankRename = await app.request(`/records/${record.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: '  ' }),
+    });
+    expect(blankRename.status).toBe(422);
+  });
+
+  // CORE-44: every transition is announced, once, in order, with the task on it.
+  it('emits exactly one typed event per timer transition, in order', async () => {
+    const taskId = await seedTask('Observable work');
+    const record = await startTracking({ context: { label: 'Observable work', taskId } });
+    await advanceStoredClock(record.id, 5 * 60_000);
+    await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    await advanceStoredClock(record.id, 5 * 60_000);
+    await app.request(`/records/${record.id}/start`, { method: 'POST' });
+    const other = await seedTask('Something else');
+    await advanceStoredClock(record.id, 5 * 60_000);
+    const switched = await startTracking({ context: { label: 'Something else', taskId: other } });
+    await app.request(`/records/${switched.id}/stop`, { method: 'POST' });
+
+    const schema = await getDb();
+    const events = await schema.db
+      .select({
+        kind: schema.event.kind,
+        detail: schema.event.detail,
+        entity: schema.event.entity,
+        userId: schema.event.userId,
+        organizationId: schema.event.organizationId,
+        occurredAt: schema.event.occurredAt,
+      })
+      .from(schema.event)
+      // Scoped to this test's freshly-seeded workspace: the suite shares one database, so an
+      // unscoped read would report every other test's timer too.
+      .where(eq(schema.event.organizationId, organizationId))
+      .orderBy(asc(schema.event.id));
+    const timerEvents = events.filter((row) => row.kind.startsWith('timer_'));
+    expect(timerEvents.map((row) => row.kind)).toEqual([
+      'timer_started',
+      'timer_paused',
+      'timer_resumed',
+      'timer_switched',
+      'timer_stopped',
+    ]);
+    for (const row of timerEvents) {
+      expect(row.userId).toBe(userId);
+      expect(row.organizationId).toBe(organizationId);
+      expect(row.occurredAt).toBeInstanceOf(Date);
+      expect(row.detail).toMatchObject({ schema: 'docket.timer' });
+      expect(row.entity).toMatchObject({ kind: 'work_item' });
+    }
+    const switchEvent = timerEvents.find((row) => row.kind === 'timer_switched');
+    expect(switchEvent?.detail).toMatchObject({ previousTimeRecordId: record.id });
+    expect(switchEvent?.entity).toMatchObject({ externalId: other });
   });
 
   it('records exact reconstructed time without claiming that it was live-tracked', async () => {
@@ -111,14 +400,8 @@ describe('Time Ledger routes', () => {
     expect(record.measures.humanEffortMs).toBe(45 * 60_000);
   });
 
-  it('keeps contexts separate from reportable allocations', async () => {
-    const record = await json<TimeRecordOut>(
-      await app.request('/records', {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({ context: { label: 'Coordinate release' } }),
-      }),
-    );
+  it('keeps non-counting contexts separate from the anchor’s reportable credit', async () => {
+    const record = await startTracking({ context: { label: 'Coordinate release' } });
     const contextResponse = await app.request(`/records/${record.id}/contexts`, {
       method: 'POST',
       headers: JSON_HEADERS,
@@ -137,7 +420,10 @@ describe('Time Ledger routes', () => {
     expect(contextResponse.status).toBe(200);
     const contextualized = await json<TimeRecordOut>(contextResponse);
     expect(contextualized.contexts).toHaveLength(1);
-    expect(contextualized.allocations).toHaveLength(0);
+    // The calendar link earns no credit; the anchor task remains the only allocation.
+    expect(contextualized.allocations).toEqual([
+      expect.objectContaining({ targetKind: 'task', targetId: record.taskId }),
+    ]);
 
     const invalidAllocation = await app.request(`/records/${record.id}/allocations`, {
       method: 'PUT',
@@ -159,37 +445,21 @@ describe('Time Ledger routes', () => {
     expect((await json<TimeRecordOut>(allocated)).allocations).toHaveLength(1);
   });
 
-  it('validates Docket contexts and allocation targets against the caller’s workspace access', async () => {
-    const accessible = await app.request('/records', {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({
-        context: {
-          label: 'Review workspace planning',
-          primaryRef: {
-            kind: 'organization',
-            source: 'docket',
-            externalId: organizationId,
-            title: 'Accessible workspace',
-            url: null,
-            docketEntityId: organizationId,
-          },
+  it('validates Docket contexts against the caller’s workspace access', async () => {
+    const accessible = await startTracking({
+      context: {
+        label: 'Review workspace planning',
+        primaryRef: {
+          kind: 'organization',
+          source: 'docket',
+          externalId: organizationId,
+          title: 'Accessible workspace',
+          url: null,
+          docketEntityId: organizationId,
         },
-      }),
+      },
     });
-    expect(accessible.status).toBe(200);
-    await expect(json<TimeRecordOut>(accessible)).resolves.toEqual(
-      expect.objectContaining({
-        contexts: [expect.objectContaining({ organizationId })],
-        allocations: [
-          expect.objectContaining({
-            targetKind: 'workspace',
-            targetId: organizationId,
-            basisPoints: 10_000,
-          }),
-        ],
-      }),
-    );
+    expect(accessible.contexts).toEqual([expect.objectContaining({ organizationId })]);
 
     const schema = await getDb();
     const foreignOrganizationId = await seedOrg(schema.db, schema);
@@ -223,6 +493,7 @@ describe('Time Ledger routes', () => {
         endsAt: '2026-07-10T10:00:00.000Z',
         context: {
           label: 'Private workspace review',
+          organizationId,
           primaryRef: {
             kind: 'organization',
             source: 'docket',
@@ -263,7 +534,7 @@ describe('Time Ledger routes', () => {
     );
   });
 
-  it('groups personal reflection by explicit allocation and preserves submitted snapshots', async () => {
+  it('groups personal reflection by workspace and preserves submitted snapshots', async () => {
     const record = await json<TimeRecordOut>(
       await app.request('/records', {
         method: 'POST',
@@ -272,17 +543,10 @@ describe('Time Ledger routes', () => {
           startNow: false,
           startsAt: '2026-07-10T10:00:00.000Z',
           endsAt: '2026-07-10T11:00:00.000Z',
-          context: { label: 'Ship the time ledger' },
+          context: { label: 'Ship the time ledger', organizationId },
         }),
       }),
     );
-    await app.request(`/records/${record.id}/allocations`, {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({
-        allocations: [{ targetKind: 'workspace', targetId: organizationId, basisPoints: 10_000 }],
-      }),
-    });
 
     const breakdown = await app.request(
       '/breakdown?start=2026-07-01T00:00:00.000Z&end=2026-07-20T00:00:00.000Z&groupBy=workspace',
@@ -302,6 +566,13 @@ describe('Time Ledger routes', () => {
       ]),
     );
 
+    await app.request(`/records/${record.id}/allocations`, {
+      method: 'PUT',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        allocations: [{ targetKind: 'workspace', targetId: organizationId, basisPoints: 10_000 }],
+      }),
+    });
     const submission = await app.request('/submissions', {
       method: 'POST',
       headers: JSON_HEADERS,
@@ -339,82 +610,94 @@ describe('Time Ledger routes', () => {
     );
   });
 
-  it('reconciles workspace breakdowns across task and workspace allocations in the same workspace', async () => {
+  // CORE-49: all four named dimensions, each reconciling, with explicit unassigned buckets.
+  it('breaks tracked time down by project, program, initiative and workspace', async () => {
     const schema = await getDb();
-    const actor = (
+    const programId = one(
       await schema.db
-        .select({ id: schema.actor.id })
-        .from(schema.actor)
-        .where(
-          and(eq(schema.actor.organizationId, organizationId), eq(schema.actor.userId, userId)),
-        )
-        .limit(1)
-    )[0];
-    if (!actor) throw new Error('member seed failed');
-    const team = (
+        .insert(schema.program)
+        .values({ organizationId, name: 'Platform' })
+        .returning({ id: schema.program.id }),
+    ).id;
+    const projectId = one(
       await schema.db
-        .insert(schema.team)
-        .values({
-          organizationId,
-          name: 'Ledger',
-          key: `LED${Math.random().toString(36).slice(2, 6)}`,
-        })
-        .returning({ id: schema.team.id })
-    )[0];
-    if (!team) throw new Error('team seed failed');
-    const task = (
+        .insert(schema.project)
+        .values({ organizationId, name: 'Ledger', programId })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const initiativeId = one(
       await schema.db
-        .insert(schema.task)
-        .values({
-          organizationId,
-          teamId: team.id,
-          title: 'Attribute Athena work',
-          state: 'todo',
-          createdBy: actor.id,
-        })
-        .returning({ id: schema.task.id })
-    )[0];
-    if (!task) throw new Error('task seed failed');
-    const record = await json<TimeRecordOut>(
-      await app.request('/records', {
-        method: 'POST',
-        headers: JSON_HEADERS,
-        body: JSON.stringify({
-          startNow: false,
-          startsAt: '2026-07-10T09:00:00.000Z',
-          endsAt: '2026-07-10T10:00:00.000Z',
-          context: { label: 'Attribute implementation work' },
-        }),
-      }),
-    );
-    const replace = await app.request(`/records/${record.id}/allocations`, {
-      method: 'PUT',
+        .insert(schema.initiative)
+        .values({ organizationId, name: 'Ship v1' })
+        .returning({ id: schema.initiative.id }),
+    ).id;
+    await schema.db
+      .insert(schema.initiativeProject)
+      .values({ initiativeId, projectId, organizationId });
+
+    const placed = await seedTask('Inside the hierarchy', { projectId });
+    const loose = await seedTask('Outside the hierarchy');
+    await app.request('/records', {
+      method: 'POST',
       headers: JSON_HEADERS,
       body: JSON.stringify({
-        allocations: [
-          { targetKind: 'task', targetId: task.id, basisPoints: 5_000 },
-          { targetKind: 'workspace', targetId: organizationId, basisPoints: 5_000 },
-        ],
+        startNow: false,
+        startsAt: '2026-07-10T09:00:00.000Z',
+        endsAt: '2026-07-10T10:00:00.000Z',
+        context: { label: 'Inside the hierarchy', taskId: placed },
       }),
     });
-    expect(replace.status).toBe(200);
+    await app.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        startNow: false,
+        startsAt: '2026-07-10T10:00:00.000Z',
+        endsAt: '2026-07-10T10:30:00.000Z',
+        context: { label: 'Outside the hierarchy', taskId: loose },
+      }),
+    });
 
-    const response = await app.request(
-      '/breakdown?start=2026-07-10T00:00:00.000Z&end=2026-07-11T00:00:00.000Z&groupBy=workspace',
-    );
-    expect(response.status).toBe(200);
-    const breakdown = await json<{
-      total: { humanEffortMs: number };
-      buckets: { key: string; measures: { humanEffortMs: number } }[];
-    }>(response);
-    const workspace = breakdown.buckets.find((bucket) => bucket.key === organizationId);
-    expect(workspace?.measures.humanEffortMs).toBe(60 * 60_000);
-    expect(
-      breakdown.buckets.reduce((total, bucket) => total + bucket.measures.humanEffortMs, 0),
-    ).toBe(breakdown.total.humanEffortMs);
+    const expected: Record<string, [string, number][]> = {
+      project: [
+        [projectId, 60 * 60_000],
+        ['unassigned:project', 30 * 60_000],
+      ],
+      program: [
+        [programId, 60 * 60_000],
+        ['unassigned:program', 30 * 60_000],
+      ],
+      initiative: [
+        [initiativeId, 60 * 60_000],
+        ['unassigned:initiative', 30 * 60_000],
+      ],
+      workspace: [[organizationId, 90 * 60_000]],
+    };
+    for (const [dimension, buckets] of Object.entries(expected)) {
+      const response = await app.request(
+        `/breakdown?start=2026-07-10T00:00:00.000Z&end=2026-07-11T00:00:00.000Z&groupBy=${dimension}`,
+      );
+      expect(response.status).toBe(200);
+      const body = await json<{
+        buckets: { key: string; label: string; measures: { humanEffortMs: number } }[];
+        total: { humanEffortMs: number };
+      }>(response);
+      for (const [key, humanEffortMs] of buckets) {
+        expect(body.buckets).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ key, measures: expect.objectContaining({ humanEffortMs }) }),
+          ]),
+        );
+      }
+      // Every dimension reconciles to the same period total, to the millisecond.
+      expect(body.buckets.reduce((sum, bucket) => sum + bucket.measures.humanEffortMs, 0)).toBe(
+        body.total.humanEffortMs,
+      );
+      expect(body.total.humanEffortMs).toBe(90 * 60_000);
+    }
   });
 
-  it('clips reports to the requested range and preserves real elapsed wall clock under agent overlap', async () => {
+  it('clips reports to the requested range and preserves real elapsed wall clock under overlap', async () => {
     const first = await app.request('/records', {
       method: 'POST',
       headers: JSON_HEADERS,
@@ -469,3 +752,79 @@ describe('Time Ledger routes', () => {
     );
   });
 });
+
+/** A range wide enough to contain everything a test writes. */
+const WIDE_RANGE = 'start=2026-01-01T00:00:00.000Z&end=2030-01-01T00:00:00.000Z';
+
+/**
+ * Push a record's existing segments back in time.
+ *
+ * @remarks
+ * Every transition in a test happens within the same millisecond, which is both unrealistic and
+ * indistinguishable from the sub-minute join the ledger is supposed to apply. Rewriting the
+ * stored timestamps is how a test states "and then five minutes passed" without a fake clock —
+ * the commands read the real clock, so moving the DATA is the honest lever.
+ */
+async function advanceStoredClock(recordId: string, ms: number): Promise<void> {
+  const schema = await getDb();
+  const rows = await schema.db
+    .select()
+    .from(schema.timeInterval)
+    .where(eq(schema.timeInterval.timeRecordId, recordId));
+  for (const row of rows) {
+    await schema.db
+      .update(schema.timeInterval)
+      .set({
+        startedAt: new Date(row.startedAt.getTime() - ms),
+        ...(row.endedAt ? { endedAt: new Date(row.endedAt.getTime() - ms) } : {}),
+      })
+      .where(eq(schema.timeInterval.id, row.id));
+  }
+}
+
+/** Move a record's most recent segment end `gapMs` into the past, simulating that much delay. */
+async function rewindLastSegment(recordId: string, gapMs: number): Promise<void> {
+  const schema = await getDb();
+  const rows = await schema.db
+    .select()
+    .from(schema.timeInterval)
+    .where(eq(schema.timeInterval.timeRecordId, recordId))
+    .orderBy(asc(schema.timeInterval.startedAt));
+  const last = rows[rows.length - 1];
+  if (!last?.endedAt) throw new Error('expected a closed segment to rewind');
+  const shift = gapMs;
+  await schema.db
+    .update(schema.timeInterval)
+    .set({
+      startedAt: new Date(last.startedAt.getTime() - shift),
+      endedAt: new Date(last.endedAt.getTime() - shift),
+    })
+    .where(eq(schema.timeInterval.id, last.id));
+}
+
+/** Count a record's live (non-superseded) segments. */
+async function segmentCount(recordId: string): Promise<number> {
+  const schema = await getDb();
+  const rows = await schema.db
+    .select({ id: schema.timeInterval.id })
+    .from(schema.timeInterval)
+    .where(eq(schema.timeInterval.timeRecordId, recordId));
+  return rows.length;
+}
+
+/**
+ * Count every segment recorded against one task, across records.
+ *
+ * @remarks
+ * The join rule is about a *task's* history, not a record's: a break long enough to matter opens
+ * a new record, so counting per record would report "1" for both the joined and the broken case
+ * and prove nothing.
+ */
+async function segmentCountForTask(taskId: string): Promise<number> {
+  const schema = await getDb();
+  const rows = await schema.db
+    .select({ id: schema.timeInterval.id })
+    .from(schema.timeInterval)
+    .where(eq(schema.timeInterval.taskId, taskId));
+  return rows.length;
+}

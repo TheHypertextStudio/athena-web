@@ -31,6 +31,7 @@ import { QueryPersistence } from '@/components/query-persistence';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
+import { GlobalTimer } from '@/components/time-tracking';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
@@ -579,6 +580,13 @@ function AppShellInner({
           <AppShellAccountSkeleton />
         ) : (
           <>
+            {/* The universal timer lives in the chrome, not on a page, so it survives every
+                navigation and every reload. This is its desktop home; the mobile top bar carries
+                the same control below `lg`, where the sidebar is a drawer. Both read one query,
+                so they are one timer rather than two. */}
+            <div className="px-2 pb-2">
+              <GlobalTimer organizationId={resolvedOrgId} />
+            </div>
             <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
             <AccountMenu onCreateWorkspace={onCreateWorkspace} />
           </>
@@ -607,15 +615,22 @@ function AppShellInner({
 
   // The search control needs no data at all — `openPalette` is a local handler — so it is rendered
   // outright rather than stood in for by a grey square of the same size.
+  //
+  // The timer sits beside it in its compact form: below `lg` the sidebar is a drawer, so the top
+  // bar is the only chrome that is always on screen, and "present on every surface" has to mean
+  // present without opening anything.
   const mobileActions = (
-    <button
-      type="button"
-      aria-label="Search"
-      onClick={openPalette}
-      className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
-    >
-      <Search aria-hidden="true" className="size-5" />
-    </button>
+    <>
+      {identityUnknown ? null : <GlobalTimer organizationId={resolvedOrgId} variant="compact" />}
+      <button
+        type="button"
+        aria-label="Search"
+        onClick={openPalette}
+        className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <Search aria-hidden="true" className="size-5" />
+      </button>
+    </>
   );
 
   return (

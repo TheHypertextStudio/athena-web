@@ -294,6 +294,31 @@ const CREDENTIAL_NAME_ALLOWLIST = new Set([
   'tokenEndpointAuthMethod',
 ]);
 
+/**
+ * The one place a real credential is allowed to appear in a 2xx body, named by OPERATION.
+ *
+ * @remarks
+ * Deliberately not an entry in {@link CREDENTIAL_NAME_ALLOWLIST}: that set is keyed on the bare
+ * property name and is consulted for every operation in the document, so exempting `token` there
+ * would also wave through an access token, a refresh token or a reset token on any route anyone
+ * adds later — the exact class of leak this block exists to catch. The exemption is therefore
+ * pinned to the single operation that earns it, and any other response field named `token` still
+ * fails.
+ *
+ * The entry itself is the current-task share token minted by `POST /v1/time/share-tokens`
+ * (`TimeShareTokenCreated`). It is unlike every credential the name pattern otherwise protects,
+ * which are secrets Docket *stores* and must never echo back: this one is *created by* the
+ * response and can never be read again. Only a SHA-256 digest is persisted
+ * (`packages/db/src/schema/time.ts`, `time_share_token.token_hash`), the owner-facing list schema
+ * `TimeShareTokenOut` omits the value outright, and `tests/routes/time-share.test.ts` asserts both
+ * — that what is stored is a 64-hex digest containing no part of the secret, and that the token
+ * appears in no later read. Showing it exactly once, at the moment of minting, is the whole of its
+ * exposure; a minted credential that is never shown is one that cannot be used.
+ */
+const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
+  'POST /v1/time/share-tokens 200 → token',
+]);
+
 /** Recursively collect every property name reachable from a JSON-Schema node. */
 function propertyNames(node: unknown, seen = new Set<object>()): string[] {
   if (typeof node !== 'object' || node === null) return [];
@@ -328,6 +353,7 @@ describe('the published contract never declares a credential-bearing response fi
     };
 
     const offenders: string[] = [];
+    const exercisedExemptions = new Set<string>();
     let inspected = 0;
     for (const [path, operations] of Object.entries(spec.paths)) {
       for (const [method, operation] of Object.entries(operations)) {
@@ -337,7 +363,12 @@ describe('the published contract never declares a credential-bearing response fi
           for (const name of propertyNames(response.content)) {
             if (!CREDENTIAL_NAME_PATTERN.test(name)) continue;
             if (CREDENTIAL_NAME_ALLOWLIST.has(name)) continue;
-            offenders.push(`${method.toUpperCase()} ${path} ${status} → ${name}`);
+            const operationField = `${method.toUpperCase()} ${path} ${status} → ${name}`;
+            if (MINTED_CREDENTIAL_RESPONSES.has(operationField)) {
+              exercisedExemptions.add(operationField);
+              continue;
+            }
+            offenders.push(operationField);
           }
         }
       }
@@ -346,6 +377,10 @@ describe('the published contract never declares a credential-bearing response fi
     // A floor, so a generator that returned an empty document could not pass this vacuously.
     expect(inspected).toBeGreaterThan(40);
     expect([...new Set(offenders)]).toEqual([]);
+    // Every operation-scoped exemption must still describe a live operation. Without this, renaming
+    // or deleting the minting route would leave a stale entry behind that silently pre-authorizes
+    // whatever later takes that method+path — an exemption nobody re-argued for.
+    expect([...exercisedExemptions].sort()).toEqual([...MINTED_CREDENTIAL_RESPONSES].sort());
   });
 
   it('would catch a response field named like a credential', () => {

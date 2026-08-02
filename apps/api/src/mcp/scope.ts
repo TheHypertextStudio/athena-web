@@ -94,6 +94,9 @@ export const TOOL_SCOPE: Readonly<Record<string, McpScope>> = {
   archive: 'work:write',
   plan_day: 'work:write',
   undo: 'work:write',
+  // The timer's read actions (`status`, `segments`) narrow to `work:read` inside the handler;
+  // the map records the strictest scope the tool can require.
+  track: 'work:write',
   pause_athena_assignment_trigger: 'work:write',
   remove_athena_assignment_trigger: 'work:write',
   // connectors:link — external linking

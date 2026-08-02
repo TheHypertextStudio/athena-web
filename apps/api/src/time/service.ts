@@ -31,4 +31,13 @@ export {
   getTimeSubmission,
   listOrganizationTimeSubmissions,
 } from './reporting';
+export {
+  createTimeShareToken,
+  listTimeShareTokens,
+  readSharedTimerStatus,
+  revokeTimeShareToken,
+  SHARE_TOKEN_HEADER,
+} from './share';
+export { resolveTaskAnchor } from './task-anchor';
+export { TIMER_JOIN_WINDOW_MS, shouldJoinSegment } from './timer-join';
 export { resolveTimeHubId } from './access';

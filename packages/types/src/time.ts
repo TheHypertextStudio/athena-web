@@ -87,10 +87,26 @@ export const AgentExecutionStatus = z.enum([
 /** Agent-execution-status value. */
 export type AgentExecutionStatus = z.infer<typeof AgentExecutionStatus>;
 
-/** A typed input supplied by any surface that can start tracking. */
+/**
+ * A typed input supplied by any surface that can start tracking.
+ *
+ * @remarks
+ * `label` is required and trimmed to at least one character because a tracking session must
+ * always be able to answer "what was worked on". Naming is therefore enforced at the moment the
+ * session is *created* rather than only at the moment it is stopped, which is what makes an
+ * unnamed-but-finished session unrepresentable rather than merely rejected.
+ *
+ * `taskId` names an existing Docket task to track. Omit it and the label becomes the title of a
+ * newly created, entirely ordinary task in {@link TrackableContext.organizationId} (or the
+ * caller's personal workspace) — never a tracking-only entity.
+ */
 export const TrackableContext = z
   .object({
     label: z.string().trim().min(1).max(500),
+    /** An existing Docket task to track. When absent, one is created from `label`. */
+    taskId: z.string().min(1).optional(),
+    /** Where to create the task when `taskId` is absent; defaults to the personal workspace. */
+    organizationId: OrganizationId.optional(),
     primaryRef: EntityRef.optional(),
     workspaceRef: EntityRef.optional(),
     contextualRefs: z.array(EntityRef).max(20).default([]),
@@ -105,6 +121,8 @@ export const TimeIntervalOut = z
   .object({
     id: TimeIntervalId,
     timeRecordId: TimeRecordId,
+    /** The Docket task this exact segment was worked on. Never null. */
+    taskId: z.string(),
     actorKind: TimeIntervalActorKind,
     userId: z.string().nullable(),
     agentExecutionId: AgentExecutionId.nullable(),
@@ -168,6 +186,10 @@ export const TimeRecordOut = z
   .object({
     id: TimeRecordId,
     hubId: HubId,
+    /** The ordinary Docket task this session tracked. Never null; never a timer-only entity. */
+    taskId: z.string(),
+    /** The workspace that task belongs to, resolved for display and for breakdowns. */
+    organizationId: OrganizationId.nullable(),
     title: z.string(),
     outcomeNote: z.string().nullable(),
     status: TimeRecordStatus,
@@ -314,8 +336,25 @@ export const TimeTimelineOut = z
 /** Time-timeline-out value. */
 export type TimeTimelineOut = z.infer<typeof TimeTimelineOut>;
 
-/** Supported dimensions for Time Ledger reflection breakdowns. */
-export const TimeBreakdownDimension = z.enum(['workspace', 'task', 'project', 'category', 'actor']);
+/**
+ * Supported dimensions for Time Ledger reflection breakdowns.
+ *
+ * @remarks
+ * `program` and `initiative` are derived from the tracked task's place in the work hierarchy
+ * (task → project → program, and project/program → initiative through the initiative join
+ * tables) rather than from allocations, because nobody allocates time to an initiative by hand.
+ * Time whose task has no program or initiative lands in an explicit unassigned bucket — it is
+ * never dropped, so every dimension still reconciles to the same period total.
+ */
+export const TimeBreakdownDimension = z.enum([
+  'workspace',
+  'task',
+  'project',
+  'program',
+  'initiative',
+  'category',
+  'actor',
+]);
 /** Time-breakdown-dimension value. */
 export type TimeBreakdownDimension = z.infer<typeof TimeBreakdownDimension>;
 

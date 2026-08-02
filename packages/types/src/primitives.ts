@@ -179,6 +179,10 @@ export const TimeSubmissionId = id<'TimeSubmissionId'>().describe(
 export const TimeSubmissionItemId = id<'TimeSubmissionItemId'>().describe(
   'ULID id of a TimeSubmissionItem — one immutable record/allocation snapshot in a submission.',
 );
+/** Branded `TimeShareToken` id (one revocable current-task share). */
+export const TimeShareTokenId = id<'TimeShareTokenId'>().describe(
+  'ULID id of a TimeShareToken — one revocable, current-task-only external read grant.',
+);
 /** Branded `AgentExecution` id (one dispatched unit of agent runtime work). */
 export const AgentExecutionId = id<'AgentExecutionId'>().describe(
   'ULID id of an AgentExecution — one exact runtime lifecycle beneath an AgentSession.',

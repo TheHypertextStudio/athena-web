@@ -91,7 +91,11 @@ export async function beginAgentExecution(
     const tracked = userId
       ? ((
           await tx
-            .select({ timeRecordId: timeInterval.timeRecordId, hubId: timeInterval.hubId })
+            .select({
+              timeRecordId: timeInterval.timeRecordId,
+              hubId: timeInterval.hubId,
+              taskId: timeInterval.taskId,
+            })
             .from(timeInterval)
             .where(
               and(
@@ -104,11 +108,16 @@ export async function beginAgentExecution(
         )[0] ?? null)
       : null;
     const now = new Date();
-    let agentRecord: { timeRecordId: string; hubId: string } | null = null;
+    let agentRecord: { timeRecordId: string; hubId: string; taskId: string } | null = null;
 
     // An agent dispatch is user-controlled work even without a parallel human timer. It receives
     // its own record; task-bound sessions also receive a real Context and Allocation, so agent
     // effort appears in task and workspace reflection instead of becoming an orphaned total.
+    //
+    // A session with NO task gets no record of its own. Since the Time Ledger anchors every
+    // record to the Task it is about, a taskless dispatch has nothing to be about — and a record
+    // titled "Athena execution" pointing at nothing was never reportable anyway. The execution
+    // row still exists and is still observable; only its ledger entry is withheld.
     if (userId && !tracked) {
       const hubRows = await tx
         .select({ id: hub.id })
@@ -133,20 +142,25 @@ export async function beginAgentExecution(
               .limit(1)
           : [];
         const taskContext = taskRows[0] ?? null;
-        const [record] = await tx
-          .insert(timeRecord)
-          .values({
-            hubId,
-            createdByUserId: userId,
-            title: taskContext?.title ? `Athena · ${taskContext.title}` : 'Athena execution',
-            status: 'open',
-            captureSource: 'agent',
-            startedAt: now,
-          })
-          .returning({ id: timeRecord.id, hubId: timeRecord.hubId });
-        if (!record) throw new Error('agent time record insert returned no row');
-        agentRecord = { timeRecordId: record.id, hubId: record.hubId };
         if (taskContext) {
+          const [record] = await tx
+            .insert(timeRecord)
+            .values({
+              hubId,
+              createdByUserId: userId,
+              taskId: taskContext.id,
+              title: `Athena · ${taskContext.title}`,
+              status: 'open',
+              captureSource: 'agent',
+              startedAt: now,
+            })
+            .returning({ id: timeRecord.id, hubId: timeRecord.hubId });
+          if (!record) throw new Error('agent time record insert returned no row');
+          agentRecord = {
+            timeRecordId: record.id,
+            hubId: record.hubId,
+            taskId: taskContext.id,
+          };
           await tx.insert(timeContext).values({
             timeRecordId: record.id,
             role: 'agent_context',
@@ -196,6 +210,7 @@ export async function beginAgentExecution(
       await tx.insert(timeInterval).values({
         timeRecordId: record.timeRecordId,
         hubId: record.hubId,
+        taskId: record.taskId,
         actorKind: 'agent',
         agentExecutionId: execution.id,
         mode: 'agent_active',

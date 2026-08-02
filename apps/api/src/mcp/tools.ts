@@ -24,6 +24,7 @@ import { registerLinkTool } from './link-tool';
 import { registerOrganizeTool } from './organize-tool';
 import { registerPlanTools } from './plan-tools';
 import { registerSessionTools } from './session-tools';
+import { registerTimeTools } from './time-tools';
 import { registerUpdateTool } from './update-tool';
 import { registerViewPlanTools } from './view-plan-tools';
 import { registerAthenaAssignmentTools } from './athena-assignment-tools';
@@ -61,4 +62,5 @@ export function registerTools(
   registerPlanTools(server, ctx);
   registerWorkspacesTool(server, ctx);
   registerAthenaAssignmentTools(server, ctx);
+  registerTimeTools(server, ctx);
 }

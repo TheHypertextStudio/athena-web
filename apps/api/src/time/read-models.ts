@@ -9,7 +9,12 @@
 import {
   agentExecution,
   db,
+  initiative,
+  initiativeProject,
   organization,
+  program,
+  project,
+  task,
   timeAllocation,
   timeCategory,
   timeContext,
@@ -200,6 +205,15 @@ export async function hydrateTimeRecords(
       ),
     ),
   );
+  // The anchor's workspace is read once for the whole page rather than per record: it is what
+  // every timer surface labels the session with, so making it an N+1 would put a query per row
+  // behind the shell's own always-on tracker read.
+  const taskIds = [...new Set(records.map((record) => record.taskId))];
+  const anchorRows = await db
+    .select({ id: task.id, organizationId: task.organizationId })
+    .from(task)
+    .where(inArray(task.id, taskIds));
+  const organizationByTask = new Map(anchorRows.map((row) => [row.id, row.organizationId]));
   return records.map((record) => {
     const recordIntervals = intervalsByRecord.get(record.id) ?? [];
     const recordContexts = contextsByRecord.get(record.id) ?? [];
@@ -207,6 +221,8 @@ export async function hydrateTimeRecords(
     return {
       id: record.id,
       hubId: record.hubId,
+      taskId: record.taskId,
+      organizationId: organizationByTask.get(record.taskId) ?? null,
       title: record.title,
       outcomeNote: record.outcomeNote,
       status: record.status,
@@ -220,6 +236,7 @@ export async function hydrateTimeRecords(
       intervals: recordIntervals.map((interval) => ({
         id: interval.id,
         timeRecordId: interval.timeRecordId,
+        taskId: interval.taskId,
         actorKind: interval.actorKind,
         userId: interval.userId,
         agentExecutionId: interval.agentExecutionId,
@@ -458,19 +475,130 @@ function addMeasures(left: TimeMeasuresInput, right: TimeMeasuresInput): TimeMea
   };
 }
 
-/** Scale a record's measures by explicit allocation credit. */
-function scaleMeasures(measures: TimeMeasuresInput, basisPoints: number): TimeMeasuresInput {
-  const scale = (value: number) => Math.floor((value * basisPoints) / 10_000);
-  return {
-    elapsedMs: scale(measures.elapsedMs),
-    humanEffortMs: scale(measures.humanEffortMs),
-    agentEffortMs: scale(measures.agentEffortMs),
-    combinedEffortMs: scale(measures.combinedEffortMs),
-    operationalWaitMs: scale(measures.operationalWaitMs),
-  };
+/** One bucket a tracked task rolls up into on a hierarchy dimension. */
+interface HierarchyPlacement {
+  readonly key: string;
+  readonly label: string;
 }
 
-/** Build a bounded personal breakdown whose buckets reconcile with the reported total. */
+/** Every hierarchy coordinate one tracked task occupies. */
+interface TaskPlacement {
+  readonly workspace: HierarchyPlacement;
+  readonly task: HierarchyPlacement;
+  readonly project: HierarchyPlacement;
+  readonly program: HierarchyPlacement;
+  readonly initiative: HierarchyPlacement;
+}
+
+/**
+ * Resolve where each tracked task sits in the work hierarchy.
+ *
+ * @remarks
+ * Rollups above the task are DERIVED, never allocated: nobody attributes time to an initiative
+ * by hand, so asking for such an allocation would guarantee every initiative reported zero. The
+ * chain walked here is the one the product already draws — task → project → program, and
+ * project or program → initiative through the initiative join tables — with a task's own
+ * `programId` overriding its project's when both are set.
+ *
+ * A task that stops short of a level lands in that level's explicit unassigned bucket ("No
+ * project", "No program", "No initiative"). It is never dropped, which is what keeps every
+ * dimension summing to the same period total.
+ *
+ * A project may belong to several initiatives. Only the lowest-id one receives the credit,
+ * because splitting it would double count and dropping it would lose time — and a person
+ * reading "how much went to this initiative" wants a number that adds up more than they want a
+ * many-to-many faithfully reproduced.
+ */
+async function resolveTaskPlacements(
+  taskIds: readonly string[],
+): Promise<Map<string, TaskPlacement>> {
+  const placements = new Map<string, TaskPlacement>();
+  if (taskIds.length === 0) return placements;
+  const taskRows = await db
+    .select({
+      id: task.id,
+      title: task.title,
+      organizationId: task.organizationId,
+      projectId: task.projectId,
+      programId: task.programId,
+      organizationName: organization.name,
+      projectName: project.name,
+      projectProgramId: project.programId,
+    })
+    .from(task)
+    .innerJoin(organization, eq(organization.id, task.organizationId))
+    .leftJoin(project, eq(project.id, task.projectId))
+    .where(inArray(task.id, taskIds));
+
+  const programIds = [
+    ...new Set(
+      taskRows.flatMap((row) => {
+        const id = row.programId ?? row.projectProgramId;
+        return id ? [id] : [];
+      }),
+    ),
+  ];
+  const projectIds = [
+    ...new Set(taskRows.flatMap((row) => (row.projectId ? [row.projectId] : []))),
+  ];
+  const [programRows, initiativeLinks] = await Promise.all([
+    programIds.length > 0
+      ? db
+          .select({ id: program.id, name: program.name })
+          .from(program)
+          .where(inArray(program.id, programIds))
+      : Promise.resolve([]),
+    projectIds.length > 0
+      ? db
+          .select({
+            projectId: initiativeProject.projectId,
+            initiativeId: initiative.id,
+            name: initiative.name,
+          })
+          .from(initiativeProject)
+          .innerJoin(initiative, eq(initiative.id, initiativeProject.initiativeId))
+          .where(inArray(initiativeProject.projectId, projectIds))
+          .orderBy(asc(initiative.id))
+      : Promise.resolve([]),
+  ]);
+  const programName = new Map(programRows.map((row) => [row.id, row.name]));
+  const initiativeByProject = new Map<string, { id: string; name: string }>();
+  for (const link of initiativeLinks) {
+    if (!initiativeByProject.has(link.projectId)) {
+      initiativeByProject.set(link.projectId, { id: link.initiativeId, name: link.name });
+    }
+  }
+
+  for (const row of taskRows) {
+    const programId = row.programId ?? row.projectProgramId;
+    const linkedInitiative = row.projectId ? initiativeByProject.get(row.projectId) : undefined;
+    placements.set(row.id, {
+      workspace: { key: row.organizationId, label: row.organizationName },
+      task: { key: row.id, label: row.title },
+      project: row.projectId
+        ? { key: row.projectId, label: row.projectName ?? 'Project' }
+        : { key: 'unassigned:project', label: 'No project' },
+      program: programId
+        ? { key: programId, label: programName.get(programId) ?? 'Program' }
+        : { key: 'unassigned:program', label: 'No program' },
+      initiative: linkedInitiative
+        ? { key: linkedInitiative.id, label: linkedInitiative.name }
+        : { key: 'unassigned:initiative', label: 'No initiative' },
+    });
+  }
+  return placements;
+}
+
+/**
+ * Build a bounded personal breakdown whose buckets reconcile with the reported total.
+ *
+ * @remarks
+ * Effort measures (`humanEffortMs`, `agentEffortMs`, `combinedEffortMs`) sum across buckets to
+ * the period total exactly, on every dimension, because each record contributes its whole
+ * measure to exactly one bucket. `elapsedMs` deliberately does not: the total merges overlapping
+ * wall-clock spans so parallel human and agent work is not counted twice, and a merge has no
+ * per-bucket decomposition. Reflection surfaces therefore headline an effort measure.
+ */
 export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery) {
   const [hubId, records, total] = await Promise.all([
     resolveTimeHubId(userId),
@@ -480,31 +608,14 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
   const start = new Date(query.start);
   const end = new Date(query.end);
   const now = new Date();
-  const organizationIds = [
-    ...new Set(
-      records.flatMap((record) =>
-        record.allocations.flatMap((allocation) =>
-          allocation.organizationId ? [allocation.organizationId] : [],
-        ),
-      ),
-    ),
-  ];
-  const [categories, organizations] = await Promise.all([
+  const [categories, placements] = await Promise.all([
     db
       .select({ id: timeCategory.id, name: timeCategory.name })
       .from(timeCategory)
       .where(eq(timeCategory.hubId, hubId)),
-    organizationIds.length > 0
-      ? db
-          .select({ id: organization.id, name: organization.name })
-          .from(organization)
-          .where(inArray(organization.id, organizationIds))
-      : Promise.resolve([]),
+    resolveTaskPlacements([...new Set(records.map((record) => record.taskId))]),
   ]);
   const categoryName = new Map(categories.map((category) => [category.id, category.name]));
-  const organizationName = new Map(
-    organizations.map((workspace) => [workspace.id, workspace.name]),
-  );
   const buckets = new Map<string, { key: string; label: string; measures: TimeMeasuresInput }>();
   const add = (key: string, label: string, measures: TimeMeasuresInput): void => {
     const existing = buckets.get(key);
@@ -549,35 +660,12 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
       }
       continue;
     }
-    const matching =
-      query.groupBy === 'workspace'
-        ? record.allocations.filter((allocation) => allocation.organizationId !== null)
-        : record.allocations.filter((allocation) => allocation.targetKind === query.groupBy);
-    const matchedBasisPoints = matching.reduce(
-      (sum, allocation) => sum + allocation.basisPoints,
-      0,
-    );
-    for (const allocation of matching) {
-      const key =
-        query.groupBy === 'workspace'
-          ? (allocation.organizationId ?? allocation.targetId)
-          : allocation.targetId;
-      const context = record.contexts.find(
-        (candidate) => candidate.entityRef.docketEntityId === allocation.targetId,
-      );
-      const label =
-        query.groupBy === 'workspace'
-          ? (organizationName.get(key) ?? 'Workspace')
-          : (context?.entityRef.title ?? allocation.targetId);
-      add(key, label, scaleMeasures(measures, allocation.basisPoints));
-    }
-    if (matchedBasisPoints < 10_000) {
-      add(
-        `unallocated:${query.groupBy}`,
-        'Unallocated',
-        scaleMeasures(measures, 10_000 - matchedBasisPoints),
-      );
-    }
+    const placement = placements.get(record.taskId);
+    const bucket = placement?.[query.groupBy] ?? {
+      key: `unassigned:${query.groupBy}`,
+      label: 'Unassigned',
+    };
+    add(bucket.key, bucket.label, measures);
   }
   return {
     groupBy: query.groupBy,

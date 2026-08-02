@@ -24,24 +24,114 @@ import type {
   TimeRecordOut,
   TimeRecordUpdate,
 } from '@docket/types';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError } from '../error';
+import { emitTimerEvent } from '../routes/event-emit';
 import {
   assertOwnedTimeCategory,
-  type PreparedTimeContext,
   prepareInitialTimeContexts,
   resolveTimeHubId,
   validateTimeAllocationTarget,
   validateTimeContext,
 } from './access';
 import { hydrateTimeRecords, toTimeCategoryOut } from './read-models';
+import { readTaskAnchor, requireTrackingName, resolveTaskAnchor } from './task-anchor';
+import { type JoinCandidate, shouldJoinSegment } from './timer-join';
 
 type TimeRecordRow = typeof timeRecord.$inferSelect;
 type TimeRecordInput = z.input<typeof TimeRecordOut>;
 type TimeRecordCreateInput = z.input<typeof TimeRecordCreate>;
 type TimeCategoryInput = ReturnType<typeof toTimeCategoryOut>;
+
+/**
+ * Announce one timer transition on the shared event bus.
+ *
+ * @remarks
+ * Every lifecycle command funnels through here so the five transitions cannot drift apart, and
+ * so a new command physically cannot be added without deciding which transition it is. The
+ * reported `elapsedMs` is the record's **human effort** — the number the timer face shows — not
+ * its wall-clock envelope, because a consumer reacting to "you have been on this for 90 minutes"
+ * means time actually tracked, not time since the session opened.
+ *
+ * Emission is deliberately after the write and outside its transaction: the ledger is the source
+ * of truth, and a bus hiccup must never roll back a person's tracked time.
+ */
+async function announceTimer(
+  kind: 'timer_started' | 'timer_paused' | 'timer_resumed' | 'timer_switched' | 'timer_stopped',
+  record: TimeRecordInput,
+  options: {
+    readonly userId: string;
+    readonly organizationId: string;
+    readonly actorId: string | null;
+    readonly occurredAt: Date;
+    readonly previousTimeRecordId?: string | null;
+  },
+): Promise<void> {
+  await emitTimerEvent({
+    organizationId: options.organizationId,
+    kind,
+    userId: options.userId,
+    actorId: options.actorId,
+    occurredAt: options.occurredAt,
+    tracked: { type: 'task', id: record.taskId, title: record.title },
+    timeRecordId: record.id,
+    previousTimeRecordId: options.previousTimeRecordId ?? null,
+    elapsedMs: record.measures.humanEffortMs,
+    trackedLabel: record.title,
+  });
+}
+
+/** The caller's most recent human segment, whatever task it was on. */
+async function latestHumanSegment(hubId: string, userId: string): Promise<JoinCandidate | null> {
+  const rows = await db
+    .select({
+      id: timeInterval.id,
+      taskId: timeInterval.taskId,
+      endedAt: timeInterval.endedAt,
+      timeRecordId: timeInterval.timeRecordId,
+    })
+    .from(timeInterval)
+    .where(
+      and(
+        eq(timeInterval.hubId, hubId),
+        eq(timeInterval.userId, userId),
+        eq(timeInterval.mode, 'human_active'),
+        isNull(timeInterval.supersededById),
+      ),
+    )
+    .orderBy(desc(timeInterval.startedAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** The most recent human segment on one record. */
+async function latestSegmentForRecord(recordId: string): Promise<JoinCandidate | null> {
+  const rows = await db
+    .select({ id: timeInterval.id, taskId: timeInterval.taskId, endedAt: timeInterval.endedAt })
+    .from(timeInterval)
+    .where(
+      and(
+        eq(timeInterval.timeRecordId, recordId),
+        eq(timeInterval.mode, 'human_active'),
+        isNull(timeInterval.supersededById),
+      ),
+    )
+    .orderBy(desc(timeInterval.startedAt))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
+/** Read a Docket task id out of a typed primary context, when the caller supplied one that way. */
+function taskIdFromPrimaryRef(
+  primaryRef: TimeRecordCreateInput['context']['primaryRef'],
+): string | undefined {
+  if (!primaryRef) return undefined;
+  if (primaryRef.source !== 'docket' || primaryRef.kind !== 'work_item') return undefined;
+  // `externalId` is required on an `EntityRef`, so the second arm is the fallback, not a guard.
+  return primaryRef.docketEntityId ?? primaryRef.externalId;
+}
 
 /** Load a record under its Hub boundary or hide it as not found. */
 async function getOwnedRecord(id: string, hubId: string): Promise<TimeRecordRow> {
@@ -87,42 +177,6 @@ async function insertContext(
   });
 }
 
-/** Seed a reportable allocation only when the launch explicitly named a Docket task or workspace. */
-function defaultAllocationFromContexts(
-  contexts: readonly PreparedTimeContext[],
-): { targetKind: 'task' | 'workspace'; targetId: string; organizationId: string } | null {
-  const primary = contexts.find(
-    (context) =>
-      context.role === 'primary' &&
-      context.entityRef.source === 'docket' &&
-      context.entityRef.kind === 'work_item' &&
-      context.entityRef.docketEntityId !== null &&
-      context.organizationId !== null,
-  );
-  if (primary?.entityRef.docketEntityId && primary.organizationId) {
-    return {
-      targetKind: 'task',
-      targetId: primary.entityRef.docketEntityId,
-      organizationId: primary.organizationId,
-    };
-  }
-  const workspace = contexts.find(
-    (context) =>
-      context.entityRef.source === 'docket' &&
-      context.entityRef.kind === 'organization' &&
-      context.entityRef.docketEntityId !== null &&
-      context.organizationId !== null,
-  );
-  if (workspace?.entityRef.docketEntityId && workspace.organizationId) {
-    return {
-      targetKind: 'workspace',
-      targetId: workspace.entityRef.docketEntityId,
-      organizationId: workspace.organizationId,
-    };
-  }
-  return null;
-}
-
 /** Refresh a record's envelope from its non-superseded exact intervals. */
 async function refreshRecordEnvelope(recordId: string, now: Date): Promise<void> {
   const intervals = await db
@@ -138,7 +192,72 @@ async function refreshRecordEnvelope(recordId: string, now: Date): Promise<void>
     .where(eq(timeRecord.id, recordId));
 }
 
-/** Create a live timer or a closed historical/reconstructed record. */
+/**
+ * Close every open human segment for one user, returning the records that were tracking.
+ *
+ * @remarks
+ * This is the switch half of "start tracking something else": exactly one human segment may be
+ * open per Hub, so beginning anything new has to hand off from whatever was running. Doing it in
+ * the same transaction as the new segment is what makes the handoff exact — there is no instant
+ * at which two segments are open, and none at which neither is.
+ */
+async function closeOpenHumanSegments(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  hubId: string,
+  userId: string,
+  now: Date,
+): Promise<string[]> {
+  const active = await tx
+    .select({ recordId: timeInterval.timeRecordId })
+    .from(timeInterval)
+    .where(
+      and(
+        eq(timeInterval.hubId, hubId),
+        eq(timeInterval.userId, userId),
+        eq(timeInterval.mode, 'human_active'),
+        isNull(timeInterval.endedAt),
+      ),
+    );
+  const recordIds = [...new Set(active.map((entry) => entry.recordId))];
+  if (recordIds.length === 0) return [];
+  await tx
+    .update(timeInterval)
+    .set({ endedAt: now, closedAt: now })
+    .where(
+      and(
+        eq(timeInterval.hubId, hubId),
+        eq(timeInterval.userId, userId),
+        eq(timeInterval.mode, 'human_active'),
+        isNull(timeInterval.endedAt),
+      ),
+    );
+  await tx.update(timeRecord).set({ status: 'paused' }).where(inArray(timeRecord.id, recordIds));
+  return recordIds;
+}
+
+/**
+ * Create a live timer or a closed historical/reconstructed record.
+ *
+ * @remarks
+ * Live creation is the universal timer's entry point, and it does three things a plain insert
+ * would not:
+ *
+ * - **It anchors to a real Task.** `context.taskId` (or a `work_item` primary ref) tracks
+ *   existing work; a bare label creates an ordinary task from those words. Either way the
+ *   session has a first-class subject, which is what lets a segment carry a task and a breakdown
+ *   roll up through project → program → initiative → workspace.
+ * - **It applies the sub-minute continuation rule.** Starting the same task again within
+ *   {@link ./timer-join.TIMER_JOIN_WINDOW_MS} of the last segment ending REOPENS that segment
+ *   and returns its record, rather than minting a second record with a gap between them. The
+ *   caller sees one continuous stretch because that is what the storage now holds.
+ * - **It hands off atomically.** Anything already tracking is closed in the same transaction, and
+ *   the transition is announced as a single `timer_switched` — never a stop plus a start, which
+ *   would let a consumer count the same seconds twice.
+ *
+ * @param userId - The tracking user.
+ * @param input - The typed create body.
+ * @returns the live (or historical) record.
+ */
 export async function createTimeRecord(
   userId: string,
   input: TimeRecordCreateInput,
@@ -153,46 +272,38 @@ export async function createTimeRecord(
   if (!live && (!historicalStart || !historicalEnd)) {
     throw new Error('Validated historical time was missing its bounds');
   }
+  const anchor = await resolveTaskAnchor(userId, {
+    taskId: input.context.taskId ?? taskIdFromPrimaryRef(input.context.primaryRef),
+    organizationId: input.context.organizationId,
+    label: input.context.label,
+  });
   const contexts = await prepareInitialTimeContexts(userId, input.context);
-  const defaultAllocation = defaultAllocationFromContexts(contexts);
-  const record = await db.transaction(async (tx) => {
-    if (live) {
-      const active = await tx
-        .select({ recordId: timeInterval.timeRecordId })
-        .from(timeInterval)
-        .where(
-          and(
-            eq(timeInterval.hubId, hubId),
-            eq(timeInterval.userId, userId),
-            eq(timeInterval.mode, 'human_active'),
-            isNull(timeInterval.endedAt),
-          ),
-        );
-      const recordIds = [...new Set(active.map((entry) => entry.recordId))];
-      if (recordIds.length > 0) {
-        await tx
-          .update(timeInterval)
-          .set({ endedAt: now, closedAt: now })
-          .where(
-            and(
-              eq(timeInterval.hubId, hubId),
-              eq(timeInterval.userId, userId),
-              eq(timeInterval.mode, 'human_active'),
-              isNull(timeInterval.endedAt),
-            ),
-          );
-        await tx
-          .update(timeRecord)
-          .set({ status: 'paused' })
-          .where(inArray(timeRecord.id, recordIds));
-      }
+  // The anchor IS the subject, so it is also the reportable credit. Deriving the allocation from
+  // context instead would let a record's contexts and its rollup disagree about what was worked
+  // on — the exact ambiguity a NOT NULL anchor exists to remove.
+  const defaultAllocation = {
+    targetKind: 'task' as const,
+    targetId: anchor.taskId,
+    organizationId: anchor.organizationId,
+  };
+
+  if (live) {
+    const candidate = await latestHumanSegment(hubId, userId);
+    if (candidate && shouldJoinSegment(candidate, anchor.taskId, now)) {
+      const joined = await resumeJoinedSegment(userId, hubId, candidate, now);
+      if (joined) return joined;
     }
+  }
+
+  const outcome = await db.transaction(async (tx) => {
+    const switchedFrom = live ? await closeOpenHumanSegments(tx, hubId, userId, now) : [];
     const [inserted] = await tx
       .insert(timeRecord)
       .values({
         hubId,
         createdByUserId: userId,
-        title: input.context.label,
+        taskId: anchor.taskId,
+        title: input.context.label.trim(),
         status: live ? 'open' : 'closed',
         categoryId: input.context.suggestedCategoryId ?? null,
         captureSource,
@@ -218,18 +329,17 @@ export async function createTimeRecord(
         })),
       );
     }
-    if (defaultAllocation) {
-      await tx.insert(timeAllocation).values({
-        timeRecordId: inserted.id,
-        targetKind: defaultAllocation.targetKind,
-        targetId: defaultAllocation.targetId,
-        organizationId: defaultAllocation.organizationId,
-        basisPoints: 10_000,
-      });
-    }
+    await tx.insert(timeAllocation).values({
+      timeRecordId: inserted.id,
+      targetKind: defaultAllocation.targetKind,
+      targetId: defaultAllocation.targetId,
+      organizationId: defaultAllocation.organizationId,
+      basisPoints: 10_000,
+    });
     await tx.insert(timeInterval).values({
       timeRecordId: inserted.id,
       hubId,
+      taskId: anchor.taskId,
       actorKind: 'human',
       userId,
       mode: 'human_active',
@@ -241,69 +351,117 @@ export async function createTimeRecord(
       startedAt: live ? now : (historicalStart ?? now),
       ...(live ? {} : { endedAt: historicalEnd ?? now, closedAt: now }),
     });
-    return inserted;
+    return { record: inserted, switchedFrom };
   });
-  return toTimeRecordOut(record, userId, now);
+  const hydrated = await toTimeRecordOut(outcome.record, userId, now);
+  if (live) {
+    const previous = outcome.switchedFrom[0] ?? null;
+    await announceTimer(previous ? 'timer_switched' : 'timer_started', hydrated, {
+      userId,
+      organizationId: anchor.organizationId,
+      actorId: anchor.actorId,
+      occurredAt: now,
+      previousTimeRecordId: previous,
+    });
+  }
+  return hydrated;
 }
 
-/** Start or resume a paused record, atomically switching away from any other user tracker. */
+/**
+ * Reopen a segment that ended moments ago, so the interruption leaves no seam.
+ *
+ * @remarks
+ * The reopened segment's `endedAt`/`closedAt` are cleared, which is why the storage keeps its
+ * promise that the persisted segments are exactly the segments a report sums — a joined resume
+ * produces no second row to reconcile away later. Returns `null` when another writer closed the
+ * window first (a concurrent start), so the caller falls through to the ordinary path instead of
+ * silently doing nothing.
+ */
+async function resumeJoinedSegment(
+  userId: string,
+  hubId: string,
+  candidate: JoinCandidate,
+  now: Date,
+): Promise<TimeRecordInput | null> {
+  const outcome = await db.transaction(async (tx) => {
+    const switchedFrom = await closeOpenHumanSegments(tx, hubId, userId, now);
+    const reopened = await tx
+      .update(timeInterval)
+      .set({ endedAt: null, closedAt: null })
+      .where(and(eq(timeInterval.id, candidate.id), isNull(timeInterval.supersededById)))
+      .returning({ recordId: timeInterval.timeRecordId });
+    const recordId = reopened[0]?.recordId;
+    if (!recordId) return null;
+    const [record] = await tx
+      .update(timeRecord)
+      .set({ status: 'open', endedAt: null, closedAt: null })
+      .where(eq(timeRecord.id, recordId))
+      .returning();
+    return record ? { record, switchedFrom } : null;
+  });
+  if (!outcome) return null;
+  const hydrated = await toTimeRecordOut(outcome.record, userId, now);
+  const anchor = await readTaskAnchor(hydrated.taskId);
+  if (anchor) {
+    const previous = outcome.switchedFrom.find((id) => id !== hydrated.id) ?? null;
+    await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
+      userId,
+      organizationId: anchor.organizationId,
+      actorId: null,
+      occurredAt: now,
+      previousTimeRecordId: previous,
+    });
+  }
+  return hydrated;
+}
+
+/**
+ * Start or resume a paused record, atomically switching away from any other user tracker.
+ *
+ * @remarks
+ * Resuming applies the same sub-minute continuation rule as a fresh start: if this record's last
+ * segment closed under a minute ago, that segment is reopened rather than a new one appended, so
+ * a brief interruption never fragments the history.
+ */
 export async function startTimeRecord(userId: string, id: string): Promise<TimeRecordInput> {
   const hubId = await resolveTimeHubId(userId);
   const record = await getOwnedRecord(id, hubId);
-  if (
-    record.status === 'closed' ||
-    record.status === 'submitted' ||
-    record.status === 'superseded'
-  ) {
-    throw new ConflictError('Closed time records cannot be resumed');
+  if (record.status === 'submitted' || record.status === 'superseded') {
+    throw new ConflictError('This time record can no longer be changed');
   }
   const now = new Date();
-  const updated = await db.transaction(async (tx) => {
-    const alreadyActive = await tx
-      .select({ id: timeInterval.id })
-      .from(timeInterval)
-      .where(
-        and(
-          eq(timeInterval.timeRecordId, id),
-          eq(timeInterval.userId, userId),
-          eq(timeInterval.mode, 'human_active'),
-          isNull(timeInterval.endedAt),
-        ),
-      )
-      .limit(1);
-    if (alreadyActive[0]) return record;
-    const active = await tx
-      .select({ recordId: timeInterval.timeRecordId })
-      .from(timeInterval)
-      .where(
-        and(
-          eq(timeInterval.hubId, hubId),
-          eq(timeInterval.userId, userId),
-          eq(timeInterval.mode, 'human_active'),
-          isNull(timeInterval.endedAt),
-        ),
-      );
-    const recordIds = [...new Set(active.map((entry) => entry.recordId))];
-    if (recordIds.length > 0) {
-      await tx
-        .update(timeInterval)
-        .set({ endedAt: now, closedAt: now })
-        .where(
-          and(
-            eq(timeInterval.hubId, hubId),
-            eq(timeInterval.userId, userId),
-            eq(timeInterval.mode, 'human_active'),
-            isNull(timeInterval.endedAt),
-          ),
-        );
-      await tx
-        .update(timeRecord)
-        .set({ status: 'paused' })
-        .where(inArray(timeRecord.id, recordIds));
-    }
+  const alreadyActive = await db
+    .select({ id: timeInterval.id })
+    .from(timeInterval)
+    .where(
+      and(
+        eq(timeInterval.timeRecordId, id),
+        eq(timeInterval.userId, userId),
+        eq(timeInterval.mode, 'human_active'),
+        isNull(timeInterval.endedAt),
+      ),
+    )
+    .limit(1);
+  if (alreadyActive[0]) return toTimeRecordOut(record, userId, now);
+
+  // The continuation rule is checked BEFORE the closed-record guard, deliberately: a session
+  // stopped forty seconds ago and restarted is the interruption the rule exists for, and
+  // refusing it as "closed" would fragment exactly the history it was written to keep whole.
+  const candidate = await latestSegmentForRecord(id);
+  if (candidate && shouldJoinSegment(candidate, record.taskId, now)) {
+    const joined = await resumeJoinedSegment(userId, hubId, candidate, now);
+    if (joined) return joined;
+  }
+  if (record.status === 'closed') {
+    throw new ConflictError('Closed time records cannot be resumed');
+  }
+
+  const outcome = await db.transaction(async (tx) => {
+    const switchedFrom = await closeOpenHumanSegments(tx, hubId, userId, now);
     await tx.insert(timeInterval).values({
       timeRecordId: id,
       hubId,
+      taskId: record.taskId,
       actorKind: 'human',
       userId,
       mode: 'human_active',
@@ -316,9 +474,21 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
       .where(eq(timeRecord.id, id))
       .returning();
     if (!resumed) throw new NotFoundError('Time record not found');
-    return resumed;
+    return { record: resumed, switchedFrom };
   });
-  return toTimeRecordOut(updated, userId, now);
+  const hydrated = await toTimeRecordOut(outcome.record, userId, now);
+  const anchor = await readTaskAnchor(hydrated.taskId);
+  if (anchor) {
+    const previous = outcome.switchedFrom.find((entry) => entry !== id) ?? null;
+    await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
+      userId,
+      organizationId: anchor.organizationId,
+      actorId: null,
+      occurredAt: now,
+      previousTimeRecordId: previous,
+    });
+  }
+  return hydrated;
 }
 
 /** Close the caller's active human interval while keeping the record resumable. */
@@ -346,16 +516,40 @@ export async function pauseTimeRecord(userId: string, id: string): Promise<TimeR
     .returning();
   if (!updated) throw new NotFoundError('Time record not found');
   await refreshRecordEnvelope(id, now);
-  return toTimeRecordOut(updated, userId, now);
+  const hydrated = await toTimeRecordOut(updated, userId, now);
+  const anchor = await readTaskAnchor(hydrated.taskId);
+  if (anchor) {
+    await announceTimer('timer_paused', hydrated, {
+      userId,
+      organizationId: anchor.organizationId,
+      actorId: null,
+      occurredAt: now,
+    });
+  }
+  return hydrated;
 }
 
-/** Stop the caller's record and close its human tracker. */
+/**
+ * Stop the caller's record and close its human tracker.
+ *
+ * @remarks
+ * Stopping re-checks that the tracked task is named, and refuses with a `validation_error`
+ * Problem — leaving the session open and still accruing — when it is not. Creation already makes
+ * an unnamed session unrepresentable, so this guard is redundant *by design*: the requirement is
+ * that finishing without documenting the work be impossible, and an invariant that holds only
+ * because one write path happens to validate is an invariant one refactor away from being lost.
+ * Checking it where the session would become permanent is the check that cannot be bypassed —
+ * not by the REST route, not by MCP, not by a future importer.
+ */
 export async function stopTimeRecord(userId: string, id: string): Promise<TimeRecordInput> {
   const hubId = await resolveTimeHubId(userId);
   const record = await getOwnedRecord(id, hubId);
   if (record.status === 'submitted' || record.status === 'superseded') {
     throw new ConflictError('This time record can no longer be changed');
   }
+  const anchor = await readTaskAnchor(record.taskId);
+  requireTrackingName(record.title, 'title');
+  requireTrackingName(anchor?.title, 'title');
   const now = new Date();
   await db
     .update(timeInterval)
@@ -375,7 +569,16 @@ export async function stopTimeRecord(userId: string, id: string): Promise<TimeRe
     .where(eq(timeRecord.id, id))
     .returning();
   if (!updated) throw new NotFoundError('Time record not found');
-  return toTimeRecordOut(updated, userId, now);
+  const hydrated = await toTimeRecordOut(updated, userId, now);
+  if (anchor) {
+    await announceTimer('timer_stopped', hydrated, {
+      userId,
+      organizationId: anchor.organizationId,
+      actorId: null,
+      occurredAt: now,
+    });
+  }
+  return hydrated;
 }
 
 /** Edit only the semantic, user-controlled fields of a record. */
@@ -415,6 +618,7 @@ export async function addHistoricalInterval(
   await db.insert(timeInterval).values({
     timeRecordId: id,
     hubId,
+    taskId: record.taskId,
     actorKind: 'human',
     userId,
     mode: 'human_active',

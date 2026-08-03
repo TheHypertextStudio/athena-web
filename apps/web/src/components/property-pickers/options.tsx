@@ -30,6 +30,7 @@ import {
   type Visibility,
 } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
+import { Globe, Shield } from '@docket/ui/icons';
 import type { PickerOption } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import type { JSX, ReactNode } from 'react';
@@ -172,11 +173,36 @@ const VISIBILITY_LABEL: Record<Visibility, string> = {
   private: 'Private',
 };
 
-/** Build the {@link Visibility} enum options (public, then private). */
+/**
+ * What each {@link Visibility} actually does, in the reader's terms.
+ *
+ * @remarks
+ * The picker used to offer two bare words with nothing to distinguish them, which left people
+ * guessing at what they were choosing — the launch note is literally "It's unclear what
+ * public/private is really doing."
+ *
+ * This copy states the effect the system actually has today, not the effect the words imply.
+ * Visibility is enforced in workspace search (`apps/api/src/search/query.ts` —
+ * `publicByMembership = fact.visibility === 'public' && !access.isGuest`): a public object is
+ * reachable by every member who is not a guest, and a private one only by someone holding an
+ * explicit grant. It is deliberately NOT described as "nobody else can open it", because the
+ * programs list and detail routes do not yet apply the same predicate — saying so would be a
+ * promise the product does not keep.
+ *
+ * @see {@link visibilityOptions} for the picker rows this copy appears in.
+ */
+export const VISIBILITY_DESCRIPTION: Record<Visibility, string> = {
+  public: 'Anyone in this workspace can find it in search.',
+  private: 'Kept out of search for anyone without access to it.',
+};
+
+/** Build the {@link Visibility} enum options (public, then private), each explaining itself. */
 export function visibilityOptions(): readonly PickerOption<Visibility>[] {
   return (['public', 'private'] as const).map((visibility) => ({
     value: visibility,
     label: VISIBILITY_LABEL[visibility],
+    supporting: VISIBILITY_DESCRIPTION[visibility],
+    icon: visibility === 'public' ? <Globe className="size-4" /> : <Shield className="size-4" />,
   }));
 }
 

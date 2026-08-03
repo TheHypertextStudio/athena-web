@@ -197,6 +197,284 @@ describe('CORE-26 · publishing each of the three entity types', () => {
     });
     expect(res.status).toBe(403);
   });
+
+  it('refuses to publish a record whose title yields no sluggable characters', async () => {
+    const { orgId, humanActorId } = await seedPublishingOrg(
+      `ws-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: '🎉🎉🎉' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subjectKind: 'project', subjectId: projectId }),
+    });
+    expect(res.status).toBe(422);
+    const problem = (await res.json()) as { fieldErrors?: Record<string, unknown> };
+    expect(Object.keys(problem.fieldErrors ?? {})).toContain('slug');
+  });
+
+  it('publishes in a workspace with no claimed public name: path uses the placeholder and urls is empty', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Unclaimed workspace project' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'no-claim' }),
+    });
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { path: string; urls: string[] };
+    expect(body.path).toBe('/briefs/:workspace/no-claim');
+    expect(body.urls).toEqual([]);
+  });
+});
+
+describe('reading publication state (GET /, GET /:subjectKind/:subjectId)', () => {
+  it('lists every publication in the workspace, newest first, including withdrawn rows', async () => {
+    const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
+    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Listed' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const created = (await (
+      await app.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'listed' }),
+      })
+    ).json()) as { id: string };
+    await app.request(`/${created.id}`, { method: 'DELETE' });
+
+    const listed = (await (await app.request('/')).json()) as {
+      items: { id: string; published: boolean; urls: string[] }[];
+    };
+    const row = listed.items.find((item) => item.id === created.id);
+    expect(row).toBeDefined();
+    expect(row?.published).toBe(false);
+    // A withdrawn brief resolves no live urls.
+    expect(row?.urls).toEqual([]);
+  });
+
+  it('reports publication: null for a record that has never been published', async () => {
+    const { orgId, humanActorId } = await seedPublishingOrg(
+      `ws-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Never published' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    const res = await app.request(`/project/${projectId}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ publication: null });
+  });
+
+  it('reports the full publication state for a published record', async () => {
+    const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
+    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Has state' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    await app.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'has-state' }),
+    });
+    const res = await app.request(`/project/${projectId}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { publication: { published: boolean; slug: string } | null };
+    expect(body.publication?.published).toBe(true);
+    expect(body.publication?.slug).toBe('has-state');
+  });
+});
+
+describe('404s for an id that does not belong to this workspace', () => {
+  it('404s a DELETE on an unknown publication id', async () => {
+    const { orgId, humanActorId } = await seedPublishingOrg(
+      `ws-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    expect((await app.request('/not-a-real-id', { method: 'DELETE' })).status).toBe(404);
+  });
+
+  it('404s a PATCH on an unknown publication id', async () => {
+    const { orgId, humanActorId } = await seedPublishingOrg(
+      `ws-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    const res = await app.request('/not-a-real-id', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ published: true }),
+    });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('PATCH /:id · moving and withdrawing a brief in place', () => {
+  async function publishedFixture(): Promise<{
+    app: Awaited<ReturnType<typeof publishApp>>;
+    anon: Awaited<ReturnType<typeof publicApp>>;
+    orgId: string;
+    humanActorId: string;
+    workspace: string;
+    publicationId: string;
+    slug: string;
+  }> {
+    const workspace = `ws-${Math.random().toString(36).slice(2, 8)}`;
+    const { orgId, humanActorId } = await seedPublishingOrg(workspace);
+    const app = await publishApp(orgId, ['contribute'], humanActorId);
+    const anon = await publicApp();
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Patchable' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const created = (await (
+      await app.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ subjectKind: 'project', subjectId: projectId, slug: 'patchable' }),
+      })
+    ).json()) as { id: string; slug: string };
+    return {
+      app,
+      anon,
+      orgId,
+      humanActorId,
+      workspace,
+      publicationId: created.id,
+      slug: created.slug,
+    };
+  }
+
+  it('moves a brief to a new address, leaving its published state untouched', async () => {
+    const { app, anon, workspace, publicationId } = await publishedFixture();
+    const res = await app.request(`/${publicationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'moved-address' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { slug: string; published: boolean };
+    expect(body.slug).toBe('moved-address');
+    expect(body.published).toBe(true);
+    expect((await anon.request(`/briefs/${workspace}/moved-address`)).status).toBe(200);
+    expect((await anon.request(`/briefs/${workspace}/patchable`)).status).toBe(404);
+  });
+
+  it('no-ops when the patch names the brief’s own current slug', async () => {
+    const { app, publicationId, slug } = await publishedFixture();
+    const res = await app.request(`/${publicationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug }),
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { slug: string }).slug).toBe(slug);
+  });
+
+  it('409s a PATCH that names another brief’s address, and changes nothing', async () => {
+    const { app, orgId, publicationId, slug } = await publishedFixture();
+    const otherProjectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Other patchable' })
+        .returning({ id: schema.project.id }),
+    ).id;
+    await app.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        subjectKind: 'project',
+        subjectId: otherProjectId,
+        slug: 'already-taken',
+      }),
+    });
+
+    const clash = await app.request(`/${publicationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ slug: 'already-taken' }),
+    });
+    expect(clash.status).toBe(409);
+    expect(((await clash.json()) as { code: string }).code).toBe('public_name_taken');
+
+    const unchanged = one(
+      await db
+        .select({ slug: schema.publication.slug })
+        .from(schema.publication)
+        .where(eq(schema.publication.id, publicationId)),
+    );
+    expect(unchanged.slug).toBe(slug);
+  });
+
+  it('withdraws via PATCH published:false exactly like DELETE, and restores via published:true at the same address', async () => {
+    const { app, anon, workspace, publicationId, slug } = await publishedFixture();
+
+    const withdrawn = await app.request(`/${publicationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ published: false }),
+    });
+    expect(withdrawn.status).toBe(200);
+    const withdrawnBody = (await withdrawn.json()) as { published: boolean; publishedAt: null };
+    expect(withdrawnBody.published).toBe(false);
+    expect(withdrawnBody.publishedAt).toBeNull();
+    expect((await anon.request(`/briefs/${workspace}/${slug}`)).status).toBe(404);
+
+    const restored = await app.request(`/${publicationId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ published: true }),
+    });
+    expect(restored.status).toBe(200);
+    const restoredBody = (await restored.json()) as { published: boolean; slug: string };
+    expect(restoredBody.published).toBe(true);
+    expect(restoredBody.slug).toBe(slug);
+    expect((await anon.request(`/briefs/${workspace}/${slug}`)).status).toBe(200);
+  });
+
+  it('keeps the original publishedAt when PATCH published:true is a no-op on an already-published brief', async () => {
+    const { app, publicationId } = await publishedFixture();
+    const before = one(
+      await db
+        .select({ publishedAt: schema.publication.publishedAt })
+        .from(schema.publication)
+        .where(eq(schema.publication.id, publicationId)),
+    );
+
+    const again = (await (
+      await app.request(`/${publicationId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ published: true }),
+      })
+    ).json()) as { publishedAt: string };
+    expect(again.publishedAt).toBe(before.publishedAt?.toISOString());
+  });
 });
 
 describe('CORE-27 · a brief reads the live record, not a snapshot', () => {

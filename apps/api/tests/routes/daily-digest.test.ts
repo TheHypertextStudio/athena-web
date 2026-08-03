@@ -1,6 +1,6 @@
 import { CaptureMailer } from '@docket/mail';
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
@@ -10,6 +10,7 @@ import { getDb, seedBaseOrg } from '../support/routes-harness';
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let sweepDailyDigests!: typeof DigestModule.sweepDailyDigests;
+let markdownToHtml!: typeof DigestModule.markdownToHtml;
 let outbox!: CaptureMailer['outbox'];
 
 /** A fixed reference time: 20:00 UTC, past an 18:00 send time. */
@@ -20,7 +21,9 @@ const EARLY = new Date('2026-06-28T08:00:00.000Z');
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  sweepDailyDigests = (await import('../../src/routes/daily-digest')).sweepDailyDigests;
+  const mod = await import('../../src/routes/daily-digest');
+  sweepDailyDigests = mod.sweepDailyDigests;
+  markdownToHtml = mod.markdownToHtml;
   // The container's mailer is the in-memory CaptureMailer under APP_MODE=test.
   const { getContainer } = await import('../../src/container');
   const mailer = getContainer().mailer;
@@ -148,6 +151,197 @@ describe('sweepDailyDigests (the hero feature)', () => {
       .where(eq(schema.dailyDigest.userId, userId));
     expect(rows).toHaveLength(1);
     expect(outbox.filter((m) => m.to === email).length).toBe(1);
+  });
+
+  it('treats an unparseable configured send time as the default (18:00), gating generation accordingly', async () => {
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: 'not-a-time', tz: 'UTC' });
+    // If the malformed value were not corrected to DEFAULT_SEND_MINUTES, a NaN comparison would
+    // never gate anything (always false), so the digest would generate even before 18:00. Seeing
+    // it correctly skip at 08:00 proves the fallback, rather than NaN-always-passes, is in effect.
+    await sweepDailyDigests(EARLY);
+    const rows = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, userId));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('defaults timezone to UTC and send time to 18:00 when a Hub omits both entirely', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    seq += 1;
+    const email = `bare-prefs-${String(seq)}@example.com`;
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: `Bare ${String(seq)}`, email })
+      .returning({ id: schema.user.id });
+    // No `timezone`, no `digest.sendAtLocalTime` — only the flag the sweep's own WHERE clause reads.
+    await db
+      .insert(schema.hub)
+      .values({ userId: u!.id, preferences: { digest: { enabled: true } } });
+    await seedEvent(orgId, u!.id, 'Bare-preferences event');
+
+    await sweepDailyDigests(NOW); // 20:00 UTC — past the 18:00 default in UTC.
+
+    const [digest] = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, u!.id));
+    expect(digest!.status).toBe('sent');
+  });
+
+  it('omits the greeting name when the user has no name on file', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    seq += 1;
+    const email = `no-name-${String(seq)}@example.com`;
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: '', email })
+      .returning({ id: schema.user.id });
+    await db.insert(schema.hub).values({
+      userId: u!.id,
+      preferences: { timezone: 'UTC', digest: { enabled: true, sendAtLocalTime: '18:00' } },
+    });
+    await seedEvent(orgId, u!.id, 'Nameless-user event');
+
+    await sweepDailyDigests(NOW);
+
+    const [digest] = await db
+      .select()
+      .from(schema.dailyDigest)
+      .where(eq(schema.dailyDigest.userId, u!.id));
+    expect(digest!.summaryMarkdown).toContain("Here's what you did");
+    expect(digest!.summaryMarkdown).not.toContain('Hi ');
+  });
+
+  it('passes an event’s summary, actor display name, and entity title through to the summarizer', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
+    seq += 1;
+    await db.insert(schema.event).values({
+      organizationId: orgId,
+      userId,
+      sourceSystem: 'linear',
+      kind: 'created',
+      occurredAt: new Date('2026-06-28T09:00:00.000Z'),
+      title: 'Rich event',
+      summary: 'A one-line summary of the change',
+      actor: {
+        source: 'linear',
+        externalId: 'ext_actor_1',
+        displayName: 'Jane Doe',
+        avatarUrl: null,
+        docketActorId: null,
+      },
+      entity: {
+        kind: 'work_item',
+        source: 'linear',
+        externalId: 'ext_entity_1',
+        title: 'Ship the thing',
+        url: null,
+        docketEntityId: null,
+      },
+      dedupeKey: `obs-${String(seq)}`,
+    });
+
+    const { getContainer } = await import('../../src/container');
+    const summarizer = getContainer().summarizer;
+    const spy = vi.spyOn(summarizer, 'summarize');
+
+    await sweepDailyDigests(NOW);
+
+    expect(spy).toHaveBeenCalled();
+    const call = spy.mock.calls.find((args) =>
+      args[0].observations.some((o) => o.title === 'Rich event'),
+    );
+    const observation = call?.[0].observations.find((o) => o.title === 'Rich event');
+    expect(observation).toMatchObject({
+      summary: 'A one-line summary of the change',
+      actor: 'Jane Doe',
+      subject: 'Ship the thing',
+    });
+    spy.mockRestore();
+  });
+
+  it('marks the digest failed (not thrown) when the notification fails to send', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
+    await seedEvent(orgId, userId, 'Will not be delivered');
+
+    const { getContainer } = await import('../../src/container');
+    const mailer = getContainer().mailer;
+    const sendSpy = vi.spyOn(mailer, 'send').mockRejectedValueOnce(new Error('smtp is down'));
+
+    try {
+      const result = await sweepDailyDigests(NOW);
+      expect(result.failed).toBe(1);
+      expect(result.sent).toBe(0);
+
+      const [digest] = await db
+        .select()
+        .from(schema.dailyDigest)
+        .where(eq(schema.dailyDigest.userId, userId));
+      expect(digest!.status).toBe('failed');
+      expect(digest!.lastError).toBe('digest notification delivery failed');
+    } finally {
+      sendSpy.mockRestore();
+    }
+  });
+
+  it('records a generic error message when generation throws something other than an Error', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { userId } = await seedDigestUser({ enabled: true, sendAt: '18:00', tz: 'UTC' });
+    await seedEvent(orgId, userId, 'Non-Error throw');
+
+    const { getContainer } = await import('../../src/container');
+    const summarizer = getContainer().summarizer;
+    // Deliberately a non-Error rejection, to exercise the `err instanceof Error` false arm of the
+    // digest's own catch block.
+    const spy = vi.spyOn(summarizer, 'summarize').mockRejectedValueOnce('a plain string rejection');
+
+    try {
+      const result = await sweepDailyDigests(NOW);
+      expect(result.failed).toBe(1);
+
+      const [digest] = await db
+        .select()
+        .from(schema.dailyDigest)
+        .where(eq(schema.dailyDigest.userId, userId));
+      expect(digest!.status).toBe('failed');
+      expect(digest!.lastError).toBe('digest generation error');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+});
+
+describe('markdownToHtml', () => {
+  it('closes a bullet list mid-document when a heading follows it, not only at the end', () => {
+    const html = markdownToHtml('- first\n- second\n# A heading\nA paragraph.');
+    expect(html).toBe(
+      [
+        '<ul>',
+        '<li>first</li>',
+        '<li>second</li>',
+        '</ul>',
+        '<h1>A heading</h1>',
+        '<p>A paragraph.</p>',
+      ].join('\n'),
+    );
+  });
+
+  it('closes a trailing list at the end of the document', () => {
+    const html = markdownToHtml('# Title\n\n- only item');
+    expect(html).toBe(['<h1>Title</h1>', '<ul>', '<li>only item</li>', '</ul>'].join('\n'));
+  });
+
+  it('renders bold inline text and escapes HTML-significant characters', () => {
+    const html = markdownToHtml('A **bold** claim about <script> & "quotes".');
+    expect(html).toBe('<p>A <strong>bold</strong> claim about &lt;script&gt; &amp; "quotes".</p>');
+  });
+
+  it('skips blank lines rather than emitting empty paragraphs', () => {
+    const html = markdownToHtml('First.\n\nSecond.');
+    expect(html).toBe('<p>First.</p>\n<p>Second.</p>');
   });
 });
 

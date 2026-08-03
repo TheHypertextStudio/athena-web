@@ -78,7 +78,9 @@ export function mintMailboxKey(random: (size: number) => Uint8Array = randomByte
   while (key.length < KEY_LENGTH) {
     for (const byte of random(KEY_LENGTH)) {
       if (key.length === KEY_LENGTH) break;
+      /* v8 ignore next -- @preserve unreachable while KEY_ALPHABET.length (32) evenly divides 256 */
       if (byte >= ceiling) continue;
+      /* v8 ignore next -- @preserve defensive: byte % KEY_ALPHABET.length is always a valid index */
       key = `${key}${KEY_ALPHABET[byte % KEY_ALPHABET.length] ?? ''}`;
     }
   }
@@ -180,6 +182,7 @@ export async function resolveMailboxForRecipients(
     .where(inArray(athenaMailbox.key, [...candidates.keys()]));
   const mailbox = rows[0];
   if (!mailbox) return null;
+  /* v8 ignore next -- @preserve defensive: mailbox.key is always one of candidates' own keys */
   return { mailbox, address: candidates.get(mailbox.key) ?? `${mailbox.key}@${host}` };
 }
 
@@ -208,6 +211,7 @@ export async function countAttachmentsFor(
     );
   const counts = new Map<string, number>();
   for (const row of rows) {
+    /* v8 ignore next -- @preserve defensive: the query's own IN clause excludes a null externalId */
     if (!row.externalId) continue;
     counts.set(row.externalId, (counts.get(row.externalId) ?? 0) + 1);
   }

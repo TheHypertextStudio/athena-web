@@ -121,8 +121,15 @@ function sendMinutes(sendAtLocalTime: string | undefined): number {
   return hh * 60 + mm;
 }
 
-/** A tiny Markdown → HTML renderer for the digest subset (h1, bullets, bold, paragraphs). */
-function markdownToHtml(md: string): string {
+/**
+ * A tiny Markdown → HTML renderer for the digest subset (h1, bullets, bold, paragraphs).
+ *
+ * @remarks
+ * Exported so its line-shape branches (a list closing mid-document vs. at the very end, an
+ * empty vs. non-empty trailing paragraph) are directly unit-testable without depending on
+ * exactly what the summarizer happens to render for a given day's observations.
+ */
+export function markdownToHtml(md: string): string {
   const esc = (s: string): string =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const inline = (s: string): string => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');

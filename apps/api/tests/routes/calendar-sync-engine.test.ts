@@ -13,10 +13,13 @@ import {
 } from '../../src/routes/calendar-google-adapter';
 import {
   claimLayerLease,
+  registerOrRenewWatches,
   syncCalendarConnections,
+  syncSingleLayer,
   type CalendarProviderAdapter,
   type CalendarProviderSyncModule,
   type CalendarPullResult,
+  type CalendarWatchResult,
   type DiscoveredCalendarConnection,
   type ProviderItemSnapshot,
 } from '../../src/routes/calendar-sync-engine';
@@ -102,6 +105,100 @@ async function findLayer(
     )
     .limit(1);
   return one(rows);
+}
+
+/**
+ * A minimal in-memory adapter with no Google-isms, for proving the engine is provider-free.
+ * Hoisted to module scope (rather than nested in the "provider neutrality" describe below) so
+ * `syncSingleLayer`/`registerOrRenewWatches` tests in their own describe blocks can reuse it too.
+ */
+function createFakeSyncModule(): {
+  module: CalendarProviderSyncModule;
+  pullCalls: { cursor: string | null }[];
+  setPullImpl: (impl: (cursor: string | null) => Promise<CalendarPullResult>) => void;
+} {
+  const pullCalls: { cursor: string | null }[] = [];
+  let pullImpl: (cursor: string | null) => Promise<CalendarPullResult> = async (cursor) => ({
+    items: [],
+    nextCursor: cursor,
+    cursorInvalid: false,
+    full: cursor === null,
+  });
+  const adapter: CalendarProviderAdapter = {
+    provider: 'google',
+    async listLayers() {
+      return [
+        {
+          externalLayerId: 'fake-layer',
+          title: 'Fake Layer',
+          description: null,
+          timezone: null,
+          color: null,
+          accessRole: 'owner',
+          primary: true,
+          editableCore: true,
+        },
+      ];
+    },
+    async pullChanges(input) {
+      pullCalls.push({ cursor: input.cursor });
+      return pullImpl(input.cursor);
+    },
+    // Most describes here only prove the PULL half is provider-neutral; the write outbox has
+    // its own dedicated fake adapter in calendar-write-back.test.ts.
+    pushItem() {
+      throw new Error('fake adapter: pushItem not exercised by provider-neutrality tests');
+    },
+    deleteItem() {
+      throw new Error('fake adapter: deleteItem not exercised by provider-neutrality tests');
+    },
+  };
+  const discoverConnections: CalendarProviderSyncModule['discoverConnections'] = async () => [
+    {
+      externalAccountId: 'fake-account',
+      accountEmail: null,
+      accountName: null,
+      accountPictureUrl: null,
+      raw: null,
+    } satisfies DiscoveredCalendarConnection,
+  ];
+  const module: CalendarProviderSyncModule = {
+    adapter,
+    discoverConnections,
+    resolveCredentials: async () => ({ accessToken: 'fake-token' }),
+    captureScopeState: () => ({
+      grantedScopes: ['fake.scope'],
+      calendarRead: true,
+      calendarWrite: true,
+      capturedAt: NOW.toISOString(),
+    }),
+  };
+  return { module, pullCalls, setPullImpl: (impl) => (pullImpl = impl) };
+}
+
+/** A fixture provider item for {@link createFakeSyncModule}'s adapter. */
+function fakeItem(overrides: Partial<ProviderItemSnapshot> = {}): ProviderItemSnapshot {
+  return {
+    externalEventId: 'fake-evt',
+    recurringEventId: null,
+    status: 'confirmed',
+    title: 'Fake Event',
+    description: null,
+    location: null,
+    htmlLink: null,
+    startsAt: new Date('2026-07-01T10:00:00.000Z'),
+    endsAt: new Date('2026-07-01T10:30:00.000Z'),
+    allDayStartDate: null,
+    allDayEndDate: null,
+    organizer: null,
+    attendees: [],
+    updatedExternalAt: null,
+    externalEtag: null,
+    permissions: { canEditCore: true, canDelete: true, readOnlyReason: null },
+    cancelled: false,
+    raw: {},
+    ...overrides,
+  };
 }
 
 describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
@@ -622,95 +719,6 @@ describe('calendar sync engine — Google adapter (fake fetchJson)', () => {
 });
 
 describe('calendar sync engine — provider neutrality (fake adapter)', () => {
-  /** A minimal in-memory adapter with no Google-isms, for proving the engine is provider-free. */
-  function createFakeSyncModule(): {
-    module: CalendarProviderSyncModule;
-    pullCalls: { cursor: string | null }[];
-    setPullImpl: (impl: (cursor: string | null) => Promise<CalendarPullResult>) => void;
-  } {
-    const pullCalls: { cursor: string | null }[] = [];
-    let pullImpl: (cursor: string | null) => Promise<CalendarPullResult> = async (cursor) => ({
-      items: [],
-      nextCursor: cursor,
-      cursorInvalid: false,
-      full: cursor === null,
-    });
-    const adapter: CalendarProviderAdapter = {
-      provider: 'google',
-      async listLayers() {
-        return [
-          {
-            externalLayerId: 'fake-layer',
-            title: 'Fake Layer',
-            description: null,
-            timezone: null,
-            color: null,
-            accessRole: 'owner',
-            primary: true,
-            editableCore: true,
-          },
-        ];
-      },
-      async pullChanges(input) {
-        pullCalls.push({ cursor: input.cursor });
-        return pullImpl(input.cursor);
-      },
-      // This describe block only proves the PULL half is provider-neutral; the write
-      // outbox has its own dedicated fake adapter in calendar-write-back.test.ts.
-      pushItem() {
-        throw new Error('fake adapter: pushItem not exercised by provider-neutrality tests');
-      },
-      deleteItem() {
-        throw new Error('fake adapter: deleteItem not exercised by provider-neutrality tests');
-      },
-    };
-    const discoverConnections: CalendarProviderSyncModule['discoverConnections'] = async () => [
-      {
-        externalAccountId: 'fake-account',
-        accountEmail: null,
-        accountName: null,
-        accountPictureUrl: null,
-        raw: null,
-      } satisfies DiscoveredCalendarConnection,
-    ];
-    const module: CalendarProviderSyncModule = {
-      adapter,
-      discoverConnections,
-      resolveCredentials: async () => ({ accessToken: 'fake-token' }),
-      captureScopeState: () => ({
-        grantedScopes: ['fake.scope'],
-        calendarRead: true,
-        calendarWrite: true,
-        capturedAt: NOW.toISOString(),
-      }),
-    };
-    return { module, pullCalls, setPullImpl: (impl) => (pullImpl = impl) };
-  }
-
-  function fakeItem(overrides: Partial<ProviderItemSnapshot> = {}): ProviderItemSnapshot {
-    return {
-      externalEventId: 'fake-evt',
-      recurringEventId: null,
-      status: 'confirmed',
-      title: 'Fake Event',
-      description: null,
-      location: null,
-      htmlLink: null,
-      startsAt: new Date('2026-07-01T10:00:00.000Z'),
-      endsAt: new Date('2026-07-01T10:30:00.000Z'),
-      allDayStartDate: null,
-      allDayEndDate: null,
-      organizer: null,
-      attendees: [],
-      updatedExternalAt: null,
-      externalEtag: null,
-      permissions: { canEditCore: true, canDelete: true, readOnlyReason: null },
-      cancelled: false,
-      raw: {},
-      ...overrides,
-    };
-  }
-
   it('drives full sync, incremental sync, and cursor invalidation with zero Google-specific code', async () => {
     const schema = await getDb();
     const userId = await seedUserWithHub(schema.db, schema, 'NeutralUser');
@@ -883,5 +891,489 @@ describe('calendar sync engine — provider neutrality (fake adapter)', () => {
       .set({ syncLeaseExpiresAt: null })
       .where(eq(schema.calendarLayer.id, layer.id));
     expect(await claimLayerLease(schema.db, layer.id, new Date(NOW.getTime() + 2000))).toBe(true);
+  });
+
+  it('a cancelled snapshot with no prior local row is skipped, never inserted', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NeutralCancelledFirstUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    // The very first pull for this layer already reports the item as cancelled — there was
+    // never a local row to archive, so the upsert must no-op rather than crash or insert one.
+    setPullImpl(async () => ({
+      items: [fakeItem({ cancelled: true, status: 'cancelled' })],
+      nextCursor: 'v1',
+      cursorInvalid: false,
+      full: true,
+    }));
+
+    const result = await syncCalendarConnections(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { google: module },
+    });
+
+    expect(result.eventsCreated).toBe(0);
+    expect(result.itemsCreated).toBe(0);
+    expect(result.eventsDeleted).toBe(0);
+    expect(result.errors).toEqual([]);
+
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    const rows = await schema.db
+      .select()
+      .from(schema.calendarEvent)
+      .where(
+        and(
+          eq(schema.calendarEvent.calendarId, layer.id),
+          eq(schema.calendarEvent.externalEventId, 'fake-evt'),
+        ),
+      );
+    expect(rows).toHaveLength(0);
+  });
+
+  it('a non-cancelled event with an empty provider title falls back to a placeholder', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NeutralEmptyTitleUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({
+      items: [fakeItem({ title: '' })],
+      nextCursor: 'v1',
+      cursorInvalid: false,
+      full: true,
+    }));
+
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    const item = one(
+      await schema.db
+        .select()
+        .from(schema.calendarItem)
+        .where(
+          and(
+            eq(schema.calendarItem.layerId, layer.id),
+            eq(schema.calendarItem.externalEventId, 'fake-evt'),
+          ),
+        ),
+    );
+    expect(item.title).toBe('(no title)');
+  });
+
+  it('skips a deselected layer entirely — no pull, no runLayerSync — while syncing a sibling', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NeutralDeselectedUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, pullCalls, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    expect(pullCalls).toHaveLength(1);
+
+    // The user deselected this calendar via `/me/calendar` visibility (preserved on
+    // conflict, never touched by the sync) — the next sweep must not pull it at all.
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    await schema.db
+      .update(schema.calendarList)
+      .set({ selected: false })
+      .where(eq(schema.calendarList.id, layer.id));
+
+    await syncCalendarConnections(schema.db, {
+      userId,
+      now: new Date(NOW.getTime() + 1000),
+      adapters: { google: module },
+    });
+
+    // No second pull was recorded — the deselected layer never reached runLayerSync.
+    expect(pullCalls).toHaveLength(1);
+  });
+
+  it('records a fallback error message when the adapter throws a non-Error value', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NeutralNonErrorThrowUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- deliberately non-Error
+      throw 'provider exploded';
+    });
+
+    const result = await syncCalendarConnections(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { google: module },
+    });
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('Calendar layer sync failed');
+
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    expect(layer.lastError).toBe('Calendar layer sync failed');
+  });
+
+  it('defaults `now` to the current time when the caller omits it', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NeutralDefaultNowUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+
+    const before = Date.now();
+    const result = await syncCalendarConnections(schema.db, {
+      userId,
+      adapters: { google: module },
+    });
+    const after = Date.now();
+
+    expect(result.connections).toBe(1);
+    const connection = one(
+      await schema.db
+        .select()
+        .from(schema.calendarConnection)
+        .where(
+          and(
+            eq(schema.calendarConnection.userId, userId),
+            eq(schema.calendarConnection.externalAccountId, 'fake-account'),
+          ),
+        ),
+    );
+    expect(connection.lastSyncedAt!.getTime()).toBeGreaterThanOrEqual(before);
+    expect(connection.lastSyncedAt!.getTime()).toBeLessThanOrEqual(after);
+  });
+
+  it('records a fallback error and a plain (non-reauth) status when a resolveCredentials failure is not a CalendarReauthRequiredError', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NeutralPlainFailureUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+
+    // Round 1 succeeds, establishing a `connected` calendar_connection row.
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+
+    // Round 2: the module's credential resolution throws a non-Error, non-reauth value.
+    module.resolveCredentials = () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- deliberately non-Error
+      throw 'token service unreachable';
+    };
+    const result = await syncCalendarConnections(schema.db, {
+      userId,
+      now: new Date(NOW.getTime() + 1000),
+      adapters: { google: module },
+    });
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('Calendar sync failed');
+
+    const connection = one(
+      await schema.db
+        .select()
+        .from(schema.calendarConnection)
+        .where(
+          and(
+            eq(schema.calendarConnection.userId, userId),
+            eq(schema.calendarConnection.externalAccountId, 'fake-account'),
+          ),
+        ),
+    );
+    expect(connection.status).toBe('error');
+    expect(connection.lastError).toBe('Calendar sync failed');
+  });
+});
+
+describe('syncSingleLayer — the bounded, push-hint-triggered single-layer sync', () => {
+  it('no-ops when the layer does not exist', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerMissingUser');
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      adapters: {},
+      now: NOW,
+    });
+
+    expect(result).toEqual({ created: 0, updated: 0, archived: 0 });
+  });
+
+  it('no-ops when the layer has no externalLayerId (a native/task-timebox layer, not provider-backed)', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerNoExternalIdUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    await schema.db
+      .update(schema.calendarLayer)
+      .set({ externalLayerId: null })
+      .where(eq(schema.calendarLayer.id, layer.id));
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: layer.id,
+      adapters: { google: module },
+      now: NOW,
+    });
+
+    expect(result).toEqual({ created: 0, updated: 0, archived: 0 });
+  });
+
+  it('no-ops when no sync module is registered for the layer provider', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerNoModuleUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: layer.id,
+      adapters: {}, // no `google` module registered
+      now: NOW,
+    });
+
+    expect(result).toEqual({ created: 0, updated: 0, archived: 0 });
+  });
+
+  it('no-ops when the linked account behind the layer can no longer be discovered', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerNoMatchUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+
+    // A module that discovers a DIFFERENT account than the one the layer's connection is bound to.
+    const staleModule: CalendarProviderSyncModule = {
+      ...module,
+      discoverConnections: async () => [],
+    };
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: layer.id,
+      adapters: { google: staleModule },
+      now: NOW,
+    });
+
+    expect(result).toEqual({ created: 0, updated: 0, archived: 0 });
+  });
+
+  it('no-ops when credential resolution for the matched account fails', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerCredFailUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+
+    const failingModule: CalendarProviderSyncModule = {
+      ...module,
+      resolveCredentials: async () => {
+        throw new Error('needs reauth');
+      },
+    };
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: layer.id,
+      adapters: { google: failingModule },
+      now: NOW,
+    });
+
+    expect(result).toEqual({ created: 0, updated: 0, archived: 0 });
+  });
+
+  it('no-ops when a full sweep already holds the layer lease', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerLeaseHeldUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+    expect(await claimLayerLease(schema.db, layer.id, NOW)).toBe(true);
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: layer.id,
+      adapters: { google: module },
+      now: new Date(NOW.getTime() + 1000),
+    });
+
+    expect(result).toEqual({ created: 0, updated: 0, archived: 0 });
+  });
+
+  it('pulls and applies changes for exactly the targeted layer', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'SingleLayerSuccessUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'fake-account', scope: 'fake.scope' });
+    const { module, setPullImpl } = createFakeSyncModule();
+    setPullImpl(async () => ({ items: [], nextCursor: 'v1', cursorInvalid: false, full: true }));
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const layer = await findLayer(schema, userId, 'fake-layer');
+
+    setPullImpl(async () => ({
+      items: [fakeItem({ externalEventId: 'targeted-evt' })],
+      nextCursor: 'v2',
+      cursorInvalid: false,
+      full: false,
+    }));
+
+    const result = await syncSingleLayer(schema.db, {
+      userId,
+      layerId: layer.id,
+      adapters: { google: module },
+      now: new Date(NOW.getTime() + 1000),
+    });
+
+    expect(result).toEqual({ created: 1, updated: 0, archived: 0 });
+    const reloaded = await findLayer(schema, userId, 'fake-layer');
+    expect(reloaded.syncToken).toBe('v2');
+  });
+});
+
+describe('registerOrRenewWatches — push-notification watch registration', () => {
+  /** A fake sync module whose adapter DOES support push (`startWatch`), unlike the plain
+   * provider-neutrality fake above (which deliberately has none). */
+  function createWatchableSyncModule(): {
+    module: CalendarProviderSyncModule;
+    startWatchCalls: { externalLayerId: string }[];
+    setStartWatchImpl: (impl: (externalLayerId: string) => Promise<CalendarWatchResult>) => void;
+  } {
+    const startWatchCalls: { externalLayerId: string }[] = [];
+    let impl: (externalLayerId: string) => Promise<CalendarWatchResult> = async () => ({
+      channelId: 'chan-1',
+      resourceId: 'res-1',
+      token: 'tok-1',
+      expiresAt: new Date(NOW.getTime() + 60 * 60 * 1000),
+    });
+    const adapter: CalendarProviderAdapter = {
+      provider: 'google',
+      async listLayers() {
+        return [
+          {
+            externalLayerId: 'watch-layer',
+            title: 'Watchable Layer',
+            description: null,
+            timezone: null,
+            color: null,
+            accessRole: 'owner',
+            primary: true,
+            editableCore: true,
+          },
+        ];
+      },
+      async pullChanges() {
+        return { items: [], nextCursor: 'v1', cursorInvalid: false, full: true };
+      },
+      pushItem() {
+        throw new Error('not exercised');
+      },
+      deleteItem() {
+        throw new Error('not exercised');
+      },
+      async startWatch(input) {
+        startWatchCalls.push({ externalLayerId: input.externalLayerId });
+        return impl(input.externalLayerId);
+      },
+    };
+    const module: CalendarProviderSyncModule = {
+      adapter,
+      discoverConnections: async () => [
+        {
+          externalAccountId: 'watch-account',
+          accountEmail: null,
+          accountName: null,
+          accountPictureUrl: null,
+          raw: null,
+        },
+      ],
+      resolveCredentials: async () => ({ accessToken: 'watch-token' }),
+      captureScopeState: () => ({
+        grantedScopes: ['watch.scope'],
+        calendarRead: true,
+        calendarWrite: true,
+        capturedAt: NOW.toISOString(),
+      }),
+    };
+    return { module, startWatchCalls, setStartWatchImpl: (fn) => (impl = fn) };
+  }
+
+  it('skips a discovered account that has never completed a sync (no calendar_connection row yet)', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'WatchNeverSyncedUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'watch-account', scope: 'watch.scope' });
+    const { module, startWatchCalls } = createWatchableSyncModule();
+
+    const result = await registerOrRenewWatches(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { google: module },
+      callbackUrlFor: () => 'https://api.docket.localhost/webhooks/calendar/google',
+    });
+
+    expect(result).toEqual({ registered: 0, errors: [] });
+    expect(startWatchCalls).toHaveLength(0);
+  });
+
+  it('skips a selected layer with no externalLayerId while still registering its sibling', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'WatchNoExternalIdUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'watch-account', scope: 'watch.scope' });
+    const { module, startWatchCalls } = createWatchableSyncModule();
+    // Establish the calendar_connection + the real watchable layer via a normal sync first.
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    const realLayer = await findLayer(schema, userId, 'watch-layer');
+
+    // A second SELECTED layer under the same connection with no externalLayerId — the
+    // registration loop must skip it without calling `startWatch`.
+    await schema.db.insert(schema.calendarLayer).values({
+      userId,
+      connectionId: realLayer.connectionId,
+      provider: 'google',
+      sourceKind: 'native_blocks',
+      title: 'No external id layer',
+      externalLayerId: null,
+      selected: true,
+    });
+
+    const result = await registerOrRenewWatches(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { google: module },
+      callbackUrlFor: () => 'https://api.docket.localhost/webhooks/calendar/google',
+    });
+
+    expect(result.registered).toBe(1);
+    expect(startWatchCalls).toEqual([{ externalLayerId: 'watch-layer' }]);
+  });
+
+  it('records a fallback error message when startWatch throws a non-Error value', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'WatchNonErrorThrowUser');
+    await seedGoogleAccount(schema, { userId, accountId: 'watch-account', scope: 'watch.scope' });
+    const { module, setStartWatchImpl } = createWatchableSyncModule();
+    await syncCalendarConnections(schema.db, { userId, now: NOW, adapters: { google: module } });
+    setStartWatchImpl(async () => {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- deliberately non-Error
+      throw 'watch service unreachable';
+    });
+
+    const result = await registerOrRenewWatches(schema.db, {
+      userId,
+      now: NOW,
+      adapters: { google: module },
+      callbackUrlFor: () => 'https://api.docket.localhost/webhooks/calendar/google',
+    });
+
+    expect(result.registered).toBe(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('Watch registration failed');
   });
 });

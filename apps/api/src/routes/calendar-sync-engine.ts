@@ -377,6 +377,7 @@ async function upsertConnection(
     })
     .returning({ id: calendarConnection.id });
   const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('calendar connection insert returned no row');
   return row.id;
 }
@@ -440,6 +441,7 @@ async function upsertProviderLayer(
       })
       .returning({ id: calendarList.id, selected: calendarList.selected });
     const insertedRow = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!insertedRow) throw new Error('calendar list insert returned no row');
     row = insertedRow;
   }
@@ -583,6 +585,7 @@ async function upsertProviderItem(
       })
       .returning({ id: calendarEvent.id });
     const row = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('calendar event insert returned no row');
     itemId = row.id;
     outcome = 'created';

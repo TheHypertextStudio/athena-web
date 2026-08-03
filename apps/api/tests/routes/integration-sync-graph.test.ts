@@ -7,22 +7,36 @@
  * The tests share one pglite instance with the rest of the suite (never reset between files),
  * so every query here is scoped by integration/org id — never a bare table-wide assertion.
  */
-import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import { publicProblemTitle } from '@docket/types';
+import { ConnectorError } from '@docket/integrations';
 
 import { problemTypeUrl } from '../../src/error';
+import { env } from '../../src/env';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
 import type * as IntegrationProviderModule from '../../src/routes/integration-provider';
 import { appWithActor, getDb, one, seedBaseOrg } from '../support/routes-harness';
 
+/**
+ * `env`'s fields are `readonly` at the type level (the fail-fast 12-factor contract), but the
+ * underlying object is a plain mutable object at runtime — the live-token-resolution test below
+ * toggles `APP_MODE` for the duration of one case (always restored in `afterEach`) to reach the
+ * needs-reauth branch the default test-mode short-circuit (`resolveConnectorToken` always
+ * returning a mock token) never exercises. Mirrors `integrations-edges.test.ts`'s established
+ * pattern for the same env.
+ */
+const mutableEnv = env as { APP_MODE: string };
+
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let integrations!: unknown;
 let runSync!: typeof IntegrationSyncModule.runSync;
+let runLeasedSync!: typeof IntegrationSyncModule.runLeasedSync;
+let toSyncRunOut!: typeof IntegrationSyncModule.toSyncRunOut;
 /**
  * The scope-block message, loaded from the route module (never re-hardcoded) so the test can't
  * silently drift from the single source of truth the verify/PATCH enforcement points speak with.
@@ -35,9 +49,13 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   integrations = (await import('../../src/routes/integrations')).default;
-  runSync = (await import('../../src/routes/integration-sync')).runSync;
+  ({ runSync, runLeasedSync, toSyncRunOut } = await import('../../src/routes/integration-sync'));
   WRITE_SCOPE_MESSAGE = (await import('../../src/routes/integration-provider'))
     .LINEAR_WRITE_SCOPE_MESSAGE;
+});
+
+afterEach(() => {
+  mutableEnv.APP_MODE = 'test';
 });
 
 const J = { 'content-type': 'application/json' };
@@ -212,6 +230,32 @@ describe('verify persists the provider workspace id (Linear webhook routing key)
     expect(persisted.lastSyncedAt).not.toBeNull();
   });
 
+  it('re-verifying an already-connected integration threads the persisted externalWorkspaceId back into connect()', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLinearIntegration(orgId, humanActorId);
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    const first = await jsonBody<IntegrationStateRes>(
+      await w.request(`/${row.id}/verify`, { method: 'POST', headers: J }),
+    );
+    expect(first.status).toBe('connected');
+    const afterFirst = await reload(row.id);
+    expect(afterFirst.config['teamMappings']).toHaveLength(2);
+
+    // A second verify call now carries a non-empty `connection.externalWorkspaceId` INTO
+    // `connect()`'s input (the `row.connection.externalWorkspaceId ? {...} : {}` branch the
+    // first call, starting from a blank connection, never took) — it must remain idempotent.
+    const second = await jsonBody<IntegrationStateRes>(
+      await w.request(`/${row.id}/verify`, { method: 'POST', headers: J }),
+    );
+    expect(second.status).toBe('connected');
+    expect(second.connection.externalWorkspaceId).toBe('mock-linear-org');
+
+    // The teamMappings backfill only runs once (non-empty already) — no duplicate entries.
+    const afterSecond = await reload(row.id);
+    expect(afterSecond.config['teamMappings']).toHaveLength(2);
+  });
+
   it('rejects a second account that resolves to the same Linear workspace in one org', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const first = one(
@@ -375,5 +419,273 @@ describe('Linear write-back scope enforcement', () => {
       body: JSON.stringify({ writeBack: false }),
     });
     expect(patchRes.status).toBe(200);
+  });
+});
+
+describe('runSync — team-mapping scoping, config edges, and the shared spine failure paths', () => {
+  it('scopes the work-graph pull by config.teamMappings when present (not the legacy listIds fallback)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLinearIntegration(orgId, humanActorId);
+    // Scope to `lin-team-eng` only — the fixture's 7-item graph splits 5 eng / 2 ops, so a
+    // teamMappings-scoped pull must total 5, not the unscoped 7 every other graph test sees.
+    await db
+      .update(schema.integration)
+      .set({ config: { teamMappings: [{ externalTeamId: 'lin-team-eng', teamId }] } })
+      .where(eq(schema.integration.id, row.id));
+    const scoped = await reload(row.id);
+
+    const run = await runSync(scoped, { actorId: humanActorId, trigger: 'scheduled' });
+
+    expect(run!.status).toBe('succeeded');
+    expect(run!.total).toBe(5);
+  });
+
+  it('records a fallback "Connector error" message when the executor throws a non-Error value', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLinearIntegration(orgId, humanActorId);
+
+    const run = await runLeasedSync(
+      row,
+      { actorId: humanActorId, trigger: 'scheduled', purpose: 'task_sync' },
+      async () => {
+        // eslint-disable-next-line @typescript-eslint/only-throw-error -- deliberately non-Error
+        throw 'raw string failure';
+      },
+    );
+
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toBe('Connector error');
+  });
+
+  it('records a needs-reauth failure and notifies the owner when the executor throws an auth ConnectorError', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const [u] = await db
+      .insert(schema.user)
+      .values({
+        name: 'Owner',
+        email: `connector-auth-${Math.random().toString(36).slice(2)}@x.test`,
+      })
+      .returning({ id: schema.user.id });
+    const [owner] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', userId: u!.id })
+      .returning({ id: schema.actor.id });
+    const row = await seedLinearIntegration(orgId, owner!.id);
+
+    const run = await runLeasedSync(
+      row,
+      { actorId: owner!.id, trigger: 'scheduled', purpose: 'task_sync' },
+      async () => {
+        throw new ConnectorError('token rejected by provider', {
+          provider: 'linear',
+          kind: 'auth',
+        });
+      },
+    );
+
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toBe('token rejected by provider');
+
+    const notif = await db
+      .select()
+      .from(schema.notification)
+      .where(
+        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+      );
+    expect(notif).toHaveLength(1);
+    expect(notif[0]!.type).toBe('connector_needs_reauth');
+    expect(notif[0]!.body.title).toBe('Reconnect Linear');
+  });
+
+  it('records a needs-reauth failure with a reconnect message when the live token resolver cannot resolve a credential', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'Owner', email: `live-reauth-${Math.random().toString(36).slice(2)}@x.test` })
+      .returning({ id: schema.user.id });
+    const [owner] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', userId: u!.id })
+      .returning({ id: schema.actor.id });
+    // `owner` has a linked Better Auth user but no linked `linear` account at all.
+    const row = await seedLinearIntegration(orgId, owner!.id);
+
+    mutableEnv.APP_MODE = 'production';
+    const run = await runSync(row, { actorId: owner!.id, trigger: 'scheduled' });
+
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toContain('Sign in with');
+
+    const notif = await db
+      .select()
+      .from(schema.notification)
+      .where(
+        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+      );
+    expect(notif).toHaveLength(1);
+    expect(notif[0]!.type).toBe('connector_needs_reauth');
+  });
+
+  it('never notifies an owner that cannot be resolved (integration.createdBy is null)', async () => {
+    // An org with no team makes a github flat-import fail regardless of who's attributed.
+    const slug = `noteam-nocreator-${Math.random().toString(36).slice(2, 10)}`;
+    const [org] = await db
+      .insert(schema.organization)
+      .values({ name: slug, slug, lifecycleState: 'active' })
+      .returning({ id: schema.organization.id });
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: org!.id,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        createdBy: null,
+      })
+      .returning();
+
+    const run = await runSync(row!, { actorId: 'actor_bootstrap', trigger: 'scheduled' });
+
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toMatch(/team/i);
+    // No owner to notify — notifyOwner's `!row.createdBy` guard returns before any DB write.
+    const notif = await db
+      .select()
+      .from(schema.notification)
+      .where(eq(schema.notification.organizationId, org!.id));
+    expect(notif).toHaveLength(0);
+  });
+
+  it('records a plain (non-reauth) failure and notifies with the raw message for a non-connector provider', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'Owner', email: `slack-owner-${Math.random().toString(36).slice(2)}@x.test` })
+      .returning({ id: schema.user.id });
+    const [owner] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Owner', userId: u!.id })
+      .returning({ id: schema.actor.id });
+    // `slack` is not a connector provider (`asConnectorProvider` returns null) — this bypasses
+    // the HTTP route's own guard (`POST /:id/sync` 409s before ever calling `runSync`) to
+    // exercise `runLeasedSync`'s OWN internal provider check directly.
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'slack',
+        pattern: 'connector',
+        roles: ['signal'],
+        status: 'connected',
+        createdBy: owner!.id,
+      })
+      .returning();
+
+    const run = await runSync(row!, { actorId: owner!.id, trigger: 'scheduled' });
+
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toBe('Integration provider does not support sync');
+
+    const notif = await db
+      .select()
+      .from(schema.notification)
+      .where(
+        and(eq(schema.notification.userId, u!.id), eq(schema.notification.organizationId, orgId)),
+      );
+    expect(notif).toHaveLength(1);
+    expect(notif[0]!.type).toBe('connector_sync_failed');
+    // The provider-fallback branch: `asConnectorProvider('slack')` is null, so the notification
+    // names the raw provider string rather than the directory's display name.
+    expect(notif[0]!.body.title).toBe('slack sync failed');
+  });
+
+  it('threads connection.externalWorkspaceId and config.listIds through the flat import path', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        connection: { externalWorkspaceId: 'gh-ws-1' },
+        config: { listIds: ['gh-list-1'] },
+        createdBy: humanActorId,
+      })
+      .returning();
+
+    const run = await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
+
+    expect(run!.status).toBe('succeeded');
+    expect(run!.total).toBe(1); // the mock github fixture, unaffected by listIds/workspace scoping
+  });
+
+  it('treats a config that fails ConnectorConfig validation as empty rather than crashing', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        // `listIds` must be an array of strings — this shape fails `ConnectorConfig.safeParse`,
+        // so `.data ?? {}` must fall back to an empty config rather than throwing.
+        config: { listIds: 'not-an-array' },
+        createdBy: humanActorId,
+      })
+      .returning();
+
+    const run = await runSync(row!, { actorId: humanActorId, trigger: 'scheduled' });
+
+    expect(run!.status).toBe('succeeded');
+    expect(run!.total).toBe(1);
+  });
+
+  it('lookbackISO widens the incremental cutoff by the cadence overlap, treating a null cadence as zero overlap', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLinearIntegration(orgId, humanActorId);
+    await db
+      .update(schema.integration)
+      .set({ syncCadenceMinutes: null })
+      .where(eq(schema.integration.id, row.id));
+
+    const first = await runSync(await reload(row.id), {
+      actorId: humanActorId,
+      trigger: 'scheduled',
+    });
+    expect(first!.total).toBe(7); // first run is always a full backfill
+
+    // Second run is incremental (still inside the full-sync window); with a null cadence the
+    // `updatedAfter` cutoff is exactly `lastSyncedAt` (no overlap widening), which is still far
+    // newer than every fixture item's static updatedAt — so it pulls nothing, same as a normal
+    // cadence would, proving the null-cadence branch didn't throw or misbehave.
+    const second = await runSync(await reload(row.id), {
+      actorId: humanActorId,
+      trigger: 'scheduled',
+    });
+    expect(second!.status).toBe('succeeded');
+    expect(second!.total).toBe(0);
+  });
+
+  it('toSyncRunOut serializes a still-running run (finishedAt null) without throwing', () => {
+    const runningRow: IntegrationSyncModule.SyncRunRow = {
+      id: 'run_test_1',
+      organizationId: 'org_test',
+      integrationId: 'intg_test',
+      status: 'running',
+      trigger: 'manual',
+      purpose: 'task_sync',
+      processed: 0,
+      total: 0,
+      error: null,
+      startedAt: new Date('2026-07-01T00:00:00.000Z'),
+      finishedAt: null,
+    };
+
+    const out = toSyncRunOut(runningRow);
+
+    expect(out.status).toBe('running');
+    expect(out.finishedAt).toBeNull();
   });
 });

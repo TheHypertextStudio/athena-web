@@ -1,4 +1,4 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -674,6 +674,95 @@ describe('background connector sweep', () => {
     expect(got.status).toBe('pending');
     const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${id}/runs`));
     expect(runs.items).toHaveLength(0);
+  });
+
+  it('never auto-syncs an integration with a zero sync cadence', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'github');
+    await db
+      .update(schema.integration)
+      .set({ status: 'connected', lastSyncedAt: null, syncCadenceMinutes: 0 })
+      .where(eq(schema.integration.id, id));
+
+    await sweepConnectorSync(new Date());
+
+    const w = appWithActor(integrations, orgId, ['view'], humanActorId);
+    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${id}/runs`));
+    expect(runs.items).toHaveLength(0);
+  });
+
+  it('skips (never syncs) a due integration whose creator actor no longer resolves', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'github',
+        pattern: 'connector',
+        roles: ['work'],
+        status: 'connected',
+        syncCadenceMinutes: 60,
+        lastSyncedAt: null,
+        createdBy: null,
+      })
+      .returning({ id: schema.integration.id });
+
+    await sweepConnectorSync(new Date());
+
+    const w = appWithActor(integrations, orgId, ['view'], humanActorId);
+    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${row!.id}/runs`));
+    expect(runs.items).toHaveLength(0);
+    const got = await body<IntegrationStateRes>(await w.request(`/${row!.id}`));
+    expect(got.lastSyncedAt).toBeNull();
+  });
+
+  it('skips a due integration whose sync lease is already held by another run', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'github');
+    const now = new Date();
+    await db
+      .update(schema.integration)
+      .set({
+        status: 'connected',
+        lastSyncedAt: null,
+        syncCadenceMinutes: 60,
+        syncStartedAt: now,
+      })
+      .where(eq(schema.integration.id, id));
+
+    await sweepConnectorSync(now);
+
+    const w = appWithActor(integrations, orgId, ['view'], humanActorId);
+    const runs = await body<{ items: SyncRunRes[] }>(await w.request(`/${id}/runs`));
+    expect(runs.items.some((r) => r.trigger === 'scheduled')).toBe(false);
+  });
+
+  it('caps one sweep invocation rather than syncing every due integration unbounded', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    // One more than `SWEEP_BATCH_LIMIT` (50), all due at once — proves the sweep caps its
+    // per-invocation work instead of growing unbounded as a backlog accumulates.
+    const ids: string[] = [];
+    for (let i = 0; i < 51; i += 1) {
+      const id = await seedIntegration(orgId, humanActorId, 'github');
+      await db
+        .update(schema.integration)
+        .set({ status: 'connected', lastSyncedAt: null, syncCadenceMinutes: 60 })
+        .where(eq(schema.integration.id, id));
+      ids.push(id);
+    }
+
+    await sweepConnectorSync(new Date());
+
+    const runs = await db
+      .select({ integrationId: schema.syncRun.integrationId })
+      .from(schema.syncRun)
+      .where(
+        and(inArray(schema.syncRun.integrationId, ids), eq(schema.syncRun.trigger, 'scheduled')),
+      );
+    const syncedIds = new Set(runs.map((r) => r.integrationId));
+    // At least one of our 51 due integrations was left for the next sweep — proof the batch cap
+    // (not an unbounded loop) governs how many run in one invocation.
+    expect(syncedIds.size).toBeLessThan(51);
   });
 });
 

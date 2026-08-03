@@ -15,7 +15,7 @@ import { onError } from '../../src/error';
 import type integrationsMcpRouter from '../../src/routes/integrations-mcp';
 import type agentSessionsRouter from '../../src/routes/agent-sessions';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
-import type { unsealCredential as Unseal } from '../../src/lib/credentials';
+import type { sealCredential as Seal, unsealCredential as Unseal } from '../../src/lib/credentials';
 import type { getContainer as GetContainer } from '../../src/container';
 import { fakeSession } from '../support/routes-harness';
 
@@ -39,6 +39,7 @@ let integrations!: typeof IntegrationsModule;
 let integrationsMcp!: typeof integrationsMcpRouter;
 let agentSessions!: typeof agentSessionsRouter;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
+let sealCredential!: typeof Seal;
 let unsealCredential!: typeof Unseal;
 let getContainer!: typeof GetContainer;
 
@@ -51,7 +52,7 @@ beforeAll(async () => {
   integrationsMcp = (await import('../../src/routes/integrations-mcp')).default;
   agentSessions = (await import('../../src/routes/agent-sessions')).default;
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
-  ({ unsealCredential } = await import('../../src/lib/credentials'));
+  ({ sealCredential, unsealCredential } = await import('../../src/lib/credentials'));
   ({ getContainer } = await import('../../src/container'));
 });
 
@@ -258,6 +259,121 @@ describe('remote MCP integrations', () => {
     expect(creds).toHaveLength(0);
     const listed = await app.request('/', { method: 'GET' });
     expect((await listed.json()) as unknown[]).toHaveLength(0);
+  });
+
+  it('defaults authMode to "none" when a legacy row config has no authMode field at all', async () => {
+    const seed = await seedOrg();
+    const [row] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: seed.orgId,
+        provider: 'mcp',
+        pattern: 'connector',
+        roles: ['work'],
+        status: 'connected',
+        config: {
+          url: 'https://mcp.sunsama.com/mcp',
+          label: 'Legacy',
+          alias: 'legacy_no_authmode',
+        },
+      })
+      .returning({ id: schema.integration.id });
+    const app = appFor(integrationsMcp, seed);
+
+    const listed = await app.request('/', { method: 'GET' });
+    const items = (await listed.json()) as McpIntegrationOut[];
+    const found = items.find((i) => i.id === row!.id);
+    expect(found?.authMode).toBe('none');
+  });
+
+  it('defaults a bodiless connect to OAuth when neither authMode nor bearerToken is given', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        url: 'https://mcp.sunsama.com/mcp',
+        label: 'Sunsama',
+        alias: 'sunsama_default',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as McpIntegrationOut;
+    expect(out.authMode).toBe('oauth');
+    expect(out.status).toBe('pending'); // OAuth servers wait for browser approval, never auto-verified
+  });
+
+  it('409s when authMode is bearer but no bearerToken is supplied', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        url: 'https://mcp.sunsama.com/mcp',
+        label: 'Sunsama',
+        alias: 'sunsama_bearer_x',
+        authMode: 'bearer',
+      }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it('409s when a bearerToken is supplied alongside a non-bearer authMode', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        url: 'https://mcp.sunsama.com/mcp',
+        label: 'Sunsama',
+        alias: 'sunsama_oauth_tok',
+        authMode: 'oauth',
+        bearerToken: 'should-not-be-here',
+      }),
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it('verify treats a still-pending OAuth credential as no bearer token, never sending a half-finished credential', async () => {
+    const seed = await seedOrg();
+    const app = appFor(integrationsMcp, seed);
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        url: 'https://mcp.sunsama.com/mcp',
+        label: 'Sunsama',
+        alias: 'sunsama_pending',
+        authMode: 'oauth',
+      }),
+    });
+    const out = (await created.json()) as McpIntegrationOut;
+    expect(out.status).toBe('pending');
+
+    // Simulate an in-flight (never-completed) OAuth approval's stored credential — the
+    // `/:id/authorize` flow persists exactly this shape before the browser redirect.
+    await db.insert(schema.integrationCredential).values({
+      organizationId: seed.orgId,
+      integrationId: out.id,
+      ciphertext: sealCredential(
+        JSON.stringify({ kind: 'mcp_oauth_pending', codeVerifier: 'abc' }),
+      ),
+    });
+
+    const verified = await app.request(`/${out.id}/verify`, { method: 'POST', headers: J });
+    expect(verified.status).toBe(200);
+    const verifiedOut = (await verified.json()) as McpIntegrationOut;
+    expect(verifiedOut.status).toBe('connected');
+    expect(verifiedOut.toolCount).toBe(2);
   });
 });
 

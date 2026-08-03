@@ -188,6 +188,16 @@ export interface SchedulingCanvasProps {
   readonly emptyMessage?: string;
   /** Customize item content without transferring gesture or geometry ownership. */
   readonly renderItem?: (context: ScheduleItemRenderContext) => ReactNode;
+  /**
+   * Optional per-item action control (e.g. a start-timer button), rendered as a fixed corner
+   * control alongside the built-in resize/move/relationship controls.
+   *
+   * @remarks
+   * Distinct from {@link SchedulingCanvasProps.renderItem}, which only supplies the item's label
+   * content — this supplies a separate, independently-clickable control anchored to one corner of
+   * the item, the way the move handle and relationship-source control already are.
+   */
+  readonly renderItemAction?: (context: ScheduleItemRenderContext) => ReactNode;
   /** Consumer-owned committed selection kept visible after its pointer gesture completes. */
   readonly selectedRegion?: ScheduleRegionSelection | null;
   /** Optional ref to the committed selection element for contextual consumer UI. */

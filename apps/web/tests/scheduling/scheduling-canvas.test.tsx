@@ -2003,6 +2003,71 @@ describe('SchedulingCanvas', () => {
     expect(renderItem).toHaveBeenCalledTimes(4);
   });
 
+  it('renders a consumer action control in the reserved bottom-right corner, isolated from open/move/region gestures', () => {
+    // The corner-control layout is otherwise fully claimed: resize grips sit on the top/bottom
+    // edges, move is `top-0.5 right-0.5`, and the relationship-source control is
+    // `bottom-0.5 left-0.5`. `renderItemAction` (CORE-40's start-timer affordance on the calendar
+    // surface) is the one consumer of the remaining `bottom-0.5 right-0.5` slot.
+    const onOpenItem = vi.fn();
+    const onMoveItem = vi.fn();
+    const onSelectRegion = vi.fn();
+    const onActionClick = vi.fn();
+    const renderItemAction = vi.fn(({ item }: ScheduleItemRenderContext) => (
+      <button type="button" onClick={onActionClick}>{`Track ${item.title}`}</button>
+    ));
+    const sourceLane = lane('ada', 'Ada', [TIMED_ITEM]);
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[sourceLane]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        onOpenItem={onOpenItem}
+        onMoveItem={onMoveItem}
+        onSelectRegion={onSelectRegion}
+        renderItemAction={renderItemAction}
+      />,
+    );
+
+    expect(renderItemAction).toHaveBeenCalledWith(
+      expect.objectContaining({ item: TIMED_ITEM, lane: sourceLane, allDay: false }),
+    );
+    const action = screen.getByRole('button', { name: 'Track Focus block' });
+    const wrapper = action.parentElement;
+    expect(wrapper).toHaveAttribute('data-schedule-item-action', '');
+    expect(wrapper).toHaveClass(
+      'absolute',
+      'right-0.5',
+      'bottom-0.5',
+      'size-6',
+      '[@media(pointer:coarse)]:size-11',
+    );
+
+    // A pointerdown that lands on the action must never bubble to the lane's own pointerdown
+    // (which would arm a region-selection drag) or reach the item body's click-to-open handler.
+    fireEvent.pointerDown(action, { button: 0, pointerId: 21, clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(action, { pointerId: 21, clientX: 100, clientY: 100 });
+    fireEvent.click(action);
+
+    expect(onActionClick).toHaveBeenCalledOnce();
+    expect(onOpenItem).not.toHaveBeenCalled();
+    expect(onMoveItem).not.toHaveBeenCalled();
+    expect(onSelectRegion).not.toHaveBeenCalled();
+  });
+
+  it('renders no action corner when renderItemAction is not supplied', () => {
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('ada', 'Ada', [TIMED_ITEM])]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+      />,
+    );
+
+    expect(renderedItem('focus').querySelector('[data-schedule-item-action]')).toBeNull();
+  });
+
   it('distinguishes overlapping items with duplicate titles by their accessible time range', () => {
     render(
       <SchedulingCanvas

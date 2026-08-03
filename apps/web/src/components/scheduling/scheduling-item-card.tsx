@@ -61,6 +61,7 @@ export interface SchedulingItemCardProps {
   readonly placement: ScheduleOverlapPlacement;
   readonly viewportRef: RefObject<HTMLElement | null>;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
+  readonly renderItemAction?: SchedulingCanvasProps['renderItemAction'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
   readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
@@ -93,6 +94,7 @@ export function SchedulingItemCard({
   placement,
   viewportRef,
   renderItem,
+  renderItemAction,
   onOpenItem,
   onMoveItem,
   onResizeItem,
@@ -163,6 +165,7 @@ export function SchedulingItemCard({
     previewMode: gesture.previewMode,
   });
   const content = renderItem?.({ item, lane, allDay: false, density }) ?? item.title;
+  const action = renderItemAction?.({ item, lane, allDay: false, density }) ?? null;
   const dragObject = item.dragObject;
   const bodyOpenable = item.openable !== false;
   const bodyMovable = editCapabilities.canMove && onMoveItem !== undefined;
@@ -290,6 +293,23 @@ export function SchedulingItemCard({
           >
             <SchedulingLinkIcon />
           </SchedulingRelationshipSourceControl>
+        ) : null}
+        {action ? (
+          <div
+            className="absolute right-0.5 bottom-0.5 z-30 flex size-6 items-center justify-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            data-schedule-item-action=""
+            // The move handle and relationship-source control each stop their own pointerdown
+            // (see `beginSchedulingPointerSession`) so it never bubbles to the lane's
+            // `onPointerDown`, which would otherwise arm a region-selection drag underneath a
+            // plain click on this control. Mirror that guard here rather than relying on this
+            // wrapper's sibling position alone, since — unlike the body's own drag-start
+            // handler — the lane's pointerdown listener sits on an ancestor of this control.
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            {action}
+          </div>
         ) : null}
         {editCapabilities.canResizeEnd && onResizeItem ? (
           <button

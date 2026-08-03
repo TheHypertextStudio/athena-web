@@ -58,6 +58,7 @@ export default function SchedulingCanvas({
   error,
   emptyMessage = 'Nothing scheduled.',
   renderItem,
+  renderItemAction,
   selectedRegion,
   selectedRegionAnchorRef,
   onSelectRegion,
@@ -351,6 +352,7 @@ export default function SchedulingCanvas({
                         placement={placement}
                         viewportRef={viewportRef}
                         renderItem={renderItem}
+                        renderItemAction={renderItemAction}
                         onOpenItem={onOpenItem}
                         onMoveItem={onMoveItem}
                         onResizeItem={onResizeItem}

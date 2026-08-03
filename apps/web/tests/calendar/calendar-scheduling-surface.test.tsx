@@ -1,8 +1,16 @@
 import '@testing-library/jest-dom/vitest';
 
-import { CalendarItemId, type CalendarItemOut, CalendarLayerId } from '@docket/types';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { createRef, useState } from 'react';
+import {
+  CalendarItemId,
+  type CalendarItemOut,
+  CalendarLayerId,
+  OrganizationId,
+  TaskId,
+} from '@docket/types';
+import { TooltipProvider } from '@docket/ui/primitives';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { createRef, type ReactNode, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as SchedulingModule from '../../src/components/scheduling';
 import type {
@@ -25,6 +33,12 @@ const axisRetry = {
   dates: vi.fn(),
   people: vi.fn(),
 };
+// Backs the CORE-40 `renderItemAction` timer button: `TaskTimerButton` reads/writes the tracker
+// through `@/lib/api` directly, independent of the calendar-mutations mock above.
+const { activeGet, recordsPost } = vi.hoisted(() => ({
+  activeGet: vi.fn(),
+  recordsPost: vi.fn(),
+}));
 
 vi.mock('../../src/components/scheduling', async (importOriginal) => {
   const actual = await importOriginal<typeof SchedulingModule>();
@@ -59,6 +73,17 @@ vi.mock('../../src/components/calendar/calendar-layer-panel', () => ({
   default: () => <div>Layer controls</div>,
 }));
 
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      time: {
+        active: { $get: activeGet },
+        records: { $post: recordsPost },
+      },
+    },
+  },
+}));
+
 import { CalendarSchedulingSurface } from '../../src/app/(app)/calendar/calendar-scheduling-surface';
 import {
   CalendarSharedItemDetails,
@@ -70,6 +95,27 @@ import type { CalendarPeopleAxisState } from '../../src/app/(app)/calendar/use-c
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
 const DISPLAY_TIMEZONE = 'America/Los_Angeles';
+
+/** A JSON response shaped like the RPC client's. */
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status < 400,
+    status,
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
+}
+
+/** Render children inside the providers `TaskTimerButton` needs (query client + tooltip root). */
+function withTimerProviders(children: ReactNode): ReactNode {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={client}>
+      <TooltipProvider>{children}</TooltipProvider>
+    </QueryClientProvider>
+  );
+}
 
 /** Build one normalized item shown by the date-axis fixture. */
 function calendarItem(): CalendarItemOut {
@@ -408,6 +454,112 @@ describe('CalendarSchedulingSurface persistence', () => {
 
     expect(compactContent.getByText(source.title)).toBeInTheDocument();
     expect(compactContent.queryByText('Sync issue')).not.toBeInTheDocument();
+  });
+
+  describe('the CORE-40 renderItemAction extension point', () => {
+    // `CalendarItemCard` (which already grows a `TaskTimerButton` for a `task_timebox`) is never
+    // mounted by the live /calendar timeline — it renders through `SchedulingCanvas` instead — so
+    // this surface has to reach the timer control through the generic canvas's opt-in
+    // `renderItemAction` prop. These tests pin that wiring directly, the same way the
+    // `renderItem` tests above call `canvasProps().renderItem` themselves.
+    const LINKED_TASK = {
+      taskId: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVT1'),
+      organizationId: OrganizationId.parse('01BX5ZZKBKACTAV9WEVGEMMVR1'),
+      role: 'contained' as const,
+      sort: 0,
+      note: null,
+      title: 'Draft the release notes',
+      state: 'in_progress',
+      done: false,
+    };
+
+    beforeEach(() => {
+      activeGet.mockReset();
+      recordsPost.mockReset();
+      activeGet.mockResolvedValue(
+        jsonResponse({
+          record: null,
+          serverNow: new Date().toISOString(),
+          activeAgentExecutions: [],
+        }),
+      );
+    });
+
+    it('renders the timer button for a task_timebox item with a linked task', async () => {
+      const source: CalendarItemOut = {
+        ...calendarItem(),
+        kind: 'task_timebox',
+        linkedTasks: [LINKED_TASK],
+      };
+      renderSurface('dates', source);
+      const props = canvasProps();
+      const lane = props.lanes[0]!;
+
+      const action = props.renderItemAction?.({
+        item: lane.items[0]!,
+        lane,
+        allDay: false,
+        density: 'full',
+      });
+      render(withTimerProviders(<div data-testid="action">{action}</div>));
+
+      expect(await screen.findByTestId(`task-timer-${LINKED_TASK.taskId}`)).toBeInTheDocument();
+    });
+
+    it('renders no timer control for a non-task_timebox item, or a task_timebox with no linked task', () => {
+      renderSurface(); // default fixture is a plain native_event
+      let props = canvasProps();
+      let lane = props.lanes[0]!;
+      expect(
+        props.renderItemAction?.({ item: lane.items[0]!, lane, allDay: false, density: 'full' }),
+      ).toBeNull();
+
+      cleanup();
+      const timeboxNoTask: CalendarItemOut = {
+        ...calendarItem(),
+        kind: 'task_timebox',
+        linkedTasks: [],
+      };
+      renderSurface('dates', timeboxNoTask);
+      props = canvasProps();
+      lane = props.lanes[0]!;
+      expect(
+        props.renderItemAction?.({ item: lane.items[0]!, lane, allDay: false, density: 'full' }),
+      ).toBeNull();
+    });
+
+    it('starts the linked task timer when clicked, without also opening the calendar item', async () => {
+      recordsPost.mockResolvedValue(jsonResponse({ id: 'rec_new' }));
+      const source: CalendarItemOut = {
+        ...calendarItem(),
+        kind: 'task_timebox',
+        linkedTasks: [LINKED_TASK],
+      };
+      const { onOpenItem } = renderSurface('dates', source);
+      const props = canvasProps();
+      const lane = props.lanes[0]!;
+      const action = props.renderItemAction?.({
+        item: lane.items[0]!,
+        lane,
+        allDay: false,
+        density: 'full',
+      });
+      render(withTimerProviders(<div data-testid="action">{action}</div>));
+
+      const timerButton = await screen.findByTestId(`task-timer-${LINKED_TASK.taskId}`);
+      fireEvent.click(timerButton);
+
+      await waitFor(() => {
+        expect(recordsPost).toHaveBeenCalledWith({
+          json: { context: { label: LINKED_TASK.title, taskId: LINKED_TASK.taskId } },
+        });
+      });
+      // Verifies there is nothing here for a stray click/drag to trigger: the calendar's own item
+      // activation (`onOpenItem`) and the canvas's move/resize plumbing never fire from a click on
+      // this control.
+      expect(onOpenItem).not.toHaveBeenCalled();
+      expect(mutationState.update.mutate).not.toHaveBeenCalled();
+    });
   });
 
   it('forwards an arbitrary controlled region and its anchor ref to the scheduling canvas', () => {

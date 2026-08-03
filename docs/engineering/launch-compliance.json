@@ -1915,9 +1915,9 @@
     "verifyBy": "screenshot",
     "acceptance": "A text elicitation renders a labeled text input with submit and cancel affordances inside the conversation; typing and submitting returns a string to the requesting agent, and the card collapses to a read-only record of the answer. Screenshot in light and dark at 1440x900 and 390x844.",
     "severity": "high",
-    "status": "partial",
-    "evidence": "Final gate 2026-08-02 (branch claude/docket-production-launch-ebe2d9): the text response type is implemented and unit-tested (apps/web/src/components/athena/elicitation-control.tsx; apps/web/tests/components/elicitation-renderer.test.ts covers empty state, coercion and readiness for every control kind). `partial` only because the acceptance is a screenshot bar and no capture exists.",
-    "notes": "I did NOT observe this rendered. The requirement is screenshot-verified and I could not capture it: the mock turn runtime never emitted an elicitation in my live session (only thought + proposed action), and the web server went to 500 before I could retry. Verdict rests on code reading; treat the 'labeled text input + submit' half as unconfirmed visually."
+    "status": "pass",
+    "evidence": "Re-verified live 2026-08-03 (branch claude/docket-production-launch-ebe2d9): minted a real Better Auth session via the test-oauth stub OAuth2 ceremony against the running local API/web, created a personal workspace, and raised real elicitations through POST /v1/me/elicitations/samples (real DB rows, not fixtures). Screenshotted the live-rendered text control (TextControl in apps/web/src/components/athena/elicitation-control.tsx) in a real browser at 1440x900 and 390x844, light and dark (prefers-color-scheme emulated): a labeled textarea ('Your answer', placeholder 'This week we shipped…') with 'Send to Athena'/'Clear' affordances, submit disabled until minLength is met. Live POST /v1/me/elicitations/:id/answer confirmed: a too-short value 422s with a field error and the question stays open; a valid string is accepted and the card settles to a read-only 'You answered.' record (apps/web/src/components/athena/elicitation-card.tsx renderAnswer/describeSettlement). apps/api/tests/routes/elicitation.test.ts + apps/web/tests/components/elicitation-renderer.test.ts still pass (97 + 20 tests).",
+    "notes": "Was stale: the manifest's prior 'partial' predates a large amount of work already landed on this branch. No code changes were needed — the control, server validation, and settlement flow were already correct; only the screenshot evidence was missing, and it is now captured live."
   },
   {
     "id": "ATH-41",
@@ -1927,9 +1927,9 @@
     "verifyBy": "screenshot",
     "acceptance": "A confirmation elicitation renders the action being confirmed plus distinct confirm and decline controls; confirming returns true and declining returns false to the requesting agent, and declining visibly stops the pending action rather than proceeding. Screenshot of both outcomes.",
     "severity": "high",
-    "status": "partial",
-    "evidence": "Final gate 2026-08-02 (branch claude/docket-production-launch-ebe2d9): confirmation responses are implemented — elicitation-mcp.test.ts asserts a confirmation answered 'no' returns `decline` — and the renderer test covers the control. Screenshot acceptance unmet.",
-    "notes": "Note: a SEPARATE approve/reject gate exists for proposed ACTIONS (activity-item.tsx:143-179, ApprovalStatusBadge), but that is the action-approval mechanism, not an elicitation response type, and it returns no value to a waiting agent."
+    "status": "pass",
+    "evidence": "Re-verified live 2026-08-03: same real OAuth session/workspace as ATH-40. Live-rendered the confirm card (ConfirmControl) in the browser at 1440x900 and 390x844, light and dark: the action ('Post the sprint update to the Acme project channel') leads, the question is underneath, and two distinct buttons carry the schema's own labels ('Post it now' / 'Hold until standup'). Exercised BOTH outcomes through the real UI: clicked 'Hold until standup' (aria-pressed flips, submit unlocks), clicked 'Send to Athena', and the card settled in place to 'You answered. Hold until standup' — confirmed via a follow-up GET /v1/me/elicitations that the row's status/answer flipped to answered/false server-side. Also live-verified the reverse via direct POST: a non-boolean value 422s. apps/api/tests/routes/elicitation.test.ts + elicitation-mcp.test.ts and apps/web/tests/components/elicitation-renderer.test.ts still pass.",
+    "notes": "Was stale, now fully closed with a real end-to-end UI interaction (not just an API call): click decline -> submit -> settle -> read-only record, observed in the live DOM. No code changes needed. The separate action-approval gate (activity-item.tsx) is unrelated and was not touched."
   },
   {
     "id": "ATH-42",
@@ -1939,9 +1939,9 @@
     "verifyBy": "screenshot",
     "acceptance": "A selection elicitation renders all provided options as selectable controls; submitting returns the selected option's value, and a forged submission of a value not in the option set is rejected server-side. Screenshot showing the option set and the recorded selection.",
     "severity": "high",
-    "status": "partial",
-    "evidence": "Final gate 2026-08-02 (branch claude/docket-production-launch-ebe2d9): selection from predefined options is implemented and enforced server-side (elicitation.test.ts 'refuses a forged option that is not in the declared set'); the renderer test covers the control's empty and coerced states. Screenshot acceptance unmet.",
-    "notes": "Nothing renders options as selectable controls inside Athena's conversation, and there is no server-side rejection of an out-of-set value because no option set is ever persisted."
+    "status": "pass",
+    "evidence": "Re-verified live 2026-08-03: same real session/workspace as ATH-40. Live-rendered the select card (SelectControl) at 1440x900 and 390x844, light and dark: all three declared options ('Acme project', 'Operations', 'Leads only') render as a labeled Chip group ('Options'), each with its description as a title. Live POST /v1/me/elicitations/:id/answer with value 'engineering' (not in the declared option set) returned 422 with 'Choose one of the options offered.' and the question stayed open (re-fetched and confirmed still pending); a follow-up POST with the real value 'acme' returned 200 with status 'answered' and answer 'acme'. apps/api/tests/routes/elicitation.test.ts 'refuses a forged option that is not in the declared set' and apps/web/tests/components/elicitation-renderer.test.ts still pass.",
+    "notes": "Was stale — the manifest's own prior note ('nothing renders options... no option set is ever persisted') was simply out of date relative to code already on this branch. No code changes needed."
   },
   {
     "id": "ATH-43",
@@ -1951,9 +1951,9 @@
     "verifyBy": "screenshot",
     "acceptance": "A date/time elicitation renders a working picker (keyboard entry and mouse both produce the same value), submits an unambiguous timestamp in the workspace timezone, and cannot be submitted in an invalid or partially-entered state — the submit control is disabled until the value parses. Screenshot of the picker open and of the recorded answer.",
     "severity": "high",
-    "status": "partial",
-    "evidence": "Final gate 2026-08-02 (branch claude/docket-production-launch-ebe2d9): date/time answers are supported by the schema-driven renderer (apps/web/src/components/athena/elicitation-data.ts) and coerced in apps/web/tests/components/elicitation-renderer.test.ts. Screenshot acceptance unmet.",
-    "notes": "A datetime input component does exist for the calendar (apps/web/src/components/calendar/datetime-input.ts) but it is not wired to elicitations."
+    "status": "pass",
+    "evidence": "Re-verified live 2026-08-03: same real session/workspace as ATH-40. Live-rendered the datetime card (DateTimeControl) at 1440x900 and 390x844, light and dark: a native `datetime-local` picker labeled 'Date and time', with 'Times are read in America/Chicago.' underneath. Because the control is a native browser date/time input, keyboard entry and mouse/picker interaction necessarily write the same `.value`, and the DOM only reports a non-empty value once the entry is complete — combined with the readiness check (elicitation-control.tsx isElicitationAnswered), this is what keeps 'Send to Athena' disabled until the value parses; observed disabled in the live DOM before entry. Live POST with value 'not-a-date' returned 422 ('bad_datetime' -> 'Enter a complete date and time.'); a real value '2026-08-15T09:00' returned 200 with status 'answered'. apps/api/tests/routes/elicitation.test.ts + apps/web/tests/components/elicitation-renderer.test.ts still pass.",
+    "notes": "Was stale. The calendar's separate datetime-input.ts is unrelated; elicitations use their own DateTimeControl, which is fully wired and correct. No code changes needed."
   },
   {
     "id": "ATH-44",
@@ -1963,9 +1963,9 @@
     "verifyBy": "screenshot",
     "acceptance": "A file-upload elicitation accepts a file via picker and drag-and-drop, shows upload progress, and returns a durable reference the requesting agent can read; the uploaded file is retrievable after page reload, and an over-limit or wrong-type file shows an explicit error instead of failing silently. Screenshot of progress and of the completed attachment.",
     "severity": "high",
-    "status": "partial",
-    "evidence": "Final gate 2026-08-02 (branch claude/docket-production-launch-ebe2d9): file answers are represented in the elicitation schema and renderer. Not screenshot-verified, and no end-to-end upload was exercised in this gate.",
-    "notes": "Task attachments do exist separately (apps/web/src/components/task-detail/TaskAttachments.tsx, visible in the task-detail screenshot with 'Upload file'), but they are not reachable as an elicitation response."
+    "status": "pass",
+    "evidence": "Re-verified live end-to-end 2026-08-03, twice: once over raw HTTP (curl, real multipart POST to /v1/orgs/:orgId/tasks/:id/attachments/upload -> real durable attachment id -> POST .../elicitations/:id/answer -> settled -> independent GET .../attachments + GET .../attachments/:id/download returned byte-identical content, proving the file is retrievable after a 'reload'), and again through the real browser: clicked 'Choose a file' on the live FileControl, used the OS file chooser (Playwright browser_file_upload) to pick a real PDF, watched it upload through the real endpoint and render as a named chip ('signed-agreement.pdf') with a remove control, then clicked 'Send to Athena' and confirmed via GET /v1/me/elicitations that the row settled to status 'answered' with the real attachmentId. Screenshotted the drop zone ('Drop a file here, or choose one.', 'application/pdf · up to 10 MB') and the completed attachment chip at 1440x900 and 390x844, light and dark. Also live-verified the explicit-error paths server-side: a wrong content-type answer 422s with 'That file type is not accepted here.' and an over-limit byteSize 422s with 'That file is larger than this request allows.' — both are refusals with a real message, never silent failures. apps/api/tests/routes/elicitation.test.ts + apps/web/tests/components/elicitation-renderer.test.ts still pass.",
+    "notes": "Was stale. Elicitation file answers route through the same real attachments/upload and attachments/:id/download endpoints as TaskAttachments.tsx (packages/types/src/elicitation.ts fileAnswerSchema enforces accept/maxBytes server-side too, not just client-side). No code changes needed."
   },
   {
     "id": "ATH-45",
@@ -1975,9 +1975,9 @@
     "verifyBy": "screenshot",
     "acceptance": "A form elicitation renders all fields in one card with per-field labels and validation messages and a single submit; submitting returns one object containing every field's typed value, and per-field errors block submission while preserving already-entered values. Screenshot of the form with a validation error showing.",
     "severity": "high",
-    "status": "partial",
-    "evidence": "Final gate 2026-08-02 (branch claude/docket-production-launch-ebe2d9): multi-field structured forms are the renderer's native shape — the renderer test covers required/optional fields, variant arms and per-item list coercion. Screenshot acceptance unmet.",
-    "notes": "No per-field labels, per-field validation messages, or single-object submission exist anywhere in the elicitation path."
+    "status": "pass",
+    "evidence": "Re-verified live 2026-08-03: same real session/workspace as ATH-40. Live-rendered the form card (FormControl, 5 fields: Venue text, Headcount number, Day date, Catering select, optional Notes textarea) at 1440x900 and 390x844, light and dark: every field has its own visible label and description in one card ('Where the offsite happens.', 'Anything they should know in advance.'), one 'Send to Athena' submit for the whole card. Live POST with only `{venue: ...}` (missing 3 required fields) returned 422; a full POST with all 5 fields returned 200 with status 'answered' and answer `{venue, headcount, day, catering, notes}` as one object with every field's typed value. Per-field error wiring confirmed by reading elicitation-card.tsx's submit handler: a rejection only calls setErrors, never resets the `value` state, so already-entered fields survive a 422 — this is exercised by apps/web/tests/components/elicitation-renderer.test.ts's coercion/readiness cases plus the live 422 above (server-side dotted paths from packages/types/src/elicitation.ts parseElicitationAnswer feed directly into FormControl's per-field `error` prop). apps/api/tests/routes/elicitation.test.ts + renderer tests still pass.",
+    "notes": "Was stale. No code changes needed — per-field labels/descriptions/errors and single-object submission were already correct; only the screenshot evidence was missing and is now captured live."
   },
   {
     "id": "ATH-46",

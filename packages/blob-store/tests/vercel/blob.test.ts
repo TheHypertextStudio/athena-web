@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { HttpClient } from '../../src/http';
-import { RealBlob, type BlobUploadFn } from '../../src/vercel';
+import { RealBlob, type BlobDeleteFn, type BlobUploadFn } from '../../src/vercel';
 
 /** A recorded `@vercel/blob` `put` call: its pathname, body, and options. */
 interface RecordedUpload {
@@ -39,6 +39,22 @@ function fakeHttp(response: Response): {
     return response;
   };
   return { http, calls };
+}
+
+/**
+ * A fake `@vercel/blob` `del` that records calls and either resolves or throws
+ * (when `outcome` is an `Error`).
+ */
+function fakeDelete(outcome?: Error): {
+  delete: BlobDeleteFn;
+  calls: { url: string; options: Parameters<BlobDeleteFn>[1] }[];
+} {
+  const calls: { url: string; options: Parameters<BlobDeleteFn>[1] }[] = [];
+  const del: BlobDeleteFn = async (url, options) => {
+    calls.push({ url, options });
+    if (outcome) throw outcome;
+  };
+  return { delete: del, calls };
 }
 
 describe('RealBlob.put', () => {
@@ -125,6 +141,33 @@ describe('RealBlob.get', () => {
     const { http } = fakeHttp(new Response('err', { status: 500 }));
     const blob = new RealBlob({ baseUrl: 'https://store.example.com', token: 'tok' }, { http });
     await expect(blob.get('a.txt')).rejects.toThrow(/RealBlob get failed: 500/);
+  });
+});
+
+describe('RealBlob.delete', () => {
+  it('deletes via the SDK using the addressed url and bearer token', async () => {
+    const { delete: del, calls } = fakeDelete();
+    const blob = new RealBlob(
+      { baseUrl: 'https://store.example.com', token: 'tok' },
+      { delete: del },
+    );
+    await blob.delete('exports/a.txt');
+    expect(calls).toEqual([
+      { url: 'https://store.example.com/exports/a.txt', options: { token: 'tok' } },
+    ]);
+  });
+
+  it('wraps an SDK failure in a clear, key-scoped error that preserves the cause', async () => {
+    const cause = new Error('blob service unavailable');
+    const { delete: del } = fakeDelete(cause);
+    const blob = new RealBlob(
+      { baseUrl: 'https://store.example.com', token: 'tok' },
+      { delete: del },
+    );
+    await expect(blob.delete('exports/a.txt')).rejects.toThrow(
+      /RealBlob delete failed for key "exports\/a.txt"/,
+    );
+    await expect(blob.delete('exports/a.txt')).rejects.toHaveProperty('cause', cause);
   });
 });
 

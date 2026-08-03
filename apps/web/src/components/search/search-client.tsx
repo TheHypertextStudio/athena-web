@@ -14,6 +14,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { DatePicker } from '@/components/date-picker';
 import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
@@ -648,17 +649,18 @@ function DateInput({
   onChange: (value: string) => void;
 }): JSX.Element {
   return (
-    <label className="text-on-surface-variant grid gap-1 text-xs">
-      <span>{label}</span>
-      <Input
-        type="date"
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
+    <div className="grid gap-1">
+      <span className="text-on-surface-variant text-label-medium">{label}</span>
+      <DatePicker
+        ariaLabel={label}
+        placeholder="Any day"
+        triggerVariant="outline"
+        value={value === '' ? null : value}
+        onChange={(next) => {
+          onChange(next ?? '');
         }}
-        className="bg-surface-container-low text-xs"
       />
-    </label>
+    </div>
   );
 }
 

@@ -50,6 +50,7 @@ import { Check, ChevronRight, Circle } from '../icons';
 
 import { cn } from '../lib/utils';
 import { focusRingInset } from './focus';
+import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 import {
   type MenuVariant,
   menuBadge,
@@ -137,11 +138,13 @@ export function DropdownMenuSubTrigger({
 /** Floating panel that holds a submenu's items. */
 export function DropdownMenuSubContent({
   className,
+  collisionPadding = OVERLAY_COLLISION_PADDING,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.SubContent>): React.JSX.Element {
   const variant = useDropdownMenuVariant();
   return (
     <DropdownMenuPrimitive.SubContent
+      collisionPadding={collisionPadding}
       className={cn(
         menuContentClass(variant),
         // Submenus float above their parent surface, so they carry a slightly deeper shadow.
@@ -163,6 +166,7 @@ export function DropdownMenuSubContent({
 export function DropdownMenuContent({
   className,
   sideOffset = 4,
+  collisionPadding = OVERLAY_COLLISION_PADDING,
   variant = 'standard',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
@@ -174,6 +178,7 @@ export function DropdownMenuContent({
       <DropdownMenuPrimitive.Portal>
         <DropdownMenuPrimitive.Content
           sideOffset={sideOffset}
+          collisionPadding={collisionPadding}
           className={cn(
             menuContentClass(variant),
             // Scrollable within the available viewport height Radix measures for us.

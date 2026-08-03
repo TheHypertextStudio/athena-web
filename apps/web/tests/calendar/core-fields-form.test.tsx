@@ -13,6 +13,18 @@ vi.mock('../../src/components/calendar/calendar-mutations', () => ({
 import { CoreFieldsForm } from '../../src/components/calendar/item-drawer/core-fields-form';
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
+
+/**
+ * Choose a day through the shared date picker, the way a person does.
+ *
+ * @param field - The field's label ("Starts" / "Ends").
+ * @param iso - The `YYYY-MM-DD` day to click in the calendar.
+ */
+function pickDay(field: string, iso: string): void {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${field} —`) }));
+  const grid = screen.getByRole('grid', { name: field });
+  fireEvent.click(within(grid).getByRole('button', { name: iso }));
+}
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
 
 /** Calendar item fixture focused on core-field range editing. */
@@ -145,21 +157,22 @@ describe('CoreFieldsForm range validation', () => {
         })}
       />,
     );
-    const startInput = screen.getByLabelText('Starts');
-    const endInput = screen.getByLabelText('Ends');
-
-    fireEvent.change(startInput, { target: { value: start } });
-    fireEvent.change(endInput, { target: { value: end } });
+    // All-day dates go through the product's shared picker, so a day is chosen from its
+    // calendar; the trigger is what carries the invalid state the person needs to see.
+    pickDay('Starts', start);
+    pickDay('Ends', end);
     act(() => {
       vi.advanceTimersByTime(600);
     });
 
     const error = screen.getByRole('alert');
     expect(error).toHaveTextContent('End must be after start.');
-    expect(startInput).toHaveAttribute('aria-invalid', 'true');
-    expect(endInput).toHaveAttribute('aria-invalid', 'true');
-    expect(startInput).toHaveAttribute('aria-describedby', error.id);
-    expect(endInput).toHaveAttribute('aria-describedby', error.id);
+    const startTrigger = screen.getByRole('button', { name: /^Starts —/ });
+    const endTrigger = screen.getByRole('button', { name: /^Ends —/ });
+    expect(startTrigger).toHaveAttribute('aria-invalid', 'true');
+    expect(endTrigger).toHaveAttribute('aria-invalid', 'true');
+    expect(startTrigger).toHaveAttribute('aria-describedby', error.id);
+    expect(endTrigger).toHaveAttribute('aria-describedby', error.id);
     expect(mutate).not.toHaveBeenCalled();
   });
 });
@@ -254,8 +267,8 @@ describe('CoreFieldsForm refetch hydration', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Starts')).toHaveValue('2026-07-12');
-    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-14');
+    expect(screen.getByRole('button', { name: /^Starts —/ })).toHaveTextContent('Jul 12, 2026');
+    expect(screen.getByRole('button', { name: /^Ends —/ })).toHaveTextContent('Jul 14, 2026');
     expect(onDirtyChange).not.toHaveBeenCalledWith(true);
   });
 

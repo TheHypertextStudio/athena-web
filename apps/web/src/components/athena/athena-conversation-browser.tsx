@@ -18,6 +18,7 @@ import { cn } from '@docket/ui/lib/utils';
 import { Button, ControlGroup, Field, Input, Text, Toolbar } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
+import { DatePicker } from '@/components/date-picker';
 import { api } from '@/lib/api';
 import { apiQueryOptions, STALE } from '@/lib/query-core';
 import { useApiQuery } from '@/lib/query';
@@ -167,22 +168,24 @@ export function AthenaConversationBrowser({
           </Field>
           <ControlGroup controlSize="sm">
             <Field label="From">
-              <Input
-                variant="filled"
-                type="date"
-                value={fromDay}
-                onChange={(event) => {
-                  setFromDay(event.target.value);
+              <DatePicker
+                ariaLabel="From"
+                placeholder="Any day"
+                triggerVariant="outline"
+                value={fromDay === '' ? null : fromDay}
+                onChange={(next) => {
+                  setFromDay(next ?? '');
                 }}
               />
             </Field>
             <Field label="To">
-              <Input
-                variant="filled"
-                type="date"
-                value={toDay}
-                onChange={(event) => {
-                  setToDay(event.target.value);
+              <DatePicker
+                ariaLabel="To"
+                placeholder="Any day"
+                triggerVariant="outline"
+                value={toDay === '' ? null : toDay}
+                onChange={(next) => {
+                  setToDay(next ?? '');
                 }}
               />
             </Field>

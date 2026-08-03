@@ -22,7 +22,7 @@ import {
   TaskId,
 } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -561,14 +561,17 @@ describe('CalendarItemDrawer', () => {
       screen.queryByText('All-day items are edited from the full calendar view.'),
     ).not.toBeInTheDocument();
 
-    const startInput = screen.getByLabelText('Starts');
-    expect(startInput).toHaveAttribute('type', 'date');
-    expect(startInput).toHaveValue('2026-07-10');
-    // The end input shows the last included day (inclusive), one day before the exclusive wire date.
-    expect(screen.getByLabelText('Ends')).toHaveValue('2026-07-10');
+    // All-day dates use the product's one date picker, so they get the same calendar, keyboard
+    // and bounds as every other date in the app rather than a bare native input.
+    const startTrigger = screen.getByRole('button', { name: /^Starts —/ });
+    expect(startTrigger).toHaveTextContent('Jul 10, 2026');
+    // The end trigger shows the last included day (inclusive), one day before the exclusive wire date.
+    expect(screen.getByRole('button', { name: /^Ends —/ })).toHaveTextContent('Jul 10, 2026');
 
     // The all-day date fields autosave on their debounce.
-    fireEvent.change(screen.getByLabelText('Ends'), { target: { value: '2026-07-12' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Ends —/ }));
+    const grid = await screen.findByRole('grid', { name: 'Ends' });
+    fireEvent.click(within(grid).getByRole('button', { name: '2026-07-12' }));
 
     await waitFor(() => {
       expect(itemPatch).toHaveBeenCalledWith({

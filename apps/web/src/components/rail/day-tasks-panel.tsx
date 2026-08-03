@@ -27,6 +27,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
+import { formatDay } from '@/components/date-picker';
 import { entityDragSource } from '@/lib/entity-drag';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
@@ -35,12 +36,9 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { stateTypeOf } from '@/lib/work-state';
 
-/** Format a `YYYY-MM-DD` due date as `Jul 1`. */
-function formatDue(dueDate: string): string {
-  return new Date(`${dueDate}T00:00:00`).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
+/** Format a due date as `Jul 1`, or `null` when the row carries nothing readable. */
+function formatDue(dueDate: string): string | null {
+  return formatDay(dueDate, { month: 'short', day: 'numeric' });
 }
 
 /** One plan task: status glyph · title · due · workspace chip, draggable onto the calendar. */

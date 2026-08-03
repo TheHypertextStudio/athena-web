@@ -13,6 +13,8 @@ import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { Button, Row } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
+import { formatDay } from '@/components/date-picker';
+
 import { shiftISODate, useAgenda } from './agenda-context';
 import AgendaViewSwitcher from './agenda-view-switcher';
 
@@ -21,11 +23,7 @@ function formatAgendaDate(iso: string, today: string): string {
   if (iso === today) return 'Today';
   if (iso === shiftISODate(today, 1)) return 'Tomorrow';
   if (iso === shiftISODate(today, -1)) return 'Yesterday';
-  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-  });
+  return formatDay(iso, { weekday: 'short', month: 'short', day: 'numeric' }) ?? iso;
 }
 
 /** The agenda day navigator: ‹ prev · the day · next › with a jump-to-today. */

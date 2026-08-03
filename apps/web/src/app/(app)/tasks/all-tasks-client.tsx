@@ -30,6 +30,7 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
+import { formatDay } from '@/components/date-picker';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
@@ -69,12 +70,17 @@ function sortTasks(tasks: readonly TaskOut[], sort: TaskSort): TaskOut[] {
   });
 }
 
-/** Format a `YYYY-MM-DD` due date as `Jul 1`. */
-function formatDue(dueDate: string): string {
-  return new Date(`${dueDate}T00:00:00`).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
+/**
+ * Format a due date as `Jul 1`, or `null` when the row carries nothing readable.
+ *
+ * @remarks
+ * This used to concatenate `T00:00:00` onto the stored value before parsing, which produced
+ * `2026-08-02T00:00:00.000ZT00:00:00` whenever the API returned a full instant — and React
+ * rendered the resulting literal `"Invalid Date"` in the due column. {@link formatDay} accepts
+ * either shape and returns `null` rather than a broken string.
+ */
+function formatDue(dueDate: string): string | null {
+  return formatDay(dueDate, { month: 'short', day: 'numeric' });
 }
 
 /** The cross-workspace task list. */

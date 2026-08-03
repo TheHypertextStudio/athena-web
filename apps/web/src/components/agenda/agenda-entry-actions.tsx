@@ -21,13 +21,14 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  Input,
   Popover,
   PopoverAnchor,
   PopoverContent,
   Stack,
 } from '@docket/ui/primitives';
 import { type JSX, useRef, useState } from 'react';
+
+import { DatePicker } from '@/components/date-picker';
 
 import { AgendaTimeboxForm } from './agenda-timebox-form';
 import { type AgendaEntry, isTimeboxed, shiftISODate, useAgenda } from './agenda-context';
@@ -177,15 +178,14 @@ function MoveForm({ entry, date, onDone }: EntryEditorProps): JSX.Element {
       }}
     >
       <Stack gap={1}>
-        <label htmlFor="move-day" className="text-on-surface-variant text-xs font-medium">
-          Move to
-        </label>
-        <Input
-          id="move-day"
-          type="date"
-          value={target}
-          onChange={(event) => {
-            setTarget(event.target.value);
+        <span className="text-on-surface-variant text-label-medium">Move to</span>
+        <DatePicker
+          ariaLabel="Move to"
+          placeholder="Pick a day"
+          triggerVariant="outline"
+          value={target === '' ? null : target}
+          onChange={(next) => {
+            setTarget(next ?? '');
           }}
         />
       </Stack>

@@ -58,6 +58,18 @@ export interface PropertyTriggerProps {
   variant?: 'ghost' | 'outline';
   /** Extra classes merged onto the trigger. */
   className?: string;
+  /**
+   * Mark the trigger invalid.
+   *
+   * @remarks
+   * A picker can be the subject of a host's validation message (a calendar item whose window
+   * closes before it opens, say), and the person needs the offending control marked — not just
+   * a sentence somewhere on the form. Rendered straight onto the button, alongside
+   * {@link PropertyTriggerProps.'aria-describedby'} pointing at that message.
+   */
+  'aria-invalid'?: boolean;
+  /** Id of the element carrying the host's validation message for this control. */
+  'aria-describedby'?: string;
 }
 
 /**

@@ -168,9 +168,6 @@
   "apps/web/src/components/account-menu.tsx": {
     "raw-type-utility": 5
   },
-  "apps/web/src/components/agenda/agenda-entry-actions.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/components/agenda/agenda-entry-card.tsx": {
     "raw-type-utility": 6,
     "shadow-outside-overlay": 1,
@@ -236,7 +233,7 @@
     "raw-type-utility": 2
   },
   "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
-    "raw-type-utility": 15,
+    "raw-type-utility": 11,
     "shadow-outside-overlay": 1
   },
   "apps/web/src/components/calendar/item-drawer/presentation.ts": {
@@ -459,7 +456,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/search/search-client.tsx": {
-    "raw-type-utility": 15
+    "raw-type-utility": 13
   },
   "apps/web/src/components/service-worker-provider.tsx": {
     "raw-type-utility": 1
@@ -725,12 +722,6 @@
   },
   "packages/ui/src/components/auth/AuthLayout.tsx": {
     "shadow-outside-overlay": 1
-  },
-  "packages/ui/src/components/pickers/DatePicker.tsx": {
-    "raw-type-utility": 4
-  },
-  "packages/ui/src/components/pickers/PickerList.tsx": {
-    "raw-type-utility": 1
   },
   "packages/ui/src/components/pickers/PropertyTrigger.tsx": {
     "raw-type-utility": 1

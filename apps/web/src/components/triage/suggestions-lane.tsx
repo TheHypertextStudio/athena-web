@@ -17,6 +17,7 @@ import { Sparkles } from '@docket/ui/icons';
 import { Badge, Button, Card, CardContent, DecorativeIcon, Input } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
+import { DatePicker } from '@/components/date-picker';
 import { useEmailSuggestionThread, useEmailSuggestions } from '@/lib/use-email-suggestions';
 
 /** Props for {@link ConfidenceBadge}. */
@@ -132,12 +133,13 @@ function SuggestionEditor({ suggestion, onAccept, onCancel }: SuggestionEditorPr
           setDescription(e.target.value);
         }}
       />
-      <Input
-        aria-label="Due date"
-        type="date"
-        value={dueDate}
-        onChange={(e) => {
-          setDueDate(e.target.value);
+      <DatePicker
+        ariaLabel="Due date"
+        placeholder="Set due date"
+        triggerVariant="outline"
+        value={dueDate === '' ? null : dueDate}
+        onChange={(next) => {
+          setDueDate(next ?? '');
         }}
       />
       <div className="flex gap-1.5">

@@ -220,7 +220,7 @@ export function PickerList<TValue extends string = string>({
                     setActiveIndex(index);
                   }}
                   className={cn(
-                    'text-on-surface text-body-medium flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left',
+                    'text-on-surface text-body-medium flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left',
                     'disabled:pointer-events-none disabled:opacity-50',
                     focusRingInset,
                     active && 'bg-surface-container-highest',
@@ -229,19 +229,29 @@ export function PickerList<TValue extends string = string>({
                   {option.icon ? (
                     <span
                       aria-hidden="true"
-                      className="flex size-4 shrink-0 items-center justify-center"
+                      className="flex size-4 shrink-0 items-center justify-center pt-0.5"
                     >
                       {option.icon}
                     </span>
                   ) : null}
-                  <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate">{option.label}</span>
+                    {option.supporting ? (
+                      <span className="text-on-surface-variant text-body-small">
+                        {option.supporting}
+                      </span>
+                    ) : null}
+                  </span>
                   {option.hint ? (
-                    <span className="text-on-surface-variant shrink-0 text-xs tabular-nums">
+                    <span className="text-on-surface-variant text-label-small shrink-0 tabular-nums">
                       {option.hint}
                     </span>
                   ) : null}
                   {chosen ? (
-                    <Check aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+                    <Check
+                      aria-hidden="true"
+                      className="text-on-surface-variant mt-0.5 size-4 shrink-0"
+                    />
                   ) : null}
                 </button>
               </li>

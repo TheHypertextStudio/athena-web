@@ -16,9 +16,37 @@
  * - {@link ActorPicker} — searchable actor preset (assignee / lead / owner).
  * - {@link EntityPicker} — searchable entity preset (project / program / initiative / cycle / team).
  * - {@link LabelsPicker} — searchable multi-select labels.
- * - {@link DatePicker} / {@link DateRangePicker} — native ISO date / date-range fields.
+ * - {@link DatePicker} / {@link DateRangePicker} — the ISO date / date-range pickers.
+ * - {@link CalendarGrid} — the keyboard-operable month grid both date pickers are built on.
+ * - `calendar-date` — pure calendar-day arithmetic and the one safe day formatter.
  */
 export { ActorPicker, type ActorPickerProps } from './ActorPicker';
+export { CalendarGrid, type CalendarGridProps } from './CalendarGrid';
+export {
+  addDays,
+  addMonths,
+  CALENDAR_MAX_DAY,
+  CALENDAR_MIN_DAY,
+  type CalendarCell,
+  type CalendarDate,
+  clampIso,
+  compareIso,
+  DAYS_PER_WEEK,
+  daysInMonth,
+  endOfMonth,
+  formatCalendarDay,
+  isIsoDate,
+  localeWeekStart,
+  monthGrid,
+  monthLabel,
+  parseIsoDate,
+  startOfMonth,
+  toCalendarDay,
+  toIso,
+  todayIso,
+  weekdayLabels,
+  weekdayOf,
+} from './calendar-date';
 export {
   DatePicker,
   type DatePickerProps,

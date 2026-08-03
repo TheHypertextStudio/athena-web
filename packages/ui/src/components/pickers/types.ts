@@ -31,6 +31,17 @@ export interface PickerOption<TValue extends string = string> {
   icon?: ReactNode;
   /** Optional muted trailing hint (e.g. a count, a date, an email). */
   hint?: string;
+  /**
+   * Optional quieter second line under the label, for a choice that needs explaining.
+   *
+   * @remarks
+   * Distinct from {@link PickerOption.hint}, which is a short trailing scrap (a count, a date)
+   * on the same line. `supporting` is a full sentence and gets its own line, because some
+   * choices are not self-describing from a single word — "Public" and "Private" name a
+   * *consequence*, and a person choosing between them deserves to be told what it is at the
+   * moment of choosing rather than after the fact.
+   */
+  supporting?: string;
   /** Extra non-displayed terms folded into search matching. */
   keywords?: readonly string[];
   /** When `true`, the option renders muted and cannot be selected. */

@@ -37,6 +37,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 
 /**
  * Shared timing context for the tooltips beneath it (Radix passthrough).
@@ -65,12 +66,14 @@ export const TooltipTrigger = TooltipPrimitive.Trigger;
 export function TooltipContent({
   className,
   sideOffset = 4,
+  collisionPadding = OVERLAY_COLLISION_PADDING,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>): React.JSX.Element {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
         sideOffset={sideOffset}
+        collisionPadding={collisionPadding}
         className={cn(
           'bg-surface-container-highest text-on-surface border-outline-variant data-[state=delayed-open]:animate-in data-[state=instant-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=instant-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95 data-[state=instant-open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 text-body-small z-[120] w-fit max-w-xs origin-[var(--radix-tooltip-content-transform-origin)] rounded-lg border px-2.5 py-1.5 shadow-md',
           className,

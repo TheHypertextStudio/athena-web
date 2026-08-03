@@ -15,7 +15,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import type { TaskDetail, TaskProvenance } from '@docket/types';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskPropertiesRail } from '../../src/components/task-detail/task-properties-rail';
@@ -148,21 +148,26 @@ describe('TaskPropertiesRail — anticipated start', () => {
 
   it('patches `startDate` with a bare YYYY-MM-DD when a date is chosen', async () => {
     const onPatch = vi.fn();
-    renderRail({ onPatch });
+    renderRail({ task: task({ startDate: '2026-09-01' }), onPatch });
 
     fireEvent.click(screen.getByRole('button', { name: /^Anticipated start —/ }));
-    const field = await screen.findByLabelText('Anticipated start');
-    fireEvent.change(field, { target: { value: '2026-09-15' } });
+    // `DatePicker` presents a WAI-ARIA date grid whose day buttons are named by their ISO day, so
+    // the choice is made the way a person makes it rather than by writing to a hidden field.
+    fireEvent.click(await screen.findByRole('button', { name: '2026-09-15' }));
 
     // The API validates this as `z.iso.date()` and 422s on a full datetime.
     expect(onPatch).toHaveBeenCalledWith({ startDate: '2026-09-15' });
   });
 
-  it('narrows a stored ISO timestamp to the calendar day the date field expects', () => {
+  it('narrows a stored ISO timestamp to the calendar day the date field expects', async () => {
     renderRail({ task: task({ startDate: '2026-09-15T00:00:00.000Z' }) });
 
+    // The trigger states the day, and the grid opens on that month with that day selected — both
+    // of which are impossible if the timestamp reached the date control unnarrowed.
+    expect(screen.getByRole('button', { name: 'Anticipated start — Sep 15, 2026' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: /^Anticipated start —/ }));
-    expect(screen.getByLabelText('Anticipated start')).toHaveValue('2026-09-15');
+    const selected = await screen.findByRole('gridcell', { selected: true });
+    expect(within(selected).getByRole('button')).toHaveAccessibleName('2026-09-15');
   });
 
   it('clears the start date through the same control', async () => {

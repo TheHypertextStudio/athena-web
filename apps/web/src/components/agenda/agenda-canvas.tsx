@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
+import { formatDay } from '@/components/date-picker';
 import {
   useLinkTaskToCalendarItem,
   useRelateCalendarItems,
@@ -101,11 +102,7 @@ function TimelineArrangement({
     () => ({
       id: `agenda:${date}`,
       date,
-      label: new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      }),
+      label: formatDay(date, { weekday: 'short', month: 'short', day: 'numeric' }) ?? date,
       items: entries.flatMap((entry) => {
         const item = toAgendaScheduleItem(entry, date, displayTimezone);
         return item ? [item] : [];

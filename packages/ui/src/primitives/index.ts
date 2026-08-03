@@ -115,6 +115,8 @@ export {
   type TextareaProps,
 } from './field';
 export { focusRing, focusRingInset } from './focus';
+
+export { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 export { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 export { Row, type RowProps, Stack, type StackProps, Toolbar, type ToolbarProps } from './layout';
 export {

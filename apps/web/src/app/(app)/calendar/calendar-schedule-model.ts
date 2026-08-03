@@ -5,6 +5,7 @@ import type {
 } from '@docket/types';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
+import { formatDay } from '@/components/date-picker';
 import {
   isInlineEditableScheduleItem,
   scheduleDateRange,
@@ -159,12 +160,7 @@ export function buildDateLane(
   return {
     id: `date:${date}`,
     date,
-    label:
-      new Date(`${date}T00:00:00`).toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      }) || date,
+    label: formatDay(date, { weekday: 'short', month: 'short', day: 'numeric' }) ?? date,
     items: items
       .filter((item) => overlapsDate(item, date, displayTimezone))
       .map((item) => toScheduleItem(item, date, colorByLayer.get(item.layerId), displayTimezone)),

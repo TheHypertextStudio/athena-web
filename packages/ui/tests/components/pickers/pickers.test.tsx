@@ -364,11 +364,13 @@ describe('DatePicker', () => {
         ariaLabel="Due date"
       />,
     );
-    // Default format renders a short locale day, not the raw ISO string.
+    // The trigger renders a short locale day, not the raw ISO string.
     expect(screen.queryByText('2026-03-15')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Due date —/ }));
-    const field = await screen.findByLabelText('Due date');
-    fireEvent.change(field, { target: { value: '2026-04-01' } });
+    // The popover hosts a real month grid whose cells are named by their ISO day, so a day is
+    // chosen by clicking it — there is no free-text field to type an arbitrary value into.
+    const grid = await screen.findByRole('grid', { name: 'Due date' });
+    fireEvent.click(within(grid).getByRole('button', { name: '2026-04-01' }));
     expect(onChange).toHaveBeenCalledWith('2026-04-01');
   });
 
@@ -414,9 +416,10 @@ describe('DateRangePicker', () => {
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
-    fireEvent.change(await screen.findByLabelText('Timeline Start'), {
-      target: { value: '2026-01-15' },
-    });
+    // The range picker opens on its Start bound; the grid is bounded above by the current end,
+    // so an inverted window cannot be produced by any sequence of clicks.
+    const grid = await screen.findByRole('grid', { name: 'Timeline Start' });
+    fireEvent.click(within(grid).getByRole('button', { name: '2026-01-15' }));
     expect(onChange).toHaveBeenCalledWith({ start: '2026-01-15', end: '2026-02-01' });
   });
 

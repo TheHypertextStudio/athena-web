@@ -54,6 +54,7 @@ import { Check, ChevronRight, Circle } from '../icons';
 
 import { cn } from '../lib/utils';
 import { focusRingInset } from './focus';
+import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 import {
   type MenuVariant,
   menuBadge,
@@ -141,11 +142,13 @@ export function ContextMenuSubTrigger({
 /** Floating panel that holds a submenu's items. */
 export function ContextMenuSubContent({
   className,
+  collisionPadding = OVERLAY_COLLISION_PADDING,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>): React.JSX.Element {
   const variant = useContextMenuVariant();
   return (
     <ContextMenuPrimitive.SubContent
+      collisionPadding={collisionPadding}
       className={cn(
         menuContentClass(variant),
         // Submenus float above their parent surface, so they carry a slightly deeper shadow and
@@ -167,6 +170,7 @@ export function ContextMenuSubContent({
  */
 export function ContextMenuContent({
   className,
+  collisionPadding = OVERLAY_COLLISION_PADDING,
   variant = 'standard',
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
@@ -177,6 +181,7 @@ export function ContextMenuContent({
     <ContextMenuVariantContext.Provider value={variant}>
       <ContextMenuPrimitive.Portal>
         <ContextMenuPrimitive.Content
+          collisionPadding={collisionPadding}
           className={cn(
             menuContentClass(variant),
             // Scrollable within the viewport, growing from the Radix transform origin.

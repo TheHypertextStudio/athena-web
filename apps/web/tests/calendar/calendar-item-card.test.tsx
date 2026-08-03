@@ -11,7 +11,11 @@
  * - an editable item renders the move handle (and, in `block` layout, the resize handle) when the
  *   caller supplies the corresponding gesture callback;
  * - clicking the card's body calls `onOpen` with the item id;
- * - a non-`clean` sync state (and a conflict) surfaces a labeled badge.
+ * - a non-`clean` sync state (and a conflict) surfaces a labeled badge;
+ * - a `task_timebox` with a linked task grows the CORE-40 {@link TaskTimerButton}, and clicking it
+ *   starts that task's timer without also calling `onOpen` (the "open" button and the timer
+ *   button are siblings, not nested, so there is nothing to stop-propagate against — but a
+ *   regression that nested them would make one click do both).
  */
 import '@testing-library/jest-dom/vitest';
 
@@ -21,14 +25,56 @@ import {
   type CalendarItemOut,
   CalendarLayerId,
   type CalendarLayerOut,
+  OrganizationId,
+  TaskId,
 } from '@docket/types';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@docket/ui/primitives';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import CalendarItemCard from '@/components/calendar/calendar-item-card';
+const { activeGet, recordsPost } = vi.hoisted(() => ({
+  activeGet: vi.fn(),
+  recordsPost: vi.fn(),
+}));
+
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      time: {
+        active: { $get: activeGet },
+        records: { $post: recordsPost },
+      },
+    },
+  },
+}));
+
+const { default: CalendarItemCard } = await import('@/components/calendar/calendar-item-card');
 
 const ITEM_ID = CalendarItemId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
 const LAYER_ID = CalendarLayerId.parse('01BX5ZZKBKACTAV9WEVGEMMVN1');
+
+/** A JSON response shaped like the RPC client's. */
+function jsonResponse(body: unknown, status = 200): Response {
+  return {
+    ok: status < 400,
+    status,
+    json: () => Promise.resolve(body),
+  } as unknown as Response;
+}
+
+/** Render children inside the providers `TaskTimerButton` needs (query client + tooltip root). */
+function withTimerProviders(children: ReactNode): ReactNode {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={client}>
+      <TooltipProvider>{children}</TooltipProvider>
+    </QueryClientProvider>
+  );
+}
 
 /** A minimal calendar-item fixture, defaulting to an editable native block. */
 function makeItem(overrides: Partial<CalendarItemOut> = {}): CalendarItemOut {
@@ -187,5 +233,108 @@ describe('CalendarItemCard', () => {
     expect(screen.queryByLabelText('Conflict')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Sync failed')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Syncing…')).not.toBeInTheDocument();
+  });
+
+  describe('the CORE-40 track-timer affordance', () => {
+    const LINKED_TASK = {
+      taskId: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVT1'),
+      organizationId: OrganizationId.parse('01BX5ZZKBKACTAV9WEVGEMMVR1'),
+      role: 'contained' as const,
+      sort: 0,
+      note: null,
+      title: 'Draft the release notes',
+      state: 'in_progress',
+      done: false,
+    };
+
+    beforeEach(() => {
+      activeGet.mockReset();
+      recordsPost.mockReset();
+      activeGet.mockResolvedValue(
+        jsonResponse({
+          record: null,
+          serverNow: new Date().toISOString(),
+          activeAgentExecutions: [],
+        }),
+      );
+    });
+
+    it('renders for a task_timebox with a linked task, and starts that task without opening the item', async () => {
+      recordsPost.mockResolvedValue(jsonResponse({ id: 'rec_new' }));
+      const onOpen = vi.fn();
+      render(
+        withTimerProviders(
+          <CalendarItemCard
+            item={makeItem({ kind: 'task_timebox', linkedTasks: [LINKED_TASK] })}
+            onOpen={onOpen}
+          />,
+        ),
+      );
+
+      const timerButton = await screen.findByTestId(`task-timer-${LINKED_TASK.taskId}`);
+      fireEvent.click(timerButton);
+
+      await waitFor(() => {
+        expect(recordsPost).toHaveBeenCalledWith({
+          json: {
+            context: { label: LINKED_TASK.title, taskId: LINKED_TASK.taskId },
+          },
+        });
+      });
+      // The timer control is a sibling of the "open" button, not nested inside it, so activating
+      // it must never also open the item workspace drawer.
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('renders nothing for a task_timebox whose linked task has not arrived yet', () => {
+      render(
+        withTimerProviders(
+          <CalendarItemCard
+            item={makeItem({ kind: 'task_timebox', linkedTasks: [] })}
+            onOpen={vi.fn()}
+          />,
+        ),
+      );
+      expect(screen.queryByRole('button', { name: /Track this task/ })).not.toBeInTheDocument();
+    });
+
+    it('renders nothing for a kind that is not task-shaped', () => {
+      render(
+        withTimerProviders(
+          <CalendarItemCard item={makeItem({ kind: 'native_block' })} onOpen={vi.fn()} />,
+        ),
+      );
+      expect(screen.queryByRole('button', { name: /Track this task/ })).not.toBeInTheDocument();
+    });
+
+    it('renders for the first-class `timebox` kind a contained task link produces live', async () => {
+      // The app's own drag-a-task-onto-the-grid flow (`onDropObjectOnGrid` in
+      // `calendar-scheduling-surface.tsx`) creates a `timebox` and links the task with
+      // `role: 'contained'` — `'task_timebox'` is a separate, legacy/derived kind no live write
+      // path produces. Checking only `'task_timebox'` would make this control unreachable from
+      // every block the real UI actually creates.
+      render(
+        withTimerProviders(
+          <CalendarItemCard
+            item={makeItem({ kind: 'timebox', linkedTasks: [LINKED_TASK] })}
+            onOpen={vi.fn()}
+          />,
+        ),
+      );
+      expect(await screen.findByTestId(`task-timer-${LINKED_TASK.taskId}`)).toBeInTheDocument();
+    });
+
+    it('renders nothing for a task-shaped item whose only link is not `contained`', () => {
+      const relatedOnly = { ...LINKED_TASK, role: 'related' as const };
+      render(
+        withTimerProviders(
+          <CalendarItemCard
+            item={makeItem({ kind: 'timebox', linkedTasks: [relatedOnly] })}
+            onOpen={vi.fn()}
+          />,
+        ),
+      );
+      expect(screen.queryByTestId(`task-timer-${relatedOnly.taskId}`)).not.toBeInTheDocument();
+    });
   });
 });

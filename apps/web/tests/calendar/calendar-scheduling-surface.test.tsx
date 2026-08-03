@@ -457,10 +457,10 @@ describe('CalendarSchedulingSurface persistence', () => {
   });
 
   describe('the CORE-40 renderItemAction extension point', () => {
-    // `CalendarItemCard` (which already grows a `TaskTimerButton` for a `task_timebox`) is never
-    // mounted by the live /calendar timeline — it renders through `SchedulingCanvas` instead — so
-    // this surface has to reach the timer control through the generic canvas's opt-in
-    // `renderItemAction` prop. These tests pin that wiring directly, the same way the
+    // `CalendarItemCard` (which already grows a `TaskTimerButton` for a task-shaped item) is
+    // never mounted by the live /calendar timeline — it renders through `SchedulingCanvas`
+    // instead — so this surface has to reach the timer control through the generic canvas's
+    // opt-in `renderItemAction` prop. These tests pin that wiring directly, the same way the
     // `renderItem` tests above call `canvasProps().renderItem` themselves.
     const LINKED_TASK = {
       taskId: TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVT1'),
@@ -485,7 +485,32 @@ describe('CalendarSchedulingSurface persistence', () => {
       );
     });
 
-    it('renders the timer button for a task_timebox item with a linked task', async () => {
+    it('renders the timer button for a first-class timebox item with a contained task link', async () => {
+      // This is the shape the live app's own drag-a-task-onto-the-grid flow produces
+      // (`onDropObjectOnGrid` below creates `intent: 'timebox'` then links with
+      // `role: 'contained'`) — checking only the legacy `task_timebox` kind would leave this
+      // control unreachable from every block the real UI creates.
+      const source: CalendarItemOut = {
+        ...calendarItem(),
+        kind: 'timebox',
+        linkedTasks: [LINKED_TASK],
+      };
+      renderSurface('dates', source);
+      const props = canvasProps();
+      const lane = props.lanes[0]!;
+
+      const action = props.renderItemAction?.({
+        item: lane.items[0]!,
+        lane,
+        allDay: false,
+        density: 'full',
+      });
+      render(withTimerProviders(<div data-testid="action">{action}</div>));
+
+      expect(await screen.findByTestId(`task-timer-${LINKED_TASK.taskId}`)).toBeInTheDocument();
+    });
+
+    it('renders the timer button for the legacy task_timebox item with a linked task', async () => {
       const source: CalendarItemOut = {
         ...calendarItem(),
         kind: 'task_timebox',
@@ -506,7 +531,7 @@ describe('CalendarSchedulingSurface persistence', () => {
       expect(await screen.findByTestId(`task-timer-${LINKED_TASK.taskId}`)).toBeInTheDocument();
     });
 
-    it('renders no timer control for a non-task_timebox item, or a task_timebox with no linked task', () => {
+    it('renders no timer control for a non-task-shaped item, a task-shaped item with no linked task, or a link that is not contained', () => {
       renderSurface(); // default fixture is a plain native_event
       let props = canvasProps();
       let lane = props.lanes[0]!;
@@ -517,10 +542,23 @@ describe('CalendarSchedulingSurface persistence', () => {
       cleanup();
       const timeboxNoTask: CalendarItemOut = {
         ...calendarItem(),
-        kind: 'task_timebox',
+        kind: 'timebox',
         linkedTasks: [],
       };
       renderSurface('dates', timeboxNoTask);
+      props = canvasProps();
+      lane = props.lanes[0]!;
+      expect(
+        props.renderItemAction?.({ item: lane.items[0]!, lane, allDay: false, density: 'full' }),
+      ).toBeNull();
+
+      cleanup();
+      const relatedOnly: CalendarItemOut = {
+        ...calendarItem(),
+        kind: 'timebox',
+        linkedTasks: [{ ...LINKED_TASK, role: 'related' }],
+      };
+      renderSurface('dates', relatedOnly);
       props = canvasProps();
       lane = props.lanes[0]!;
       expect(
@@ -532,7 +570,7 @@ describe('CalendarSchedulingSurface persistence', () => {
       recordsPost.mockResolvedValue(jsonResponse({ id: 'rec_new' }));
       const source: CalendarItemOut = {
         ...calendarItem(),
-        kind: 'task_timebox',
+        kind: 'timebox',
         linkedTasks: [LINKED_TASK],
       };
       const { onOpenItem } = renderSurface('dates', source);

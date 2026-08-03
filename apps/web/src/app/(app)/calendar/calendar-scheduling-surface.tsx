@@ -9,6 +9,7 @@ import {
   useRelateCalendarItems,
   useUpdateCalendarItemById,
 } from '@/components/calendar/calendar-mutations';
+import { containedTaskLink } from '@/components/calendar/calendar-item-task-link';
 import {
   resolveScheduleWallInstant,
   type ScheduleItem,
@@ -289,16 +290,15 @@ export function CalendarSchedulingSurface({
             );
           }}
           // CORE-40's start-timer affordance for the live calendar timeline. `CalendarItemCard`
-          // (which already grows a `TaskTimerButton` for a `task_timebox`) is never mounted by this
-          // surface — the real timeline renders through `SchedulingCanvas` — so the control has to
-          // reach the item card through this opt-in extension point instead. Scoped to the calendar
-          // surface only: the agenda view shares this same canvas and deliberately leaves
+          // (which already grows a `TaskTimerButton` for a task-shaped item) is never mounted by
+          // this surface — the real timeline renders through `SchedulingCanvas` — so the control
+          // has to reach the item card through this opt-in extension point instead. Scoped to the
+          // calendar surface only: the agenda view shares this same canvas and deliberately leaves
           // `renderItemAction` unset.
           renderItemAction={({ item }) => {
             const source = dateAxis.itemById.get(item.id);
             if (!source) return null;
-            const timeboxedTask =
-              source.kind === 'task_timebox' ? (source.linkedTasks[0] ?? null) : null;
+            const timeboxedTask = containedTaskLink(source);
             if (!timeboxedTask) return null;
             return (
               <TaskTimerButton

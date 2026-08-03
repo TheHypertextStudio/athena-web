@@ -742,10 +742,11 @@ export const CalendarItemTaskLinkResultOut = z
 export type CalendarItemTaskLinkResultOut = z.infer<typeof CalendarItemTaskLinkResultOut>;
 
 /** The directed relationship one calendar item has to another. */
-export const CalendarItemRelationRole = z.enum(['contained', 'related']).meta({
+export const CalendarItemRelationRole = z.enum(['contained', 'related', 'follow_up']).meta({
   id: 'CalendarItemRelationRole',
   description:
-    'A directed calendar-item relationship: the target is contained by the source, or generally related.',
+    'A directed calendar-item relationship: the target is contained by the source, the two are ' +
+    'generally related, or the target is a scheduler-created debrief that follows up on the source.',
 });
 /** Calendar-item relation-role value. */
 export type CalendarItemRelationRole = z.infer<typeof CalendarItemRelationRole>;

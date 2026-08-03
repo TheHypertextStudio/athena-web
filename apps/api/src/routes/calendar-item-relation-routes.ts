@@ -4,7 +4,6 @@ import {
   CalendarItemKind,
   CalendarItemRelationCreate,
   CalendarItemRelationOut,
-  CalendarItemRelationRole,
   pageOf,
 } from '@docket/types';
 import { and, eq, inArray } from 'drizzle-orm';
@@ -23,17 +22,30 @@ const idParam = z.object({ id: z.string() });
 const itemRelationParam = z.object({ id: z.string(), relatedItemId: z.string() });
 const CalendarItemRelationsOut = pageOf(CalendarItemRelationOut);
 
-/** Serialize a user-owned calendar-item relationship. */
-function toCalendarItemRelationOut(
-  row: typeof calendarItemRelation.$inferSelect,
-): z.input<typeof CalendarItemRelationOut> {
+/**
+ * Build a calendar-item relationship's wire shape WITHOUT validating `role` yet.
+ *
+ * @remarks
+ * Two call sites need different failure behavior for the same raw row: a single-relation
+ * response (POST/DELETE) should throw if its own role is somehow invalid, but the list endpoint
+ * must not let one bad row take down every other relation in the response. Both build off this
+ * shared, unvalidated shape and choose `.parse` vs `.safeParse` themselves.
+ */
+function toCalendarItemRelationOutUnsafe(row: typeof calendarItemRelation.$inferSelect): unknown {
   return {
     sourceItemId: row.sourceItemId,
     targetItemId: row.targetItemId,
-    role: CalendarItemRelationRole.parse(row.role),
+    role: row.role,
     createdByUserId: row.createdByUserId,
     createdAt: row.createdAt.toISOString(),
   };
+}
+
+/** Serialize a user-owned calendar-item relationship, throwing if its role is unrecognized. */
+function toCalendarItemRelationOut(
+  row: typeof calendarItemRelation.$inferSelect,
+): z.input<typeof CalendarItemRelationOut> {
+  return CalendarItemRelationOut.parse(toCalendarItemRelationOutUnsafe(row));
 }
 
 /** Calendar-item relationship routes, mounted on the me-calendar router at `/`. */
@@ -139,16 +151,19 @@ export const calendarItemRelationRoutes = new Hono<AppEnv>()
               );
       const targetById = new Map(targets.map((target) => [target.id, target]));
       return ok(c, CalendarItemRelationsOut, {
-        items: rows.map((row) => {
-          const relation = toCalendarItemRelationOut(row);
+        // A single row that fails to parse (an unrecognized role, an unrecognized target kind)
+        // is dropped rather than raising `.map()`'s error through the whole response — otherwise
+        // one malformed relation makes every OTHER relation on this item unreadable too. Contrast
+        // with the single-relation POST/DELETE responses below, which parse the one row they
+        // return and correctly throw if it's invalid.
+        items: rows.flatMap((row) => {
+          const relation = CalendarItemRelationOut.safeParse(toCalendarItemRelationOutUnsafe(row));
+          if (!relation.success) return [];
           const target = targetById.get(row.targetItemId);
-          return target
-            ? {
-                ...relation,
-                targetTitle: target.title,
-                targetKind: CalendarItemKind.parse(target.kind),
-              }
-            : relation;
+          if (!target) return [relation.data];
+          const targetKind = CalendarItemKind.safeParse(target.kind);
+          if (!targetKind.success) return [relation.data];
+          return [{ ...relation.data, targetTitle: target.title, targetKind: targetKind.data }];
         }),
       });
     },

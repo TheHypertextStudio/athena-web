@@ -132,6 +132,7 @@ export function AthenaConversationBrowser({
             <Button
               type="button"
               variant={lens === 'topics' ? 'secondary' : 'ghost'}
+              className="min-h-10"
               onClick={() => {
                 setLens('topics');
               }}
@@ -142,6 +143,7 @@ export function AthenaConversationBrowser({
             <Button
               type="button"
               variant={lens === 'search' ? 'secondary' : 'ghost'}
+              className="min-h-10"
               onClick={() => {
                 setLens('search');
               }}

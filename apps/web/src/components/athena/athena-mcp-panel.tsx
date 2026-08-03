@@ -246,6 +246,7 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
             type="button"
             variant="ghost"
             iconOnly={false}
+            className="min-h-10"
             onClick={() => {
               setConnectOpen(true);
             }}

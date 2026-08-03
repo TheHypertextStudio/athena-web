@@ -225,7 +225,11 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   const { releaseApproval, readApprovalPath } = await installAthenaFixture(page, orgId);
 
   await page.goto('/today');
-  await expect(page.getByRole('button', { name: 'Open Athena' })).toContainText('1 needs you');
+  // Exact: '/today' also renders its own page-level "Open Athena for today" door, whose name
+  // contains this one's as a substring — only the floating pulse button carries the queue count.
+  await expect(page.getByRole('button', { name: 'Open Athena', exact: true })).toContainText(
+    '1 needs you',
+  );
   await page.keyboard.press('Meta+J');
   await expect(page.getByRole('dialog', { name: 'Athena' })).toBeVisible();
   await expect(page.getByText('1 needs you').first()).toBeVisible();

@@ -35,6 +35,7 @@ export function VoiceLaunch({ workspaceId, history }: VoiceLaunchProps): JSX.Ele
     <>
       <Button
         variant="secondary"
+        className="min-h-10"
         onClick={() => {
           setOpen(true);
         }}

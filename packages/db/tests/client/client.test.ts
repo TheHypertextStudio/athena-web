@@ -17,6 +17,7 @@ type CloseMock = ReturnType<typeof vi.fn>;
 interface PgliteClientDouble {
   readonly dataDir: string;
   readonly close: CloseMock;
+  readonly listen: CloseMock;
 }
 
 const clientMocks = vi.hoisted(() => ({
@@ -56,7 +57,11 @@ function resetDriverMocks(): void {
   clientMocks.postgres.mockReset();
 
   clientMocks.PGlite.mockImplementation(function PGliteDouble(dataDir: string) {
-    const client = { close: vi.fn(async () => undefined), dataDir };
+    const client = {
+      close: vi.fn(async () => undefined),
+      dataDir,
+      listen: vi.fn(async () => vi.fn(async () => undefined)),
+    };
     clientMocks.pgliteClients.push(client);
     return client;
   });
@@ -149,6 +154,35 @@ describe('db client driver selection', () => {
     expect(fullSchema).toHaveProperty('organization');
     expect(fullSchema).toHaveProperty('task');
     expect(fullSchema).toHaveProperty('organizationRelations');
+  });
+
+  it('builds a postgres-js client for a non-pglite DATABASE_URL', async () => {
+    vi.stubEnv('DATABASE_URL', 'postgres://user:pass@localhost:5432/docket');
+    const { db } = await import('../../src/client');
+    expect(typeof touch(db, 'select')).toBe('function');
+    expect(clientMocks.postgres).toHaveBeenCalledWith(
+      'postgres://user:pass@localhost:5432/docket',
+      expect.objectContaining({ prepare: false }),
+    );
+    expect(clientMocks.drizzlePostgres).toHaveBeenCalledWith(
+      clientMocks.postgresClients[0],
+      expect.objectContaining({ schema: expect.any(Object) }),
+    );
+    expect(clientMocks.PGlite).not.toHaveBeenCalled();
+  });
+
+  it('subscribes to a NOTIFY channel through the pglite driver LISTEN', async () => {
+    vi.stubEnv('DATABASE_URL', 'pglite://memory');
+    const { listenToChannel } = await import('../../src/client');
+    const handler = vi.fn();
+
+    const unlisten = await listenToChannel('mcp_notify', handler);
+
+    const client = clientMocks.pgliteClients[0]!;
+    expect(client.listen).toHaveBeenCalledWith('mcp_notify', handler);
+    expect(typeof unlisten).toBe('function');
+    // The resolved value is `client.listen`'s own resolved unsub function, returned as-is.
+    await expect(unlisten()).resolves.toBeUndefined();
   });
 
   it('anchors a relative pglite data dir to the workspace root, not the cwd', async () => {

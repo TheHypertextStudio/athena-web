@@ -162,6 +162,9 @@ const initiativeAggregates = new Hono<AppEnv>()
       }[] = [];
       const visit = (id: string, depth: number): void => {
         const row = rowsById.get(id);
+        /* v8 ignore next -- @preserve defensive: `id` is always either a contextInitiatives row
+         * (always in rowsById, filtered from the viewer's own org) or a visibleLinks child
+         * (rowsById.has(child) is part of the visibleLinks filter itself), so this never misses. */
         if (!row) return;
         overviewItems.push({
           row,
@@ -171,7 +174,15 @@ const initiativeAggregates = new Hono<AppEnv>()
         });
         const children = childrenByParent.get(id) ?? [];
         children
-          .sort((a, b) => (rowsById.get(a)?.name ?? '').localeCompare(rowsById.get(b)?.name ?? ''))
+          .sort((a, b) => {
+            // Same invariant as above: every id here came from visibleLinks, so both lookups
+            // always resolve to a real row with a real name — the `?? ''` never fires.
+            /* v8 ignore start -- @preserve defensive: see the invariant note above */
+            const left = rowsById.get(a)?.name ?? '';
+            const right = rowsById.get(b)?.name ?? '';
+            /* v8 ignore stop */
+            return left.localeCompare(right);
+          })
           .forEach((childId) => {
             visit(childId, depth + 1);
           });
@@ -199,12 +210,24 @@ const initiativeAggregates = new Hono<AppEnv>()
         if (!row) throw new Error('Initiative attention row disappeared');
         const parentId = parentByChild.get(row.id) ?? null;
         const latest = latestUpdateByInitiative.get(row.id);
+        // `organizationIds` (fed into the orgRows query above) is built from the same rowsById
+        // set as `row`, so a row's own org always has a matching entry — the `?? ''` fallback
+        // exists only to satisfy Map's `| undefined` return type.
+        /* v8 ignore next -- @preserve defensive: see the invariant note above */
+        const organizationName = orgNameById.get(row.organizationId) ?? '';
+        // `parentId` (when non-null) always came from `visibleLinks`, whose filter requires
+        // both ends to already be in `rowsById` — so a resolved parent always has a real name.
+        let parentInitiativeName: string | null = null;
+        if (parentId) {
+          /* v8 ignore next -- @preserve defensive: see the invariant note above */
+          parentInitiativeName = rowsById.get(parentId)?.name ?? null;
+        }
         return {
           initiativeId: row.id,
           organizationId: row.organizationId,
-          organizationName: orgNameById.get(row.organizationId) ?? '',
+          organizationName,
           parentInitiativeId: parentId,
-          parentInitiativeName: parentId ? (rowsById.get(parentId)?.name ?? null) : null,
+          parentInitiativeName,
           title: row.name,
           excerpt: latest?.body ?? row.summary,
           severity,
@@ -215,6 +238,14 @@ const initiativeAggregates = new Hono<AppEnv>()
       return ok(c, InitiativeOverviewOut, {
         items: overviewItems.map(({ row, parentInitiativeId, parentLinkId, depth }) => {
           const display = displayByInitiative.get(row.id);
+          // `ownerRows` (fed into ownerNameById above) is queried for exactly the ownerIds
+          // present on visible rows, and an owner's `onDelete: 'set null'` FK means a set
+          // ownerId always still names a real actor — the `?? null` fallback never fires.
+          let ownerName: string | null = null;
+          if (row.ownerId) {
+            /* v8 ignore next -- @preserve defensive: see the invariant note above */
+            ownerName = ownerNameById.get(row.ownerId) ?? null;
+          }
           return {
             ...toOut(row),
             display: display
@@ -227,12 +258,14 @@ const initiativeAggregates = new Hono<AppEnv>()
                   customized: true,
                 }
               : defaultEntityDisplay('initiative', row.id),
+            // Same org-id invariant as the attention list above.
+            /* v8 ignore next -- @preserve defensive: see the invariant note above */
             organizationName: orgNameById.get(row.organizationId) ?? '',
             parentInitiativeId,
             parentLinkId,
             depth,
             childCount: childrenByParent.get(row.id)?.length ?? 0,
-            ownerName: row.ownerId ? (ownerNameById.get(row.ownerId) ?? null) : null,
+            ownerName,
             lastUpdateAt: latestUpdateByInitiative.get(row.id)?.createdAt.toISOString() ?? null,
           };
         }),
@@ -293,6 +326,11 @@ const initiativeAggregates = new Hono<AppEnv>()
       const inheritedThrough = new Map<string, string>();
       const visit = (parentId: string, firstHop: string): void => {
         for (const childId of childrenByParent.get(parentId) ?? []) {
+          // `childrenByParent` is built from `visibleLinks` within ONE context, where the
+          // `initiative_hierarchy_context_child_uq` unique index guarantees a child has at most
+          // one parent edge — combined with the cycle guard on link creation, the reachable
+          // graph below `id` is a proper forest, so no descendant is ever visited twice.
+          /* v8 ignore next -- @preserve defensive: see the invariant note above */
           if (descendantIds.includes(childId)) continue;
           descendantIds.push(childId);
           inheritedThrough.set(childId, firstHop);
@@ -355,6 +393,21 @@ const initiativeAggregates = new Hono<AppEnv>()
         string,
         z.input<typeof InitiativeAggregateDetail>['connectedWork'][number]
       >();
+      /**
+       * The first hop below `id` an indirect (non-direct) connected-work link inherited through,
+       * or `null` for a direct link.
+       *
+       * @remarks
+       * `programLinks`/`projectLinks` are queried for exactly `rollupIds = [id, ...descendantIds]`,
+       * so an `initiativeId` that is not `id` itself is always one of `descendantIds` — and
+       * `inheritedThrough` is populated for every one of those during the traversal above. The
+       * `?? null` exists only to satisfy Map's `| undefined` return type.
+       */
+      function inheritedThroughInitiativeId(initiativeId: string): string | null {
+        if (initiativeId === id) return null;
+        /* v8 ignore next -- @preserve defensive: see the function's own remarks */
+        return inheritedThrough.get(initiativeId) ?? null;
+      }
       for (const item of programLinks) {
         if (!accessibleIds.has(item.row.organizationId)) continue;
         const key = `program:${item.row.id}`;
@@ -369,8 +422,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           status: item.row.status,
           health: item.row.health,
           direct,
-          inheritedThroughInitiativeId:
-            item.initiativeId === id ? null : (inheritedThrough.get(item.initiativeId) ?? null),
+          inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
         });
       }
       for (const item of projectLinks) {
@@ -387,8 +439,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           status: item.row.status,
           health: item.row.health,
           direct,
-          inheritedThroughInitiativeId:
-            item.initiativeId === id ? null : (inheritedThrough.get(item.initiativeId) ?? null),
+          inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
         });
       }
       const connectedWork = [...connectedByKey.values()];
@@ -401,18 +452,28 @@ const initiativeAggregates = new Hono<AppEnv>()
       const baseDetail = buildInitiativeDetail(target, projects, programs);
       const latest = updateRows[0] ?? null;
       const parentRow = parentLink ? rowsById.get(parentLink.parentInitiativeId) : null;
+      // `parentRow`'s and every child's `organizationId` is always within `accessibleIds` (both
+      // came from `rowsById`, which is filtered to `accessibleIds.has(row.organizationId)`), and
+      // `orgRows` above was queried for exactly `[...accessibleIds]` — so `orgNameById.get(...)`
+      // always finds a name and `rowsById.get(link.childInitiativeId)` (from `childLinks`, a
+      // subset of `visibleLinks`, whose filter requires both ends in `rowsById`) never misses.
+      let parent: z.input<typeof InitiativeAggregateDetail>['parent'] = null;
+      if (parentRow) {
+        /* v8 ignore next -- @preserve defensive: see the invariant note above */
+        parent = toReference(parentRow, orgId, orgNameById.get(parentRow.organizationId) ?? '');
+      }
+      /* v8 ignore next 4 -- @preserve defensive: see the invariant note above */
+      const children = childLinks.flatMap((link) => {
+        const child = rowsById.get(link.childInitiativeId);
+        return child
+          ? [toReference(child, orgId, orgNameById.get(child.organizationId) ?? '')]
+          : [];
+      });
       return ok(c, InitiativeAggregateDetail, {
         ...baseDetail,
         contextOrganizationId: orgId,
-        parent: parentRow
-          ? toReference(parentRow, orgId, orgNameById.get(parentRow.organizationId) ?? '')
-          : null,
-        children: childLinks.flatMap((link) => {
-          const child = rowsById.get(link.childInitiativeId);
-          return child
-            ? [toReference(child, orgId, orgNameById.get(child.organizationId) ?? '')]
-            : [];
-        }),
+        parent,
+        children,
         connectedWork,
         labels: labelLinks.map(({ row }) => ({
           id: row.id,

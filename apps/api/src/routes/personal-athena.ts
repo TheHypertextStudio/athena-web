@@ -302,6 +302,7 @@ const personalAthena = new Hono<AppEnv>()
             status: 'pending',
           })
           .returning();
+        /* v8 ignore next -- @preserve defensive: insert always returns a row */
         if (!row) throw new Error('personal connection insert returned no row');
         if (ciphertext) {
           await tx.insert(personalMcpCredential).values({
@@ -586,6 +587,7 @@ const personalAthena = new Hono<AppEnv>()
               : null,
         })
         .returning();
+      /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!created) throw new Error('trigger insert returned no row');
       return ok(c, AthenaTriggerOut, toTriggerOut(created));
     },

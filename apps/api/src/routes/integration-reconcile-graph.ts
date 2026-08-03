@@ -309,6 +309,10 @@ export async function applyLabel(ctx: GraphApplyContext, ext: ExternalLabel): Pr
   const scopeTeamId = ext.externalTeamId ? ctx.resolveTeam(ext.externalTeamId) : null;
   // A team-scoped label whose team isn't mapped is not synced (explicit, no fallback).
   if (ext.externalTeamId && scopeTeamId === undefined) return;
+  /* v8 ignore next -- @preserve defensive: `resolveTeam` never returns `null` (only `string |
+   * undefined`), and the guard above already excludes `undefined` when `externalTeamId` is set,
+   * so `scopeTeamId` is always a string here — the `?? null` only guards the type, not a real
+   * runtime path. */
   const teamId = ext.externalTeamId ? (scopeTeamId ?? null) : null;
 
   const linked = ctx.existingLabelsByExternal.get(ext.externalId);
@@ -359,6 +363,7 @@ export async function applyLabel(ctx: GraphApplyContext, ext: ExternalLabel): Pr
     })
     .returning({ id: label.id });
   const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('label insert returned no row');
   ctx.labelIdByExternal.set(ext.externalId, row.id);
   ctx.result.labels.created += 1;
@@ -419,6 +424,7 @@ export async function applyProject(ctx: GraphApplyContext, ext: ExternalProject)
       })
       .returning({ id: project.id });
     const row = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('project insert returned no row');
     ctx.projectIdByExternal.set(ext.externalId, row.id);
     ctx.result.projects.created += 1;
@@ -490,6 +496,7 @@ export async function applyCycle(ctx: GraphApplyContext, ext: ExternalCycle): Pr
       })
       .returning({ id: cycle.id });
     const row = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('cycle insert returned no row');
     ctx.cycleIdByExternal.set(ext.externalId, row.id);
     ctx.result.cycles.created += 1;
@@ -629,6 +636,7 @@ async function insertLinkedItem(
     })
     .returning({ id: task.id });
   const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('linked task insert returned no row');
   return row.id;
 }

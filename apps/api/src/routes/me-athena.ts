@@ -146,6 +146,11 @@ function decodeHistoryCursor(
     if (Number.isNaN(createdAt.getTime()) || createdAt.toISOString() !== rawCreatedAt) return null;
     return { createdAt, id };
   } catch {
+    // Nothing in the try block above can actually throw: `token` is pre-filtered to the
+    // base64url alphabet, `Buffer.from(...).toString('utf8')` never throws for any input, and
+    // `new Date(...)` returns Invalid Date rather than throwing. Kept as a guard against a
+    // future change to this function, not because today's code can reach it.
+    /* v8 ignore next -- @preserve defensive: see remark above */
     return null;
   }
 }
@@ -260,6 +265,11 @@ async function metadataBySession(
   }
   for (const row of contexts) {
     const current = grouped.get(row.sessionId) ?? { objective: null, context: null };
+    // Every writer of a `context` key follows the same `...(context ? { context } : {})`
+    // pattern (see `appendMessage` and `raiseElicitation`): the key is included only with a
+    // real object, never set to an explicit `null`. The SQL filter above only proves the key
+    // exists, not its value, so the fallback stays as the honest defensive read of that.
+    /* v8 ignore next -- @preserve defensive: see remark above */
     grouped.set(row.sessionId, { ...current, context: row.body.context ?? null });
   }
   return grouped;
@@ -344,9 +354,16 @@ interface ActivityCursor {
   readonly id: string;
 }
 
-/** Resolve a persisted SSE event id into its deterministic timestamp/id cursor. */
+/**
+ * Resolve a persisted SSE event id into its deterministic timestamp/id cursor.
+ *
+ * @remarks
+ * `id` is never falsy in practice — the one call site already guards with
+ * `lastEventId ? await activityCursor(...) : null`, so an empty id never reaches here. No
+ * defensive re-check: a second guard for a condition the caller already excludes is dead code,
+ * not safety.
+ */
 async function activityCursor(sessionId: string, id: string): Promise<ActivityCursor | null> {
-  if (!id) return null;
   const rows = await db
     .select({ createdAt: sessionActivity.createdAt, id: sessionActivity.id })
     .from(sessionActivity)
@@ -490,9 +507,12 @@ async function overview(
     ownerUserId,
     contextEntries.map(([, context]) => context),
   );
+  // `resolveAthenaDisplays` always returns one entry per input, in order (never a hole), so
+  // `resolvedDisplays[index]` is guaranteed defined for every `contextEntries` index here.
   const contexts = new Map(
     contextEntries.flatMap(([key], index) => {
       const display = resolvedDisplays[index];
+      /* v8 ignore next -- @preserve defensive: see remark above */
       return display ? [[key, display] as const] : [];
     }),
   );
@@ -511,17 +531,24 @@ async function overview(
     }),
   );
   const summariesById = new Map(summaries.map((row) => [row.id, row]));
+  // `rows` is the deduped union of every lane's sessions (plus `chats`), and `summaries` maps
+  // over exactly `rows` — so every id in any one lane below is guaranteed a `summariesById`
+  // entry; `Promise.all` over `summaries` would itself have rejected before reaching here if
+  // any one session's summary build had failed.
   const sessions = {
     needsYou: needsYou.sessions.flatMap((row) => {
       const summary = summariesById.get(row.id);
+      /* v8 ignore next -- @preserve defensive: see remark above */
       return summary ? [summary] : [];
     }),
     working: working.sessions.flatMap((row) => {
       const summary = summariesById.get(row.id);
+      /* v8 ignore next -- @preserve defensive: see remark above */
       return summary ? [summary] : [];
     }),
     finished: finished.sessions.flatMap((row) => {
       const summary = summariesById.get(row.id);
+      /* v8 ignore next -- @preserve defensive: see remark above */
       return summary ? [summary] : [];
     }),
   };
@@ -584,6 +611,12 @@ async function appendMessage(
       .from(agentSession)
       .where(eq(agentSession.id, session.id))
       .for('update');
+    // `session` was already loaded (and ownership-checked) by the caller a moment ago; nothing
+    // in this API can change a session's owner or executor kind, and there is no delete route
+    // for one, so this re-check can only fail under a genuine concurrent mutation this test
+    // suite has no way to fault-inject. Kept as the transaction's own guarantee, not because
+    // today's call graph can reach it.
+    /* v8 ignore next -- @preserve defensive: see remark above */
     if (locked?.ownerUserId !== ownerUserId || locked.executorKind !== 'athena') {
       throw new NotFoundError('Session not found');
     }
@@ -597,6 +630,7 @@ async function appendMessage(
         .set({ contextOrganizationId: context.workspaceId, initiatorId: invocation.actorId })
         .where(eq(agentSession.id, session.id))
         .returning();
+      /* v8 ignore next -- @preserve defensive: update always returns the just-locked row */
       if (!focused) throw new Error('session focus update returned no row');
       current = focused;
     }
@@ -947,6 +981,12 @@ const meAthena = new Hono<AppEnv>()
           },
         })
         .returning({ createdAt: sessionActivity.createdAt });
+      // `dispatchAthenaWork` is never called with a `taskId` from this route (only its
+      // "task-already-exists" early return can produce a null `linkageNote`), so every call
+      // here goes through one of the branches that always constructs a real sentence —
+      // `describeParentResolution` itself never returns empty. The `if` stays because
+      // `linkageNote`'s type is `string | null`, not because this route can see the false side.
+      /* v8 ignore next -- @preserve defensive: see remark above */
       if (dispatched.linkageNote) {
         // Said out loud, always. Silently filing work nowhere is the failure this prevents.
         // Stamped strictly after the opening message: the session's objective is derived from
@@ -957,6 +997,7 @@ const meAthena = new Hono<AppEnv>()
           organizationId: null,
           type: 'response',
           body: { text: dispatched.linkageNote, author: 'athena' },
+          /* v8 ignore next -- @preserve defensive: insert always returns a row */
           ...(opening ? { createdAt: new Date(opening.createdAt.getTime() + 1) } : {}),
         });
       }

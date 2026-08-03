@@ -69,6 +69,9 @@ export type RunGenerationEffect<T> = (tx: RunGenerationTransaction) => Promise<T
 
 /** Return the Athena owner after checking the persisted executor shape. */
 function ownerOf(session: SessionRow): string {
+  /* v8 ignore next 3 -- @preserve defensive: the sole caller only invokes this inside an
+     `executorKind === 'athena'` branch, and agent_session_executor_shape_check guarantees such a
+     session's ownerUserId is NOT NULL at the database level */
   if (session.executorKind !== 'athena' || !session.ownerUserId) {
     throw new Error('Athena session is missing its owner');
   }
@@ -110,15 +113,26 @@ async function lockRunAdmissionSession(
       .from(user)
       .where(eq(user.id, ownerOf(observed)))
       .for('update');
+    /* v8 ignore next -- @preserve defensive: ownerUserId has an FK to user with onDelete:
+       'cascade', so if the owner row were gone this session row would already be gone too */
     if (!owner) throw new NotFoundError('Athena owner not found');
   }
 
+  // Not defensively ignored: unlike the two checks above, this is a genuine (if narrow) race
+  // between the non-locking read above and this lock — a concurrent hard-delete of the session
+  // (e.g. its organization being deleted) landing in between. Real in production; not one this
+  // suite's PGlite driver can reproduce, since it serializes concurrent transaction callbacks
+  // rather than interleaving their individual statements.
   const [current] = await tx
     .select()
     .from(agentSession)
     .where(eq(agentSession.id, sessionId))
     .for('update');
   if (!current) throw new NotFoundError('Session not found');
+  /* v8 ignore next 5 -- @preserve defensive: executorKind and ownerUserId are set once at session
+     creation (agent_session_executor_shape_check enforces their pairing) and no code path in this
+     codebase ever updates either column afterward, so the freshly-locked row can never disagree
+     with the non-locking read taken moments earlier in the same transaction */
   if (
     current.executorKind !== observed.executorKind ||
     current.ownerUserId !== observed.ownerUserId
@@ -146,6 +160,9 @@ export async function enqueueRunGeneration(
 
   return db.transaction(async (tx) => {
     const current = await lockRunAdmissionSession(tx, session.id);
+    /* v8 ignore next 6 -- @preserve defensive: executorKind and ownerUserId are set once at
+       session creation and never updated afterward by any code path in this codebase, so the
+       just-locked row can never disagree with the (possibly stale) `session` the caller passed in */
     if (
       current.executorKind !== session.executorKind ||
       current.ownerUserId !== session.ownerUserId
@@ -181,6 +198,8 @@ export async function enqueueRunGeneration(
 
     if (current.executorKind === 'athena') {
       const ownerUserId = current.ownerUserId;
+      /* v8 ignore next -- @preserve defensive: agent_session_executor_shape_check guarantees an
+         athena session's ownerUserId is NOT NULL at the database level */
       if (!ownerUserId) throw new Error('Athena session is missing its owner');
       const [active] = await tx
         .select({ value: count() })
@@ -195,6 +214,8 @@ export async function enqueueRunGeneration(
           ),
         );
       const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
+      /* v8 ignore next -- @preserve defensive: a bare count() aggregate with no GROUP BY always
+         returns exactly one row, so `active` is never undefined and the `?? 0` fallback is dead */
       if ((active?.value ?? 0) >= limit) {
         throw new ConflictError('Athena has reached the concurrent run limit');
       }
@@ -215,6 +236,7 @@ export async function enqueueRunGeneration(
         dispatchOrigin: 'athena_admission',
       })
       .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!queued) throw new Error('queued run generation insert returned no row');
     await tx.insert(agentSessionDispatch).values({
       runId: queued.id,
@@ -292,6 +314,8 @@ export async function claimQueuedRunGeneration(
     }
     if (recoveringExpired && current.executorKind === 'athena') {
       const ownerUserId = current.ownerUserId;
+      /* v8 ignore next -- @preserve defensive: agent_session_executor_shape_check guarantees an
+         athena session's ownerUserId is NOT NULL at the database level */
       if (!ownerUserId) throw new Error('Athena session is missing its owner');
       const [active] = await tx
         .select({ value: count() })
@@ -307,6 +331,8 @@ export async function claimQueuedRunGeneration(
           ),
         );
       const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
+      /* v8 ignore next -- @preserve defensive: a bare count() aggregate with no GROUP BY always
+         returns exactly one row, so `active` is never undefined and the `?? 0` fallback is dead */
       if ((active?.value ?? 0) >= limit) {
         throw new ConflictError('Athena has reached the concurrent run limit');
       }
@@ -381,6 +407,9 @@ export async function claimRunGeneration(
 
   return db.transaction(async (tx) => {
     const current = await lockRunAdmissionSession(tx, session.id);
+    /* v8 ignore next 6 -- @preserve defensive: executorKind and ownerUserId are set once at
+       session creation and never updated afterward by any code path in this codebase, so the
+       just-locked row can never disagree with the (possibly stale) `session` the caller passed in */
     if (
       current.executorKind !== session.executorKind ||
       current.ownerUserId !== session.ownerUserId
@@ -407,6 +436,8 @@ export async function claimRunGeneration(
 
     if (current.executorKind === 'athena') {
       const ownerUserId = current.ownerUserId;
+      /* v8 ignore next -- @preserve defensive: agent_session_executor_shape_check guarantees an
+         athena session's ownerUserId is NOT NULL at the database level */
       if (!ownerUserId) throw new Error('Athena session is missing its owner');
       const [active] = await tx
         .select({ value: count() })
@@ -419,6 +450,8 @@ export async function claimRunGeneration(
           ),
         );
       const limit = env.ATHENA_MAX_CONCURRENT_RUNS ?? DEFAULT_ATHENA_CONCURRENCY;
+      /* v8 ignore next -- @preserve defensive: a bare count() aggregate with no GROUP BY always
+         returns exactly one row, so `active` is never undefined and the `?? 0` fallback is dead */
       if ((active?.value ?? 0) >= limit) {
         throw new ConflictError('Athena has reached the concurrent run limit');
       }
@@ -495,6 +528,9 @@ export async function claimRunGeneration(
         .where(eq(agentSession.id, current.id));
     }
 
+    /* v8 ignore next -- @preserve defensive: the queued-adopt and running-recover branches above
+       already throw their own ConflictError when unclaimed; the only branch that reaches here
+       without having done so is the fresh insert, whose `.returning()` always yields a row */
     if (!claimed) throw new Error('run generation claim returned no row');
 
     return {
@@ -665,6 +701,9 @@ export async function settleRunGeneration(
       .set({ status: sessionStatus, ...(terminal ? { endedAt: new Date() } : {}) })
       .where(eq(agentSession.id, lease.sessionId))
       .returning();
+    /* v8 ignore next -- @preserve defensive: this row was already locked with FOR UPDATE by
+       `parent` above in this same transaction, so it cannot vanish between that lock and this
+       update */
     if (!settled) throw new Error('session update returned no row');
     return settled;
   });

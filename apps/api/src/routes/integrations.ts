@@ -64,6 +64,9 @@ async function setIntegration(
 ): Promise<IntegrationRow> {
   const updated = await db.update(integration).set(patch).where(eq(integration.id, id)).returning();
   const row = updated[0];
+  /* v8 ignore next -- @preserve defensive: every caller already loaded this row (existence
+   * verified) in the same request; only a genuine concurrent delete between that load and this
+   * update could empty `updated`, not reproducible against a single serialized connection. */
   if (!row) throw new NotFoundError('Integration not found');
   return row;
 }
@@ -117,6 +120,9 @@ async function setVerifiedLinearIntegration(
       .set(patch)
       .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
       .returning();
+    /* v8 ignore next -- @preserve defensive: the caller already loaded this row (existence
+     * verified) before this SERIALIZABLE transaction; only a genuine concurrent delete could
+     * empty `updated`, not reproducible against a single serialized connection. */
     if (!updated) throw new NotFoundError('Integration not found');
     return updated;
   });
@@ -147,6 +153,11 @@ async function validateTeamMappings(
 
   const parsed = ConnectorConfig.shape.teamMappings.safeParse(config['teamMappings']);
   if (!parsed.success) throw new ValidationError(parsed.error);
+  /* v8 ignore next -- @preserve defensive: `parsed.success` guarantees `parsed.data` is defined
+   * for every value JSON can actually carry here — `config['teamMappings']` only reaches this
+   * function via a JSON request body (`zJson`-validated), and JSON has no `undefined`, so the
+   * `undefined`-with-success case this guards (a literal JS `undefined` value on an `.optional()`
+   * field) is not reachable through the real HTTP transport. */
   const mappings = parsed.data ?? [];
   if (mappings.length === 0) return;
 

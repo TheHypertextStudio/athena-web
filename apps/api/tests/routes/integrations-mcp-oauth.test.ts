@@ -59,6 +59,31 @@ afterEach(() => {
   resetAuthMocks();
 });
 
+async function seedPendingPersonalOAuth(): Promise<{ ownerUserId: string; connectionId: string }> {
+  const suffix = Math.random().toString(36).slice(2, 10);
+  const [user] = await db
+    .insert(schema.user)
+    .values({ name: 'Personal Owner', email: `personal-mcp-${suffix}@example.com` })
+    .returning({ id: schema.user.id });
+  const [connection] = await db
+    .insert(schema.personalMcpConnection)
+    .values({
+      ownerUserId: user!.id,
+      name: 'Sunsama',
+      alias: `sun${suffix}`,
+      url: 'https://mcp.sunsama.com/mcp',
+      authMode: 'oauth',
+      status: 'pending',
+    })
+    .returning({ id: schema.personalMcpConnection.id });
+  await db.insert(schema.personalMcpCredential).values({
+    connectionId: connection!.id,
+    ownerUserId: user!.id,
+    ciphertext: sealCredential(JSON.stringify({ kind: 'mcp_oauth_pending', codeVerifier: 'pkce' })),
+  });
+  return { ownerUserId: user!.id, connectionId: connection!.id };
+}
+
 async function seedPendingOAuth(): Promise<{ orgId: string; integrationId: string }> {
   const slug = `mcp-oauth-${Math.random().toString(36).slice(2, 10)}`;
   const [org] = await db
@@ -224,5 +249,205 @@ describe('remote MCP OAuth callback', () => {
     expect(response.status).toBe(302);
     expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
     expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('records the provider error and redirects when the callback carries no code (org scope)', async () => {
+    const seeded = await seedPendingOAuth();
+    const state = signConnectState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+      userId: 'actor_test',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+
+    const response = await app.request(
+      `/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
+    const [stored] = await db
+      .select({ status: schema.integration.status, lastError: schema.integration.lastError })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, seeded.integrationId));
+    expect(stored).toMatchObject({ status: 'error', lastError: 'access_denied' });
+    expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('redirects to error when the signed integration id does not resolve to a real MCP integration', async () => {
+    const state = signConnectState({
+      integrationId: 'nonexistent-integration',
+      orgId: 'nonexistent-org',
+      userId: 'actor_test',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+
+    const response = await app.request(
+      `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
+    expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();
+  });
+
+  it('marks the integration errored when the pending credential no longer matches', async () => {
+    const seeded = await seedPendingOAuth();
+    // Overwrite the stored credential so it is no longer a pending approval.
+    await db
+      .update(schema.integrationCredential)
+      .set({ ciphertext: sealCredential(JSON.stringify({ kind: 'something_else' })) })
+      .where(eq(schema.integrationCredential.integrationId, seeded.integrationId));
+    const state = signConnectState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+      userId: 'actor_test',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+
+    const response = await app.request(
+      `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
+    const [stored] = await db
+      .select({ status: schema.integration.status, lastError: schema.integration.lastError })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, seeded.integrationId));
+    expect(stored).toMatchObject({
+      status: 'error',
+      lastError: 'MCP OAuth approval is no longer active',
+    });
+  });
+
+  it('marks the integration errored when the token exchange itself throws', async () => {
+    const seeded = await seedPendingOAuth();
+    completeMcpOAuthAuthorization.mockRejectedValue(new Error('provider refused the code'));
+    const state = signConnectState({
+      integrationId: seeded.integrationId,
+      orgId: seeded.orgId,
+      userId: 'actor_test',
+    });
+    const app = new Hono().route('/', integrationsMcpOauth);
+
+    const response = await app.request(
+      `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get('location')).toContain('/settings/athena?mcp=error');
+    const [stored] = await db
+      .select({ lastError: schema.integration.lastError })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, seeded.integrationId));
+    expect(stored?.lastError).toBe('provider refused the code');
+  });
+
+  describe('personal scope', () => {
+    it('exchanges a signed personal approval and returns to the Connections screen as connected', async () => {
+      const seeded = await seedPendingPersonalOAuth();
+      completeMcpOAuthAuthorization.mockResolvedValue({
+        kind: 'mcp_oauth',
+        tokens: { access_token: 'access', token_type: 'Bearer' },
+        obtainedAt: new Date().toISOString(),
+      });
+      const state = signConnectState({
+        scope: 'personal',
+        personalConnectionId: seeded.connectionId,
+        ownerUserId: seeded.ownerUserId,
+      });
+      const app = new Hono().route('/', integrationsMcpOauth);
+
+      const response = await app.request(
+        `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toContain('/settings/connections?mcp=connected');
+      const [stored] = await db
+        .select({ status: schema.personalMcpConnection.status })
+        .from(schema.personalMcpConnection)
+        .where(eq(schema.personalMcpConnection.id, seeded.connectionId));
+      expect(stored?.status).toBe('connected');
+    });
+
+    it('redirects to error when the personal state names a mismatched connection/owner pair', async () => {
+      const seeded = await seedPendingPersonalOAuth();
+      const state = signConnectState({
+        scope: 'personal',
+        personalConnectionId: seeded.connectionId,
+        ownerUserId: 'someone-else',
+      });
+      const app = new Hono().route('/', integrationsMcpOauth);
+
+      const response = await app.request(
+        `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toContain('/settings/connections?mcp=error');
+      expect(completeMcpOAuthAuthorization).not.toHaveBeenCalled();
+    });
+
+    it('redirects to error when the personal state is missing required fields', async () => {
+      const state = signConnectState({ scope: 'personal' });
+      const app = new Hono().route('/', integrationsMcpOauth);
+
+      const response = await app.request(
+        `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toContain('/settings/connections?mcp=error');
+    });
+
+    it('records the provider error when the callback carries no code (personal scope)', async () => {
+      const seeded = await seedPendingPersonalOAuth();
+      const state = signConnectState({
+        scope: 'personal',
+        personalConnectionId: seeded.connectionId,
+        ownerUserId: seeded.ownerUserId,
+      });
+      const app = new Hono().route('/', integrationsMcpOauth);
+
+      const response = await app.request(
+        `/callback?error=access_denied&state=${encodeURIComponent(state)}`,
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toContain('/settings/connections?mcp=error');
+      const [stored] = await db
+        .select({
+          status: schema.personalMcpConnection.status,
+          lastError: schema.personalMcpConnection.lastError,
+        })
+        .from(schema.personalMcpConnection)
+        .where(eq(schema.personalMcpConnection.id, seeded.connectionId));
+      expect(stored).toMatchObject({ status: 'error', lastError: 'access_denied' });
+    });
+
+    it('marks the personal connection errored when the token exchange throws', async () => {
+      const seeded = await seedPendingPersonalOAuth();
+      completeMcpOAuthAuthorization.mockRejectedValue(new Error('personal provider refused'));
+      const state = signConnectState({
+        scope: 'personal',
+        personalConnectionId: seeded.connectionId,
+        ownerUserId: seeded.ownerUserId,
+      });
+      const app = new Hono().route('/', integrationsMcpOauth);
+
+      const response = await app.request(
+        `/callback?code=approval-code&state=${encodeURIComponent(state)}`,
+      );
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get('location')).toContain('/settings/connections?mcp=error');
+      const [stored] = await db
+        .select({ lastError: schema.personalMcpConnection.lastError })
+        .from(schema.personalMcpConnection)
+        .where(eq(schema.personalMcpConnection.id, seeded.connectionId));
+      expect(stored?.lastError).toBe('personal provider refused');
+    });
   });
 });

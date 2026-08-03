@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.hoisted(() => {
   process.env['DATABASE_URL'] = 'pglite://memory://';
@@ -11,12 +11,31 @@ vi.hoisted(() => {
   process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
 });
 
+const { beginMcpOAuthAuthorization } = vi.hoisted(() => ({
+  beginMcpOAuthAuthorization: vi.fn(),
+}));
+
+vi.mock('@docket/integrations', async (importOriginal) => ({
+  ...(await importOriginal<typeof IntegrationsModule>()),
+  beginMcpOAuthAuthorization,
+}));
+
 import type * as DbModule from '@docket/db';
+import type * as IntegrationsModule from '@docket/integrations';
 import type { PersonalMcpConnectionOut } from '@docket/types';
 
+import { env } from '../../src/env';
 import type personalAthenaRouter from '../../src/routes/personal-athena';
+import type {
+  loadPersonalMcpConnection as LoadPersonalMcpConnection,
+  verifyPersonalMcpConnection as VerifyPersonalMcpConnection,
+} from '../../src/routes/personal-athena';
+import type { getContainer as GetContainer } from '../../src/container';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
-import type { unsealCredential as UnsealCredential } from '../../src/lib/credentials';
+import type {
+  sealCredential as SealCredential,
+  unsealCredential as UnsealCredential,
+} from '../../src/lib/credentials';
 import { appWithSession, fakeSession, getDb, one } from '../support/routes-harness';
 
 const JSON_HEADERS = { 'content-type': 'application/json' };
@@ -25,14 +44,27 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let personalAthena!: typeof personalAthenaRouter;
 let openToolbox!: typeof OpenToolbox;
+let sealCredential!: typeof SealCredential;
 let unsealCredential!: typeof UnsealCredential;
+let getContainer!: typeof GetContainer;
+let verifyPersonalMcpConnection!: typeof VerifyPersonalMcpConnection;
+let loadPersonalMcpConnection!: typeof LoadPersonalMcpConnection;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
-  personalAthena = (await import('../../src/routes/personal-athena')).default;
+  ({
+    default: personalAthena,
+    verifyPersonalMcpConnection,
+    loadPersonalMcpConnection,
+  } = await import('../../src/routes/personal-athena'));
   ({ openToolbox } = await import('../../src/agent/toolbox'));
-  ({ unsealCredential } = await import('../../src/lib/credentials'));
+  ({ sealCredential, unsealCredential } = await import('../../src/lib/credentials'));
+  ({ getContainer } = await import('../../src/container'));
+});
+
+afterEach(() => {
+  beginMcpOAuthAuthorization.mockReset();
 });
 
 async function seedUser(label: string): Promise<string> {
@@ -46,7 +78,7 @@ async function seedUser(label: string): Promise<string> {
 
 async function connect(
   userId: string,
-  input: Partial<Record<'name' | 'alias' | 'authMode' | 'bearerToken', string>> = {},
+  input: Partial<Record<'name' | 'alias' | 'authMode' | 'bearerToken' | 'url', string>> = {},
 ): Promise<PersonalMcpConnectionOut> {
   const app = appWithSession(personalAthena, fakeSession(userId));
   const response = await app.request('/connections', {
@@ -187,5 +219,290 @@ describe('personal Athena MCP connections', () => {
       await athena.close();
       await agent.close();
     }
+  });
+
+  it('refuses every route to a caller with no session', async () => {
+    const app = appWithSession(personalAthena, null);
+    expect((await app.request('/connections')).status).toBe(401);
+  });
+
+  it('leaves an oauth connection pending rather than verifying it eagerly', async () => {
+    const userId = await seedUser('OAuthPending');
+    const created = await connect(userId, { authMode: 'oauth' });
+    expect(created).toMatchObject({ authMode: 'oauth', status: 'pending', toolCount: null });
+  });
+
+  it('refuses a second connection that reuses an existing alias or URL', async () => {
+    const userId = await seedUser('Duplicate');
+    await connect(userId, { alias: 'shared_alias' });
+
+    const byAlias = await appWithSession(personalAthena, fakeSession(userId)).request(
+      '/connections',
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          url: 'https://mcp.acme-release.example/mcp',
+          name: 'Different server',
+          alias: 'shared_alias',
+          authMode: 'none',
+        }),
+      },
+    );
+    expect(byAlias.status).toBe(409);
+
+    const byUrl = await appWithSession(personalAthena, fakeSession(userId)).request(
+      '/connections',
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          url: 'https://mcp.sunsama.com/mcp',
+          name: 'Same server, new alias',
+          alias: 'a_different_alias',
+          authMode: 'none',
+        }),
+      },
+    );
+    expect(byUrl.status).toBe(409);
+  });
+
+  it('records a connection error rather than throwing when the remote server is unreachable', async () => {
+    const userId = await seedUser('Unreachable');
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request('/connections', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        url: 'https://mcp.does-not-exist.example/mcp',
+        name: 'Ghost server',
+        alias: 'ghost',
+        authMode: 'none',
+      }),
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as PersonalMcpConnectionOut;
+    expect(body.status).toBe('error');
+    expect(body.lastError).toContain('No MCP server reachable');
+  });
+
+  it('reconnects using an in-progress OAuth credential with no bearer token yet', async () => {
+    const userId = await seedUser('OAuthInProgress');
+    const created = await connect(userId, { authMode: 'oauth' });
+    await db.insert(schema.personalMcpCredential).values({
+      connectionId: created.id,
+      ownerUserId: userId,
+      ciphertext: sealCredential(
+        JSON.stringify({ kind: 'mcp_oauth_pending', codeVerifier: 'pkce' }),
+      ),
+    });
+
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request(`/connections/${created.id}/reconnect`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as PersonalMcpConnectionOut).toMatchObject({
+      status: 'connected',
+      toolCount: 2,
+    });
+  });
+
+  it('refuses to rename a connection into an alias another connection already owns', async () => {
+    const userId = await seedUser('AliasConflict');
+    await connect(userId, { alias: 'taken' });
+    const other = await connect(userId, {
+      alias: 'free',
+      url: 'https://mcp.acme-release.example/mcp',
+    });
+
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request(`/connections/${other.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ alias: 'taken' }),
+    });
+    expect(response.status).toBe(409);
+  });
+
+  it('starts an OAuth approval and persists its encrypted pending state', async () => {
+    beginMcpOAuthAuthorization.mockResolvedValue({
+      authorizationUrl: 'https://mcp.sunsama.com/authorize?state=abc',
+      credential: { kind: 'mcp_oauth_pending', codeVerifier: 'verifier-value' },
+    });
+    const userId = await seedUser('OAuthStart');
+    const created = await connect(userId, { authMode: 'oauth' });
+
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request(`/connections/${created.id}/authorize`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as { authorizationUrl: string }).toEqual({
+      authorizationUrl: 'https://mcp.sunsama.com/authorize?state=abc',
+    });
+    expect(beginMcpOAuthAuthorization).toHaveBeenCalledWith(
+      expect.objectContaining({ serverUrl: created.url, clientMetadataUrl: expect.any(String) }),
+    );
+    const credential = one(
+      await db
+        .select()
+        .from(schema.personalMcpCredential)
+        .where(eq(schema.personalMcpCredential.connectionId, created.id)),
+    );
+    expect(unsealCredential(credential.ciphertext)).toContain('mcp_oauth_pending');
+  });
+
+  it('omits the client metadata URL when the API is not served over HTTPS', async () => {
+    beginMcpOAuthAuthorization.mockResolvedValue({
+      authorizationUrl: 'https://mcp.sunsama.com/authorize?state=abc',
+      credential: { kind: 'mcp_oauth_pending', codeVerifier: 'verifier-value' },
+    });
+    // `env` is typed `Readonly<...>` (its values are meant to come only from validated process
+    // env), but it is a plain object at runtime — mutating it here for one test, then restoring
+    // it, is the same technique `tests/lib/slack-app.test.ts` uses for its own `env` overrides.
+    const mutableEnv = env as { API_URL: string };
+    const originalApiUrl = mutableEnv.API_URL;
+    mutableEnv.API_URL = 'http://api.docket.localhost';
+    try {
+      const userId = await seedUser('OAuthInsecure');
+      const created = await connect(userId, { authMode: 'oauth' });
+      const app = appWithSession(personalAthena, fakeSession(userId));
+      const response = await app.request(`/connections/${created.id}/authorize`, {
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect(beginMcpOAuthAuthorization).toHaveBeenCalledWith(
+        expect.not.objectContaining({ clientMetadataUrl: expect.anything() }),
+      );
+    } finally {
+      mutableEnv.API_URL = originalApiUrl;
+    }
+  });
+
+  it('refuses to start OAuth for a connection that does not use it', async () => {
+    const userId = await seedUser('NotOAuth');
+    const created = await connect(userId, { authMode: 'none' });
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request(`/connections/${created.id}/authorize`, { method: 'POST' });
+    expect(response.status).toBe(409);
+  });
+
+  it('discovers a server name that falls back to its bare identifier with no title', async () => {
+    const userId = await seedUser('NoTitle');
+    const openSpy = vi.spyOn(getContainer().mcpConnector, 'open').mockResolvedValueOnce({
+      serverInfo: () => ({ name: 'bare-server' }),
+      listTools: async () => [],
+      callTool: async () => ({ content: '', isError: false }),
+      close: async () => undefined,
+    });
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const preview = await app.request('/connections/preview', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ url: 'https://mcp.no-title.example/mcp' }),
+    });
+    expect(await preview.json()).toEqual({ name: 'bare-server' });
+    openSpy.mockRestore();
+  });
+
+  it('uses a completed OAuth token as the bearer credential on reconnect', async () => {
+    const userId = await seedUser('OAuthCompleted');
+    const created = await connect(userId, { authMode: 'oauth' });
+    await db.insert(schema.personalMcpCredential).values({
+      connectionId: created.id,
+      ownerUserId: userId,
+      ciphertext: sealCredential(
+        JSON.stringify({
+          kind: 'mcp_oauth',
+          tokens: { access_token: 'real-access-token', token_type: 'bearer' },
+          obtainedAt: new Date().toISOString(),
+        }),
+      ),
+    });
+    const openSpy = vi.spyOn(getContainer().mcpConnector, 'open');
+
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request(`/connections/${created.id}/reconnect`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as PersonalMcpConnectionOut).toMatchObject({
+      status: 'connected',
+    });
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ bearerToken: 'real-access-token' }),
+    );
+    openSpy.mockRestore();
+  });
+
+  it('records a non-Error connection failure with a generic message', async () => {
+    const userId = await seedUser('WeirdThrow');
+    const openSpy = vi
+      .spyOn(getContainer().mcpConnector, 'open')
+      .mockRejectedValueOnce('a plain string rejection, not an Error');
+    const app = appWithSession(personalAthena, fakeSession(userId));
+
+    const response = await app.request('/connections', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        url: 'https://mcp.weird-throw.example/mcp',
+        name: 'Odd server',
+        alias: 'odd',
+        authMode: 'none',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()) as PersonalMcpConnectionOut).toMatchObject({
+      status: 'error',
+      lastError: 'Connection failed',
+    });
+    openSpy.mockRestore();
+  });
+
+  it('refuses to verify a connection that vanished between its load and its health check', async () => {
+    const userId = await seedUser('VanishingConnection');
+    const created = await connect(userId);
+    const row = await loadPersonalMcpConnection(userId, created.id);
+    await db
+      .delete(schema.personalMcpConnection)
+      .where(eq(schema.personalMcpConnection.id, row.id));
+
+    await expect(verifyPersonalMcpConnection(row)).rejects.toThrow('Connection not found');
+  });
+
+  it('renames a connection to a genuinely new alias with no conflict', async () => {
+    const userId = await seedUser('RenameFree');
+    const created = await connect(userId, { alias: 'old_alias' });
+    const app = appWithSession(personalAthena, fakeSession(userId));
+    const response = await app.request(`/connections/${created.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ alias: 'new_alias' }),
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()) as PersonalMcpConnectionOut).toMatchObject({
+      alias: 'new_alias',
+    });
+  });
+
+  it('hides an edit that lost a race with the connection’s own deletion', async () => {
+    const userId = await seedUser('RaceDelete');
+    const created = await connect(userId);
+    const app = appWithSession(personalAthena, fakeSession(userId));
+
+    const [patchResponse, deleteResponse] = await Promise.all([
+      app.request(`/connections/${created.id}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ name: 'Renamed mid-delete' }),
+      }),
+      app.request(`/connections/${created.id}`, { method: 'DELETE' }),
+    ]);
+
+    // Exactly one of the two racing requests observed the row still there to act on; the other
+    // found it already gone. Both outcomes are a defended not-found, never a crash or a silent
+    // write to a deleted row.
+    const statuses = [patchResponse.status, deleteResponse.status].sort();
+    expect(statuses).toEqual([200, 404].sort());
   });
 });

@@ -139,9 +139,14 @@ function toolOrganizationId(input: unknown): string | null {
 /** Build the toolbox identity exclusively from the persisted executor columns. */
 function toolboxExecutor(session: SessionRow): ToolboxExecutor {
   if (session.executorKind === 'athena') {
+    /* v8 ignore next -- @preserve defensive: agent_session_executor_shape_check guarantees an
+       athena session's ownerUserId is NOT NULL at the database level */
     if (!session.ownerUserId) throw new Error('Athena session is missing its owner');
     return { kind: 'athena', ownerUserId: session.ownerUserId };
   }
+  /* v8 ignore next 3 -- @preserve defensive: agent_session_executor_shape_check guarantees a
+     registered_agent session's organizationId and agentId are both NOT NULL at the database
+     level */
   if (!session.organizationId || !session.agentId) {
     throw new Error('Registered-agent session is missing its workspace identity');
   }
@@ -154,6 +159,9 @@ function toolboxExecutor(session: SessionRow): ToolboxExecutor {
 
 /** Return an Athena owner after checking the persisted executor shape. */
 function requireAthenaOwner(session: SessionRow): string {
+  /* v8 ignore next 3 -- @preserve defensive: the sole caller only invokes this inside an
+     `executorKind === 'athena'` branch, and agent_session_executor_shape_check guarantees such a
+     session's ownerUserId is NOT NULL at the database level */
   if (session.executorKind !== 'athena' || !session.ownerUserId) {
     throw new Error('Athena session is missing its owner');
   }
@@ -162,6 +170,9 @@ function requireAthenaOwner(session: SessionRow): string {
 
 /** Return a registered agent id after checking the persisted executor shape. */
 function requireRegisteredAgentId(session: SessionRow): string {
+  /* v8 ignore next 3 -- @preserve defensive: every caller only invokes this inside an
+     `executorKind === 'registered_agent'` branch, and agent_session_executor_shape_check
+     guarantees such a session's agentId is NOT NULL at the database level */
   if (session.executorKind !== 'registered_agent' || !session.agentId) {
     throw new Error('Registered-agent session is missing its agent');
   }
@@ -927,6 +938,9 @@ export async function executeApprovedActions(
             .set({
               body: {
                 ...claimed.body,
+                /* v8 ignore next 7 -- @preserve defensive: the try block above only throws from
+                   inside `if (call && toolbox && claimed.body.action)`, so reaching this catch
+                   already proves claimed.body.action was truthy; nothing in between mutates it */
                 ...(claimed.body.action
                   ? {
                       action: {
@@ -1015,6 +1029,11 @@ async function executeApprovedGeneration(
     }
     await checkpointRunGeneration(lease);
     generationSettled = true;
+    // Not defensively ignored: a genuine (if narrow) race between the checkpoint above and this
+    // read — a concurrent hard-delete of the session landing in between — is real in production
+    // but, like the analogous read in `run-generation.ts`'s `lockRunAdmissionSession`, not one
+    // this suite's PGlite driver can reproduce (it serializes concurrent transaction callbacks
+    // rather than interleaving their individual statements).
     const [current] = await db
       .select()
       .from(agentSession)

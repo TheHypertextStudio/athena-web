@@ -168,6 +168,13 @@ describe('planTaskReconcile', () => {
     expect(planTaskReconcile(local(), r, { writeBack: true })).toEqual({ kind: 'noop' });
   });
 
+  it('no-ops on a clean local when the provider reports no per-item update timestamp at all', () => {
+    // Some providers never populate `externalUpdatedAt` — remoteMs is undefined, so remoteNewer
+    // can never be true regardless of the anchor, and a clean local simply stays put.
+    const r = remote(); // no externalUpdatedAt override
+    expect(planTaskReconcile(local(), r, { writeBack: true })).toEqual({ kind: 'noop' });
+  });
+
   it('prefers a delete over an update when a dirty local task is canceled', () => {
     const l = local({
       stateType: 'canceled',

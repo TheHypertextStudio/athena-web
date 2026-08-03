@@ -8,6 +8,7 @@ import {
   appWithActor,
   fakeSession,
   getDb,
+  one,
   seedBaseOrg,
   seedOrg,
   seedUserWithHub,
@@ -1018,5 +1019,435 @@ describe('initiatives ownerId in-org validation', () => {
     });
     expect(res.status).toBe(200);
     expect((await json<{ ownerId: string | null }>(res)).ownerId).toBeNull();
+  });
+});
+
+const HDR = { 'content-type': 'application/json' };
+
+describe('initiatives overview edge cases', () => {
+  it('returns empty items/attention without a visible Initiative in context', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const body = await json<{ items: unknown[]; attention: unknown[] }>(
+      await viewer.request('/overview'),
+    );
+    expect(body.items).toEqual([]);
+    expect(body.attention).toEqual([]);
+  });
+
+  it('resolves ownerName for an owned Initiative and leaves it null when unset', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [owner] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Riley Owner' })
+      .returning({ id: schema.actor.id });
+    const owned = await seedInitiative(orgId, humanActorId);
+    const unowned = await seedInitiative(orgId, humanActorId);
+    await db
+      .update(schema.initiative)
+      .set({ ownerId: owner!.id })
+      .where(eq(schema.initiative.id, owned));
+    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const body = await json<{ items: { id: string; ownerName: string | null }[] }>(
+      await viewer.request('/overview'),
+    );
+    expect(body.items.find((i) => i.id === owned)?.ownerName).toBe('Riley Owner');
+    expect(body.items.find((i) => i.id === unowned)?.ownerName).toBeNull();
+  });
+
+  it('sorts multiple children of the same parent alphabetically by name', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const root = await seedInitiative(orgId, humanActorId);
+    const [zeta] = await db
+      .insert(schema.initiative)
+      .values({ organizationId: orgId, name: 'Zeta', createdBy: humanActorId })
+      .returning({ id: schema.initiative.id });
+    const [alpha] = await db
+      .insert(schema.initiative)
+      .values({ organizationId: orgId, name: 'Alpha', createdBy: humanActorId })
+      .returning({ id: schema.initiative.id });
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: zeta!.id }),
+    });
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: alpha!.id }),
+    });
+    const body = await json<{ items: { id: string; depth: number }[] }>(
+      await writer.request('/overview'),
+    );
+    expect(body.items.filter((i) => i.depth === 2).map((i) => i.id)).toEqual([alpha!.id, zeta!.id]);
+  });
+
+  it('ranks attention by health with parent linkage, and a spoofed cross-org update cannot win the excerpt', async () => {
+    const userId = await seedUserWithHub(db, schema, 'AttentionOwner');
+    const contextOrgId = await seedOrg(db, schema);
+    const foreignOrgId = await seedOrg(db, schema);
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+
+    // Root: no parent, at_risk, no narrative updates — its excerpt falls back to its summary.
+    const [root] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: contextOrgId,
+        name: 'Root at risk',
+        createdBy: contextActorId,
+        health: 'at_risk',
+        status: 'active',
+        summary: 'Rolling out phase two',
+      })
+      .returning({ id: schema.initiative.id });
+    // Foreign child, linked into context: off_track, with a parent and real updates.
+    const [foreignChild] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: foreignOrgId,
+        name: 'Foreign child off track',
+        createdBy: foreignActorId,
+        health: 'off_track',
+        status: 'active',
+      })
+      .returning({ id: schema.initiative.id });
+
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      contextActorId,
+      fakeSession(userId),
+    );
+    const linked = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: root!.id, childInitiativeId: foreignChild!.id }),
+    });
+    expect(linked.status).toBe(200);
+
+    // Two genuine updates on the foreign child — only the latest surfaces.
+    await db.insert(schema.update).values({
+      organizationId: foreignOrgId,
+      subjectType: 'initiative',
+      subjectId: foreignChild!.id,
+      authorId: foreignActorId,
+      createdBy: foreignActorId,
+      body: 'Older narrative',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    await db.insert(schema.update).values({
+      organizationId: foreignOrgId,
+      subjectType: 'initiative',
+      subjectId: foreignChild!.id,
+      authorId: foreignActorId,
+      createdBy: foreignActorId,
+      body: 'Latest narrative',
+      createdAt: new Date('2026-06-01T00:00:00Z'),
+    });
+    // A spoofed update: subjectId reuses the foreign child's id but is filed under the CONTEXT
+    // org (which is always in `organizationIds`), so only the app-level ownership guard — not
+    // the SQL organizationId filter — can exclude it. Its timestamp is deliberately the newest.
+    await db.insert(schema.update).values({
+      organizationId: contextOrgId,
+      subjectType: 'initiative',
+      subjectId: foreignChild!.id,
+      authorId: contextActorId,
+      createdBy: contextActorId,
+      body: 'Spoofed narrative',
+      createdAt: new Date('2026-12-01T00:00:00Z'),
+    });
+
+    const overview = await json<{
+      items: { id: string; lastUpdateAt: string | null }[];
+      attention: {
+        initiativeId: string;
+        parentInitiativeId: string | null;
+        parentInitiativeName: string | null;
+        excerpt: string;
+        severity: string;
+      }[];
+    }>(await writer.request('/overview'));
+
+    const childItem = overview.items.find((i) => i.id === foreignChild!.id);
+    expect(childItem?.lastUpdateAt).toBe('2026-06-01T00:00:00.000Z'); // not the spoofed one
+
+    const rootAttention = overview.attention.find((a) => a.initiativeId === root!.id);
+    expect(rootAttention?.severity).toBe('at_risk');
+    expect(rootAttention?.parentInitiativeId).toBeNull();
+    expect(rootAttention?.excerpt).toBe('Rolling out phase two');
+
+    const childAttention = overview.attention.find((a) => a.initiativeId === foreignChild!.id);
+    expect(childAttention?.severity).toBe('off_track');
+    expect(childAttention?.parentInitiativeId).toBe(root!.id);
+    expect(childAttention?.parentInitiativeName).toBe('Root at risk');
+    expect(childAttention?.excerpt).toBe('Latest narrative'); // not the spoofed one
+  });
+});
+
+describe('initiatives aggregate — access and 404s', () => {
+  it('404s for a missing id', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    expect((await viewer.request(`/${MISSING_ULID}/aggregate`)).status).toBe(404);
+  });
+
+  it('404s for an accessible-but-unlinked foreign-org Initiative', async () => {
+    const userId = await seedUserWithHub(db, schema, 'UnlinkedForeign');
+    const contextOrgId = await seedOrg(db, schema);
+    const foreignOrgId = await seedOrg(db, schema);
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+    // An unrelated in-context link, so `links` is non-empty and the appearsInContext check
+    // actually evaluates each row rather than short-circuiting on an empty array.
+    const root = await seedInitiative(contextOrgId, contextActorId);
+    const unrelatedChild = await seedInitiative(contextOrgId, contextActorId);
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      contextActorId,
+      fakeSession(userId),
+    );
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: unrelatedChild }),
+    });
+
+    // The user CAN see foreignOrgId (real membership), but nothing links this Initiative into
+    // the context org — target resolves, but appearsInContext is false.
+    const foreignInit = await seedInitiative(foreignOrgId, foreignActorId);
+    const res = await writer.request(`/${foreignInit}/aggregate`);
+    expect(res.status).toBe(404);
+  });
+
+  it('serves a foreign child’s own aggregate view via link membership rather than org ownership', async () => {
+    const userId = await seedUserWithHub(db, schema, 'ForeignSelfAggregate');
+    const contextOrgId = await seedOrg(db, schema);
+    const foreignOrgId = await seedOrg(db, schema);
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const foreignActorId = await addMember(db, schema, foreignOrgId, userId, 'member');
+    const root = await seedInitiative(contextOrgId, contextActorId);
+    const foreignChild = await seedInitiative(foreignOrgId, foreignActorId);
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      contextActorId,
+      fakeSession(userId),
+    );
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: foreignChild }),
+    });
+
+    const res = await writer.request(`/${foreignChild}/aggregate`);
+    expect(res.status).toBe(200);
+    const body = await json<{ id: string; parent: { id: string } | null }>(res);
+    expect(body.id).toBe(foreignChild);
+    expect(body.parent?.id).toBe(root);
+  });
+
+  it('surfaces the latest update and count on the aggregate detail', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedInitiative(orgId, humanActorId);
+    await db.insert(schema.update).values({
+      organizationId: orgId,
+      subjectType: 'initiative',
+      subjectId: id,
+      authorId: humanActorId,
+      createdBy: humanActorId,
+      body: 'First',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+    });
+    await db.insert(schema.update).values({
+      organizationId: orgId,
+      subjectType: 'initiative',
+      subjectId: id,
+      authorId: humanActorId,
+      createdBy: humanActorId,
+      body: 'Second',
+      createdAt: new Date('2026-02-01T00:00:00Z'),
+    });
+    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const body = await json<{ latestUpdate: { body: string } | null; updateCount: number }>(
+      await viewer.request(`/${id}/aggregate`),
+    );
+    expect(body.latestUpdate?.body).toBe('Second');
+    expect(body.updateCount).toBe(2);
+  });
+});
+
+describe('initiatives aggregate — connected work dedup and cross-org filtering', () => {
+  /** Create a program row directly and return its id. */
+  async function mkProgram(orgId: string, createdBy: string, name: string): Promise<string> {
+    const [row] = await db
+      .insert(schema.program)
+      .values({ organizationId: orgId, name, createdBy })
+      .returning({ id: schema.program.id });
+    return row!.id;
+  }
+
+  it('a direct program link survives a later-seen inherited duplicate, and a duplicate inherited link is dropped', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await db
+      .update(schema.organization)
+      .set({ initiativeMaxDepth: 3 })
+      .where(eq(schema.organization.id, orgId));
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const root = await seedInitiative(orgId, humanActorId);
+    const child = await seedInitiative(orgId, humanActorId);
+    const grandchild = await seedInitiative(orgId, humanActorId);
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: root, childInitiativeId: child }),
+    });
+    await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: HDR,
+      body: JSON.stringify({ parentInitiativeId: child, childInitiativeId: grandchild }),
+    });
+
+    const directWins = await mkProgram(orgId, humanActorId, 'Direct wins');
+    // Root's DIRECT link is recorded first; the child's inherited duplicate that follows must
+    // not demote it (exercises the `existing?.direct` skip).
+    for (const initiativeId of [root, child]) {
+      expect(
+        (
+          await writer.request(`/${initiativeId}/programs`, {
+            method: 'POST',
+            headers: HDR,
+            body: JSON.stringify({ programId: directWins }),
+          })
+        ).status,
+      ).toBe(200);
+    }
+
+    const duplicateInherited = await mkProgram(orgId, humanActorId, 'Duplicate inherited');
+    // Linked at TWO different descendant levels, neither direct — only the first-seen (through
+    // `child`) survives (exercises the `existing && !direct` skip).
+    for (const initiativeId of [child, grandchild]) {
+      expect(
+        (
+          await writer.request(`/${initiativeId}/programs`, {
+            method: 'POST',
+            headers: HDR,
+            body: JSON.stringify({ programId: duplicateInherited }),
+          })
+        ).status,
+      ).toBe(200);
+    }
+
+    // The identical dedup logic is duplicated for projects — exercise both skip paths there too.
+    const directProject = await seedProject(orgId, humanActorId, { name: 'Direct project' });
+    for (const initiativeId of [root, child]) {
+      expect(
+        (
+          await writer.request(`/${initiativeId}/projects`, {
+            method: 'POST',
+            headers: HDR,
+            body: JSON.stringify({ projectId: directProject }),
+          })
+        ).status,
+      ).toBe(200);
+    }
+    const duplicateInheritedProject = await seedProject(orgId, humanActorId, {
+      name: 'Duplicate inherited project',
+    });
+    for (const initiativeId of [child, grandchild]) {
+      expect(
+        (
+          await writer.request(`/${initiativeId}/projects`, {
+            method: 'POST',
+            headers: HDR,
+            body: JSON.stringify({ projectId: duplicateInheritedProject }),
+          })
+        ).status,
+      ).toBe(200);
+    }
+
+    const aggregate = await json<{
+      connectedWork: {
+        kind: string;
+        id: string;
+        direct: boolean;
+        inheritedThroughInitiativeId: string | null;
+      }[];
+    }>(await writer.request(`/${root}/aggregate`));
+
+    const directEntries = aggregate.connectedWork.filter((w) => w.id === directWins);
+    expect(directEntries).toHaveLength(1);
+    expect(directEntries[0]).toMatchObject({ direct: true, inheritedThroughInitiativeId: null });
+
+    const dupEntries = aggregate.connectedWork.filter((w) => w.id === duplicateInherited);
+    expect(dupEntries).toHaveLength(1); // deduplicated, not two entries
+    expect(dupEntries[0]).toMatchObject({ direct: false, inheritedThroughInitiativeId: child });
+
+    const directProjectEntries = aggregate.connectedWork.filter((w) => w.id === directProject);
+    expect(directProjectEntries).toHaveLength(1);
+    expect(directProjectEntries[0]).toMatchObject({
+      direct: true,
+      inheritedThroughInitiativeId: null,
+    });
+
+    const dupProjectEntries = aggregate.connectedWork.filter(
+      (w) => w.id === duplicateInheritedProject,
+    );
+    expect(dupProjectEntries).toHaveLength(1);
+    expect(dupProjectEntries[0]).toMatchObject({
+      direct: false,
+      inheritedThroughInitiativeId: child,
+    });
+  });
+
+  it('excludes a program/project belonging to an org the viewer cannot access', async () => {
+    const userId = await seedUserWithHub(db, schema, 'InaccessibleConnected');
+    const contextOrgId = await seedOrg(db, schema);
+    const outsiderOrgId = await seedOrg(db, schema); // the viewer is NOT a member here
+    const contextActorId = await addMember(db, schema, contextOrgId, userId, 'owner');
+    const outsiderActorId = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: outsiderOrgId, kind: 'human', displayName: 'Outside actor' })
+        .returning({ id: schema.actor.id }),
+    ).id;
+
+    const root = await seedInitiative(contextOrgId, contextActorId);
+    const foreignProgram = await mkProgram(outsiderOrgId, outsiderActorId, 'Foreign program');
+    const [foreignProjectRow] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: outsiderOrgId,
+        name: 'Foreign project',
+        createdBy: outsiderActorId,
+      })
+      .returning({ id: schema.project.id });
+    const foreignProject = foreignProjectRow!.id;
+    // Link both in directly at the join-table level (bypassing the route's own org-membership
+    // guard) to prove the aggregate READ path filters them too, independent of write-side checks.
+    await db
+      .insert(schema.initiativeProgram)
+      .values({ initiativeId: root, programId: foreignProgram, organizationId: outsiderOrgId });
+    await db
+      .insert(schema.initiativeProject)
+      .values({ initiativeId: root, projectId: foreignProject, organizationId: outsiderOrgId });
+
+    const writer = appWithActor(
+      initiatives,
+      contextOrgId,
+      ['contribute'],
+      contextActorId,
+      fakeSession(userId),
+    );
+    const aggregate = await json<{ connectedWork: { id: string }[] }>(
+      await writer.request(`/${root}/aggregate`),
+    );
+    expect(aggregate.connectedWork.some((w) => w.id === foreignProgram)).toBe(false);
+    expect(aggregate.connectedWork.some((w) => w.id === foreignProject)).toBe(false);
   });
 });

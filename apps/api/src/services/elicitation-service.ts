@@ -416,6 +416,10 @@ export async function raiseElicitation(
       .insert(sessionActivity)
       .values({
         sessionId: session.id,
+        // `session.executorKind` is always `'athena'` here: the check constraint on
+        // `agent_session` pairs `executorKind = 'registered_agent'` with `owner_user_id IS
+        // NULL`, and the guard a few lines up already refused any session without an owner.
+        /* v8 ignore next -- @preserve defensive: see remark above */
         organizationId: session.executorKind === 'athena' ? null : organizationId,
         type: 'elicitation',
         body: {
@@ -462,8 +466,12 @@ export async function raiseElicitation(
     .from(task)
     .where(eq(task.id, taskId))
     .limit(1);
+  // `taskId` was just proven to exist by `ensureElicitationTask`, a moment ago in this same
+  // function — the `?? actionSummary` fallback only fires if the task was deleted in the
+  // instant between that check and this read, a real but not fault-injectably-testable race.
   const notified = await notifyElicitation(
     created,
+    /* v8 ignore next -- @preserve defensive: see remark above */
     taskTitles[0]?.title ?? input.request.actionSummary,
     input.notify ?? {},
   );
@@ -705,6 +713,10 @@ export async function materializeElicitations(
       activityId: activity.id,
       taskId,
       live,
+      // Same fallback, same justification as `raiseElicitation`'s: `taskId` was just proven to
+      // exist by `ensureElicitationTask` a moment ago, so `titles` comes up empty only if the
+      // task was deleted in that same narrow, not fault-injectably-testable window.
+      /* v8 ignore next -- @preserve defensive: see remark above */
       notified: await notifyElicitation(row, titles[0]?.title ?? request.actionSummary, notify),
     });
   }

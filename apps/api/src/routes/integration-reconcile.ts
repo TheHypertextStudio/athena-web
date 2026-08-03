@@ -404,12 +404,16 @@ async function insertLinked(
     })
     .returning({ id: task.id });
   const row = inserted[0];
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('linked task insert returned no row');
   await enqueueSearchUpsert(orgId, 'task', row.id);
 }
 
 /** Apply a newer remote's fields onto a local linked task and restamp the anchors. */
 async function applyPull(taskId: string, item: ImportedItem, keys: StateKeys): Promise<void> {
+  /* v8 ignore next -- @preserve defensive: applyPull's one call site only runs when
+   * planTaskReconcile returned 'pull', which requires `remoteNewer`, which itself requires
+   * `remote.provenance.externalUpdatedAt` to be parseable — so it is always truthy here. */
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : new Date();

@@ -69,6 +69,78 @@ function appFor(ownerUserId: string) {
   return app;
 }
 
+/**
+ * Seed just enough for an approval decision to authorize: an owner-side workspace with the
+ * caller's own active human actor in it. {@link authorizeApprovalTarget} needs no capability
+ * grant for an `athena` session — only that the actor exists, active, in the proposal's
+ * workspace.
+ */
+async function seedApprovalWorkspace(ownerUserId: string): Promise<{ readonly orgId: string }> {
+  const suffix = Math.random().toString(36).slice(2, 9);
+  const [org] = await schema.db
+    .insert(schema.organization)
+    .values({ name: `Approve-${suffix}`, slug: `approve-${suffix}`, lifecycleState: 'active' })
+    .returning({ id: schema.organization.id });
+  await schema.db.insert(schema.actor).values({
+    organizationId: org!.id,
+    kind: 'human',
+    displayName: 'Owner',
+    userId: ownerUserId,
+  });
+  return { orgId: org!.id };
+}
+
+/**
+ * Insert one caller-owned Athena session with a durable `waiting` generation — the precondition
+ * {@link persistWaitingAthenaWake} enforces before it will queue a wake dispatch.
+ */
+async function seedOwnedSession(
+  ownerUserId: string,
+  status: 'awaiting_approval' | 'awaiting_input' | 'pending' | 'running',
+  contextOrganizationId?: string,
+): Promise<string> {
+  const [session] = await schema.db
+    .insert(schema.agentSession)
+    .values({
+      executorKind: 'athena',
+      ownerUserId,
+      trigger: 'delegation',
+      status,
+      ...(contextOrganizationId ? { contextOrganizationId } : {}),
+    })
+    .returning({ id: schema.agentSession.id });
+  await schema.db.insert(schema.agentSessionRun).values({
+    sessionId: session!.id,
+    ownerUserId,
+    generation: 1,
+    workflowInstanceId: `${session!.id}:1`,
+    status: 'waiting',
+    attempt: 1,
+  });
+  return session!.id;
+}
+
+/** Append one still-pending proposed action to a session. */
+async function seedProposedAction(
+  sessionId: string,
+  orgId: string,
+  summary: string,
+  proposalGroupId?: string,
+): Promise<string> {
+  const [activity] = await schema.db
+    .insert(schema.sessionActivity)
+    .values({
+      sessionId,
+      organizationId: orgId,
+      type: 'action',
+      approvalStatus: 'proposed',
+      ...(proposalGroupId ? { proposalGroupId } : {}),
+      body: { action: { kind: 'capture', summary } },
+    })
+    .returning({ id: schema.sessionActivity.id });
+  return activity!.id;
+}
+
 describe('personal Athena asynchronous acknowledgement', () => {
   it('returns 202 after persisting work and handing off the opaque generation', async () => {
     const suffix = Math.random().toString(36).slice(2, 9);
@@ -360,5 +432,210 @@ describe('personal Athena asynchronous acknowledgement', () => {
       status: 'pending',
       attempt: 1,
     });
+  });
+
+  it('acknowledges a single-activity approval by queueing a wake rather than resuming inline', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Approve Owner', email: `approve-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const ws = await seedApprovalWorkspace(owner!.id);
+    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const activityId = await seedProposedAction(sessionId, ws.orgId, 'Async approve target');
+
+    const response = await appFor(owner!.id).request(
+      `/sessions/${sessionId}/activity/${activityId}/approve`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+    );
+
+    expect(response.status).toBe(202);
+    expect((await response.json()) as { approvalStatus: string }).toMatchObject({
+      approvalStatus: 'approved',
+    });
+    expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
+    expect(runnerMocks.admit).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges a single-activity rejection by queueing a wake rather than resuming inline', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Reject Owner', email: `reject-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const ws = await seedApprovalWorkspace(owner!.id);
+    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const activityId = await seedProposedAction(sessionId, ws.orgId, 'Async reject target');
+
+    const response = await appFor(owner!.id).request(
+      `/sessions/${sessionId}/activity/${activityId}/reject`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+    );
+
+    expect(response.status).toBe(202);
+    expect((await response.json()) as { approvalStatus: string }).toMatchObject({
+      approvalStatus: 'rejected',
+    });
+    expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
+  });
+
+  it('acknowledges a proposal-group approval by queueing one wake for the whole group', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Group Approve Owner', email: `group-approve-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const ws = await seedApprovalWorkspace(owner!.id);
+    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const groupId = 'group_async_approve';
+    const first = await seedProposedAction(sessionId, ws.orgId, 'First in group', groupId);
+    const second = await seedProposedAction(sessionId, ws.orgId, 'Second in group', groupId);
+
+    const response = await appFor(owner!.id).request(
+      `/sessions/${sessionId}/proposals/${groupId}/approve`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
+    const rows = await schema.db
+      .select({
+        id: schema.sessionActivity.id,
+        approvalStatus: schema.sessionActivity.approvalStatus,
+      })
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.sessionId, sessionId));
+    expect(
+      rows
+        .filter((row) => [first, second].includes(row.id))
+        .every((row) => row.approvalStatus === 'approved'),
+    ).toBe(true);
+  });
+
+  it('acknowledges a proposal-group rejection by queueing one wake for the whole group', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Group Reject Owner', email: `group-reject-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const ws = await seedApprovalWorkspace(owner!.id);
+    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    const groupId = 'group_async_reject';
+    await seedProposedAction(sessionId, ws.orgId, 'Only in group', groupId);
+
+    const response = await appFor(owner!.id).request(
+      `/sessions/${sessionId}/proposals/${groupId}/reject`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+    );
+
+    expect(response.status).toBe(202);
+    expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
+  });
+
+  it('acknowledges the session-level approve shortcut by queueing a wake, not resuming inline', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Shortcut Approve Owner', email: `shortcut-approve-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const ws = await seedApprovalWorkspace(owner!.id);
+    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    await seedProposedAction(sessionId, ws.orgId, 'Latest action');
+
+    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/approve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(202);
+    expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
+  });
+
+  it('acknowledges the session-level reject shortcut by queueing a wake, not resuming inline', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Shortcut Reject Owner', email: `shortcut-reject-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const ws = await seedApprovalWorkspace(owner!.id);
+    const sessionId = await seedOwnedSession(owner!.id, 'awaiting_approval');
+    await seedProposedAction(sessionId, ws.orgId, 'Latest action to reject');
+
+    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/reject`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(202);
+    expect(runnerMocks.wake).toHaveBeenCalledWith(sessionId);
+  });
+
+  it('steers pending or running work through admission rather than a wake', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Steer Owner', email: `steer-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const sessionId = await seedOwnedSession(owner!.id, 'running');
+    await schema.db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: owner!.id,
+      messages: [],
+    });
+    runnerMocks.admit.mockResolvedValue({
+      mode: 'async',
+      queued: { runId: 'run_x', generation: 1 },
+    });
+
+    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ body: 'Keep steering this while it runs' }),
+    });
+
+    expect(response.status).toBe(202);
+    expect(runnerMocks.admit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: sessionId }),
+      expect.objectContaining({
+        runnableStatuses: ['pending', 'running', 'completed', 'failed'],
+        clearEndedAt: true,
+      }),
+    );
+    expect(runnerMocks.wake).not.toHaveBeenCalled();
+  });
+
+  it('acknowledges /run for pending or running work rather than running it inline', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [owner] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Run Owner', email: `run-${suffix}@example.com` })
+      .returning({ id: schema.user.id });
+    const sessionId = await seedOwnedSession(owner!.id, 'running');
+    runnerMocks.admit.mockResolvedValue({
+      mode: 'async',
+      queued: { runId: 'run_y', generation: 1 },
+    });
+
+    const response = await appFor(owner!.id).request(`/sessions/${sessionId}/run`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+
+    expect(response.status).toBe(202);
+    expect(runnerMocks.admit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: sessionId }),
+      expect.objectContaining({ runnableStatuses: ['pending', 'running'] }),
+    );
   });
 });

@@ -26,8 +26,10 @@ vi.mock('../../src/agent/async-runner', async (importOriginal) => {
 
 import type personalAthenaRouter from '../../src/routes/personal-athena';
 import type {
+  eventIsInAssignmentScope as EventIsInAssignmentScope,
   handleAthenaAssignmentEvent as HandleAthenaAssignmentEvent,
   sweepAthenaAssignmentTriggers as SweepAthenaAssignmentTriggers,
+  AthenaAssignmentRow,
 } from '../../src/agent/assignments';
 import type { getContainer as GetContainer } from '../../src/container';
 import type { openToolbox as OpenToolbox } from '../../src/agent/toolbox';
@@ -41,6 +43,7 @@ let db!: typeof DbModule.db;
 let personalAthena!: typeof personalAthenaRouter;
 let handleAthenaAssignmentEvent!: typeof HandleAthenaAssignmentEvent;
 let sweepAthenaAssignmentTriggers!: typeof SweepAthenaAssignmentTriggers;
+let eventIsInAssignmentScope!: typeof EventIsInAssignmentScope;
 let getContainer!: typeof GetContainer;
 let openToolbox!: typeof OpenToolbox;
 
@@ -48,7 +51,7 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   personalAthena = (await import('../../src/routes/personal-athena')).default;
-  ({ handleAthenaAssignmentEvent, sweepAthenaAssignmentTriggers } =
+  ({ handleAthenaAssignmentEvent, sweepAthenaAssignmentTriggers, eventIsInAssignmentScope } =
     await import('../../src/agent/assignments'));
   ({ getContainer } = await import('../../src/container'));
   ({ openToolbox } = await import('../../src/agent/toolbox'));
@@ -597,5 +600,401 @@ describe('personal Athena assignments', () => {
     expect(runs).toHaveLength(3);
     expect(runs.every((run) => run.status === 'queued')).toBe(true);
     expect(runnerMocks.admit).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('personal Athena assignment and trigger management routes', () => {
+  it('reads one owner-matched assignment by id', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const response = await app.request(`/assignments/${assignment.id}`);
+    expect(response.status).toBe(200);
+    expect((await response.json()) as { id: string }).toMatchObject({ id: assignment.id });
+  });
+
+  it('pauses an assignment, disabling its triggers, then resumes it without reviving them', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const triggerResponse = await app.request(`/assignments/${assignment.id}/triggers`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+    });
+    const trigger = (await triggerResponse.json()) as { id: string; enabled: boolean };
+    expect(trigger.enabled).toBe(true);
+
+    const paused = await app.request(`/assignments/${assignment.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ status: 'paused' }),
+    });
+    expect(paused.status).toBe(200);
+    expect((await paused.json()) as { status: string; pausedReason: string | null }).toMatchObject({
+      status: 'paused',
+      pausedReason: 'owner_paused',
+    });
+    const [afterPause] = await db
+      .select({ enabled: schema.athenaTrigger.enabled })
+      .from(schema.athenaTrigger)
+      .where(eq(schema.athenaTrigger.id, trigger.id));
+    expect(afterPause?.enabled).toBe(false);
+
+    const resumed = await app.request(`/assignments/${assignment.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ status: 'active' }),
+    });
+    expect((await resumed.json()) as { status: string; pausedReason: string | null }).toMatchObject(
+      {
+        status: 'active',
+        pausedReason: null,
+      },
+    );
+    const [afterResume] = await db
+      .select({ enabled: schema.athenaTrigger.enabled })
+      .from(schema.athenaTrigger)
+      .where(eq(schema.athenaTrigger.id, trigger.id));
+    // Resuming never silently revives a trigger the owner (or the pause above) disabled.
+    expect(afterResume?.enabled).toBe(false);
+  });
+
+  it('completing an assignment also disables its triggers', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const triggerResponse = await app.request(`/assignments/${assignment.id}/triggers`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ type: 'event', eventKinds: ['status_change'] }),
+    });
+    const trigger = (await triggerResponse.json()) as { id: string };
+
+    const completed = await app.request(`/assignments/${assignment.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ status: 'completed' }),
+    });
+    expect((await completed.json()) as { status: string }).toMatchObject({ status: 'completed' });
+    const [row] = await db
+      .select({ enabled: schema.athenaTrigger.enabled })
+      .from(schema.athenaTrigger)
+      .where(eq(schema.athenaTrigger.id, trigger.id));
+    expect(row?.enabled).toBe(false);
+  });
+
+  it('hides another user’s assignment behind not-found for read, edit, and delete', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const otherApp = appWithSession(personalAthena, fakeSession(seedData.otherUserId));
+    expect((await otherApp.request(`/assignments/${assignment.id}`)).status).toBe(404);
+    expect(
+      (
+        await otherApp.request(`/assignments/${assignment.id}`, {
+          method: 'PATCH',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ status: 'paused' }),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (await otherApp.request(`/assignments/${assignment.id}`, { method: 'DELETE' })).status,
+    ).toBe(404);
+  });
+
+  it('deletes an assignment and cascades its triggers', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const trigger = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string };
+
+    const deleted = await app.request(`/assignments/${assignment.id}`, { method: 'DELETE' });
+    expect(deleted.status).toBe(200);
+    expect(await deleted.json()).toEqual({ ok: true });
+    expect(
+      await db
+        .select()
+        .from(schema.athenaAssignment)
+        .where(eq(schema.athenaAssignment.id, assignment.id)),
+    ).toHaveLength(0);
+    expect(
+      await db.select().from(schema.athenaTrigger).where(eq(schema.athenaTrigger.id, trigger.id)),
+    ).toHaveLength(0);
+  });
+
+  it('lists an assignment’s own triggers, newest last, excluding another assignment’s', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const otherAssignment = await createAssignment(seedData, 'project');
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const first = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string };
+    const second = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'event', eventKinds: ['status_change'] }),
+      })
+    ).json()) as { id: string };
+    await app.request(`/assignments/${otherAssignment.id}/triggers`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+    });
+
+    const response = await app.request(`/assignments/${assignment.id}/triggers`);
+    expect(response.status).toBe(200);
+    const triggers = (await response.json()) as { id: string }[];
+    expect(triggers.map((row) => row.id)).toEqual([first.id, second.id]);
+  });
+
+  it('hides another user’s assignment triggers behind not-found', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const otherApp = appWithSession(personalAthena, fakeSession(seedData.otherUserId));
+    expect((await otherApp.request(`/assignments/${assignment.id}/triggers`)).status).toBe(404);
+  });
+
+  it('pauses and resumes one trigger directly through its HTTP route', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const trigger = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string; enabled: boolean };
+    expect(trigger.enabled).toBe(true);
+
+    const paused = await app.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ enabled: false }),
+    });
+    expect(paused.status).toBe(200);
+    expect((await paused.json()) as { enabled: boolean }).toMatchObject({ enabled: false });
+
+    const resumed = await app.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ enabled: true }),
+    });
+    expect((await resumed.json()) as { enabled: boolean }).toMatchObject({ enabled: true });
+  });
+
+  it('hides another user’s trigger behind not-found for edit and delete', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const trigger = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string };
+    const otherApp = appWithSession(personalAthena, fakeSession(seedData.otherUserId));
+    expect(
+      (
+        await otherApp.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, {
+          method: 'PATCH',
+          headers: JSON_HEADERS,
+          body: JSON.stringify({ enabled: false }),
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await otherApp.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, {
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(404);
+    // Untouched by the other user's refused attempts.
+    const [row] = await db
+      .select({ enabled: schema.athenaTrigger.enabled })
+      .from(schema.athenaTrigger)
+      .where(eq(schema.athenaTrigger.id, trigger.id));
+    expect(row?.enabled).toBe(true);
+  });
+
+  it('removes one trigger directly through its HTTP route without touching its assignment', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const trigger = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string };
+
+    const deleted = await app.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, {
+      method: 'DELETE',
+    });
+    expect(deleted.status).toBe(200);
+    expect(
+      await db.select().from(schema.athenaTrigger).where(eq(schema.athenaTrigger.id, trigger.id)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: schema.athenaAssignment.id })
+        .from(schema.athenaAssignment)
+        .where(eq(schema.athenaAssignment.id, assignment.id)),
+    ).toHaveLength(1);
+  });
+
+  it('refuses a trigger id paired with the wrong (but owner-matched) assignment id', async () => {
+    const seedData = await seed();
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const assignmentA = await createAssignment(seedData, 'task');
+    const assignmentB = await createAssignment(seedData, 'project');
+    const trigger = (await (
+      await app.request(`/assignments/${assignmentA.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string };
+
+    // The trigger genuinely belongs to `assignmentA`, and both assignments genuinely belong to
+    // this owner — only the (assignment, trigger) pairing itself is wrong, which must still
+    // refuse rather than resolve on ownership alone.
+    const response = await app.request(`/assignments/${assignmentB.id}/triggers/${trigger.id}`, {
+      method: 'DELETE',
+    });
+    expect(response.status).toBe(404);
+  });
+
+  it('hides an assignment edit that lost a race with its own deletion', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+
+    const [patchResponse, deleteResponse] = await Promise.all([
+      app.request(`/assignments/${assignment.id}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status: 'paused' }),
+      }),
+      app.request(`/assignments/${assignment.id}`, { method: 'DELETE' }),
+    ]);
+
+    const statuses = [patchResponse.status, deleteResponse.status].sort();
+    expect(statuses).toEqual([200, 404].sort());
+  });
+
+  it('hides a trigger edit that lost a race with its own removal', async () => {
+    const seedData = await seed();
+    const assignment = await createAssignment(seedData);
+    const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+    const trigger = (await (
+      await app.request(`/assignments/${assignment.id}/triggers`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ type: 'scheduled', scheduleMinutes: 5 }),
+      })
+    ).json()) as { id: string };
+
+    const [patchResponse, deleteResponse] = await Promise.all([
+      app.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ enabled: false }),
+      }),
+      app.request(`/assignments/${assignment.id}/triggers/${trigger.id}`, { method: 'DELETE' }),
+    ]);
+
+    const statuses = [patchResponse.status, deleteResponse.status].sort();
+    expect(statuses).toEqual([200, 404].sort());
+  });
+
+  it.each(['task', 'project', 'initiative'] as const)(
+    'hides a %s assignment target that does not exist as not found',
+    async (entityType) => {
+      const seedData = await seed();
+      const app = appWithSession(personalAthena, fakeSession(seedData.userId));
+      const response = await app.request('/assignments', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          organizationId: seedData.orgId,
+          entityType,
+          // Well-formed ULID (so it clears Zod), but no such row exists.
+          entityId: '00000000000000000000000000',
+          objective: 'Work on something that was never created.',
+        }),
+      });
+      expect(response.status).toBe(404);
+    },
+  );
+
+  describe('eventIsInAssignmentScope', () => {
+    function assignmentRow(
+      overrides: Pick<AthenaAssignmentRow, 'entityType' | 'entityId' | 'organizationId'>,
+    ): AthenaAssignmentRow {
+      return {
+        id: 'assignment-fixture',
+        ownerUserId: 'owner-fixture',
+        objective: 'fixture',
+        status: 'active',
+        activeSessionId: null,
+        pausedReason: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      };
+    }
+
+    it('is out of scope when a task-scoped assignment receives a non-task subject', async () => {
+      const seedData = await seed();
+      const assignment = assignmentRow({
+        entityType: 'task',
+        entityId: seedData.taskId,
+        organizationId: seedData.orgId,
+      });
+      await expect(
+        eventIsInAssignmentScope(assignment, { type: 'project', id: seedData.projectId }),
+      ).resolves.toBe(false);
+    });
+
+    it('is out of scope when a project-scoped assignment receives a non-task subject', async () => {
+      const seedData = await seed();
+      const assignment = assignmentRow({
+        entityType: 'project',
+        entityId: seedData.projectId,
+        organizationId: seedData.orgId,
+      });
+      await expect(
+        eventIsInAssignmentScope(assignment, { type: 'program', id: 'some-program' }),
+      ).resolves.toBe(false);
+    });
+
+    it('is out of scope when an initiative-scoped assignment receives a subject that is not task/project/program', async () => {
+      const seedData = await seed();
+      const assignment = assignmentRow({
+        entityType: 'initiative',
+        entityId: 'some-initiative',
+        organizationId: seedData.orgId,
+      });
+      await expect(
+        eventIsInAssignmentScope(assignment, { type: 'agent_session', id: 'some-session' }),
+      ).resolves.toBe(false);
+    });
   });
 });

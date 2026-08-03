@@ -234,6 +234,45 @@ function mockCompletion(text = 'Done', priorAssistantTurns = 0): void {
 }
 
 describe('personal Athena routes', () => {
+  it('refuses every route to a caller with no session', async () => {
+    const app = new Hono<AppEnv>();
+    app.route('/', meAthena);
+    app.onError(onError);
+    expect((await app.request('/')).status).toBe(401);
+  });
+
+  it('returns an empty overview for a brand-new caller with no Athena work at all', async () => {
+    const seed = await seedPeople();
+    const response = await appFor(seed.owner).request('/');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      counts: { needsYou: 0, working: 0, finished: 0 },
+      currentChat: null,
+      sessions: { needsYou: [], working: [], finished: [] },
+    });
+  });
+
+  it('lists the same grouped work under the plural /sessions alias', async () => {
+    const seed = await seedPeople();
+    const needsYou = await seedSession(seed, seed.owner, 'awaiting_input');
+    const response = await appFor(seed.owner).request('/sessions');
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      sessions: Record<'needsYou' | 'working' | 'finished', { id: string }[]>;
+    };
+    expect(body.sessions.needsYou.map((row) => row.id)).toEqual([needsYou]);
+  });
+
+  it('rejects a history cursor whose embedded timestamp does not round-trip', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    const malformed = Buffer.from('activity|not-a-real-date|abc123', 'utf8').toString('base64url');
+    const response = await appFor(seed.owner).request(
+      `/sessions/${sessionId}/activity?cursor=${malformed}`,
+    );
+    expect(response.status).toBe(422);
+  });
+
   it('returns only caller-owned work grouped by product state and the current chat', async () => {
     const seed = await seedPeople();
     const oldChat = await seedSession(seed, seed.owner, 'completed', 'chat');
@@ -261,6 +300,78 @@ describe('personal Athena routes', () => {
       expect.arrayContaining([oldChat, finished]),
     );
     expect(JSON.stringify(body)).not.toContain(privateOther);
+  });
+
+  it('derives a null objective from a textless first response, and a null context from a workspace-less session', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
+    // Empty text on the *first* response — the objective it seeds must be null, not "".
+    await seedActivity(sessionId, {
+      type: 'response',
+      body: { text: '', author: 'user' },
+      createdAt: new Date('2026-07-15T12:00:00.000Z'),
+    });
+    // A later response on the *same* session carries a context — proves the per-session
+    // metadata map merges into the entry the first loop already created, rather than
+    // clobbering it.
+    await seedActivity(sessionId, {
+      type: 'response',
+      body: { text: 'Following up', author: 'user', context: { workspaceId: seed.orgA } },
+      createdAt: new Date('2026-07-15T12:00:01.000Z'),
+    });
+
+    const response = await appFor(seed.owner).request('/');
+    const body = (await response.json()) as {
+      sessions: {
+        needsYou: { id: string; objective: string | null; context: unknown }[];
+      };
+    };
+    const summary = body.sessions.needsYou.find((row) => row.id === sessionId);
+    expect(summary?.objective).toBeNull();
+    expect(summary?.context).toMatchObject({ workspaceId: seed.orgA });
+  });
+
+  it('derives a null objective for a session whose only carried context is on a non-response row', async () => {
+    const seed = await seedPeople();
+    const contextOnlySession = await seedSession(seed, seed.owner, 'awaiting_input');
+    // No `response`-type row at all on this session — the context-bearing lookup has to match
+    // it independently of the objective lookup, which finds nothing to seed a grouped entry
+    // from first.
+    await seedActivity(contextOnlySession, {
+      type: 'elicitation',
+      body: { text: 'Which one?', context: { workspaceId: seed.orgA } },
+    });
+
+    const response = await appFor(seed.owner).request('/');
+    const body = (await response.json()) as {
+      sessions: { needsYou: { id: string; objective: string | null; context: unknown }[] };
+    };
+    const summary = body.sessions.needsYou.find((row) => row.id === contextOnlySession);
+    expect(summary?.objective).toBeNull();
+    expect(summary?.context).toMatchObject({ workspaceId: seed.orgA });
+  });
+
+  it('shows a null context and workspace for work with no focus of its own in the overview', async () => {
+    const seed = await seedPeople();
+    const sessionId = one(
+      await db
+        .insert(schema.agentSession)
+        .values({
+          executorKind: 'athena',
+          ownerUserId: seed.owner.userId,
+          kind: 'job',
+          trigger: 'delegation',
+          status: 'awaiting_input',
+        })
+        .returning({ id: schema.agentSession.id }),
+    ).id;
+
+    const response = await appFor(seed.owner).request('/');
+    const body = (await response.json()) as {
+      sessions: { needsYou: { id: string; context: unknown; workspace: unknown }[] };
+    };
+    const summary = body.sessions.needsYou.find((row) => row.id === sessionId);
+    expect(summary).toMatchObject({ context: null, workspace: null });
   });
 
   it('bounds active and finished history while batching many distinct display contexts', async () => {
@@ -410,6 +521,29 @@ describe('personal Athena routes', () => {
       `/?limit=2&workingCursor=${encodeURIComponent(cursor)}`,
     );
     expect(wrongLane.status).toBe(422);
+  });
+
+  it('lists the current chat’s topic segments through its own route', async () => {
+    const seed = await seedPeople();
+    const app = appFor(seed.owner);
+    await app.request('/chat', { method: 'GET' });
+    const response = await app.request('/chat/segments');
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ items: [] });
+  });
+
+  it('searches the caller’s own conversations through its own route', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    await seedActivity(sessionId, {
+      type: 'response',
+      body: { text: 'Let’s review the launch checklist', author: 'user' },
+    });
+
+    const response = await appFor(seed.owner).request('/chat/search?q=checklist');
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { items: { sessionId: string }[] };
+    expect(body.items.some((item) => item.sessionId === sessionId)).toBe(true);
   });
 
   it('returns compact pulse counts without personal session history', async () => {
@@ -1155,6 +1289,62 @@ describe('personal Athena routes', () => {
     expect(transcript?.messages).toEqual(existingMessages);
   });
 
+  it('steers non-chat work directly, refocusing it onto the message’s new workspace', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'running');
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: seed.owner.userId,
+      messages: [],
+    });
+    mockCompletion('Steered onto the new workspace');
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        body: 'Actually, work on this in the other workspace',
+        context: { workspaceId: seed.orgB },
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { status: string; context?: { workspaceId?: string } };
+    expect(body.status).toBe('completed');
+    expect(body.context?.workspaceId).toBe(seed.orgB);
+    const [row] = await db
+      .select({ contextOrganizationId: schema.agentSession.contextOrganizationId })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    expect(row?.contextOrganizationId).toBe(seed.orgB);
+  });
+
+  it('synchronously runs pending or running personal work through /run', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'running');
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: seed.owner.userId,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Keep going' }] }],
+    });
+    mockCompletion('Ran to completion');
+
+    const otherAttempt = await appFor(seed.other).request(`/sessions/${sessionId}/run`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+    expect(otherAttempt.status).toBe(404);
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/run`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+    expect(response.status).toBe(200);
+    expect((await response.json()) as { status: string }).toMatchObject({ status: 'completed' });
+  });
+
   it('admits transcript-free personal replies through durable generations', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');
@@ -1330,6 +1520,20 @@ describe('personal Athena routes', () => {
     expect(body.indexOf('id: activity_alpha')).toBeLessThan(body.indexOf('id: activity_zulu'));
   });
 
+  it('replays the full bounded window when a resumed Last-Event-ID matches no persisted activity', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'completed');
+    await seedActivity(sessionId, { type: 'response', body: { text: 'Only entry' } });
+
+    const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`, {
+      headers: { 'last-event-id': 'activity_never_persisted' },
+    });
+
+    expect(stream.status).toBe(200);
+    const text = await stream.text();
+    expect(text).toContain('Only entry');
+  });
+
   it('bounds a stream opened without Last-Event-ID to the newest activity window', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'completed');
@@ -1405,6 +1609,63 @@ describe('personal Athena routes', () => {
         (statement) => statement.includes('created_at') && statement.includes('>'),
       ),
     ).toBe(true);
+  });
+
+  it('stops polling once the client aborts a live-tailing stream', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'running');
+    // Seeded so the initial replay has something to write immediately — otherwise the first
+    // `read()` below would block on the (much later) heartbeat instead of proving the abort.
+    await seedActivity(sessionId, { type: 'response', body: { text: 'Already in flight' } });
+    const client = Reflect.get(db, '$client') as {
+      query: (...args: unknown[]) => Promise<unknown>;
+    };
+    const controller = new AbortController();
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`, {
+      signal: controller.signal,
+    });
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    await reader.read();
+
+    void reader.cancel();
+    controller.abort();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const queryCountAtAbort = vi.spyOn(client, 'query').mock.calls.length;
+    // Give any still-in-flight poll iteration a moment to either exit or (if this regresses)
+    // issue one more query; a strictly bounded count proves the loop actually stopped.
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    const queryCountAfterWait = vi.mocked(client.query).mock.calls.length;
+    expect(queryCountAfterWait - queryCountAtAbort).toBeLessThanOrEqual(1);
+  });
+
+  it('writes a heartbeat comment when the poll loop goes quiet past the heartbeat interval', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'running');
+    const originalNow = Date.now.bind(Date);
+    const testStart = originalNow();
+    // A global `Date.now` spy sees every call in the process, not just this route's — so it
+    // can't key off "the Nth call". Keying off real elapsed time instead is robust to whatever
+    // unrelated code (middleware, auth, drizzle) also reads the clock during setup: anything in
+    // the first 200ms (request setup) sees the real clock, and everything after — including the
+    // route's own `lastHeartbeat` init and its first poll's comparison — sees a jump 20s ahead,
+    // so the very first poll iteration is already due for a heartbeat.
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => {
+      const real = originalNow();
+      return real - testStart > 200 ? real + 20_000 : real;
+    });
+
+    const stream = await appFor(seed.owner).request(`/sessions/${sessionId}/stream`);
+    const bodyPromise = stream.text();
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    await db
+      .update(schema.agentSession)
+      .set({ status: 'completed', endedAt: new Date() })
+      .where(eq(schema.agentSession.id, sessionId));
+    const body = await bodyPromise;
+
+    nowSpy.mockRestore();
+    expect(body).toContain(': heartbeat');
   });
 
   it('lets the owner approve without assign while the underlying tool reauthorizes', async () => {
@@ -1562,6 +1823,266 @@ describe('personal Athena routes', () => {
       executionOrigin: 'athena',
       athenaSessionId: sessionId,
       requestedByUserId: seed.owner.userId,
+    });
+  });
+
+  it('sends a fresh chat with no focus down the workspace-less fallback path', async () => {
+    const seed = await seedPeople();
+    const fresh = await appFor(seed.owner).request('/chat/new', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(fresh.status).toBe(200);
+    expect((await fresh.json()) as { context: unknown }).toMatchObject({ context: null });
+  });
+
+  it('messages the current chat synchronously and reflects the settled reply', async () => {
+    const seed = await seedPeople();
+    const app = appFor(seed.owner);
+    await app.request('/chat', { method: 'GET' });
+    mockCompletion('Got it, on it now');
+
+    const response = await app.request('/chat/messages', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ body: 'Please draft the agenda' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      status: string;
+      activities: { body: { text?: string } }[];
+    };
+    expect(body.status).toBe('completed');
+    expect(body.activities.some((activity) => activity.body.text === 'Got it, on it now')).toBe(
+      true,
+    );
+  });
+
+  it('creates untracked personal work with no workspace focus, noting it out loud', async () => {
+    const seed = await seedPeople();
+    mockCompletion('Started without a home yet');
+
+    const response = await appFor(seed.owner).request('/sessions', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ prompt: 'Jot this down for later' }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      context: unknown;
+      activities: { body: { text?: string; author?: string } }[];
+    };
+    expect(body.context).toBeNull();
+    expect(
+      body.activities.some((activity) =>
+        activity.body.text?.includes('Started without a tracked task'),
+      ),
+    ).toBe(true);
+  });
+
+  it('refuses to approve or reject the latest action when none is proposed', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'running');
+    const approve = await appFor(seed.owner).request(`/sessions/${sessionId}/approve`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+    expect(approve.status).toBe(409);
+    const reject = await appFor(seed.owner).request(`/sessions/${sessionId}/reject`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+    expect(reject.status).toBe(409);
+  });
+
+  it('parks a message sent to work that is awaiting approval instead of resuming it', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'awaiting_approval');
+    await seedActivity(sessionId, {
+      type: 'action',
+      organizationId: seed.orgA,
+      approvalStatus: 'proposed',
+      body: { action: { kind: 'capture', summary: 'Still pending your decision' } },
+    });
+    await db.insert(schema.agentSessionTranscript).values({
+      sessionId,
+      ownerUserId: seed.owner.userId,
+      messages: [],
+    });
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/messages`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ body: 'Any update?' }),
+    });
+
+    expect(response.status).toBe(200);
+    const [row] = await db
+      .select({ status: schema.agentSession.status })
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    // Still awaiting approval — a steering message never resumes gated work on its own.
+    expect(row?.status).toBe('awaiting_approval');
+  });
+
+  describe('sessions with no workspace focus of their own (contextOrganizationId null)', () => {
+    /** Insert a caller-owned session with no workspace focus of its own. */
+    async function seedContextlessSession(
+      seed: Seed,
+      status: 'pending' | 'running' | 'awaiting_approval',
+    ): Promise<string> {
+      return one(
+        await db
+          .insert(schema.agentSession)
+          .values({
+            executorKind: 'athena',
+            ownerUserId: seed.owner.userId,
+            kind: 'job',
+            trigger: 'delegation',
+            status,
+          })
+          .returning({ id: schema.agentSession.id }),
+      ).id;
+    }
+
+    /** Insert an owner-authored transcript turn plus a scripted completion for it to resume. */
+    async function primeForResume(sessionId: string, seed: Seed): Promise<void> {
+      await db.insert(schema.agentSessionTranscript).values({
+        sessionId,
+        ownerUserId: seed.owner.userId,
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Keep going' }] }],
+      });
+      mockCompletion('Resumed with no workspace of its own');
+    }
+
+    it('runs contextless pending work through /run using the fallback workspace', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'running');
+      await primeForResume(sessionId, seed);
+
+      const response = await appFor(seed.owner).request(`/sessions/${sessionId}/run`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: '{}',
+      });
+      expect(response.status).toBe(200);
+      expect((await response.json()) as { status: string }).toMatchObject({ status: 'completed' });
+    });
+
+    it('approves a single contextless proposed action through the fallback workspace', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'awaiting_approval');
+      const actionId = await seedActivity(sessionId, {
+        type: 'action',
+        organizationId: seed.orgA,
+        approvalStatus: 'proposed',
+        body: { action: { kind: 'capture', summary: 'Contextless approve target' } },
+      });
+
+      const response = await appFor(seed.owner).request(
+        `/sessions/${sessionId}/activity/${actionId}/approve`,
+        { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+      );
+      expect(response.status).toBe(200);
+      expect((await loadApproval(actionId)).approvalStatus).toBe('applied');
+    });
+
+    it('rejects a single contextless proposed action through the fallback workspace', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'awaiting_approval');
+      const actionId = await seedActivity(sessionId, {
+        type: 'action',
+        organizationId: seed.orgA,
+        approvalStatus: 'proposed',
+        body: { action: { kind: 'capture', summary: 'Contextless reject target' } },
+      });
+
+      const response = await appFor(seed.owner).request(
+        `/sessions/${sessionId}/activity/${actionId}/reject`,
+        { method: 'POST', headers: JSON_HEADERS, body: '{}' },
+      );
+      expect(response.status).toBe(200);
+      expect((await loadApproval(actionId)).approvalStatus).toBe('rejected');
+    });
+
+    it('approves a contextless proposal group through the fallback workspace', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'awaiting_approval');
+      const groupId = 'group_contextless_approve';
+      const actionId = await seedActivity(sessionId, {
+        type: 'action',
+        organizationId: seed.orgA,
+        approvalStatus: 'proposed',
+        proposalGroupId: groupId,
+        body: { action: { kind: 'capture', summary: 'Contextless group approve target' } },
+      });
+
+      const response = await appFor(seed.owner).request(
+        `/sessions/${sessionId}/proposals/${groupId}/approve`,
+        { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({}) },
+      );
+      expect(response.status).toBe(200);
+      expect((await loadApproval(actionId)).approvalStatus).toBe('applied');
+    });
+
+    it('rejects a contextless proposal group through the fallback workspace', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'awaiting_approval');
+      const groupId = 'group_contextless_reject';
+      const actionId = await seedActivity(sessionId, {
+        type: 'action',
+        organizationId: seed.orgA,
+        approvalStatus: 'proposed',
+        proposalGroupId: groupId,
+        body: { action: { kind: 'capture', summary: 'Contextless group reject target' } },
+      });
+
+      const response = await appFor(seed.owner).request(
+        `/sessions/${sessionId}/proposals/${groupId}/reject`,
+        { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({}) },
+      );
+      expect(response.status).toBe(200);
+      expect((await loadApproval(actionId)).approvalStatus).toBe('rejected');
+    });
+
+    it('resumes contextless awaiting-input work through the fallback workspace', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'pending');
+      await db
+        .update(schema.agentSession)
+        .set({ status: 'awaiting_input' })
+        .where(eq(schema.agentSession.id, sessionId));
+      await primeForResume(sessionId, seed);
+
+      const response = await appFor(seed.owner).request(`/sessions/${sessionId}/resume`, {
+        method: 'POST',
+      });
+      expect(response.status).toBe(200);
+      expect((await response.json()) as { status: string }).toMatchObject({ status: 'completed' });
+    });
+
+    it('approves the latest contextless action through the session-level shortcut', async () => {
+      const seed = await seedPeople();
+      const sessionId = await seedContextlessSession(seed, 'awaiting_approval');
+      const actionId = await seedActivity(sessionId, {
+        type: 'action',
+        organizationId: seed.orgA,
+        approvalStatus: 'proposed',
+        body: { action: { kind: 'capture', summary: 'Contextless shortcut approve' } },
+      });
+
+      const response = await appFor(seed.owner).request(`/sessions/${sessionId}/approve`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: '{}',
+      });
+      expect(response.status).toBe(200);
+      expect((await loadApproval(actionId)).approvalStatus).toBe('applied');
     });
   });
 });

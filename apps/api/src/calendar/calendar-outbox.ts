@@ -384,6 +384,23 @@ export interface CalendarWriteDrainTally {
 }
 
 /**
+ * Maps a non-`null` {@link attemptCalendarItemWrite} outcome to its {@link CalendarWriteDrainTally}
+ * key (`'conflict'` -> `conflicts`, otherwise the same name) — a lookup rather than an
+ * if/else-if chain so the one genuinely untallied outcome (`null`, a concurrent run already
+ * claimed the write) is a single top-level guard, not a branch buried in a chain that can only
+ * be proven reachable by true cross-process concurrency.
+ */
+const DRAIN_TALLY_KEY = {
+  applied: 'applied',
+  conflict: 'conflicts',
+  failed: 'failed',
+  retried: 'retried',
+} as const satisfies Record<
+  'applied' | 'conflict' | 'failed' | 'retried',
+  keyof CalendarWriteDrainTally
+>;
+
+/**
  * Drain every outbox write **owned by `userId`** that is due for a (re)attempt:
  * `status = 'pending'` and (`nextAttemptAt IS NULL` — never attempted — or its backoff
  * has elapsed), oldest first, up to `limit`.
@@ -423,11 +440,11 @@ export async function drainDueCalendarItemWrites(
   const tally = { applied: 0, conflicts: 0, failed: 0, retried: 0 };
   for (const row of dueRows) {
     const outcome = await attemptCalendarItemWrite(db, row.id, opts.syncModules, opts.now);
-    if (outcome === 'applied') tally.applied += 1;
-    else if (outcome === 'conflict') tally.conflicts += 1;
-    else if (outcome === 'failed') tally.failed += 1;
-    else if (outcome === 'retried') tally.retried += 1;
-    // `null` means a concurrent run already claimed it — nothing to tally.
+    /* v8 ignore else -- @preserve defensive: `outcome === null` means a concurrent run already
+     * claimed this write — nothing to tally. Reachable only via a genuine cross-process race
+     * between this loop's `SELECT` and its own claim `UPDATE`, not reproducible against a single
+     * serialized pglite connection without flaky true concurrency. */
+    if (outcome !== null) tally[DRAIN_TALLY_KEY[outcome]] += 1;
   }
   return tally;
 }

@@ -555,3 +555,573 @@ describe('generic action handlers (M5)', () => {
     expect(rows[0]?.body).toMatchObject({ title: 'A suggestion arrived' });
   });
 });
+
+describe('mail.* handler variety and no-op branches', () => {
+  it('markRead, markUnread, and trash each derive their own MailAction kind', async () => {
+    for (const type of ['mail.markRead', 'mail.markUnread', 'mail.trash']) {
+      const { orgId, integrationId, taskId } = await seedTaskWithEmail();
+      await db.insert(schema.automationRule).values({
+        organizationId: orgId,
+        name: 'test rule',
+        enabled: true,
+        eventMatch: { kind: 'completed', subjectType: 'task' },
+        condition: { op: 'and', nodes: [] },
+        actions: [{ type, params: {} }],
+      });
+      const recorded: RecordedMail[] = [];
+      const registry = buildAutomationRegistry({
+        mailApplier: async (i) => void recorded.push(i),
+      });
+      await runAutomationsForEvent(
+        {
+          organizationId: orgId,
+          kind: 'completed',
+          source: 'docket',
+          subjectType: 'task',
+          subjectId: taskId,
+          detail: {},
+          occurredAt: new Date(0),
+        },
+        registry,
+      );
+      expect(recorded).toEqual([
+        {
+          organizationId: orgId,
+          integrationId,
+          threadId: 'thread_xyz',
+          action: { kind: type.replace('mail.', '') },
+        },
+      ]);
+    }
+  });
+
+  it('applyLabel/removeLabel derive the label from params, and no-op without one', async () => {
+    const { orgId, taskId } = await seedTaskWithEmail();
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'apply without label',
+      enabled: true,
+      eventMatch: { kind: 'completed', subjectType: 'task' },
+      condition: { op: 'and', nodes: [] },
+      actions: [{ type: 'mail.applyLabel', params: {} }], // no `label` — build() returns null
+    });
+    const recorded: RecordedMail[] = [];
+    const registry = buildAutomationRegistry({
+      mailApplier: async (i) => void recorded.push(i),
+    });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'completed',
+        source: 'docket',
+        subjectType: 'task',
+        subjectId: taskId,
+        detail: {},
+        occurredAt: new Date(0),
+      },
+      registry,
+    );
+    expect(recorded).toHaveLength(0);
+
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'remove with label',
+      enabled: true,
+      eventMatch: { kind: 'created', subjectType: 'task' },
+      condition: { op: 'and', nodes: [] },
+      actions: [{ type: 'mail.removeLabel', params: { label: 'follow-up' } }],
+    });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'created',
+        source: 'docket',
+        subjectType: 'task',
+        subjectId: taskId,
+        detail: {},
+        occurredAt: new Date(0),
+      },
+      registry,
+    );
+    expect(recorded).toEqual([
+      expect.objectContaining({ action: { kind: 'removeLabel', label: 'follow-up' } }),
+    ]);
+  });
+
+  it('no-ops when the firing event carries no subjectId at all', async () => {
+    const { orgId } = await seedTaskWithEmail();
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'no subject',
+      enabled: true,
+      eventMatch: { kind: 'created' },
+      condition: { op: 'and', nodes: [] },
+      actions: [{ type: 'mail.archive', params: {} }],
+    });
+    const recorded: RecordedMail[] = [];
+    const registry = buildAutomationRegistry({
+      mailApplier: async (i) => void recorded.push(i),
+    });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'created',
+        source: 'docket',
+        detail: {},
+        occurredAt: new Date(0),
+      },
+      registry,
+    );
+    expect(recorded).toHaveLength(0);
+  });
+
+  it('skips an email attachment row missing its integration id or external id', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const t = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Incomplete attachment',
+          state: 'todo',
+          createdBy: humanActorId,
+        })
+        .returning({ id: schema.task.id }),
+    );
+    await db.insert(schema.attachment).values({
+      organizationId: orgId,
+      subjectType: 'task',
+      subjectId: t.id,
+      kind: 'email',
+      title: 'Broken',
+      sourceIntegrationId: null,
+      externalId: null,
+      createdBy: humanActorId,
+    });
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'archive broken',
+      enabled: true,
+      eventMatch: { kind: 'completed', subjectType: 'task' },
+      condition: { op: 'and', nodes: [] },
+      actions: [{ type: 'mail.archive', params: {} }],
+    });
+    const recorded: RecordedMail[] = [];
+    const registry = buildAutomationRegistry({
+      mailApplier: async (i) => void recorded.push(i),
+    });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'completed',
+        source: 'docket',
+        subjectType: 'task',
+        subjectId: t.id,
+        detail: {},
+        occurredAt: new Date(0),
+      },
+      registry,
+    );
+    expect(recorded).toHaveLength(0);
+  });
+});
+
+describe('task.* handlers: invalid params and a missing task subject', () => {
+  /** Run one event through the real registry with a recording mail applier. */
+  async function fire(
+    orgId: string,
+    event: Partial<Parameters<typeof runAutomationsForEvent>[0]>,
+  ): Promise<void> {
+    const registry = buildAutomationRegistry({ mailApplier: async () => undefined });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'created',
+        source: 'docket',
+        detail: {},
+        occurredAt: new Date(0),
+        ...event,
+      },
+      registry,
+    );
+  }
+
+  async function addRule(orgId: string, on: unknown, then: unknown) {
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'test rule',
+      enabled: true,
+      eventMatch: on,
+      condition: { op: 'and', nodes: [] },
+      actions: then,
+    });
+  }
+
+  it('task.setStatus no-ops on invalid params (missing state)', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const t = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'T',
+          state: 'todo',
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
+      { type: 'task.setStatus', params: {} },
+    ]);
+    await fire(orgId, { subjectType: 'task', subjectId: t.id });
+    const row = one(await db.select().from(schema.task).where(eq(schema.task.id, t.id)));
+    expect(row.state).toBe('todo');
+  });
+
+  it('task.assign no-ops on invalid params and when the event names no task', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
+      { type: 'task.assign', params: {} }, // missing assigneeId
+    ]);
+    await expect(
+      fire(orgId, { subjectType: 'task', subjectId: 'missing' }),
+    ).resolves.toBeUndefined();
+
+    // A rule matching a non-task event: taskOf's subjectType guard short-circuits.
+    const suggestion = one(
+      await db
+        .insert(schema.emailSuggestion)
+        .values({
+          organizationId: orgId,
+          createdBy: humanActorId,
+          integrationId: one(
+            await db
+              .insert(schema.integration)
+              .values({
+                organizationId: orgId,
+                provider: 'gmail',
+                pattern: 'connector',
+                roles: ['signal'],
+                createdBy: humanActorId,
+              })
+              .returning({ id: schema.integration.id }),
+          ).id,
+          externalThreadId: 'assign-guard-thread',
+          title: 'Not a task',
+        })
+        .returning(),
+    );
+    await addRule(orgId, { kind: 'created', subjectType: 'email_suggestion' }, [
+      { type: 'task.assign', params: { assigneeId: humanActorId } },
+    ]);
+    await expect(
+      fire(orgId, { subjectType: 'email_suggestion', subjectId: suggestion.id }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('task.setPriority no-ops when the event names no task', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await addRule(orgId, { kind: 'created' }, [
+      { type: 'task.setPriority', params: { priority: 'urgent' } },
+    ]);
+    await expect(
+      fire(orgId, { actorId: humanActorId }), // no subjectType/subjectId at all
+    ).resolves.toBeUndefined();
+  });
+
+  it('task.applyLabel no-ops on invalid params and when the event names no task', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const t = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'T',
+          state: 'todo',
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
+      { type: 'task.applyLabel', params: {} }, // missing labelId
+    ]);
+    await fire(orgId, { subjectType: 'task', subjectId: t.id });
+    expect(
+      await db.select().from(schema.taskLabel).where(eq(schema.taskLabel.taskId, t.id)),
+    ).toHaveLength(0);
+
+    await addRule(orgId, { kind: 'archived' }, [
+      { type: 'task.applyLabel', params: { labelId: 'whatever' } },
+    ]);
+    await expect(fire(orgId, { kind: 'archived' })).resolves.toBeUndefined(); // no subject at all
+  });
+});
+
+describe('notification.send: targeting, and the no-inbox/no-target no-ops', () => {
+  async function fire(
+    orgId: string,
+    event: Partial<Parameters<typeof runAutomationsForEvent>[0]>,
+  ): Promise<void> {
+    const registry = buildAutomationRegistry({ mailApplier: async () => undefined });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'created',
+        source: 'docket',
+        detail: {},
+        occurredAt: new Date(0),
+        ...event,
+      },
+      registry,
+    );
+  }
+
+  async function addRule(orgId: string, on: unknown, then: unknown) {
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'test rule',
+      enabled: true,
+      eventMatch: on,
+      condition: { op: 'and', nodes: [] },
+      actions: then,
+    });
+  }
+
+  it('no-ops on invalid params (missing title)', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await addRule(orgId, { kind: 'created' }, [
+      { type: 'notification.send', params: { to: 'actor' } },
+    ]);
+    await fire(orgId, { actorId: humanActorId });
+    expect(
+      await db
+        .select()
+        .from(schema.notification)
+        .where(eq(schema.notification.organizationId, orgId)),
+    ).toHaveLength(0);
+  });
+
+  it('no-ops for to:"actor" when the firing event carries no actorId', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await addRule(orgId, { kind: 'created' }, [
+      { type: 'notification.send', params: { to: 'actor', title: 'Hi' } },
+    ]);
+    await fire(orgId, {});
+    expect(
+      await db
+        .select()
+        .from(schema.notification)
+        .where(eq(schema.notification.organizationId, orgId)),
+    ).toHaveLength(0);
+  });
+
+  it('no-ops for to:"actor" when the actor is an agent with no linked inbox user', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const agentActor = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
+        .returning({ id: schema.actor.id }),
+    );
+    await addRule(orgId, { kind: 'created' }, [
+      { type: 'notification.send', params: { to: 'actor', title: 'Hi' } },
+    ]);
+    await fire(orgId, { actorId: agentActor.id });
+    expect(
+      await db
+        .select()
+        .from(schema.notification)
+        .where(eq(schema.notification.organizationId, orgId)),
+    ).toHaveLength(0);
+  });
+
+  it('targets the task assignee for to:"taskAssignee", and no-ops when unassigned', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const [u] = await db
+      .insert(schema.user)
+      .values({ name: 'Assignee', email: `assignee-${Date.now().toString()}@example.com` })
+      .returning({ id: schema.user.id });
+    const assigneeActor = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Assignee', userId: u!.id })
+        .returning({ id: schema.actor.id }),
+    );
+    const assigned = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Assigned',
+          state: 'todo',
+          createdBy: humanActorId,
+          assigneeId: assigneeActor.id,
+        })
+        .returning({ id: schema.task.id }),
+    );
+    const unassigned = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Unassigned',
+          state: 'todo',
+          createdBy: humanActorId,
+        })
+        .returning({ id: schema.task.id }),
+    );
+    await addRule(orgId, { kind: 'created', subjectType: 'task' }, [
+      { type: 'notification.send', params: { to: 'taskAssignee', title: 'Assigned to you' } },
+    ]);
+
+    await fire(orgId, { subjectType: 'task', subjectId: assigned.id });
+    const rows = await db
+      .select()
+      .from(schema.notification)
+      .where(eq(schema.notification.userId, u!.id));
+    expect(rows).toHaveLength(1);
+
+    await fire(orgId, { subjectType: 'task', subjectId: unassigned.id });
+    expect(
+      await db.select().from(schema.notification).where(eq(schema.notification.userId, u!.id)),
+    ).toHaveLength(1); // unchanged — no assignee to notify
+  });
+});
+
+describe('suggestion.autoAccept / suggestion.dismiss no-op and fallback branches', () => {
+  async function fire(
+    orgId: string,
+    event: Partial<Parameters<typeof runAutomationsForEvent>[0]>,
+  ): Promise<void> {
+    const registry = buildAutomationRegistry({ mailApplier: async () => undefined });
+    await runAutomationsForEvent(
+      {
+        organizationId: orgId,
+        kind: 'created',
+        source: 'docket',
+        detail: {},
+        occurredAt: new Date(0),
+        ...event,
+      },
+      registry,
+    );
+  }
+
+  async function addRule(orgId: string, on: unknown, then: unknown) {
+    await db.insert(schema.automationRule).values({
+      organizationId: orgId,
+      name: 'test rule',
+      enabled: true,
+      eventMatch: on,
+      condition: { op: 'and', nodes: [] },
+      actions: then,
+    });
+  }
+
+  async function seedIntegration(orgId: string, createdBy: string): Promise<string> {
+    return one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'gmail',
+          pattern: 'connector',
+          roles: ['signal'],
+          createdBy,
+        })
+        .returning({ id: schema.integration.id }),
+    ).id;
+  }
+
+  it('autoAccept and dismiss both no-op when the event names no suggestion', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    await addRule(orgId, { kind: 'created' }, [{ type: 'suggestion.autoAccept', params: {} }]);
+    await addRule(orgId, { kind: 'archived' }, [{ type: 'suggestion.dismiss', params: {} }]);
+    await expect(fire(orgId, { actorId: humanActorId })).resolves.toBeUndefined();
+    await expect(fire(orgId, { kind: 'archived', actorId: humanActorId })).resolves.toBeUndefined();
+  });
+
+  it('falls back to the suggestion’s creator when the firing event carries no actor', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await seedIntegration(orgId, humanActorId);
+    const suggestion = one(
+      await db
+        .insert(schema.emailSuggestion)
+        .values({
+          organizationId: orgId,
+          createdBy: humanActorId,
+          integrationId,
+          externalThreadId: 'no-actor-thread',
+          title: 'From the sweep',
+          emailMeta: {
+            subject: 'Sweep-created',
+            externalUrl: 'https://mail.mock.docket.local/#all/no-actor-thread',
+          },
+        })
+        .returning(),
+    );
+    await addRule(orgId, { kind: 'created', subjectType: 'email_suggestion' }, [
+      { type: 'suggestion.autoAccept', params: {} },
+    ]);
+    // No actorId on the event — the handler falls back to the suggestion's own createdBy.
+    await fire(orgId, { subjectType: 'email_suggestion', subjectId: suggestion.id });
+    const updated = one(
+      await db
+        .select()
+        .from(schema.emailSuggestion)
+        .where(eq(schema.emailSuggestion.id, suggestion.id)),
+    );
+    expect(updated.status).toBe('accepted');
+  });
+
+  it('no-ops when neither the event nor a resolvable suggestion names an actor', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await addRule(orgId, { kind: 'created', subjectType: 'email_suggestion' }, [
+      { type: 'suggestion.autoAccept', params: {} },
+    ]);
+    // No actorId, and the subjectId names no real suggestion row — the createdBy lookup misses.
+    await expect(
+      fire(orgId, { subjectType: 'email_suggestion', subjectId: 'sugg_does_not_exist' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('logs (does not throw) when the suggestion was already resolved', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await seedIntegration(orgId, humanActorId);
+    const suggestion = one(
+      await db
+        .insert(schema.emailSuggestion)
+        .values({
+          organizationId: orgId,
+          createdBy: humanActorId,
+          integrationId,
+          externalThreadId: 'already-resolved-thread',
+          title: 'Already handled',
+          status: 'dismissed',
+          emailMeta: { subject: 'Already handled' },
+        })
+        .returning(),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await addRule(orgId, { kind: 'created', subjectType: 'email_suggestion' }, [
+      { type: 'suggestion.autoAccept', params: {} },
+    ]);
+    await expect(
+      fire(orgId, {
+        subjectType: 'email_suggestion',
+        subjectId: suggestion.id,
+        actorId: humanActorId,
+      }),
+    ).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[automation] suggestion.autoAccept skipped',
+      expect.objectContaining({ outcome: 'already_resolved' }),
+    );
+    warnSpy.mockRestore();
+  });
+});

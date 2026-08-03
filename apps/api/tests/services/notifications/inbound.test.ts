@@ -132,6 +132,95 @@ describe('notification inbound service', () => {
       .where(eq(schema.contactPoint.id, point.id));
     expect(updatedPoint).toMatchObject({ status: 'disabled' });
   });
+
+  it('marks a delivery delivered/read/acted for the delivered, opened, and clicked kinds', async () => {
+    const { recordNotificationProviderEvent, normalizeEmailProviderPayload } =
+      await import('../../../src/services/notifications/inbound');
+
+    const delivered = await seedEmailDelivery('InboundEmailDelivered');
+    await recordNotificationProviderEvent(
+      db,
+      normalizeEmailProviderPayload({
+        eventId: `email-delivered-${delivered.userId}`,
+        event: 'delivered',
+        deliveryId: delivered.deliveryId,
+      }),
+    );
+    const [deliveredRow] = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.id, delivered.deliveryId));
+    expect(deliveredRow).toMatchObject({ status: 'delivered' });
+    expect(deliveredRow?.deliveredAt).not.toBeNull();
+
+    const opened = await seedEmailDelivery('InboundEmailOpened');
+    await recordNotificationProviderEvent(
+      db,
+      normalizeEmailProviderPayload({
+        eventId: `email-opened-${opened.userId}`,
+        event: 'opened',
+        deliveryId: opened.deliveryId,
+      }),
+    );
+    const [openedRow] = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.id, opened.deliveryId));
+    expect(openedRow).toMatchObject({ status: 'read' });
+    expect(openedRow?.readAt).not.toBeNull();
+
+    const clicked = await seedEmailDelivery('InboundEmailClicked');
+    await recordNotificationProviderEvent(
+      db,
+      normalizeEmailProviderPayload({
+        eventId: `email-clicked-${clicked.userId}`,
+        event: 'clicked',
+        deliveryId: clicked.deliveryId,
+      }),
+    );
+    const [clickedRow] = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.id, clicked.deliveryId));
+    expect(clickedRow).toMatchObject({ status: 'acted' });
+    expect(clickedRow?.actedAt).not.toBeNull();
+  });
+
+  it('records the provider error code (or falls back to the event name) on a failed delivery', async () => {
+    const { recordNotificationProviderEvent, normalizeSmsProviderPayload } =
+      await import('../../../src/services/notifications/inbound');
+
+    const withCode = await seedEmailDelivery('InboundSmsFailedWithCode');
+    await recordNotificationProviderEvent(
+      db,
+      normalizeSmsProviderPayload({
+        eventId: `sms-failed-code-${withCode.userId}`,
+        event: 'failed',
+        errorCode: 'carrier_rejected',
+        deliveryId: withCode.deliveryId,
+      }),
+    );
+    const [withCodeRow] = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.id, withCode.deliveryId));
+    expect(withCodeRow).toMatchObject({ status: 'failed', errorCode: 'carrier_rejected' });
+
+    const withoutCode = await seedEmailDelivery('InboundSmsFailedNoCode');
+    await recordNotificationProviderEvent(
+      db,
+      normalizeSmsProviderPayload({
+        eventId: `sms-failed-nocode-${withoutCode.userId}`,
+        event: 'undelivered',
+        deliveryId: withoutCode.deliveryId,
+      }),
+    );
+    const [withoutCodeRow] = await db
+      .select()
+      .from(schema.notificationDelivery)
+      .where(eq(schema.notificationDelivery.id, withoutCode.deliveryId));
+    expect(withoutCodeRow).toMatchObject({ status: 'failed', errorCode: 'undelivered' });
+  });
 });
 
 async function seedEmailDelivery(name: string): Promise<{

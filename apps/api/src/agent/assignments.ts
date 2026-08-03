@@ -201,6 +201,7 @@ export async function startAssignmentRun(
         externalRunRef,
       })
       .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!session) throw new Error('assignment session insert returned no row');
     await tx.insert(sessionActivity).values({
       sessionId: session.id,
@@ -238,6 +239,7 @@ export async function createAthenaAssignment(input: {
   if (!access) throw new NotFoundError('Work not found');
   const created = await db.transaction(async (tx) => {
     const [assignment] = await tx.insert(athenaAssignment).values(input).returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!assignment) throw new Error('assignment insert returned no row');
     await tx.insert(notification).values({
       userId: input.ownerUserId,

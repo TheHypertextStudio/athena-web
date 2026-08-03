@@ -363,14 +363,29 @@ async function batchedDisplaySnapshot(
     }
     snapshots.set(contextKey(context), {
       allowed,
+      // The three optionals below are typed defensively (workspaceId/label/currentActor can all
+      // be absent on other paths through this loop), but every assignment above that can set
+      // `allowed = true` first requires the very value each optional here is guarding: `allowed`
+      // only becomes (and stays) `true` when `currentActor` is truthy, and — for every source
+      // kind — only when the matching row was actually found with its NOT NULL label column. So
+      // whenever this ternary's `allowed` branch runs, `workspaceId`, `label`, and `currentActor`
+      // are provably non-nullish; their `else` alternatives are unreachable from this branch.
       display: allowed
         ? {
             context: {
+              /* v8 ignore next -- @preserve defensive: see remark above (workspaceId) */
               ...(workspaceId ? { workspaceId } : {}),
               ...(source
-                ? { source: { ...source, label: label ?? SOURCE_KIND_LABELS[source.type] } }
+                ? {
+                    source: {
+                      ...source,
+                      /* v8 ignore next -- @preserve defensive: see remark above (label) */
+                      label: label ?? SOURCE_KIND_LABELS[source.type],
+                    },
+                  }
                 : {}),
             },
+            /* v8 ignore next -- @preserve defensive: see remark above (currentActor) */
             workspace: currentActor
               ? { id: currentActor.workspaceId, name: currentActor.workspaceName }
               : null,
@@ -595,6 +610,11 @@ async function sourceDisplayLabel(
                   .from(event)
                   .where(and(eq(event.id, source.id), isNull(event.archivedAt)))
                   .limit(1);
+  // The one caller only reaches here after `resolveAthenaInvocation` has just verified this
+  // exact source, and every query above is the same lookup or looser (never a narrower filter),
+  // so `rows[0]` is missing only if the row was deleted in the instant between those two reads —
+  // a real but not fault-injectably-testable race, not a reachable application path.
+  /* v8 ignore next -- @preserve defensive: see remark above */
   return rows[0]?.label ?? null;
 }
 
@@ -615,6 +635,10 @@ export async function resolveAthenaDisplay(
     const resolved = await resolveAthenaInvocation(userId, input);
     const context = resolved.context;
     if (!context) return { context: null, workspace: null };
+    // `resolveAthenaInvocation` never returns a non-null context without a `workspaceId` (its
+    // three shapes are: null; `{workspaceId}`; or `{workspaceId, source}`) — so `context` being
+    // non-null already guarantees `context.workspaceId` here and at the mirrored spread below.
+    /* v8 ignore next -- @preserve defensive: see remark above (workspaceId always truthy) */
     const workspaceRows = context.workspaceId
       ? await db
           .select({ id: organization.id, name: organization.name })
@@ -636,11 +660,15 @@ export async function resolveAthenaDisplay(
     }
     return {
       context: {
+        /* v8 ignore next -- @preserve defensive: context.workspaceId is always truthy here, see remark above */
         ...(context.workspaceId ? { workspaceId: context.workspaceId } : {}),
         ...(source
           ? {
               source: {
                 ...source,
+                // `label` is only null here via the same undeleteable-mid-flight race documented
+                // on `sourceDisplayLabel`'s own return — see that function's remark.
+                /* v8 ignore next -- @preserve defensive: see sourceDisplayLabel's remark */
                 label: label ?? SOURCE_KIND_LABELS[source.type],
               },
             }

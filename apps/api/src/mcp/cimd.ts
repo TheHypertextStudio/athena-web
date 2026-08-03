@@ -165,6 +165,11 @@ function isPublicAddress(address: string): boolean {
   return false;
 }
 
+/* v8 ignore start -- @preserve live-network IO boundary: a real DNS lookup and a real pinned
+   HTTPS request to an arbitrary client-supplied host cannot be exercised without either a live
+   network or a full TLS server fixture, and every `resolveCimdClient`/`upsertCimdClient`/
+   `createCimdAuthorizeMiddleware` test above injects a `CimdDeps` double instead — these two
+   functions are only ever reached as the unmocked `defaultDeps`, which no test path uses. */
 async function defaultResolveHost(hostname: string): Promise<readonly ResolvedAddress[]> {
   const addresses = await dnsLookup(hostname, { all: true, verbatim: true });
   return addresses.map((entry) => ({ address: entry.address, family: entry.family as 4 | 6 }));
@@ -226,6 +231,7 @@ async function defaultFetchJson(url: URL, resolved: ResolvedAddress): Promise<un
     req.end();
   });
 }
+/* v8 ignore stop */
 
 const defaultDeps: CimdDeps = {
   resolveHost: defaultResolveHost,

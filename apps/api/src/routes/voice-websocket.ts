@@ -99,7 +99,9 @@ export type FrameError = 1002 | 1003 | 1009;
  */
 export function decodeFrame(buffer: Buffer): DecodedFrame | null | FrameError {
   if (buffer.length < 2) return null;
+  /* v8 ignore next -- @preserve defensive: the length check above guarantees index 0 exists */
   const first = buffer[0] ?? 0;
+  /* v8 ignore next -- @preserve defensive: the length check above guarantees index 1 exists */
   const second = buffer[1] ?? 0;
   // rsv1/2/3 must be zero: we never negotiate an extension that would set them.
   if ((first & 0x70) !== 0) return 1002;
@@ -121,6 +123,10 @@ export function decodeFrame(buffer: Buffer): DecodedFrame | null | FrameError {
     length = Number(big);
     offset += 8;
   }
+  /* v8 ignore next -- @preserve defensive: unreachable while MAX_MESSAGE_BYTES (256 KiB) exceeds
+     the 16-bit length form's ceiling (65535) — the 64-bit form already returns 1009 above when
+     its length exceeds MAX_MESSAGE_BYTES. Kept in case MAX_MESSAGE_BYTES is ever lowered under
+     65535, at which point the 16-bit form would need this check too. */
   if (length > MAX_MESSAGE_BYTES) return 1009;
   if (buffer.length < offset + 4 + length) return null;
 
@@ -128,6 +134,7 @@ export function decodeFrame(buffer: Buffer): DecodedFrame | null | FrameError {
   offset += 4;
   const payload = Buffer.allocUnsafe(length);
   for (let i = 0; i < length; i += 1) {
+    /* v8 ignore next -- @preserve defensive: the length checks above guarantee both indices exist */
     payload[i] = (buffer[offset + i] ?? 0) ^ (mask[i % 4] ?? 0);
   }
   return { fin, opcode, payload, size: offset + length };

@@ -73,6 +73,23 @@ describe('mintInstallationToken', () => {
       ConnectorError,
     );
   });
+
+  it('falls back to the platform fetch when no transport is injected', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ token: 'ghs_global', expires_at: '2026-06-28T13:00:00Z' }), {
+          status: 201,
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const res = await mintInstallationToken(APP, '99', NOW_S);
+      expect(res.token).toBe('ghs_global');
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('resolveInstallationAccount', () => {

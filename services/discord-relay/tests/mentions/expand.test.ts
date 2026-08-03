@@ -43,6 +43,11 @@ describe('expandMentionedUserIds', () => {
     ).toEqual(['U7']);
   });
 
+  it('adds no DM recipients when dmRecipientIds is absent for a DM message', () => {
+    const msg: DiscordMessage = { id: 'M1', channel_id: 'C1', content: 'hi' };
+    expect(expandMentionedUserIds(msg, noRoles)).toEqual([]);
+  });
+
   it('does not add DM recipients for a guild message', () => {
     const msg: DiscordMessage = {
       id: 'M1',

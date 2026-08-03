@@ -55,7 +55,7 @@ export function readUiToolMeta(meta: unknown): McpUiToolMeta | null {
  * @param meta - A tool's `_meta`, as the server sent it.
  * @returns `{ ui }` or an empty object, so `exactOptionalPropertyTypes` stays satisfied.
  */
-function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta } {
+export function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta } {
   const ui = readUiToolMeta(meta);
   return ui ? { ui } : {};
 }
@@ -532,7 +532,7 @@ export class MockMcpConnector implements McpConnector {
 }
 
 /** Flatten an MCP result's text blocks into one payload. */
-function flatten(result: CallToolResult): RemoteToolResult {
+export function flatten(result: CallToolResult): RemoteToolResult {
   const parts: string[] = [];
   for (const block of result.content) {
     if (block.type === 'text') parts.push(block.text);

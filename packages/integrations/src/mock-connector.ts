@@ -225,10 +225,15 @@ export class MockConnector implements Connector {
       listThreads: async (input: ListThreadsInput): Promise<MailListPage> => {
         if (input.cursor === MockConnector.EXPIRED_CURSOR) return { kind: 'cursorExpired' };
         const fixtures = MAIL_THREAD_SUMMARIES[this.provider];
+        // A mail-capable provider without listing fixtures is a fixture bug — loud, not [].
+        // Unreachable today: MAIL_CAPABLE_PROVIDERS and MAIL_THREAD_SUMMARIES both currently
+        // list exactly `gmail`; this guards the two manifests from silently drifting apart if
+        // a future provider is added to one without the other.
+        /* v8 ignore start */
         if (!fixtures) {
-          // A mail-capable provider without listing fixtures is a fixture bug — loud, not [].
           throw new Error(`No MAIL_THREAD_SUMMARIES fixtures for provider ${this.provider}`);
         }
+        /* v8 ignore stop */
         return {
           kind: 'page',
           threads: fixtures.slice(0, input.maxThreads),

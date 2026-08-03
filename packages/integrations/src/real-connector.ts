@@ -255,7 +255,11 @@ export class RealConnector implements Connector {
   asWorkGraph(): WorkGraphConnector | undefined {
     if (this.provider !== 'linear') return undefined;
     const client = this.client;
+    /* v8 ignore start -- unreachable: PROVIDER_CLIENT_FACTORIES.linear always constructs a
+       LinearProviderClient, which structurally implements WorkGraphProviderClient; this guard
+       only protects a future factory change from silently losing the capability. */
     if (!isWorkGraphProviderClient(client)) return undefined;
+    /* v8 ignore stop */
     return {
       pullWorkGraph: (input) => client.pullWorkGraph(input),
       listTeamStates: (externalTeamId) => client.listTeamStates(externalTeamId),

@@ -114,6 +114,38 @@ describe('GmailProviderClient mail actions', () => {
 });
 
 describe('GmailProviderClient fetchThread', () => {
+  it('falls back to a placeholder subject and blank fields for a message with no headers/body', async () => {
+    const http = new RecordingHttp();
+    http.respond = () => ({ id: 't1', messages: [] });
+    const thread = await gmailClient(http).fetchThread({ connectionId: 'c', threadId: 't1' });
+    expect(thread.subject).toBe('Thread t1');
+    expect(thread.messages).toEqual([]);
+  });
+
+  it('tolerates a message with no payload at all (no headers, no snippet, no internalDate)', async () => {
+    const http = new RecordingHttp();
+    http.respond = () => ({ id: 't1', messages: [{ id: 'm1' }] });
+    const thread = await gmailClient(http).fetchThread({ connectionId: 'c', threadId: 't1' });
+    expect(thread.messages[0]).toMatchObject({
+      id: 'm1',
+      from: '',
+      to: [],
+      subject: '',
+      snippet: '',
+      sentAt: '',
+      references: [],
+    });
+    expect(thread.messages[0]).not.toHaveProperty('rfc822MessageId');
+    expect(thread.messages[0]).not.toHaveProperty('inReplyTo');
+  });
+
+  it('tolerates a thread response with no messages key', async () => {
+    const http = new RecordingHttp();
+    http.respond = () => ({ id: 't1' });
+    const thread = await gmailClient(http).fetchThread({ connectionId: 'c', threadId: 't1' });
+    expect(thread.messages).toEqual([]);
+  });
+
   it('requests RFC 5322 headers and parses them into a render-ready MailThread', async () => {
     const http = new RecordingHttp();
     http.respond = () => ({
@@ -150,6 +182,46 @@ describe('GmailProviderClient fetchThread', () => {
   });
 });
 
+describe('GmailProviderClient — base ConnectorProviderClient surface', () => {
+  it('listContainers has no container concept and returns empty', async () => {
+    const http = new RecordingHttp();
+    await expect(gmailClient(http).listContainers()).resolves.toEqual([]);
+  });
+
+  it('mirrorStatus sizes the mirror from the thread-import count', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/threads?')) {
+        return {
+          threads: [
+            { id: 't1', snippet: 'one' },
+            { id: 't2', snippet: 'two' },
+          ],
+        };
+      }
+      throw new Error(`unexpected path ${path}`);
+    };
+    const status = await gmailClient(http).mirrorStatus({ connectionId: 'c1', provider: 'gmail' });
+    expect(status).toEqual({ connectionId: 'c1', status: 'idle', itemCount: 2 });
+  });
+
+  it('resolveAccount returns undefined when the profile has no emailAddress', async () => {
+    const http = new RecordingHttp();
+    http.respond = () => ({});
+    expect(await gmailClient(http).resolveAccount()).toBeUndefined();
+  });
+
+  it('importWork tolerates a threads response with no threads key', async () => {
+    const http = new RecordingHttp();
+    http.respond = () => ({});
+    const items = await gmailClient(http).importWork(
+      { connectionId: 'c1', provider: 'gmail' },
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(items).toEqual([]);
+  });
+});
+
 describe('GmailProviderClient listThreads', () => {
   it('cold pull: lists threads, hydrates each with headers, and anchors the cursor to the profile historyId', async () => {
     const http = new RecordingHttp();
@@ -179,6 +251,18 @@ describe('GmailProviderClient listThreads', () => {
     expect(page.threads[1]?.from).toBe('Deals <no-reply@shop.x.com>');
   });
 
+  it('cold pull returns an expired-shaped empty cursor when the profile has no historyId', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/threads?')) return { threads: [{ id: 't1' }] };
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      if (path.startsWith('/users/me/profile')) return {};
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({ connectionId: 'c', maxThreads: 50 });
+    expect(page).toMatchObject({ kind: 'page', nextCursor: '' });
+  });
+
   it('cold pull respects maxThreads across list pages', async () => {
     const http = new RecordingHttp();
     http.respond = (path) => {
@@ -194,6 +278,53 @@ describe('GmailProviderClient listThreads', () => {
     expect(page.kind).toBe('page');
     if (page.kind !== 'page') return;
     expect(page.threads).toHaveLength(1);
+  });
+
+  it('cold pull follows the pageToken across a second listing page', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/threads?')) {
+        if (path.includes('pageToken=p2')) return { threads: [{ id: 't2' }] };
+        expect(path).not.toContain('pageToken');
+        return { threads: [{ id: 't1' }], nextPageToken: 'p2' };
+      }
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      if (path.startsWith('/users/me/threads/t2')) return threadJson('t2');
+      if (path.startsWith('/users/me/profile')) return { historyId: 'h1' };
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({ connectionId: 'c', maxThreads: 2 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    expect(page.threads.map((t) => t.threadId)).toEqual(['t1', 't2']);
+  });
+
+  it('cold pull skips a thread that hydrates to no messages (nothing to ingest)', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/threads?')) {
+        return { threads: [{ id: 'empty' }, { id: 't1' }] };
+      }
+      if (path.startsWith('/users/me/threads/empty')) return { id: 'empty', messages: [] };
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      if (path.startsWith('/users/me/profile')) return { historyId: 'h1' };
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({ connectionId: 'c', maxThreads: 50 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    expect(page.threads.map((t) => t.threadId)).toEqual(['t1']);
+  });
+
+  it('cold pull tolerates a listing page with no threads key', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/threads?')) return {};
+      if (path.startsWith('/users/me/profile')) return { historyId: 'h1' };
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({ connectionId: 'c', maxThreads: 10 });
+    expect(page).toMatchObject({ kind: 'page', threads: [] });
   });
 
   it('incremental pull: reads history since the cursor and returns the new historyId', async () => {
@@ -288,6 +419,76 @@ describe('GmailProviderClient listThreads', () => {
     if (page.kind !== 'page') return;
     expect(page.threads.map((t) => t.threadId)).toEqual(['t1', 't2']);
     expect(page.nextCursor).toBe('h200'); // the final (drained) page's historyId
+  });
+
+  it('tolerates a history page with no history key, no messagesAdded, and an entry with no threadId', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/history?')) {
+        return {
+          // No `history` key at all: the walk finds nothing this page.
+          historyId: 'h150',
+        };
+      }
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({
+      connectionId: 'c',
+      cursor: 'h100',
+      maxThreads: 10,
+    });
+    expect(page).toEqual({ kind: 'page', threads: [], nextCursor: 'h150' });
+  });
+
+  it('skips a history record with no messagesAdded and a messagesAdded entry with no threadId', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/history?')) {
+        return {
+          history: [
+            {}, // no messagesAdded at all
+            { messagesAdded: [{ message: {} }] }, // no threadId on the message
+          ],
+          historyId: 'h150',
+        };
+      }
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({
+      connectionId: 'c',
+      cursor: 'h100',
+      maxThreads: 10,
+    });
+    expect(page).toEqual({ kind: 'page', threads: [], nextCursor: 'h150' });
+  });
+
+  it('keeps the running historyId when a later page omits it', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/history?')) {
+        if (path.includes('pageToken=p2')) {
+          // Final page carries no historyId of its own — the earlier one must survive.
+          return { history: [{ messagesAdded: [{ message: { threadId: 't2' } }] }] };
+        }
+        return {
+          history: [{ messagesAdded: [{ message: { threadId: 't1' } }] }],
+          nextPageToken: 'p2',
+          historyId: 'h150',
+        };
+      }
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      if (path.startsWith('/users/me/threads/t2')) return threadJson('t2');
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({
+      connectionId: 'c',
+      cursor: 'h100',
+      maxThreads: 50,
+    });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    // Fully drained, and the last page's missing historyId falls back to the running 'h150'.
+    expect(page.nextCursor).toBe('h150');
   });
 
   it('a stale history cursor (404) surfaces as cursorExpired, not a throw', async () => {

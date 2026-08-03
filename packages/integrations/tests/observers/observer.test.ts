@@ -34,6 +34,16 @@ describe('MockObserver.route + normalize', () => {
     expect(r?.eventType).toBe('mock');
   });
 
+  it('honors an explicit externalEventId override', () => {
+    const r = observer.route({ externalEventId: 'evt_custom_1' });
+    expect(r?.externalEventId).toBe('evt_custom_1');
+  });
+
+  it('returns null for a non-object payload', () => {
+    expect(observer.route('not-an-object')).toBeNull();
+    expect(observer.route(null)).toBeNull();
+  });
+
   it('normalizes one draft, honoring fixture overrides', () => {
     const drafts = observer.normalize({
       eventType: 'mock',
@@ -63,5 +73,53 @@ describe('MockObserver.route + normalize', () => {
     expect(drafts[0]?.title).toBe('Mock observation');
     expect(drafts[0]?.entity).toBeUndefined();
     expect(drafts[0]?.detail?.schema).toBe('generic');
+  });
+
+  it('tolerates a non-object payload, falling back to the bare-payload defaults', () => {
+    const drafts = observer.normalize({ eventType: 'mock', receivedAt: AT, payload: 'garbage' });
+    expect(drafts[0]?.title).toBe('Mock observation');
+    expect(drafts[0]?.dedupeKey).toBe('mock:mock:0');
+  });
+
+  it('builds an entity without a title when the fixture carries an id but no title', () => {
+    const drafts = observer.normalize({ eventType: 'mock', receivedAt: AT, payload: { id: 'x2' } });
+    expect(drafts[0]?.entity).toEqual({ kind: 'work_item', externalId: 'x2' });
+  });
+
+  it('carries a fixture summary into the draft and its generic detail', () => {
+    const drafts = observer.normalize({
+      eventType: 'mock',
+      receivedAt: AT,
+      payload: { summary: 'Fixture summary' },
+    });
+    expect(drafts[0]?.summary).toBe('Fixture summary');
+    expect(drafts[0]?.detail).toMatchObject({ summary: 'Fixture summary' });
+  });
+
+  it('maps a bare-string participants array to actor refs', () => {
+    const drafts = observer.normalize({
+      eventType: 'mock',
+      receivedAt: AT,
+      payload: { participants: ['u1', 'u2'] },
+    });
+    expect(drafts[0]?.participants).toEqual([{ externalId: 'u1' }, { externalId: 'u2' }]);
+  });
+
+  it('maps object-shaped participants, dropping ones without an externalId', () => {
+    const drafts = observer.normalize({
+      eventType: 'mock',
+      receivedAt: AT,
+      payload: { participants: [{ externalId: 'u3' }, { nope: true }, 42] },
+    });
+    expect(drafts[0]?.participants).toEqual([{ externalId: 'u3' }]);
+  });
+
+  it('omits participants entirely when the fixture array is empty or absent', () => {
+    const withKey = observer.normalize({
+      eventType: 'mock',
+      receivedAt: AT,
+      payload: { participants: [] },
+    });
+    expect(withKey[0]).not.toHaveProperty('participants');
   });
 });

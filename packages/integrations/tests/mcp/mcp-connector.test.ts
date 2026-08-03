@@ -30,6 +30,8 @@ describe('MockMcpConnector', () => {
 
     expect((await session.callTool('get_task_by_id', { taskId: 'nope' })).isError).toBe(true);
     expect((await session.callTool('unknown_tool', {})).isError).toBe(true);
+    // No taskId at all (not even an object) — the input guard fails closed to "not found".
+    expect((await session.callTool('get_task_by_id', undefined)).isError).toBe(true);
   });
 
   it('throws on unknown hosts and invalid URLs (never reports success falsely)', async () => {
@@ -58,6 +60,31 @@ describe('MockMcpConnector', () => {
     });
     const session = await connector.open({ url: 'https://mcp.example.com/mcp' });
     expect((await session.listTools()).map((t) => t.name)).toEqual(['echo']);
+  });
+
+  it('falls back to the host as the name when a fixture server declares no serverInfo, and wraps `call` for callToolRaw when the fixture declares no callRaw', async () => {
+    const connector = new MockMcpConnector({
+      servers: {
+        'mcp.example.com': {
+          tools: [
+            {
+              name: 'echo',
+              description: 'Echo.',
+              inputSchema: { type: 'object' },
+              annotations: { readOnlyHint: true },
+            },
+          ],
+          call: (name, input) => ({ content: JSON.stringify({ name, input }), isError: false }),
+        },
+      },
+    });
+    const session = await connector.open({ url: 'https://mcp.example.com/mcp' });
+    expect(session.serverInfo()).toEqual({ name: 'mcp.example.com' });
+
+    const raw = await session.callToolRaw?.('echo', { x: 1 });
+    expect(raw).toEqual({
+      content: [{ type: 'text', text: JSON.stringify({ name: 'echo', input: { x: 1 } }) }],
+    });
   });
 });
 

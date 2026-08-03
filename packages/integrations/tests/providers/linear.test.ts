@@ -163,6 +163,11 @@ describe('LinearProviderClient — listTeamStates', () => {
     expect(calls[0]!.body.variables).toEqual({ id: 't1' });
     expect(calls[0]!.body.query).not.toContain('t1');
   });
+
+  it('returns an empty list when the team or its states are missing from the response', async () => {
+    const { client } = fakeHttp([gql({ team: null })]);
+    expect(await client.listTeamStates('missing-team')).toEqual([]);
+  });
 });
 
 describe('LinearProviderClient — pagination', () => {
@@ -310,12 +315,22 @@ describe('LinearProviderClient — pushWorkItem', () => {
     const result = await client.pushWorkItem({
       kind: 'update',
       externalId: 'i1',
-      fields: { title: 'New title', priority: 'high', stateExternalId: 's2' },
+      fields: {
+        title: 'New title',
+        description: 'New description',
+        priority: 'high',
+        stateExternalId: 's2',
+      },
     });
     expect(result).toEqual({ externalId: 'i1', externalUpdatedAt: 'T2' });
     expect(calls[0]!.body.variables).toEqual({
       id: 'i1',
-      input: { title: 'New title', priority: 2, stateId: 's2' },
+      input: {
+        title: 'New title',
+        description: 'New description',
+        priority: 2,
+        stateId: 's2',
+      },
     });
   });
 
@@ -361,6 +376,14 @@ describe('LinearProviderClient — pushWorkItem', () => {
     await expectConnectorError(
       () => client.pushWorkItem({ kind: 'update', externalId: 'i1', fields: { title: 'x' } }),
       'auth',
+    );
+  });
+
+  it('classifies a non-auth-shaped GraphQL error as a provider ConnectorError', async () => {
+    const { client } = fakeHttp([gqlError('Internal server error while resolving field')]);
+    await expectConnectorError(
+      () => client.pushWorkItem({ kind: 'update', externalId: 'i1', fields: { title: 'x' } }),
+      'provider',
     );
   });
 });
@@ -469,6 +492,10 @@ describe('edge mapping — user', () => {
       active: false,
     });
   });
+
+  it('throws when a user has neither displayName nor name', () => {
+    expect(() => toExternalUser({ id: 'u3', active: true })).toThrow(ConnectorError);
+  });
 });
 
 describe('edge mapping — label team scoping', () => {
@@ -571,6 +598,19 @@ describe('edge mapping — cycle', () => {
       }),
     ).toThrow(ConnectorError);
   });
+
+  it('omits name and completedAt when the cycle carries neither', () => {
+    const cycle = toExternalCycle({
+      id: 'cy3',
+      number: 8,
+      startsAt: 'a',
+      endsAt: 'b',
+      updatedAt: 'c',
+      team: { id: 't1' },
+    });
+    expect(cycle).not.toHaveProperty('name');
+    expect(cycle).not.toHaveProperty('completedAt');
+  });
 });
 
 describe('edge mapping — workflow state', () => {
@@ -660,6 +700,11 @@ describe('edge mapping — work item', () => {
 
   it('throws when an issue has no team', () => {
     expect(() => toExternalWorkItem({ ...richNode, team: null })).toThrow(ConnectorError);
+  });
+
+  it('carries a real canceledAt through', () => {
+    const item = toExternalWorkItem({ ...richNode, canceledAt: '2026-06-12T00:00:00.000Z' });
+    expect(item.canceledAt).toBe('2026-06-12T00:00:00.000Z');
   });
 });
 

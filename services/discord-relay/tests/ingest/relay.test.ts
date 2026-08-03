@@ -57,6 +57,26 @@ describe('forwardMessage', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('falls back to the global fetch when no fetch is injected', async () => {
+    const fetchMock = vi.fn(
+      async (_url: string, _init?: RequestInit) => new Response(null, { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const msg: DiscordMessage = {
+        id: 'M1',
+        channel_id: 'C1',
+        guild_id: 'G1',
+        mentions: [{ id: 'U2' }],
+      };
+      const ok = await forwardMessage(msg, { ...BASE, membersOfRole: () => [] });
+      expect(ok).toBe(true);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('throws when the ingest edge rejects the delivery', async () => {
     const fetchMock = vi.fn(
       async (_url: string, _init?: RequestInit) => new Response(null, { status: 401 }),

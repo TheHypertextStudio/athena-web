@@ -169,6 +169,22 @@ describe('verifySvixSignature', () => {
     }
   });
 
+  it('rejects a signature entry whose decoded length differs from the real one', () => {
+    // A well-formed `v1,<short base64>` entry: same prefix, but the byte length can never match a
+    // real 32-byte HMAC-SHA256 digest, so this exercises the length guard ahead of the
+    // constant-time byte comparison rather than a content mismatch caught by it.
+    expect(
+      verifySvixSignature({
+        secret: SECRET,
+        id: ID,
+        timestamp,
+        signature: 'v1,c2hvcnQ=',
+        payload: PAYLOAD,
+        now,
+      }),
+    ).toEqual({ ok: false, code: 'invalid-signature' });
+  });
+
   it('accepts a secret supplied without its whsec_ prefix', () => {
     const bare = SECRET.slice('whsec_'.length);
     const signed = `v1,${signSvixPayload(bare, ID, timestamp, PAYLOAD)}`;

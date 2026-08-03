@@ -53,6 +53,10 @@ function actorFrom(user: Record<string, unknown> | undefined): EventActorRef | u
 /** Map a Linear native object type (its event `type`) onto the canonical entity taxonomy. */
 function linearEntityKind(eventType: string): CanonicalEntityKind | undefined {
   switch (eventType) {
+    // Unreachable via the only caller (`normalizeGeneric`, from `normalize`'s `default` arm):
+    // an `Issue`-typed event is always routed to `normalizeIssue` before this runs. Kept for
+    // documentation/symmetry with the other two entity-bearing Linear event types.
+    /* v8 ignore next 2 */
     case 'Issue':
       return 'work_item';
     case 'Project':

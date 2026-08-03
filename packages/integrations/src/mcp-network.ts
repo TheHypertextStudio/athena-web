@@ -48,26 +48,50 @@ const DEFAULT_LIMITS: Required<McpNetworkLimits> = {
   maxBodyBytes: 2 * 1024 * 1024,
 };
 
+/* v8 ignore start -- live DNS IO boundary: the only caller (`resolvePublicAddress`) always
+   injects a `lookup` in tests; this default reaches the real OS resolver and is exercised by
+   actually running the singleton `mcpSafeFetch` against a live host, not by a unit test. */
 const defaultLookup: McpDnsLookup = async (hostname) => {
   const rows = await dns.lookup(hostname, { all: true, verbatim: true });
   return rows.map((row) => ({ address: row.address, family: row.family as 4 | 6 }));
 };
+/* v8 ignore stop */
 
 function parseIpv4(address: string): readonly [number, number, number, number] | null {
   const parts = address.split('.');
+  // Defensive re-validation, not the primary gate: `parseIpv4` is only ever called (directly, or
+  // via `ipv4Number`) on a string that `isPublicAddress` already had Node's `net.isIP` classify
+  // as syntactically valid — for family 4 directly, and for a family-6 embedded IPv4 tail (Node
+  // validates that too, e.g. `isIP('::ffff:999.1.1.1')` is `0`, not `6`). A string that fails
+  // these checks therefore never reaches here through the safe-fetch entry point; kept as an
+  // independent parser rather than trusting `isIP` alone never to regress.
+  /* v8 ignore start */
   if (parts.length !== 4) return null;
   const values = parts.map((part) => (/^\d+$/.test(part) ? Number(part) : Number.NaN));
   if (!values.every((value) => Number.isInteger(value) && value >= 0 && value <= 255)) return null;
+  /* v8 ignore stop */
+  // `values` has exactly 4 entries here (checked above); the `?? 0`s only narrow
+  // `noUncheckedIndexedAccess`, they never actually supply a default.
+  /* v8 ignore next */
   return [values[0] ?? 0, values[1] ?? 0, values[2] ?? 0, values[3] ?? 0];
 }
 
 function ipv4Number(address: string): number | null {
   const octets = parseIpv4(address);
+  // Unreachable via the safe-fetch entry point for the same reason as `parseIpv4`'s guards above
+  // — `ipv4Number` is only called with a `net.isIP`-validated family-4 string (direct) or a
+  // byte-derived dotted-quad that is always well-formed (the IPv4-mapped path in
+  // `isPublicIpv6`), so `parseIpv4` never returns `null` here in practice.
+  /* v8 ignore next */
   if (!octets) return null;
   return (((octets[0] << 24) >>> 0) + (octets[1] << 16) + (octets[2] << 8) + octets[3]) >>> 0;
 }
 
 function inIpv4Cidr(value: number, base: number, prefix: number): boolean {
+  // `prefix` is always one of the fixed, non-zero prefixes in `BLOCKED_IPV4` below — a `/0`
+  // entry (matching all of IPv4) has never been and would never sensibly be added there, so this
+  // ternary's `0` arm is dead under the current (and any plausible future) blocklist.
+  /* v8 ignore next */
   const mask = prefix === 0 ? 0 : (0xffff_ffff << (32 - prefix)) >>> 0;
   return (value & mask) >>> 0 === (base & mask) >>> 0;
 }
@@ -90,10 +114,16 @@ const BLOCKED_IPV4: readonly (readonly [number, number])[] = [
   [0xf000_0000, 4],
 ];
 
+// The early `return null`s below are defensive re-validation, not the primary gate: like
+// `parseIpv4`, `parseIpv6` is only ever called (via `isPublicIpv6`) on a string Node's `net.isIP`
+// already classified as syntactically valid IPv6 — multiple `::` compressions, out-of-range hex
+// groups, wrong group counts, and malformed embedded IPv4 tails are all rejected by `isIP` before
+// this function runs, so those branches are unreachable through the safe-fetch entry point.
 function parseIpv6(address: string): Uint8Array | null {
   const zoneIndex = address.indexOf('%');
   const value = (zoneIndex >= 0 ? address.slice(0, zoneIndex) : address).toLowerCase();
   const halves = value.split('::');
+  /* v8 ignore next */
   if (halves.length > 2) return null;
   const parseHalf = (part: string): number[] | null => {
     if (!part) return [];
@@ -101,21 +131,30 @@ function parseIpv6(address: string): Uint8Array | null {
     for (const token of part.split(':')) {
       if (token.includes('.')) {
         const ipv4 = parseIpv4(token);
+        /* v8 ignore next */
         if (!ipv4) return null;
         words.push((ipv4[0] << 8) | ipv4[1], (ipv4[2] << 8) | ipv4[3]);
       } else {
+        /* v8 ignore next */
         if (!/^[0-9a-f]{1,4}$/.test(token)) return null;
         words.push(Number.parseInt(token, 16));
       }
     }
     return words;
   };
+  // `String.split` always yields at least one element, so `halves[0]` is always defined; the
+  // `?? ''` only narrows `noUncheckedIndexedAccess`. `halves[1]` genuinely can be `undefined`
+  // (no `::` in the address) — that fallback is real and exercised by an uncompressed address.
+  /* v8 ignore next */
   const left = parseHalf(halves[0] ?? '');
   const right = parseHalf(halves[1] ?? '');
+  /* v8 ignore next */
   if (!left || !right) return null;
   const missing = 8 - left.length - right.length;
+  /* v8 ignore next */
   if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1)) return null;
   const words = [...left, ...Array.from({ length: missing }, () => 0), ...right];
+  /* v8 ignore next */
   if (words.length !== 8) return null;
   const bytes = new Uint8Array(16);
   words.forEach((word, index) => {
@@ -132,11 +171,17 @@ function isPublicIpv4(address: string): boolean {
 
 function isPublicIpv6(address: string): boolean {
   const bytes = parseIpv6(address);
+  // `parseIpv6` never returns `null` for the Node-`isIP`-validated strings this is called with
+  // (see `parseIpv6`'s own module-level note); this guard defends a future `parseIpv6` change.
+  /* v8 ignore next */
   if (!bytes) return false;
   const mapped =
     bytes.slice(0, 10).every((byte) => byte === 0) && bytes[10] === 0xff && bytes[11] === 0xff;
   if (mapped) return isPublicIpv4(`${bytes[12]}.${bytes[13]}.${bytes[14]}.${bytes[15]}`);
   // Globally routable unicast currently occupies 2000::/3. Exclude documentation space.
+  // (`bytes` is always a fixed `Uint8Array(16)`, so every index is always defined at runtime;
+  // the `?? 0`s below only narrow `noUncheckedIndexedAccess` and never actually supply a
+  // default — left un-ignored because this line also carries the real, tested `&&` branches.)
   const globalUnicast = ((bytes[0] ?? 0) & 0xe0) === 0x20;
   const ietfReserved = bytes[0] === 0x20 && bytes[1] === 0x01 && ((bytes[2] ?? 0) & 0xfe) === 0;
   const documentation =
@@ -178,6 +223,9 @@ async function resolvePublicAddress(
   if (addresses.length === 0) throw new Error('MCP endpoint DNS returned no addresses');
   const blocked = addresses.find((row) => !isPublicAddress(row.address));
   if (blocked) throw new Error(`MCP endpoint address is not public: ${blocked.address}`);
+  // `addresses` is non-empty (checked above) and none of its rows were `blocked`, so index 0
+  // always exists; the `?.`/`?? ''` only narrow `noUncheckedIndexedAccess`.
+  /* v8 ignore next */
   return addresses[0]?.address ?? '';
 }
 
@@ -237,6 +285,10 @@ function assertHeaderBounds(response: Response, maxHeaderBytes: number): void {
   if (bytes > maxHeaderBytes) throw new Error('MCP response headers exceed the size limit');
 }
 
+/* v8 ignore start -- live network edge: the raw `node:https` socket, pinned to a pre-validated
+   address. The only caller (`createMcpSafeFetch`) always accepts an injected `request` in tests
+   (every test in `mcp-network.test.ts` supplies one); this default is exercised by actually
+   running the singleton `mcpSafeFetch` against a live TLS endpoint, not by a unit test. */
 const defaultRequest: McpPinnedRequest = async (url, init, address, signal, limits) => {
   const headers = new Headers(init.headers);
   const body =
@@ -290,6 +342,7 @@ const defaultRequest: McpPinnedRequest = async (url, init, address, signal, limi
     request.end();
   });
 };
+/* v8 ignore stop */
 
 /**
  * Create the only fetch implementation permitted for real remote MCP traffic.

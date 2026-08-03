@@ -14,10 +14,12 @@ import { MCP_UI_EXTENSION, MCP_UI_META_KEY, MCP_UI_MIME_TYPE } from '@docket/typ
 
 import {
   createWidgetFixtureServer,
+  flatten,
   MCP_UI_CLIENT_CAPABILITY,
   MockMcpConnector,
   readUiResourceMeta,
   readUiToolMeta,
+  uiMetaSpread,
   WIDGET_FIXTURE_URI,
 } from '../../src/mcp-connector';
 
@@ -63,6 +65,60 @@ describe('reading a tool’s UI declaration', () => {
       csp: { connectDomains: ['https://x'] },
     });
     expect(readUiResourceMeta(7)).toBeNull();
+  });
+});
+
+describe('uiMetaSpread', () => {
+  it('spreads a `{ ui }` key when the tool declares UI metadata', () => {
+    expect(uiMetaSpread({ [MCP_UI_META_KEY]: { resourceUri: 'ui://a/b' } })).toEqual({
+      ui: { resourceUri: 'ui://a/b' },
+    });
+  });
+
+  it('spreads to an empty object (no `ui` key at all) when the tool declares none', () => {
+    const spread = uiMetaSpread(undefined);
+    expect(spread).toEqual({});
+    expect('ui' in spread).toBe(false);
+  });
+});
+
+describe('flatten', () => {
+  it('joins every text block and carries isError through', () => {
+    expect(
+      flatten({
+        content: [
+          { type: 'text', text: 'first' },
+          { type: 'text', text: 'second' },
+        ],
+        isError: false,
+      }),
+    ).toEqual({ content: 'first\nsecond', isError: false });
+  });
+
+  it('skips non-text content blocks', () => {
+    expect(
+      flatten({
+        content: [
+          { type: 'text', text: 'kept' },
+          { type: 'image', data: 'base64==', mimeType: 'image/png' },
+        ],
+        isError: false,
+      }),
+    ).toEqual({ content: 'kept', isError: false });
+  });
+
+  it('normalizes a missing/non-true isError to false', () => {
+    expect(flatten({ content: [{ type: 'text', text: 'x' }] })).toEqual({
+      content: 'x',
+      isError: false,
+    });
+  });
+
+  it('reports isError: true only when the server set it', () => {
+    expect(flatten({ content: [{ type: 'text', text: 'boom' }], isError: true })).toEqual({
+      content: 'boom',
+      isError: true,
+    });
   });
 });
 
@@ -127,6 +183,44 @@ describe('a session against a widget-bearing server', () => {
 
     await session.callToolRaw?.('abandon_release', {});
     expect(await done()).toBe(0);
+    await session.close();
+  });
+
+  it('advances through the flattened callTool path too, and is a no-op once every step is done', async () => {
+    const connector = new MockMcpConnector({
+      servers: { 'mcp.acme-release.example': createWidgetFixtureServer() },
+    });
+    const session = await connector.open(ENDPOINT);
+    const doneCount = async (): Promise<number> => {
+      const flattened = await session.callTool('release_checklist', {});
+      const steps = (JSON.parse(flattened.content) as { steps: { done: boolean }[] }).steps;
+      return steps.filter((step) => step.done).length;
+    };
+
+    expect(await doneCount()).toBe(2); // two steps start done in the fixture
+    await session.callTool('advance_release', {});
+    expect(await doneCount()).toBe(3);
+    await session.callTool('advance_release', {});
+    expect(await doneCount()).toBe(4); // every step now done
+    // A further advance is a no-op — there is no next incomplete step to mark.
+    await session.callTool('advance_release', {});
+    expect(await doneCount()).toBe(4);
+
+    await session.callTool('abandon_release', {});
+    expect(await doneCount()).toBe(0);
+    await session.close();
+  });
+
+  it('is also a no-op on callToolRaw once every step is already done', async () => {
+    const connector = new MockMcpConnector({
+      servers: { 'mcp.acme-release.example': createWidgetFixtureServer() },
+    });
+    const session = await connector.open(ENDPOINT);
+    await session.callToolRaw?.('advance_release', {});
+    await session.callToolRaw?.('advance_release', {});
+    const raw = await session.callToolRaw?.('advance_release', {});
+    const steps = (raw?.['structuredContent'] as { steps: { done: boolean }[] }).steps;
+    expect(steps.every((step) => step.done)).toBe(true);
     await session.close();
   });
 

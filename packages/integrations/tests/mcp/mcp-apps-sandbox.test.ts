@@ -292,4 +292,14 @@ describe('policy injection', () => {
     expect(params['sandbox']).toBe(MCP_APP_VIEW_SANDBOX);
     expect(params['allow']).toBe(`camera 'src'`);
   });
+
+  it('defaults csp/permissions to empty objects for a resource with no meta at all', () => {
+    const params = sandboxResourceParams({
+      uri: 'ui://acme/view',
+      mimeType: 'text/html;profile=mcp-app',
+      text: '<html><head></head><body>x</body></html>',
+    });
+    expect(params['csp']).toEqual({});
+    expect(params['permissions']).toEqual({});
+  });
 });

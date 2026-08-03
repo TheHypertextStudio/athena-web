@@ -8,7 +8,7 @@ import {
 
 const publicLookup: McpDnsLookup = async () => [{ address: '93.184.216.34', family: 4 }];
 
-function response(body = '{}', init: ResponseInit = {}): McpPinnedRequest {
+function response(body: string | null = '{}', init: ResponseInit = {}): McpPinnedRequest {
   return vi.fn(async () => new Response(body, init));
 }
 
@@ -181,5 +181,219 @@ describe('MCP outbound network policy', () => {
       'https://public-v6.example/mcp',
     );
     expect(await result.text()).toBe('ok');
+  });
+
+  it('allows a globally routable IPv6 destination carrying a zone id', async () => {
+    const lookup: McpDnsLookup = async () => [{ address: '2606:4700:4700::1111%eth0', family: 6 }];
+    const result = await createMcpSafeFetch({ lookup, request: response('ok') })(
+      'https://public-v6.example/mcp',
+    );
+    expect(await result.text()).toBe('ok');
+  });
+
+  it('allows a full (uncompressed, no "::") globally routable IPv6 address', async () => {
+    const lookup: McpDnsLookup = async () => [
+      { address: '2606:4700:4700:0:0:0:0:1111', family: 6 },
+    ];
+    const result = await createMcpSafeFetch({ lookup, request: response('ok') })(
+      'https://public-v6.example/mcp',
+    );
+    expect(await result.text()).toBe('ok');
+  });
+
+  it('uses a literal IP address in the URL directly, without a DNS lookup', async () => {
+    // The lookup fake would fail loudly (an unexpected call) if the code fell through to it;
+    // it's never invoked for a literal-IP URL, so its own return value is irrelevant.
+    const lookup = vi.fn<McpDnsLookup>(async () => {
+      throw new Error('lookup should not be called for a literal IP URL');
+    });
+    const request = vi.fn<McpPinnedRequest>(async (_url, _init, address) => {
+      expect(address).toBe('93.184.216.34');
+      return new Response('ok');
+    });
+    const result = await createMcpSafeFetch({ lookup, request })('https://93.184.216.34/mcp');
+    expect(await result.text()).toBe('ok');
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it('treats a malformed resolver answer as not public (defends a buggy/compromised lookup)', async () => {
+    const lookup: McpDnsLookup = async () => [{ address: 'not-an-ip-address', family: 4 }];
+    await expect(
+      createMcpSafeFetch({ lookup, request: response() })('https://public.example/mcp'),
+    ).rejects.toThrow(/not public/i);
+  });
+
+  it('rejects on the synchronous abort check when the overall timeout fires between redirect hops', async () => {
+    // The DNS/address-resolution abort check is synchronous at the top of the next hop; the
+    // realistic way it observes an already-aborted signal is the overall timeout firing while a
+    // slow hop is in flight, before the loop resolves the redirect target's address.
+    let calls = 0;
+    const request = vi.fn<McpPinnedRequest>(async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return Response.redirect('https://public.example/next', 302);
+    });
+    await expect(
+      createMcpSafeFetch({
+        lookup: publicLookup,
+        request,
+        limits: { overallTimeoutMs: 5 },
+      })('https://public.example/start'),
+    ).rejects.toThrow(/timed out/i);
+    expect(calls).toBe(1); // the second hop's address was never resolved — aborted first
+  });
+
+  it('rejects when DNS resolution returns no addresses', async () => {
+    const lookup: McpDnsLookup = async () => [];
+    await expect(
+      createMcpSafeFetch({ lookup, request: response() })('https://empty.example/mcp'),
+    ).rejects.toThrow(/no addresses/i);
+  });
+
+  it('rejects a redirect Location that carries embedded credentials', async () => {
+    // The initial URL can't carry credentials at all — the platform `Request` constructor
+    // itself rejects that before this module's code runs. A malicious redirect target is the
+    // real way `url.username`/`url.password` gets populated: `Location` is parsed with `new
+    // URL(location, url)`, which (unlike `Request`) does not reject embedded credentials.
+    const request = vi.fn<McpPinnedRequest>(async () =>
+      Response.redirect('https://attacker:pwned@public.example/next', 302),
+    );
+    await expect(
+      createMcpSafeFetch({ lookup: publicLookup, request })('https://public.example/start'),
+    ).rejects.toThrow(/credentials/i);
+  });
+
+  it("propagates the caller's own abort signal", async () => {
+    const controller = new AbortController();
+    const request = vi.fn<McpPinnedRequest>(
+      async (_url, _init, _address, signal) =>
+        await new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              reject(signal.reason instanceof Error ? signal.reason : new Error('aborted'));
+            },
+            { once: true },
+          );
+        }),
+    );
+    const fetchPromise = createMcpSafeFetch({ lookup: publicLookup, request })(
+      'https://public.example/mcp',
+      { signal: controller.signal },
+    );
+    controller.abort(new Error('caller cancelled'));
+    await expect(fetchPromise).rejects.toThrow(/caller cancelled/);
+  });
+
+  it('resolves cleanly for a response with no body (e.g. 204)', async () => {
+    const request = response(null, { status: 204 });
+    const result = await createMcpSafeFetch({ lookup: publicLookup, request })(
+      'https://public.example/mcp',
+    );
+    expect(result.status).toBe(204);
+  });
+
+  it('enforces the body limit while streaming, even without a content-length header', async () => {
+    const request = vi.fn<McpPinnedRequest>(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('x'.repeat(100)));
+          controller.close();
+        },
+      });
+      return new Response(body); // no content-length: the declared-size check can't catch this
+    });
+    const result = await createMcpSafeFetch({
+      lookup: publicLookup,
+      request,
+      limits: { maxBodyBytes: 10 },
+    })('https://public.example/mcp');
+    await expect(result.text()).rejects.toThrow(/size limit/i);
+  });
+
+  it('falls back to an unread body when a header-bounds violation cancel itself fails', async () => {
+    const request = vi.fn<McpPinnedRequest>(async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('x'));
+        },
+        cancel() {
+          throw new Error('cancel is not supported by this stream');
+        },
+      });
+      return new Response(body, { headers: { 'x-large': 'x'.repeat(128) } });
+    });
+    await expect(
+      createMcpSafeFetch({
+        lookup: publicLookup,
+        request,
+        limits: { maxHeaderBytes: 64 },
+      })('https://public.example/mcp'),
+    ).rejects.toThrow(/header/i);
+  });
+
+  it('resolves the response as-is when a redirect status carries no Location header', async () => {
+    const request = response('', { status: 302 });
+    const result = await createMcpSafeFetch({ lookup: publicLookup, request })(
+      'https://public.example/mcp',
+    );
+    expect(result.status).toBe(302);
+  });
+
+  it('downgrades a POST to GET on a 302 redirect, dropping the body', async () => {
+    let secondInit: RequestInit | undefined;
+    const request = vi.fn<McpPinnedRequest>(async (url, init) => {
+      if (url.pathname === '/start') {
+        return Response.redirect('https://public.example/next', 302);
+      }
+      secondInit = init;
+      return new Response('ok');
+    });
+    const result = await createMcpSafeFetch({ lookup: publicLookup, request })(
+      'https://public.example/start',
+      { method: 'POST', body: 'payload' },
+    );
+    expect(await result.text()).toBe('ok');
+    expect(secondInit?.method).toBe('GET');
+    expect(secondInit?.body).toBeUndefined();
+  });
+
+  it('preserves the method on a 307 redirect (no downgrade)', async () => {
+    let secondMethod: string | undefined;
+    const request = vi.fn<McpPinnedRequest>(async (url, init) => {
+      if (url.pathname === '/start') {
+        return Response.redirect('https://public.example/next', 307);
+      }
+      secondMethod = init.method;
+      return new Response('ok');
+    });
+    await createMcpSafeFetch({ lookup: publicLookup, request })('https://public.example/start', {
+      method: 'POST',
+      body: 'payload',
+    });
+    expect(secondMethod).toBe('POST');
+  });
+
+  it('strips auth/cookie headers on a cross-origin redirect, but keeps them same-origin', async () => {
+    let crossOriginHeaders: Headers | undefined;
+    let sameOriginHeaders: Headers | undefined;
+    const lookup: McpDnsLookup = async () => [{ address: '93.184.216.34', family: 4 }];
+    const request = vi.fn<McpPinnedRequest>(async (url, init) => {
+      if (url.hostname === 'a.example' && url.pathname === '/start') {
+        return Response.redirect('https://a.example/same-origin', 307);
+      }
+      if (url.hostname === 'a.example' && url.pathname === '/same-origin') {
+        sameOriginHeaders = new Headers(init.headers);
+        return Response.redirect('https://b.example/cross-origin', 307);
+      }
+      crossOriginHeaders = new Headers(init.headers);
+      return new Response('ok');
+    });
+    await createMcpSafeFetch({ lookup, request })('https://a.example/start', {
+      headers: { authorization: 'Bearer secret', cookie: 'session=1' },
+    });
+    expect(sameOriginHeaders?.get('authorization')).toBe('Bearer secret');
+    expect(crossOriginHeaders?.has('authorization')).toBe(false);
+    expect(crossOriginHeaders?.has('cookie')).toBe(false);
   });
 });

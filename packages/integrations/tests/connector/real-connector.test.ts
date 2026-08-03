@@ -7,7 +7,7 @@
  * network is touched. The only un-unit-testable line — the real `globalThis.fetch`
  * call in `defaultHttpClient` — is covered by `real.test.ts`.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RealConnector } from '../../src/real-connector';
 import { ConnectorError, type ConnectorErrorKind } from '../../src/connector-error';
@@ -277,6 +277,43 @@ describe('RealConnector — GitHub (REST)', () => {
       /github API returned an unparseable response: \/issues/,
     );
   });
+
+  it('has no container concept', async () => {
+    const { http } = fakeHttp([]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    expect(await connector.listContainers({ connectionId: 'c1', provider: 'github' })).toEqual([]);
+  });
+
+  it('stops at MAX_IMPORT_PAGES and logs a truncation warning when every page is full', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      // 100 full pages (100 items each) — never a short page, so the loop only stops at the bound.
+      const pages = Array.from(
+        { length: 100 },
+        (_unused, page) =>
+          new Response(
+            JSON.stringify(
+              Array.from({ length: 100 }, (_unused2, i) => ({
+                id: page * 100 + i,
+                number: page * 100 + i,
+                title: `Issue ${page * 100 + i}`,
+                html_url: `https://github.com/o/r/issues/${page * 100 + i}`,
+              })),
+            ),
+            { status: 200 },
+          ),
+      );
+      const { http, calls } = fakeHttp(pages);
+      const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+      const items = await connector.importWork({ connectionId: 'c1', provider: 'github' });
+      expect(items).toHaveLength(10_000);
+      expect(calls).toHaveLength(100);
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]![0]).toContain('import_truncated');
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('RealConnector — Linear (GraphQL)', () => {
@@ -300,6 +337,31 @@ describe('RealConnector — Linear (GraphQL)', () => {
     expect(header(call, 'Authorization')).toBe('Bearer lin_tok');
     expect(header(call, 'Content-Type')).toBe('application/json');
     expect(JSON.parse(bodyText(call)).query).toContain('viewer');
+  });
+
+  it('carries the organization id/slug/name through as the external workspace identity', async () => {
+    const { http } = fakeHttp([
+      new Response(
+        JSON.stringify({
+          data: {
+            viewer: { name: 'Ada' },
+            organization: { id: 'org-uuid', urlKey: 'docket', name: 'Docket Inc' },
+          },
+        }),
+        { status: 200 },
+      ),
+    ]);
+    const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
+    const result = await connector.connect({ provider: 'linear', referenceId: 'o' });
+    expect(result).toEqual({
+      connectionId: 'linear:o',
+      provider: 'linear',
+      status: 'connected',
+      account: 'Ada',
+      externalWorkspaceId: 'org-uuid',
+      externalWorkspaceSlug: 'docket',
+      externalWorkspaceName: 'Docket Inc',
+    });
   });
 
   it('falls back to the viewer email when name is absent', async () => {
@@ -470,14 +532,116 @@ describe('RealConnector — asWorkGraph capability seam', () => {
     expect(connector.asWorkGraph()).toBeUndefined();
   });
 
-  it('returns a defined work-graph connector for linear (LinearProviderClient implements the methods)', () => {
-    const { http } = fakeHttp([]);
+  it('returns a defined work-graph connector for linear that forwards each method to the client', async () => {
+    const emptyConnection = { nodes: [], pageInfo: { hasNextPage: false } };
+    const gql = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200 });
+    const { http } = fakeHttp([
+      // pullWorkGraph: users, labels, projects, cycles, issues.
+      gql({ users: emptyConnection }),
+      gql({ issueLabels: emptyConnection }),
+      gql({ projects: emptyConnection }),
+      gql({ cycles: emptyConnection }),
+      gql({ issues: emptyConnection }),
+      // listTeamStates
+      gql({ team: { states: { nodes: [] } } }),
+      // pushWorkItem (update)
+      gql({
+        issueUpdate: { success: true, issue: { id: 'i1', updatedAt: '2026-01-01T00:00:00Z' } },
+      }),
+    ]);
     const connector = new RealConnector({ provider: 'linear', accessToken: 'tok' }, http);
     const workGraph = connector.asWorkGraph();
     expect(workGraph).toBeDefined();
-    expect(typeof workGraph?.pullWorkGraph).toBe('function');
-    expect(typeof workGraph?.listTeamStates).toBe('function');
-    expect(typeof workGraph?.pushWorkItem).toBe('function');
+
+    const snapshot = await workGraph?.pullWorkGraph({ externalTeamIds: [] });
+    expect(snapshot?.users).toEqual([]);
+
+    const states = await workGraph?.listTeamStates('team1');
+    expect(states).toEqual([]);
+
+    const result = await workGraph?.pushWorkItem({
+      kind: 'update',
+      externalId: 'i1',
+      fields: { title: 'Renamed' },
+    });
+    expect(result).toEqual({ externalId: 'i1', externalUpdatedAt: '2026-01-01T00:00:00Z' });
+  });
+});
+
+describe('RealConnector — asWritable capability seam', () => {
+  it('returns undefined for a read-only provider (github)', () => {
+    const { http } = fakeHttp([]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    expect(connector.asWritable()).toBeUndefined();
+  });
+
+  it('returns a defined writable connector for gtasks and forwards pushTask to the client', async () => {
+    const { http, calls } = fakeHttp([
+      new Response(JSON.stringify({ id: 'gt1', updated: '2026-01-01T00:00:00Z' }), {
+        status: 200,
+      }),
+    ]);
+    const connector = new RealConnector({ provider: 'gtasks', accessToken: 'tok' }, http);
+    const writable = connector.asWritable();
+    expect(writable).toBeDefined();
+    const result = await writable?.pushTask({
+      connectionId: 'c1',
+      provider: 'gtasks',
+      op: { kind: 'create', listId: 'list1', title: 'New', completed: false },
+    });
+    expect(result).toEqual({ externalId: 'gt1', externalUpdatedAt: '2026-01-01T00:00:00Z' });
+    expect(calls[0]!.url).toContain('/lists/list1/tasks');
+  });
+});
+
+describe('RealConnector — asMailActor capability seam', () => {
+  it('returns undefined for a non-mail provider (github)', () => {
+    const { http } = fakeHttp([]);
+    const connector = new RealConnector({ provider: 'github', accessToken: 'tok' }, http);
+    expect(connector.asMailActor()).toBeUndefined();
+  });
+
+  it('returns a defined mail actor for gmail and forwards each method to the client', async () => {
+    const { http } = fakeHttp([
+      // listThreads (cold): threads.list, hydrate t1, profile
+      new Response(JSON.stringify({ threads: [{ id: 't1' }] }), { status: 200 }),
+      new Response(
+        JSON.stringify({
+          messages: [{ id: 'm1', snippet: 'hi', payload: { headers: [] } }],
+        }),
+        { status: 200 },
+      ),
+      new Response(JSON.stringify({ emailAddress: 'me@x.dev', historyId: 'h1' }), {
+        status: 200,
+      }),
+      // applyMailAction (archive)
+      new Response('{}', { status: 200 }),
+      // fetchThread
+      new Response(
+        JSON.stringify({
+          messages: [{ id: 'm1', snippet: 'hi', payload: { headers: [] } }],
+        }),
+        { status: 200 },
+      ),
+    ]);
+    const connector = new RealConnector({ provider: 'gmail', accessToken: 'tok' }, http);
+    const mailActor = connector.asMailActor();
+    expect(mailActor).toBeDefined();
+
+    const page = await mailActor?.listThreads({ connectionId: 'c1', maxThreads: 10 });
+    expect(page?.kind).toBe('page');
+
+    await expect(
+      mailActor?.applyMailAction({
+        connectionId: 'c1',
+        provider: 'gmail',
+        threadId: 't1',
+        action: { kind: 'archive' },
+      }),
+    ).resolves.toBeUndefined();
+
+    const thread = await mailActor?.fetchThread({ connectionId: 'c1', threadId: 't1' });
+    expect(thread?.threadId).toBe('t1');
   });
 });
 

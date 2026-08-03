@@ -70,6 +70,12 @@ export class MockObserver implements Observer {
   /** {@inheritDoc Observer.normalize} — one draft, honoring optional fixture overrides. */
   normalize(event: RawInboundEvent): EventDraft[] {
     const body = asRecord(event.payload) ?? {};
+    // `body` is always a plain object here (the `?? {}` above), so `route(body)` — whose only
+    // null case is a non-record payload — can never return null and `externalEventId` is always
+    // a string (`route` itself falls back to a `mock:...` template). The `?? mock:receivedAt`
+    // fallback is unreachable through this call site; kept only as a defensive belt-and-braces
+    // in case `route` is ever overridden to return null for a record input.
+    /* v8 ignore next */
     const dedupeKey = this.route(body)?.externalEventId ?? `mock:${event.receivedAt}`;
     const kind: EventKind = EventKind.safeParse(str(body, 'kind')).data ?? 'mention';
     const title = str(body, 'title') ?? 'Mock observation';

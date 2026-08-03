@@ -8,11 +8,18 @@ import { describe, expect, it } from 'vitest';
 
 import { FixtureInboundReceiver, buildInboundFixturePayload } from '../../src/fixture-inbound';
 import { buildInboundReceiverFromEnv } from '../../src/inbound-transport';
-import { htmlToText, mailboxKeyOf, parseAddress, snippetOf } from '../../src/inbound';
+import {
+  htmlToText,
+  mailboxHostOf,
+  mailboxKeyOf,
+  parseAddress,
+  snippetOf,
+} from '../../src/inbound';
 import {
   RESEND_RECEIVING_ENDPOINT,
   ResendInboundReceiver,
   readResendInboundPayload,
+  toInboundMessage,
 } from '../../src/resend-inbound';
 import { signSvixPayload } from '../../src/svix-signature';
 
@@ -94,6 +101,27 @@ describe('readResendInboundPayload', () => {
     if (read.kind !== 'inbound') return;
     // A single bare string recipient is accepted as a one-element list.
     expect(read.notification.to).toEqual(['solo@inbox.example']);
+  });
+});
+
+describe('toInboundMessage', () => {
+  it('lowercases cc addresses the same way it lowercases to addresses', () => {
+    const message = toInboundMessage(
+      {
+        emailId: 'e_1',
+        from: 'a@example.com',
+        to: [],
+        cc: ['CC-One@Example.com', ' CC-Two@Example.com '],
+        receivedFor: [],
+        messageId: null,
+        subject: 'S',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        attachments: [],
+        inline: null,
+      },
+      null,
+    );
+    expect(message.cc).toEqual(['cc-one@example.com', 'cc-two@example.com']);
   });
 });
 
@@ -274,6 +302,19 @@ describe('FixtureInboundReceiver', () => {
         .status,
     ).toBe('received');
   });
+
+  it('rejects an unreadable body as malformed, unsigned', async () => {
+    const receiver = new FixtureInboundReceiver();
+    const result = await receiver.receive({ rawBody: 'not json', headers: {} });
+    expect(result).toEqual({ status: 'rejected', code: 'malformed-payload' });
+  });
+
+  it('acknowledges an authentic event about something else without delivering it', async () => {
+    const receiver = new FixtureInboundReceiver();
+    const other = JSON.stringify({ type: 'email.delivered', data: { email_id: 'x' } });
+    const result = await receiver.receive({ rawBody: other, headers: {} });
+    expect(result).toEqual({ status: 'ignored', eventType: 'email.delivered' });
+  });
 });
 
 describe('buildInboundReceiverFromEnv', () => {
@@ -290,6 +331,27 @@ describe('buildInboundReceiverFromEnv', () => {
       RESEND_INBOUND_WEBHOOK_SECRET: SECRET,
     });
     expect(receiver.providerId).toBe('resend');
+  });
+
+  it('honors a production receiving API base override', () => {
+    const receiver = buildInboundReceiverFromEnv({
+      APP_MODE: 'production',
+      RESEND_API_KEY: 're_live',
+      RESEND_INBOUND_WEBHOOK_SECRET: SECRET,
+      RESEND_RECEIVING_API_BASE: 'https://receiving.example.com',
+    });
+    expect(receiver.providerId).toBe('resend');
+  });
+
+  it('verifies signatures offline in local/test when a signing secret is configured', async () => {
+    const receiver = buildInboundReceiverFromEnv({
+      APP_MODE: 'local',
+      RESEND_INBOUND_WEBHOOK_SECRET: SECRET,
+    });
+    expect(await receiver.receive({ rawBody: WEBHOOK, headers: {}, now: NOW })).toEqual({
+      status: 'rejected',
+      code: 'missing-signature',
+    });
   });
 
   it('refuses to build a production receiver without a signing secret', () => {
@@ -329,6 +391,16 @@ describe('address helpers', () => {
   it('refuses to guess at a malformed address', () => {
     for (const bad of ['nope', '@host', 'a@b@c', '']) {
       expect(mailboxKeyOf(bad)).toBeNull();
+    }
+  });
+
+  it('reads the lowercased host out of an address', () => {
+    expect(mailboxHostOf('k7x9@Inbox.Example.com')).toBe('inbox.example.com');
+  });
+
+  it('refuses to guess at a malformed address host', () => {
+    for (const bad of ['nope', '@host', 'a@b@c', '', 'a@']) {
+      expect(mailboxHostOf(bad)).toBeNull();
     }
   });
 

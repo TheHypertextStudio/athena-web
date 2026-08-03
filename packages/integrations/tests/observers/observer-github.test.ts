@@ -33,6 +33,15 @@ describe('RealGitHubObserver.verifySignature', () => {
   it('rejects a missing signature header', () => {
     expect(observer.verifySignature({ rawBody: '{}', headers: {} })).toBe(false);
   });
+
+  it('rejects a signature of the wrong byte length outright', () => {
+    expect(
+      observer.verifySignature({
+        rawBody: '{}',
+        headers: { 'x-hub-signature-256': 'sha256=short' },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('RealGitHubObserver.route', () => {
@@ -61,6 +70,41 @@ describe('RealGitHubObserver.route', () => {
   it('returns null for an unrecognized payload', () => {
     expect(observer.route({ action: 'created', installation: { id: 1 } })).toBeNull();
     expect(observer.route('not-json')).toBeNull();
+  });
+
+  it('infers pull_request and pull_request_review_comment event types', () => {
+    const pr = observer.route({ action: 'opened', pull_request: { id: 5 } });
+    expect(pr?.eventType).toBe('pull_request');
+
+    const prComment = observer.route({
+      action: 'created',
+      pull_request: { id: 5 },
+      comment: { id: 88 },
+    });
+    expect(prComment?.eventType).toBe('pull_request_review_comment');
+  });
+
+  it('defaults action to "event" and omits externalWorkspaceId when installation is absent', () => {
+    const r = observer.route({ issue: { id: 7 } });
+    expect(r?.externalEventId).toBe('issues:event:7:');
+    expect(r).not.toHaveProperty('externalWorkspaceId');
+  });
+
+  it('falls back id/updatedAt to "" when the concerned entity has neither', () => {
+    const r = observer.route({ action: 'opened', issue: {} });
+    expect(r?.externalEventId).toBe('issues:opened::');
+  });
+
+  it('prefers the comment, then the PR, then the issue as the concerned entity', () => {
+    const commentWins = observer.route({
+      action: 'created',
+      issue: { id: 'issue-1' },
+      comment: { id: 'comment-1' },
+    });
+    expect(commentWins?.externalEventId).toContain(':comment-1:');
+
+    const prWins = observer.route({ action: 'opened', pull_request: { id: 'pr-1' } });
+    expect(prWins?.externalEventId).toContain(':pr-1:');
   });
 });
 
@@ -92,6 +136,65 @@ describe('RealGitHubObserver.normalize', () => {
     expect(obs?.actor?.externalId).toBe('octocat');
     expect(obs?.actor?.avatarUrl).toBe('https://x/a.png');
     expect(obs?.detail?.schema).toBe('generic');
+  });
+
+  it('maps a non-opened, non-closed issue update to a status_change event, with a bare-object fallback title', () => {
+    const [obs] = observer.normalize({
+      eventType: 'issues',
+      payload: { action: 'labeled', issue: {} },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('status_change');
+    expect(obs?.title).toBe('Updated issue: an issue');
+    expect(obs).not.toHaveProperty('entity');
+    expect(obs).not.toHaveProperty('actor');
+    expect(obs).not.toHaveProperty('permalink');
+    expect(obs).not.toHaveProperty('externalId');
+    expect(obs?.occurredAt).toBe(RECEIVED_AT); // no updated_at → falls back to receivedAt
+  });
+
+  it('maps an opened issue to a created event', () => {
+    const [obs] = observer.normalize({
+      eventType: 'issues',
+      payload: { action: 'opened', issue: { id: 9 } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('created');
+    expect(obs?.title).toBe('Opened issue: an issue');
+  });
+
+  it('maps a closed-but-not-merged pull request to a completed event titled "Closed"', () => {
+    const [obs] = observer.normalize({
+      eventType: 'pull_request',
+      payload: { action: 'closed', pull_request: { id: 5, state: 'closed', merged: false } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('completed');
+    expect(obs?.title).toBe('Closed PR: a pull request');
+  });
+
+  it('maps a still-open pull request update to a status_change event, with a bare-object fallback', () => {
+    const [obs] = observer.normalize({
+      eventType: 'pull_request',
+      payload: { action: 'synchronize', pull_request: {} },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('status_change');
+    expect(obs?.title).toBe('Updated PR: a pull request');
+    expect(obs).not.toHaveProperty('entity');
+    expect(obs).not.toHaveProperty('actor');
+    // No `number` on a bare object → the pull_request detail builder declines, generic wins.
+    expect(obs?.detail?.schema).toBe('generic');
+  });
+
+  it('maps an opened pull request to a created event', () => {
+    const [obs] = observer.normalize({
+      eventType: 'pull_request',
+      payload: { action: 'opened', pull_request: { id: 5 } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('created');
+    expect(obs?.title).toBe('Opened PR: a pull request');
   });
 
   it('maps a merged pull request to a completed event with a github.pull_request detail', () => {
@@ -144,6 +247,69 @@ describe('RealGitHubObserver.normalize', () => {
     expect(obs?.entity?.externalId).toBe('7');
     expect(obs?.actor?.externalId).toBe('reviewer');
     expect(obs?.detail?.schema).toBe('generic');
+  });
+
+  it('maps a pull_request_review_comment (comment carries pull_request, not issue)', () => {
+    const payload = {
+      action: 'created',
+      pull_request: { id: 12, title: 'Add feature', html_url: 'https://github.com/o/r/pull/12' },
+      comment: { id: 200, body: 'LGTM', user: { login: 'reviewer' } },
+    };
+    const [obs] = observer.normalize({
+      eventType: 'pull_request_review_comment',
+      payload,
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('comment');
+    expect(obs?.title).toBe('Commented on Add feature');
+    expect(obs?.detail?.schema).toBe('generic');
+  });
+
+  it("falls back the comment actor to the delivery's sender when the comment carries no user", () => {
+    const payload = {
+      action: 'created',
+      issue: { id: 7 },
+      comment: { id: 99, body: 'hi' },
+      sender: { login: 'bot-account' },
+    };
+    const [obs] = observer.normalize({
+      eventType: 'issue_comment',
+      payload,
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.actor?.externalId).toBe('bot-account');
+  });
+
+  it('omits summary/entity/actor/permalink/externalId and falls back to a default title for a bare comment', () => {
+    const [obs] = observer.normalize({
+      eventType: 'issue_comment',
+      payload: { action: 'created', comment: {} },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.title).toBe('Commented on a thread');
+    expect(obs).not.toHaveProperty('summary');
+    expect(obs).not.toHaveProperty('entity');
+    expect(obs).not.toHaveProperty('actor');
+    expect(obs).not.toHaveProperty('permalink');
+    expect(obs).not.toHaveProperty('externalId');
+  });
+
+  it('actorFrom: falls back to a stringified numeric id when the user has no login', () => {
+    const [obs] = observer.normalize({
+      eventType: 'issues',
+      payload: { action: 'opened', issue: { id: 7 }, sender: { id: 555 } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.actor).toEqual({ externalId: '555' });
+  });
+
+  it('actorFrom: omits the actor entirely when the sender is absent', () => {
+    const [obs] = observer.normalize({
+      eventType: 'issues',
+      payload: { action: 'opened', issue: { id: 7 } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs).not.toHaveProperty('actor');
   });
 
   it('ignores an unknown event type (ping/health delivery carries no activity)', () => {

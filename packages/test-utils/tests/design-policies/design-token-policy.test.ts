@@ -45,7 +45,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   DESIGN_TOKEN_RULES,
@@ -172,38 +172,39 @@ describe('design token policy', () => {
     }
   });
 
-  // A full-workspace source scan: the monorepo has grown enough that this can exceed the
-  // default 30s timeout under coverage instrumentation on a slower CI runner, even though it
-  // finishes in a few seconds locally. Generous, not tuned to a moving target.
-  const WORKSPACE_SCAN_TIMEOUT_MS = 120_000;
+  // The three tests below each need every violation across the enforced roots, and re-walking
+  // and re-parsing the whole workspace three separate times is what made this file exceed the
+  // default per-test timeout under coverage instrumentation on a slower CI runner (each of the
+  // three has independently been the one to lose that race). Scanning once here and sharing the
+  // result removes the redundant work rather than just widening the budget three times over.
+  let allViolations: DesignTokenViolation[];
+  beforeAll(() => {
+    allViolations = scanEnforcedRoots();
+  });
 
-  it(
-    'holds the design system primitives to zero, with no ledger entries permitted',
-    () => {
-      const violations = scanEnforcedRoots().filter((violation) =>
-        violation.file.startsWith(ZERO_TOLERANCE_PREFIX),
-      );
+  it('holds the design system primitives to zero, with no ledger entries permitted', () => {
+    const violations = allViolations.filter((violation) =>
+      violation.file.startsWith(ZERO_TOLERANCE_PREFIX),
+    );
 
-      expect(
-        violations,
-        [
-          'The design system primitives must contain no off-token visual values.',
-          'Type comes from the MD3 roles in primitives/text.tsx; height, padding, and icon size',
-          'come from the scale in primitives/control.tsx; shadows belong to overlays only.',
-          formatViolations(violations),
-        ].join('\n'),
-      ).toEqual([]);
+    expect(
+      violations,
+      [
+        'The design system primitives must contain no off-token visual values.',
+        'Type comes from the MD3 roles in primitives/text.tsx; height, padding, and icon size',
+        'come from the scale in primitives/control.tsx; shadows belong to overlays only.',
+        formatViolations(violations),
+      ].join('\n'),
+    ).toEqual([]);
 
-      const ledgered = Object.keys(readLedger()).filter((file) =>
-        file.startsWith(ZERO_TOLERANCE_PREFIX),
-      );
-      expect(
-        ledgered,
-        'The design system itself may not carry design-token debt. Fix the primitive, do not ledger it.',
-      ).toEqual([]);
-    },
-    WORKSPACE_SCAN_TIMEOUT_MS,
-  );
+    const ledgered = Object.keys(readLedger()).filter((file) =>
+      file.startsWith(ZERO_TOLERANCE_PREFIX),
+    );
+    expect(
+      ledgered,
+      'The design system itself may not carry design-token debt. Fix the primitive, do not ledger it.',
+    ).toEqual([]);
+  });
 
   it('ratchets: new debt fails, unchanged debt passes, a cleaned file must be delisted', () => {
     const ledger: DesignTokenDebtLedger = {
@@ -265,7 +266,7 @@ describe('design token policy', () => {
   });
 
   it('lets no file introduce or increase design-token debt', () => {
-    const { regressions } = diffAgainstLedger(tallyViolations(scanEnforcedRoots()), readLedger());
+    const { regressions } = diffAgainstLedger(tallyViolations(allViolations), readLedger());
 
     expect(
       regressions,
@@ -282,7 +283,7 @@ describe('design token policy', () => {
   });
 
   it('drops ledger entries for files that no longer carry debt', () => {
-    const { stale } = diffAgainstLedger(tallyViolations(scanEnforcedRoots()), readLedger());
+    const { stale } = diffAgainstLedger(tallyViolations(allViolations), readLedger());
 
     expect(
       stale,

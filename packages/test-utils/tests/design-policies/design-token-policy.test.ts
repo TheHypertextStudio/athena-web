@@ -194,7 +194,10 @@ describe('design token policy', () => {
       ledgered,
       'The design system itself may not carry design-token debt. Fix the primitive, do not ledger it.',
     ).toEqual([]);
-  });
+  }, // A full-workspace source scan: the monorepo has grown enough that this can exceed the
+  // default 30s timeout under coverage instrumentation on a slower CI runner, even though it
+  // finishes in a few seconds locally. Generous, not tuned to a moving target.
+  120_000);
 
   it('ratchets: new debt fails, unchanged debt passes, a cleaned file must be delisted', () => {
     const ledger: DesignTokenDebtLedger = {

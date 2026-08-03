@@ -15,5 +15,8 @@ describe('documentation coverage', () => {
       undocumented,
       `\nUndocumented declarations (${undocumented.length}):\n${report}\n`,
     ).toEqual([]);
-  });
+  }, // A full-workspace source scan: the monorepo has grown enough that this can exceed the
+  // default 30s timeout under coverage instrumentation on a slower CI runner, even though it
+  // finishes in a few seconds locally. Generous, not tuned to a moving target.
+  120_000);
 });

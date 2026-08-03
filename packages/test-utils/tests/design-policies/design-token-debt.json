@@ -91,7 +91,7 @@
     "raw-type-utility": 9
   },
   "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx": {
-    "raw-type-utility": 5
+    "raw-type-utility": 4
   },
   "apps/web/src/app/(app)/orgs/[orgId]/teams/teams-client.tsx": {
     "raw-type-utility": 3
@@ -628,8 +628,7 @@
     "raw-type-utility": 5
   },
   "apps/web/src/components/task-detail/CommentActivityFeed.tsx": {
-    "raw-type-utility": 9,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 8
   },
   "apps/web/src/components/task-detail/Dependencies.tsx": {
     "raw-type-utility": 6

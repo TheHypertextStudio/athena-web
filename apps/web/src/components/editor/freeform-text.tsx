@@ -15,7 +15,11 @@ import type { JSX } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '@docket/ui/lib/utils';
+import { useOptionalActiveOrg } from '@/components/active-org';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
+
+import { Mention } from './mention-node';
+import { useEditorSuggestions } from './use-editor-suggestions';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -58,6 +62,17 @@ export function FreeformTextEditor({
   onSubmitRef.current = onSubmit;
   onCancelRef.current = onCancel;
 
+  // Rendered outside the app shell in a few composers and in tests, where there is no workspace
+  // to mention things from; the editor still works, just without `@`.
+  const activeOrg = useOptionalActiveOrg();
+  const suggestions = useEditorSuggestions({
+    organizationId: activeOrg?.activeOrgId ?? null,
+    disabled: disabled || readOnly,
+  });
+  const suggestionExtensions = suggestions.extensions;
+  const attachSuggestions = suggestions.attach;
+  const suggestionMenu = suggestions.menu;
+
   const extensions = useMemo(
     () => [
       StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false }),
@@ -69,8 +84,10 @@ export function FreeformTextEditor({
         validate: (href) => /^(https?:|mailto:)/i.test(href),
       }),
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
+      Mention,
+      ...suggestionExtensions,
     ],
-    [],
+    [suggestionExtensions],
   );
 
   const editor = useEditor({
@@ -107,6 +124,8 @@ export function FreeformTextEditor({
     },
   });
 
+  attachSuggestions(editor);
+
   useEffect(() => {
     if (!editor) return;
     editor.setEditable(!disabled && !readOnly);
@@ -121,13 +140,26 @@ export function FreeformTextEditor({
 
   return (
     <div
+      data-editor-surface=""
+      onMouseDown={(event) => {
+        // Click anywhere the surface *looks* editable and the caret goes there — including the
+        // empty space to the right of a line and the whitespace below the last paragraph. The
+        // ProseMirror element only covers its own text, so without this a person clicking the
+        // obvious blank area inside an editor-shaped box gets nothing at all.
+        if (!editor.isEditable) return;
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        editor.commands.focus('end');
+      }}
       className={cn(
         'placeholder:text-on-surface-variant [&_.ProseMirror.is-editor-empty:first-child::before]:text-on-surface-variant [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:outline-none [&_.ProseMirror.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror.is-editor-empty:first-child::before]:float-left [&_.ProseMirror.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]',
+        editor.isEditable ? 'cursor-text' : '',
         disabled ? 'cursor-default opacity-60' : '',
         className,
       )}
     >
       <EditorContent editor={editor} />
+      {suggestionMenu}
     </div>
   );
 }
@@ -202,7 +234,7 @@ export function EditableFreeformText({
 
   return (
     <div
-      className={className}
+      className={cn('flex min-h-0 flex-col', className)}
       onFocus={() => {
         setFocused(true);
       }}
@@ -215,7 +247,7 @@ export function EditableFreeformText({
         onChange={setDraft}
         placeholder={placeholder}
         ariaLabel="Description"
-        className="min-h-28"
+        className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
       />
     </div>
   );

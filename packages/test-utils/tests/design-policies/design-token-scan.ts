@@ -85,6 +85,12 @@ export const SHADOW_ALLOWED_FILES: ReadonlySet<string> = new Set([
   'packages/ui/src/primitives/dropdown-menu.tsx',
   'packages/ui/src/primitives/context-menu.tsx',
   'apps/web/src/components/command-palette/command-palette.tsx',
+  // The editor's `@`/`/` suggestion list. It is a floating overlay in every sense that matters
+  // here — portalled to the body, positioned against the caret, clamped to the viewport with
+  // OVERLAY_COLLISION_PADDING — but it cannot be a DropdownMenu, because a Radix menu takes
+  // focus and this list must leave the caret in the editor so typing keeps filtering. It
+  // therefore needs the same elevation as the menus it sits alongside.
+  'apps/web/src/components/editor/suggestion-menu.tsx',
 ]);
 
 /**

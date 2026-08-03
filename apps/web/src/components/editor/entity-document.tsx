@@ -122,16 +122,26 @@ export function EntityDocument({
             <div className="px-3 pb-2">{renderContents(false)}</div>
           </details>
         ) : null}
+        {/*
+         * `p-4`, not `px-4 py-3`: the inset a person sees on the left of the first line is the
+         * same inset they see above it. Asymmetric padding is the single most common reason an
+         * editor looks "off" without anyone being able to say why.
+         *
+         * `flex` + a `flex-1` editor means the editor's own box reaches the bottom of the
+         * container, so the empty space below the last paragraph belongs to the editor and
+         * clicking it puts the caret at the end — rather than being inert container padding
+         * that looks editable and does nothing.
+         */}
         <div
           ref={rootRef}
-          className="entity-document bg-surface-container-low min-h-56 rounded-xl px-4 py-3 print:bg-transparent print:p-0"
+          className="entity-document bg-surface-container-low flex min-h-56 flex-col rounded-xl p-4 print:bg-transparent print:p-0"
         >
           <EditableFreeformText
             value={value}
             placeholder={placeholder}
             canEdit={canEdit}
             onSave={onSave}
-            className="max-w-none"
+            className="flex min-h-0 max-w-none flex-1 flex-col"
           />
         </div>
       </div>

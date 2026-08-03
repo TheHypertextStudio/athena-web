@@ -139,3 +139,17 @@ export function useActiveOrg(): ActiveOrgValue {
   }
   return value;
 }
+
+/**
+ * Read the shell-wide active-org state when there may not be one.
+ *
+ * @remarks
+ * For components that legitimately render both inside and outside the `(app)` shell — the
+ * freeform editor appears in marketing-adjacent composers and in tests — so they can degrade
+ * (no workspace-scoped `@` mentions) instead of throwing.
+ *
+ * @returns the current {@link ActiveOrgValue}, or `null` outside the shell.
+ */
+export function useOptionalActiveOrg(): ActiveOrgValue | null {
+  return useContext(ActiveOrgReactContext);
+}

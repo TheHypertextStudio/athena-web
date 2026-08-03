@@ -30,6 +30,16 @@ import { queryKeys, unwrap, useApiMutation } from './query';
 export interface TaskPatch {
   /** New title. Non-empty; titles cannot be cleared. */
   title?: string;
+  /**
+   * New description body, or `''` to empty it.
+   *
+   * @remarks
+   * The task detail's description editor patches through here. It must be listed both on this
+   * interface *and* in the mutation's request body, which is an explicit field whitelist: a field
+   * present on the type but missing from the body compiles, saves nothing, and still shows the
+   * editor's own "saved" state — a silent no-op is worse than a type error.
+   */
+  description?: string;
   assigneeId?: string | null;
   projectId?: string | null;
   programId?: string | null;
@@ -172,6 +182,7 @@ export function useTaskMutations(
     mutationFn: (patch) => {
       const body = {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
+        ...(patch.description !== undefined ? { description: patch.description } : {}),
         ...(patch.assigneeId !== undefined
           ? { assigneeId: patch.assigneeId === null ? null : ActorId.parse(patch.assigneeId) }
           : {}),

@@ -3,8 +3,10 @@
 import type { CommentOut, SessionActivityOut } from '@docket/types';
 import { ActorAvatar, type ActorKind } from '@docket/ui/components';
 import { Sparkles } from '@docket/ui/icons';
-import { Badge, Button, Separator } from '@docket/ui/primitives';
+import { Badge, Button, Separator, Text } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
+
+import { FreeformTextEditor } from '@/components/editor/freeform-text';
 
 /** A resolved actor descriptor for rendering an author avatar + name. */
 export interface FeedActor {
@@ -257,27 +259,27 @@ export function CommentActivityFeed({
               void post();
             }}
           >
-            <label htmlFor="comment-body" className="sr-only">
-              Add a comment
-            </label>
-            <textarea
-              id="comment-body"
-              value={body}
-              onChange={(event) => {
-                setBody(event.target.value);
-              }}
-              onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                  event.preventDefault();
+            {/*
+             * The same editor as every other body of text in the product: Markdown formats as
+             * you type it, `@` references a task or project, `/` inserts a block. A comment used
+             * to be a bare `<textarea>`, so the one place people write to each other was the one
+             * place none of that worked.
+             */}
+            <div className="bg-surface-container rounded-md p-3">
+              <FreeformTextEditor
+                value={body}
+                onChange={setBody}
+                placeholder="Leave a comment…"
+                ariaLabel="Add a comment"
+                onSubmit={() => {
                   void post();
-                }
-              }}
-              rows={3}
-              placeholder="Leave a comment…"
-              className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium w-full resize-y rounded-md border px-3 py-2 shadow-sm focus-visible:ring-1 focus-visible:outline-none"
-            />
+                }}
+              />
+            </div>
             <div className="flex items-center justify-between">
-              <span className="text-on-surface-variant text-xs">⌘↵ to send</span>
+              <Text token="label-small" tone="muted">
+                ⌘↵ to send
+              </Text>
               <Button type="submit" size="sm" disabled={posting || body.trim().length === 0}>
                 {posting ? 'Posting…' : 'Comment'}
               </Button>

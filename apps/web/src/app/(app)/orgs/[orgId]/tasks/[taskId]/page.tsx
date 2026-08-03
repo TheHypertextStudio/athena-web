@@ -19,6 +19,7 @@ import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EntityDocument } from '@/components/editor/entity-document';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
@@ -297,17 +298,24 @@ export default function TaskDetailPage(): JSX.Element {
 
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          {/*
+           * A task's description is an editor, not a read-out. It used to render as an inert
+           * paragraph that said "No description." in placeholder grey next to an editable title —
+           * which taught people the region was editable and then did nothing when they clicked
+           * it, and left no way at all to add a description from here.
+           */}
           <section aria-labelledby="description-heading" className="flex flex-col gap-2">
             <h2 id="description-heading" className="sr-only">
               Description
             </h2>
-            {task.description ? (
-              <p className="text-on-surface text-body-medium leading-relaxed whitespace-pre-wrap">
-                {task.description}
-              </p>
-            ) : (
-              <p className="text-on-surface-variant text-body-medium">No description.</p>
-            )}
+            <EntityDocument
+              value={task.description}
+              canEdit={canEdit}
+              onSave={(description) => {
+                patchTask({ description: description ?? '' });
+              }}
+              placeholder="Add a description…"
+            />
           </section>
 
           <Subtasks

@@ -48,7 +48,7 @@ describe('readNotionSchema', () => {
     });
   });
 
-  it('resolves the same roles on Notion’s built-in task database, whose names differ', () => {
+  it('resolves the same roles on a differently-named custom database', () => {
     // "Due", not "Due date" — proof the mapping resolves by type + name preference rather than
     // by a hard-coded property name.
     expect(myTasksSchema.titleProperty).toBe('Task name');

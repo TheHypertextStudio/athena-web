@@ -1,18 +1,26 @@
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import type { ImportedItem } from '@docket/integrations';
+import type * as DbModule from '@docket/db';
+import type { ExternalWriteResult, ImportedItem, WritableConnector } from '@docket/integrations';
 
 import type * as ReconcileModule from '../../src/routes/integration-reconcile';
-import { getDb } from '../support/routes-harness';
+import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 // `planTaskReconcile` is pure, but its module imports `@docket/db`, so we defer the import
 // until the harness has configured the (pglite) DATABASE_URL — exactly like the other suites.
+let schema!: typeof DbModule;
+let db!: typeof DbModule.db;
 let planTaskReconcile!: typeof ReconcileModule.planTaskReconcile;
+let reconcileTasks!: typeof ReconcileModule.reconcileTasks;
 type Local = ReconcileModule.ReconcileLocalTask;
 
 beforeAll(async () => {
-  await getDb();
-  planTaskReconcile = (await import('../../src/routes/integration-reconcile')).planTaskReconcile;
+  schema = await getDb();
+  db = schema.db;
+  const mod = await import('../../src/routes/integration-reconcile');
+  planTaskReconcile = mod.planTaskReconcile;
+  reconcileTasks = mod.reconcileTasks;
 });
 
 const D = (iso: string): Date => new Date(iso);
@@ -168,5 +176,120 @@ describe('planTaskReconcile', () => {
     });
     const r = remote({ externalUpdatedAt: '2026-01-01T00:00:00.000Z' });
     expect(planTaskReconcile(l, r, { writeBack: true })).toEqual({ kind: 'pushDelete' });
+  });
+});
+
+/**
+ * `reconcileTasks` end-to-end for `provider: 'notion'` specifically (WIL-12).
+ *
+ * @remarks
+ * The pure `planTaskReconcile` cases above are provider-agnostic by design — the decision logic
+ * never reads `provenance.provider`. What WIL-12 actually asks for ("Docket wins, and the outbound
+ * write carries Docket's value") is only observable at the `reconcileTasks` orchestration level,
+ * against a real integration row and a scripted `pushTask`. `integration-reconcile-orchestration
+ * .test.ts` already covers this shape generically with `provider: 'gtasks'`; this block closes the
+ * one thing that leaves — that the exact same guarantee holds with `provider: 'notion'`, and that
+ * the conflict log records Notion specifically, not a generic provider string.
+ */
+describe('reconcileTasks — the Notion connector (WIL-12: Docket wins, the loss is logged)', () => {
+  it('pushes Docket’s value to Notion and records Notion’s losing value under provider: notion', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'notion',
+          pattern: 'connector',
+          roles: ['work'],
+          writeBack: true,
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    const local = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Docket’s title wins',
+          state: 'todo',
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'notion-page-conflict',
+          externalListId: 'notion-data-source-1',
+          externalUpdatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          // Dirty: edited locally after the last synced anchor.
+          updatedAt: new Date('2026-02-01T00:00:00.000Z'),
+        })
+        .returning(),
+    );
+    const notionItem: ImportedItem = {
+      id: 'notion-page-conflict',
+      kind: 'issue',
+      title: 'Notion’s title (loses)',
+      body: 'Notion’s notes (loses)',
+      provenance: {
+        provider: 'notion',
+        externalId: 'notion-page-conflict',
+        importedAt: '2026-06-01T00:00:00.000Z',
+        // Newer than the anchor — a genuine two-sided edit, not a one-sided remote change.
+        externalUpdatedAt: '2026-03-01T00:00:00.000Z',
+      },
+    };
+    const pushCalls: unknown[] = [];
+    const writable: WritableConnector = {
+      pushTask: async (input) => {
+        pushCalls.push(input);
+        const result: ExternalWriteResult = {
+          externalId: 'notion-page-conflict',
+          externalUpdatedAt: '2026-03-02T00:00:00.000Z',
+        };
+        return result;
+      },
+    };
+
+    const tally = await reconcileTasks(orgId, humanActorId, integration, teamId, [notionItem], {
+      assigneeId: null,
+      writable,
+    });
+
+    expect(tally).toMatchObject({ pushed: 1, conflicts: 1, pulled: 0 });
+
+    // The outbound push carries DOCKET's value, not Notion's losing one.
+    expect(pushCalls).toEqual([
+      expect.objectContaining({
+        provider: 'notion',
+        op: expect.objectContaining({
+          kind: 'update',
+          externalId: 'notion-page-conflict',
+          title: 'Docket’s title wins',
+        }),
+      }),
+    ]);
+
+    // Docket's own row is untouched by Notion's losing title.
+    const after = one(await db.select().from(schema.task).where(eq(schema.task.id, local.id)));
+    expect(after.title).toBe('Docket’s title wins');
+
+    // The loss is recorded — provider: 'notion' specifically — not silently dropped.
+    const events = await db
+      .select()
+      .from(schema.auditEvent)
+      .where(
+        and(eq(schema.auditEvent.subjectId, local.id), eq(schema.auditEvent.organizationId, orgId)),
+      );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.metadata).toMatchObject({
+      kind: 'sync_conflict',
+      provider: 'notion',
+      integrationId: integration.id,
+      resolution: 'docket_wins',
+      externalId: 'notion-page-conflict',
+      remoteTitle: 'Notion’s title (loses)',
+      remoteBody: 'Notion’s notes (loses)',
+    });
   });
 });

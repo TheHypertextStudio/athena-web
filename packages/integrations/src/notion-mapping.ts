@@ -9,12 +9,14 @@
  * {@link NotionSchema} and is a pure function of it, so the whole mapping is unit-testable with
  * no network.
  *
- * The role assignment was designed against the REAL Las Vegans for Better Transit databases
- * (`Tasks Tracker`: Task name/Status/Assignee/Due date/Priority/Description/Project/Effort
- * level/Parent Task/Subtasks/Updated at, and the built-in `My Tasks` task database:
- * Task name/Status/Due/Assignee/Source), not against an invented example — see
+ * The role assignment was designed against the REAL Las Vegans for Better Transit `Tasks Tracker`
+ * database (Task name/Status/Assignee/Due date/Priority/Description/Project/Effort level/Parent
+ * Task/Subtasks/Updated at), not against an invented example — see
  * `docs/engineering/specs/notion-sync.md` for the field-by-field table and the list of fields
- * that deliberately do not map.
+ * that deliberately do not map. (An earlier draft of this comment also cited the workspace's
+ * built-in "My Tasks" home view as a second live-verified schema; a 2026-08-02 re-check found that
+ * view has no data source of its own to read a schema from at all — see
+ * `packages/integrations/tests/notion/notion-fixtures.ts` and notion-sync.md §3 for the finding.)
  *
  * Completion is read from Notion's `status` property **groups** (`to_do` / `in_progress` /
  * `complete`) rather than from option names, because the option names are workspace-authored

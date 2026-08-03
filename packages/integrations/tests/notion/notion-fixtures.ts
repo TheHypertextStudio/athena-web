@@ -1,24 +1,50 @@
 /**
- * Notion API payload fixtures, transcribed from the REAL "Las Vegans for Better Transit"
- * workspace.
+ * Notion API payload fixtures for the REAL "Las Vegans for Better Transit" workspace, plus one
+ * deliberately synthetic second schema (see the `MY_TASKS_*` remark below).
  *
  * @remarks
- * Both schemas below were read out of the live workspace through the Notion MCP surface on
- * 2026-08-02 — `Tasks Tracker` (the team's own task database) and `My Tasks` (Notion's built-in
- * task database, the "native task system"). They are transcribed rather than invented so a
- * mapping bug cannot hide behind a convenient fake: the property names, the status **group**
- * names, the option names, and the id formats are the ones the connector will actually meet.
+ * `TASKS_TRACKER_PROPERTIES` was read out of the live workspace through the Notion MCP surface —
+ * re-verified again on 2026-08-02 against `collection://383c7791-208f-802e-9508-000b6d244e57` and
+ * matching byte for byte (property names, ids, the `status` groups, the `Project` relation
+ * target). It is transcribed rather than invented so a mapping bug cannot hide behind a
+ * convenient fake.
  *
- * `Tasks Tracker` uses a `status` property with Notion's three semantic groups and a rich set of
- * relations/selects; `My Tasks` uses different property names for the same roles ("Due", not
- * "Due date") plus a read-only `Source` property — which is exactly the pair that proves the
- * mapping is derived from the schema rather than hard-coded.
+ * **`MY_TASKS_PROPERTIES` is NOT a live-verified schema — this was re-checked on 2026-08-02 and
+ * found to be wrong.** The LVBT workspace's sidebar "My Tasks" (id `6f60a403-…`) is not a
+ * standalone data source at all: it is Notion's built-in cross-database "assigned to me" home
+ * view. Live evidence, gathered through the same connected Notion MCP this fixture file claims to
+ * be transcribed from:
+ *   - Fetching the "My Tasks" database by id returns no `<data-sources>` block (unlike
+ *     `Tasks Tracker`, whose database fetch lists its data source explicitly), and its one view's
+ *     `dataSourceUrl` is the empty string.
+ *   - `GET /v1/data_sources/6f60a403-0e08-47a3-8948-9fa25cdf97be` (`collection://` fetch) 404s:
+ *     `"Could not find data_source with ID: …"` — the same call `NotionProviderClient.schemaFor`
+ *     makes, so the real connector would hit this too, not a mapping gap.
+ *   - Querying the "My Tasks" view returns real pages whose own `<parent-data-source>` is
+ *     `collection://383c7791-208f-802e-9508-000b6d244e57` — i.e. `Tasks Tracker` itself. "My
+ *     Tasks" has no rows of its own; it is a filtered lens over rows that already live in a real,
+ *     already-syncable database.
+ *
+ * So `MY_TASKS_PROPERTIES` is kept here only as a **synthetic stand-in for a differently-named
+ * custom database** — it still earns its keep by proving `readNotionSchema` resolves properties by
+ * type + name preference ("Due", not "Due date") rather than by a hard-coded property name, and
+ * that it reports an unmapped `rollup` property instead of dropping it. It must not be cited as
+ * evidence of what Notion's public API actually returns for a native task view, because (per the
+ * above) there is no such queryable object for a public integration to ever see. See
+ * `docs/engineering/specs/notion-sync.md` §3 for the write-up this finding fed back into.
  */
 
 /** The real data source id of the LVBT "Tasks Tracker" database. */
 export const TASKS_TRACKER_DATA_SOURCE = '383c7791-208f-802e-9508-000b6d244e57';
 
-/** The real database id of Notion's built-in "My Tasks" database in the LVBT workspace. */
+/**
+ * A synthetic data source id standing in for a differently-named custom database.
+ *
+ * @remarks
+ * Reuses the id of the LVBT workspace's native "My Tasks" home view for continuity with earlier
+ * fixtures, but — per the file remark above — that id resolves to no queryable data source at all;
+ * treat this purely as an arbitrary second id, not as a real database's identity.
+ */
 export const MY_TASKS_DATA_SOURCE = '6f60a403-0e08-47a3-8948-9fa25cdf97be';
 
 /**
@@ -97,7 +123,8 @@ export const TASKS_TRACKER_PROPERTIES: Readonly<Record<string, unknown>> = {
 };
 
 /**
- * The `properties` map of Notion's built-in "My Tasks" database — the native task system.
+ * A synthetic `properties` map for a differently-named custom database (NOT Notion's native "My
+ * Tasks" home view — see the file-level remark above for why that view has no schema of its own).
  *
  * @remarks
  * Deliberately names its date property "Due" (not "Due date") and carries a read-only `Source`

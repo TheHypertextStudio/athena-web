@@ -5,8 +5,10 @@
 > **Related**: [`integration-sync.md`](./integration-sync.md) (the shared sync spine),
 > [`../../migration/sunsama-to-docket.md`](../../migration/sunsama-to-docket.md)
 
-Docket syncs Notion databases — including Notion's built-in task database — with Docket's own
-tasks, in both directions, **with Docket as the source of truth on conflict**.
+Docket syncs Notion databases with Docket's own tasks, in both directions, **with Docket as the
+source of truth on conflict**. It does not, and per §3a cannot, sync Notion's built-in personal "My
+Tasks" home view as a distinct thing — see §3a for why, and what to sync instead to get the same
+data.
 
 That last clause is the whole point, and it is not a default that fell out of the existing
 machinery. Before this connector, every Docket connector resolved a two-sided edit by _last write
@@ -112,13 +114,53 @@ Every property the mapping does not carry is recorded on `NotionSchema.unmappedP
 type, so the sync surface can name it rather than dropping it silently. On the real LVBT `Tasks
 Tracker` database those are:
 
-| Property                                      | Type               | Why it does not map                                                                                                                                |
-| --------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `Effort level`                                | `select`           | Docket's estimate is a duration (`estimate_minutes`), not a T-shirt size; there is no non-arbitrary conversion from Small/Medium/Large to minutes. |
-| `Project`                                     | `relation`         | Notion relations point at other Notion pages. Resolving one to a Docket project requires a project-level mapping the connector does not yet have.  |
-| `Parent Task` / `Subtasks`                    | `relation`         | Same: the Docket parent must exist before the child can point at it, which needs a second reconciliation pass.                                     |
-| `Updated at`                                  | `last_edited_time` | Already carried, as the page-level `last_edited_time` anchor — mapping the property too would double-count it.                                     |
-| `Source` (on Notion's built-in task database) | `rollup`           | A rollup is a computed view of another database's rows; it has no independent value to store.                                                      |
+| Property                                         | Type               | Why it does not map                                                                                                                                |
+| ------------------------------------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Effort level`                                   | `select`           | Docket's estimate is a duration (`estimate_minutes`), not a T-shirt size; there is no non-arbitrary conversion from Small/Medium/Large to minutes. |
+| `Project`                                        | `relation`         | Notion relations point at other Notion pages. Resolving one to a Docket project requires a project-level mapping the connector does not yet have.  |
+| `Parent Task` / `Subtasks`                       | `relation`         | Same: the Docket parent must exist before the child can point at it, which needs a second reconciliation pass.                                     |
+| `Updated at`                                     | `last_edited_time` | Already carried, as the page-level `last_edited_time` anchor — mapping the property too would double-count it.                                     |
+| `Source` (synthetic test fixture only — see §3a) | `rollup`           | A rollup is a computed view of another database's rows; it has no independent value to store.                                                      |
+
+---
+
+## 3a. Notion's native "My Tasks" view is not a syncable database, and there is no per-row source-type field
+
+An earlier pass of this spec (and the `MY_TASKS_PROPERTIES` fixture in
+`packages/integrations/tests/notion/notion-fixtures.ts`) described Notion's built-in, per-person
+"My Tasks" sidebar view as a second real database in the LVBT workspace, with its own simple schema
+(`Task name`/`Status`/`Due`/`Assignee`/`Source`) distinguishable from an ordinary database row by a
+source-type field. **A 2026-08-02 re-check against the live LVBT workspace, through the same
+connected Notion MCP, found this to be wrong**, and the requirement it was meant to satisfy
+(surface a `sourceType` field that tells a native-task-system row apart from a plain database row)
+cannot be met as written, for a structural reason rather than a missing feature:
+
+- Fetching the "My Tasks" database (id `6f60a403-0e08-47a3-8948-9fa25cdf97be`) returns no
+  `<data-sources>` block at all — unlike `Tasks Tracker`, whose database fetch lists its data
+  source explicitly — and the one view "My Tasks" has is filtered to "assigned to me" over
+  `dataSourceUrl: ""` (empty).
+- `GET /v1/data_sources/6f60a403-0e08-47a3-8948-9fa25cdf97be` — the exact call
+  `NotionProviderClient.schemaFor` makes for any data source — 404s: `"Could not find data_source
+with ID: …"`. This is not an MCP-tool quirk: it is Notion's own API answering that no data source
+  exists at that id, which is what `GET /v1/data_sources/{id}` would tell the real connector too.
+- Querying the "My Tasks" view's rows and then fetching one of those rows directly shows its real
+  `<parent-data-source>` is `collection://383c7791-208f-802e-9508-000b6d244e57` — `Tasks Tracker`
+  itself. "My Tasks" has no rows of its own to have a schema for; it is Notion's own cross-database
+  "assigned to me, still open" filter over rows that already live in a real database.
+
+**The practical consequence:** a public Notion integration — which is what Docket's OAuth grant is
+— can never be given access to "My Tasks" (there is nothing shareable to grant access to), so
+`listContainers()` structurally never offers it as a database to sync, and there is no row Docket's
+connector could ever receive that originated from it. Every task assignee sees in their personal
+"My Tasks" view is already reachable by syncing the real database it lives in (`Tasks Tracker`, in
+LVBT's case) — which the connector already does, fully, today. So there is no genuine "native task
+row" for a `sourceType` field to distinguish: the requirement's premise does not correspond to
+anything reachable through Notion's public API, and adding a field that always reads "custom
+database" (there being no alternative value it could ever take) would be dead code standing in for
+a distinction the API cannot produce. `MY_TASKS_PROPERTIES` is kept in the fixture file as a
+synthetic stand-in for a differently-named custom database — useful for exercising
+`readNotionSchema`'s type/name-preference resolution — but is no longer presented as a second real,
+live-verified schema.
 
 ---
 
@@ -213,14 +255,14 @@ Setup:
 
 ## 7. Files
 
-| Path                                                    | What it holds                                                                              |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `packages/integrations/src/notion-mapping.ts`           | The pure schema derivation and property mapping (no HTTP).                                 |
-| `packages/integrations/src/notion.ts`                   | `NotionProviderClient` — the provider I/O edge, read + write.                              |
-| `packages/integrations/tests/notion/notion-fixtures.ts` | The real LVBT `Tasks Tracker` and `My Tasks` schemas, transcribed from the live workspace. |
-| `packages/integrations/tests/notion/*.test.ts`          | 36 tests over the mapping and the client.                                                  |
-| `apps/api/src/routes/sync-notion.ts`                    | The sync conflict log: `recordSyncConflict`, `listSyncConflicts`.                          |
-| `apps/api/src/routes/integration-reconcile.ts`          | `planTaskReconcile` — where Docket wins.                                                   |
+| Path                                                    | What it holds                                                                                                                              |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/integrations/src/notion-mapping.ts`           | The pure schema derivation and property mapping (no HTTP).                                                                                 |
+| `packages/integrations/src/notion.ts`                   | `NotionProviderClient` — the provider I/O edge, read + write.                                                                              |
+| `packages/integrations/tests/notion/notion-fixtures.ts` | The real LVBT `Tasks Tracker` schema, transcribed from the live workspace, plus one synthetic differently-named-database schema (see §3a). |
+| `packages/integrations/tests/notion/*.test.ts`          | 36 tests over the mapping and the client.                                                                                                  |
+| `apps/api/src/routes/sync-notion.ts`                    | The sync conflict log: `recordSyncConflict`, `listSyncConflicts`.                                                                          |
+| `apps/api/src/routes/integration-reconcile.ts`          | `planTaskReconcile` — where Docket wins.                                                                                                   |
 
 Everything else — the lease, the `sync_run` rows, the cron sweep, the cursor bookkeeping — is the
 shared spine in [`integration-sync.md`](./integration-sync.md). Notion adds no parallel engine.

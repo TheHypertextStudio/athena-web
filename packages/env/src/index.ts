@@ -19,7 +19,7 @@ export { isRealValue, realEnvValue } from './real-value';
 // `@docket/env/custom-domain` because tooling (`scripts/domain-check.ts`) imports the barrel to
 // avoid pulling in a fail-fast composition, and a feature should never have to know which of the
 // two modules a helper lives in.
-export type { HostConfig, HostEnvSource, HostRole, HostSource, ResolvedHost } from './hosts';
+export type { HostConfig, HostEnvSource, HostRole, ResolvedHost } from './hosts';
 export {
   apexOf,
   assertHostConfigIsolated,

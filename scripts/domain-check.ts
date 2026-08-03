@@ -118,9 +118,7 @@ function commandHosts(): number {
   for (const role of HOST_ROLES) {
     const resolved = config.hosts[role];
     console.log(
-      resolved
-        ? `${role.padEnd(12)} ${resolved.origin.padEnd(44)} ${resolved.source}`
-        : `${role.padEnd(12)} ${'(unconfigured)'.padEnd(44)} —`,
+      resolved ? `${role.padEnd(12)} ${resolved.origin}` : `${role.padEnd(12)} (unconfigured)`,
     );
   }
   console.log('');

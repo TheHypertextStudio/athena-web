@@ -13,9 +13,9 @@
  * **The shape of the contract.** Exactly one variable is authoritative — the apex Docket
  * owns ({@link HostEnvSource.rootDomain}, from `PUBLIC_ROOT_DOMAIN` / `NEXT_PUBLIC_ROOT_DOMAIN`).
  * Every other host either comes from its own explicit variable or is *derived* from that apex
- * by a documented rule, and {@link ResolvedHost.source} always says which happened. Setting the
- * apex alone is enough to move the whole product; setting a specific variable overrides just
- * that host, which is what the staged cutover in `docs/engineering/domain-cutover.md` needs.
+ * by a documented rule. Setting the apex alone is enough to move the whole product; setting a
+ * specific variable overrides just that host, which is what the staged cutover in
+ * `docs/engineering/domain-cutover.md` needs.
  *
  * **No literal hostname appears here.** A legacy-apex string in production source is exactly
  * what GEN-25 forbids, so the isolation check ({@link assertHostConfigIsolated}) is expressed
@@ -90,9 +90,6 @@ export interface HostEnvSource {
   readonly supportEmail?: string | undefined;
 }
 
-/** Whether a resolved host came from its own variable or was derived from the apex. */
-export type HostSource = 'configured' | 'derived';
-
 /** One resolved host, with everything a caller needs and nothing it has to re-parse. */
 export interface ResolvedHost {
   /** The role this host serves. */
@@ -105,12 +102,8 @@ export interface ResolvedHost {
    * a DNS record, or a TLS SAN comparison wants. A port in any of those is a bug.
    */
   readonly host: string;
-  /** The port, when the configured URL carried a non-default one (local development). */
-  readonly port: number | undefined;
   /** The full origin, e.g. `https://api.docket.place` or `http://api.docket.localhost:1355`. */
   readonly origin: string;
-  /** Whether an explicit variable supplied this host or the apex derived it. */
-  readonly source: HostSource;
 }
 
 /** The fully resolved host contract for one deployment. */
@@ -206,22 +199,10 @@ function resolveOne(
 ): ResolvedHost | undefined {
   const explicit = parseHost(configured);
   if (explicit) {
-    return {
-      role,
-      host: explicit.host,
-      port: explicit.port,
-      origin: originOf(explicit.host, explicit.port),
-      source: 'configured',
-    };
+    return { role, host: explicit.host, origin: originOf(explicit.host, explicit.port) };
   }
   if (derivedHost === undefined) return undefined;
-  return {
-    role,
-    host: derivedHost,
-    port: undefined,
-    origin: originOf(derivedHost, undefined),
-    source: 'derived',
-  };
+  return { role, host: derivedHost, origin: originOf(derivedHost, undefined) };
 }
 
 /**

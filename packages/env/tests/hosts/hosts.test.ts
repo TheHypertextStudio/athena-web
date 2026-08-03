@@ -22,7 +22,6 @@ import {
   requireSupportEmail,
   resolveHost,
   resolveHostConfig,
-  WEB_HOST_ROLES,
 } from '../../src/hosts';
 
 describe('parseHost', () => {
@@ -86,7 +85,6 @@ describe('resolveHostConfig', () => {
     expect(config.supportEmail).toBe('support@docket.place');
     expect(config.passkeyRpId).toBe('docket.place');
     expect(config.customDomainTarget).toBe('briefs.docket.place');
-    for (const role of WEB_HOST_ROLES) expect(resolveHost(config, role)?.source).toBe('derived');
   });
 
   it('derives the apex from the app URL when none is set', () => {
@@ -97,7 +95,6 @@ describe('resolveHostConfig', () => {
     });
 
     expect(config.rootDomain).toBe('example.test');
-    expect(config.hosts.app?.source).toBe('configured');
     expect(config.hosts.api?.host).toBe('docket-api.example.test');
     expect(config.hosts.admin?.host).toBe('admin.example.test');
   });
@@ -110,9 +107,8 @@ describe('resolveHostConfig', () => {
       adminUrl: 'https://ops.docket.place',
     });
 
-    expect(config.hosts.brief).toMatchObject({ host: 'read.docket.place', source: 'configured' });
-    expect(config.hosts.admin).toMatchObject({ host: 'ops.docket.place', source: 'configured' });
-    expect(config.hosts.api?.source).toBe('derived');
+    expect(config.hosts.brief).toMatchObject({ host: 'read.docket.place' });
+    expect(config.hosts.admin).toMatchObject({ host: 'ops.docket.place' });
     expect(config.customDomainTarget).toBe('edge.docket.place');
   });
 
@@ -128,7 +124,6 @@ describe('resolveHostConfig', () => {
     });
     expect(configured.hosts['athena-mail']).toMatchObject({
       host: 'inbox.athena.example.test',
-      source: 'configured',
     });
   });
 
@@ -138,7 +133,6 @@ describe('resolveHostConfig', () => {
     const config = resolveHostConfig({ appUrl: 'http://docket.localhost:1355' });
 
     expect(config.hosts.app?.host).toBe('docket.localhost');
-    expect(config.hosts.app?.port).toBe(1355);
     expect(config.hosts.app?.origin).toBe('http://docket.localhost:1355');
     expect(config.passkeyRpId).toBe('docket.localhost');
   });

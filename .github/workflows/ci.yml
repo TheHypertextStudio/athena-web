@@ -208,11 +208,15 @@ jobs:
     runs-on: ubuntu-latest
     # A couple of specs (pwa-offline-sync's reconnect-sync test, fluid-scheduling-gestures' people-
     # card comparison test) have each independently taken 3-9 minutes under CI load, on top of the
-    # ~15 minutes the other ~50 specs take. 30 minutes was cutting the job off via GitHub's own job
-    # timeout mid-run — the *test* retries were never actually exhausted, so the run reported as
-    # cancelled without ever printing which of the later specs pass or fail. Raised to give the
-    # suite room to actually finish and report real results instead of an artificial cutoff.
-    timeout-minutes: 45
+    # ~15 minutes the other ~50 specs take. With Playwright's own 2 retries, a spec that fails
+    # deterministically (not just slow) pays that cost up to 3 times over — 45 minutes still cut
+    # the job off via GitHub's own job timeout mid-run, before Playwright's retries were exhausted,
+    # so the run reported as cancelled without ever printing which specs actually pass or fail.
+    # Two of these are already-open, tracked bugs (not new — see follow-up work on the calendar
+    # People-axis toggle and the fluid-scheduling range-request assertion); once fixed, actual
+    # runtime should drop well under this ceiling again. Raised to give the suite room to actually
+    # finish and report real results instead of a second artificial cutoff.
+    timeout-minutes: 60
     env:
       PORTLESS_PORT: '1355'
       PORTLESS_HTTPS: '0'

@@ -274,6 +274,7 @@ export async function loadBusyItems(
     );
 
   return rows.flatMap((r) => {
+    /* v8 ignore next -- @preserve defensive: the query above filters both columns isNotNull */
     if (r.startsAt === null || r.endsAt === null) return [];
     if (r.status === 'cancelled') return [];
     return [
@@ -330,6 +331,7 @@ export async function loadActuals(db: Database, hubId: string, since: Date): Pro
 
   const perRecord = new Map<string, { taskId: string; minutes: number }>();
   for (const row of rows) {
+    /* v8 ignore next -- @preserve defensive: the query above filters isNotNull(timeInterval.endedAt) */
     if (row.endedAt === null) continue;
     const minutes = Math.round((row.endedAt.getTime() - row.startedAt.getTime()) / 60_000);
     if (minutes <= 0) continue;
@@ -497,6 +499,7 @@ export async function persistPlannedBlocks(
         workShape: block.shape,
         origin: 'scheduler',
         scheduleRunId: input.runId,
+        organizationId: block.organizationId,
       })
       .returning({ id: calendarItem.id });
     const row = inserted[0];
@@ -638,6 +641,7 @@ export async function loadDayBlocks(
     .orderBy(calendarItem.startsAt);
 
   return rows.flatMap((r) => {
+    /* v8 ignore next -- @preserve defensive: the query above filters both columns isNotNull */
     if (r.startsAt === null || r.endsAt === null) return [];
     if (r.status === 'cancelled') return [];
     return [
@@ -875,7 +879,7 @@ export async function loadWeekBlocks(
         start: row.startsAt.getTime(),
         end: row.endsAt.getTime(),
         date: localDateString(row.startsAt, timezone),
-        organizationId: null,
+        organizationId: row.organizationId,
         location: row.location,
         attendees: row.attendees.map((a) => a.email ?? a.displayName ?? '').filter((a) => a !== ''),
         origin: row.origin,

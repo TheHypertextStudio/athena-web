@@ -290,6 +290,15 @@ export const calendarItem = pgTable(
     origin: text('origin').notNull().default('user'),
     /** The `schedule_run` that placed this block; null for anything not placed by a run. */
     scheduleRunId: text('schedule_run_id'),
+    /**
+     * The workspace a scheduler-placed block is attributed to, when the commitment behind it
+     * named one (e.g. a filming session for a specific org); null for a personal, unattributed
+     * block. Set only by the weekly scheduler today — provider-synced and manually created items
+     * leave this null.
+     */
+    organizationId: text('organization_id').references(() => organization.id, {
+      onDelete: 'set null',
+    }),
     archivedAt: timestamp('archived_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')

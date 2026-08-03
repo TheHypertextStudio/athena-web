@@ -464,6 +464,41 @@ describe('GET /schedule-week — coverage', () => {
     expect(plan.coverage.protectedMinutes).toBeGreaterThan(0);
   });
 
+  it("keeps a scheduler-placed block's workspace attribution across a reload, not just the POST response", async () => {
+    // Regression: `persistPlannedBlocks` never wrote `organization_id` to `calendar_item`, and
+    // `loadWeekBlocks` hardcoded it back out as `null` on every read — so the POST response
+    // reported the right workspace (still holding the in-memory planned block) while every GET
+    // after it, including a plain page reload, silently lost it. Only a POST-then-GET round trip
+    // catches this; asserting on the POST response alone (as every other test in this file does)
+    // cannot.
+    const { app, lvbtOrgId } = await seedPlanner('PlannerReload');
+    const posted = await app.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ weekStartDate: WEEK }),
+    });
+    expect(posted.status).toBe(200);
+
+    const reloaded = await app.request(`/?weekStartDate=${WEEK}`);
+    expect(reloaded.status).toBe(200);
+    const plan = (await reloaded.json()) as {
+      blocks: {
+        shape: string;
+        organizationId: string | null;
+        organizationName: string | null;
+      }[];
+    };
+    const filming = plan.blocks.filter((b) => b.shape === 'filming_session');
+    expect(filming.length).toBeGreaterThan(0);
+    expect(filming[0]?.organizationId).toBe(lvbtOrgId);
+    expect(filming[0]?.organizationName).toBe('Las Vegans for Better Transit');
+
+    const personal = plan.blocks.filter((b) => b.shape === 'deep_writing');
+    expect(personal.length).toBeGreaterThan(0);
+    expect(personal[0]?.organizationId).toBeNull();
+    expect(personal[0]?.organizationName).toBeNull();
+  });
+
   it('never places a work block inside a declared personal window, across ten generated weeks', async () => {
     const { app, userId } = await seedPlanner('PlannerProtected');
     // A single, unmistakable protected window: every Wednesday, all day.

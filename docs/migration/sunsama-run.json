@@ -1,36 +1,36 @@
 {
-  "ranAt": "2026-08-02T21:43:54.460Z",
+  "ranAt": "2026-08-03T04:32:17.997Z",
   "source": "fixture",
   "endpoint": "https://sunsama.fixture.localhost/mcp",
-  "applied": false,
+  "applied": true,
   "sunsamaActiveCount": 7,
   "sunsamaArchivedCount": 1,
-  "docketMatchedCount": 0,
-  "unmatchedSunsamaIds": ["su-001", "su-002", "su-003", "su-007", "su-004", "su-006", "su-005"],
+  "docketMatchedCount": 7,
+  "unmatchedSunsamaIds": [],
   "unmatchedDocketIds": [],
   "workspaces": [
     {
       "workspace": "Las Vegans for Better Transit",
       "routed": 3,
-      "created": 0,
+      "created": 3,
       "alreadyPresent": 0
     },
     {
       "workspace": "The Willie Diaries",
       "routed": 2,
-      "created": 0,
+      "created": 2,
       "alreadyPresent": 0
     },
     {
       "workspace": "Personal Life",
       "routed": 1,
-      "created": 0,
+      "created": 1,
       "alreadyPresent": 0
     },
     {
       "workspace": "Hypertext Studio",
       "routed": 1,
-      "created": 0,
+      "created": 1,
       "alreadyPresent": 0
     }
   ],
@@ -112,6 +112,33 @@
       "sunsamaCreatedAt": "2026-07-28T09:00:00.000Z",
       "sunsamaSourceIntegration": "github:hypertext-studio/athena-web#412",
       "sunsamaStreamIds": ["str-docket"]
+    }
+  },
+  "notWrittenByReconciler": {
+    "su-001": {
+      "startDate": null,
+      "estimateMinutes": 45,
+      "subtaskCount": 2
+    },
+    "su-002": {
+      "startDate": null,
+      "estimateMinutes": 30,
+      "subtaskCount": 0
+    },
+    "su-004": {
+      "startDate": "2026-08-03",
+      "estimateMinutes": 90,
+      "subtaskCount": 1
+    },
+    "su-006": {
+      "startDate": "2026-08-03",
+      "estimateMinutes": 60,
+      "subtaskCount": 0
+    },
+    "su-005": {
+      "startDate": "2026-08-04",
+      "estimateMinutes": 240,
+      "subtaskCount": 0
     }
   }
 }

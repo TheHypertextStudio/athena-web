@@ -26,6 +26,7 @@ export * from './mock-connector';
 export * from './mock-linear-agent';
 export * from './notion-mapping';
 export * from './sunsama';
+export * from './sunsama-connector';
 export * from './sunsama-fixtures';
 export * from './sunsama-mapping';
 export * from './mock-observer';

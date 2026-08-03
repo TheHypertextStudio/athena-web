@@ -5,7 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ActorAvatar, type ActorKind } from '../../../src/components/atoms/ActorAvatar';
 import { EmptyState } from '../../../src/components/atoms/EmptyState';
+import { IdentityGlyph } from '../../../src/components/atoms/IdentityGlyph';
 import {
+  StatusGlyph,
   StatusIcon,
   STATE_TYPE_TOKEN_CLASS,
   type WorkflowStateType,
@@ -32,6 +34,51 @@ describe('StatusIcon', () => {
       'custom-size',
       'text-state-completed',
     );
+  });
+});
+
+describe('IdentityGlyph', () => {
+  it('renders its content in a tonal circle sized to the default 40px identity scale', () => {
+    render(
+      <IdentityGlyph>
+        <span data-testid="inner">x</span>
+      </IdentityGlyph>,
+    );
+    const glyph = screen.getByTestId('inner').parentElement;
+    expect(glyph).toHaveAttribute('aria-hidden', 'true');
+    expect(glyph).toHaveClass('bg-surface-container-highest', 'rounded-full');
+    expect(glyph).toHaveStyle({ width: '40px', height: '40px' });
+  });
+
+  it('accepts a custom size and merges an extra className', () => {
+    render(
+      <IdentityGlyph size={24} className="bg-primary/12">
+        <span data-testid="inner2">x</span>
+      </IdentityGlyph>,
+    );
+    const glyph = screen.getByTestId('inner2').parentElement;
+    expect(glyph).toHaveStyle({ width: '24px', height: '24px' });
+    expect(glyph).toHaveClass('bg-primary/12');
+  });
+});
+
+describe('StatusGlyph', () => {
+  it('renders a state-tinted identity circle around the ring/check/x glyph', () => {
+    // The outer IdentityGlyph is `aria-hidden`, so its descendants must be queried explicitly.
+    render(<StatusGlyph type="completed" label="Done" />);
+    const icon = screen.getByRole('img', { hidden: true, name: 'Done' });
+    expect(icon).toHaveClass('text-state-completed');
+    // The wrapping IdentityGlyph carries the tonal circle fill for the same state.
+    const circle = icon.parentElement;
+    expect(circle).toHaveClass('bg-state-completed/15', 'text-state-completed');
+    expect(circle).toHaveStyle({ width: '40px', height: '40px' });
+  });
+
+  it('scales the inner glyph from the circle size, floored at 16px', () => {
+    render(<StatusGlyph type="started" size={20} />);
+    const icon = screen.getByRole('img', { hidden: true, name: 'started' });
+    // Math.max(16, Math.round(20 * 0.45)) === 16.
+    expect(icon).toHaveStyle({ '--status-icon-size': '16px' });
   });
 });
 

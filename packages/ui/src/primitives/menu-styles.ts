@@ -167,16 +167,6 @@ export function menuItemClass(variant: MenuVariant, options?: MenuItemClassOptio
 }
 
 /**
- * Color class for a leading icon (anatomy #1) — one tone quieter than the item text.
- *
- * @param variant - Menu tonal family.
- * @returns The icon color utility to place on the leading glyph.
- */
-export function menuLeadingIcon(variant: MenuVariant): string {
-  return variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface-variant';
-}
-
-/**
  * Class string for a section label / group heading (anatomy #9).
  *
  * @param variant - Menu tonal family.

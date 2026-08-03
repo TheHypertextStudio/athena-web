@@ -196,7 +196,12 @@ export function EntityTable<T>({
 
   const handleSelectRow = React.useCallback(
     (row: T) => {
+      /* v8 ignore start -- unreachable: this callback is only ever wired to a row's `onSelect`
+         prop below, and that wiring is itself gated on `onSelect` being defined
+         (`onSelect ? () => handleSelectRow(...) : undefined`) — so `onSelect` can never be falsy
+         by the time this runs. */
       if (!onSelect) return;
+      /* v8 ignore stop */
       onSelect(row, !(selected?.has(getRowKey(row)) ?? false));
     },
     [onSelect, selected, getRowKey],

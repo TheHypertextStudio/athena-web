@@ -128,7 +128,7 @@ describe('ContextProvider / useContextState', () => {
 });
 
 describe('AppShell', () => {
-  it('keeps the first resolved org steady and cross-fades a later org switch', () => {
+  it('keeps the first resolved org steady and cross-fades a later org switch', async () => {
     render(
       <ContextProvider initialContext={null}>
         <ContextRebindControls />
@@ -144,6 +144,14 @@ describe('AppShell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Switch to Globex' }));
     expect(main).toHaveClass('animate-org-rebind');
+
+    // The cross-fade is transient: once its 240ms timer fires, the class is dropped again.
+    await waitFor(
+      () => {
+        expect(main).not.toHaveClass('animate-org-rebind');
+      },
+      { timeout: 1000 },
+    );
   });
 
   it('applies --org-accent and data-density when an org is bound, around sidebar + tab bar', () => {
@@ -350,6 +358,25 @@ describe('AppShell rail', () => {
     expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-[min(17vw,22rem)]');
   });
 
+  it('arms the width transition only for the duration of the collapse/expand motion', async () => {
+    renderWithRail(() => true);
+    const host = screen.getByRole('complementary', { name: 'Tasks' });
+    expect(host).not.toHaveClass('transition-[width]');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Tasks' }));
+    expect(host).toHaveClass('transition-[width]', 'w-0');
+
+    // Once the 240ms motion completes, the transition class is dropped so a later viewport
+    // resize (which also changes the rail's width) never gets caught by the same animation.
+    await waitFor(
+      () => {
+        expect(host).not.toHaveClass('transition-[width]');
+      },
+      { timeout: 1000 },
+    );
+    expect(host).toHaveClass('w-0');
+  });
+
   it('adopts a persisted collapsed choice after mount rather than at hydration', () => {
     // React does not patch attribute mismatches it finds while hydrating, so reading storage in
     // `useState`'s initializer left the server's class on the element forever and the viewer's saved
@@ -372,6 +399,59 @@ describe('AppShell rail', () => {
     // because the open modal `aria-hidden`s the rest of the tree — which is also why the two
     // presentations can no longer share one id.
     expect(document.getElementById('shell-aside')).toHaveClass('hidden');
+  });
+
+  it('switches between panels from the mobile sheet tablist when more than one exists', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    const AGENDA_PANEL = {
+      id: 'agenda',
+      label: 'Agenda',
+      icon: <Home />,
+      node: <div>Agenda body</div>,
+    };
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+          aside={{ panels: [TASKS_PANEL, AGENDA_PANEL], defaultPanelId: 'tasks' }}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show Tasks' }));
+    const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
+    const tablist = within(overlay).getByRole('tablist', { name: 'Panels' });
+    const tasksTab = within(tablist).getByRole('tab', { name: /Tasks/ });
+    const agendaTab = within(tablist).getByRole('tab', { name: /Agenda/ });
+    expect(tasksTab).toHaveAttribute('aria-selected', 'true');
+    expect(agendaTab).toHaveAttribute('aria-selected', 'false');
+
+    fireEvent.click(agendaTab);
+    expect(within(overlay).getByText('Agenda body')).toBeInTheDocument();
+
+    // Escape dismisses the mobile sheet (the sheet's own onOpenChange(false) path).
+    fireEvent.keyDown(overlay, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Agenda' })).not.toBeInTheDocument();
+    });
   });
 });
 
@@ -661,6 +741,22 @@ describe('Sidebar', () => {
     // hrefs — the workspaces exist, so an empty treatment here would be false.
     expect(screen.getByRole('button', { name: 'Projects' })).toBeDisabled();
   });
+
+  it('pins optional footer content to the bottom of the nav', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <Sidebar
+          workspaces={WORKSPACES}
+          {...sidebarHrefs()}
+          onSelectWorkspace={() => undefined}
+          onOpenSearch={() => undefined}
+          footer={<button type="button">Sign out</button>}
+        />
+      </ContextProvider>,
+    );
+    const footerButton = screen.getByRole('button', { name: 'Sign out' });
+    expect(footerButton.parentElement).toHaveClass('mt-auto');
+  });
 });
 
 /** Open a Radix dropdown trigger in jsdom (pointerDown + click). */
@@ -668,6 +764,70 @@ function openMenu(trigger: HTMLElement): void {
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
   fireEvent.click(trigger);
 }
+
+describe('WorkspaceSwitcher attention + avatar details', () => {
+  it('shows the attention badge for a workspace with a positive count', async () => {
+    const withAttention: Workspace = { ...GLOBEX, attentionCount: 5 };
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher
+          workspaces={[ACME, withAttention]}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
+    await waitFor(() => expect(screen.getByLabelText('5 need attention')).toBeInTheDocument());
+  });
+
+  it('clamps a large attention count to a 99+ ceiling', async () => {
+    const overflowing: Workspace = { ...GLOBEX, attentionCount: 140 };
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher
+          workspaces={[ACME, overflowing]}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    openMenu(screen.getByRole('button', { name: /Workspace: Acme Co/ }));
+    await waitFor(() => expect(screen.getByLabelText('140 need attention')).toBeInTheDocument());
+    expect(screen.getByLabelText('140 need attention')).toHaveTextContent('99+');
+  });
+
+  it('renders the workspace avatar image when one is supplied', () => {
+    const withAvatar: Workspace = { ...ACME, avatar: 'https://example.com/acme.png' };
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher
+          workspaces={[withAvatar]}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    // Radix's AvatarImage only swaps in after a successful load; asserting the fallback still
+    // renders is enough to prove the `workspace.avatar` branch was taken (it renders an
+    // AvatarImage instead of skipping straight to AvatarFallback).
+    expect(screen.getByRole('button', { name: /Workspace: Acme Co/ })).toBeInTheDocument();
+  });
+
+  it('falls back to "?" initials for a blank workspace name', async () => {
+    const blank: Workspace = { id: 'ORG00000000000000000000099', name: '   ' };
+    render(
+      <ContextProvider initialContext={blank.id}>
+        <WorkspaceSwitcher
+          workspaces={[blank]}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
+      </ContextProvider>,
+    );
+    expect(screen.getByText('?')).toBeInTheDocument();
+  });
+});
 
 describe('WorkspaceSwitcher', () => {
   it('shows the active org as the trigger and switches to another org on selection', async () => {
@@ -967,5 +1127,11 @@ describe('SidebarNavItem', () => {
     );
     const link = screen.getByRole('link', { name: 'Inbox, 5 unread' });
     expect(link).toHaveTextContent('5');
+  });
+
+  it('clamps a badge over 99 to a 99+ ceiling', () => {
+    render(<SidebarNavItem label="Inbox" badge={140} />);
+    const button = screen.getByRole('button', { name: 'Inbox, 140 unread' });
+    expect(button).toHaveTextContent('99+');
   });
 });

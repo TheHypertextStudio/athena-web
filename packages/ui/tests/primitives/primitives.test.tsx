@@ -31,7 +31,10 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '../../src/primitives/dropdown-menu';
+import { DecorativeIcon } from '../../src/primitives/decorative-icon';
 import { Input } from '../../src/primitives/input';
+import { Row, Stack } from '../../src/primitives/layout';
+import { Popover, PopoverAnchor, PopoverTrigger } from '../../src/primitives/popover';
 import { Separator } from '../../src/primitives/separator';
 import { Skeleton } from '../../src/primitives/skeleton';
 
@@ -84,6 +87,15 @@ describe('Button', () => {
   it('buttonVariants composes variant + size + extra className', () => {
     const out = buttonVariants({ variant: 'ghost', size: 'sm', className: 'extra-x' });
     expect(out).toContain('extra-x');
+  });
+
+  it('buttonVariants defaults to the default variant and the md control step with no options', () => {
+    expect(buttonVariants()).toContain('bg-primary');
+    expect(buttonVariants({})).toContain('h-8');
+  });
+
+  it('buttonVariants lets an explicit controlSize win over the legacy size vocabulary', () => {
+    expect(buttonVariants({ controlSize: 'xl' })).toContain('h-10');
   });
 });
 
@@ -185,6 +197,86 @@ describe('Separator', () => {
   });
 });
 
+describe('DecorativeIcon', () => {
+  it('frames an icon component in a toned 20px box, hidden from the a11y tree', () => {
+    function Folder({ className }: { className?: string }): React.JSX.Element {
+      return <svg data-testid="folder" className={className} />;
+    }
+    const { container } = render(<DecorativeIcon icon={Folder} />);
+    expect(screen.getByTestId('folder')).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveAttribute('aria-hidden', 'true');
+    expect(container.firstElementChild).toHaveClass('rounded-lg', '[&>svg]:size-5');
+  });
+
+  it('frames a children glyph when no icon component is given', () => {
+    render(
+      <DecorativeIcon>
+        <svg data-testid="custom-glyph" />
+      </DecorativeIcon>,
+    );
+    expect(screen.getByTestId('custom-glyph')).toBeInTheDocument();
+  });
+});
+
+describe('Stack / Row', () => {
+  it('Stack lays out children vertically with a tokenized gap and alignment', () => {
+    render(
+      <Stack gap={3} align="center" data-testid="stack">
+        <span>a</span>
+      </Stack>,
+    );
+    expect(screen.getByTestId('stack')).toHaveClass('flex-col', 'gap-3', 'items-center');
+  });
+
+  it('Row lays out children horizontally, centered by default', () => {
+    render(
+      <Row data-testid="row">
+        <span>a</span>
+      </Row>,
+    );
+    expect(screen.getByTestId('row')).toHaveClass('flex-row', 'items-center');
+  });
+
+  it('Row supports an explicit justify and a polymorphic element', () => {
+    render(
+      <Row as="nav" justify="between" data-testid="row-nav">
+        <span>a</span>
+      </Row>,
+    );
+    const row = screen.getByTestId('row-nav');
+    expect(row.tagName).toBe('NAV');
+    expect(row).toHaveClass('justify-between');
+  });
+});
+
+describe('PopoverAnchor', () => {
+  it('renders a positioning anchor decoupled from the trigger', () => {
+    render(
+      <Popover>
+        <PopoverAnchor data-testid="anchor" />
+        <PopoverTrigger>Open</PopoverTrigger>
+      </Popover>,
+    );
+    expect(screen.getByTestId('anchor')).toBeInTheDocument();
+  });
+
+  it('accepts a virtual ref for positioning from consumer-owned geometry without rendering its own node', () => {
+    // A virtual anchor supplies geometry directly, so Radix renders no DOM element for it — this
+    // exercises the virtualRef forwarding without asserting a node that deliberately doesn't exist.
+    const virtualRef = {
+      current: { getBoundingClientRect: () => new DOMRect(0, 0, 10, 10) },
+    };
+    expect(() => {
+      render(
+        <Popover>
+          <PopoverAnchor virtualRef={virtualRef} />
+          <PopoverTrigger>Open</PopoverTrigger>
+        </Popover>,
+      );
+    }).not.toThrow();
+  });
+});
+
 describe('Skeleton', () => {
   it('renders an animated placeholder and merges className', () => {
     const { container } = render(<Skeleton className="h-4 w-10" />);
@@ -268,5 +360,51 @@ describe('DropdownMenu family', () => {
     await waitFor(() => {
       expect(screen.getByText('Inside sub')).toBeInTheDocument();
     });
+  });
+
+  it('retones every descendant when variant="vibrant" is set on the content', async () => {
+    render(
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+        <DropdownMenuContent variant="vibrant">
+          <DropdownMenuLabel>Section</DropdownMenuLabel>
+          <DropdownMenuItem>Rename</DropdownMenuItem>
+          <DropdownMenuCheckboxItem checked>Pinned</DropdownMenuCheckboxItem>
+          <DropdownMenuRadioGroup value="p1">
+            <DropdownMenuRadioItem value="p1">Priority one</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuShortcut>⌘R</DropdownMenuShortcut>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Move to</DropdownMenuSubTrigger>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    const label = await screen.findByText('Section');
+    expect(label).toHaveClass('text-on-tertiary-container');
+    expect(screen.getByText('Rename')).toHaveClass('text-on-tertiary-container');
+    expect(screen.getByText('Pinned')).toHaveClass('py-1.5');
+    expect(screen.getByText('Priority one')).toBeInTheDocument();
+    expect(screen.getByText('⌘R')).toHaveClass('text-on-tertiary-container');
+    expect(screen.getByText('Move to')).toHaveClass(
+      '[&_svg:first-child]:text-on-tertiary-container',
+    );
+  });
+
+  it('renders the full rich item anatomy: supporting text, badge, and trailing text', async () => {
+    render(
+      <DropdownMenu defaultOpen>
+        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuItem supporting="Cannot be undone" badge="3" trailingText="⌘⌫">
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>,
+    );
+    expect(await screen.findByText('Cannot be undone')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('⌘⌫')).toBeInTheDocument();
   });
 });

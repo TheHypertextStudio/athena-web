@@ -6,6 +6,7 @@ import * as React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { type ListKeyboardEvent, useListKeyboard } from '../../src/hooks/useListKeyboard';
+import { useMediaQuery } from '../../src/hooks/useMediaQuery';
 import { useRedirectIfAuthenticated } from '../../src/hooks/useRedirectIfAuthenticated';
 import { useVocabulary, VocabularyProvider } from '../../src/hooks/useVocabulary';
 
@@ -155,6 +156,54 @@ describe('useListKeyboard', () => {
     });
     rerender({ rowCount: 6 });
     expect(result.current.activeIndex).toBe(1);
+  });
+});
+
+describe('useMediaQuery', () => {
+  it('reads the current match state from window.matchMedia', () => {
+    // The suite-wide setup stubs matchMedia to always answer `matches: false`.
+    const { result } = renderHook(() => useMediaQuery('(min-width: 64rem)'));
+    expect(result.current).toBe(false);
+  });
+
+  it('reacts to a change event on the media query list', () => {
+    let changeListener: (() => void) | undefined;
+    const mql = {
+      matches: false,
+      addEventListener: (_type: string, listener: () => void) => {
+        changeListener = listener;
+      },
+      removeEventListener: vi.fn(),
+    };
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn(() => mql),
+    );
+    try {
+      const { result } = renderHook(() => useMediaQuery('(min-width: 64rem)'));
+      expect(result.current).toBe(false);
+      mql.matches = true;
+      act(() => {
+        changeListener?.();
+      });
+      expect(result.current).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('falls back to false, without throwing, when matchMedia is unavailable', () => {
+    // Simulates an SSR-like environment; jsdom does implement matchMedia (via the suite-wide
+    // stub), so this removes it for the duration of the test and restores it afterward.
+    const original = window.matchMedia;
+    // @ts-expect-error - deliberately simulating an environment without matchMedia
+    delete window.matchMedia;
+    try {
+      const { result } = renderHook(() => useMediaQuery('(min-width: 64rem)'));
+      expect(result.current).toBe(false);
+    } finally {
+      window.matchMedia = original;
+    }
   });
 });
 

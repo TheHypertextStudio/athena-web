@@ -214,6 +214,28 @@ describe('EntityTable — rows + chrome', () => {
     expect(screen.getByRole('grid', { name: 'Items' })).toHaveAttribute('aria-rowcount', '0');
   });
 
+  it('marks a link row both active (keyboard) and selected with the matching data/aria attributes', () => {
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        selected={new Set(['r1'])}
+        onSelect={vi.fn()}
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' }); // -> first data row (Billing revamp) active
+    const row = screen.getByRole('row', { name: /Billing revamp/ });
+    expect(row).toHaveAttribute('aria-current', 'true');
+    expect(row).toHaveAttribute('aria-selected', 'true');
+    expect(row).toHaveAttribute('data-active', '');
+    expect(row).toHaveAttribute('data-selected', '');
+  });
+
   it('renders via a custom renderRowLink slot (a router Link)', () => {
     render(
       <EntityTable
@@ -260,6 +282,42 @@ describe('EntityTable — selection', () => {
     expect(onSelect).toHaveBeenLastCalledWith(ROWS[0], true);
     fireEvent.click(selectedRow);
     expect(onSelect).toHaveBeenLastCalledWith(ROWS[1], false);
+  });
+
+  it('treats every row as unselected when the selected prop is entirely omitted', () => {
+    const onSelect = vi.fn<(row: Row, next: boolean) => void>();
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        onSelect={onSelect}
+      />,
+    );
+    fireEvent.click(screen.getByRole('row', { name: /Billing revamp/ }));
+    expect(onSelect).toHaveBeenCalledWith(ROWS[0], true);
+  });
+});
+
+describe('EntityTable — prefetch', () => {
+  it('warms the row destination cache on hover/focus via onRowPrefetch (link rows only)', () => {
+    const onRowPrefetch = vi.fn<(row: Row) => void>();
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        onRowPrefetch={onRowPrefetch}
+      />,
+    );
+    const row = screen.getByRole('row', { name: /Billing revamp/ });
+    fireEvent.mouseEnter(row);
+    expect(onRowPrefetch).toHaveBeenCalledWith(ROWS[0]);
+    fireEvent.focus(row);
+    expect(onRowPrefetch).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -308,6 +366,25 @@ describe('EntityTable — grouping', () => {
     expect(screen.getByRole('row', { name: /Billing revamp/ })).toBeInTheDocument();
     fireEvent.click(header);
     expect(screen.queryByRole('row', { name: /Billing revamp/ })).not.toBeInTheDocument();
+  });
+
+  it('re-expands an already-collapsed group on a second header click (uncontrolled)', () => {
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        groups={GROUPS}
+        getRowKey={getRowKey}
+        defaultCollapsed={['g-one']}
+      />,
+    );
+    expect(screen.queryByRole('row', { name: /Billing revamp/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('row', { name: /First bucket/ }));
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /First bucket/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
   });
 
   it('drives collapse externally in controlled mode via collapsed + onToggleGroup', () => {

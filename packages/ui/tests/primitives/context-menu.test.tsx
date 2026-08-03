@@ -126,6 +126,54 @@ describe('ContextMenu family', () => {
     });
   });
 
+  it('retones every descendant when variant="vibrant" is set on the content', async () => {
+    render(
+      <ContextMenu>
+        <ContextMenuTrigger>Region</ContextMenuTrigger>
+        <ContextMenuContent variant="vibrant">
+          <ContextMenuLabel>Section</ContextMenuLabel>
+          <ContextMenuItem>Rename</ContextMenuItem>
+          <ContextMenuCheckboxItem checked>Pinned</ContextMenuCheckboxItem>
+          <ContextMenuRadioGroup value="p1">
+            <ContextMenuRadioItem value="p1">Priority one</ContextMenuRadioItem>
+          </ContextMenuRadioGroup>
+          <ContextMenuSeparator />
+          <ContextMenuShortcut>⌘R</ContextMenuShortcut>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Move to</ContextMenuSubTrigger>
+          </ContextMenuSub>
+        </ContextMenuContent>
+      </ContextMenu>,
+    );
+    openContextMenu(screen.getByText('Region'));
+    const label = await screen.findByText('Section');
+    expect(label).toHaveClass('text-on-tertiary-container');
+    expect(screen.getByText('Rename')).toHaveClass('text-on-tertiary-container');
+    expect(screen.getByText('Pinned')).toHaveClass('py-1.5');
+    expect(screen.getByText('Priority one')).toBeInTheDocument();
+    expect(screen.getByText('⌘R')).toHaveClass('text-on-tertiary-container');
+    expect(screen.getByText('Move to')).toHaveClass(
+      '[&_svg:first-child]:text-on-tertiary-container',
+    );
+  });
+
+  it('renders the full rich item anatomy: supporting text, badge, and trailing text', async () => {
+    render(
+      <ContextMenu>
+        <ContextMenuTrigger>Region</ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem supporting="Cannot be undone" badge="3" trailingText="⌘⌫">
+            Delete
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>,
+    );
+    openContextMenu(screen.getByText('Region'));
+    expect(await screen.findByText('Cannot be undone')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getByText('⌘⌫')).toBeInTheDocument();
+  });
+
   it('opens the submenu content via the sub-trigger to render SubContent', async () => {
     render(
       <ContextMenu>

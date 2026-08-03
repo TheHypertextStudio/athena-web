@@ -76,6 +76,33 @@ function TriggerlessDialog(): React.JSX.Element {
   );
 }
 
+/** Like {@link TriggerlessDialog}, but forwards a caller-supplied `onCloseAutoFocus`. */
+function TriggerlessDialog2({
+  onCloseAutoFocus,
+}: {
+  onCloseAutoFocus: (event: Event) => void;
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button
+        onClick={() => {
+          setOpen(true);
+        }}
+      >
+        New project
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent onCloseAutoFocus={onCloseAutoFocus}>
+          <DialogTitle>New project</DialogTitle>
+          <DialogDescription>Give it a name to get started.</DialogDescription>
+          <Input aria-label="Project name" />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 /** A destructive confirmation opened from an already-modal sheet. */
 function SheetConfirmation({ onConfirm }: { onConfirm: () => void }): React.JSX.Element {
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -237,6 +264,66 @@ describe('Dialog family', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Confirm delete' }));
     expect(onConfirm).toHaveBeenCalledOnce();
+  });
+
+  it('does not crash and skips focus restore when the pre-open active element is not an HTMLElement', async () => {
+    // An icon-only SVG trigger with a tabIndex is a real pattern (a bare icon affordance); SVG
+    // elements are not HTMLElements, so the opener-capture code's `instanceof HTMLElement` guard
+    // takes its false branch and simply does not try to restore focus to it.
+    function SvgOpenedDialog(): React.JSX.Element {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <svg
+            tabIndex={0}
+            role="button"
+            aria-label="Open via icon"
+            data-testid="svg-opener"
+            onClick={() => {
+              setOpen(true);
+            }}
+          />
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent>
+              <DialogTitle>Panel</DialogTitle>
+              <DialogDescription>Opened from a non-HTMLElement trigger.</DialogDescription>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+    render(<SvgOpenedDialog />);
+    const svgOpener = screen.getByTestId('svg-opener');
+    svgOpener.focus();
+    fireEvent.click(svgOpener);
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    // No crash, and focus does not land back on the (non-HTMLElement) opener.
+    expect(document.body).toHaveFocus();
+  });
+
+  it('honors a caller onCloseAutoFocus that already called preventDefault', async () => {
+    const onCloseAutoFocus = vi.fn((event: Event) => {
+      event.preventDefault();
+    });
+    render(<TriggerlessDialog2 onCloseAutoFocus={onCloseAutoFocus} />);
+    const opener = screen.getByRole('button', { name: 'New project' });
+    opener.focus();
+    fireEvent.click(opener);
+    const dialog = await screen.findByRole('dialog');
+
+    fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(onCloseAutoFocus).toHaveBeenCalledTimes(1);
+    // The caller already prevented the default, so this component must not also refocus the
+    // opener — the assertion is simply that it does not crash and the opener is left alone.
+    expect(opener).not.toHaveFocus();
   });
 
   it('merges custom classes onto the content, header, footer, title, and description', async () => {

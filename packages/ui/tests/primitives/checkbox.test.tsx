@@ -57,4 +57,11 @@ describe('Checkbox', () => {
 
     expect(ref.current).toBe(screen.getByRole('checkbox', { name: 'Show holidays' }));
   });
+
+  it('exposes the node to a caller-supplied callback ref', () => {
+    const callback = vi.fn();
+    render(<Checkbox aria-label="Show holidays" ref={callback} />);
+
+    expect(callback).toHaveBeenCalledWith(screen.getByRole('checkbox', { name: 'Show holidays' }));
+  });
 });

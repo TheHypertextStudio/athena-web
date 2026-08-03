@@ -3,9 +3,9 @@ import '@testing-library/jest-dom/vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, renderHook, screen } from '@testing-library/react';
 import type * as React from 'react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { Button } from '../../src/primitives/button';
 import { Chip } from '../../src/primitives/chip';
@@ -16,6 +16,7 @@ import {
   type ControlSize,
   controlChrome,
   DEFAULT_CONTROL_SIZE,
+  useControlMetrics,
 } from '../../src/primitives/control';
 import { FIELD_VARIANTS, Field, Input, Select, Textarea } from '../../src/primitives/field';
 import { Toolbar } from '../../src/primitives/layout';
@@ -75,6 +76,19 @@ describe('control-height scale', () => {
     expect(chrome).toContain('px-0');
     expect(chrome).not.toContain('px-3');
   });
+
+  it('swaps a fixed height for a minimum height when the control is growable', () => {
+    // `toContain` is a substring check and `min-h-8` contains `h-8`, so classes are compared as a
+    // token set rather than by substring.
+    const classes = controlChrome('md', { growable: true }).split(/\s+/);
+    expect(classes).toContain(CONTROL.md.minHeight);
+    expect(classes).not.toContain(CONTROL.md.height);
+  });
+
+  it('useControlMetrics resolves the full metric set for the requested (or ambient) step', () => {
+    const { result } = renderHook(() => useControlMetrics('lg'));
+    expect(result.current).toEqual(CONTROL.lg);
+  });
 });
 
 describe('ControlGroup', () => {
@@ -122,6 +136,17 @@ describe('ControlGroup', () => {
     );
     expect(screen.getByRole('button', { name: 'Override' })).toHaveClass(CONTROL.xs.height);
     expect(screen.getByRole('button', { name: 'Inherited' })).toHaveClass(CONTROL.xl.height);
+  });
+
+  it('lays out vertically and allows wrapping when asked', () => {
+    render(
+      <ControlGroup orientation="vertical" wrap data-testid="vgroup">
+        <Button>A</Button>
+      </ControlGroup>,
+    );
+    const group = screen.getByTestId('vgroup');
+    expect(group).toHaveClass('flex-col', 'items-stretch', 'flex-wrap');
+    expect(group).not.toHaveClass('flex-row');
   });
 
   it('preserves every legacy Button size name at its original pixel height', () => {
@@ -252,6 +277,33 @@ describe('Chip', () => {
     expect(screen.getByRole('button', { name: 'Alex Kim' })).toBeInTheDocument();
   });
 
+  it('fires onRemove and keeps the box size on a selected removable chip', () => {
+    const onRemove = vi.fn();
+    render(
+      <Chip variant="input" avatar={<svg />} selected onRemove={onRemove} removeLabel="Remove Alex">
+        Alex Kim
+      </Chip>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Alex' }));
+    expect(onRemove).toHaveBeenCalledTimes(1);
+    // Selection changes colour only; the transparent border keeps the same box size.
+    expect(screen.getByRole('button', { name: 'Alex Kim' }).parentElement).toHaveClass(
+      'bg-secondary-container',
+      'border-transparent',
+    );
+  });
+
+  it('renders chip styling onto a single child element via asChild', () => {
+    render(
+      <Chip asChild icon={<svg data-testid="glyph" />}>
+        <a href="/projects/1">Open project</a>
+      </Chip>,
+    );
+    const link = screen.getByRole('link', { name: 'Open project' });
+    expect(link).toHaveClass('rounded-md', CONTROL.md.height);
+    expect(screen.getByTestId('glyph')).toBeInTheDocument();
+  });
+
   it('never renders a shadow', () => {
     const { container } = render(<Chip icon={<svg />}>Chip</Chip>);
     expect(container.innerHTML).not.toMatch(/\bshadow-/);
@@ -329,6 +381,24 @@ describe('field family', () => {
     );
     expect(screen.getByRole('alert')).toHaveTextContent('Enter a name');
     expect(screen.queryByText('Shown in the sidebar')).not.toBeInTheDocument();
+  });
+
+  it('renders neither description nor error text when both are omitted', () => {
+    const { container } = render(
+      <Field label="Project name">
+        <Input />
+      </Field>,
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    // Only the <label> renders inside the field column — no empty supporting-text row beneath it.
+    expect(container.firstElementChild?.children).toHaveLength(1);
+  });
+
+  it('marks the field invalid with the error border when aria-invalid is set', () => {
+    render(<Input aria-label="Due date" aria-invalid />);
+    const input = screen.getByLabelText('Due date');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(input).toHaveClass('border-error');
   });
 });
 

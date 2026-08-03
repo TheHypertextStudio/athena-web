@@ -206,7 +206,11 @@ export function PickerList<TValue extends string = string>({
               );
             }
             const option = row.option;
+            /* v8 ignore start -- unreachable: `rows` (built above) always pairs a `'row'`-kind
+               entry with a defined `option`; this only narrows the discriminated union's optional
+               field for TypeScript. */
             if (!option) return null;
+            /* v8 ignore stop */
             const chosen = isSelected(option.value, selected);
             return (
               <li key={option.value} role="option" aria-selected={chosen}>

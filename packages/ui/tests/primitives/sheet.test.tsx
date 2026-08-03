@@ -148,6 +148,42 @@ describe('Sheet family', () => {
     });
   });
 
+  it('does not crash and skips focus restore when the pre-open active element is not an HTMLElement', async () => {
+    function SvgOpenedSheet(): React.JSX.Element {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <svg
+            tabIndex={0}
+            role="button"
+            aria-label="Open via icon"
+            data-testid="svg-opener"
+            onClick={() => {
+              setOpen(true);
+            }}
+          />
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetContent>
+              <SheetTitle>Panel</SheetTitle>
+              <SheetDescription>Opened from a non-HTMLElement trigger.</SheetDescription>
+            </SheetContent>
+          </Sheet>
+        </>
+      );
+    }
+    render(<SvgOpenedSheet />);
+    const svgOpener = screen.getByTestId('svg-opener');
+    svgOpener.focus();
+    fireEvent.click(svgOpener);
+    const sheet = await screen.findByRole('dialog');
+
+    fireEvent.keyDown(sheet, { key: 'Escape', code: 'Escape' });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(document.body).toHaveFocus();
+  });
+
   it('closes via a SheetClose action', async () => {
     render(<NavSheet />);
     fireEvent.click(screen.getByText('Open navigation'));

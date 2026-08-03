@@ -61,6 +61,13 @@ describe('EntityListRow', () => {
     expect(row).toHaveClass('bg-secondary-container', 'row-x');
   });
 
+  it('uses the neutral active tone (not the selected tone) for an active, unselected row', () => {
+    render(<EntityListRow title="Just active" active />);
+    const row = screen.getByRole('button', { name: 'Just active' });
+    expect(row).toHaveClass('bg-surface-container-highest');
+    expect(row).not.toHaveClass('bg-secondary-container');
+  });
+
   it('renders the leading, subtitle, meta, and trailing slots', () => {
     render(
       <EntityListRow

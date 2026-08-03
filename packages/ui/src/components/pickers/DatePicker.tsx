@@ -351,7 +351,12 @@ export function DateRangePicker({
             onSelect={(next) => {
               if (editingStart) {
                 // A start after the current end would invert the window; drop the stale end
-                // rather than silently storing an impossible range.
+                // rather than silently storing an impossible range. Belt-and-suspenders: the
+                // grid this fires from is itself bounded above by `gridMax = end ?? max` while
+                // editing the start, so a day past `end` is rendered `disabled` and can never
+                // reach this callback — the inversion branch cannot be exercised through the UI.
+                /* v8 ignore next -- unreachable: the calling grid's own min/max already bars
+                   selecting a day after `end`, so `compareIso(next, end) > 0` is never true here. */
                 const nextEnd = end && compareIso(next, end) > 0 ? null : end;
                 onChange({ start: next, end: nextEnd });
                 setEditing('end');
@@ -370,6 +375,11 @@ export function DateRangePicker({
             todayDisabled={compareIso(today, gridMin) < 0 || compareIso(today, gridMax) > 0}
             onToday={() => {
               if (editingStart) {
+                // Same inversion guard as the grid's onSelect above, and unreachable for the same
+                // reason: `todayDisabled` (bound to the same `gridMax = end ?? max`) already
+                // disables this control whenever today would fall after `end`.
+                /* v8 ignore next -- unreachable: `todayDisabled` bars this handler from firing
+                   whenever `compareIso(today, end) > 0` would hold. */
                 onChange({ start: today, end: end && compareIso(today, end) > 0 ? null : end });
                 setEditing('end');
                 return;

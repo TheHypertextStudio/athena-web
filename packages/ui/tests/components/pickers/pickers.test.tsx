@@ -5,7 +5,9 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ActorPicker } from '../../../src/components/pickers/ActorPicker';
+import { CalendarGrid } from '../../../src/components/pickers/CalendarGrid';
 import { DatePicker, DateRangePicker } from '../../../src/components/pickers/DatePicker';
+import { EntityMultiPicker } from '../../../src/components/pickers/EntityMultiPicker';
 import { EntityPicker } from '../../../src/components/pickers/EntityPicker';
 import { EnumPicker } from '../../../src/components/pickers/EnumPicker';
 import { LabelsPicker } from '../../../src/components/pickers/LabelsPicker';
@@ -76,6 +78,26 @@ describe('PropertyTrigger', () => {
   it('disables the trigger when disabled', () => {
     render(<PropertyTrigger placeholder="Set lead" disabled />);
     expect(screen.getByRole('button')).toBeDisabled();
+  });
+
+  it('shows the leading icon alongside the value when readOnly', () => {
+    render(
+      <PropertyTrigger
+        icon={<span data-testid="ro-glyph" />}
+        label="Ada Lovelace"
+        placeholder="Set lead"
+        readOnly
+      />,
+    );
+    expect(screen.getByTestId('ro-glyph')).toBeInTheDocument();
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('omits the leading + on the empty prompt when hidePlaceholderIcon is set', () => {
+    const { container } = render(<PropertyTrigger placeholder="Set lead" hidePlaceholderIcon />);
+    expect(container.querySelector('svg')).not.toBeInTheDocument();
+    expect(screen.getByText('Set lead')).toBeInTheDocument();
   });
 });
 
@@ -176,6 +198,92 @@ describe('PickerList', () => {
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 
+  it('falls back to a plain "Search" label when no ariaLabel is given', () => {
+    render(<PickerList options={PROJECTS} selected={null} onSelect={vi.fn()} />);
+    expect(screen.getByLabelText('Search')).toBeInTheDocument();
+  });
+
+  it('renders an option icon and supporting text when supplied', () => {
+    const options: PickerOption[] = [
+      {
+        value: 'p1',
+        label: 'Migration',
+        icon: <span data-testid="opt-icon" />,
+        supporting: 'Owned by Platform',
+      },
+    ];
+    render(<PickerList options={options} selected={null} onSelect={vi.fn()} ariaLabel="Project" />);
+    expect(screen.getByTestId('opt-icon')).toBeInTheDocument();
+    expect(screen.getByText('Owned by Platform')).toBeInTheDocument();
+  });
+
+  it('moves the highlight up with ArrowUp, clamped at the first row', () => {
+    const onSelect = vi.fn();
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={onSelect} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    fireEvent.keyDown(search, { key: 'ArrowDown' }); // -> Onboarding (index 1)
+    fireEvent.keyDown(search, { key: 'ArrowUp' }); // -> back to Migration (index 0)
+    fireEvent.keyDown(search, { key: 'ArrowUp' }); // clamped at 0
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith('p1');
+  });
+
+  it('jumps to the first row with Home', () => {
+    const onSelect = vi.fn();
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={onSelect} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    fireEvent.keyDown(search, { key: 'Home' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith('p1');
+  });
+
+  it('ignores an unrelated key', () => {
+    const onSelect = vi.fn();
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={onSelect} ariaLabel="Project" />,
+    );
+    fireEvent.keyDown(screen.getByLabelText('Search Project'), { key: 'Tab' });
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when Enter is pressed with zero matching rows', () => {
+    const onSelect = vi.fn();
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={onSelect} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    fireEvent.change(search, { target: { value: 'zzzz' } });
+    expect(() => {
+      fireEvent.keyDown(search, { key: 'Enter' });
+    }).not.toThrow();
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('highlights a row and the clear row on mouse hover', () => {
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected="p1"
+        onSelect={vi.fn()}
+        clear={{ label: 'No project', onClear: vi.fn() }}
+        ariaLabel="Project"
+      />,
+    );
+    const migrationOption = screen.getByRole('option', { name: /Migration/ });
+    fireEvent.mouseEnter(within(migrationOption).getByRole('button'));
+    expect(within(migrationOption).getByRole('button')).toHaveClass('bg-surface-container-highest');
+
+    fireEvent.mouseEnter(screen.getByText('No project'));
+    expect(screen.getByText('No project').closest('button')).toHaveClass(
+      'bg-surface-container-highest',
+    );
+  });
+
   it('hides the search input when not searchable and navigates on the listbox', () => {
     const onSelect = vi.fn();
     render(
@@ -255,6 +363,15 @@ describe('OptionPicker', () => {
     );
     expect(screen.getByText('Migration')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('renders without an accessible-label prefix when ariaLabel is omitted', () => {
+    render(
+      <OptionPicker options={PROJECTS} value={null} onChange={vi.fn()} placeholder="Set project" />,
+    );
+    // No ariaLabel means no explicit aria-label attribute; the button falls back to its text.
+    const trigger = screen.getByRole('button', { name: 'Set project' });
+    expect(trigger).not.toHaveAttribute('aria-label');
   });
 });
 
@@ -351,6 +468,176 @@ describe('LabelsPicker', () => {
     // The popover stays open so the user can pick more.
     expect(screen.getByRole('listbox')).toBeInTheDocument();
   });
+
+  it('falls back to "1 label" when the single selected value no longer matches an option', () => {
+    render(<LabelsPicker options={LABELS} value={['stale-id']} onToggle={vi.fn()} />);
+    expect(screen.getByText('1 label')).toBeInTheDocument();
+  });
+
+  it('renders read-only with no opener', () => {
+    render(<LabelsPicker options={LABELS} value={['l1']} onToggle={vi.fn()} readOnly />);
+    expect(screen.getByText('bug')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('EntityMultiPicker', () => {
+  const PROJECTS_MULTI: PickerOption[] = [
+    { value: 'p1', label: 'Migration' },
+    { value: 'p2', label: 'Onboarding' },
+  ];
+
+  it('shows the calm prompt when empty and reports a toggle', async () => {
+    const onToggle = vi.fn();
+    render(
+      <EntityMultiPicker
+        options={PROJECTS_MULTI}
+        value={[]}
+        onToggle={onToggle}
+        placeholder="Add projects"
+        singularLabel="project"
+        pluralLabel="projects"
+        ariaLabel="Projects"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Projects — none/ }));
+    const option = await screen.findByRole('option', { name: /Migration/ });
+    fireEvent.click(within(option).getByRole('button'));
+    expect(onToggle).toHaveBeenCalledWith('p1');
+  });
+
+  it('summarizes a single selection by name and several as a count', () => {
+    const { rerender } = render(
+      <EntityMultiPicker
+        options={PROJECTS_MULTI}
+        value={['p1']}
+        onToggle={vi.fn()}
+        placeholder="Add projects"
+        singularLabel="project"
+        pluralLabel="projects"
+        ariaLabel="Projects"
+      />,
+    );
+    expect(screen.getByText('Migration')).toBeInTheDocument();
+    rerender(
+      <EntityMultiPicker
+        options={PROJECTS_MULTI}
+        value={['p1', 'p2']}
+        onToggle={vi.fn()}
+        placeholder="Add projects"
+        singularLabel="project"
+        pluralLabel="projects"
+        ariaLabel="Projects"
+      />,
+    );
+    expect(screen.getByText('2 projects')).toBeInTheDocument();
+  });
+
+  it('renders read-only with no opener', () => {
+    render(
+      <EntityMultiPicker
+        options={PROJECTS_MULTI}
+        value={['p1']}
+        onToggle={vi.fn()}
+        placeholder="Add projects"
+        singularLabel="project"
+        pluralLabel="projects"
+        ariaLabel="Projects"
+        readOnly
+      />,
+    );
+    expect(screen.getByText('Migration')).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+});
+
+describe('CalendarGrid month navigation', () => {
+  it('moves to the next and previous month via the header buttons', () => {
+    render(
+      <CalendarGrid
+        value="2026-08-15"
+        onSelect={vi.fn()}
+        ariaLabel="Due date"
+        min="2020-01-01"
+        max="2030-12-31"
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    expect(screen.getByRole('heading', { name: 'September 2026' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Previous month' }));
+    expect(screen.getByRole('heading', { name: 'July 2026' })).toBeInTheDocument();
+  });
+
+  it('moves a year at a time with Shift+PageUp/PageDown', () => {
+    render(
+      <CalendarGrid
+        value="2026-08-15"
+        onSelect={vi.fn()}
+        ariaLabel="Due date"
+        min="2020-01-01"
+        max="2030-12-31"
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Due date' });
+    fireEvent.keyDown(grid, { key: 'PageDown', shiftKey: true });
+    expect(screen.getByRole('heading', { name: 'August 2027' })).toBeInTheDocument();
+    fireEvent.keyDown(grid, { key: 'PageUp', shiftKey: true });
+    expect(screen.getByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
+  });
+
+  it('moves a month at a time with PageUp/PageDown (no shift)', () => {
+    render(
+      <CalendarGrid
+        value="2026-08-15"
+        onSelect={vi.fn()}
+        ariaLabel="Due date"
+        min="2020-01-01"
+        max="2030-12-31"
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Due date' });
+    fireEvent.keyDown(grid, { key: 'PageDown' });
+    expect(screen.getByRole('heading', { name: 'September 2026' })).toBeInTheDocument();
+  });
+
+  it('moves within the week with Home/End and up/down a week with ArrowUp/ArrowDown', () => {
+    render(
+      <CalendarGrid
+        value="2026-08-15"
+        onSelect={vi.fn()}
+        ariaLabel="Due date"
+        min="2020-01-01"
+        max="2030-12-31"
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Due date' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'Home' });
+    fireEvent.keyDown(grid, { key: 'End' });
+    fireEvent.keyDown(grid, { key: 'ArrowUp' });
+    // No day is out of range for this window, so nothing throws and the header stays in August.
+    expect(screen.getByRole('heading', { name: 'August 2026' })).toBeInTheDocument();
+  });
+
+  it('commits the focused day with Space and disables navigation past the min/max bounds', () => {
+    const onSelect = vi.fn();
+    render(
+      <CalendarGrid
+        value="2026-01-15"
+        onSelect={onSelect}
+        ariaLabel="Due date"
+        min="2026-01-01"
+        max="2026-01-31"
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeDisabled();
+    const grid = screen.getByRole('grid', { name: 'Due date' });
+    fireEvent.keyDown(grid, { key: ' ' });
+    expect(onSelect).toHaveBeenCalledWith('2026-01-15');
+  });
 });
 
 describe('DatePicker', () => {
@@ -402,6 +689,41 @@ describe('DatePicker', () => {
     expect(screen.getByText('—')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('jumps to today and closes via the Today shortcut', async () => {
+    const onChange = vi.fn();
+    render(
+      <DatePicker
+        value={null}
+        onChange={onChange}
+        placeholder="Set due date"
+        ariaLabel="Due date"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Due date —/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Today' }));
+    expect(onChange).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    });
+  });
+
+  it('hides the Clear affordance and disables Today when nothing is set / today is out of range', async () => {
+    render(
+      <DatePicker
+        value={null}
+        onChange={vi.fn()}
+        placeholder="Set due date"
+        ariaLabel="Due date"
+        min="1970-01-01"
+        max="1970-01-02"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Due date —/ }));
+    await screen.findByRole('grid');
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Today' })).toBeDisabled();
+  });
 });
 
 describe('DateRangePicker', () => {
@@ -433,5 +755,114 @@ describe('DateRangePicker', () => {
       />,
     );
     expect(screen.getByText('Set timeline')).toBeInTheDocument();
+  });
+
+  it('renders read-only with no opener', () => {
+    render(
+      <DateRangePicker
+        value={{ start: '2026-01-01', end: '2026-02-01' }}
+        onChange={vi.fn()}
+        placeholder="Set timeline"
+        ariaLabel="Timeline"
+        readOnly
+      />,
+    );
+    expect(screen.getByText(/2026/)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('advances to the End tab when an in-range start is chosen, keeping the existing end', async () => {
+    const onChange = vi.fn();
+    render(
+      <DateRangePicker
+        value={{ start: '2026-01-01', end: '2026-02-01' }}
+        onChange={onChange}
+        placeholder="Set timeline"
+        ariaLabel="Timeline"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
+    const startGrid = await screen.findByRole('grid', { name: 'Timeline Start' });
+    fireEvent.click(within(startGrid).getByRole('button', { name: '2026-01-15' }));
+    expect(onChange).toHaveBeenCalledWith({ start: '2026-01-15', end: '2026-02-01' });
+    // Selecting a start advances the segmented control to End.
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^End/ })).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
+  it('sets the end bound and closes when the End tab is active', async () => {
+    const onChange = vi.fn();
+    render(
+      <DateRangePicker
+        value={{ start: '2026-01-01', end: '2026-02-01' }}
+        onChange={onChange}
+        placeholder="Set timeline"
+        ariaLabel="Timeline"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /^End/ }));
+    const endGrid = await screen.findByRole('grid', { name: 'Timeline End' });
+    fireEvent.click(within(endGrid).getByRole('button', { name: '2026-02-15' }));
+    expect(onChange).toHaveBeenCalledWith({ start: '2026-01-01', end: '2026-02-15' });
+    await waitFor(() => {
+      expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    });
+  });
+
+  it('jumps the start bound to today and advances to the End tab', async () => {
+    const onChange = vi.fn();
+    render(
+      <DateRangePicker
+        value={{ start: '1970-01-01', end: null }}
+        onChange={onChange}
+        placeholder="Set timeline"
+        ariaLabel="Timeline"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Today' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ end: null }));
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /^End/ })).toHaveAttribute('aria-selected', 'true');
+    });
+  });
+
+  it('jumps the end bound to today and closes when the End tab is active', async () => {
+    const onChange = vi.fn();
+    render(
+      <DateRangePicker
+        value={{ start: '1970-01-01', end: '1970-01-02' }}
+        onChange={onChange}
+        placeholder="Set timeline"
+        ariaLabel="Timeline"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /^End/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Today' }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ start: '1970-01-01' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    });
+  });
+
+  it('clears both bounds and resets to the Start tab', async () => {
+    const onChange = vi.fn();
+    render(
+      <DateRangePicker
+        value={{ start: '2026-01-01', end: '2026-02-01' }}
+        onChange={onChange}
+        placeholder="Set timeline"
+        ariaLabel="Timeline"
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Timeline —/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
+    expect(onChange).toHaveBeenCalledWith({ start: null, end: null });
+    await waitFor(() => {
+      expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    });
   });
 });

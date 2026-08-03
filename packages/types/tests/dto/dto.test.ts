@@ -757,12 +757,16 @@ describe('cycle DTOs', () => {
       teamId: ID,
       number: 1,
       name: null,
+      // Required: every read derives it (author name, else the window). See
+      // `tests/dto/cycle-display-name.test.ts` for the scheme itself.
+      displayName: 'Jul 27 – Aug 2',
       startsAt: 'x',
       endsAt: 'y',
       status: 'active',
       createdAt: 'z',
     });
     expect(parsed.number).toBe(1);
+    expect(parsed.displayName).toBe('Jul 27 – Aug 2');
   });
 });
 

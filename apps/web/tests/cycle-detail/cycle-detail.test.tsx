@@ -25,7 +25,7 @@ import type { CycleBurnupOut, CycleDetail, TaskOut } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { JSX } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { useApiQuery, useApiMutation, usePrefetchApi, useOrgCapability } = vi.hoisted(() => ({
   useApiQuery: vi.fn(),
@@ -193,15 +193,53 @@ function occurrences(haystack: string, needle: string): number {
   return haystack.split(needle).length - 1;
 }
 
+/**
+ * Everything in `container` a person can read, including text that lives in form controls.
+ *
+ * @remarks
+ * `textContent` is not what a reader sees. The masthead title is an `<input>` — its value and its
+ * placeholder both render as words on screen and neither appears in `textContent`. Counting only
+ * `textContent` is how a screenshot of "Jul 27 – Aug 2" (title, grey) directly above "Jul 27 – Aug 2
+ * · Day 7 of 7 · last day" (subtitle) passed a test asserting the window appears exactly once. This
+ * reads the controls too, so the count is the one a reader would make.
+ */
+function readableText(container: HTMLElement): string {
+  // A field shows its value, or — only when that value is empty — its placeholder. Never both.
+  const fields = [...container.querySelectorAll('input, textarea')]
+    .map((field) => (field as HTMLInputElement).value || (field.getAttribute('placeholder') ?? ''))
+    .join(' ');
+  return `${container.textContent} ${fields}`;
+}
+
+/**
+ * A moment inside the fixture's window, so the runway clause below is a live one.
+ *
+ * @remarks
+ * `CYCLE` is a fixed historical window but the runway is computed against the clock, so without
+ * pinning `now` the runway assertions only hold on the day they were written — and they did not
+ * survive it: run an hour past `endsAt`, "Day 7 of 7 · last day" became "Wrapped · ran 7 days".
+ * Pinning keeps the runway phrasing asserted verbatim rather than loosened to a pattern that would
+ * also accept the wrapped copy. `shouldAdvanceTime` leaves real timers running so React Testing
+ * Library's scheduling is untouched.
+ */
+const INSIDE_WINDOW = new Date('2026-08-02T12:00:00.000Z');
+
+beforeEach(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  vi.setSystemTime(INSIDE_WINDOW);
+});
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe('cycle detail — one window, stated once', () => {
-  it('renders the window string exactly once', () => {
+  it('renders the window string exactly once, counting the title field', () => {
     const container = renderPage();
-    expect(occurrences(container.textContent, 'Jul 27 – Aug 2')).toBe(1);
+    // Once, in the title — an unnamed cycle IS its window. Not again in the subtitle.
+    expect(occurrences(readableText(container), 'Jul 27 – Aug 2')).toBe(1);
   });
 
   it('shows the same dates on the Window property chip', () => {
@@ -209,10 +247,22 @@ describe('cycle detail — one window, stated once', () => {
     expect(screen.getByRole('button', { name: 'Window — Jul 27 → Aug 2' })).toBeInTheDocument();
   });
 
-  it('pairs the window with the runway in the one masthead subtitle', () => {
+  it('gives the subtitle to the runway alone when the title already carries the window', () => {
     const container = renderPage();
-    // `Jul 27 – Aug 2 · <runway>` — the runway clause depends on today, the window never does.
-    expect(container.textContent).toMatch(/Jul 27 – Aug 2 · \S/);
+    // The runway clause depends on today; the window never does. It must be the whole line here —
+    // the subtitle is a single truncating row, and at 390px a repeated window pushed "last day" out
+    // to "…· la…".
+    expect(container.textContent).toMatch(/Day \d+ of \d+/);
+    expect(container.textContent).not.toMatch(/Jul 27 – Aug 2 · Day/);
+  });
+
+  it('leads the subtitle with the window when the title is an author-set name', () => {
+    const named = { ...CYCLE, name: 'Launch week', displayName: 'Launch week' };
+    const container = renderPage([], { ...detailData(), cycle: named });
+
+    // A name says nothing about when the cycle runs, so the line must supply the window first.
+    expect(container.textContent).toMatch(/Jul 27 – Aug 2 · Day \d+ of \d+/);
+    expect(occurrences(readableText(container), 'Launch week')).toBe(1);
   });
 });
 
@@ -223,11 +273,14 @@ describe('cycle detail — no epoch sequence numbers', () => {
     expect(container.textContent).not.toContain('1000135');
   });
 
-  it('titles an unnamed cycle by its window, as an empty rename field', () => {
+  it('titles an unnamed cycle by its window, held in the rename field', () => {
     renderPage();
     const title = screen.getByLabelText<HTMLInputElement>('Cycle name');
-    expect(title.value).toBe('');
-    expect(title.placeholder).toBe('Jul 27 – Aug 2');
+    // The field HOLDS the window rather than offering it as a placeholder. A placeholder renders in
+    // the browser's grey placeholder colour — so the cycle's own name read as un-entered text, and
+    // read differently to a viewer who cannot edit (a plain span at full strength) — and it leaves
+    // the `<h1>` with no text for a screen reader to announce.
+    expect(title.value).toBe('Jul 27 – Aug 2');
   });
 });
 

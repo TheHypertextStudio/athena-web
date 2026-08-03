@@ -35,6 +35,30 @@ import { userErrorMessage } from '@/lib/problem';
 type TabId = 'tasks' | 'pace';
 
 /**
+ * The masthead's one-line summary: the runway, prefixed by the window only when it adds a fact.
+ *
+ * @remarks
+ * An unnamed cycle is titled by its window (`displayName`), so prefixing the window here would
+ * print the same six words twice, one line apart. A named cycle's title says nothing about when it
+ * runs, so there the window is the first thing the line must supply. Exported for the unit test
+ * that pins both branches.
+ *
+ * @param name - The cycle's author-set name, or `null`/`undefined` when it has none.
+ * @param startsAt - The window start (ISO-8601).
+ * @param endsAt - The window end (ISO-8601).
+ * @returns the subtitle line, e.g. `"Day 7 of 7 · last day"` or
+ *   `"Jul 27 – Aug 2 · Day 7 of 7 · last day"`.
+ */
+export function cycleSubtitle(
+  name: string | null | undefined,
+  startsAt: string,
+  endsAt: string,
+): string {
+  const runway = windowRunway(windowProgress(startsAt, endsAt));
+  return name ? `${formatWindow(startsAt, endsAt)} · ${runway}` : runway;
+}
+
+/**
  * Cycle detail, composed from the shared entity-detail shell.
  *
  * @remarks
@@ -47,11 +71,27 @@ type TabId = 'tasks' | 'pace';
  * set `h-full` on that column, which let the browser shrink the pace banner to fit — the direct
  * cause of the empty plot region on desktop and the hairline "rule separating nothing" on mobile.
  *
- * The window is stated exactly once, in the masthead subtitle, from
- * {@link file://../../../../../../components/cycles/format-window.ts | formatWindow}; the Window
- * property chip mirrors its day format. The cycle's epoch-anchored `number` is never rendered —
- * "Cycle 1000135" is not a name a person recognizes, so an unnamed cycle is titled by its window
- * through `displayName`.
+ * The cycle's epoch-anchored `number` is never rendered — "Cycle 1000135" is not a name a person
+ * recognizes, so an unnamed cycle is titled by its window through `displayName`. Two consequences
+ * of that fall out here, and both were visible defects before:
+ *
+ * - **The window is stated once as prose.** An unnamed cycle's title *is* its window, so prefixing
+ *   the subtitle with `formatWindow` printed "Jul 27 – Aug 2" twice, one line apart — which reads
+ *   as a rendering bug rather than as two facts, and at 390px pushed the runway ("Day 7 of 7 · last
+ *   day") past the subtitle's single-line truncation into "…· la…". The subtitle therefore carries
+ *   the window only when the title is an author-set name. See {@link cycleSubtitle}. The Window
+ *   *chip* below is not a third statement: it is the editable control that sets the window, and a
+ *   date control that does not show its date has nothing to press.
+ * - **The title reads at full strength either way.** The editable title is fed `displayName`, not
+ *   `name ?? ''`. Feeding it the raw `name` left an unnamed cycle's `<input>` empty, so the window
+ *   arrived as the field's `placeholder` — rendered at the browser's grey placeholder colour, so a
+ *   cycle's own name looked like un-entered text, and looked *different* to a viewer who may not
+ *   edit (who gets a plain span at full strength). It also left the `<h1>` with no text at all,
+ *   which is what a screen reader announces the heading as. `displayName` is the name — the same
+ *   string the roster, the tab and the close dialog render — so it is what the field holds. Saving
+ *   is unaffected: `EditableTitle` only calls `onSave` for a value that differs from the one it was
+ *   given, so opening the field and leaving it alone writes nothing, and `onSave` still persists to
+ *   `name` (the derived default keeps following the window until someone types a real name).
  */
 export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
@@ -255,7 +295,7 @@ export default function CycleDetailPage(): JSX.Element {
       }
       title={
         <EditableTitle
-          value={cycle.name ?? ''}
+          value={cycle.displayName}
           onSave={(name) => {
             patchCycle({ name });
           }}
@@ -265,7 +305,7 @@ export default function CycleDetailPage(): JSX.Element {
           className="text-on-surface text-headline-medium font-medium"
         />
       }
-      subtitle={`${formatWindow(cycle.startsAt, cycle.endsAt)} · ${windowRunway(win)}`}
+      subtitle={cycleSubtitle(cycle.name, cycle.startsAt, cycle.endsAt)}
       metadata={
         <>
           <EntityMetadataRow ariaLabel={`${cycleNoun} properties`}>

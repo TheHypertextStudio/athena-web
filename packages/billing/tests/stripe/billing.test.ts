@@ -183,6 +183,11 @@ describe('toSubscription', () => {
     expect(sub.currentPeriodEnd).toBe(new Date(0).toISOString());
     expect(sub.status).toBe('canceled');
   });
+
+  it('falls back to an empty string when metadata has no reference and no fallback is given', () => {
+    const sub = toSubscription(stripeSub({ referenceId: null }));
+    expect(sub.referenceId).toBe('');
+  });
 });
 
 describe('parseApiBase', () => {

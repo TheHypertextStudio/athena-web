@@ -264,7 +264,7 @@ export default function InitiativesListClient(): JSX.Element {
   // Set while a drag is in flight so the click some browsers synthesize after a drop does not
   // trigger row navigation; cleared on the next tick after the drag ends.
   const dragOccurredRef = useRef(false);
-  const overview = useApiQuery(initiativeOverviewDef(orgId));
+  const overview = useApiQuery(initiativeOverviewDef(orgId, api));
   const data: InitiativeOverviewOut | undefined = overview.data;
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
 

@@ -61,7 +61,7 @@ export function useMyWork(orgId: string, userId: string | null): MyWorkState {
   // The five slices flow through myWorkDefs — the same definitions the SSR entry prefetches with —
   // so a warm first paint hits the cache and any create/mutation elsewhere reconciles this screen
   // automatically, with no key/fetcher/staleTime drift between server and client.
-  const defs = myWorkDefs(orgId);
+  const defs = myWorkDefs(orgId, api);
   const tasksQ = useApiQuery(defs.tasks);
   const projectsQ = useApiQuery(defs.projects);
   const membersQ = useApiQuery(defs.members);

@@ -101,7 +101,7 @@ export default function CyclesClient(): JSX.Element {
   const cyclesQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.cycles(orgId),
-      fetchCyclesWithStats(orgId),
+      fetchCyclesWithStats(orgId, api),
       'Could not load your cycles.',
     ),
   );

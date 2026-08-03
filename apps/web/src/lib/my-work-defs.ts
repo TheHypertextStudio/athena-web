@@ -9,7 +9,7 @@
  * like `fetch-cycles-with-stats` / the `*DetailDef` factories. Server-safe (no React, no
  * `'use client'`): `apiQueryOptions` comes from `query-core`.
  */
-import { api } from './api';
+import type { api as ApiClient } from './api';
 import { STALE, apiQueryOptions } from './query-core';
 import { queryKeys } from './query-keys';
 
@@ -17,10 +17,13 @@ import { queryKeys } from './query-keys';
  * Build the My Work query definitions for an org.
  *
  * @param orgId - The active org id.
- * @param client - The RPC client; defaults to the browser client. The SSR entry passes its
- *   cookie-forwarding server client.
+ * @param client - The RPC client: the browser singleton from `./api` for a client caller, or the
+ *   SSR entry's cookie-forwarding server client. Required rather than defaulted so this module
+ *   never imports `./api` itself — that import eagerly calls the client-only `withOfflineOutbox`,
+ *   which fails the build the instant a Server Component pulls this file in (as `my-work/page.tsx`
+ *   does).
  */
-export function myWorkDefs(orgId: string, client: typeof api = api) {
+export function myWorkDefs(orgId: string, client: typeof ApiClient) {
   return {
     tasks: apiQueryOptions(
       queryKeys.tasks(orgId),

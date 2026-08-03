@@ -91,8 +91,10 @@ export default function AllTasksClient(): JSX.Element {
   const [sort, setSort] = useState<TaskSort>('due');
 
   // One query per workspace for tasks + members (members resolves this user's per-org actor id).
-  const taskResults = useQueries({ queries: orgs.map((org) => myWorkDefs(org.id).tasks) });
-  const memberResults = useQueries({ queries: orgs.map((org) => myWorkDefs(org.id).members) });
+  const taskResults = useQueries({ queries: orgs.map((org) => myWorkDefs(org.id, api).tasks) });
+  const memberResults = useQueries({
+    queries: orgs.map((org) => myWorkDefs(org.id, api).members),
+  });
 
   const mine = useMemo<TaskOut[]>(() => {
     const out: TaskOut[] = [];

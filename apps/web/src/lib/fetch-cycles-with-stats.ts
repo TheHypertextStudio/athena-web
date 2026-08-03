@@ -1,6 +1,6 @@
 import type { CycleOut, CycleStats } from '@docket/types';
 
-import { api } from '@/lib/api';
+import type { api as ApiClient } from '@/lib/api';
 import { rpcErrorResponse, type RpcResponse } from '@/lib/query-core';
 
 /**
@@ -29,12 +29,15 @@ export interface CyclesWithStats {
  * from the gating list read.
  *
  * @param orgId - The active org id.
- * @param client - The RPC client; defaults to the browser client. The server passes its
- *   cookie-forwarding client for SSR prefetch.
+ * @param client - The RPC client: the browser singleton from `@/lib/api` for a client caller, or
+ *   the server's cookie-forwarding client for SSR prefetch. Required rather than defaulted so this
+ *   module never has to import the client singleton itself — that import eagerly calls the
+ *   client-only `withOfflineOutbox`, which fails the build the instant a Server Component pulls
+ *   this file in (as `cycles/page.tsx` does).
  */
 export function fetchCyclesWithStats(
   orgId: string,
-  client: typeof api = api,
+  client: typeof ApiClient,
 ): () => Promise<RpcResponse<CyclesWithStats>> {
   return async () => {
     // `roll=true`: the list endpoint auto-materializes every team's window in-process before

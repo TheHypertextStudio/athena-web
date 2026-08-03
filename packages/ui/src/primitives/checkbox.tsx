@@ -1,3 +1,5 @@
+'use client';
+
 /**
  * `@docket/ui` — the design-system checkbox.
  *

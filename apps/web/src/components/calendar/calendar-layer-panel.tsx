@@ -4,26 +4,31 @@
  * `calendar/calendar-layer-panel` — the calendar's layer visibility panel.
  *
  * @remarks
- * One row per {@link CalendarLayerOut}: a visibility checkbox, its color swatch, an optional inline
+ * One row per *calendar*: a visibility checkbox, its color swatch, an optional inline
  * kind glyph, the title, and one line of supporting context (provider, sync recency, and — for a
  * calendar that arrives on more than one linked account — which account already shows it). Rows are
  * grouped under the account that owns them, because "which of my accounts is this from?" is the
  * question this panel exists to answer once more than one is linked.
  *
- * When {@link findDuplicateCalendarLayers} finds the same calendar arriving twice, the panel offers
- * a single **Hide duplicates** action. That action is explicit and fully reversible: every row stays
- * in the list, still toggleable, and still says why it was considered redundant. Nothing is ever
- * auto-hidden — a calendar the person cannot see and was never told about is precisely the failure
- * the connector-reliability rule forbids.
+ * When {@link findDuplicateCalendarLayers} finds the same calendar arriving on more than one linked
+ * account, the panel lists that calendar **once**, on a row attributed to every account it came from
+ * ("On work@example.com and ada@personal.com"). Ticking that row ticks every copy, so visibility and
+ * what is on the grid stay in step. Listing a calendar twice was the complaint: "Surely there's some
+ * way to deduplicate shit like holiday calendars or personal calendars appearing on work accounts."
+ *
+ * Collapsing is never a disappearance. The row says how many accounts it stands for, and a single
+ * **Show each copy** disclosure expands the group back into one row per account, each independently
+ * toggleable. A calendar the person cannot see and was never told about is precisely the failure the
+ * connector-reliability rule forbids — so the fact is on the row, and the way back is one click.
  *
  * A toggle is wrapped in {@link startViewTransition} (per this app's no-hard-swap rule) so the
  * timeline's item set reshapes rather than jumping when a layer's items appear or disappear;
- * {@link useUpdateLayerVisibility} is already optimistic, so no toggle waits on the network.
+ * {@link useUpdateLayerGroupVisibility} is already optimistic, so no toggle waits on the network.
  */
 import type { CalendarLayerOut } from '@docket/types';
 import { Globe, Layers } from '@docket/ui/icons';
 import { Badge, Button, Checkbox } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { relativeTime } from '@/components/settings/format-time';
 import { useApiQuery } from '@/lib/query';
@@ -35,44 +40,67 @@ import {
   findDuplicateCalendarLayers,
   isHolidayLayer,
 } from './calendar-layer-dedup';
-import { useUpdateLayerVisibility } from './calendar-mutations';
+import { useUpdateLayerGroupVisibility } from './calendar-mutations';
 
-/** How a row is marked redundant, and which account already shows the same calendar. */
+/** The accounts one collapsed row stands for, in the order they are named on it. */
 interface LayerRedundancy {
-  /** Whether this copy is the redundant one rather than the copy being kept. */
-  readonly redundant: boolean;
-  /** Human-readable owner of the copy being kept, e.g. `work@example.com`. */
-  readonly keptOn: string;
+  /** Distinct human-readable accounts this calendar arrives on, e.g. `work@example.com`. */
+  readonly accounts: readonly string[];
+  /** How many distinct linked accounts it actually arrives on. */
+  readonly accountCount: number;
   /** Whether the duplicate is a personal calendar surfacing on another account. */
   readonly crossAccountMailbox: boolean;
 }
 
-/** Register a per-layer "hide this" action so one bulk control can drive many rows. */
-type RegisterHide = (layerId: string, hide: () => void) => () => void;
+/**
+ * The one-line attribution a collapsed row prints, or `null` when there is nothing to attribute.
+ *
+ * @remarks
+ * Names the accounts when they can be told apart, and falls back to the honest count when they
+ * cannot — a failed settings read leaves every connection resolving to the same generic label, and
+ * printing "On Linked account and Linked account" would be worse than saying nothing.
+ *
+ * @param redundancy - The row's duplicate context, if it has one.
+ * @returns The clause to render after "On ", or `null`.
+ */
+function attributionLine(redundancy: LayerRedundancy | undefined): string | null {
+  if (redundancy === undefined || redundancy.accountCount < 2) return null;
+  const { accounts, accountCount } = redundancy;
+  if (accounts.length < accountCount) return `${String(accountCount)} linked accounts`;
+  return `${accounts.slice(0, -1).join(', ')} and ${String(accounts.at(-1))}`;
+}
 
 /** Props for {@link LayerRow}. */
 interface LayerRowProps {
   /** The layer this row toggles/describes. */
   readonly layer: CalendarLayerOut;
-  /** Duplicate context, when this layer renders a calendar that also arrives elsewhere. */
+  /** Duplicate context, when this row stands for the same calendar on several accounts. */
   readonly redundancy?: LayerRedundancy;
-  /** Registry the row publishes its hide action into. */
-  readonly registerHide: RegisterHide;
+  /**
+   * Every layer id this one row governs.
+   *
+   * @remarks
+   * `[layer.id]` for an ordinary calendar; the whole duplicate group when the row stands for a
+   * calendar that arrives on more than one account, so one tick moves every copy.
+   */
+  readonly layerIds: readonly string[];
 }
 
-/** One layer's visibility row. */
-function LayerRow({ layer, redundancy, registerHide }: LayerRowProps): JSX.Element {
-  const update = useUpdateLayerVisibility(layer.id);
+/**
+ * One calendar's visibility row.
+ *
+ * @remarks
+ * A row is a *calendar*, not a layer record: when the same calendar arrives on two linked accounts
+ * this is the single row for it, its checkbox drives every copy, and {@link LayerRedundancy} names
+ * every account underneath.
+ *
+ * @param props - The {@link LayerRowProps}.
+ * @returns The row.
+ */
+function LayerRow({ layer, redundancy, layerIds }: LayerRowProps): JSX.Element {
+  const update = useUpdateLayerGroupVisibility(layerIds);
   const mutate = update.mutate;
   const holiday = isHolidayLayer(layer);
-
-  useEffect(
-    () =>
-      registerHide(layer.id, () => {
-        mutate({ selected: false });
-      }),
-    [layer.id, mutate, registerHide],
-  );
 
   // Provenance only. The source name is dropped when it merely repeats the row's own title — a
   // Docket-native layer titled "Docket", sitting under a "Docket" group heading, used to print the
@@ -84,6 +112,7 @@ function LayerRow({ layer, redundancy, registerHide }: LayerRowProps): JSX.Eleme
   ]
     .filter(Boolean)
     .join(' · ');
+  const attribution = attributionLine(redundancy);
 
   return (
     <li className="hover:bg-surface-container-high flex items-start gap-2 rounded-md px-1.5 py-1.5">
@@ -91,6 +120,8 @@ function LayerRow({ layer, redundancy, registerHide }: LayerRowProps): JSX.Eleme
         checked={layer.selected}
         disabled={update.isPending}
         onChange={() => {
+          // One calendar, one decision: a row standing for three copies moves all three, or
+          // unticking it would leave the same events on the grid from the other account.
           startViewTransition(() => {
             mutate({ selected: !layer.selected });
           });
@@ -113,22 +144,23 @@ function LayerRow({ layer, redundancy, registerHide }: LayerRowProps): JSX.Eleme
           <span className="truncate">{layer.title}</span>
         </span>
         {supporting ? (
-          <span className="text-on-surface-variant text-body-small truncate">{supporting}</span>
+          <span className="text-on-surface-variant text-body-medium truncate">{supporting}</span>
         ) : null}
         {/*
-          The duplicate note gets its own line rather than a third `·` clause. It is the fact that
-          justifies the Hide duplicates action, and as a tail clause it was the first thing the row
-          truncated away — leaving the action unexplained on exactly the accounts that need it.
+          The attribution gets its own line rather than a third `·` clause. It is the fact that
+          justifies drawing one row where the API returned two, and as a tail clause it was the first
+          thing the row truncated away — leaving the collapse unexplained on exactly the accounts
+          that need it explained.
         */}
-        {redundancy?.redundant === true ? (
-          <span className="text-on-surface-variant text-body-small flex min-w-0 items-center gap-1">
+        {attribution ? (
+          <span className="text-on-surface-variant text-body-medium flex min-w-0 items-center gap-1">
             <Layers aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="truncate">Also on {redundancy.keptOn}</span>
+            <span className="truncate">On {attribution}</span>
           </span>
         ) : null}
       </div>
       {!layer.editableCore ? (
-        <Badge variant="secondary" className="mt-0.5 shrink-0 font-normal">
+        <Badge variant="secondary" className="mt-0.5 shrink-0">
           Read-only
         </Badge>
       ) : null}
@@ -178,20 +210,27 @@ function onlyRowRepeatsLabel(group: LayerAccountGroup): boolean {
   return group.layers.length === 1 && group.layers[0]?.title.trim() === group.label;
 }
 
-/** Map every redundant/kept layer id to the context its row should show. */
+/**
+ * Map each surviving row to the accounts it stands for.
+ *
+ * @param groups - Duplicate groups from {@link findDuplicateCalendarLayers}.
+ * @param labelForConnection - Resolve a connection id to the account's display label.
+ * @returns Attribution keyed by the id of the copy that stays on the list.
+ */
 function redundancyByLayerId(
   groups: readonly CalendarLayerDuplicateGroup[],
   labelForConnection: (connectionId: string) => string,
 ): ReadonlyMap<string, LayerRedundancy> {
+  const label = (layer: CalendarLayerOut): string =>
+    layer.connectionId === null ? 'Docket' : labelForConnection(layer.connectionId);
   const context = new Map<string, LayerRedundancy>();
   for (const group of groups) {
-    const keptOn =
-      group.keep.connectionId === null ? 'Docket' : labelForConnection(group.keep.connectionId);
-    const crossAccountMailbox = group.reason === 'other_account_primary';
-    context.set(group.keep.id, { redundant: false, keptOn, crossAccountMailbox });
-    for (const layer of group.redundant) {
-      context.set(layer.id, { redundant: true, keptOn, crossAccountMailbox });
-    }
+    const members = [group.keep, ...group.redundant];
+    context.set(group.keep.id, {
+      accounts: [...new Set(members.map(label))],
+      accountCount: new Set(members.map((entry) => entry.connectionId)).size,
+      crossAccountMailbox: group.reason === 'other_account_primary',
+    });
   }
   return context;
 }
@@ -203,12 +242,15 @@ export interface CalendarLayerPanelProps {
 }
 
 /**
- * The layer visibility panel, grouped by account and aware of cross-account duplicates.
+ * The layer visibility panel: one row per calendar, grouped by the account that supplies it.
  *
  * @remarks
  * Reads linked accounts through {@link calendarSettingsDef}, which shares its query key with the
  * settings surface — so this is a warm-cache read, not a second fetch, and a failed read simply
  * degrades to ungrouped rows plus the duplicate rules that need no account data.
+ *
+ * A calendar that arrives on more than one account is listed **once**, attributed to all of them.
+ * `Show each copy` expands the collapse; nothing is hidden without the row saying so.
  *
  * @param props - The full layer list; nothing else is required to render.
  * @returns The panel, or a single-line note when no layers exist yet.
@@ -216,13 +258,7 @@ export interface CalendarLayerPanelProps {
 export default function CalendarLayerPanel({ layers }: CalendarLayerPanelProps): JSX.Element {
   const settings = useApiQuery(calendarSettingsDef());
   const connections = useMemo(() => settings.data?.connections ?? [], [settings.data]);
-  const hideActions = useRef(new Map<string, () => void>());
-  const registerHide = useCallback<RegisterHide>((layerId, hide) => {
-    hideActions.current.set(layerId, hide);
-    return () => {
-      hideActions.current.delete(layerId);
-    };
-  }, []);
+  const [expandCopies, setExpandCopies] = useState(false);
   const labelForConnection = useCallback(
     (connectionId: string): string => {
       const connection = connections.find((candidate) => candidate.id === connectionId);
@@ -238,21 +274,29 @@ export default function CalendarLayerPanel({ layers }: CalendarLayerPanelProps):
     () => redundancyByLayerId(duplicates, labelForConnection),
     [duplicates, labelForConnection],
   );
+  /** Ids the panel folds away while collapsed, keyed by the id of the row that stands for them. */
+  const foldedByKeptId = useMemo(() => {
+    const folded = new Map<string, readonly string[]>();
+    for (const group of duplicates) {
+      folded.set(
+        group.keep.id,
+        group.redundant.map((layer) => layer.id),
+      );
+    }
+    return folded;
+  }, [duplicates]);
+  const foldedIds = useMemo(() => new Set([...foldedByKeptId.values()].flat()), [foldedByKeptId]);
+  const visibleLayers = useMemo(
+    () => (expandCopies ? layers : layers.filter((layer) => !foldedIds.has(layer.id))),
+    [expandCopies, foldedIds, layers],
+  );
   const groups = useMemo(
-    () => groupLayersByAccount(layers, labelForConnection),
-    [labelForConnection, layers],
+    () => groupLayersByAccount(visibleLayers, labelForConnection),
+    [labelForConnection, visibleLayers],
   );
-  const hideableIds = useMemo(
-    () =>
-      duplicates.flatMap((group) =>
-        group.redundant.filter((layer) => layer.selected).map((layer) => layer.id),
-      ),
-    [duplicates],
-  );
-
   if (layers.length === 0) {
     return (
-      <p className="text-on-surface-variant text-body-small">
+      <p className="text-on-surface-variant text-body-medium">
         No calendar layers yet. Link a Google account or create a native block to get one.
       </p>
     );
@@ -260,26 +304,27 @@ export default function CalendarLayerPanel({ layers }: CalendarLayerPanelProps):
 
   return (
     <div className="flex flex-col gap-2">
-      {hideableIds.length > 0 ? (
+      {foldedIds.size > 0 ? (
         <div className="bg-surface-container-high flex items-center gap-2 rounded-md px-1.5 py-1.5">
-          <p className="text-on-surface-variant text-body-small min-w-0 flex-1">
-            {hideableIds.length === 1
-              ? '1 duplicate calendar across accounts'
-              : `${String(hideableIds.length)} duplicate calendars across accounts`}
+          <p className="text-on-surface-variant text-body-medium min-w-0 flex-1">
+            {foldedIds.size === 1
+              ? '1 calendar arrives on more than one account. It is listed once.'
+              : `${String(foldedIds.size)} calendars arrive on more than one account. Each is listed once.`}
           </p>
           <Button
             variant="ghost"
             size="sm"
             className="shrink-0"
+            aria-expanded={expandCopies}
             onClick={() => {
-              // Explicit and reversible: this only unticks rows that stay right here, each still
-              // labelled with the account that keeps showing the same calendar.
+              // Reversible in one click, and never a silent state: the sentence beside this button
+              // states the collapse whether it is on or off.
               startViewTransition(() => {
-                for (const id of hideableIds) hideActions.current.get(id)?.();
+                setExpandCopies((current) => !current);
               });
             }}
           >
-            Hide duplicates
+            {expandCopies ? 'List once' : 'Show each copy'}
           </Button>
         </div>
       ) : null}
@@ -291,7 +336,7 @@ export default function CalendarLayerPanel({ layers }: CalendarLayerPanelProps):
             apart, so one that names the same thing as the row beneath it is pure repetition.
           */}
           {groups.length > 1 && !onlyRowRepeatsLabel(group) ? (
-            <h3 className="text-on-surface-variant text-label-medium truncate px-1.5 pt-1">
+            <h3 className="text-on-surface-variant text-label-large truncate px-1.5 pt-1">
               {group.label}
             </h3>
           ) : null}
@@ -303,8 +348,10 @@ export default function CalendarLayerPanel({ layers }: CalendarLayerPanelProps):
               <LayerRow
                 key={layer.id}
                 layer={layer}
-                redundancy={redundancy.get(layer.id)}
-                registerHide={registerHide}
+                redundancy={expandCopies ? undefined : redundancy.get(layer.id)}
+                layerIds={
+                  expandCopies ? [layer.id] : [layer.id, ...(foldedByKeptId.get(layer.id) ?? [])]
+                }
               />
             ))}
           </ul>

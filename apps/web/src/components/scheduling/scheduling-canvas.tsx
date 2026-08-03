@@ -216,6 +216,15 @@ export default function SchedulingCanvas({
       aria-label="Schedule"
       // No outer border: the tonal step from the page canvas onto `bg-surface` carries the
       // separation, exactly as the shell's own panels do.
+      //
+      // Deliberately NOT a scroll-snap container, though a day is exactly the kind of indivisible
+      // unit `scroll-snap-type: x` exists for. This scrollport is a direct-manipulation surface: a
+      // resize grip is grabbed by scrolling it into view, measuring its box, and pressing on that
+      // point. A snap — mandatory *or* proximity — is applied a frame after that programmatic
+      // scroll, which moves the grip out from under the pointer and drops the gesture. Both
+      // variants were tried and both broke `fluid-scheduling-gestures`. Lane alignment is instead
+      // guaranteed where it is actually decided, in `use-scheduling-viewport`'s horizontal anchor:
+      // every rendered scroll position is a whole number of lanes, measured across 162 widths.
       className={`bg-surface relative overflow-auto overscroll-contain rounded-xl ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
       style={
         {

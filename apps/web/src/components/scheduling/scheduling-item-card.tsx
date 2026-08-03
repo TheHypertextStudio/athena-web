@@ -1,7 +1,14 @@
 'use client';
 
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
-import { type DragEvent as ReactDragEvent, type JSX, type RefObject, useId, useState } from 'react';
+import {
+  type CSSProperties,
+  type DragEvent as ReactDragEvent,
+  type JSX,
+  type RefObject,
+  useId,
+  useState,
+} from 'react';
 
 import {
   isScheduleItemEditable,
@@ -16,6 +23,11 @@ import {
 } from './scheduling-overlap-layout';
 import { SchedulingItemBody } from './scheduling-item-body';
 import { SchedulingGripIcon, SchedulingLinkIcon } from './scheduling-item-icons';
+import {
+  scheduleItemFill,
+  scheduleItemRaisedFill,
+  scheduleItemStripe,
+} from './scheduling-item-surface';
 import {
   SchedulingRelationshipSourceControl,
   SchedulingRelationshipTargetControl,
@@ -164,12 +176,18 @@ export function SchedulingItemCard({
       // The card carries exactly one intentional border — the left colour bar identifying its
       // layer. Everything else is tone and ring: no drop shadows at rest, on hover, while dragging,
       // or while targeted, and never a transform (scale/lift never signals interactivity here).
+      //
+      // The resting fill comes from {@link scheduleItemFill} rather than a `bg-*` token, because the
+      // tonal ramp has no single container step that moves *away* from the canvas in both themes
+      // (see that module). It is published as two custom properties in `style` and consumed by
+      // ordinary utilities here, so rest / hover / focus stay one CSS cascade rather than a
+      // JavaScript hover state.
       className={`${DRAGGABLE} ${
         dropActive
           ? 'bg-primary-container ring-primary group absolute z-30 overflow-visible rounded-md ring-2'
           : gesture.preview
             ? 'bg-surface-container-high ring-primary group absolute z-40 overflow-visible rounded-md ring-2'
-            : 'border-l-outline-variant bg-surface-container-low hover:bg-surface-container focus-within:bg-surface-container group absolute z-10 overflow-visible rounded-md border-l transition-colors focus-within:z-20 hover:z-20 motion-reduce:transition-none'
+            : 'group absolute z-10 overflow-visible rounded-md border-l bg-(--schedule-item-fill) transition-colors focus-within:z-20 focus-within:bg-(--schedule-item-fill-raised) hover:z-20 hover:bg-(--schedule-item-fill-raised) motion-reduce:transition-none'
       }`}
       data-item-density={density}
       data-layout-column={placement.columnIndex}
@@ -195,21 +213,19 @@ export function SchedulingItemCard({
         if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
         onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
       }}
-      style={{
-        top: visibleTop,
-        ...horizontalStyle,
-        height: visibleHeight,
-        transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
-        borderLeftWidth: 4,
-        // The 4px left stripe is the card's single identity marker — no full border. A colored
-        // event also gets a faint color-mix fill; an uncolored one keeps the neutral stripe.
-        ...(item.color && !dropActive
-          ? {
-              borderLeftColor: item.color,
-              backgroundColor: `color-mix(in srgb, ${item.color} 12%, var(--color-surface-container-low))`,
-            }
-          : {}),
-      }}
+      style={
+        {
+          top: visibleTop,
+          ...horizontalStyle,
+          height: visibleHeight,
+          transform: laneTranslation === 0 ? undefined : `translateX(${String(laneTranslation)}px)`,
+          borderLeftWidth: 4,
+          // The 4px left stripe is the card's single identity marker — no full border.
+          borderLeftColor: scheduleItemStripe(item.color),
+          '--schedule-item-fill': scheduleItemFill(item.color),
+          '--schedule-item-fill-raised': scheduleItemRaisedFill(item.color),
+        } as CSSProperties
+      }
     >
       <div
         className="contents"
@@ -247,7 +263,7 @@ export function SchedulingItemCard({
         {!editable && item.readOnlyLabel ? (
           <span
             id={readOnlyDescriptionId}
-            className="bg-surface/90 text-on-surface-variant text-label-medium pointer-events-none absolute right-0.5 bottom-0.5 z-30 max-w-[calc(100%-0.25rem)] truncate rounded px-1 py-0.5"
+            className="bg-surface/90 text-on-surface-variant text-label-large pointer-events-none absolute right-0.5 bottom-0.5 z-30 max-w-[calc(100%-0.25rem)] truncate rounded px-1 py-0.5"
           >
             {item.readOnlyLabel}
           </span>

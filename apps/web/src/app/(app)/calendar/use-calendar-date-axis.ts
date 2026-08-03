@@ -5,6 +5,7 @@ import { useCallback, useMemo } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';
 import { calendarItemsDef, calendarLayersDef } from '@/components/calendar/calendar-data';
+import { deduplicateCalendarItems } from '@/components/calendar/calendar-event-dedup';
 import type { ScheduleLane } from '@/components/scheduling';
 import { useApiListQuery } from '@/lib/query';
 
@@ -23,8 +24,17 @@ export interface CalendarDateAxisState {
   readonly startISO: string;
   readonly endISO: string;
   readonly lanes: readonly ScheduleLane[];
+  /** One item per distinct event — copies arriving from a second account are already folded in. */
   readonly items: readonly CalendarItemOut[];
   readonly itemById: ReadonlyMap<string, CalendarItemOut>;
+  /**
+   * Copies of an event that were folded into the rendered one, keyed by the rendered item's id.
+   *
+   * @remarks
+   * Empty for every ordinary item. Present so a detail view can name every calendar an event
+   * arrived on — a collapsed copy the reader cannot discover is a lie about what synced.
+   */
+  readonly duplicatesByItemId: ReadonlyMap<string, readonly CalendarItemOut[]>;
   readonly layers: readonly CalendarLayerOut[];
   readonly itemsPending: boolean;
   readonly itemsError: boolean;
@@ -54,8 +64,15 @@ export function useCalendarDateAxis(
   const { startISO, endISO } = dateRange(windowStartDate, windowLaneCount, displayTimezone);
   const itemsQuery = useApiListQuery(calendarItemsDef(startISO, endISO));
   const layersQuery = useApiListQuery(calendarLayersDef());
-  const items = useMemo(() => itemsQuery.data?.items ?? [], [itemsQuery.data]);
+  const rawItems = useMemo(() => itemsQuery.data?.items ?? [], [itemsQuery.data]);
   const layers = useMemo(() => layersQuery.data?.items ?? [], [layersQuery.data]);
+  // Collapse the same event arriving from two linked accounts before anything downstream sees it,
+  // so the grid, the counts, and the item map all agree on how many events there actually are.
+  const deduplicated = useMemo(
+    () => deduplicateCalendarItems(rawItems, layers),
+    [layers, rawItems],
+  );
+  const items = deduplicated.items;
   const colorByLayer = useMemo(
     () => new Map(layers.map((layer) => [layer.id, layer.color])),
     [layers],
@@ -85,6 +102,7 @@ export function useCalendarDateAxis(
     lanes,
     items,
     itemById,
+    duplicatesByItemId: deduplicated.duplicatesByItemId,
     layers,
     itemsPending: itemsQuery.isPending || itemsQuery.isPlaceholderData,
     itemsError: itemsQuery.isError,

@@ -83,7 +83,7 @@ export function CalendarTimeField({
                   onOccurrenceChange(candidate.occurrence);
                 }}
                 className={cn(
-                  'text-label-medium min-h-10 min-w-0 truncate rounded px-1 transition-colors motion-reduce:transition-none',
+                  'text-label-large min-h-10 min-w-0 truncate rounded-md px-1 transition-colors motion-reduce:transition-none',
                   selected
                     ? 'bg-surface-container-highest text-on-surface'
                     : 'text-on-surface-variant hover:bg-surface-container-high',

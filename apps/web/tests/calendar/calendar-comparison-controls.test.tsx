@@ -69,7 +69,13 @@ describe('CalendarComparisonControls', () => {
     const trigger = screen.getByRole('button', { name: 'People' });
     // Shared row geometry: one fixed height, and a width that may compress to its `min-w` floor
     // under pressure but is rigid once the row has room for labels.
-    expect(trigger).toHaveClass('min-h-10', 'min-w-9', '@2xl:min-h-8', '@2xl:shrink-0');
+    expect(trigger).toHaveClass(
+      'min-h-9',
+      'min-w-9',
+      '@min-[22rem]:min-h-11',
+      '@2xl:min-h-8',
+      '@2xl:shrink-0',
+    );
     expect(screen.queryByRole('combobox', { name: 'Workspace' })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
   });

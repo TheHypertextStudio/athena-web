@@ -73,7 +73,7 @@ const SELECT_CLASS =
  * being `shrink-0` at the same height.
  */
 const CALENDAR_CONTROL_CLASS =
-  'min-h-10 w-10 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
+  'min-h-9 w-9 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
 /** Props for {@link CreateBlockForm}. */
 export interface CreateBlockFormProps {

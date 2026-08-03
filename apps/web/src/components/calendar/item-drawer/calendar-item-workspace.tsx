@@ -6,6 +6,7 @@ import { type JSX } from 'react';
 
 import { CALENDAR_ITEM_KIND_ICON, CALENDAR_ITEM_KIND_LABEL } from '../calendar-item-card';
 import { CalendarDrawerClose } from '../calendar-drawer-close';
+import { CalendarItemDuplicateSources } from '../calendar-item-duplicate-sources';
 import { CoreFieldsForm } from './core-fields-form';
 import { LinkedTasksSection } from './linked-tasks-section';
 import { itemTimeLabel } from './presentation';
@@ -20,6 +21,16 @@ export interface CalendarItemWorkspaceProps {
   item: CalendarItemOut;
   /** Owning layer, used for color, title, and provider context. */
   layer?: CalendarLayerOut;
+  /** Every layer for the signed-in user, used to name the calendars a duplicate arrived on. */
+  layers?: readonly CalendarLayerOut[];
+  /**
+   * Copies of this event folded into the single block on the grid.
+   *
+   * @remarks
+   * Empty for an ordinary event. Supplied so collapsing a cross-account duplicate stays
+   * discoverable rather than silent — see {@link CalendarItemDuplicateSources}.
+   */
+  duplicates?: readonly CalendarItemOut[];
   /** Close the drawer after deletion. */
   onClose: () => void;
   /** Report whether editable core fields differ from their saved values. */
@@ -35,6 +46,8 @@ export function CalendarItemWorkspace({
   displayTimezone,
   item,
   layer,
+  layers = [],
+  duplicates = [],
   onClose,
   onDirtyChange,
   onOpenTask,
@@ -67,7 +80,7 @@ export function CalendarItemWorkspace({
         </p>
         <div className="flex flex-wrap items-center gap-2">
           {layer ? (
-            <Badge variant="outline" className="gap-1.5 font-normal">
+            <Badge variant="outline" className="gap-1.5">
               <span
                 aria-hidden="true"
                 className="size-2 rounded-full"
@@ -76,9 +89,7 @@ export function CalendarItemWorkspace({
               {layer.title}
             </Badge>
           ) : null}
-          <Badge variant="secondary" className="font-normal">
-            {CALENDAR_ITEM_KIND_LABEL[item.kind]}
-          </Badge>
+          <Badge variant="secondary">{CALENDAR_ITEM_KIND_LABEL[item.kind]}</Badge>
           {item.htmlLink ? (
             <a
               href={item.htmlLink}
@@ -93,6 +104,7 @@ export function CalendarItemWorkspace({
       </header>
 
       <SyncStatusSection item={item} />
+      <CalendarItemDuplicateSources duplicates={duplicates} layers={layers} />
 
       <section className="flex flex-col gap-2">
         <h3 className="text-on-surface text-title-small">Details</h3>

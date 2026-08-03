@@ -39,9 +39,6 @@
   "apps/admin/src/components/viewing-as-banner.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/app/(app)/calendar/calendar-view-settings.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/app/(app)/exports/[exportId]/page.tsx": {
     "raw-type-utility": 2
   },
@@ -226,22 +223,9 @@
   "apps/web/src/components/athena/athena-workspace.tsx": {
     "raw-type-utility": 32
   },
-  "apps/web/src/components/calendar/calendar-layer-panel.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/calendar/item-drawer/calendar-item-workspace.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
     "raw-type-utility": 11,
     "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/calendar/item-drawer/presentation.ts": {
-    "raw-type-utility": 2,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/calendar/item-drawer/relations-section.tsx": {
-    "raw-type-utility": 1
   },
   "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
     "shadow-outside-overlay": 1
@@ -437,15 +421,6 @@
   },
   "apps/web/src/components/recovery-nudge-banner.tsx": {
     "raw-type-utility": 4
-  },
-  "apps/web/src/components/scheduling/scheduling-all-day-item.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/scheduling/scheduling-canvas-notice.tsx": {
-    "raw-type-utility": 1
-  },
-  "apps/web/src/components/scheduling/scheduling-item-body.tsx": {
-    "raw-type-utility": 1
   },
   "apps/web/src/components/search/search-client.tsx": {
     "raw-type-utility": 13

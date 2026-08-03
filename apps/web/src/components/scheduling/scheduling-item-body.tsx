@@ -57,7 +57,7 @@ function ItemBodyContent({
       <span className="sticky block w-full truncate" style={STICKY_LABEL_STYLE}>
         {content}
         <span aria-hidden="true"> · </span>
-        <span className="text-on-surface-variant font-normal tabular-nums">{timeRange}</span>
+        <span className="text-on-surface-variant text-body-medium tabular-nums">{timeRange}</span>
       </span>
     );
   }
@@ -67,7 +67,7 @@ function ItemBodyContent({
   return (
     <span className="sticky flex min-w-0 flex-col" style={STICKY_LABEL_STYLE}>
       <span className="text-title-small block w-full truncate">{content}</span>
-      <span className="text-on-surface-variant text-body-small block w-full truncate tabular-nums">
+      <span className="text-on-surface-variant text-body-medium block w-full truncate tabular-nums">
         {timeRange}
       </span>
     </span>
@@ -83,7 +83,7 @@ export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element 
   const bodyClassName =
     density === 'marker'
       ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
-      : 'text-on-surface text-label-medium focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-2 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
+      : 'text-on-surface text-label-large focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-2 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
   const ariaLabel = density === 'marker' ? `${item.title}, ${timeRange}` : undefined;
   const describedBy = !editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined;
   const title = `${item.title} · ${timeRange}`;

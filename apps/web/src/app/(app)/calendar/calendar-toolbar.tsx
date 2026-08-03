@@ -22,16 +22,17 @@
  *   width (`min-w-0 flex-1 truncate`); every control is `shrink-0`. Narrowing squeezes the label,
  *   never the layout.
  * - **Controls collapse to their glyph, not to a new line.** Below `@2xl` each trailing control
- *   renders icon-only with an `aria-label`, so four controls cost ~4 × 40px on a phone.
+ *   renders icon-only with an `aria-label`, so four controls cost ~4 × 44px on a phone.
  * - **One control per concern.** Presentation options live inside {@link CalendarViewSettings}, so
  *   a new view capability lands in a menu rather than beside it. Layers and people moved into their
  *   own popovers for the same reason.
  *
- * Sizing is uniform on purpose — inline neighbours must share a height exactly: text controls are
- * `min-h-10 … @2xl:min-h-8`, icon controls `size-10 … @2xl:size-8`, and every glyph is `size-4`
- * (the `Button` base sets `[&_svg]:size-6`, which is far too large here). Breakpoints are
- * `@`-prefixed container queries because `<main>` is a `@container` — the row responds to the
- * space it actually has, not to the window.
+ * Sizing is uniform on purpose — inline neighbours must share a height exactly, and it steps three
+ * times: 36px below `@min-[22rem]`, a 44px touch target from there to `@2xl`, then 32px once the row
+ * is wide enough to carry labels. Every glyph is `size-4` (the `Button` base sets `[&_svg]:size-6`,
+ * which is far too large here). Breakpoints are `@`-prefixed container queries because `<main>` is a
+ * `@container` — the row responds to the space it actually has, not to the window. See
+ * {@link CALENDAR_CONTROL_CLASS} for the width arithmetic each step has to satisfy.
  *
  * @see {@link CalendarViewSettings} for the consolidated Display menu.
  * @see {@link calendarRangeLabel} for the heading, the page's single date atom.
@@ -47,12 +48,13 @@ import { CALENDAR_CONTROL_CLASS, CalendarViewSettings } from './calendar-view-se
  * Shared geometry for every icon-only control in the row.
  *
  * @remarks
- * Same fluid-with-a-floor rule as {@link CALENDAR_CONTROL_CLASS}: a 40px basis that may compress to
- * 36px when the row is genuinely tight, never below. `flex-nowrap` on the row — not `shrink-0` on
- * the children — is what forbids a second line.
+ * The same three container steps as {@link CALENDAR_CONTROL_CLASS} — 36px, then a 44px touch target
+ * from `@min-[22rem]`, then 32px once the row is wide enough for labels. Inline neighbours share a height
+ * exactly, so these two recipes must move together. `flex-nowrap` on the row — not `shrink-0` on the
+ * children — is what forbids a second line.
  */
 const ROW_ICON_CONTROL =
-  'h-10 w-10 min-w-9 shrink [&_svg]:size-4 @2xl:h-8 @2xl:w-8 @2xl:min-w-8 @2xl:shrink-0';
+  'h-9 w-9 min-w-9 shrink [&_svg]:size-4 @min-[22rem]:h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:h-8 @2xl:w-8 @2xl:min-w-8 @2xl:shrink-0';
 
 /** Props for {@link TrailingSlot}. */
 interface TrailingSlotProps {
@@ -73,7 +75,9 @@ interface TrailingSlotProps {
  */
 function TrailingSlot({ children }: TrailingSlotProps): JSX.Element | null {
   if (children === undefined || children === null) return null;
-  return <span className="flex shrink-0 items-center gap-1 @2xl:gap-2">{children}</span>;
+  return (
+    <span className="flex shrink-0 items-center gap-0.5 @sm:gap-1 @2xl:gap-2">{children}</span>
+  );
 }
 
 /** Props for the calendar's navigation, view-settings, and create controls. */
@@ -130,7 +134,7 @@ export function CalendarToolbar({
   onZoomCommit,
 }: CalendarToolbarProps): JSX.Element {
   return (
-    <header className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 @2xl:gap-2">
+    <header className="flex min-w-0 shrink-0 flex-nowrap items-center gap-0.5 @sm:gap-1 @2xl:gap-2">
       {/*
         `Today` follows the same collapse rule as every other labelled control in the row — glyph
         below `@2xl`, word above it. It was the one text button that kept its label at every width,
@@ -166,18 +170,25 @@ export function CalendarToolbar({
       </Button>
 
       {/*
-        The flexible child, but no longer the *only* thing that gives: it holds a `min-w-16` floor —
-        enough for `Aug 2026` at the small-title step — and the glyph controls beside it compress
-        instead. Below `@2xl` it renders the abbreviated month, which survives the squeeze intact
-        where the long form would clip to `August 2...` and lose the year; `title` keeps the full
-        month recoverable either way. Both spans are `aria-hidden` and the accessible name comes from
+        The heading is the row's release valve and is `min-w-0` on purpose. It used to hold a
+        `min-w-16` floor, which turns a too-narrow row into a *control* pushed past the viewport
+        edge — the New button's right border was measurably cut off at 320px — instead of a slightly
+        shorter month label. Every control now carries a width the row's budget was computed against
+        (see `CALENDAR_CONTROL_CLASS`), so the heading is never actually squeezed: 67px is left for
+        it at 320 and 71px at 390, where `Aug 2026` needs about 60. If a locale ever renders a
+        longer form than that budget allows, this truncates and the primary action stays on screen,
+        which is the right way round.
+
+        Below `@2xl` it renders the abbreviated month, which survives the squeeze intact where the
+        long form would clip to `August 2...` and lose the year; `title` keeps the full month
+        recoverable either way. Both spans are `aria-hidden` and the accessible name comes from
         `aria-label`, so assistive tech reads one unabbreviated heading rather than the two the CSS
         toggles between.
       */}
       <h1
         aria-label={heading}
         title={heading}
-        className="text-title-small text-on-surface @sm:text-title-medium min-w-16 flex-1 truncate"
+        className="text-title-small text-on-surface @sm:text-title-medium min-w-0 flex-1 truncate"
       >
         <span aria-hidden="true" className="@2xl:hidden">
           {headingShort ?? heading}

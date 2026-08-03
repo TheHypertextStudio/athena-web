@@ -25,13 +25,20 @@ export const TASK_ROLE_LABEL: Record<CalendarItemTaskRole, string> = {
   related: 'Related',
 };
 
-/** Shared classes for a destructive action inside a confirmation dialog. */
+/**
+ * Shared classes for a destructive action inside a confirmation dialog.
+ *
+ * @remarks
+ * `text-label-large` carries the emphasis that `font-medium` used to add by hand — one token that
+ * sets size, line height, weight and tracking together, per the type scale. The drop shadow is gone
+ * for the same reason: a button inside a dialog is not an overlay, and only overlays may cast one.
+ */
 export const DESTRUCTIVE_CONFIRM_CLASS =
-  'focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 text-body-medium rounded-md px-3 py-1.5 font-medium shadow-sm transition-colors outline-none focus-visible:ring-1';
+  'focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 text-label-large rounded-md px-3 py-1.5 transition-colors outline-none focus-visible:ring-1';
 
 /** Shared classes for the cancel action inside a confirmation dialog. */
 export const CANCEL_CLASS =
-  'focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-high text-body-medium rounded-md px-3 py-1.5 font-medium transition-colors outline-none focus-visible:ring-1';
+  'focus-visible:ring-ring text-on-surface-variant hover:bg-surface-container-high text-label-large rounded-md px-3 py-1.5 transition-colors outline-none focus-visible:ring-1';
 
 /** Format one calendar item as a concise range in the selected display timezone. */
 export function itemTimeLabel(item: CalendarItemOut, displayTimezone: string): string {

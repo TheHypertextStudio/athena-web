@@ -56,7 +56,11 @@ function SchedulingLaneHeading({
     <div className="flex min-w-0 flex-col gap-0.5">
       {heading ? (
         <p className="text-title-small text-on-surface flex min-w-0 items-center gap-1.5">
-          <span className="truncate">{heading.weekday}</span>
+          {/* The weekday is the least informative atom in the heading — the day number is what a
+              person scans for — and it is chrome sitting directly above the events. Dropping it to
+              the variant tone keeps every day header quieter than an event's own title, which is
+              the emphasis order this surface is supposed to have. */}
+          <span className="text-on-surface-variant truncate">{heading.weekday}</span>
           {/* The day number always occupies the same 24px box, chip or not, so every lane heading
               is exactly as tall as every other and the all-day row below stays on one line. */}
           <span
@@ -72,7 +76,7 @@ function SchedulingLaneHeading({
         <p className="text-title-small text-on-surface truncate">{lane.label}</p>
       )}
       {showsTimezone ? (
-        <p className="text-label-medium text-on-surface-variant truncate">{lane.timezone}</p>
+        <p className="text-label-large text-on-surface-variant truncate">{lane.timezone}</p>
       ) : null}
     </div>
   );
@@ -119,14 +123,13 @@ export function SchedulingCanvasHeader({
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }): JSX.Element {
   return (
-    // One structural rule for the whole header instead of a grid of them: the tonal step plus a
-    // single hairline is all the separation the grid below needs.
-    <header
-      ref={headerRef}
-      className="bg-surface-container-low border-outline-variant/40 sticky top-0 z-[60] flex border-b"
-    >
+    // No rule under the header at all: the tonal step from `surface-container-low` onto the grid's
+    // `surface` is the separation, which is how every other region on this surface is separated.
+    // The hairline that used to sit here was the one visible border on the whole calendar that the
+    // "there are just so many fucking borders everywhere" complaint could still point at.
+    <header ref={headerRef} className="bg-surface-container-low sticky top-0 z-[60] flex">
       <div
-        className="text-on-surface-variant bg-surface-container-low text-label-medium sticky left-0 z-[70] shrink-0 self-stretch px-2 py-3"
+        className="text-on-surface-variant bg-surface-container-low text-label-large sticky left-0 z-[70] shrink-0 self-stretch px-2 py-3"
         style={{ width: gutterWidth }}
       >
         All day

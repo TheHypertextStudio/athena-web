@@ -126,7 +126,7 @@ export function SchedulingTimeGrid({
           .map((tick) => (
             <span
               key={tick.wallMinutes}
-              className="text-on-surface-variant text-label-medium absolute right-2 -translate-y-1/2 tabular-nums"
+              className="text-on-surface-variant text-label-large absolute right-2 -translate-y-1/2 tabular-nums"
               data-schedule-label={tick.wallMinutes}
               style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
             >

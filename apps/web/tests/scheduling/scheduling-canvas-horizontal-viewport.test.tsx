@@ -80,6 +80,42 @@ describe('SchedulingCanvas horizontal viewport', () => {
     expect(viewport.scrollLeft).toBe(laneWidth);
   });
 
+  it('re-derives the horizontal offset when the measured lane width changes', () => {
+    // Lane width comes from a *measured* viewport, so it always changes at least once after mount
+    // (unmeasured → real) and again on every resize or rail toggle. Keeping the first paint's pixel
+    // offset through that leaves every lane sitting a fraction of a lane under the `sticky left-0`
+    // hour gutter — which is what rendered today's date badge as a blue half-disc and sliced event
+    // titles mid-word. The offset has to be re-derived from the new width, rounded to a whole lane.
+    const lanes = [
+      lane('before', 'July 12'),
+      lane('anchor', 'July 13'),
+      lane('after-one', 'July 14'),
+      lane('after-two', 'July 15'),
+    ];
+    const canvas = (viewportWidth: number): React.JSX.Element => (
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={lanes}
+        pixelsPerHour={60}
+        viewportWidth={viewportWidth}
+        minimumLaneWidth={220}
+        initialLaneIndex={1}
+      />
+    );
+    const result = render(canvas(600));
+    const viewport = screen.getByRole('region', { name: 'Schedule' });
+    const narrowLaneWidth = Number.parseFloat(laneHeader('anchor').style.width);
+    expect(viewport.scrollLeft).toBe(narrowLaneWidth);
+
+    result.rerender(canvas(900));
+
+    const wideLaneWidth = Number.parseFloat(laneHeader('anchor').style.width);
+    expect(wideLaneWidth).not.toBe(narrowLaneWidth);
+    // Still exactly one lane in, so the lane after the gutter is a whole lane rather than the
+    // tail of the one before it.
+    expect(viewport.scrollLeft).toBe(wideLaneWidth);
+  });
+
   it('keeps the source viewport mounted while centering a rebased boundary window', () => {
     const dates = (startDay: number): ScheduleLane[] =>
       Array.from({ length: 9 }, (_, index) => {

@@ -13,8 +13,9 @@
  *   so there is nothing for the layout to jump around.
  *
  * It also pins the duplicate-calendar behaviour, where the invariant is stricter than "it works":
- * nothing may be hidden without the person asking, and every row a bulk action touches has to stay
- * in the list, still toggleable, still saying why it was called redundant.
+ * a calendar that arrives on two accounts is listed exactly once and says so on the row, one tick
+ * moves every copy of it, and the collapse expands back to one independently toggleable row per
+ * account in a single click. Collapsed is never hidden.
  */
 import '@testing-library/jest-dom/vitest';
 
@@ -26,7 +27,7 @@ import {
   type CalendarLayersOut,
 } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -269,11 +270,11 @@ describe('CalendarLayerPanel', () => {
       expect(screen.getByRole('heading', { name: 'ada@work.example' })).toBeInTheDocument();
     });
     expect(screen.getByRole('heading', { name: 'ada@personal.example' })).toBeInTheDocument();
-    // No duplicates here, so no bulk action is offered.
-    expect(screen.queryByRole('button', { name: 'Hide duplicates' })).not.toBeInTheDocument();
+    // No duplicates here, so nothing is collapsed and no disclosure is offered.
+    expect(screen.queryByRole('button', { name: 'Show each copy' })).not.toBeInTheDocument();
   });
 
-  it('offers an explicit Hide duplicates action and never hides anything on its own', async () => {
+  it('lists a calendar arriving on two accounts once, attributed to both', async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
     });
@@ -317,30 +318,105 @@ describe('CalendarLayerPanel', () => {
 
     render(<CalendarLayerPanel layers={layers} />, { wrapper });
 
-    const hide = await screen.findByRole('button', { name: 'Hide duplicates' });
-    expect(screen.getByText('1 duplicate calendar across accounts')).toBeInTheDocument();
-    // Nothing has happened yet: both copies are still selected, and no write was attempted.
+    // Exactly one row for the calendar, naming both accounts on it — the whole point of the
+    // complaint about holiday calendars showing up twice.
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole('checkbox', { name: 'Toggle Holidays in United States visibility' }),
+      ).toHaveLength(1);
+    });
+    expect(
+      await screen.findByText('On ada@work.example and ada@personal.example'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('1 calendar arrives on more than one account. It is listed once.'),
+    ).toBeInTheDocument();
+    // Collapsing is not hiding: nothing was written, and both copies are still selected.
     expect(layerPatch).not.toHaveBeenCalled();
-    const rowsBefore = screen.getAllByRole('listitem').length;
-    // The redundant copy says which account keeps showing the same calendar.
-    expect(await screen.findByText(/Also on ada@work\.example/)).toBeInTheDocument();
 
-    fireEvent.click(hide);
+    // One tick moves every copy, or the events would stay on the grid from the other account.
+    fireEvent.click(
+      screen.getByRole('checkbox', { name: 'Toggle Holidays in United States visibility' }),
+    );
 
+    await waitFor(() => {
+      const cached = client.getQueryData<CalendarLayersOut>(queryKeys.calendarLayers());
+      expect(cached?.items.map((entry) => entry.selected)).toEqual([false, false]);
+    });
+    expect(layerPatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('expands the collapse on request, back to one independently toggleable row per account', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
+    calendarSettingsGet.mockImplementation(() =>
+      Promise.resolve(
+        okResponse({
+          connections: [
+            makeConnection(WORK_CONNECTION, 'ada@work.example'),
+            makeConnection(PERSONAL_CONNECTION, 'ada@personal.example'),
+          ],
+          calendars: [],
+          layers: [],
+        }),
+      ),
+    );
+    const holidayId = 'en.usa#holiday@group.v.calendar.google.com';
+    const layers: CalendarLayerOut[] = [
+      makeLayer({
+        id: LAYER_A,
+        title: 'Holidays in United States',
+        connectionId: WORK_CONNECTION,
+        provider: 'google',
+        sourceKind: 'provider_calendar',
+        externalLayerId: holidayId,
+        createdAt: '2026-06-01T00:00:00.000Z',
+      }),
+      makeLayer({
+        id: LAYER_B,
+        title: 'Holidays in United States',
+        connectionId: PERSONAL_CONNECTION,
+        provider: 'google',
+        sourceKind: 'provider_calendar',
+        externalLayerId: holidayId,
+        createdAt: '2026-07-01T00:00:00.000Z',
+      }),
+    ];
+    client.setQueryData<CalendarLayersOut>(queryKeys.calendarLayers(), { items: layers });
+    const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    render(<CalendarLayerPanel layers={layers} />, { wrapper });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Show each copy' }));
+
+    // Both copies are back, each on its own account, each with its own checkbox.
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole('checkbox', { name: 'Toggle Holidays in United States visibility' }),
+      ).toHaveLength(2);
+    });
+    expect(screen.getByRole('heading', { name: 'ada@work.example' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'ada@personal.example' })).toBeInTheDocument();
+
+    // Expanded, a row governs only itself.
+    const personal = within(
+      screen.getByRole('list', { name: 'Calendar layers · ada@personal.example' }),
+    );
+    fireEvent.click(
+      personal.getByRole('checkbox', { name: 'Toggle Holidays in United States visibility' }),
+    );
     await waitFor(() => {
       const cached = client.getQueryData<CalendarLayersOut>(queryKeys.calendarLayers());
       expect(cached?.items.find((entry) => entry.id === LAYER_B)?.selected).toBe(false);
     });
-    // The kept copy is untouched, and the hidden row is still listed and still toggleable.
     expect(
       client
         .getQueryData<CalendarLayersOut>(queryKeys.calendarLayers())
         ?.items.find((entry) => entry.id === LAYER_A)?.selected,
     ).toBe(true);
-    expect(screen.getAllByRole('listitem').length).toBe(rowsBefore);
-    expect(
-      screen.getAllByRole('checkbox', { name: 'Toggle Holidays in United States visibility' }),
-    ).toHaveLength(2);
     expect(layerPatch).toHaveBeenCalledTimes(1);
   });
 

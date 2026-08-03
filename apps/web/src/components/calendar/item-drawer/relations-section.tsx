@@ -113,7 +113,7 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
           {title}
         </button>
         {relation.targetKind ? (
-          <Badge variant="secondary" className="shrink-0 font-normal">
+          <Badge variant="secondary" className="shrink-0">
             {CALENDAR_ITEM_KIND_LABEL[relation.targetKind]}
           </Badge>
         ) : null}

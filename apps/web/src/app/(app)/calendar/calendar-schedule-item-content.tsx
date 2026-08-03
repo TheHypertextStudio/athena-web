@@ -3,38 +3,16 @@ import type { JSX } from 'react';
 
 import type { ScheduleItemDensity } from '../../../components/scheduling';
 
-const KIND_LABELS = {
-  provider_event: 'Calendar event',
-  native_event: 'Event',
-  native_block: 'Block',
-  timebox: 'Timebox',
-  task_timebox: 'Task timebox',
-  availability_block: 'Availability',
-} satisfies Record<CalendarItemOut['kind'], string>;
-
 /**
- * The kind label shown on a card, never `undefined`.
+ * Return compact application-owned sync copy without exposing provider failures.
  *
  * @remarks
- * The API and the web app deploy independently, so an API that adds a `CalendarItemKind` ahead of a
- * web release would hand this map a key it does not have — and an unguarded lookup prints the literal
- * string `undefined` onto every affected event. Falling back to the generic word keeps an unknown
- * kind merely unspecific instead of visibly broken.
+ * Never the provider's own words. `provider_error` becomes "Sync issue" — a fact the reader can act
+ * on — rather than whatever sentence the API happened to receive from Google.
  *
- * The map is read through a widened local rather than indexed directly: `satisfies` keeps the
- * literal exhaustive against today's union, while the widened type is what makes the fallback
- * reachable at runtime — indexing the narrow type would make the `??` provably dead and the
- * defence would be linted away.
- *
- * @param kind - The item kind reported by the API.
- * @returns The display label for that kind.
+ * @param item - The calendar item being drawn.
+ * @returns The state to print beside the title, or `null` when the item is simply fine.
  */
-function kindLabel(kind: CalendarItemOut['kind']): string {
-  const labels: Readonly<Record<string, string | undefined>> = KIND_LABELS;
-  return labels[kind] ?? 'Event';
-}
-
-/** Return compact application-owned sync copy without exposing provider failures. */
 function syncLabel(item: CalendarItemOut): string | null {
   if (item.hasConflict || item.status === 'conflicted') return 'Conflict';
   if (item.syncState === 'local_dirty' || item.syncState === 'push_pending') return 'Saving…';
@@ -42,7 +20,22 @@ function syncLabel(item: CalendarItemOut): string | null {
   return null;
 }
 
-/** Render event kind and sync state directly on a calendar card. */
+/**
+ * Render one calendar item's on-card content: its title, and a state only when there is one.
+ *
+ * @remarks
+ * This used to also print a per-card kind label — `Block`, `Calendar event`, `Timebox`. Measured on
+ * a 154px card at 1440, that label took 32px and **never truncated** while the title was cut off at
+ * 98px: a fixed piece of chrome outranking the content on the one surface whose whole job is to show
+ * events. The kind is already carried by the layer's colour stripe and stated in full in the item's
+ * drawer, so nothing is lost by giving the line back to the title.
+ *
+ * A *sync state* is different in kind and stays: "Conflict" or "Sync issue" is something the reader
+ * has to do something about, and it appears on the small minority of cards that actually have one.
+ *
+ * @param props - The item to draw and the density the canvas resolved for its box.
+ * @returns The card's label content.
+ */
 export function CalendarScheduleItemContent({
   item,
   density,
@@ -50,15 +43,14 @@ export function CalendarScheduleItemContent({
   readonly item: CalendarItemOut;
   readonly density: ScheduleItemDensity;
 }): JSX.Element {
-  if (density !== 'full') return <span className="truncate">{item.title}</span>;
-
   const state = syncLabel(item);
-  const metadata = `${kindLabel(item.kind)}${state ? ` · ${state}` : ''}`;
+  if (density !== 'full' || state === null) return <span className="truncate">{item.title}</span>;
+
   return (
     <span className="flex min-w-0 items-baseline gap-1">
       <span className="min-w-0 flex-1 truncate">{item.title}</span>
-      <span className="text-on-surface-variant text-body-small max-w-[45%] shrink-0 truncate">
-        {metadata}
+      <span className="text-on-surface-variant text-body-medium max-w-[45%] shrink-0 truncate">
+        {state}
       </span>
     </span>
   );

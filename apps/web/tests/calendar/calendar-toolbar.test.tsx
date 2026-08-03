@@ -58,18 +58,18 @@ describe('CalendarToolbar', () => {
     }
   });
 
-  it('gives the heading a floor and lets the controls compress instead', () => {
+  it('makes the heading the only thing that gives, so no control leaves the viewport', () => {
     renderToolbar();
     const heading = screen.getByRole('heading', { name: 'August 2026' });
 
-    // The heading absorbs slack first (`flex-1 truncate`) but it can never be squeezed below a
-    // legible width: six rigid 40px controls in a 296px row left it 32px, which rendered
-    // `August 2026` as the single letter `A`.
-    expect(heading).toHaveClass('flex-1', 'truncate', 'min-w-16');
-    expect(heading.className).not.toContain('min-w-0');
+    // The heading absorbs slack first and has no floor of its own. A floor here is what pushed the
+    // primary action off the screen: at 320px the New button's right edge measured 324px in a 320px
+    // viewport, its border visibly cut. Every control now carries a width the row budget was
+    // computed against, so the heading is never actually squeezed — and if a locale ever overruns
+    // that budget, this truncates instead of a control disappearing.
+    expect(heading).toHaveClass('flex-1', 'truncate', 'min-w-0');
 
-    // Every control that may compress declares a floor, so "gives up width" can never become
-    // "disappears" — and the row's own `flex-nowrap` is what forbids a second line.
+    // Every control still declares a floor, so "gives up width" can never become "disappears".
     for (const name of ['Today', 'Previous dates', 'Next dates', 'Display settings']) {
       const control = screen.getByRole('button', { name });
       expect(control.className).toMatch(/\bmin-w-\d/);
@@ -140,15 +140,27 @@ describe('CalendarToolbar', () => {
     expect(screen.queryByText('New slot')).not.toBeInTheDocument();
   });
 
-  it('keeps every inline control on a shared height', () => {
+  it('keeps every inline control on one shared height at each of the three steps', () => {
     renderToolbar();
 
-    // Height is fixed and identical across the row; only *width* is allowed to flex.
+    // Height is identical across the row at every step, and it steps three times: 36px on a 320px
+    // screen, a 44 x 44 touch target from a 22rem container (which is what a 390px phone reports
+    // once `<main>`'s stable scrollbar gutter is taken out), then 32px once the row carries labels.
     for (const name of ['Previous dates', 'Next dates']) {
-      expect(screen.getByRole('button', { name })).toHaveClass('h-10', '@2xl:h-8');
+      expect(screen.getByRole('button', { name })).toHaveClass(
+        'h-9',
+        '@min-[22rem]:h-11',
+        '@min-[22rem]:w-11',
+        '@2xl:h-8',
+      );
     }
     for (const name of ['Today', 'Display settings']) {
-      expect(screen.getByRole('button', { name })).toHaveClass('min-h-10', '@2xl:min-h-8');
+      expect(screen.getByRole('button', { name })).toHaveClass(
+        'min-h-9',
+        '@min-[22rem]:min-h-11',
+        '@min-[22rem]:min-w-11',
+        '@2xl:min-h-8',
+      );
     }
   });
 

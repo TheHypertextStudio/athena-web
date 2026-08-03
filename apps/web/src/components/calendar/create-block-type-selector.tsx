@@ -44,7 +44,7 @@ export function CreateBlockTypeSelector({
               onChange(value);
             }}
             className={cn(
-              'text-label-medium flex min-h-9 items-center justify-center gap-1.5 rounded px-2 capitalize transition-colors motion-reduce:transition-none',
+              'text-label-large flex min-h-9 items-center justify-center gap-1.5 rounded-md px-2 capitalize transition-colors motion-reduce:transition-none',
               selected
                 ? 'bg-surface-container-highest text-on-surface'
                 : 'text-on-surface-variant hover:bg-surface-container-high',

@@ -139,7 +139,7 @@ export function SchedulingAllDayItem({
           >
             {renderItem?.({ item, lane, allDay: true, density: 'compact' }) ?? item.title}
             {previewLabel ? (
-              <span className="ml-1 font-semibold tabular-nums">· {previewLabel}</span>
+              <span className="text-label-large ml-1 tabular-nums">· {previewLabel}</span>
             ) : null}
           </button>
         ) : (

@@ -59,16 +59,30 @@ import type { CalendarAxis } from './calendar-schedule-model';
  * @remarks
  * Inline neighbours must share a height exactly, and the row must never wrap (the row itself is
  * `flex-nowrap`, which is what guarantees that — not `shrink-0`). Below `@2xl` a trailing control
- * collapses to a 40 × 40 glyph. `px-2` overrides the `size="sm"` recipe's `px-3` at that width and
- * is restored above it; breakpoints are container queries because `<main>` is the `@container`, so
- * the row responds to the space it actually has rather than to the window.
+ * collapses to a glyph-only square. `px-2` overrides the `size="sm"` recipe's `px-3` at that width
+ * and is restored above it; breakpoints are container queries because `<main>` is the `@container`,
+ * so the row responds to the space it actually has rather than to the window.
  *
- * Widths are **fluid with a floor** rather than fixed. Six rigid 40px controls plus 4px gaps claim
- * 264px of a 320px viewport's 296px row, which left the heading 32px and rendered `August 2026` as
- * the single letter `A`. Letting each glyph give up 4px under pressure (`w-10` basis, `min-w-9`
- * floor) costs nothing anyone can see and buys the heading the width it needs to stay a date. The
- * floor is what keeps this from degenerating: controls compress to 36px and then stop, so the row
- * still cannot overflow or wrap.
+ * ## Three widths, and the arithmetic each one has to satisfy
+ *
+ * The row is six controls plus a heading, and its width budget is the only thing standing between
+ * this surface and a primary action that falls off the screen — which is exactly what happened: at
+ * 320px the `New` button's right edge measured 324px in a 320px viewport, its border visibly cut.
+ * So the sizes are chosen against the arithmetic, per container step, rather than as one fluid rule:
+ *
+ * | viewport | container      | control | gap | row budget | controls + gaps | left for the heading |
+ * | -------- | -------------- | ------- | --- | ---------- | --------------- | -------------------- |
+ * | 320      | 309 (`< 22rem`)| 36px    | 2px | 293px      | 226px           | 67px (`Aug 2026`)    |
+ * | 375      | 364 (`@22rem`) | 44px    | 2px | 348px      | 274px           | 74px (`Aug 2026`)    |
+ * | 390      | 379 (`@22rem`) | 44px    | 2px | 363px      | 274px           | 89px (`Aug 2026`)    |
+ * | ≥ 672    | `@2xl`         | 32px    | 8px | ≥ 600px    | labels + gaps   | the remainder        |
+ *
+ * The 44px middle step is not decoration: below `@2xl` every control is icon-only, and a phone-width
+ * calendar has to offer real touch targets — 44 × 44 CSS px is the floor a finger needs. The step
+ * begins at a 22rem *container* rather than at `@sm` (24rem) because `<main>` reserves a stable
+ * scrollbar gutter, so a 390px phone reports a 379px container and would otherwise miss `@sm`
+ * entirely — the exact off-by-a-gutter that left a phone with 36px targets. The 36px bottom step is
+ * the concession 320px forces, on a width no touch device actually reports.
  *
  * `[&_svg]:size-4` is required, not decorative: `Button`'s base recipe sets `[&_svg]:size-6`, whose
  * descendant selector outranks a plain `size-4` on the glyph itself, so a 24px icon would sit in a
@@ -79,7 +93,7 @@ import type { CalendarAxis } from './calendar-schedule-model';
  * module must not depend on an `app/` route module.
  */
 export const CALENDAR_CONTROL_CLASS =
-  'min-h-10 w-10 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
+  'min-h-9 w-9 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
 /** Smallest legal zoom — roughly a full day in view without the grid collapsing. */
 export const MIN_PIXELS_PER_HOUR = 24;
@@ -271,7 +285,9 @@ export function CalendarViewSettings({
           fourth radio — "Custom" is a description of the current number, not a thing to pick.
         */}
         {activePreset ? null : (
-          <DropdownMenuLabel className="font-normal">Custom · {zoomPercent}%</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-body-medium">
+            Custom · {zoomPercent}%
+          </DropdownMenuLabel>
         )}
 
         <DropdownMenuSeparator />

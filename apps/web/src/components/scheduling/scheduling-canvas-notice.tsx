@@ -53,9 +53,9 @@ export function SchedulingCanvasNotice({
       */}
       <p
         role={hasError ? 'alert' : 'status'}
-        className={`text-body-small max-w-full rounded-2xl px-3 py-1.5 text-center text-balance ${
+        className={`text-body-medium max-w-full rounded-2xl px-3 py-1.5 text-center text-balance ${
           hasError
-            ? 'bg-error-container text-on-error-container font-medium'
+            ? 'bg-error-container text-on-error-container'
             : 'bg-surface-container-high text-on-surface-variant'
         }`}
       >

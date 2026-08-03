@@ -24,11 +24,13 @@ import { visibleScheduleLaneRange } from './scheduling-visible-lanes';
  * Width of the sticky hour-label gutter.
  *
  * @remarks
- * Sized so a 12px `12:00 AM` fits on one line with real padding. At the previous 64px the label
- * wrapped to two lines at the readable type size, which is exactly the "text is almost unreadable"
- * complaint arriving by a different route.
+ * Sized so `12:00 AM` fits on one line with real padding at the gutter's type size. That size is now
+ * 14px, not 12px: the hour labels are the most numerous run of text on the whole surface — 24 of
+ * them — so they alone decided whether "the minimum text size" reads as raised. 76px held the 12px
+ * form; 88px holds the 14px one without the label wrapping, which is the failure this width exists
+ * to prevent.
  */
-const HOUR_GUTTER_WIDTH = 76;
+const HOUR_GUTTER_WIDTH = 88;
 
 interface UseSchedulingViewportOptions {
   readonly lanes: readonly ScheduleLane[];
@@ -93,6 +95,13 @@ export function useSchedulingViewport({
     | undefined
   >(undefined);
   const initializedVerticalScrollRef = useRef(false);
+  // The lane width the current `scrollLeft` was computed against. Lane width is derived from a
+  // *measured* viewport, so it always changes at least once after mount (0 → real) and again on
+  // every resize or rail toggle. Without re-deriving the offset from it, the first paint's pixel
+  // value survives into a completely different geometry and every lane ends up sitting a fraction of
+  // a lane under the sticky hour gutter — which is what rendered today's date badge as a blue
+  // half-disc and sliced event titles mid-word.
+  const previousLaneWidthRef = useRef(0);
   const previousPixelsPerHourRef = useRef(pixelsPerHour);
   const viewportCenterMinutesRef = useRef<number | undefined>(undefined);
   const zoomAnchorRef = useRef<ScheduleZoomAnchor | undefined>(undefined);
@@ -190,7 +199,18 @@ export function useSchedulingViewport({
     ) {
       viewport.scrollLeft = initialLaneIndex > 0 ? initialLaneIndex * geometry.laneWidth : 0;
       initializedWindowRef.current = { firstLaneId, horizontalAnchorKey };
+    } else if (
+      previousLaneWidthRef.current > 0 &&
+      previousLaneWidthRef.current !== geometry.laneWidth &&
+      viewport.scrollLeft > 0
+    ) {
+      // Same window, new lane width: keep the lane that was against the gutter against the gutter.
+      // Rounding to the nearest whole lane is what makes this a *re-alignment* rather than a scale —
+      // a viewport that grew mid-scroll must not leave a fractional lane wedged under the gutter.
+      const laneIndex = Math.round(viewport.scrollLeft / previousLaneWidthRef.current);
+      viewport.scrollLeft = laneIndex * geometry.laneWidth;
     }
+    previousLaneWidthRef.current = geometry.laneWidth;
     if (!initializedVerticalScrollRef.current) {
       viewport.scrollTop = Math.max(
         0,

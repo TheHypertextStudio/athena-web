@@ -135,6 +135,7 @@ function dateAxisState(
     lanes: [lane],
     items: [source],
     itemById: new Map([[source.id, source]]),
+    duplicatesByItemId: new Map(),
     layers: [],
     itemsPending: false,
     itemsError: false,
@@ -349,10 +350,9 @@ describe('CalendarSchedulingSurface persistence', () => {
   });
 
   it.each([
-    { syncState: 'clean' as const, expected: 'Event' },
-    { syncState: 'push_pending' as const, expected: 'Event · Saving…' },
-    { syncState: 'provider_error' as const, expected: 'Event · Sync issue' },
-  ])('shows item kind and $syncState state directly on its card', ({ syncState, expected }) => {
+    { syncState: 'push_pending' as const, expected: 'Saving…' },
+    { syncState: 'provider_error' as const, expected: 'Sync issue' },
+  ])('shows the $syncState state directly on its card', ({ syncState, expected }) => {
     const source = { ...calendarItem(), syncState };
     renderSurface('dates', source);
     const props = canvasProps();
@@ -369,7 +369,29 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(screen.getByText(expected)).toBeInTheDocument();
   });
 
-  it('keeps kind and sync metadata out of compact collided cards', () => {
+  it('gives a healthy card its whole line, with no per-card kind label', () => {
+    // The kind label (`Block`, `Calendar event`) took a fixed 32px of a 154px card and never
+    // truncated, while the title it sat beside was cut off at 98px. Chrome does not get to outrank
+    // the content on the surface whose entire job is showing events.
+    const source = { ...calendarItem(), syncState: 'clean' as const };
+    renderSurface('dates', source);
+    const props = canvasProps();
+    const lane = props.lanes[0]!;
+    const content = props.renderItem?.({
+      item: lane.items[0]!,
+      lane,
+      allDay: false,
+      density: 'full',
+    });
+
+    render(<div data-testid="full-item-content">{content}</div>);
+    const fullContent = within(screen.getByTestId('full-item-content'));
+
+    expect(fullContent.getByText(source.title)).toBeInTheDocument();
+    expect(screen.getByTestId('full-item-content').textContent).toBe(source.title);
+  });
+
+  it('keeps sync metadata out of compact collided cards', () => {
     const source = { ...calendarItem(), syncState: 'provider_error' as const };
     renderSurface('dates', source);
     const props = canvasProps();
@@ -385,7 +407,7 @@ describe('CalendarSchedulingSurface persistence', () => {
     const compactContent = within(screen.getByTestId('compact-item-content'));
 
     expect(compactContent.getByText(source.title)).toBeInTheDocument();
-    expect(compactContent.queryByText('Event · Sync issue')).not.toBeInTheDocument();
+    expect(compactContent.queryByText('Sync issue')).not.toBeInTheDocument();
   });
 
   it('forwards an arbitrary controlled region and its anchor ref to the scheduling canvas', () => {

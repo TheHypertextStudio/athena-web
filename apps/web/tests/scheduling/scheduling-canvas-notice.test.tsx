@@ -98,7 +98,7 @@ describe('SchedulingCanvas notice', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('No calendar items yet.');
     // The empty note is distinguished by tone, not by an italic face — one shared type token.
-    expect(screen.getByRole('status')).toHaveClass('text-on-surface-variant', 'text-body-small');
+    expect(screen.getByRole('status')).toHaveClass('text-on-surface-variant', 'text-body-medium');
     expect(screen.getByRole('status')).not.toHaveClass('italic');
   });
 

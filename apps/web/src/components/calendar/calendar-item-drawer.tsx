@@ -7,6 +7,7 @@
  * The drawer shell owns selection and loading only. Focused sections live under `item-drawer/` so
  * editing task links, relationships, fields, or sync actions does not grow this orchestrator.
  */
+import type { CalendarItemOut } from '@docket/types';
 import { Sheet, SheetContent, SheetDescription, SheetTitle, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useEffect, useState } from 'react';
 
@@ -22,6 +23,14 @@ export interface CalendarItemDrawerProps {
   displayTimezone: string;
   /** Calendar item id to show, or `null` to keep the drawer closed. */
   itemId: string | null;
+  /**
+   * Copies of an event folded into the one drawn on the grid, keyed by the drawn item's id.
+   *
+   * @remarks
+   * Comes from the range read's dedup pass. The drawer is where a collapsed duplicate becomes
+   * discoverable, which is the condition on collapsing it at all.
+   */
+  duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]>;
   /** Close the drawer. */
   onClose: () => void;
   /** Navigate to a linked task detail page. */
@@ -34,6 +43,7 @@ export interface CalendarItemDrawerProps {
 export default function CalendarItemDrawer({
   displayTimezone,
   itemId,
+  duplicatesByItemId,
   onClose,
   onOpenTask,
   onOpenItem,
@@ -74,6 +84,7 @@ export default function CalendarItemDrawer({
             key={itemId}
             displayTimezone={displayTimezone}
             initialItemId={itemId}
+            duplicatesByItemId={duplicatesByItemId}
             onClose={requestClose}
             onDirtyChange={setHasUnsavedChanges}
             onBeforeItemChange={confirmDiscard}
@@ -89,6 +100,7 @@ export default function CalendarItemDrawer({
 interface CalendarItemDrawerContentProps {
   displayTimezone: string;
   initialItemId: string;
+  duplicatesByItemId?: ReadonlyMap<string, readonly CalendarItemOut[]>;
   onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onBeforeItemChange: () => boolean;
@@ -99,6 +111,7 @@ interface CalendarItemDrawerContentProps {
 function CalendarItemDrawerContent({
   displayTimezone,
   initialItemId,
+  duplicatesByItemId,
   onClose,
   onDirtyChange,
   onBeforeItemChange,
@@ -109,9 +122,8 @@ function CalendarItemDrawerContent({
   const itemQuery = useApiQuery(calendarItemDef(activeItemId));
   const layersQuery = useApiListQuery(calendarLayersDef());
   const item = itemQuery.data;
-  const layer = item
-    ? layersQuery.data?.items.find((value) => value.id === item.layerId)
-    : undefined;
+  const layers = layersQuery.data?.items ?? [];
+  const layer = item ? layers.find((value) => value.id === item.layerId) : undefined;
   const openItem = (nextItemId: string): void => {
     if (!onBeforeItemChange()) return;
     if (onOpenItem) onOpenItem(nextItemId);
@@ -150,6 +162,8 @@ function CalendarItemDrawerContent({
       displayTimezone={displayTimezone}
       item={item}
       layer={layer}
+      layers={layers}
+      duplicates={duplicatesByItemId?.get(item.id)}
       onClose={onClose}
       onDirtyChange={onDirtyChange}
       onOpenTask={onOpenTask}

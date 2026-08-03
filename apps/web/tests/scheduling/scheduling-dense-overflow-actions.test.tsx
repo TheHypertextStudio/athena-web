@@ -46,7 +46,7 @@ describe('SchedulingCanvas dense-overflow actions', () => {
         displayTimezone="UTC"
         lanes={[lane]}
         pixelsPerHour={60}
-        viewportWidth={300}
+        viewportWidth={312}
         onOpenItem={vi.fn()}
         onMoveItem={onMoveItem}
         onResizeItem={onResizeItem}
@@ -116,7 +116,7 @@ describe('SchedulingCanvas dense-overflow actions', () => {
         displayTimezone="UTC"
         lanes={[lane]}
         pixelsPerHour={60}
-        viewportWidth={300}
+        viewportWidth={312}
         onDropObjectOnItem={onDropObjectOnItem}
       />,
     );

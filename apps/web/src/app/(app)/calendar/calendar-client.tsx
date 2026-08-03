@@ -188,7 +188,10 @@ export default function CalendarClient(): JSX.Element {
   };
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-y-auto p-3 @2xl:p-4 @4xl:p-6">
+    // `p-2` at the narrowest step, not `p-3`: 8px of inset buys the control row 8px of budget, and
+    // at 320px that row was 27px over its container — enough to push the New button's right border
+    // off the viewport. From `@sm` up the inset returns to the app's normal rhythm.
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-col gap-3 overflow-y-auto p-2 @sm:p-3 @2xl:p-4 @4xl:p-6">
       <CalendarToolbar
         heading={heading}
         headingShort={headingShort}
@@ -238,9 +241,11 @@ export default function CalendarClient(): JSX.Element {
               `AthenaContextAction` hard-codes `min-h-10` and inherits `Button`'s 24px glyph, which
               would make it the one control in the row at a different height, so the row's shared
               geometry is imposed from this wrapper: the descendant selectors outrank the button's
-              own utilities, which is what actually lands it.
+              own utilities, which is what actually lands it. The two steps mirror
+              `CALENDAR_CONTROL_CLASS` — a 44px touch target while the control is icon-only, 32px
+              once the row is wide enough to carry labels.
             */}
-            <span className="hidden shrink-0 @lg:flex [&_button_svg]:size-4 [&>button]:min-h-8">
+            <span className="hidden shrink-0 @lg:flex [&_button_svg]:size-4 [&>button]:min-h-11 [&>button]:min-w-11 @2xl:[&>button]:min-h-8 @2xl:[&>button]:min-w-8">
               <AthenaContextAction
                 label={
                   openItemId ? 'Open Athena for this calendar item' : 'Open Athena for Calendar'
@@ -320,6 +325,7 @@ export default function CalendarClient(): JSX.Element {
       <CalendarItemDrawer
         displayTimezone={displayTimezone}
         itemId={openItemId}
+        duplicatesByItemId={dateAxis.duplicatesByItemId}
         onClose={() => {
           setOpenItemId(null);
         }}

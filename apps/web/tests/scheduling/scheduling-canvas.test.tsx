@@ -2035,13 +2035,19 @@ describe('SchedulingCanvas', () => {
     );
 
     // Colour and stacking only: no shadow at any state, and no scale/translate — growing on
-    // hover is never how interactivity is signalled here.
+    // hover is never how interactivity is signalled here. The resting and raised fills are two
+    // custom properties published by `scheduling-item-surface`, because no single tonal token steps
+    // away from the canvas in both themes.
     expect(renderedItem('focus')).toHaveClass(
       'hover:z-20',
-      'hover:bg-surface-container',
+      'bg-(--schedule-item-fill)',
+      'hover:bg-(--schedule-item-fill-raised)',
       'motion-reduce:transition-none',
     );
     expect(renderedItem('focus').className).not.toMatch(/shadow-|scale-|translate-/);
+    expect(renderedItem('focus').style.getPropertyValue('--schedule-item-fill')).toContain(
+      'color-mix(in oklab, var(--color-on-surface)',
+    );
   });
 
   it('keeps the grid mounted when the deterministic clock is absent or invalid', () => {

@@ -167,6 +167,7 @@ export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<Op
       ...(input.phoneNumberId ? { phoneNumberId: input.phoneNumberId } : {}),
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('voice session insert returned no row');
 
   const ctx: VoiceSessionContext = {

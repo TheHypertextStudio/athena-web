@@ -1,13 +1,17 @@
 import { agentSession, agentSessionDispatch, agentSessionRun, user } from '@docket/db';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   admitAthenaGeneration,
+  deliverAthenaDispatch,
   DEFAULT_DISPATCH_RECONCILIATION_MS,
   MAX_DISPATCH_ATTEMPTS,
+  persistWaitingAthenaWake,
   sweepAthenaDispatches,
+  wakeWaitingAthenaGeneration,
 } from '../../src/agent/async-runner';
+import { ApiError, ConflictError } from '../../src/error';
 import { enqueueRunGeneration } from '../../src/agent/run-generation';
 import { getMigratedDb } from '../support/db';
 
@@ -277,5 +281,226 @@ describe('Athena durable dispatch outbox', () => {
       })
       .returning();
     await expect(enqueueRunGeneration(next!)).resolves.toBeDefined();
+  });
+
+  it('recovers a crashed dispatcher’s expired lease, incrementing the attempt it left behind', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    const now = new Date();
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({
+        status: 'delivering',
+        attempt: 2,
+        leaseToken: 'stale-crashed-lease',
+        leaseExpiresAt: new Date(now.getTime() - 1_000),
+      })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    const fetch = vi.fn().mockResolvedValue(Response.json({ accepted: true }, { status: 202 }));
+
+    const result = await sweepAthenaDispatches({ now, batchSize: 10 }, { config, fetch });
+
+    expect(result).toEqual({ claimed: 1, delivered: 1, retried: 0, failed: 0 });
+    const [recovered] = await dbModule.db
+      .select()
+      .from(agentSessionDispatch)
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    expect(recovered).toMatchObject({ status: 'delivered', attempt: 3 });
+  });
+
+  it('never claims a due delivering intent whose lease token was already cleared', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    const now = new Date();
+    // A `delivering` row with no lease token is a state the normal claim/deliver cycle never
+    // produces (the token is always set alongside the status) — this defends against it anyway.
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({
+        status: 'delivering',
+        leaseToken: null,
+        leaseExpiresAt: new Date(now.getTime() - 1_000),
+      })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    const fetch = vi.fn();
+
+    const result = await sweepAthenaDispatches({ now, batchSize: 10 }, { config, fetch });
+
+    expect(result).toEqual({ claimed: 0, delivered: 0, retried: 0, failed: 0 });
+    expect(fetch).not.toHaveBeenCalled();
+    const [unchanged] = await dbModule.db
+      .select()
+      .from(agentSessionDispatch)
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    expect(unchanged).toMatchObject({ status: 'delivering', leaseToken: null });
+  });
+
+  it('sweeps with the real clock and the default batch size when neither option is given', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ availableAt: new Date(Date.now() - 1_000) })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    const fetch = vi.fn().mockResolvedValue(Response.json({ accepted: true }, { status: 202 }));
+
+    const result = await sweepAthenaDispatches({}, { config, fetch });
+
+    expect(result).toEqual({ claimed: 1, delivered: 1, retried: 0, failed: 0 });
+  });
+
+  it('throws when the runner cannot be reached on the final attempt of a durable admission', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ attempt: MAX_DISPATCH_ATTEMPTS - 1 })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+
+    await expect(
+      admitAthenaGeneration(
+        session,
+        {},
+        {
+          config,
+          enqueue: async () => queued,
+          fetch: vi.fn().mockRejectedValue(new Error('runner unreachable')),
+        },
+      ),
+    ).rejects.toThrow(ApiError);
+
+    const [failedDispatch] = await dbModule.db
+      .select()
+      .from(agentSessionDispatch)
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+    expect(failedDispatch).toMatchObject({ status: 'failed', attempt: MAX_DISPATCH_ATTEMPTS });
+    const [failedRun] = await dbModule.db
+      .select({ status: agentSessionRun.status })
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.id, queued.runId));
+    expect(failedRun?.status).toBe('failed');
+  });
+});
+
+describe('deliverAthenaDispatch — the not-yet-due fallback read', () => {
+  it("reports an already-delivered intent as 'delivered' without reclaiming it", async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ status: 'delivered', deliveredAt: new Date() })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+
+    await expect(
+      deliverAthenaDispatch(queued.runId, 'enqueue', { config, fetch: vi.fn() }),
+    ).resolves.toBe('delivered');
+  });
+
+  it("reports a not-yet-due pending intent as 'in_progress'", async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ availableAt: new Date(Date.now() + 60_000) })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+
+    await expect(
+      deliverAthenaDispatch(queued.runId, 'enqueue', { config, fetch: vi.fn() }),
+    ).resolves.toBe('in_progress');
+  });
+
+  it("reports an intent still inside another worker's active lease as 'in_progress'", async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({
+        status: 'delivering',
+        leaseToken: 'another-worker',
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+
+    await expect(
+      deliverAthenaDispatch(queued.runId, 'enqueue', { config, fetch: vi.fn() }),
+    ).resolves.toBe('in_progress');
+  });
+
+  it("reports an intent already exhausted to 'failed' status as 'failed'", async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ status: 'failed' })
+      .where(eq(agentSessionDispatch.runId, queued.runId));
+
+    await expect(
+      deliverAthenaDispatch(queued.runId, 'enqueue', { config, fetch: vi.fn() }),
+    ).resolves.toBe('failed');
+  });
+
+  it('refuses to deliver an action that was never persisted for this run', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+
+    // Only 'enqueue' was ever queued for this run — 'wake' has no dispatch row at all.
+    await expect(
+      deliverAthenaDispatch(queued.runId, 'wake', { config, fetch: vi.fn() }),
+    ).rejects.toThrow(ConflictError);
+  });
+});
+
+describe('the waiting-Athena wake intent', () => {
+  it('refuses to queue a wake for a generation that is not currently waiting', async () => {
+    const session = await seedPendingAthena();
+    await enqueueRunGeneration(session);
+    // The freshly-enqueued generation is 'queued', not 'waiting'.
+    await expect(persistWaitingAthenaWake(dbModule.db, session.id)).rejects.toThrow(
+      /no waiting Athena generation/,
+    );
+  });
+
+  it('refuses to wake a session with no run generation at all', async () => {
+    const session = await seedPendingAthena();
+    await expect(
+      wakeWaitingAthenaGeneration(session.id, { config, fetch: vi.fn() }),
+    ).rejects.toThrow(/no waiting Athena generation/);
+  });
+
+  it('throws when the runner is unreachable on the final wake attempt, without failing the run', async () => {
+    const session = await seedPendingAthena();
+    const queued = await enqueueRunGeneration(session);
+    await dbModule.db
+      .update(agentSessionRun)
+      .set({ status: 'waiting' })
+      .where(eq(agentSessionRun.id, queued.runId));
+    await persistWaitingAthenaWake(dbModule.db, session.id);
+    await dbModule.db
+      .update(agentSessionDispatch)
+      .set({ attempt: MAX_DISPATCH_ATTEMPTS - 1 })
+      .where(
+        and(eq(agentSessionDispatch.runId, queued.runId), eq(agentSessionDispatch.action, 'wake')),
+      );
+
+    await expect(
+      wakeWaitingAthenaGeneration(session.id, {
+        config,
+        fetch: vi.fn().mockRejectedValue(new Error('runner unreachable')),
+      }),
+    ).rejects.toThrow(ApiError);
+
+    const [wakeDispatch] = await dbModule.db
+      .select()
+      .from(agentSessionDispatch)
+      .where(
+        and(eq(agentSessionDispatch.runId, queued.runId), eq(agentSessionDispatch.action, 'wake')),
+      );
+    expect(wakeDispatch).toMatchObject({ status: 'failed', attempt: MAX_DISPATCH_ATTEMPTS });
+    // Only an exhausted 'enqueue' fails the run itself; a 'wake' leaves it waiting for attention.
+    const [run] = await dbModule.db
+      .select({ status: agentSessionRun.status })
+      .from(agentSessionRun)
+      .where(eq(agentSessionRun.id, queued.runId));
+    expect(run?.status).toBe('waiting');
   });
 });

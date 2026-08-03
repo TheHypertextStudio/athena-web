@@ -92,4 +92,46 @@ describe('Athena asynchronous runner admission', () => {
     ).resolves.toBeUndefined();
     expect(fetch).toHaveBeenCalledOnce();
   });
+
+  it('refuses to dispatch when the runner URL or its shared secret is not configured', async () => {
+    const fetch = vi.fn();
+    await expect(
+      dispatchRunnerMessage(
+        'enqueue',
+        { sessionId: '01SESSION', generation: 1, workflowId: '01SESSION:1' },
+        { config: { CLOUDFLARE_ATHENA_RUNNER_URL: 'https://runner.example' }, fetch },
+      ),
+    ).rejects.toThrow(/without its required configuration/);
+    await expect(
+      dispatchRunnerMessage(
+        'enqueue',
+        { sessionId: '01SESSION', generation: 1, workflowId: '01SESSION:1' },
+        {
+          config: { DOCKET_TO_CLOUDFLARE_HMAC_SECRET: 'docket-to-cloudflare-secret-long-enough' },
+          fetch,
+        },
+      ),
+    ).rejects.toThrow(/without its required configuration/);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('treats a non-202 runner response as a dispatch failure', async () => {
+    const fetch = vi.fn(async () => new Response(JSON.stringify({ ok: false }), { status: 500 }));
+    await expect(
+      dispatchRunnerMessage(
+        'enqueue',
+        { sessionId: '01SESSION', generation: 1, workflowId: '01SESSION:1' },
+        {
+          config: {
+            APP_MODE: 'production',
+            ATHENA_ASYNC_RUNNER_ENABLED: true,
+            CLOUDFLARE_ATHENA_RUNNER_URL: 'https://runner.example',
+            DOCKET_TO_CLOUDFLARE_HMAC_SECRET: 'docket-to-cloudflare-secret-long-enough',
+          },
+          fetch,
+        },
+      ),
+    ).rejects.toThrow(/dispatch failed/i);
+    expect(fetch).toHaveBeenCalledOnce();
+  });
 });

@@ -176,6 +176,25 @@ describe('track', () => {
     const stopped = payload(await track(client, { action: 'stop' }));
     expect(stopped.tracking.state).toBe('idle');
 
+    // Switching away from the first task (CORE-38) paused its record rather than ending it, and
+    // it was never explicitly stopped or resumed afterward — it is still a genuine, resumable
+    // paused session. `status` with no explicit `timeRecordId` resolves to whatever `getActiveTime`
+    // reports (CORE-36: `status IN ('open', 'paused')`, `'open'` first), so once the second task's
+    // record is `'closed'` the first task's still-paused one is exactly what should resurface, not
+    // a blank idle state that would make the paused session unreachable from `status`.
+    const stillPaused = payload(await track(client, { action: 'status' }));
+    expect(stillPaused.tracking).toMatchObject({
+      state: 'paused',
+      taskId: first,
+      timeRecordId: started.tracking.timeRecordId,
+    });
+
+    // Idle is reached by explicitly stopping that dangling paused session too.
+    const stoppedFirst = payload(
+      await track(client, { action: 'stop', timeRecordId: started.tracking.timeRecordId }),
+    );
+    expect(stoppedFirst.tracking.state).toBe('idle');
+
     const idle = payload(await track(client, { action: 'status' }));
     expect(idle.tracking).toMatchObject({ state: 'idle', taskId: null });
   });
@@ -218,6 +237,42 @@ describe('track', () => {
     expect(listed.segments).toEqual([
       expect.objectContaining({ taskId, taskTitle: 'Segmented work', running: false }),
     ]);
+  });
+
+  // CORE-42: the naming guard is the SERVER's, not a client affordance — it must hold over MCP
+  // exactly as it does over REST (see `tests/routes/time.test.ts`'s matching REST case).
+  it('refuses to stop over MCP when the tracked task has no name, and leaves it running', async () => {
+    const s = await seedOrg();
+    const taskId = await seedTask(s, 'Nameable work');
+    const client = await connect(s.ctx);
+    const started = payload(await track(client, { action: 'start', taskId }));
+    const recordId = started.tracking.timeRecordId!;
+
+    // Bypass every client and every validator, exactly as the REST case does: blank the record's
+    // own label directly in storage so the stop-time guard is the only thing left to catch it.
+    await db
+      .update(schema.timeRecord)
+      .set({ title: '   ' })
+      .where(eq(schema.timeRecord.id, recordId));
+
+    const refused = await track(client, { action: 'stop' });
+    expect(refused.isError).toBe(true);
+    const message = (refused.content[0] as { text: string }).text;
+    expect(message.length).toBeGreaterThan(0);
+
+    const stillOpen = await db
+      .select({ status: schema.timeRecord.status })
+      .from(schema.timeRecord)
+      .where(eq(schema.timeRecord.id, recordId));
+    expect(stillOpen[0]?.status).toBe('open');
+
+    // The same call succeeds the moment the work has a name again.
+    await db
+      .update(schema.timeRecord)
+      .set({ title: 'Named at last' })
+      .where(eq(schema.timeRecord.id, recordId));
+    const stopped = payload(await track(client, { action: 'stop' }));
+    expect(stopped.tracking.state).toBe('idle');
   });
 
   it('refuses to act on any timer for an agent principal', async () => {

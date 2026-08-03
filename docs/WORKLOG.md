@@ -1,11 +1,1210 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-07-31
+> **Last Updated**: 2026-08-02
 
 ---
 
 ## Active Tasks
+
+### [LAUNCH-TIME-002] Close CORE-36 (paused-timer visibility) and CORE-40 (calendar-block timer)
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-03
+- **Priority**: P0
+- **Closes**: CORE-36 (launch-blocker), CORE-40 (high) in
+  `docs/engineering/launch-compliance.json`.
+- **Summary**: Both items were reported "partial" after a prior adversarial pass. CORE-36's fix
+  (`getActiveTime` in `apps/api/src/time/read-models.ts` querying `status IN ('open', 'paused')`
+  instead of joining on an open `timeInterval`) was already committed at HEAD
+  (`ecf08fae`, owned by a concurrent coverage-focused agent per this task's file boundaries) — this
+  pass verified it for real with the repo's own scripted live Playwright flow
+  (`verify-timer-flow.ts`) against a fresh throwaway org: pause switched the control to Resume
+  (not idle), elapsed held steady across 30s, and resume continued accruing. It also found and
+  fixed a stale assumption in `apps/api/tests/mcp/mcp-time-tools.test.ts`'s full-lifecycle test,
+  which encoded the old buggy semantics (asserting full idle after switch+stop, when the correct,
+  now-fixed behavior is that the switched-away-from task's still-paused record correctly
+  resurfaces, consistent with CORE-38's verified switch semantics).
+  CORE-40's `renderItemAction` wiring through `SchedulingCanvas`/`SchedulingItemCard` into the live
+  calendar surface was also already present in the working tree, but had a real bug: it checked
+  `item.kind === 'task_timebox'`, a legacy/derived kind no live write path produces — the app's
+  actual drag-a-task-onto-the-grid flow creates the first-class `'timebox'` kind with a
+  `role: 'contained'` task link, a shape the old check never matched, so the Track button never
+  appeared on any calendar block a real user could create. Reproduced live (created the exact
+  shape via the real API in a fresh org, loaded `/calendar`, hovered the block: zero Track button).
+  The same diagnosis and fix (a shared `containedTaskLink()` helper checking both kinds and the
+  `'contained'` role) landed concurrently from another in-flight worker on this branch as commits
+  `0a3c339b`/`794dba27`, converging with this pass's own analysis on the same file, function name,
+  and test cases — re-verified the committed result live rather than re-doing it: the button now
+  appears on hover and clicking it starts a genuine timer (`GET /v1/time/active` returns the new
+  open record with the correct `taskId`).
+- **Files changed** (this entry's own commit):
+  - `apps/api/tests/mcp/mcp-time-tools.test.ts` — corrected the full-lifecycle test's stale
+    post-fix assertions.
+  - `docs/engineering/launch-compliance.json` — CORE-36 and CORE-40 promoted to `pass`.
+  - Did not touch `apps/api/src/services/scheduling/repository.ts`, `apps/api/src/time/read-models.ts`,
+    or their test files (owned by a concurrent agent per this task's boundaries).
+- **Files changed** (landed separately, already on `HEAD` before this entry's commit):
+  - `ecf08fae` — `apps/api/src/time/read-models.ts`'s `getActiveTime` (CORE-36's root-cause fix;
+    owned by a concurrent agent, verified but not authored here).
+  - `0a3c339b`, `794dba27` — `apps/web/src/components/calendar/calendar-item-task-link.ts` (new),
+    `apps/web/src/app/(app)/calendar/calendar-scheduling-surface.tsx`,
+    `apps/web/src/components/calendar/calendar-item-card.tsx`, and their test files (CORE-40's
+    calendar-block fix; converged with, and re-verified live by, this pass — see summary above).
+- **Learnings**:
+  - "The wiring exists" and "the wiring is reachable from what the live app actually creates" are
+    different claims — a kind/role check that only matches a legacy or test-only shape looks fixed
+    in a unit test and is invisible in a live repro that happens to use the same fixture shape as
+    the test. The tell was a DOM query (`count 0`) after reproducing the _real_ creation flow via
+    the API, not the component in isolation.
+  - A "fix landed" claim about a file you don't own still needs independent live verification, not
+    just a re-read of the diff — the diff can be exactly right and a downstream test can still
+    encode the old, now-incorrect expectation (the MCP lifecycle test here).
+
+---
+
+### [LAUNCH-PROJ-001] Rebuild the Projects Timeline and Dependencies lenses
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Compliance items**: ENT-01 … ENT-17 (`docs/engineering/launch-compliance.json`, areas
+  "Projects — Timeline" and "Projects — Dependencies view")
+- **Summary**: The Timeline stopped being a card and became the page — full-bleed to the content
+  panel, an opaque sticky axis, guides instead of rules, undated projects as ordinary rows in the
+  same list, five real zoom granularities (days → years) persisted in the URL, and a schedule drag
+  that shows the object in hand, states where it will land, and pans the window when held at an
+  edge. The Dependencies lens was rebuilt on the page's own frame: it fills the panel to the same
+  four content edges as the list, its cards separate by tone rather than by a hairline and shadow,
+  a click opens a populated inspector instead of a selection ring, and the unlabelled rule under
+  the status chip now reads "3/8 tasks" with a matching tooltip and accessible name.
+- **Files changed**:
+  - `apps/web/src/components/timeline/` — `timeline-canvas`, `timeline-bar`, `timeline-axis`,
+    `timeline-layout`, `timeline-tint`, `time-scale`, `use-timeline-viewport`, `use-timeline-drag`,
+    `timeline-display-sections`, `cascade-proposal`; new `use-timeline-autoscroll.ts` and
+    `timeline-drag-layer.tsx`; deleted `unscheduled-tray.tsx`.
+  - `apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx` — lens persisted in the URL.
+  - `apps/web/src/components/canvas/` — `project-graph-panel`, `project-node`, `canvas`; new
+    `project-peek.tsx` and `pack-isolated.ts`.
+  - `apps/web/src/components/views/{field-catalog,view-state-url}.ts` — `ViewScale += 'year'`.
+  - `apps/web/tests/timeline/`, `apps/web/tests/project-detail/` — 40 new tests.
+- **Learnings**:
+  - A granularity control that only relabels the axis is five spellings of one view. Selecting a
+    unit has to re-frame the window, including on first load from a URL — which is the case the
+    "changed request" effect alone silently skipped.
+  - A drag whose span is derived from a cached pixels-per-millisecond ratio cannot survive the
+    viewport moving under it. Deriving the span from the pointer's _date_ against the live window
+    is what makes edge auto-pan correct rather than merely animated.
+  - A sticky header's geometric intersection with scrolling rows is unavoidable and proves nothing.
+    The honest evidence is a pixel comparison of the header band across scroll offsets; ours is
+    byte-identical at top/middle/bottom, both viewports, both themes.
+  - `defaultWindow` read the raw clock, so the same page produced a different axis on the server
+    than on hydration and no screenshot of the surface was reproducible. Snapping to the UTC day
+    fixed both.
+
+---
+
+### [LAUNCH-AUTH-001] Reconcile the auth-and-entry lane
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Closes**: SCR-07, SCR-08, SCR-09, SCR-10 (entry gate); SCR-11, SCR-12, SCR-13, SCR-14 (consent
+  screen); SCR-01–SCR-06 (placeholders, loaders, optimistic mutations). **MISS-05 partially** — see
+  the open gap below.
+- **Description**: Three agents built the auth-and-entry lane in parallel against three shared
+  contracts — a server-side session gate that kills the sign-in flash and makes protected routes
+  real, a rewritten OAuth consent screen with layperson copy over a closed scope set, and the
+  removal of the shell's first-paint skeletons. Reconcile them into one working whole, verify the
+  contracts against the running stack rather than trusting the reports, and fix the seams.
+- **What shipped**:
+  - **The three shared contracts hold as written.** `ServerSessionUser`/`ServerSessionState`/
+    `readServerSession` match Contract 1 field for field; `AppShellFrameProps.initialSession` is the
+    required prop of Contract 2 and the `(app)` layout passes exactly the specified expression;
+    `OAUTH_ISSUABLE_SCOPES` is a single closed array that `packages/auth`'s `oauthProvider({ scopes })`,
+    the API's `CONNECT_SCOPES`/`MCP_SCOPES`, and the consent copy map all now derive from.
+  - **The consent screen and the roster that revokes it were still strangers.** `connected-apps-tab.tsx`
+    kept its own hand-written scope-label map, so the same permission had two names in the product
+    ("Read work" in Settings, "Read your work" on the consent screen), and its `?? scope` fallback
+    printed a raw identifier — the exact SCR-12/SCR-14 failure the consent screen had just closed.
+    Both surfaces now render from `describeScope`, so a permission cannot be renamed or reduced to
+    an identifier on the screen where someone checks what they agreed to.
+  - **A security control that overstated its own reach.** The roster promised revoking "removes all
+    their access tokens immediately". It does not: with the `jwt` plugin mounted the access token is
+    a self-contained JWT that never reaches `oauth_access_token`, and the MCP resource server
+    verifies it locally with no per-call lookup. Revocation ends the grant and the refresh path
+    immediately, and a token already issued survives up to its 15-minute lifetime. Both the UI copy
+    and the `DELETE /me/connected-apps/:clientId` OpenAPI description now state that window.
+  - **One open-redirect guard, not two.** `safeSameOriginPath` (browser) and `safeServerReturnPath`
+    (server) were two hand-written copies of the same URL reasoning, differing only in which origin
+    they resolve against. Both now bind one shared `sameOriginPath`, and a test asserts the two
+    bindings agree on every attack shape — the failure mode being a `callbackURL` the server honours
+    and the client rejects, on whichever route nobody re-checked.
+  - **One auth-screen entry guard, not two.** `/sign-in` and `/sign-up` had duplicated the same
+    `searchParams` reader, OAuth-resume detection, fallback destination and redirect. Both now call
+    `redirectAuthenticatedVisitor` in `(auth)/_lib/server-entry-guard.ts`.
+  - **Stale rationale corrected.** `/open` shipped as a Server Component calling `redirect()` rather
+    than the planned Route Handler (`next/link` will not navigate to a Route Handler), but the
+    comments in `marketing-cta.tsx` and its test still explained `prefetch={false}` by the old shape.
+- **Verification**: `typecheck` + `lint` clean across `@docket/web`, `@docket/api`, `@docket/ui`,
+  `@docket/types`, `@docket/auth`, `@docket/test-utils`. Tests: web **162 files / 1214**, api
+  **184 / 1622**, ui **22 / 293**, types **15 / 278**, auth **3 / 60**, test-utils **13 / 98** — all
+  pass. `placeholder-inventory --check` exits 0; `surface-inventory` regenerates with no drift.
+  Probed against the running stack: anonymous `/today`, `/calendar`, `/settings/athena?tab=mcp` and
+  `/orgs` each 307 to `/sign-in` with the query-preserving `callbackURL`; a stale (well-formed but
+  invalid) session cookie passes middleware and is caught by the layout; authenticated `/sign-in`,
+  `/sign-up`, `/open` all 307 into the app with no auth document served; `?response_type=&client_id=`
+  correctly renders instead of redirecting, so an in-flight grant is never abandoned; and
+  `callbackURL=https://evil.example` / `//evil.example` both fall back to `/today` while
+  `callbackURL=/calendar` is honoured.
+- **Open gap (MISS-05, not closed here)**: "revoking the grant makes the next call fail" is still
+  false for up to 15 minutes. The obvious fix — checking the `oauth_consent` row in
+  `resolveBearerContext` — is **not** a safe drop-in: `@better-auth/oauth-provider` skips writing a
+  consent row entirely for a client with `skipConsent`, and `skip_consent` is an accepted dynamic
+  client-registration field, so requiring the row would 401 those clients outright. Closing this
+  properly means deciding whether Docket accepts a ≤15-minute residual (the standard short-lived-JWT
+  trade) or adds a per-call revocation check that also handles the no-consent-row case — a product
+  decision, not an integration one. The behaviour is now documented everywhere it is user-visible
+  instead of being contradicted.
+- **Learnings**:
+  - A contract shared by three agents held perfectly; the seams that broke were all between a new
+    module and an **old** surface nobody was assigned. The consent screen got a single source of
+    truth for its copy, and the settings page that revokes those same grants was never pointed at
+    it. Reconciliation has to look outward from the changed files, not just between them.
+  - Two of the three worst findings were false sentences, not broken code — "removes all their
+    access tokens immediately" and "the target is a route handler". Green gates cannot see either.
+  - When an agent escalates a security gap with a proposed fix, verify the fix before adopting it.
+    The proposed consent-row check was correct about the defect and would have caused an outage.
+
+---
+
+### [LAUNCH-LEDGER-001] Collapse the two launch ledgers into one derived record
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: GEN-09 (the slice-record half of it). Also corrects the recorded figures for
+  [LAUNCH-INTEGRATE-001] and closes GEN-07 / GEN-23, whose implementing slice is recorded in
+  [LAUNCH-SEC-001] below.
+- **Description**: An adversarial review found the launch reporting three different numbers for one
+  measurement and two different answers to "how much of the launch is done?". The cause was
+  structural, not clerical: two generators, `scripts/launch-record.ts` and
+  `scripts/launch-compliance-record.ts`, each projected the same 399-requirement baseline into its
+  own artifact, and each had its own passing test. `pnpm launch:record` reported `closed=12`;
+  `pnpm launch:compliance-record` reported `closed=10`.
+- **What changed**:
+  - **One ledger.** `scripts/launch-compliance-record.ts` and
+    `docs/engineering/launch/checklist.md` are deleted. `scripts/launch-record.ts` is now the only
+    launch tool and writes both surviving artifacts — `launch-record.json` and its rendering
+    `launch-checklist.md` — from one pass over the baseline and the slice files.
+  - **The disagreement is now unrepresentable, not merely detectable.** `owner`, `claim`, `state`,
+    `verifiedBy`, and `verificationArtifacts` are _derived_ from
+    `docs/engineering/launch/slices/*.md` on every run and overwrite whatever the record held.
+    Only genuinely human-authored fields (`evidence`, `worklogAnchor`, `blockedReason`,
+    `questions`, `externalSystems`) carry across. The previous guard, `sliceClaimViolations()`,
+    could only catch a record that _overstated_ its slices; it could not catch one that ignored
+    them, which is exactly how GEN-07 and GEN-23 sat at `not-started` while
+    `slices/security-and-domains.md` graded both `pass`.
+  - **The distinction that made two files tempting is kept, in one file.** A new `claim` field on
+    each entry carries the slice's own five-value outcome beside the four-value graded `state`, and
+    the checklist renders both. What a worker claims and what a verifier confirmed are genuinely
+    different facts; they no longer live in different documents.
+  - **GEN-09 is enforced by the parser.** The slice contract gains required `verifier:` and
+    `verifierArtifacts:` fields. `parseSlice` rejects a slice whose verifier normalizes to its own
+    name, and `sliceVerificationProblems()` rejects one whose artifacts are absent from disk or sit
+    entirely outside the verifier-owned evidence roots. `stateForClaim()` will not grade anything
+    `closed` unless its slice passes both. Previously the requirement was satisfied one layer up in
+    `launch-record.json`, so the slice records GEN-09's acceptance actually names carried nothing:
+    two of four had no verification field at all.
+  - **The gap between "claimed pass" and "closed" is printed.** `awaiting-verification=N` appears in
+    the CLI headline and in the checklist summary. That number is what silently differed between the
+    two ledgers; it is now a reported measurement rather than something found by diffing files.
+- **Corrections to previously recorded figures** — every one of these was restated from the file or
+  from a fresh run, not from a prior summary:
+  - [LAUNCH-INTEGRATE-001] recorded `Test Files 15 passed (15) / Tests 104 passed (104)` for
+    `@docket/test-utils`, `Test Files 7 passed (7) / Tests 90 passed (90)` for `test:tooling`, and
+    `sign-off: withheld (392 gate violations)`. None of the three reproduced; the real figures at
+    audit time were 13/95, 7/91, and 389. Corrected in place, and the counts are now cited as
+    commands rather than transcribed, since a number copied into prose goes stale in silence.
+  - The same entry stated `verifiedBy is set to launch-governance-verifier on all seven entries`.
+    Every one of those entries reads `launch-record-reconciler`. Corrected, and the field is now
+    derived from the claiming slice so it cannot be set by hand.
+  - **A prior lane summary reported the closed tally as `SCR-17, SCR-18, SCR-21, SCR-22 → closed,
+verifiedBy: launch-lane-reconciler` and `11 closed, 3 in-progress, 385 not-started`.** Every
+    figure was wrong against the file: the field is `state`, not `status`; SCR-22 was `in-progress`
+    and SCR-19 was `closed` (the reverse of what was claimed); `verifiedBy` read
+    `launch-record-reconciler`; and the tally was 10 / 21 / 368. The tally today, from
+    `pnpm launch:record`, is **12 closed / 21 in-progress / 366 not-started**.
+  - The `signOffViolations()` count was reported as 388 in one place and 392 in another, while the
+    generator printed 389. It prints 387 now that GEN-07 and GEN-23 close.
+  - "Three duplications left standing, all green and mutually consistent" was wrong on both halves.
+    Two of the three — `core-e2e-tests.md` and the `ci-gating-policy` / `e2e-suite-policy` guards —
+    had already been collapsed by [LAUNCH-INTEGRATE-002]. The third, the two ledgers, was **not**
+    mutually consistent: it was reporting `closed=12` against `closed=10`. It is collapsed here.
+    None remain.
+- **Not closed here, with reason**:
+  - **SCR-20** needs a GitHub Actions run on a scratch branch showing a forced unit failure and a
+    forced e2e failure each turning the workflow red. That requires committing and pushing, which
+    this lane is explicitly instructed not to do. The static half remains verified
+    (`pnpm ci:gate-policy`, exit 0). Left `in-progress`.
+  - **SCR-22** needs `pnpm --filter @docket/web test:e2e` to pass. `playwright.config.ts` is
+    `workers: 1` and its own header records that "every spec mutates the one shared embedded dev
+    database" — the stack is shared with other agents working concurrently, so running the suite
+    would destroy their state. The relocation clause is verified (25 spec files across 7
+    subdirectories, none at the root). Left `in-progress`.
+  - **GEN-10** stays open on its own merits: 45 of 85 inventoried surfaces have no scorecard.
+- **Files changed**: `scripts/launch-record.ts`,
+  `packages/test-utils/tests/launch-policies/{launch-record-schema.ts,launch-record.test.ts}`,
+  `tests/launch/launch-record.test.ts`, `package.json`,
+  `docs/engineering/launch/slices/{ci-gating,launch-governance,security-and-domains,test-standards}.md`,
+  `docs/engineering/launch/{README.md,verification-log.md,launch-record.json,launch-checklist.md}`,
+  `docs/engineering/launch/evidence/verification/2026-08-02-security-and-domains-verification.txt`,
+  `docs/WORKLOG.md`. Deleted: `scripts/launch-compliance-record.ts`,
+  `docs/engineering/launch/checklist.md`.
+- **Validation** — every figure below is the command's real output, captured after the last edit:
+  - `pnpm --filter @docket/test-utils typecheck` — exit 0. `lint` — exit 0.
+    `test` — `Test Files 13 passed (13) / Tests 96 passed (96)`.
+  - `pnpm test:tooling` — `Test Files 7 passed (7) / Tests 100 passed (100)`.
+  - `pnpm launch:record` —
+    `requirements=399 closed=12 open=387 awaiting-verification=0 slices=4 sign-off=withheld (387 gate violations)`.
+    Record states: `closed=12 in-progress=21 not-started=366 blocked=0`.
+  - `pnpm launch:record --sign-off` — exit 1, `sign-off blocked by 387 open requirement(s)`:
+    `unclaimed: 366, partial: 16, fail: 4, not-built: 1`. Red on purpose; GEN-01's gate must stay
+    red until the launch actually lands.
+  - Idempotence: `pnpm launch:record` run twice leaves both generated files byte-identical
+    (sha256 compared before and after). `pnpm exec prettier --check` — clean on both.
+  - `pnpm ci:gate-policy` — `PASS`, exit 0. `git rev-list --merges --count origin/main..HEAD` — `0`.
+  - **The GEN-09 gate was mutation-tested, not merely observed green.** Removing the
+    `&& sliceVerified` clause from `stateForClaim` — the exact loophole that would let an
+    unverified `pass` close a requirement — turns two tests red
+    (`grades a claim by outcome, and holds an unverified pass at in-progress`,
+    `refuses to close a pass claim whose verifier artifact is missing`). Restored, 30 pass. A gate
+    nobody has seen fail is not known to be a gate.
+- **Learnings**:
+  - A ceiling rule catches a record that claims more than its slices. It cannot catch one that
+    claims less, because "not-started" is below every ceiling — so the drift ran in the one
+    direction nobody had guarded, and shipped work was reported as untouched.
+  - Two artifacts that each regenerate byte-identically are not therefore consistent with each
+    other. Idempotence is a property of one generator; agreement is a property of a pair, and
+    nothing was measuring it.
+  - When a requirement's acceptance names a specific document ("each work slice's record"),
+    satisfying it somewhere else that happens to be more convenient is not satisfying it. GEN-09
+    read `closed` for hours while two of the four files it actually names had no verifier field.
+
+---
+
+### [LAUNCH-SEC-001] Credential masking and the Docket/Athena domain deliverable
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P1
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: GEN-07, GEN-23.
+- **Description**: The `security-and-domains` slice shipped without a WORKLOG entry — it landed
+  while [LAUNCH-INTEGRATE-001] was running, and that entry explicitly left its record "its own to
+  write". MISS-07 requires every shipped slice to be recorded here, so this entry records it. The
+  implementation is that slice's; the verification below is [LAUNCH-LEDGER-001]'s, which is the
+  point of GEN-09.
+- **What shipped**:
+  - **GEN-07 — stored credentials are never rendered in plaintext.** The bearer-token field is the
+    only password-typed input across web and admin; `McpIntegrationOut` carries no token field at
+    all, and `apps/api/src/routes/integrations-mcp.ts` seals the value with AES-256-GCM via
+    `sealCredential()`. A probe drove the add-connector and stored-connector surfaces at 1440×900
+    and 390×844 in both themes and captured every network response.
+  - **GEN-23 — candidate domains for Docket and Athena.** `docs/engineering/domains.md` records 20
+    Docket and 16 Athena candidate rows, each with a registrar/WHOIS result or a `dig` status, and
+    recommends one pick per product with rationale: `docket.place` and `athena.day`.
+- **Independent verification** (verifier: `launch-ledger-integrator`, which wrote neither the
+  domains document nor the credential-masking work; artifact:
+  `docs/engineering/launch/evidence/verification/2026-08-02-security-and-domains-verification.txt`):
+  `probe-report.json` records `bearerFieldMasked: true`, `bearerFieldType: "password"`,
+  `leakingResponses: []`, and zero captured responses containing the probe token. The PNGs were
+  read, not counted: the Bearer token field renders as filled dots, and a _stored_ connector's
+  expanded "Connection details" renders the server URL and no credential at all — stronger than the
+  "last-4 only" the acceptance would have accepted. Both recommended domains independently re-probe
+  `status: NXDOMAIN`, and two `.com` rows marked free re-probe `No match for domain` at the Verisign
+  registry.
+- **Residual, recorded rather than glossed**: GEN-07's acceptance also names "server logs for the
+  same session contain no key material". The probe captures HTTP responses and DOM, not API stdout,
+  so that clause rests on the `sealCredential()` code path rather than on a captured log sweep.
+- **Files changed**: recorded in
+  `docs/engineering/launch/slices/security-and-domains.md` under `filesChanged`.
+
+---
+
+### [LAUNCH-INTEGRATE-002] Collapse the launch lane's duplicate guards and make CI able to go green
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: no requirement of its own. This entry records the integration of the
+  `launch-governance`, `ci-gating`, and `test-standards` slices, and the seam work
+  [LAUNCH-INTEGRATE-001] deliberately deferred.
+- **Description**: Three workers built the launch's testing and CI governance in parallel, beside a
+  fourth lane doing overlapping work. Every artifact was internally consistent. Taken together they
+  contained two registers for one requirement, two guards for another, a CI job that could never go
+  green, and a set of repository-level tests that CI never ran at all.
+- **What was reconciled**:
+  - **Two SCR-19/SCR-20 guards became one.** `scripts/ci-gate-policy.ts` (a real YAML reader, a
+    projected job/step model, four fixtures proving each rule bites) is now the only implementation.
+    The second — a line-based workflow reader inside
+    `packages/test-utils/tests/workspace-policies/testing-tree.ts` plus `ci-gating-policy.test.ts`
+    over it — is deleted, and that module's header now says workflow parsing does not belong there.
+    The surviving guard runs twice: as `pnpm ci:gate-policy` in the `quality` job, and as
+    `tests/ci/ci-gate-policy.test.ts`.
+  - **Two SCR-18 registers became one.** `docs/engineering/specs/core-e2e.md` survives with
+    `e2e-discipline-policy.test.ts`; `docs/engineering/core-e2e-tests.md` and
+    `e2e-suite-policy.test.ts` are deleted. The two graded different specs core, and because each
+    had its own passing guard, neither could see the disagreement.
+  - **The `secret-scan` job could never have passed.** It ran `gitleaks/gitleaks-action@v3`, which
+    needs a licence key for organization-owned repositories; `GITLEAKS_LICENSE` is unset, so the job
+    would have failed on every run and blocked every deploy. Meanwhile the committed
+    `.gitleaks.toml` already described `scripts/secret-scan.ts` — a real, tested, network-free
+    scanner over the same rules — as the gate. CI now runs that. The licensed binary remains the
+    documented second opinion for scanning history, which the in-repo scanner does not cover; the
+    checkout keeps `fetch-depth: 0` for it. Recorded as a residual gap, not hidden.
+  - **CI never ran the repository-level suites.** `turbo run test` only runs workspace packages, so
+    `tests/ci/` and `tests/launch/` — the guards protecting `ci.yml` and the launch record — were
+    never executed by any job. The `test` job now runs `pnpm test:tooling` as well, which is what
+    made widening that script in the lane contract mean anything.
+  - **GEN-07 was claimed by two slices.** `security-and-domains` finished it (`pass`, with the
+    surface screenshots); `test-standards` could only claim `partial`. The claim was removed from
+    `test-standards.md` and its section rewritten as a record of what it contributed. Only GEN-06 is
+    allowed to sit in two slices, and the reconciler now exits 0 again.
+  - **The record could claim more than the slices did.** `sliceClaimViolations()` in
+    `launch-record-schema.ts` is the new guard: `launch-record.json` may lag a slice file — a `pass`
+    waits at `in-progress` until GEN-09's independent verification lands — but it may never lead
+    one. Closing something a slice itself calls `partial` is now a test failure that names the id,
+    the state, and the claim. That exact overstatement had shipped for GEN-09 and MISS-07.
+- **Fixed outside the lane's file set, with reason**: `packages/ui/tests/primitives/checkbox.test.tsx`
+  carried `as HTMLInputElement`, which the lint program rejects as unnecessary while `tsc` requires
+  it — a genuine disagreement between the two programs, not a redundant cast. A typed
+  `getByRole<HTMLInputElement>` query satisfies both. It is another lane's file, but it was the only
+  red task in `turbo run lint`, so it blocked the whole quality gate.
+- **Files changed**: `.github/workflows/ci.yml`, `package.json`, `scripts/ci-gate-policy.ts`,
+  `tests/ci/ci-gate-policy.test.ts`, `docs/engineering/ci-gating.md`,
+  `packages/test-utils/tests/workspace-policies/testing-tree.ts`,
+  `packages/test-utils/tests/launch-policies/{launch-record-schema.ts,launch-record.test.ts}`,
+  `packages/ui/tests/primitives/checkbox.test.tsx`,
+  `docs/engineering/launch/slices/test-standards.md`,
+  `docs/engineering/launch/evidence/integration/2026-08-02-lane-integration.txt`, `docs/WORKLOG.md`.
+  Deleted: `docs/engineering/core-e2e-tests.md`,
+  `packages/test-utils/tests/workspace-policies/{ci-gating-policy,e2e-suite-policy}.test.ts`.
+- **Validation**: `pnpm turbo run typecheck` — 18/18. `pnpm turbo run lint` — 18/18.
+  `pnpm turbo run test` — 18/18. `pnpm test:tooling` — all root suites green.
+  `pnpm exec tsx scripts/ci-gate-policy.ts` — PASS, exit 0. `pnpm exec tsx scripts/secret-scan.ts`
+  — 0 findings over 2001 tracked files. `pnpm exec tsx scripts/launch-record.ts` — exit 0, no
+  double claim outside GEN-06. Full transcript:
+  `docs/engineering/launch/evidence/integration/2026-08-02-lane-integration.txt`.
+- **Learnings**:
+  - Two guards for one requirement are worse than one, and worse than none in a specific way: each
+    validates its own document, so the pair reports green while disagreeing. The SCR-18 registers
+    disagreed on three specs for hours with four passing test suites over them.
+  - A gate that cannot be turned green is not a strict gate, it is a gate that will be deleted. The
+    `secret-scan` job would have been the first thing removed the morning someone needed to ship.
+  - The dangerous direction of drift is always the same one: a record claiming more than the work
+    beneath it. Enforcing a ceiling rather than an equality catches that without forcing anyone to
+    close a requirement before it has been checked.
+
+---
+
+### [LAUNCH-CRAFT-001] Craft Rubric pass over the six unscored daily surfaces
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P1
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Advances (closes nothing)**: GEN-10. The requirement is claimed by the `test-standards` slice at
+  `partial` and stays there. This entry moves its progress number and does not touch its claim —
+  `scripts/launch-record.ts` allows a second claim on GEN-06 only, so nothing here re-claims GEN-10.
+- **Description**: `docs/design/surface-inventory.md` reported 39 of 85 surfaces carrying a Craft
+  Rubric scorecard, and `/search` — a primary daily destination — had never been reviewed at all.
+  The five personal daily surfaces plus the sign-in page were scored against
+  `docs/design/craft-rubric.md` from real captures and real measurements, not from source reading.
+- **What shipped**:
+  - **Six scorecards**, each with the machine-readable header
+    `docs/design/audits/README.md` specifies: `2026-08-02-launch-{sign-in,today,portfolio,inbox,search,settings}.md`.
+    Every one lands `needs-work`. `/search` gains its first scorecard, taking inventory coverage
+    from 39/85 to 40/85.
+  - **28 committed captures** under `docs/design/audits/screenshots/2026-08-02-launch-surfaces/` —
+    1440x900 and 390x844 in light and dark for all six surfaces, a keyboard-focus capture, two 3x
+    detail crops, and the `/sign-in` passkey-failure state. The three older Athena scorecards cite
+    screenshot directories that no longer exist on disk; these are committed beside the reviews so
+    the claims stay re-checkable.
+  - **The cursor defect is one primitive, not six pages.** A probe that separates enabled from
+    disabled controls (a disabled `<button>` is _supposed_ to compute `cursor: default`) found every
+    **enabled** `<button>` in the app computing `default` while every `<a>` computes `pointer`:
+    11 of 29 on `/today`, 10 of 28 on `/portfolio`, 17 of 35 on `/inbox`, 14 of 32 on `/search`,
+    6 of 34 on `/settings`, and the enabled primary action on `/sign-in`.
+  - **Two A11y gate failures, both measured.** On `/today` the `⌘↵` hint inside the composer's
+    primary action is **1.34:1** against that button (`lab(35.0059 -0.209 -3.006)` at 10px on
+    `lab(41.7003 22.5097 -73.931)`, converted CIE Lab D50 → linear sRGB → WCAG); the button's own
+    label is fine at 5.55:1. On `/search`, five controls measure 36px at 390px against a 40px floor.
+  - **Two findings nobody had recorded.** `/search` ships two raw `input[type="date"]` controls
+    rendering the browser's `mm/dd/yyyy` inside an otherwise fully tokenised surface. The `/today`
+    agenda rail draws its current-time line _under_ its own empty-state copy, so the now-indicator
+    renders as two disconnected red stubs (`today-now-line-3x.png`).
+  - **One claim retracted before it was published.** A first probe read `outline-style: none` after
+    a programmatic `.focus()` and looked like a missing focus ring. Re-run with real `Tab` presses,
+    `:focus-visible` matches and the ring is painted — `focus-today-tab4.png` shows it on the
+    sidebar. The A11y focus gate passes on all six surfaces.
+- **Files changed**: `docs/design/audits/2026-08-02-launch-sign-in.md`,
+  `docs/design/audits/2026-08-02-launch-today.md`,
+  `docs/design/audits/2026-08-02-launch-portfolio.md`,
+  `docs/design/audits/2026-08-02-launch-inbox.md`,
+  `docs/design/audits/2026-08-02-launch-search.md`,
+  `docs/design/audits/2026-08-02-launch-settings.md`,
+  `docs/design/audits/screenshots/2026-08-02-launch-surfaces/` (28 PNGs),
+  `docs/design/surface-inventory.md` (regenerated), `docs/WORKLOG.md`.
+- **Validation**: `pnpm --filter @docket/test-utils test` — 6 files / 32 tests passed, including
+  `design-policies/scorecard-schema.test.ts` (headers, ship-verdict rule, coverage-line equality)
+  and `design-policies/surface-inventory.test.ts`. `pnpm exec tsx scripts/surface-inventory.ts` —
+  wrote `docs/design/surface-inventory.md`, Coverage 40 of 85. `pnpm exec tsx scripts/launch-record.ts`
+  — unchanged, 399 rows. `pnpm exec prettier --check` on all seven authored Markdown files — clean.
+  `git rev-list --merges --count origin/main..HEAD` — 0.
+- **Not done**: none of the six surfaces reaches the ship bar, and no product defect found here was
+  fixed — product code belongs to other lanes. Every capture is of a genuinely empty account, so no
+  scorecard scores populated behaviour; each says so under "Not verified in this pass".
+
+### [LAUNCH-GOV-002] The launch record: slice reconciler, obstacle/question registers, hub and portability docs
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Slice record**: `docs/engineering/launch/slices/launch-governance.md` (canonical; see below)
+- **Closes**: GEN-01, GEN-03, GEN-04, GEN-05, GEN-08, GEN-18, MISS-01 — and records GEN-09 and
+  MISS-07 as **partial**, with the exact remaining action named rather than hand-waved.
+- **Description**: Nine of the audit's 399 requirements
+  (`docs/engineering/launch-compliance.json`) are graded on documents that did not exist. Every one
+  read `not-built` with the note "no launch record exists". This slice builds the record, the tool
+  that keeps it honest, and the two engineering documents (hub architecture, native portability)
+  that two of those requirements are graded on directly.
+- **What shipped**:
+  - **`scripts/launch-record.ts`** — the slice reconciler. Loads the read-only audit baseline,
+    parses every `docs/engineering/launch/slices/*.md` frontmatter with a strict in-repo YAML reader
+    (no new dependency; the reader _rejects_ anything off-contract rather than tolerating it), and
+    renders `docs/engineering/launch/checklist.md` with one row per requirement. Two modes:
+    **structural** (default — every slice parses, no id claimed twice outside the GEN-06 allowlist,
+    no id the baseline does not define) and **`--sign-off`** (GEN-01's gate: exits non-zero while
+    any requirement is unclaimed or not `pass`, printing every offending id with its severity).
+  - **`docs/engineering/launch/obstacle-log.md`** — six obstacles actually hit, each naming the
+    session that got the data anyway: the Vercel MCP server routed around with the authorized
+    `vercel` CLI; `npx wrangler` refusing to install, routed around with the workspace's own
+    `apps/runner` dependency; Docker absent, routed around with the embedded-PGlite dev stack. The
+    three still-open items are classified as a naming gap, an OAuth ceremony, and a hardware passkey
+    ceremony — with the one-line command that closes each.
+  - **`docs/engineering/launch/external-systems.md`** — all seven systems GEN-05 names. **Four
+    captured authenticated sessions** (Google via `gcloud projects list`; Notion via
+    `notion-get-users self`; Cloudflare via `wrangler whoami`; Vercel via `vercel whoami` +
+    `project ls`) and three with 3–4 distinct workaround attempts each quoting real failure output
+    (Sunsama, Lovelace Lattice, Twilio).
+  - **`docs/engineering/launch/questions.md`** — the register. Zero approval requests were made;
+    one question is raised in writing, in the mandated three-field form.
+  - **`docs/engineering/launch/verification-log.md`** — per-slice verifier and artifact, with
+    PENDING entries carrying the exact command instead of invented verifier output.
+  - **`docs/engineering/hub-architecture.md`** — names Docket as the hub, inventories every
+    connector with file:line for each canonical-entity read/write, and writes up the negative search
+    (every provider-client construction site, every outbound provider write, every token
+    resolution). The closest external-to-external candidate — a Linear webhook causing a Gmail
+    archive — passes through three Docket entities and is guarded by `if (!event.subjectId) return;`
+    at `apps/api/src/lib/automation/handlers.ts:73`.
+  - **`docs/engineering/native-portability.md`** — 33 shipped web patterns enumerated from the real
+    components; 24 mapped to named Material 3 and Apple HIG counterparts, 9 explicit exceptions each
+    with a reason and a migration note, and the required count stated: **0** shipped patterns
+    neither mapped nor excepted.
+  - **`tests/launch/launch-record.test.ts`** — 21 tests covering the parser's rejection cases, the
+    unclaimed / doubly-claimed detection, the GEN-06 allowlist (weakest-claim-wins), and assertions
+    against the real committed data that the checklist holds every baseline id exactly once and that
+    sign-off is **not** clean.
+- **Files changed**: `scripts/launch-record.ts`, `scripts/launch-compliance-record.ts`,
+  `tests/launch/launch-record.test.ts`,
+  `docs/engineering/launch/{README.md,checklist.md,obstacle-log.md,questions.md,external-systems.md,verification-log.md}`,
+  `docs/engineering/launch/slices/launch-governance.md`, `docs/engineering/hub-architecture.md`,
+  `docs/engineering/native-portability.md`, `docs/WORKLOG.md`.
+- **Validation**: `pnpm exec vitest run tests/launch` — `Test Files 1 passed (1) / Tests 21 passed
+(21)`. `pnpm exec tsx scripts/launch-record.ts` → `requirements=399 closed=8 open=391 slices=2`,
+  399 rows written, byte-identical on a second run. `pnpm exec tsx scripts/launch-record.ts
+--sign-off` → exit 1, `391 open (unclaimed 382, partial 6, fail 3)`, every id named. ESLint clean
+  on all three source files; `prettier --check` clean on all eleven authored files; `tsc --noEmit`
+  clean against the root tsconfig. `git rev-list --merges --count origin/main..HEAD` → `0`.
+- **Honest scope — what this does NOT close**:
+  - **GEN-09 is `partial`.** Only the `ci-gating` slice has a verifier-produced artifact on disk
+    (`docs/engineering/launch/evidence/production/`, six files, whose verdict is that production is
+    32 API paths behind `HEAD`). This slice has no independent verifier — every command above was
+    run by its implementer, and naming myself as my own verification subagent would defeat the
+    requirement. `test-standards` has produced no artifact yet. The verification log records the
+    exact commands a verifier must run.
+  - **MISS-07 is `partial`.** Two of three slices have written slice files, and this lane may not
+    commit, so slice files are the canonical record (stated explicitly in
+    `docs/engineering/launch/README.md`) rather than landed commits. The linear-history clause
+    passes as written.
+  - **GEN-01's substantive condition is not met and is not claimed to be.** 391 of 399 requirements
+    are open. What shipped is the gate that will refuse a dishonest sign-off, and it is deliberately
+    red today.
+- **Relationship to [LAUNCH-GOV-001] — a duplicate claim that needs collapsing**: the entry below
+  was written by another lane and claims seven of the same requirement ids (GEN-01, GEN-03, GEN-04,
+  GEN-05, GEN-08, GEN-09, MISS-07). Both entries are real work and neither was discarded, but
+  **MISS-07 requires each id to appear in exactly one entry, so the duplication is itself a defect**
+  and is the main reason MISS-07 is recorded `partial`. Three concrete differences the orchestrator
+  needs in order to collapse them:
+  1. **State vocabulary.** LAUNCH-GOV-001's record uses `not-started | in-progress | closed |
+blocked`; the lane's shared contract and this slice use the baseline's five outcomes
+     (`pass | partial | fail | not-built | unverifiable`). `blocked` is one of the four words GEN-01
+     counts as a violation, so it should not be a legal state.
+  2. **GEN-05 evidence.** LAUNCH-GOV-001's ledger records all seven external systems as `attempting`
+     with no captured session, which does not meet GEN-05's bar. `external-systems.md` captures four
+     authenticated sessions and three sets of ≥3 failed attempts with real output, which does.
+  3. **Tooling.** Both lanes authored a generator at `scripts/launch-record.ts`. Nothing was lost:
+     the other lane's generator was preserved verbatim at `scripts/launch-compliance-record.ts` with
+     a provenance note; the reconciler held `scripts/launch-record.ts`. They wrote disjoint outputs
+     and neither imported the other, but there were two checklists in `docs/engineering/launch/` and
+     they should become one. **Resolved by [LAUNCH-LEDGER-001]**: they did become one. The two
+     ledgers had by then diverged — `closed=12` versus `closed=10` on the same tree — so the second
+     generator and `checklist.md` are deleted and the surviving tool derives every graded field from
+     the slice files.
+- **Learnings**:
+  - Two agents given the same governance mandate will both build it, and neither will know. File
+    ownership stated in a brief is not enforcement; the first thing a lane like this should ship is
+    the reconciler that makes double-claiming visible, because that is the only artifact that
+    catches the duplication automatically.
+  - "Blocked on credentials" is almost always a mis-classification. Of the three open obstacles
+    here, one was a naming gap, one an unperformed OAuth consent, and one a hardware ceremony that
+    is un-automatable _by design_. Each has a one-line action; none is an access problem. Writing
+    the distinction down is what converts an excuse into a task.
+  - A negative claim ("no external system talks to another") is only credible with an enumerable
+    search space. Three greps over the chokepoints — client construction, outbound writes, token
+    resolution — turned GEN-18 from an assertion into something a reviewer can re-run in a minute.
+
+---
+
+### [LAUNCH-INTEGRATE-002] Close the review findings against the launch record
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Priority**: P0
+- **Description**: An adversarial review found that five requirements the launch record graded
+  `closed` were not closed, and that one of them was closed on evidence its own record file
+  contradicted. This entry is the response to that review, by an agent that implemented none of the
+  slices it graded.
+- **What was wrong, and what it is now**:
+  - **SCR-18 — two registers, and they disagreed.** `docs/engineering/core-e2e-tests.md` marked 13
+    specs core; `docs/engineering/specs/core-e2e.md` marked 16. They split on seven specs, and
+    `verify-composer.spec.ts` was a core journey in one and "asserts only that the composer opens"
+    in the other. Each had its own guard, so each was green and neither could see the other.
+    `specs/core-e2e.md` survives as the single register — it is machine-readable, lists every spec
+    rather than only the core ones, and makes the divergence check bidirectional. The duplicate and
+    `e2e-suite-policy.test.ts` are gone; the spec-count floor that made that guard worth keeping
+    moved into `e2e-discipline-policy.test.ts`, which also now **fails if a second register
+    reappears** — any other Markdown file under `docs/` whose table rows are keyed on an e2e spec
+    path is reported as a competing register.
+  - **GEN-09 — the verifier was the implementer wearing a suffix.** Seven closed entries read owner
+    `launch-governance` / verifiedBy `launch-governance-verifier` and cited `launch-record.json`
+    plus the policy test that reads it, both written by the implementer. The guard only rejected an
+    exact string match. `verificationViolations()` now normalizes casing, separators, and the
+    `-verifier` / `-verification` / `-reviewer` / `-checker` family before comparing, treats
+    containment as identity, and additionally requires at least one artifact under
+    `docs/engineering/launch/evidence/` or `docs/design/audits/screenshots/` — the roots only a
+    verifier writes to. Both rules are proved against fixtures in both directions.
+  - **GEN-09's own missing artifact now exists.** `verification-log.md` had recorded
+    `launch-governance` as PENDING with the exact commands a verifier would need to run. They were
+    run, and the output is
+    `docs/engineering/launch/evidence/verification/2026-08-02-launch-record-reconciliation.txt`.
+  - **GEN-08 — the evidence contradicted the file it pointed at.** It read "This slice asked none,
+    so the array is empty" while the same record's `questions` array holds Q-01/WIL-41. Rewritten to
+    describe the question that was actually asked, and demoted to `in-progress`, since the
+    acceptance is conditioned on reaching production sign-off and `signOff` is `false`.
+  - **GEN-01 — demoted.** The checklist is real, complete, and idempotent, but the majority of the
+    399 ids map to no landed commit, and nothing this lane produced is committed.
+  - **SCR-22 — demoted.** The acceptance says the suite must discover **and pass**; only discovery
+    was ever measured. Re-verified at 25 files / 42 tests against a pre-move baseline of 23.
+  - **Two launch registers were also disagreeing.** `slices/*.md` graded GEN-01 `pass` while the
+    record graded it `closed` on the strength of that claim, and MISS-07 the other way round. The
+    slice files are the source of truth for a claim; every open-state entry now follows them, and
+    `sliceClaimViolations()` fails if the two ever diverge again.
+- **What could not be closed here, and why**:
+  - **SCR-20's empirical half** needs a GitHub Actions run on a scratch branch showing a forced unit
+    failure and a forced e2e failure each turn the workflow red with `deploy-production` skipped.
+    Producing one requires pushing a branch, and this run was instructed not to commit. The static
+    half is verified (`pnpm ci:gate-policy`, exit 0, all six check jobs in `deploy-production.needs`).
+  - **SCR-22's passing run** needs an isolated stack. `playwright.config.ts` is `workers: 1` and
+    every spec mutates the single embedded pglite dev database other agents were using
+    concurrently, so running it would have destroyed their state.
+  - **GEN-10** stays open on its own merits: 46 of 85 inventoried surfaces have no scorecard, every
+    overlay is uncovered, and one scorecard records `needs-work` with failing gates.
+  - **GEN-23 and the `security-and-domains` slice** belong to a lane that landed while this ran;
+    its record entries are its own to write.
+- **Files changed**: `docs/engineering/launch/launch-record.json`,
+  `docs/engineering/launch/launch-checklist.md`, `docs/engineering/launch/verification-log.md`,
+  `docs/engineering/launch/evidence/verification/2026-08-02-launch-record-reconciliation.txt`,
+  `docs/engineering/launch/slices/{launch-governance.md,test-standards.md}`,
+  `docs/engineering/specs/core-e2e.md`,
+  `packages/test-utils/tests/launch-policies/{launch-record-schema.ts,launch-record.test.ts}`,
+  `packages/test-utils/tests/workspace-policies/e2e-discipline-policy.test.ts`, `docs/WORKLOG.md`.
+- **Validation**: `pnpm --filter @docket/test-utils typecheck` and `lint` clean; `test` —
+  `Test Files 13 passed (13) / Tests 95 passed (95)`. `pnpm test:tooling` —
+  `Test Files 7 passed (7) / Tests 91 passed (91)`. `pnpm --filter @docket/web test` —
+  `Test Files 153 passed (153) / Tests 1101 passed (1101)`, which also settles the review's report
+  of five red calendar/scheduling tests: they pass individually and in the full run.
+  `pnpm exec prettier --check` clean on every file touched. Record state: `closed=10`,
+  `in-progress=21`, `not-started=368`, `blocked=0`, sign-off withheld.
+- **Learnings**: a policy test that reads only its own document is not a policy test. Both defects
+  here — two core-e2e registers, and a verifier named after its owner — were green under a guard
+  that was structurally incapable of seeing them. The fix in both cases was to make the guard
+  enumerate the space it is supposed to be authoritative over: every Markdown file under `docs/`,
+  and every normalization of an agent name.
+
+---
+
+### [LAUNCH-INTEGRATE-001] Reconcile the launch-governance lane
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: no requirement of its own — this entry records the integration of LAUNCH-GOV-001,
+  LAUNCH-TEST-001, and LAUNCH-DESIGN-001.
+- **Description**: Three workers built the launch's governance artifacts at the same time, and a
+  fourth lane built overlapping ones alongside them. Each was internally consistent and none of
+  them agreed with the others. This entry is the seam work: one generator per output path, one set
+  of references that resolve, and the evidence one lane captured moved into the ledger the other
+  lane made canonical.
+- **What was reconciled**:
+  - **Two tools had claimed `scripts/launch-record.ts`.** The slice reconciler (baseline ×
+    `docs/engineering/launch/slices/*.md` → `checklist.md`) and the compliance-record generator
+    (baseline → `launch-record.json` + `launch-checklist.md`) are different tools with disjoint
+    outputs, and each had briefly overwritten the other on that one path. They now live at
+    `scripts/launch-record.ts` and `scripts/launch-compliance-record.ts` respectively, and every
+    reference to either — `docs/engineering/launch/README.md`, the checklist's own generated
+    header, `launch-record-schema.ts`, `launch-record.test.ts`, the GEN-01 evidence string, and the
+    LAUNCH-GOV-001 entry below — was corrected to name the right one.
+  - **The external-systems ledger was empty in the canonical record while the evidence sat in
+    prose.** `docs/engineering/launch/external-systems.md` holds real captured sessions for Google,
+    Notion, Cloudflare, and Vercel and three-or-more recorded workaround attempts for Sunsama,
+    Lovelace Lattice, and Twilio; `launch-record.json` recorded all seven as `attempting` with
+    empty evidence, so the machine gate reported seven unmet systems that had in fact been worked.
+    All seven rows were ported into the record with their commands and their real failure output,
+    which cleared seven of the gate's violations. That is what actually satisfies GEN-05 rather
+    than only enforcing it. (This bullet previously read "from 399 to 392"; the entry's Validation
+    block said 392, the lane's own summary said 388, and the generator printed 389. The count moves
+    every time a requirement closes, so it is no longer written here — `pnpm launch:record` prints
+    it.)
+  - **The one open product question was likewise unrecorded.** Q-01 ("which vendor is Lovelace
+    Lattice?") existed only in `questions.md`; it is now in the record's `questions` array in the
+    three-field form GEN-08 demands, keyed to WIL-41.
+  - **A scorecard had landed without the header its own schema requires.**
+    `docs/design/audits/2026-08-02-calendar-round-1.md` was written by the calendar lane minutes
+    after the schema was introduced, so it had no front matter and failed
+    `scorecard-schema.test.ts`. Retrofitted per `docs/design/audits/README.md` — scores copied
+    verbatim from the document's own table, gates read off its own gates section (`⚠️` and `❌`
+    both map to `false`), verdict `needs-work` to match its own "BELOW BAR" — and
+    `docs/design/surface-inventory.md` regenerated so `/calendar` lists both of its scorecards.
+  - **`packages/test-utils` could not typecheck at all.** `tests/security/secret-scan.test.ts`
+    imports `scripts/secret-scan.ts`, which sits outside the package's inherited `rootDir`, so
+    `tsc --noEmit` failed with TS6059 before reaching any other file. The package is `noEmit`, so
+    `rootDir` has no output meaning here; widening it to the workspace root states what the program
+    genuinely spans and restores typechecking for every test in the package.
+- **Files changed**: `scripts/launch-record.ts`, `scripts/launch-compliance-record.ts`,
+  `docs/engineering/launch/README.md`, `docs/engineering/launch/launch-record.json`,
+  `docs/engineering/launch/launch-checklist.md`,
+  `packages/test-utils/tests/launch-policies/{launch-record-schema.ts,launch-record.test.ts}`,
+  `packages/test-utils/tsconfig.json`, `docs/design/audits/2026-08-02-calendar-round-1.md`,
+  `docs/design/surface-inventory.md`, `docs/WORKLOG.md`.
+- **Validation**: `pnpm --filter @docket/test-utils typecheck` clean (was TS6059); `lint` clean;
+  `test` green. `pnpm test:tooling` green. `pnpm --filter @docket/web typecheck`, `lint`, and
+  `test` clean. `pnpm exec prettier --check` clean on every file touched. The seven
+  external-system rows cleared, which is what moved `signOffViolations()`.
+- **Figures corrected by [LAUNCH-LEDGER-001]**: this block previously recorded
+  `Test Files 15 passed (15) / Tests 104 passed (104)` for `@docket/test-utils`,
+  `Test Files 7 passed (7) / Tests 90 passed (90)` for `test:tooling`, and
+  `sign-off: withheld (392 gate violations)`. None of the three reproduced against the tree — the
+  real counts at the time of the audit were 13 files / 95 tests and 7 files / 91 tests, and the
+  generator printed 389. Counts are no longer transcribed here, because a number copied into prose
+  is a number that goes stale silently; run `pnpm --filter @docket/test-utils test`,
+  `pnpm test:tooling`, and `pnpm launch:record` for the current values.
+- **Duplication resolved since**: the two SCR-18 registers and the two SCR-19/SCR-20 guards
+  described here have been collapsed — see **[LAUNCH-INTEGRATE-002]** below. The claim in this
+  entry that "their subjects agree" turned out to be wrong: the two registers disagreed on seven
+  specs, and each guard validated only its own document, so neither could see it.
+- **Learnings**:
+  - Parallel workers converge on the same _paths_, not only the same ideas. The costly collision
+    was not two designs for the launch record — it was two tools named `launch-record.ts`, which
+    made each worker's output silently vanish under the other's.
+  - The seam that mattered most was not a type error. It was one lane holding real authenticated
+    sessions in Markdown while the other lane's machine-readable gate reported seven unmet external
+    systems. Both artifacts were honest on their own; the pair was misleading.
+
+---
+
+### [LAUNCH-TEST-001] Test-tree layout, core-e2e register, and CI gating
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: SCR-17, SCR-18, SCR-21, SCR-22
+- **Description**: Four of the audit's testing requirements are about where tests live and whether
+  the suite can be trusted to run: no test beside the source it covers, no test loose at the root
+  of a testing directory, every Playwright spec in a topical subdirectory, and a committed document
+  naming which end-to-end journeys are core. All four were graded `partial`, `fail`, or
+  `not-built`.
+- **What shipped**:
+  - **24 Playwright specs relocated** out of the flat `apps/web/e2e/` root into `auth/`,
+    `calendar/`, `scheduling/`, `athena/`, `mcp/`, `work/`, and `platform/`, with their relative
+    helper imports rewritten. `ls apps/web/e2e/*.spec.ts` now returns nothing.
+  - **`docs/engineering/core-e2e-tests.md`** — the register: 13 core journeys and 11 supporting
+    specs, each by post-move path with a plain-language description of the journey it covers. The
+    document _is_ the marking; there is no in-spec tag that could drift away from it.
+    _(Superseded in [LAUNCH-INTEGRATE-002]: another lane wrote a second register at
+    `docs/engineering/specs/core-e2e.md` grading 16 specs core where this one graded 13. One
+    register survives — that one — and this file was deleted.)_
+  - **`packages/test-utils/tests/workspace-policies/testing-tree.ts`** — the shared walker:
+    workspace enumeration including the `services/*` group that `workspace.ts` omits, the testing
+    and source directory collectors, the e2e spec walker, and a purpose-built GitHub Actions job
+    reader that extracts only `run:`/`uses:` values so prose in a comment can never be mistaken for
+    a command.
+  - **`test-layout-policy.test.ts`, `e2e-suite-policy.test.ts`, `ci-gating-policy.test.ts`** — the
+    three suites built on it, plus **`docs/engineering/ci-gating.md`** recording the gating
+    contract. _(The latter two, and the workflow reader in `testing-tree.ts` they depended on, were
+    removed in [LAUNCH-INTEGRATE-002] as duplicates of another lane's register and guard;
+    `test-layout-policy.test.ts` and `docs/engineering/ci-gating.md` remain.)_
+- **The rules the tests actually enforce**: zero `*.test.*` / `*.spec.*` files under any package
+  `src/` (SCR-17); zero test files directly at the root of any of the 20 testing directories
+  (SCR-21); every spec in a subdirectory and classified exactly once in the register, with a floor
+  of 24 specs so a broken walker fails loudly instead of passing vacuously (SCR-18, SCR-22); and
+  `deploy-production.needs` naming every job that runs tests **or** checks, since `quality` and
+  `build` run no test command and a tests-only rule would let a lint-only job ship red (SCR-19).
+- **Files changed**: 24 spec relocations under `apps/web/e2e/`,
+  `packages/test-utils/tests/workspace-policies/{testing-tree.ts,test-layout-policy.test.ts,e2e-suite-policy.test.ts,ci-gating-policy.test.ts}`,
+  `docs/engineering/core-e2e-tests.md`, `docs/engineering/ci-gating.md`, `docs/WORKLOG.md`. Of
+  those, `e2e-suite-policy.test.ts`, `ci-gating-policy.test.ts`, and `core-e2e-tests.md` no longer
+  exist; see [LAUNCH-INTEGRATE-002].
+- **Validation**: `ls apps/web/e2e/*.spec.ts` → no matches; 24 specs across 7 subdirectories;
+  `pnpm exec playwright test --list` → `Total: 41 tests in 24 files`, against a pre-move baseline of
+  40 tests in 23 files measured from `git archive HEAD apps/web/e2e` (the extra one is the calendar
+  lane's new `calendar-viewport-floor.spec.ts`; no spec was dropped from discovery). Planting
+  `apps/web/e2e/zz-mutation-probe.spec.ts` turned three SCR-21 assertions red naming that exact
+  path. `pnpm --filter @docket/test-utils typecheck`, `lint`, and `test` all clean.
+- **Honest scope**: SCR-19 and SCR-20 are recorded `in-progress`, not closed. SCR-19's guard is
+  built and green, but a second guard for the same requirement was built concurrently by another
+  lane and the two have not been collapsed. SCR-20's static half — zero soft-failed test steps
+  across all three workflow files — is proven; its acceptance also asks for empirical proof on a
+  scratch branch that a forced test failure turns the run red and stops `deploy-production`, and no
+  GitHub Actions run has been observed. The experiment is written out step by step in
+  `docs/engineering/ci-gating.md`.
+
+---
+
+### [LAUNCH-DESIGN-001] Surface inventory and craft-scorecard schema
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: no requirement — this slice builds GEN-10's first half only; see "Honest scope".
+- **Description**: GEN-10 says no surface ships knowingly degraded, and grades that on a committed
+  inventory of every route and overlay where every entry carries a passing Craft Rubric scorecard.
+  Ten scorecards existed, all prose. "How many surfaces have a passing scorecard" was not a number
+  anything could compute.
+- **What shipped**:
+  - **`docs/design/surface-inventory.md`** — 85 surfaces, generated: 70 routes (every `page.tsx`
+    under `apps/web/src/app`, route groups erased, dynamic segments kept) and 15 overlays (every
+    component rendering a dialog, drawer, or sheet). Each row carries its id, URL, source path, and
+    the scorecards covering it, plus a coverage line.
+  - **`docs/design/audits/README.md`** — the header schema: `surfaces`, `date`, `verdict`, all
+    eight dimension scores, all five hard gates, and the rule that a gate is `true` only when the
+    document marks it ✅. `⚠️`, "partial", "unverified", and every hedge map to `false`.
+  - **Front matter retrofitted onto all ten existing scorecards**, scores copied verbatim from each
+    document's own table and gates read off its own gates line. Result: seven `ship`, three
+    `needs-work`.
+  - **`scripts/surface-inventory.ts`** and
+    **`packages/test-utils/tests/design-policies/{surfaces.ts,surface-inventory.test.ts,scorecard-schema.test.ts}`**
+    — the generator and the two suites that keep the file current and the headers valid. Step 6 of
+    `.claude/skills/design-review/SKILL.md` now requires the header on every new scorecard.
+- **Files changed**: `docs/design/surface-inventory.md`, `docs/design/audits/README.md`, the ten
+  scorecards under `docs/design/audits/` (front matter only, 250 insertions and 0 deletions),
+  `scripts/surface-inventory.ts`, `packages/test-utils/tests/design-policies/`,
+  `.claude/skills/design-review/SKILL.md`, `docs/WORKLOG.md`.
+- **Validation**: `pnpm --filter @docket/test-utils typecheck`, `lint`, and `test` clean. Forcing
+  `verdict: ship` onto a card with a failing gate, planting a surface id that appears in no
+  inventory row, and deleting one inventory row each produced the expected red naming the offending
+  path. Two consecutive generator runs produce byte-identical output.
+- **Honest scope**: **GEN-10 is not closed and must not be recorded as closed.** This slice builds
+  the half a machine can check. The other half is the design work itself: 46 of the 85 surfaces
+  have no scorecard at all — including every one of the 15 overlays — and three of the ten existing
+  scorecards record `needs-work`. GEN-10's acceptance also names published-brief templates, and no
+  such template source exists in this repository, so the generator has nothing to enumerate for
+  that class; it has to appear in the inventory before GEN-10 can close. Recorded `in-progress` in
+  the launch record with the coverage number as its evidence.
+
+---
+
+### [LAUNCH-GOV-001] Launch record and compliance checklist
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Branch**: `claude/docket-production-launch-ebe2d9`
+- **Closes**: GEN-01, GEN-03, GEN-04, GEN-05, GEN-08, GEN-09, MISS-07
+- **Description**: The production-launch audit graded 399 requirements
+  (`docs/engineering/launch-compliance.json`) and found no artifact anywhere in the repo that maps
+  a single one of them to an owner, a state, or evidence. Seven of those requirements are
+  meta-requirements about the launch process itself — they are graded on the existence and shape
+  of exactly that artifact. This slice builds it, and builds the machine checks that make it
+  impossible to close a requirement dishonestly.
+- **What shipped**:
+  - **`docs/engineering/launch/launch-record.json`** — one entry per audited requirement, 399 of
+    them, in audit order. Each carries an owner, a state, evidence, the verifier, verification
+    artifacts, the worklog anchor that claims it, and a blocker reason or `null`. Alongside the
+    entries: a ledger row for each of the seven external systems GEN-05 names, and a `questions`
+    array that records every question put to the author in the three-field form GEN-08 demands.
+  - **`docs/engineering/launch/launch-checklist.md`** — the readable rendering: a summary table
+    (counts by state, counts by severity, launch-blockers still open, open sign-off violations)
+    and one row per requirement. Generated; never hand-edited.
+  - **`scripts/launch-compliance-record.ts`** — regenerates both from the audit. Human-authored
+    fields are carried across untouched while `area` and `severity` are re-read from the audit every
+    time, so the record cannot drift away from the bar it is graded against. Idempotent: a second
+    run produces byte-identical files. (It was authored at `scripts/launch-record.ts`, which the
+    concurrent `ci-gating` lane also claimed for its slice reconciler; the two write disjoint
+    outputs and now sit at distinct paths. See LAUNCH-INTEGRATE-001.)
+  - **`packages/test-utils/tests/launch-policies/`** — the enforcement. `launch-record-schema.ts`
+    holds the types, the loaders, the pure `signOffViolations` / `blockedEntryViolations` /
+    `questionViolations` predicates, and the checklist renderer. `launch-record.test.ts` and
+    `worklog-and-history.test.ts` run them against the committed record.
+- **The rules the tests actually enforce**:
+  - The state vocabulary has no "partial", "deferred", or "follow-up" member, and the tests reject
+    that language in free text too — so a requirement cannot be shelved through prose either
+    (GEN-01).
+  - A `blocked` entry may only cite `upstream-outage`, `awaiting-third-party-review`, or
+    `requires-production-data`. Unreachable docs, a paywall, a failed fetch, a missing credential,
+    a login you did not complete — all rejected as a cause and as prose inside the detail. The
+    launch has full access to the machine, its browsers, its CLIs, and its accounts; an obstacle
+    that is merely hard is not a blocker (GEN-03, GEN-04).
+  - A closed entry needs 40+ characters of evidence, a `verifiedBy` that is **not** its `owner`,
+    and at least one verification artifact whose path is checked against the filesystem — a made-up
+    path fails the suite (GEN-09).
+  - Sign-off is a gate, not a formality: flipping `signOff` to `true` requires all 399 entries
+    closed and every external system either authenticated with evidence, marked not-required with
+    a reason, or carrying three distinct workaround attempts with their failure output. The gate is
+    exercised against fixtures today, so it is known to work on the day it matters (GEN-05).
+  - Every closed entry's `worklogAnchor` must occur exactly once in this file, and each requirement
+    id may sit under exactly one anchor — no id unclaimed, none claimed twice. Plus
+    `git rev-list --merges --count $(git merge-base main HEAD)..HEAD` must print `0` (MISS-07).
+- **Files changed**: `docs/engineering/launch/README.md`,
+  `docs/engineering/launch/launch-record.json`, `docs/engineering/launch/launch-checklist.md`,
+  `scripts/launch-compliance-record.ts`,
+  `packages/test-utils/tests/launch-policies/{launch-record-schema.ts,launch-record.test.ts,worklog-and-history.test.ts}`,
+  `docs/WORKLOG.md`.
+- **Validation**: `pnpm --filter @docket/test-utils typecheck` clean;
+  `pnpm exec eslint tests/launch-policies` clean; `pnpm exec vitest run tests/launch-policies` —
+  `Test Files 2 passed (2) / Tests 12 passed (12)`. `pnpm exec prettier --check` clean on both
+  generated files. Regenerating twice leaves `git status --porcelain docs/engineering/launch`
+  unchanged. At the time this slice landed the record reported
+  `not-started=392 in-progress=0 closed=7 blocked=0` and `sign-off: withheld (399 gate violations)`;
+  LAUNCH-INTEGRATE-001 later filled the external-systems ledger, which cleared seven of those
+  violations.
+- **Honest scope**: this slice closes the seven governance requirements by delivering the ledger
+  and its enforcement. It does not close the other 392 — they are recorded as `not-started` with no
+  owner, which is exactly what the checklist says. GEN-01's substantive condition (all 399 done) is
+  now machine-enforced at sign-off rather than satisfied. GEN-05's seven external systems were
+  ledgered as `attempting` with no session captured when this slice landed; the sessions and
+  workaround attempts were captured separately by the `ci-gating` lane and folded into the record by
+  LAUNCH-INTEGRATE-001.
+- **Superseded — `verifiedBy` on the seven governance entries**: this entry recorded that
+  `verifiedBy` was set to `launch-governance-verifier` on all seven, citing the committed policy
+  tests and the generated files as artifacts. That was self-verification passing a string-equality
+  check: the implementing slice was `launch-governance`, and both artifacts were written by that
+  implementer. `verificationViolations()` now normalizes the `-verifier` family of suffixes so the
+  two names no longer read as different agents, and requires an artifact under a verifier-owned
+  evidence root. All seven entries were re-verified by `launch-record-reconciler`, and that is what
+  `launch-record.json` reads today — not `launch-governance-verifier`. Since [LAUNCH-LEDGER-001] the
+  field is derived from the claiming slice's `verifier:`, so it can no longer be set by hand at all.
+- **Learnings**:
+  - A governance artifact that only a hand-run script checks is an artifact nothing checks.
+    `scripts/` sits outside `turbo run lint` and `turbo run typecheck`, so all the enforcement went
+    into the vitest policy tests and the script stayed a thin caller of pure functions.
+  - A gate nobody has ever seen return a violation is not known to work. `signOffViolations` is
+    tested against fixtures that pass it and fixtures that trip each failure mode, so the day
+    someone sets `signOff` is not the first day the code runs.
+  - Prettier aligns Markdown table cells to the widest value in the column. With 399 rows, one
+    300-character evidence sentence would have padded the whole file to match it, so the checklist
+    truncates the evidence column at 72 characters and the JSON keeps the full text.
+
+---
+
+### [CAL-GATES-002] Clear the Calendar's failing design-review gates
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Closes**: the 11 gates left failing by the round-1 verify of the Calendar rebuild, including the
+  known gap [CAL-INTEGRATE-001] deferred as off-limits.
+- **Description**: The round-1 design review passed the Calendar's consolidation work but failed it
+  on responsiveness, on the in-progress event rendering blank, on unearned colour in the shared menu
+  primitive, and on several craft items. Fix each one against the running stack and re-verify by
+  screenshot rather than by assertion.
+- **What shipped**:
+  - **The 1023→1024 responsive cliff, at its real owner.** `AppShell` docked a 22rem rail the moment
+    the sidebar appeared, so `<main>` fell from 1023px to 344px across one pixel and the calendar
+    collapsed to a single clipped lane beside a 90%-empty rail. Rail docking is now its own, much
+    higher threshold (`RAIL_DOCK_QUERY`, 90rem); below it the same panels open as a right overlay
+    from the always-visible activity bar, which costs `<main>` nothing. Measured across 14 widths:
+    the worst case went from 26.8% of viewport / 1 lane / heading clipped to `A…`, to 44.7% / 2 full
+    lanes / full-text toolbar. Docking stays default-on at 90rem because dragging a task from the
+    rail onto the grid needs both surfaces visible at once.
+  - **The event happening right now had no title.** An item that began before the canvas scroll
+    position painted as a bare coloured rectangle: its label sat at the item's own top edge, above
+    the fold, inside an `overflow-hidden` body. The label row is now `sticky` within the item,
+    offset by the canvas header's measured height, and the body no longer establishes a scrollport
+    that would strand it.
+  - **A toolbar that cannot squeeze the date away.** Six rigid 40px controls claimed 264px of a
+    320px row and left the heading 32px — `August 2026` rendered as `A`. Controls are now fluid with
+    a 36px floor, `Today` collapses to its glyph like every other label, and the heading holds a
+    `min-w-16` floor. No clipping at any width from 320 to 1920.
+  - **Magenta selection rows.** The shared menu primitive escalated a checked row to
+    `tertiary-container` (hue 330). Selection is MD3's `secondary-container` role, which sits on the
+    surface ramp's own hue — so a checked row now reads as _selected_ rather than as _coloured_.
+    Applies to every dropdown and context menu in the app.
+  - **Chrome that framed the content twice.** `<main>` carried both a border and a drop shadow, with
+    a second shadowed card beside it. Both are gone; the tonal step from canvas onto `surface` is
+    the separation. Ten bordered nodes remain inside the calendar — five day separators, four
+    controls, one header rule — and zero shadows.
+  - **A design-system checkbox.** `calendar-layer-panel` drew the operating system's blue square via
+    `accent-primary`. New `Checkbox` primitive: still a native input (form participation,
+    `indeterminate`, AT support) but `appearance-none` and drawn from tokens.
+  - **Craft fixes.** The empty-state notice no longer chops the now-indicator in half — it is pinned
+    to the bottom edge of the visible canvas, wraps instead of truncating, and claims no layout. The
+    rail names itself ("Today's plan") instead of restating a date the lane header and toolbar
+    already carry. The New popover's fields share one recipe (the `Input` primitive lost its
+    `shadow-sm`; the `<select>` lost its mismatched fill) and its submit button matches their
+    height. The duplicate-calendar note moved to its own line so it stops truncating away, and a
+    group heading that only repeats its one row is dropped. The Athena entry point collapses to a
+    glyph instead of vanishing. The item drawer's `text-xs`/`text-sm`/`text-base` all resolve to MD3
+    type tokens. `KIND_LABELS` gained a fallback so an API-ahead-of-web deploy cannot print
+    `undefined` onto event cards.
+  - **Drag into a time block, captured.** `calendar-drag-evidence.spec.ts` performs the real HTML5
+    drag from the rail onto grid time and attaches before/after/close-up screenshots — the round-1
+    reviewer scored this fail only because they had not exercised it.
+- **Verification**: `typecheck` and `lint` clean for `@docket/web` and `@docket/ui`; **164 files /
+  1235 tests** and **22 files / 293 tests** pass. All 9 `e2e/calendar` and 11 `e2e/scheduling` specs
+  pass. Responsive sweep at 14 widths: no heading clipping, no horizontal overflow, no shadows
+  inside `<main>`, schedule 44.7%–82.1% of viewport everywhere. Screenshots read at 320/390/768/
+  1023/1024/1100/1280/1439/1440/1920 plus 1440 and 390 in both themes.
+- **Also changed**: the Playwright default viewport is now 1440×900 — the width at which the rail
+  docks, which is what specs assume whenever they reach for the Tasks or Agenda panel. It had been
+  silently pinned to `devices['Desktop Chrome']`'s 1280×720 because a project-level `use` overrides
+  the top-level one.
+- **Known gap (not fixed here)**: the Calendars popover's duplicate-account state could not be
+  re-captured live. `(app)/calendar/page.tsx` SSR-prefetches the layers list and hydrates it, so the
+  browser never requests it and a route fixture has nothing to intercept; the shared dev database
+  was also re-seeded mid-session onto an account with zero calendar layers. The three refinements
+  are covered by unit tests instead, and the gate itself passed in round 1.
+- **Learnings**:
+  - A breakpoint that _adds_ a width-taking panel always makes the content narrower at that exact
+    pixel. The only honest question is how big the step is and whether the content is still the
+    largest thing on screen — chasing a literally continuous curve means never docking anything.
+  - `position: sticky` silently does nothing inside an `overflow: hidden` ancestor, because that
+    ancestor is itself a scrollport. Clipping and clamping cannot live on the same element.
+  - A row of `shrink-0` controls does not need `shrink-0` to avoid wrapping — `flex-nowrap` on the
+    parent already guarantees that. Making the controls fluid with a `min-w` floor bought back the
+    width the heading needed at no visible cost.
+  - Mocking an SSR-prefetched query from the browser is not possible. If a fixture has to reach a
+    hydrated read, the page has to be built to fetch it on the client.
+
+---
+
+### [CAL-INTEGRATE-001] Reconcile the two halves of the Calendar rebuild
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Description**: [CAL-CONTROLS-001] and [CAL-CANVAS-001] were built in parallel against five
+  agreed seams. Reconcile them into one working whole and verify the seams hold in a real browser
+  rather than trusting either author's report.
+- **What shipped**:
+  - **Seams verified, not assumed.** `onZoomGesture` resolves to one signature across all five
+    sites; `CalendarLayerPanel`'s public shape is still `{ layers }`; `CalendarSchedulingSurfaceProps`
+    gained that one property and lost none; the `flex-1`/`min-h-0` chain is unbroken from the page
+    root to `<section aria-label="Schedule">`.
+  - **The one real collision: duplicated copy.** Both agents kept the People-axis privacy sentence —
+    the toolbar's People popover (which the brief assigns it to) and the surface below the canvas.
+    It rendered twice on the people axis. Removed the surface copy; the popover owns it.
+  - **Heading legibility under squeeze.** The heading is the row's release valve, so it truncated to
+    `August 2...` on a phone — losing the year, the one thing the grid's lane headers never carry.
+    `calendarRangeLabel` gained a `'short'` style and the toolbar renders it below `@2xl`, so narrow
+    widths read `Aug 2026` whole. Both spans are `aria-hidden` behind one `aria-label`, so the
+    accessible name stays a single unabbreviated heading.
+  - **Lint honesty.** Repo-wide lint failed on ~71 parser errors in `test-results/` (Playwright
+    traces) and `.data/` (local review scratch) — gitignored throwaway output that is not source.
+    Both are now in the shared ESLint ignores beside `.turbo` and `coverage`.
+- **Verification**: `typecheck` clean; `lint` clean repo-wide; **152 files / 1095 tests** pass;
+  `next build` succeeds. 12/12 calendar Playwright specs pass. Independently probed at 390/960/1024/
+  1180/1280/1440 in **both** themes: one schedule region, 25.3%–77.7% of viewport, one toolbar row,
+  zero ISO dates in page text, no month name inside the Schedule region, no horizontal overflow.
+- **Known gap (not fixed here)**: at exactly 1024–1150px the toolbar heading still clips to `A…`.
+  The cause is not the calendar: `AppShell` docks a 22rem rail at `min-width: 64rem`, so `<main>`
+  collapses from 1023px to 344px across that one pixel — the audit's "wider viewport, smaller
+  calendar" band. Six controls need 275px of it, leaving 32px for the heading. The fix belongs in
+  `packages/ui/src/components/shell/AppShell.tsx`, which the integration plan puts off-limits to
+  this work, and would change rail behavior for every surface. The hard gates still hold there
+  (schedule = 25.28% of viewport, one row, no overflow); only heading legibility suffers.
+- **Learnings**:
+  - Two agents given the same orphaned sentence and told "don't drop this copy" will both keep it.
+    Shared-copy ownership needs naming in the brief as explicitly as shared type ownership.
+  - A "one flexible child that truncates" row is only as good as its narrowest label. Truncation
+    should degrade to a shorter _complete_ label before it degrades to an ellipsis.
+  - A green e2e suite proved the layout gates but not legibility — `A…` passes every assertion the
+    specs make. Reading the actual screenshots caught what the measurements could not.
+
+---
+
+### [CAL-CONTROLS-001] Collapse the Calendar's control chrome into one row
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Description**: The controls half of the Calendar rebuild, from the production-launch goal doc:
+  "the calendar view looks extremely haphazard… a bunch of useless buttons and controls like zoom
+  and density", "the New button must never wrap", "the date must not be shown both inline in the
+  toolbar AND at the top of the view", "consolidate into ONE subtle view-settings interface", and
+  "under NO circumstances should any combination of UX interactions result in a calendar view that
+  takes up less than 10% of the entire viewport". Paired with a sibling agent who rebuilt the
+  time-drawing half (canvas, lane headers, layer panel, app-shell rail) in a disjoint file set.
+- **What shipped**:
+  - `calendar-toolbar.tsx` is one `flex-nowrap` row with a single flexible child. It used to be a
+    `flex flex-wrap` container wrapping a second `flex flex-wrap` cluster, and stacked into four
+    rows of chrome the moment `<main>` narrowed.
+  - `calendar-view-settings.tsx` (new) is the one Display menu: the lane axis, three named
+    densities (Compact 48 / Default 72 / Spacious 108), a compact −/%/+ zoom stepper, a
+    `Custom · N%` hint for a value between presets, and Reset to default. It replaces four separate
+    controls that all wrote the same `pixelsPerHour` scalar and were visible simultaneously.
+  - `calendar-range-label.ts` (new) emits month/year only (`August 2026`, `Aug – Sep 2026`,
+    `Dec 2026 – Jan 2027`) and never a weekday, day-of-month, or ISO date. With the sibling agent's
+    lane headers showing `Sun 2`, each date atom now appears exactly once on screen.
+  - `calendar-layers-menu.tsx` (new) and a rewritten `calendar-comparison-controls.tsx` move layer
+    visibility and people comparison out of the page column and into trailing popovers.
+  - Trackpad pinch zoom is consumed via the canvas's `onZoomGesture(scale)` seam, clamped through
+    `clampPixelsPerHour` and persisted on a 300ms trailing debounce so a gesture is one PATCH.
+- **Measured** (six widths × light/dark, real browser, DOM probe): the toolbar is exactly one row
+  at 390 / 960 / 1024 / 1180 / 1280 / 1440 (header height equals its tallest child at every one);
+  no horizontal document overflow; zero `YYYY-MM-DD` strings in `document.body.innerText`; the
+  month/year appears exactly once; one `[aria-label="Schedule"]` grid. The calendar's share of the
+  viewport went from 9.64%–44% to 26.31%–77.65% on the date axis, and the audit's worst case —
+  the People axis at 1024×600, previously **5.55%** — is now **22.49%**.
+- **Files changed**: `apps/web/src/app/(app)/calendar/{calendar-client,calendar-toolbar,
+calendar-view-settings,calendar-layers-menu,calendar-comparison-controls}.tsx`,
+  `calendar-range-label.ts`, `apps/web/src/components/calendar/{create-block-form,
+create-block-type-selector,create-block-time-fields,calendar-time-field}.tsx`, and the matching
+  suites under `apps/web/tests/calendar/`.
+- **Learnings**:
+  - `Button`'s base recipe carries `[&_svg]:size-6`, and that descendant selector outranks a plain
+    `size-4` on the glyph itself — every calendar icon was silently rendering at 24px despite the
+    class. Overriding needs `[&_svg]:size-4` in the button's own `className` (where `cn`'s
+    tailwind-merge drops the base rule), or a longer descendant selector when the control is a
+    third-party child whose `className` you cannot reach.
+  - "One row" cannot be a convention slot authors remember. A `ReactNode` slot cannot be given
+    `shrink-0` from the toolbar, so the toolbar wraps every slot in an element that already has it.
+  - Radix draws a selected radio row's indicator as a small filled circle; using `Circle` as a
+    leading icon on the same row reads as one control repeated. The neutral density glyph is an
+    open ring for that reason.
+  - A native `datetime-local` renders a full localized date _and_ time, which clipped mid-value in
+    a two-up grid inside a 320px popover. Stacking the fields is the only layout that survives a
+    longer locale format.
+
+---
+
+### [CAL-CANVAS-001] Rebuild the Calendar's time grid around events, not chrome
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Description**: The time-drawing half of the Calendar rebuild, from the production-launch goal
+  doc: "no duplicate date labels", "use a larger minimum text size — current text is almost
+  unreadable", "too many borders everywhere", "it must be IMPOSSIBLE to have two calendars on
+  screen at once", "under NO circumstances should any combination of UX interactions result in a
+  calendar view that takes up less than 10% of the entire viewport", "there must be some way to
+  deduplicate holiday calendars or personal calendars appearing on work accounts", and "it must be
+  possible to drag events into time blocks". Paired with a sibling agent who rebuilt the controls
+  half (toolbar, Display menu, Calendars popover) in a disjoint file set.
+- **What shipped**:
+  - **One calendar, structurally.** `railAsideFor` no longer registers the Agenda panel on the
+    calendar surface. `<Agenda />` mounts the same `SchedulingCanvas` the calendar page mounts, and
+    `ShellActivityBar` gives every registered panel a one-click button — so the calendar was one
+    click from two live time grids side by side, the rail's often taller than the real one. The
+    calendar's rail is the Tasks day-plan alone, which is also the drag source for timeboxing a
+    task. The dead third implementation, `calendar-week-grid.tsx`, is deleted.
+  - **A hard floor on the schedule.** `calendar-scheduling-surface.tsx` is one flex column with a
+    single growing child and an unbroken `flex-1` + `min-h-0` chain to `<section aria-label=
+"Schedule">`, plus `min-h-[max(16rem,45dvh)]`. The permanent 16rem "Layers" column — which
+    usually rendered nothing but "No calendar layers yet." — is gone, along with
+    `calendar-scheduling-sidebar.tsx`.
+  - **One date atom per lane.** The shared canvas header renders `Sun` + a day-number chip derived
+    from the lane's date, never the raw `YYYY-MM-DD` it used to stack underneath. Today's number
+    carries the only emphasis in the header. Resource lanes still show the person, and a lane
+    timezone appears only when it differs from the canvas timezone.
+  - **A 12px floor and far fewer rules.** Every `text-[9px]`/`[10px]`/`[11px]` in the scheduling
+    primitives is now an MD3 type token; the canvas has no outer border, no gutter rule, no rule
+    after the last lane, and no `shadow-*` at any interaction state. A card keeps exactly one
+    border: the 4px colour bar identifying its layer.
+  - **Cross-account duplicate detection.** New `calendar-layer-dedup.ts` groups layers that render
+    the same calendar, from data the API already returns: identical `provider:externalLayerId`
+    across two `connectionId`s, holiday calendars (by id, and by identical title across accounts,
+    since Google issues per-locale holiday ids), and a personal mailbox calendar surfacing on a
+    work account. `calendar-layer-panel.tsx` groups rows by owning account and offers one explicit
+    **Hide duplicates** action; nothing is ever auto-hidden, every row stays listed and toggleable,
+    and each redundant row names the account that already shows it.
+  - **Trackpad / pinch zoom.** `SchedulingCanvas` exposes `onZoomGesture(scale)` via a manual
+    non-passive `wheel` listener, and `use-scheduling-viewport.ts` restores `scrollTop` so the
+    minute under the pointer stays under the pointer. A zoom with no pointer (the Display menu)
+    falls back to preserving the viewport's vertical centre.
+- **Measured** (real browser, DOM probe, with seeded overlapping events, an all-day item, and two
+  linked accounts): at 960×640 / 1024×600 / 1180×620 / 1280×720 / 1440×760, with the rail both
+  collapsed and expanded and on both axes, exactly one visible `[aria-label="Schedule"]`, no
+  horizontal document overflow, and a schedule share of **25.3%–77.7%** against a 5.55%–41% worst
+  case before. `e2e/calendar-viewport-floor.spec.ts` asserts a 20% floor against a 10% contract so
+  drift is caught with margin. Zero `YYYY-MM-DD` strings in `document.body.innerText`.
+- **Files changed**: `apps/web/src/components/app-shell-frame.tsx` (one branch),
+  `apps/web/src/components/scheduling/**`, `apps/web/src/components/calendar/{calendar-layer-panel,
+calendar-layer-dedup}.ts(x)`, `apps/web/src/app/(app)/calendar/{calendar-scheduling-surface,
+calendar-scheduling-contract,calendar-schedule-item-content,calendar-sync-alert,
+calendar-read-failure-notice,calendar-shared-item-details}.ts(x)`; deleted
+  `calendar-week-grid.tsx` and `calendar-scheduling-sidebar.tsx`; suites under
+  `apps/web/tests/{scheduling,calendar}/` and `apps/web/e2e/{calendar-viewport-floor,
+fluid-scheduling,fluid-scheduling-gestures,fluid-scheduling-relations,layered-calendar}.spec.ts`.
+- **Learnings**:
+  - The duplicate calendar was never a styling problem. `railAsideFor` had a comment showing the
+    author knew the Agenda would "just duplicate the calendar's own timeline", but only the
+    _default_ was changed — and a registered panel is still one click away. Demoting a thing is not
+    removing it.
+  - Raising the hour-gutter type to a readable 12px made `12:00 AM` wrap inside a 64px gutter, so
+    fixing the text size required widening the gutter to 76px. A type-scale change is a layout
+    change; the two cannot be reviewed separately.
+  - The today chip has to occupy the same box whether or not it is filled. A 24px chip beside a
+    20px number made each lane header a different height, which pushed the all-day rows out of
+    alignment by 4px per lane — visible immediately, and invisible in any unit test.
+  - `/calendar` server-prefetches the layers query, and a server fetch cannot be intercepted from
+    the browser. Screenshotting the populated layer panel needed a real mutation to invalidate the
+    hydrated key first — worth knowing before concluding a stubbed surface "renders empty".
+
+---
 
 ### [ATHENA-OWNERSHIP-001] Make Athena user-owned and ambient
 
@@ -5048,3 +6247,101 @@ A 19-agent architecture/code-quality audit (6 review dimensions + adversarial ve
 **Refuted (verified, no action):** the legacy-suggestion `externalUrl` migration backfill was flagged as "fabricating a provider link," but its formula is byte-identical to the sanctioned, boundary-owned `gmailThreadUrl()` that live ingest already uses — it enforces the app-layer invariant for old rows rather than violating it.
 
 Docs updated: `mail-providers.md` §4.1 (cursor-honesty rule for both providers), `automations.md` (org-scoping note on `mail.*`, per-action isolation guarantee).
+
+---
+
+### [LAUNCH-LATTICE-001] Bring your own model: Athena on a Lovelace Lattice device
+
+- **Status**: REVIEW
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Requirement ids**: WIL-41 … WIL-49 (Lovelace Lattice), WIL-51 (sequencing). WIL-50 remains open.
+- **Summary**: A person can authorize Docket from their Lovelace account and point Athena's model
+  work at a computer they own. The turn is dispatched to Lovelace's hosted gateway with the
+  `lattice:personal:<latticeId>` selector; the gateway relays it to the daemon on their machine.
+  When that machine is unreachable, the turn fails with an actionable reason and runs nowhere else.
+
+#### Skill invocation (WIL-43)
+
+Searched for a Lattice skill and found the first-party one in the Lovelace monorepo:
+`ReasonableTech/lovelace:plugins/lovelace-developers/commands/lattice-start.md`. Installed it to
+`.claude/skills/lattice-start/SKILL.md` (frontmatter `name:` added so the skill loader registers it)
+and invoked it. What it contributed, concretely — none of this was guessed:
+
+- The SDK package name and constructor shape (`@reasonabletech/lattice-client`, `LatticeClient`
+  with an `oauth` credential, `chatCompleteForPersonalRuntime`).
+- The credential model: **user-authorized OAuth**, not a developer key, and why.
+- The issuer (`accounts.uselovelace.com`) and the authorization-code + PKCE flow.
+- The scope vocabulary, which led to the upstream `auth-scopes.md` and the decision to request only
+  `lattice:compute:inference` + `lattice:compute:catalog:read`.
+- The `lattice-ctl` CLI, verified installed at 0.1.0 on this machine.
+- Its "Done when" checklist, which is what forced the live end-to-end run rather than stopping at a
+  compiling integration.
+
+Steps 1, 2, 4 and 5 were carried out. **Step 3 needs a human**: registering the OAuth app at
+`developer.uselovelace.com` and obtaining a real client id/secret. `developer.uselovelace.com` does
+not currently resolve.
+
+#### Approach
+
+The design is documented in full at `docs/engineering/specs/lattice-byo-model.md`. Three decisions
+carried the most weight:
+
+1. **Per-user, not per-process.** `resolveModelBackend` picks a backend from the deployment's
+   environment, which cannot express "this person's laptop". `apps/api/src/routes/lattice-backend.ts`
+   is a per-owner layer above it, and the agent loop resolves once per turn from the session's owner.
+2. **No silent fallback, enforced four times over.** An unreachable device produces a stable reason
+   at the gateway, in `runLatticeChat`, in the turn runtime, and in the resolver. Tests assert on
+   the _request count_, not just the error, so a fallback could not pass unnoticed.
+3. **A text tool protocol.** Lattice's compatibility wire carries `{ role, content: string }` with no
+   `tools` field and no `tool_calls`. Tool calling is therefore encoded in the text, with a parser
+   whose rules exist to stop a model's _description_ of a call from becoming a real one.
+
+#### Files changed
+
+Owned: `packages/integrations/src/lattice-{sdk,oauth,gateway}.ts`,
+`packages/integrations/tests/lattice/`, `packages/agent-runtime/src/lattice-{turn,tool-protocol}.ts`,
+`packages/agent-runtime/tests/lattice/`, `apps/api/src/routes/lattice{,-connection,-oauth,-backend,-gate}.ts`,
+`apps/api/tests/lattice/`, `apps/web/src/app/(app)/settings/athena/lattice-{section.tsx,copy.ts}`,
+`apps/web/e2e/lattice/`, `docs/engineering/specs/lattice-byo-model.md`.
+
+Outside owned paths, minimal and disclosed: `packages/db/src/schema/agents.ts` (two additive tables),
+`packages/db/drizzle/0063_lattice_byo_model.sql`, `packages/env/src/{slices,registry-vars-core}.ts`
+(four optional vars), `apps/api/src/{app,server}.ts` (route mounts), `apps/api/src/agent/loop.ts`
+(one line: per-owner backend resolution), `apps/api/turbo.json` (`LATTICE_*` and the
+already-missing `CREDENTIALS_ENCRYPTION_KEY` added to the dev env allowlist),
+`apps/web/src/lib/query-keys.ts` (two keys), `apps/web/src/app/(app)/settings/athena/page.tsx`
+(one import + one line), `packages/integrations/src/index.ts` and
+`packages/agent-runtime/src/index.ts` (barrel exports).
+
+#### Validation
+
+83 new tests (44 integrations, 28 agent-runtime, 11 API end-to-end). `tsc --noEmit`, `eslint` and
+`prettier` clean on every Lattice file across all five packages. The migration passes the
+destructive-DDL policy suite; the design-token policy and doc-coverage gates pass.
+
+Evidence: `docs/engineering/evidence/lattice-local-device-run.md` records a real Athena turn
+answered by a model running on this machine (LM Studio / `qwen2.5-0.5b-instruct-mlx`), corroborated
+by the device's own server log, with correlated request ids across both legs and the offline case
+showing zero dispatches. Screenshots of the whole flow at 1440x900 and 390x844 in both themes are in
+`apps/web/.data/design-review/lattice/`; the recorded run measured **3 user actions and 0 text
+fields** from disconnected to running.
+
+#### Learnings
+
+- The compound foreign key on `(id, owner_user_id)` needed a table **constraint**, not a unique
+  index. Drizzle emits constraints inside `CREATE TABLE` but unique indexes _after_ the
+  `ALTER TABLE … ADD CONSTRAINT` statements, so as an index it produced a migration that failed with
+  `42830` whenever the batch also carried other new tables. The end-to-end test caught it; review
+  would not have.
+- Turborepo's strict env mode silently drops undeclared variables, so a correctly configured feature
+  reads as "not configured". `CREDENTIALS_ENCRYPTION_KEY` was already missing from that allowlist,
+  which means no credential-storing connector could ever have completed a connect flow in local dev.
+
+#### Blockers for launch
+
+- **WIL-50 is not closed.** No Docket-owned Anthropic or Cloudflare credential exists in this
+  environment, so Athena has never been run against the real model router with the project's own
+  keys. `apps/api/src/routes/lattice-gate.ts` records this honestly as `mode: 'harness'`, which
+  keeps the Lattice surface unreachable in production until a real-key run is recorded.
+- Registering the Lovelace OAuth app (WIL-47's real consent screen) needs a human with a browser.

@@ -154,6 +154,23 @@ export function SignInClient(): JSX.Element {
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
   const conditionalArmed = useRef(false);
+  // A passkey ceremony and the org-lookup it triggers both cross real `await` gaps (WebAuthn
+  // round trip, a retrying fetch), long enough for the component to have unmounted by the time
+  // either resolves — most concretely between test cases, where a prior test's still-in-flight
+  // chain can otherwise land a stray call against the next test's fresh mocks. Checked before any
+  // state update or side-effecting call past an `await`.
+  //
+  // `isMounted()` reads the ref through a function call rather than inline, because TypeScript's
+  // control-flow narrowing otherwise carries a `.current` read's truthiness across the `await`
+  // that follows — treating a check *after* the await as if nothing could have run during it,
+  // which is exactly the assumption the cleanup below breaks.
+  const mountedRef = useRef(true);
+  const isMounted = useCallback((): boolean => mountedRef.current, []);
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const { data: existingSession, isPending: sessionPending } = authClient.useSession();
 
   /** Route into the cockpit, or onboarding when the user has no organization yet. */
@@ -165,8 +182,10 @@ export function SignInClient(): JSX.Element {
       window.location.href = resumeUrl;
       return;
     }
+    if (!isMounted()) return;
     try {
       const res = await loadOrgsAfterSignIn();
+      if (!isMounted()) return;
       if (res.ok) {
         const { items } = await res.json();
         if (items.length === 0) {
@@ -184,6 +203,7 @@ export function SignInClient(): JSX.Element {
       setError('We could not load your workspaces. Please try signing in again.');
       return;
     } catch {
+      if (!isMounted()) return;
       setError('We could not load your workspaces. Please try signing in again.');
       return;
     }
@@ -201,6 +221,7 @@ export function SignInClient(): JSX.Element {
       setError(null);
       try {
         const result = await authClient.signIn.passkey({ autoFill, returnWebAuthnResponse: true });
+        if (!isMounted()) return;
         const passkeyError = result.error;
         if (passkeyError) {
           // When the server no longer holds the presented credential (deleted passkey), tell the
@@ -224,13 +245,13 @@ export function SignInClient(): JSX.Element {
         }
         await routeAfterSignIn();
       } catch (caught) {
-        if (!autoFill) {
+        if (!autoFill && isMounted()) {
           setError(
             passkeyErrorMessage(caught, 'Something went wrong signing in. Please try again.'),
           );
         }
       } finally {
-        if (!autoFill) setPending(false);
+        if (!autoFill && isMounted()) setPending(false);
       }
     },
     [routeAfterSignIn],

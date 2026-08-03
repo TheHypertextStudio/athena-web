@@ -128,6 +128,7 @@ export async function createTimeSubmission(
       submittedAt: now,
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!submission) throw new Error('time submission insert returned no row');
   const periodStart = new Date(input.periodStartsAt);
   const periodEnd = new Date(input.periodEndsAt);

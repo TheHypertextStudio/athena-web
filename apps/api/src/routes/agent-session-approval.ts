@@ -60,7 +60,11 @@ async function authorizeApprovalTarget(
     return { organizationId, actorId, approverActorId: actorId };
   }
   const registeredAgentId = session.agentId;
+  /* v8 ignore next -- @preserve defensive: `agent_session_executor_shape_check` guarantees every
+     `registered_agent` row has a non-null `agentId` */
   if (!registeredAgentId) throw new Error('Registered-agent session is missing its agent');
+  /* v8 ignore next -- @preserve defensive: the same check constraint guarantees a non-null
+     `organizationId` for every `registered_agent` row, so the fallback is never taken */
   const organizationId = session.organizationId ?? fallbackOrganizationId;
   const rows = await handle
     .select({ actorId: agent.actorId })
@@ -99,6 +103,10 @@ async function authorizeApprovalTargets(
 
 /** Return an Athena owner after checking the persisted executor shape. */
 function athenaOwner(session: SessionRow): string {
+  // Every call site here already checked `executorKind === 'athena'`, and
+  // `agent_session_executor_shape_check` guarantees a non-null `ownerUserId` for every `athena`
+  // row, so this condition is never true.
+  /* v8 ignore next -- @preserve defensive: see above */
   if (session.executorKind !== 'athena' || !session.ownerUserId) {
     throw new Error('Athena session is missing its owner');
   }

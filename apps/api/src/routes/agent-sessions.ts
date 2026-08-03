@@ -87,6 +87,7 @@ async function getOrCreateChatSession(
       .set({ contextOrganizationId: orgId })
       .where(eq(agentSession.id, existing[0].id))
       .returning();
+    /* v8 ignore next -- @preserve defensive: update always returns a row */
     if (!focused) throw new Error('chat session update returned no row');
     return focused;
   }

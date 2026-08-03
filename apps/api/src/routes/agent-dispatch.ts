@@ -116,6 +116,7 @@ export async function resolveCanonicalConversation(
         workLinkage: 'conversation',
       })
       .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('conversation insert returned no row');
     return created;
   });
@@ -166,6 +167,7 @@ export async function rotateCanonicalConversation(
         workLinkage: 'conversation',
       })
       .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!created) throw new Error('successor conversation insert returned no row');
     return created;
   });
@@ -337,6 +339,7 @@ export async function dispatchAthenaWork(input: DispatchWorkInput): Promise<Disp
       ...parentColumns(resolution),
     })
     .returning({ id: task.id });
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!created) throw new Error('dispatched task insert returned no row');
 
   const session = await insertSpawnedSession(input, created.id, spawnLabel);
@@ -372,6 +375,7 @@ async function insertSpawnedSession(
       currentStepAt: new Date(),
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!created) throw new Error('spawned session insert returned no row');
   return created;
 }

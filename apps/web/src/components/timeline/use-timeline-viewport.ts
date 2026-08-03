@@ -25,6 +25,7 @@ import {
   buildScale,
   defaultWindow,
   panWindow,
+  windowForGranularity,
   zoomWindow,
 } from './time-scale';
 
@@ -66,21 +67,37 @@ export function useTimelineViewport(
   const scale = useMemo(() => buildScale(window, requested), [requested, window]);
 
   /**
-   * Frame the viewport on the data the first time any arrives.
+   * Establish the window: once from the data, and again whenever the granularity is *requested*.
    *
    * @remarks
-   * The lazy initialiser above runs on the *first* render, when the page's query is still pending
-   * and `spans` is empty — so it produces the no-data fallback window. Without this the timeline
-   * would then keep that arbitrary window forever and paint every bar running off the right edge.
-   * Framing is a one-shot: once done, later data changes must not move the viewport, or editing a
-   * date would yank the view out from under the person editing it.
+   * Three moments, one rule — the window is (re)framed only when something the viewer did or the
+   * data supplied genuinely changes what should be on screen:
+   *
+   * 1. **Mount.** The lazy initialiser above ran with `spans` still empty (the page's query is in
+   *    flight), so it produced the no-data fallback. If the URL already asks for a granularity —
+   *    the reload case — that request is applied here, which is what makes "Years" survive a
+   *    reload as a *zoom* rather than as a relabelled 200-day window.
+   * 2. **First data.** Re-frame on the real extents. Without this the timeline would keep the
+   *    arbitrary fallback window forever and paint every bar off the right edge. One-shot: later
+   *    data changes must not move the viewport, or editing a date would yank the view out from
+   *    under the person editing it.
+   * 3. **A changed request.** Choosing "Years" has to actually zoom out, or the five granularities
+   *    are five spellings of one view. Keyed on the request alone, so a wheel zoom that happens to
+   *    land in another granularity's territory never yanks the window. `'auto'` re-frames nothing
+   *    — it is the absence of a request.
    */
   const framed = useRef(false);
+  const lastRequest = useRef<ViewScale | null>(null);
   useEffect(() => {
-    if (framed.current || spans.length === 0) return;
-    framed.current = true;
-    setWindow(defaultWindow(spans, Date.now()));
-  }, [spans]);
+    const firstData = !framed.current && spans.length > 0;
+    const requestChanged = lastRequest.current !== null && lastRequest.current !== requested;
+    if (lastRequest.current !== null && !firstData && !requestChanged) return;
+    lastRequest.current = requested;
+    if (firstData) framed.current = true;
+    setWindow((current) =>
+      windowForGranularity(firstData ? defaultWindow(spans, Date.now()) : current, requested),
+    );
+  }, [requested, spans]);
 
   const resetToToday = useCallback((): void => {
     setWindow(defaultWindow(spans, Date.now()));

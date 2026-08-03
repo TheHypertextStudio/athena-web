@@ -23,12 +23,27 @@ import type { TimelineTint } from './timeline-catalog';
  * The shared bar body: one neutral tonal surface for every tone.
  *
  * @remarks
- * A tonal step above the plot area rather than a coloured fill, so a bar reads as an object on the
- * canvas instead of as an alert. Text is the normal on-surface colour, which stays legible in both
- * themes without the white-on-saturated contrast gamble.
+ * A tonal step away from the plot area rather than a coloured fill, so a bar reads as an object on
+ * the canvas instead of as an alert. Text is the normal on-surface colour, which stays legible in
+ * both themes without the white-on-saturated contrast gamble.
+ *
+ * **No outline.** The bar used to carry a 1px `outline-variant` stroke as well, which — repeated
+ * once per row and again at every gridline — is what made the chart read as a wireframe. The tone
+ * alone separates it: against the plot area (the page's own `surface`) this is measured at 1.21:1
+ * in light and 1.30:1 in dark.
  */
-export const BAR_SURFACE_CLASS =
-  'bg-surface-container-highest text-on-surface border-outline-variant';
+export const BAR_SURFACE_CLASS = 'bg-surface-container-highest text-on-surface';
+
+/**
+ * The lane drawn for a row that carries no dates.
+ *
+ * @remarks
+ * An undated row is still a row, so it gets a full-width track rather than a chip in a drawer —
+ * but the track has to say "nothing is scheduled here" without drawing a bar at a date the row
+ * does not have. A faint tonal wash plus its own copy does that, and the whole lane is the drag
+ * target that gives the row its first dates.
+ */
+export const UNSCHEDULED_LANE_CLASS = 'bg-surface-container/40';
 
 /**
  * The leading-edge accent that carries the semantic tone.

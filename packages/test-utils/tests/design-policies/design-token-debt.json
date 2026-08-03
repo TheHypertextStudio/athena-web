@@ -256,14 +256,6 @@
     "raw-type-utility": 4,
     "shadow-outside-overlay": 1
   },
-  "apps/web/src/components/canvas/project-graph-panel.tsx": {
-    "raw-type-utility": 1,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/canvas/project-node.tsx": {
-    "raw-type-utility": 4,
-    "shadow-outside-overlay": 1
-  },
   "apps/web/src/components/canvas/task-graph-panel.tsx": {
     "raw-type-utility": 3,
     "shadow-outside-overlay": 2
@@ -650,23 +642,6 @@
   },
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1
-  },
-  "apps/web/src/components/timeline/cascade-proposal.tsx": {
-    "raw-type-utility": 2,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/timeline/timeline-axis.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/timeline/timeline-bar.tsx": {
-    "raw-type-utility": 2,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/timeline/timeline-canvas.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/timeline/unscheduled-tray.tsx": {
-    "raw-type-utility": 4
   },
   "apps/web/src/components/today/ghost-proposals.tsx": {
     "raw-type-utility": 4

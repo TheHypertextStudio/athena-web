@@ -101,8 +101,15 @@ export const EMPTY_VIEW_STATE: ViewState = { filters: [], groupBy: null, sort: [
  */
 export type DisplayGeometryToken = 'row' | 'bar' | 'axis';
 
-/** The time-axis granularity a temporal lens renders at; `auto` derives it from the visible span. */
-export type ViewScale = 'auto' | 'day' | 'week' | 'month' | 'quarter';
+/**
+ * The time-axis granularity a temporal lens renders at; `auto` derives it from the visible span.
+ *
+ * @remarks
+ * The five concrete steps are the calendar units a plan is actually discussed in — days, weeks,
+ * months, quarters, years — so a roadmap can be read at the resolution of the decision being made
+ * without the viewer inventing an intermediate unit.
+ */
+export type ViewScale = 'auto' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 
 /** Row density — the only display option permitted to change row height. */
 export type ViewDensity = 'comfortable' | 'compact';

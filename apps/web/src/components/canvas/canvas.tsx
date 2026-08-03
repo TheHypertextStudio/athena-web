@@ -60,8 +60,28 @@ export interface CanvasProps extends GraphInteractionHandlers {
   highlightChains?: boolean;
   /** When it changes, the canvas pans/zooms to fit these node ids (e.g. search matches). */
   focusOn?: readonly string[];
+  /**
+   * The largest zoom the canvas will apply, including when fitting.
+   *
+   * @remarks
+   * Defaults to xyflow's own `2`. A host whose graph is a handful of large cards should pass `1`:
+   * `fitView` scales *up* as readily as down, so a sparse graph opens magnified past life size
+   * with two cards filling the viewport — the "everything feels way too zoomed in when first
+   * opened" reading. Capping at 1 makes fitting mean fitting.
+   */
+  maxZoom?: number;
   /** Optional minimap node colorer; hosts inject any dataset-specific coloring. */
   nodeColor?: (node: Node) => string;
+  /**
+   * Whether to render the minimap. Defaults to `density === 'full'`.
+   *
+   * @remarks
+   * A minimap earns its space on a graph too large to hold in view — hundreds of task nodes. On a
+   * portfolio of a dozen wide project cards it is a grey block of abstracted rectangles parked over
+   * the canvas, telling you nothing the canvas is not already showing. Hosts of the second kind
+   * turn it off.
+   */
+  minimap?: boolean;
   /** When provided, renders an expand affordance that calls this. */
   onExpand?: () => void;
   /** Called when a node is single-clicked (selected), or null when the pane is clicked. */
@@ -86,7 +106,9 @@ function CanvasInner({
   highlightIds,
   highlightChains = true,
   focusOn,
+  maxZoom = 2,
   nodeColor,
+  minimap,
   onExpand,
   onSelectNode,
   onNavigate,
@@ -133,19 +155,31 @@ function CanvasInner({
           fitView
           proOptions={{ hideAttribution: true }}
           minZoom={0.1}
+          maxZoom={maxZoom}
+          fitViewOptions={{ maxZoom }}
         >
-          <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface-container" />
+          {/*
+            The canvas takes the page's own surface. It used to force `surface-container`, so the
+            graph sat on a visibly darker slab than the panel around it and read as a widget
+            embedded in the page rather than as the page.
+          */}
+          <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface" />
+          {/*
+            Controls and minimap: tonal, no strokes. The overrides used to force a 1px outline on
+            every control and a divider between them, which is the wireframe look this canvas was
+            called out for.
+          */}
           <Controls
             showInteractive={false}
-            className="[&_button]:!border-outline-variant [&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest !shadow-none [&_button]:!border-b"
+            className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
           />
-          {density === 'full' ? (
+          {(minimap ?? density === 'full') ? (
             <MiniMap
               pannable
               zoomable
               nodeColor={nodeColor}
               maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
-              bgColor="var(--color-surface-container)"
+              bgColor="var(--color-surface-container-low)"
               className="!rounded-lg"
             />
           ) : null}

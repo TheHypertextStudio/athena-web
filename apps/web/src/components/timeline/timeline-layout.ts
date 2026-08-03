@@ -12,9 +12,19 @@
  * `applied.groups` into bare rows, so choosing "Group by → Team" silently changed nothing on
  * screen; here a group produces a real band header track and its rows follow it.
  *
- * Rows with no dates are **partitioned out, not dropped**. They collect in the unscheduled tray so
- * the timeline never hides work, and — critically — they are never plotted at offset zero, which
- * is what made undated Projects read as broken rows in the old lens.
+ * **Undated rows are rows.** They stay in the same ordered track list, at the same height, with the
+ * same label cell and the same drag affordances — only their span is `null`, so the plot area
+ * draws an empty schedulable lane instead of a bar. The previous model partitioned them into a
+ * separate tray docked under the chart, which read as an unrelated island of chips and gave the
+ * same object two different shapes depending on whether someone had typed a date yet. What it must
+ * never do is plot them at offset zero, which is what made undated Projects look like broken rows
+ * in the lens before that.
+ *
+ * Within each group (or the whole list when ungrouped) the dated rows come first in view order and
+ * the undated ones follow, still in view order. This is the *only* re-ordering the model does, and
+ * it is a property of the projection rather than of the query: on a time axis a row with no
+ * position cannot be interleaved among rows that have one without reading as a gap in the chart.
+ * The list lens, which has no such axis, keeps the view's order untouched.
  */
 import type { AppliedView } from '@/components/views/apply-view';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
@@ -40,7 +50,7 @@ export interface GroupTrack {
   readonly id: string;
   /** The group header label. */
   readonly label: string;
-  /** How many plottable rows the band contains (shown as a count on the header). */
+  /** How many rows the band contains (shown as a count on the header). */
   readonly count: number;
   /** The track's vertical offset from the top of the canvas, in pixels. */
   readonly top: number;
@@ -48,32 +58,42 @@ export interface GroupTrack {
   readonly height: number;
 }
 
-/** A plottable row track. */
+/** A row track — one entity, dated or not. */
 export interface RowTrack<T> {
   /** Discriminator. */
   readonly kind: 'row';
-  /** The placed row. */
-  readonly placed: PlacedRow<T>;
+  /** The originating row. */
+  readonly row: T;
+  /** The row's stable id. */
+  readonly id: string;
+  /**
+   * The row's resolved span, or `null` when it carries no dates.
+   *
+   * @remarks
+   * `null` is a first-class state, not an error: the row still occupies a track of the ordinary
+   * height with its ordinary label, and the plot area renders an empty schedulable lane.
+   */
+  readonly span: TimelineSpan | null;
   /** The track's vertical offset from the top of the canvas, in pixels. */
   readonly top: number;
   /** The track's height, in pixels. */
   readonly height: number;
 }
 
-/** One rendered track: a group band header, or a plottable row. */
+/** One rendered track: a group band header, or a row. */
 export type TimelineTrack<T> = GroupTrack | RowTrack<T>;
 
-/** The render-ready layout: ordered tracks, the unscheduled remainder, and the canvas height. */
+/** The render-ready layout: ordered tracks, the placed subset, and the canvas height. */
 export interface TimelineLayout<T> {
   /** The ordered tracks, top to bottom. */
   readonly tracks: readonly TimelineTrack<T>[];
-  /** Rows carrying no dates, surfaced in the tray rather than plotted. */
-  readonly unscheduled: readonly T[];
-  /** Every placed row, for deriving the viewport and resolving edges. */
+  /** Every dated row, for deriving the viewport and resolving edges. */
   readonly placed: readonly PlacedRow<T>[];
+  /** How many rows carry no dates (for copy and empty-state hints). */
+  readonly undatedCount: number;
   /** The total canvas height in pixels (the sum of every track height). */
   readonly height: number;
-  /** Vertical offset of each placed row's track center, keyed by row id — for edge routing. */
+  /** Vertical offset of each row's track center, keyed by row id — for edge routing. */
   readonly centerById: ReadonlyMap<string, number>;
 }
 
@@ -83,6 +103,8 @@ export interface TimelineLayout<T> {
  * @remarks
  * Consumes the same {@link AppliedView} the list lens renders, so filtering, sorting, and grouping
  * behave identically across lenses — switching lens changes the projection, never the population.
+ * Row order is the view's order, with the dated rows of each bucket emitted before its undated
+ * ones (see the module note for why that one re-ordering belongs to the projection).
  *
  * @typeParam T - The row type.
  * @param applied - The filtered/sorted/grouped rows from `applyView`.
@@ -99,33 +121,38 @@ export function buildTimelineLayout<T>(
   const headerHeight = groupHeaderHeightFor(display);
 
   const tracks: TimelineTrack<T>[] = [];
-  const unscheduled: T[] = [];
   const placed: PlacedRow<T>[] = [];
   const centerById = new Map<string, number>();
+  let undatedCount = 0;
   let top = 0;
 
   const pushRows = (rows: readonly T[]): number => {
-    let plotted = 0;
-    for (const row of rows) {
-      const span = catalog.span(row);
-      if (!span) {
-        unscheduled.push(row);
-        continue;
-      }
-      const entry: PlacedRow<T> = { row, id: catalog.id(row), span };
-      placed.push(entry);
-      tracks.push({ kind: 'row', placed: entry, top, height: rowHeight });
+    // Resolve every span once, then emit the dated rows before the undated ones. Two passes over
+    // a resolved array rather than two calls to `catalog.span` per row.
+    const resolved = rows.map((row) => ({ row, id: catalog.id(row), span: catalog.span(row) }));
+    const emit = (entry: (typeof resolved)[number]): void => {
+      if (entry.span) placed.push({ row: entry.row, id: entry.id, span: entry.span });
+      else undatedCount += 1;
+      tracks.push({
+        kind: 'row',
+        row: entry.row,
+        id: entry.id,
+        span: entry.span,
+        top,
+        height: rowHeight,
+      });
       centerById.set(entry.id, top + rowHeight / 2);
       top += rowHeight;
-      plotted += 1;
-    }
-    return plotted;
+    };
+    for (const entry of resolved) if (entry.span) emit(entry);
+    for (const entry of resolved) if (!entry.span) emit(entry);
+    return resolved.length;
   };
 
   if (applied.groups) {
     for (const group of applied.groups) {
       // Reserve the band header's track before its rows so `top` stays monotonic, then backfill
-      // the plotted count once the rows are known.
+      // the row count once the rows are known.
       const headerTop = top;
       top += headerHeight;
       const headerIndex = tracks.length;
@@ -137,12 +164,12 @@ export function buildTimelineLayout<T>(
         top: headerTop,
         height: headerHeight,
       });
-      const plotted = pushRows(group.rows);
+      const count = pushRows(group.rows);
       tracks[headerIndex] = {
         kind: 'group',
         id: group.id,
         label: group.label,
-        count: plotted,
+        count,
         top: headerTop,
         height: headerHeight,
       };
@@ -151,5 +178,5 @@ export function buildTimelineLayout<T>(
     pushRows(applied.rows);
   }
 
-  return { tracks, unscheduled, placed, height: top, centerById };
+  return { tracks, placed, undatedCount, height: top, centerById };
 }

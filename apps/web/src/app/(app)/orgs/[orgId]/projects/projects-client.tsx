@@ -17,7 +17,7 @@ import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -63,7 +63,30 @@ const ProjectGraphPanel = dynamic(
   { ssr: false },
 );
 
+/** The three projections of the same portfolio rows. */
 type Lens = 'list' | 'dependencies' | 'timeline';
+
+/** The URL search param the active lens is persisted in. */
+const LENS_PARAM = 'lens';
+/** Every lens id, for validating what arrives in the URL. */
+const LENSES: readonly Lens[] = ['list', 'dependencies', 'timeline'];
+
+/**
+ * Read the active lens out of the URL, falling back to the list.
+ *
+ * @remarks
+ * The lens belongs in the URL for the same reason the filters do: a configured surface has to
+ * survive a reload and be shareable as a link. It was component state, so a reload silently threw
+ * the viewer back to the list — and the timeline's own zoom and scale, which *are* persisted,
+ * became unreachable by link because the lens showing them was not.
+ *
+ * @param params - The current search params.
+ * @returns the parsed lens.
+ */
+function parseLens(params: URLSearchParams): Lens {
+  const raw = params.get(LENS_PARAM);
+  return LENSES.find((lens) => lens === raw) ?? 'list';
+}
 
 const HEALTH_LABEL = {
   on_track: 'On track',
@@ -332,7 +355,22 @@ export default function ProjectsListClient(): JSX.Element {
   const projectsNoun = useVocabulary('project', { plural: true });
   const teamNoun = useVocabulary('team');
   const [createOpen, setCreateOpen] = useState(false);
-  const [lens, setLens] = useState<Lens>('list');
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+  const lens = useMemo(() => parseLens(new URLSearchParams(search)), [search]);
+  const setLens = useCallback(
+    (next: Lens): void => {
+      const params = new URLSearchParams(search);
+      if (next === 'list') params.delete(LENS_PARAM);
+      else params.set(LENS_PARAM, next);
+      const query = params.toString();
+      // `replace`, not `push`: flipping between projections of the same rows is not a navigation
+      // step, and back should leave the page rather than walk the lenses.
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, search],
+  );
   const { state, display, setFilters, setGroupBy, setSort, setDisplay } = useViewState();
 
   const overviewQ = useApiQuery(projectOverviewDef(orgId));
@@ -640,7 +678,7 @@ export default function ProjectsListClient(): JSX.Element {
           />
         ) : null
       }
-      fill={lens === 'timeline'}
+      fill={lens !== 'list'}
     >
       <CreateProjectDialog
         orgId={orgId}
@@ -719,6 +757,9 @@ export default function ProjectsListClient(): JSX.Element {
               noun={projectNoun}
               pluralNoun={projectsNoun}
               canSchedule={canRename}
+              // On this surface the timeline *is* the page, so it runs to the content panel's
+              // edges rather than sitting inside the container's document gutters.
+              fullBleed
               onReschedule={handleReschedule}
               onApplyCascade={handleApplyCascade}
               applyingCascade={applyingCascade}

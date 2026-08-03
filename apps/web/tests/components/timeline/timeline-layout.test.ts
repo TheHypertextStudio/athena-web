@@ -137,15 +137,21 @@ describe('buildTimelineLayout', () => {
     expect(layout.height).toBe(expected);
   });
 
-  it('partitions undated rows into the tray instead of plotting them', () => {
+  it('keeps an undated row in the list as a spanless track rather than plotting it at zero', () => {
     const layout = buildTimelineLayout(
-      flat([row('dated', 0, DAY), row('undated', null, null)]),
+      flat([row('undated', null, null), row('dated', 0, DAY)]),
       catalog,
       comfortable,
     );
-    expect(layout.unscheduled.map((entry) => entry.id)).toEqual(['undated']);
+    // Both are rows, in view order, at the same height — the undated one simply has no span.
+    expect(layout.tracks.map((track) => track.kind)).toEqual(['row', 'row']);
+    const spans = layout.tracks.map((track) => (track.kind === 'row' ? track.span : undefined));
+    expect(spans[0]).not.toBeNull();
+    expect(spans[1]).toBeNull();
+    expect(new Set(layout.tracks.map((track) => track.height)).size).toBe(1);
+    // Only the dated row is placed, so nothing undated can reach the axis or the edge router.
     expect(layout.placed.map((entry) => entry.id)).toEqual(['dated']);
-    expect(layout.tracks).toHaveLength(1);
+    expect(layout.undatedCount).toBe(1);
   });
 
   it('renders a band header per group rather than flattening the groups away', () => {
@@ -162,7 +168,7 @@ describe('buildTimelineLayout', () => {
     expect(layout.tracks.map((track) => track.kind)).toEqual(['group', 'row', 'group', 'row']);
   });
 
-  it('counts only the plotted rows on a band header', () => {
+  it('counts every row in a band, dated or not', () => {
     const applied: AppliedView<Row> = {
       rows: [],
       groups: [
@@ -176,8 +182,10 @@ describe('buildTimelineLayout', () => {
     const layout = buildTimelineLayout(applied, catalog, comfortable);
     const header = layout.tracks[0];
     if (header?.kind !== 'group') throw new Error('expected a group band header first');
-    expect(header.count).toBe(1);
-    expect(layout.unscheduled).toHaveLength(1);
+    // The band's count is how many rows are under it. Counting only the dated ones made the
+    // header disagree with the rows drawn beneath it the moment anything was unscheduled.
+    expect(header.count).toBe(2);
+    expect(layout.undatedCount).toBe(1);
   });
 
   it('exposes a routing center per placed row for the dependency layer', () => {

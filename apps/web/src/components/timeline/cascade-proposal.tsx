@@ -59,13 +59,13 @@ export default function CascadeProposal({
   return (
     <div
       role="status"
-      className="border-outline-variant bg-surface-container-high flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 shadow-sm"
+      className="bg-surface-container-high flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg px-3 py-2.5"
     >
-      <p className="text-on-surface min-w-0 flex-1 text-xs">
-        <span className="font-semibold">
+      <p className="text-on-surface min-w-0 flex-1">
+        <span className="text-label-medium">
           That pushes {changes.length} downstream {noun}
         </span>
-        <span className="text-on-surface-variant"> — {summary}.</span>
+        <span className="text-on-surface-variant text-body-small"> — {summary}.</span>
       </p>
       <div className="flex items-center gap-1.5">
         <Button size="sm" onClick={onApply} disabled={applying}>

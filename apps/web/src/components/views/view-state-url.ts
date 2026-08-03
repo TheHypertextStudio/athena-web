@@ -201,7 +201,7 @@ export function isEmptyViewState(state: ViewState): boolean {
 }
 
 /** The recognized {@link ViewScale} values, for validating a parsed token. */
-const SCALES = new Set<ViewScale>(['auto', 'day', 'week', 'month', 'quarter']);
+const SCALES = new Set<ViewScale>(['auto', 'day', 'week', 'month', 'quarter', 'year']);
 /** The recognized {@link ViewDensity} values, for validating a parsed token. */
 const DENSITIES = new Set<ViewDensity>(['comfortable', 'compact']);
 

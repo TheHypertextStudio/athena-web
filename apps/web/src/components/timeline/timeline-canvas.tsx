@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `timeline` — the canvas: axis, label column, plotted rows, edges, tray, and the drag surface.
+ * `timeline` — the canvas: axis, label column, plotted rows, edges, and the drag surface.
  *
  * @remarks
  * The single component every temporal lens in Docket renders. It is generic over the row type and
@@ -9,16 +9,25 @@
  * portfolio, and any future surface share one implementation of the axis, zooming, grouping,
  * dependency drawing, and drag-to-schedule.
  *
- * Two structural decisions are worth calling out because they eliminate whole classes of defect
+ * Four structural decisions are worth calling out because they eliminate whole classes of defect
  * rather than papering over them:
  *
  * - **There is no horizontal scroll.** Time is navigated by zooming and panning the viewport, not
  *   by scrolling a track wider than the screen. That means the label column can never scroll out
  *   of view and the axis can never desynchronise from the bars — the old lens lost the project
- *   names the moment you scrolled right.
+ *   names the moment you scrolled right. Edge-zone auto-*pan* during a drag is the same idea: the
+ *   window moves, not a scroll offset.
  * - **Vertical position is arithmetic.** The layout model hands over fixed-height tracks with
  *   precomputed offsets, so gridlines, row bands, and dependency waypoints all derive from the
- *   same numbers without measuring the DOM.
+ *   same numbers without measuring the DOM. Tracks are laid out end to end from a running sum,
+ *   which is why no row can ever overlap its neighbour at any zoom or scroll offset.
+ * - **The chart is not in a card.** It has no surface, border, or radius of its own: it *is* the
+ *   page's content region, bled to the panel's edges. A tonal card around a full-height chart adds
+ *   an inner frame, a second rounded corner against the shell's own, and a gutter of wasted width
+ *   — all to say something the page had already said.
+ * - **Every row is a row.** A row with no dates keeps its place in the same list at the same
+ *   height with the same label and the same affordances; only its lane is empty. It is not
+ *   demoted to a chip in a tray docked under the chart.
  *
  * Interaction follows one rule: never reject the gesture. A drag always commits, violations become
  * visible rather than preventing anything, and the two consequences a drag can have — an undo and
@@ -40,14 +49,15 @@ import {
   useState,
 } from 'react';
 
+import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
 import type { AppliedView } from '@/components/views/apply-view';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
 
 import CascadeProposal from './cascade-proposal';
 import TimelineAxis from './timeline-axis';
 import TimelineBar from './timeline-bar';
+import { TimelineDragPreview, TimelineDropIndicator } from './timeline-drag-layer';
 import TimelineEdges, { type EdgeAnchor, edgeKey } from './timeline-edges';
-import UnscheduledTray, { type TrayEntry } from './unscheduled-tray';
 import {
   type CascadeGraph,
   type CascadeNode,
@@ -57,10 +67,11 @@ import {
   findViolations,
 } from './cascade';
 import { type TimelineCatalog, type TimelineSpan } from './timeline-catalog';
-import { buildTimelineLayout } from './timeline-layout';
-import { TINT_DOT_CLASS } from './timeline-tint';
-import { rowCenterFor } from './timeline-geometry';
-import { DAY_MS, dateAtPct, panWindow, pct, zoomWindow } from './time-scale';
+import { buildTimelineLayout, type RowTrack } from './timeline-layout';
+import { TINT_DOT_CLASS, UNSCHEDULED_LANE_CLASS } from './timeline-tint';
+import { BAR_HEIGHT, barInsetFor, rowCenterFor } from './timeline-geometry';
+import { DAY_MS, dateAtPct, panWindow, pct, snapDown, zoomWindow } from './time-scale';
+import { useTimelineAutoScroll } from './use-timeline-autoscroll';
 import { useTimelineDrag } from './use-timeline-drag';
 import type { TimelineViewport } from './use-timeline-viewport';
 
@@ -81,6 +92,20 @@ const MIN_LABEL_WIDTH = 112;
 const MAX_LABEL_WIDTH = 480;
 /** Zoom step applied per wheel notch / button press. */
 const ZOOM_STEP = 0.8;
+
+/**
+ * Cancel the page container's gutters so the chart runs to the content panel's edges.
+ *
+ * @remarks
+ * Mirrors `PageContainer`'s `px-3 py-4 @2xl:p-6 @4xl:p-8` exactly. A chart is not a document: every
+ * pixel of width is more time on screen, and a gutter around it reads as the frame of a card that
+ * is not there. Opt-in (see {@link TimelineCanvasProps.fullBleed}) because a timeline embedded
+ * among siblings — the Hub roadmap — must keep the rhythm of the stack it sits in.
+ */
+const FULL_BLEED_CLASS = '-mx-3 -mb-4 @2xl:-mx-6 @2xl:-mb-6 @4xl:-mx-8 @4xl:-mb-8';
+
+/** Horizontal padding inside the label column, aligned to the page's own gutters. */
+const LABEL_PAD_CLASS = 'px-3 @2xl:px-6';
 
 /** A completed reschedule, retained so it can be undone. */
 interface LastChange {
@@ -114,6 +139,14 @@ export interface TimelineCanvasProps<T> {
   pluralNoun: string;
   /** Whether the caller may reschedule; read-only viewers still get the full visual timeline. */
   canSchedule: boolean;
+  /**
+   * Bleed the chart past the page container's gutters to the content panel's edges.
+   *
+   * @remarks
+   * For a surface where the timeline *is* the page. Left `false` for a timeline that is one block
+   * among siblings, where cancelling the container's padding would break the stack's alignment.
+   */
+  fullBleed?: boolean;
   /** Persist one row's new span. */
   onReschedule: (id: string, span: TimelineSpan) => void;
   /** Persist a whole proposed ripple as one transaction. */
@@ -141,6 +174,7 @@ export default function TimelineCanvas<T>({
   noun,
   pluralNoun,
   canSchedule,
+  fullBleed = false,
   onReschedule,
   onApplyCascade,
   applyingCascade,
@@ -161,9 +195,19 @@ export default function TimelineCanvas<T>({
   );
 
   const { window, scale, setWindow } = viewport;
+  /**
+   * Where "today" falls in the window, or `null` when today is off screen.
+   *
+   * @remarks
+   * Snapped to the start of the UTC day, like every other date on this chart. Reading the raw
+   * clock here made the rule's offset a function of the millisecond the component rendered at,
+   * which differed between the server pass and hydration and threw the whole subtree away. Day
+   * resolution is also what the axis and every bar already use, so a marker at the day boundary is
+   * the consistent reading rather than a compromise.
+   */
   const todayLeft = useMemo(() => {
-    const now = Date.now();
-    return now >= window.min && now <= window.max ? pct(now, window) : null;
+    const today = snapDown(Date.now(), 'day');
+    return today >= window.min && today <= window.max ? pct(today, window) : null;
   }, [window]);
 
   /** The constraint graph over currently placed rows. */
@@ -193,21 +237,19 @@ export default function TimelineCanvas<T>({
   const anchors = useMemo<ReadonlyMap<string, EdgeAnchor>>(() => {
     const map = new Map<string, EdgeAnchor>();
     for (const track of layout.tracks) {
-      if (track.kind !== 'row') continue;
-      map.set(track.placed.id, {
-        span: track.placed.span,
-        center: track.top + rowCenterFor(display),
-      });
+      if (track.kind !== 'row' || track.span === null) continue;
+      map.set(track.id, { span: track.span, center: track.top + rowCenterFor(display) });
     }
     return map;
   }, [display, layout.tracks]);
 
   const rowById = useMemo(() => {
     const map = new Map<string, T>();
-    for (const entry of layout.placed) map.set(entry.id, entry.row);
-    for (const row of layout.unscheduled) map.set(catalog.id(row), row);
+    for (const track of layout.tracks) {
+      if (track.kind === 'row') map.set(track.id, track.row);
+    }
     return map;
-  }, [catalog, layout.placed, layout.unscheduled]);
+  }, [layout.tracks]);
 
   const nameOf = useCallback(
     (id: string): string => {
@@ -228,9 +270,19 @@ export default function TimelineCanvas<T>({
     [graph, onReschedule],
   );
 
+  /** Pan the visible window, for the edge-zone auto-pan during a drag. */
+  const handlePan = useCallback(
+    (fraction: number): void => {
+      setWindow((current) => panWindow(current, fraction));
+    },
+    [setWindow],
+  );
+
+  const autoScroll = useTimelineAutoScroll({ scrollRef, trackRef, onPan: handlePan });
   const { drag, startDrag, consumeDragClick } = useTimelineDrag({
     window,
     trackRef,
+    autoScroll,
     onCommit: handleCommit,
   });
 
@@ -243,8 +295,8 @@ export default function TimelineCanvas<T>({
     [consumeDragClick, onActivate],
   );
 
-  /** Begin scheduling an undated row where the pointer currently sits on the track. */
-  const handleTrayPointerDown = useCallback(
+  /** Begin scheduling an undated row from a press anywhere on its empty lane. */
+  const handleLanePointerDown = useCallback(
     (event: ReactPointerEvent<HTMLElement>, id: string): void => {
       const track = trackRef.current;
       if (!track || !canSchedule) return;
@@ -302,235 +354,269 @@ export default function TimelineCanvas<T>({
     return () => {
       track.removeEventListener('wheel', onWheel);
     };
-  }, []);
+  }, [setWindow]);
 
-  const trayEntries = useMemo<readonly TrayEntry[]>(
-    () =>
-      layout.unscheduled.map((row) => ({
-        id: catalog.id(row),
-        label: catalog.label(row),
-        status: catalog.statusLabel(row),
-        tint: catalog.tint(row),
-      })),
-    [catalog, layout.unscheduled],
-  );
+  /** The track being dragged, for the drop indicator and the preview card. */
+  const dragTrack = useMemo<RowTrack<T> | null>(() => {
+    if (!drag) return null;
+    for (const track of layout.tracks) {
+      if (track.kind === 'row' && track.id === drag.id) return track;
+    }
+    return null;
+  }, [drag, layout.tracks]);
 
   const gridStyle: CSSProperties = {
     gridTemplateColumns: `${labelWidth === null ? DEFAULT_LABEL_WIDTH : `${labelWidth}px`} minmax(0, 1fr)`,
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      {/*
-        One tonal card. The chart is the page's content, so it takes the remaining height rather
-        than a magic viewport calculation, and its surface steps up from the page background per
-        MD3 tonal hierarchy instead of sitting on bare white.
-      */}
-      <div className="border-outline-variant bg-surface-container flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-          {/* ── Sticky axis header ──────────────────────────────────────── */}
-          <div
-            className="bg-surface-container-high/95 supports-[backdrop-filter]:bg-surface-container-high/80 border-outline-variant sticky top-0 z-30 grid border-b backdrop-blur"
-            style={gridStyle}
-          >
-            <div className="border-outline-variant relative flex items-end border-r px-3 pb-1.5">
-              <span
-                role="presentation"
-                onPointerDown={handleResizePointerDown}
-                className="hover:bg-primary/40 absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize"
-              />
-            </div>
-            <TimelineAxis scale={scale} todayLeft={todayLeft} />
-          </div>
-
-          {/* ── Body ────────────────────────────────────────────────────── */}
-          <div
-            role="grid"
-            aria-label={`${pluralNoun} timeline`}
-            // `min-h-full` so the gridlines, today rule, and column divider run the whole canvas
-            // rather than stopping at the last row and leaving the chart looking half-drawn.
-            className="relative grid min-h-full"
-            style={gridStyle}
-          >
-            {/* Label column */}
-            <div
-              className="border-outline-variant relative border-r"
-              style={{ minHeight: layout.height }}
-            >
-              {layout.tracks.map((track) =>
-                track.kind === 'group' ? (
-                  <div
-                    key={`group-${track.id}`}
-                    role="row"
-                    className="bg-surface-container-high absolute inset-x-0 flex items-center gap-2 px-3"
-                    style={{ top: track.top, height: track.height }}
-                  >
-                    <span className="text-on-surface truncate text-xs font-semibold">
-                      {track.label}
-                    </span>
-                    <span className="text-on-surface-variant text-[11px] tabular-nums">
-                      {track.count}
-                    </span>
-                  </div>
-                ) : (
-                  <LabelRow
-                    key={`label-${track.placed.id}`}
-                    top={track.top}
-                    height={track.height}
-                    drag={catalog.dragSource(track.placed.row)}
-                    onEnter={() => {
-                      setHoveredId(track.placed.id);
-                      onPrefetch(track.placed.id);
-                    }}
-                    onLeave={() => {
-                      setHoveredId(null);
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={cn(
-                        'size-2 shrink-0 rounded-full',
-                        TINT_DOT_CLASS[catalog.tint(track.placed.row)],
-                      )}
-                    />
-                    <button
-                      type="button"
-                      role="gridcell"
-                      onClick={() => {
-                        activate(track.placed.id);
-                      }}
-                      className="text-on-surface min-w-0 truncate text-left text-sm font-medium hover:underline"
-                    >
-                      {catalog.label(track.placed.row)}
-                    </button>
-                    {/* Same line, never a second one — row height must not depend on the row. */}
-                    {(() => {
-                      const sub = catalog.sublabel(track.placed.row);
-                      return sub ? (
-                        <span className="text-on-surface-variant shrink-0 truncate text-[11px]">
-                          {sub}
-                        </span>
-                      ) : null;
-                    })()}
-                  </LabelRow>
-                ),
-              )}
-            </div>
-
-            {/* Plot area */}
-            <div ref={trackRef} className="relative" style={{ minHeight: layout.height }}>
-              {/* Gridlines + today rule, behind everything. */}
-              <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-                {scale.ticks.map((tick) => (
-                  <div
-                    key={tick.at}
-                    className={cn(
-                      'border-outline-variant absolute inset-y-0 border-l',
-                      tick.major ? 'opacity-100' : 'opacity-40',
-                    )}
-                    style={{ left: `${pct(tick.at, scale)}%` }}
-                  />
-                ))}
-                {todayLeft !== null ? (
-                  <div
-                    className="bg-primary/30 absolute inset-y-0 z-[1] w-px"
-                    style={{ left: `${todayLeft}%` }}
-                  />
-                ) : null}
-              </div>
-
-              {/* Group band tints, so the bands read as tonal steps rather than ruled lines. */}
-              {layout.tracks.map((track) =>
-                track.kind === 'group' ? (
-                  <div
-                    key={`band-${track.id}`}
-                    aria-hidden="true"
-                    className="bg-surface-container-high absolute inset-x-0"
-                    style={{ top: track.top, height: track.height }}
-                  />
-                ) : null,
-              )}
-
-              <TimelineEdges
-                edges={allEdges}
-                anchors={anchors}
-                violations={violationKeys}
-                hoveredId={hoveredId}
-                window={window}
-                height={layout.height}
-                trackRef={trackRef}
-              />
-
-              {layout.tracks.map((track) => {
-                if (track.kind !== 'row') return null;
-                const { placed } = track;
-                const live = drag?.id === placed.id ? drag.span : placed.span;
-                // Only the *blocked* row is marked. Ringing both endpoints paints two bars red for
-                // one problem and, along a chain, turns the whole canvas red — while the row that
-                // actually cannot start on time is the blocked one. The red edge already names the
-                // blocker.
-                const violated = allEdges.some(
-                  (edge) =>
-                    edge.blockedId === placed.id &&
-                    violationKeys.has(edgeKey(edge.blockerId, edge.blockedId)),
-                );
-                return (
-                  <div
-                    key={`row-${placed.id}`}
-                    className="absolute inset-x-0"
-                    style={{ top: track.top, height: track.height }}
-                    onMouseEnter={() => {
-                      setHoveredId(placed.id);
-                    }}
-                    onMouseLeave={() => {
-                      setHoveredId(null);
-                    }}
-                  >
-                    <TimelineBar
-                      id={placed.id}
-                      label={catalog.label(placed.row)}
-                      span={live}
-                      tint={catalog.tint(placed.row)}
-                      progress={catalog.progress(placed.row)}
-                      markers={catalog.markers(placed.row)}
-                      window={window}
-                      display={display}
-                      description={describe(catalog, placed.row, live)}
-                      violated={violated}
-                      dragging={drag?.id === placed.id}
-                      onDragStart={(event, mode) => {
-                        if (canSchedule) startDrag(event, placed.id, mode, placed.span);
-                      }}
-                      onActivate={() => {
-                        activate(placed.id);
-                      }}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
+    <div className={cn('flex min-h-0 flex-1 flex-col gap-2', fullBleed && FULL_BLEED_CLASS)}>
+      <div
+        ref={scrollRef}
+        data-timeline-scroll=""
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+      >
         {/*
-          The tray sits *inside* the card, sharing its surface. Rendered as its own panel it read
-          as an unrelated island parked under the chart, when it is really the same collection —
-          the rows that simply have no position yet.
+          ── Sticky axis header ──────────────────────────────────────────
+          Fully opaque, on its own tonal step. Anything less and the rows sliding underneath stay
+          readable through the dates.
         */}
-        {trayEntries.length > 0 ? (
-          <div className="border-outline-variant bg-surface-container-high shrink-0 border-t px-3 py-2">
-            <UnscheduledTray
-              entries={trayEntries}
-              onSchedulePointerDown={handleTrayPointerDown}
-              onActivate={activate}
+        <div
+          className="bg-surface-container-low sticky top-0 z-30 grid"
+          style={gridStyle}
+          data-timeline-sticky-header=""
+        >
+          <div className={cn('relative flex items-end pb-1.5', LABEL_PAD_CLASS)}>
+            <span
+              role="presentation"
+              onPointerDown={handleResizePointerDown}
+              className="hover:bg-primary/40 absolute inset-y-0 right-0 z-10 w-1.5 cursor-col-resize"
             />
           </div>
-        ) : null}
+          <TimelineAxis scale={scale} todayLeft={todayLeft} />
+        </div>
+
+        {/* ── Body ────────────────────────────────────────────────────── */}
+        <div
+          role="grid"
+          aria-label={`${pluralNoun} timeline`}
+          // `min-h-full` so the gridlines, today rule, and column guide run the whole canvas
+          // rather than stopping at the last row and leaving the chart looking half-drawn.
+          className="relative grid min-h-full"
+          style={gridStyle}
+        >
+          {/* Label column */}
+          <div className="relative" style={{ minHeight: layout.height }}>
+            {/*
+              The column guide, not a rule. `outline-variant` at a quarter opacity is enough to
+              register as an alignment edge and not enough to read as a drawn line — the whole
+              point of the "strong lines" note.
+            */}
+            <span
+              aria-hidden="true"
+              className="bg-outline-variant/25 absolute inset-y-0 right-0 w-px"
+            />
+            {layout.tracks.map((track) =>
+              track.kind === 'group' ? (
+                <div
+                  key={`group-${track.id}`}
+                  role="row"
+                  data-timeline-track="group"
+                  className={cn(
+                    'bg-surface-container-low absolute inset-x-0 flex items-center gap-2',
+                    LABEL_PAD_CLASS,
+                  )}
+                  style={{ top: track.top, height: track.height }}
+                >
+                  <span className="text-on-surface text-label-large truncate">{track.label}</span>
+                  <span className="text-on-surface-variant text-label-small tabular-nums">
+                    {track.count}
+                  </span>
+                </div>
+              ) : (
+                <LabelRow
+                  key={`label-${track.id}`}
+                  top={track.top}
+                  height={track.height}
+                  hovered={hoveredId === track.id}
+                  drag={catalog.dragSource(track.row)}
+                  onEnter={() => {
+                    setHoveredId(track.id);
+                    onPrefetch(track.id);
+                  }}
+                  onLeave={() => {
+                    setHoveredId(null);
+                  }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      'size-2 shrink-0 rounded-full',
+                      TINT_DOT_CLASS[catalog.tint(track.row)],
+                    )}
+                  />
+                  <button
+                    type="button"
+                    role="gridcell"
+                    onClick={() => {
+                      activate(track.id);
+                    }}
+                    className="text-on-surface text-label-large min-w-0 truncate text-left hover:underline"
+                  >
+                    {catalog.label(track.row)}
+                  </button>
+                  {/* Same line, never a second one — row height must not depend on the row. */}
+                  {(() => {
+                    const sub = catalog.sublabel(track.row);
+                    return sub ? (
+                      <span className="text-on-surface-variant text-body-small shrink-0 truncate">
+                        {sub}
+                      </span>
+                    ) : null;
+                  })()}
+                </LabelRow>
+              ),
+            )}
+          </div>
+
+          {/* Plot area */}
+          <div ref={trackRef} className="relative" style={{ minHeight: layout.height }}>
+            {/* Gridlines + today rule, behind everything, at guide weight rather than rule weight. */}
+            <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+              {scale.ticks.map((tick) => (
+                <div
+                  key={tick.at}
+                  className={cn(
+                    'absolute inset-y-0 w-px',
+                    tick.major ? 'bg-outline-variant/40' : 'bg-outline-variant/20',
+                  )}
+                  style={{ left: `${pct(tick.at, scale)}%` }}
+                />
+              ))}
+              {todayLeft !== null ? (
+                <div
+                  className="bg-primary/40 absolute inset-y-0 z-[1] w-px"
+                  style={{ left: `${todayLeft}%` }}
+                />
+              ) : null}
+            </div>
+
+            {/* Group band tints, so the bands read as tonal steps rather than ruled lines. */}
+            {layout.tracks.map((track) =>
+              track.kind === 'group' ? (
+                <div
+                  key={`band-${track.id}`}
+                  aria-hidden="true"
+                  className="bg-surface-container-low absolute inset-x-0"
+                  style={{ top: track.top, height: track.height }}
+                />
+              ) : null,
+            )}
+
+            <TimelineEdges
+              edges={allEdges}
+              anchors={anchors}
+              violations={violationKeys}
+              hoveredId={hoveredId}
+              window={window}
+              height={layout.height}
+              trackRef={trackRef}
+            />
+
+            {layout.tracks.map((track) => {
+              if (track.kind !== 'row') return null;
+              // Only the *blocked* row is marked. Ringing both endpoints paints two bars red for
+              // one problem and, along a chain, turns the whole canvas red — while the row that
+              // actually cannot start on time is the blocked one. The red edge already names the
+              // blocker.
+              const violated = allEdges.some(
+                (edge) =>
+                  edge.blockedId === track.id &&
+                  violationKeys.has(edgeKey(edge.blockerId, edge.blockedId)),
+              );
+              const live = drag?.id === track.id ? drag.span : track.span;
+              return (
+                <div
+                  key={`row-${track.id}`}
+                  data-timeline-track="row"
+                  className={cn(
+                    'absolute inset-x-0',
+                    hoveredId === track.id && 'bg-surface-container/40',
+                  )}
+                  style={{ top: track.top, height: track.height }}
+                  onMouseEnter={() => {
+                    setHoveredId(track.id);
+                  }}
+                  onMouseLeave={() => {
+                    setHoveredId(null);
+                  }}
+                >
+                  {live === null ? (
+                    <UnscheduledLane
+                      display={display}
+                      schedulable={canSchedule}
+                      noun={noun}
+                      onPointerDown={(event) => {
+                        handleLanePointerDown(event, track.id);
+                      }}
+                      onActivate={() => {
+                        activate(track.id);
+                      }}
+                      label={catalog.label(track.row)}
+                    />
+                  ) : (
+                    <TimelineBar
+                      id={track.id}
+                      label={catalog.label(track.row)}
+                      span={live}
+                      tint={catalog.tint(track.row)}
+                      progress={catalog.progress(track.row)}
+                      markers={catalog.markers(track.row)}
+                      window={window}
+                      display={display}
+                      description={describe(catalog, track.row, live)}
+                      violated={violated}
+                      dragging={drag?.id === track.id && drag.moved}
+                      schedulable={canSchedule}
+                      onDragStart={(event, mode) => {
+                        if (canSchedule && track.span) startDrag(event, track.id, mode, track.span);
+                      }}
+                      onActivate={() => {
+                        activate(track.id);
+                      }}
+                    />
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Where the object will land — drawn from the same snapped span the drop commits. */}
+            {drag?.moved && dragTrack ? (
+              <TimelineDropIndicator
+                top={dragTrack.top}
+                height={dragTrack.height}
+                span={drag.span}
+                window={window}
+              />
+            ) : null}
+          </div>
+        </div>
       </div>
+
+      {/* What the pointer is carrying, pinned to it and portalled clear of every clip. */}
+      {drag?.moved && dragTrack ? (
+        <TimelineDragPreview
+          label={catalog.label(dragTrack.row)}
+          tint={catalog.tint(dragTrack.row)}
+          span={drag.span}
+          pointerX={drag.pointerX}
+          pointerY={drag.pointerY}
+        />
+      ) : null}
 
       {/* ── Consequences: undo, then the downstream ripple. Never modal. ──── */}
       {lastChange ? (
-        <div className="flex items-center gap-2">
+        <div className={cn('flex items-center gap-2', fullBleed && LABEL_PAD_CLASS)}>
           <Button
             size="sm"
             variant="outline"
@@ -546,20 +632,93 @@ export default function TimelineCanvas<T>({
         </div>
       ) : null}
 
-      <CascadeProposal
-        changes={proposal}
-        nameOf={nameOf}
-        noun={proposal.length === 1 ? noun.toLowerCase() : pluralNoun.toLowerCase()}
-        applying={applyingCascade}
-        onApply={() => {
-          onApplyCascade(proposal);
-          setProposal([]);
-        }}
-        onDismiss={() => {
-          setProposal([]);
-        }}
-      />
+      <div className={cn(fullBleed && LABEL_PAD_CLASS)}>
+        <CascadeProposal
+          changes={proposal}
+          nameOf={nameOf}
+          noun={proposal.length === 1 ? noun.toLowerCase() : pluralNoun.toLowerCase()}
+          applying={applyingCascade}
+          onApply={() => {
+            onApplyCascade(proposal);
+            setProposal([]);
+          }}
+          onDismiss={() => {
+            setProposal([]);
+          }}
+        />
+      </div>
     </div>
+  );
+}
+
+/** Props for {@link UnscheduledLane}. */
+interface UnscheduledLaneProps {
+  /** The active presentation toggles, so the lane centres on the same baseline as a bar. */
+  display: ViewDisplayState;
+  /** Whether the viewer may schedule; a read-only viewer gets the lane without the invitation. */
+  schedulable: boolean;
+  /** Singular noun for the plotted entity, for the lane's copy. */
+  noun: string;
+  /** The row's name, for the accessible label. */
+  label: string;
+  /** Begin a create-drag at the pressed date. */
+  onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  /** Open the row's detail on a click that was not a drag. */
+  onActivate: () => void;
+}
+
+/**
+ * The lane drawn for a row that carries no dates.
+ *
+ * @remarks
+ * The honest rendering of "this row has no position on this axis": a full-width track at the same
+ * height as every other row, seated on the same baseline a bar would occupy, saying so in words —
+ * and schedulable by pressing anywhere along it, so the date it gets is the date under the
+ * pointer. Plotting such a row at offset zero (what the lens did two revisions ago) claims a start
+ * date it does not have; exiling it to a tray under the chart (what it did one revision ago) says
+ * it is a different kind of thing.
+ *
+ * @param props - The {@link UnscheduledLaneProps}.
+ * @returns the rendered lane.
+ */
+function UnscheduledLane({
+  display,
+  schedulable,
+  noun,
+  label,
+  onPointerDown,
+  onActivate,
+}: UnscheduledLaneProps): JSX.Element {
+  const inset = barInsetFor(display);
+  return (
+    <button
+      type="button"
+      aria-label={
+        schedulable
+          ? `${label} — not scheduled. Drag across this row to schedule it.`
+          : `${label} — not scheduled.`
+      }
+      onPointerDown={schedulable ? onPointerDown : undefined}
+      onClick={onActivate}
+      className={cn(
+        'focus-visible:ring-ring absolute inset-x-0 flex items-center rounded-md px-2.5 text-left focus-visible:ring-2 focus-visible:outline-none',
+        UNSCHEDULED_LANE_CLASS,
+        schedulable && CURSOR_DRAGGABLE,
+      )}
+      style={{ top: `${inset}px`, height: `${BAR_HEIGHT}px` }}
+    >
+      <span className="text-on-surface-variant text-label-medium truncate">
+        Not scheduled
+        {/*
+          The instruction is dropped on a narrow container rather than truncated: at 390px the
+          label column already takes a third of the width, and "…drag to place this proj…" teaches
+          nobody anything. The accessible name carries the full sentence at every width.
+        */}
+        {schedulable ? (
+          <span className="hidden @2xl:inline"> — drag to place this {noun.toLowerCase()}</span>
+        ) : null}
+      </span>
+    </button>
   );
 }
 
@@ -569,6 +728,8 @@ interface LabelRowProps {
   top: number;
   /** The track's height, in pixels. */
   height: number;
+  /** Whether this row is the hovered one (the plot half highlights in step). */
+  hovered: boolean;
   /** How this row is dragged as an object, or `null` when it is not draggable. */
   drag: DragSource | null;
   /** The pointer entered the row. */
@@ -591,14 +752,25 @@ interface LabelRowProps {
  * @param props - The {@link LabelRowProps}.
  * @returns the rendered label row.
  */
-function LabelRow({ top, height, drag, onEnter, onLeave, children }: LabelRowProps): JSX.Element {
+function LabelRow({
+  top,
+  height,
+  hovered,
+  drag,
+  onEnter,
+  onLeave,
+  children,
+}: LabelRowProps): JSX.Element {
   const dragProps = dragSourceProps(drag ?? undefined);
   return (
     <div
       role="row"
+      data-timeline-track="row"
       {...dragProps}
       className={cn(
-        'hover:bg-surface-container-high absolute inset-x-0 flex items-center gap-2 px-3 transition-colors',
+        'absolute inset-x-0 flex items-center gap-2 transition-colors',
+        LABEL_PAD_CLASS,
+        hovered && 'bg-surface-container/40',
         dragProps?.className,
       )}
       style={{ top, height }}

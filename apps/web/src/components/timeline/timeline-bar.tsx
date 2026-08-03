@@ -18,10 +18,15 @@
  * A row carrying only one date is an *anchor*, not a duration, and renders as a diamond at that
  * instant — the previous lens stretched it into a 2%-wide stub that was indistinguishable from a
  * rendering bug.
+ *
+ * The bar has **no outline**: separation from the plot area is tonal (see `timeline-tint.ts`).
+ * While it is being dragged it drops to half opacity, because the object the pointer is actually
+ * carrying is the preview card, and two solid copies of one row read as two rows.
  */
 import { cn } from '@docket/ui';
 import type { CSSProperties, JSX, PointerEvent as ReactPointerEvent } from 'react';
 
+import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
 
 import type { DragMode } from './use-timeline-drag';
@@ -67,6 +72,8 @@ export interface TimelineBarProps {
   violated: boolean;
   /** Whether this bar is the one being dragged. */
   dragging: boolean;
+  /** Whether the row may be rescheduled at all (drives the cursor affordance). */
+  schedulable: boolean;
   /** Open a drag from a pointer-down on the body or an edge handle. */
   onDragStart: (event: ReactPointerEvent<HTMLElement>, mode: DragMode) => void;
   /** Activate the row (open its detail) — a click that was not a drag. */
@@ -91,6 +98,7 @@ export default function TimelineBar({
   description,
   violated,
   dragging,
+  schedulable,
   onDragStart,
   onActivate,
 }: TimelineBarProps): JSX.Element {
@@ -118,11 +126,12 @@ export default function TimelineBar({
         }}
         onClick={onActivate}
         className={cn(
-          'focus-visible:ring-ring absolute z-[1] flex -translate-x-1/2 items-center justify-center rounded-[3px] border-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+          'focus-visible:ring-ring absolute z-[1] flex -translate-x-1/2 items-center justify-center rounded-[3px] border-2 transition-opacity focus-visible:ring-2 focus-visible:outline-none',
           'bg-surface-container-highest',
+          schedulable && CURSOR_DRAGGABLE,
           TINT_ANCHOR_BORDER_CLASS[tint],
           violated && 'border-destructive',
-          dragging && 'bg-surface-container-high',
+          dragging && 'opacity-40',
         )}
         style={{
           ...style,
@@ -146,11 +155,11 @@ export default function TimelineBar({
         }}
         onClick={onActivate}
         className={cn(
-          'focus-visible:ring-ring group relative flex h-full w-full min-w-0 cursor-grab items-center overflow-hidden rounded-md border pr-2 pl-2.5 text-left text-xs font-medium transition-colors focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing',
+          'focus-visible:ring-ring text-label-medium group relative flex h-full w-full min-w-0 items-center overflow-hidden rounded-md pr-2 pl-2.5 text-left transition-opacity focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none',
           BAR_SURFACE_CLASS,
-          'hover:bg-surface-container-high',
-          violated && 'border-destructive',
-          dragging && 'bg-surface-container-high',
+          schedulable && CURSOR_DRAGGABLE,
+          violated && 'ring-destructive ring-1',
+          dragging && 'opacity-40',
         )}
       >
         {display.progress && progress !== null ? (
@@ -201,7 +210,7 @@ export default function TimelineBar({
                 key={marker.id}
                 aria-hidden="true"
                 title={marker.name}
-                className="border-on-surface/40 bg-surface pointer-events-none absolute top-full z-[3] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] border shadow-sm"
+                className="ring-on-surface/30 bg-surface pointer-events-none absolute top-full z-[3] -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] ring-1"
                 style={{
                   left: `${within}%`,
                   width: `${MARKER_SIZE}px`,

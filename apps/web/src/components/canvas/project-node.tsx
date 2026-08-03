@@ -5,14 +5,23 @@
  *
  * @remarks
  * A card mirroring {@link "./task-node"#default | TaskNode}'s shell — the same left/right
- * `Handle` placement, per-density size tokens, MD3 tonal surface (`bg-surface-container-high`
- * card over an `outline-variant` border), and selected ring — but framed for a *bounded effort*
- * rather than a single task. It leads with the shared {@link "@docket/ui/components"#StatusIcon}
- * glyph for the project lifecycle (via {@link statusGlyphType}), the project name (line-clamped),
- * and a {@link "../projects/project-status"#ProjectStatusBadge | ProjectStatusBadge} tinted by the
- * project's {@link Health}; at full density it adds a progress bar and target date. The node is
- * purely presentational and read-only — it carries no toolbar and never depends on the canvas
- * actions context.
+ * `Handle` placement, per-density size tokens, and selected treatment — but framed for a *bounded
+ * effort* rather than a single task. It leads with the shared
+ * {@link "@docket/ui/components"#StatusIcon} glyph for the project lifecycle (via
+ * {@link statusGlyphType}), the project name (line-clamped), and a
+ * {@link "../projects/project-status"#ProjectStatusBadge | ProjectStatusBadge}; at full density it
+ * adds a *labelled* task-completion bar and the target date. The node is purely presentational and
+ * read-only — it carries no toolbar and never depends on the canvas actions context.
+ *
+ * **Separation is tonal, not drawn.** The card carried a 1px hairline and a drop shadow, which at
+ * a dozen cards turned the canvas into a sheet of boxes floating over a dot grid — the "sharp
+ * borders, doesn't feel immersive" note. It now sits a tonal step above the canvas and nothing
+ * else; the waiting and root states, which the border used to carry, become a leading accent bar
+ * and a selection ring respectively, so no state needs an outline to be visible.
+ *
+ * **The progress bar says what it measures.** An unexplained rule under the status chip is not
+ * data, it is decoration that looks like data. The bar is now preceded by its own reading —
+ * `3/8 tasks` — and carries both a hover tooltip and an accessible name saying the same thing.
  *
  * The card carries a stable `view-transition-name` (`project-node-<id>`) so filtering, relayout,
  * or expanding the canvas morphs the same node between arrangements rather than hard-swapping it.
@@ -50,6 +59,10 @@ export interface ProjectNodeData extends Record<string, unknown> {
   health: Health | null;
   /** Weighted completion, 0–100 (drives the full-density progress bar). */
   progress: number;
+  /** How many Tasks the project holds, so the bar can state what it is measuring. */
+  taskCount: number;
+  /** How many of those Tasks are complete. */
+  completedTaskCount: number;
   /** ISO target date, or `null` (shown at full density). */
   targetDate: string | null;
   /** Count of upstream blockers still open within this view (0 when none). */
@@ -67,8 +80,19 @@ export function projectData(node: { data: unknown }): ProjectNodeData {
 
 /** A single project card on the canvas. */
 function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
-  const { name, orgId, status, health, progress, targetDate, waitingCount, density, isRoot } =
-    data as ProjectNodeData;
+  const {
+    name,
+    orgId,
+    status,
+    health,
+    progress,
+    taskCount,
+    completedTaskCount,
+    targetDate,
+    waitingCount,
+    density,
+    isRoot,
+  } = data as ProjectNodeData;
   const compact = density === 'compact';
   // Low-detail (zoomed out): show just the glyph + name, dropping the badge row and progress.
   const lod = useLod();
@@ -76,22 +100,34 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
   const pct = Math.max(0, Math.min(100, Math.round(progress)));
   const targetLabel = formatCalendarDate(targetDate, { month: 'short', day: 'numeric' });
   const waiting = waitingCount > 0;
+  const taskReading =
+    taskCount === 0
+      ? 'No tasks yet'
+      : `${String(completedTaskCount)} of ${String(taskCount)} tasks complete (${String(pct)}%)`;
 
   return (
     <div
       style={{ viewTransitionName: projectNodeTransitionName(id) }}
       className={cn(
-        'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 rounded-lg border shadow-sm transition-colors',
+        'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
         compact ? 'h-14 w-[224px] px-3' : 'h-[96px] w-[268px] px-3.5',
-        isRoot ? 'border-primary' : waiting ? 'border-state-started/60' : 'border-outline-variant',
         selected && 'ring-primary ring-2',
       )}
     >
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!border-outline-variant !bg-surface !size-2"
-      />
+      {/*
+        The states the border used to encode, carried by a leading accent instead: the focus of a
+        neighbourhood view, and a project with upstream work still open.
+      */}
+      {isRoot || waiting ? (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute inset-y-0 left-0 w-1',
+            isRoot ? 'bg-primary' : 'bg-state-started/70',
+          )}
+        />
+      ) : null}
+      <Handle type="target" position={Position.Left} className="!bg-outline-variant !size-2" />
 
       {/* Explicit navigation affordance: the card itself never navigates (too easy to mis-click
           while panning or connecting), so a deliberate corner button reveals on hover/focus. */}
@@ -108,9 +144,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
 
       <div className="flex min-w-0 items-center gap-2">
         <StatusIcon type={statusGlyphType(status)} />
-        <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate font-medium">
-          {name}
-        </span>
+        <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">{name}</span>
         {health !== null ? (
           <span
             aria-label={HEALTH_LABEL[health]}
@@ -125,37 +159,42 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
           <div className="flex min-w-0 items-center gap-2">
             <ProjectStatusBadge status={status} />
             {waiting ? (
-              <span className="text-state-started shrink-0 text-xs font-medium">
+              <span className="text-state-started text-label-small shrink-0">
                 {waitingCount} waiting
               </span>
             ) : null}
             {targetLabel !== null ? (
-              <span className="text-on-surface-variant ml-auto shrink-0 text-xs tabular-nums">
+              <span className="text-on-surface-variant text-label-small ml-auto shrink-0 tabular-nums">
                 {targetLabel}
               </span>
             ) : null}
           </div>
-          <div
-            role="progressbar"
-            aria-valuenow={pct}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={`${pct}% complete`}
-            className="bg-surface-container h-1.5 w-full overflow-hidden rounded-full"
-          >
+          {/*
+            The bar and its reading are one thing. Read alone the bar encodes nothing a viewer can
+            name; read together they say "3/8 tasks" and the fill is just that number drawn.
+          */}
+          <div className="flex min-w-0 items-center gap-2" title={taskReading}>
+            <span className="text-on-surface-variant text-label-small shrink-0 tabular-nums">
+              {taskCount === 0 ? 'No tasks' : `${completedTaskCount}/${taskCount} tasks`}
+            </span>
             <div
-              className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
-              style={{ width: `${pct}%` }}
-            />
+              role="progressbar"
+              aria-valuenow={pct}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={taskReading}
+              className="bg-surface-container h-1.5 min-w-0 flex-1 overflow-hidden rounded-full"
+            >
+              <div
+                className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
           </div>
         </>
       ) : null}
 
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!border-outline-variant !bg-surface !size-2"
-      />
+      <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
     </div>
   );
 }

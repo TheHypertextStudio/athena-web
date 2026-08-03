@@ -30,8 +30,15 @@ import type { ViewDensity, ViewDisplayState, ViewScale } from '@/components/view
 
 import { SCALE_LABEL } from './time-scale';
 
-/** The ordered scale options. */
-const SCALES: readonly ViewScale[] = ['auto', 'day', 'week', 'month', 'quarter'];
+/**
+ * The ordered scale options: `auto`, then the five calendar units, coarsening downward.
+ *
+ * @remarks
+ * All five units a plan is discussed in are offered explicitly. `auto` heads the list because it
+ * is the absence of a choice rather than a sixth unit — it follows the viewer's zoom instead of
+ * pinning it.
+ */
+const SCALES: readonly ViewScale[] = ['auto', 'day', 'week', 'month', 'quarter', 'year'];
 /** The ordered density options and their labels. */
 const DENSITIES: readonly { value: ViewDensity; label: string }[] = [
   { value: 'comfortable', label: 'Comfortable' },

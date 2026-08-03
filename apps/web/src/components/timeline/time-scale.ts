@@ -102,7 +102,48 @@ export function pickGranularity(spanMs: number): ResolvedGranularity {
   if (days <= 21) return 'day';
   if (days <= 80) return 'week';
   if (days <= 750) return 'month';
-  return 'quarter';
+  if (days <= 2200) return 'quarter';
+  return 'year';
+}
+
+/**
+ * The viewport span each concrete granularity is legible at, in milliseconds.
+ *
+ * @remarks
+ * Choosing a granularity from the zoom menu is *zooming*, not merely relabelling: asking for
+ * "Days" on a five-year window would draw eighteen hundred ticks the axis then has to thin away,
+ * and the viewer would still be looking at five years. Each step therefore carries the window
+ * width at which its ticks read comfortably (roughly 8–16 marks across the plot), and selecting it
+ * re-frames the viewport to that width about its own centre. `auto` has no width — it is the
+ * absence of a request, and leaves the window exactly where the viewer left it.
+ */
+const GRANULARITY_SPAN_MS: Record<ResolvedGranularity, number> = {
+  day: 14 * DAY_MS,
+  week: 70 * DAY_MS,
+  month: 400 * DAY_MS,
+  quarter: 1200 * DAY_MS,
+  year: 8 * 365 * DAY_MS,
+};
+
+/**
+ * Re-frame a window so the requested granularity renders at a legible tick density.
+ *
+ * @remarks
+ * Preserves the window's centre, so choosing a coarser or finer unit keeps the viewer looking at
+ * the same moment in the plan rather than jumping to today or to the data's first row.
+ *
+ * @param window - The current viewport.
+ * @param requested - The requested granularity, or `'auto'` to leave the window untouched.
+ * @returns the re-framed viewport, clamped to the legible zoom range.
+ */
+export function windowForGranularity(window: TimeWindow, requested: ViewScale): TimeWindow {
+  if (requested === 'auto') return window;
+  const target = GRANULARITY_SPAN_MS[requested];
+  const center = window.min + (window.max - window.min) / 2;
+  return clampWindow({
+    min: Math.round(center - target / 2),
+    max: Math.round(center + target / 2),
+  });
 }
 
 /** The UTC midnight on or before `ms`. */
@@ -130,12 +171,18 @@ function startOfQuarter(ms: number): number {
   return Date.UTC(d.getUTCFullYear(), Math.floor(d.getUTCMonth() / 3) * 3, 1);
 }
 
+/** The UTC first-of-year at or before `ms`. */
+function startOfYear(ms: number): number {
+  return Date.UTC(new Date(ms).getUTCFullYear(), 0, 1);
+}
+
 /** Snap `ms` down to the start of its granularity period. */
 export function snapDown(ms: number, g: ResolvedGranularity): number {
   if (g === 'day') return startOfDay(ms);
   if (g === 'week') return startOfWeek(ms);
   if (g === 'month') return startOfMonth(ms);
-  return startOfQuarter(ms);
+  if (g === 'quarter') return startOfQuarter(ms);
+  return startOfYear(ms);
 }
 
 /** Advance `ms` by exactly one granularity period (stepping the tick cursor). */
@@ -144,13 +191,16 @@ function step(ms: number, g: ResolvedGranularity): number {
   if (g === 'day') return ms + DAY_MS;
   if (g === 'week') return ms + 7 * DAY_MS;
   if (g === 'month') return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 3, 1);
+  if (g === 'quarter') return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 3, 1);
+  return Date.UTC(d.getUTCFullYear() + 1, 0, 1);
 }
 
 /** Whether a tick opens a larger calendar unit, for the axis header's second tier. */
 function isMajor(ms: number, g: ResolvedGranularity): boolean {
   const d = new Date(ms);
   if (g === 'day' || g === 'week') return d.getUTCDate() <= 7;
+  // At year granularity every tick opens its own band, so a decade is the next unit up.
+  if (g === 'year') return d.getUTCFullYear() % 10 === 0;
   return d.getUTCMonth() === 0;
 }
 
@@ -163,12 +213,13 @@ function tickLabel(ms: number, g: ResolvedGranularity): string {
   if (g === 'month') {
     return d.toLocaleDateString(undefined, { month: 'short', timeZone: 'UTC' });
   }
+  if (g === 'year') return `${d.getUTCFullYear()}`;
   const quarter = Math.floor(d.getUTCMonth() / 3) + 1;
   return `Q${quarter} '${`${d.getUTCFullYear() % 100}`.padStart(2, '0')}`;
 }
 
 /**
- * The label for the axis header's major band covering `ms` (the month, or the year).
+ * The label for the axis header's major band covering `ms` (the month, the year, or the decade).
  *
  * @param ms - An instant inside the band.
  * @param g - The rendered granularity.
@@ -179,6 +230,7 @@ export function bandLabel(ms: number, g: ResolvedGranularity): string {
   if (g === 'day' || g === 'week') {
     return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
   }
+  if (g === 'year') return `${Math.floor(d.getUTCFullYear() / 10) * 10}s`;
   return `${d.getUTCFullYear()}`;
 }
 
@@ -212,22 +264,29 @@ export function extentOf(dated: readonly Dated[]): TimeWindow | null {
  * Build the initial, today-anchored viewport for a set of dated items.
  *
  * @remarks
- * Frames the work *and* the present: the window covers the data extents, always includes `now`
+ * Frames the work *and* the present: the window covers the data extents, always includes today
  * (a roadmap whose work is all in the past still shows where "today" sits relative to it), and
  * carries proportional padding so no bar starts or ends flush against an edge. With nothing dated
  * it falls back to a fixed window around today rather than collapsing to a point.
+ *
+ * `now` is snapped to the start of its UTC day before anything else happens. That is what makes
+ * the result a function of the *date* rather than of the millisecond it was called at — the same
+ * page rendered on the server and hydrated on the client produces a byte-identical axis, and two
+ * viewers opening the same board see the same window. A viewport that moved with the clock also
+ * made every screenshot of this surface unreproducible.
  *
  * @param dated - The dated items to frame.
  * @param now - The current instant, injected so the result is deterministic under test.
  * @returns the initial viewport.
  */
 export function defaultWindow(dated: readonly Dated[], now: number): TimeWindow {
+  const today = startOfDay(now);
   const extent = extentOf(dated);
   if (!extent) {
-    return { min: now - EMPTY_WINDOW_BEFORE_MS, max: now + EMPTY_WINDOW_AFTER_MS };
+    return { min: today - EMPTY_WINDOW_BEFORE_MS, max: today + EMPTY_WINDOW_AFTER_MS };
   }
-  const min = Math.min(extent.min, now);
-  const max = Math.max(extent.max, now);
+  const min = Math.min(extent.min, today);
+  const max = Math.max(extent.max, today);
   const pad = Math.max((max - min) * DEFAULT_PAD_RATIO, DAY_MS);
   return clampWindow({ min: min - pad, max: max + pad });
 }
@@ -336,4 +395,5 @@ export const SCALE_LABEL: Record<ViewScale, string> = {
   week: 'Weeks',
   month: 'Months',
   quarter: 'Quarters',
+  year: 'Years',
 };

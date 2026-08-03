@@ -10,8 +10,14 @@
  * over the individual tick labels, so a position resolves to a real date at a glance instead of
  * being interpolated between two endpoints.
  *
- * The header sticks to the top of the scroll container, and the today rule is drawn through it so
- * the present stays locatable while scrolling in either direction.
+ * The header sticks to the top of the scroll container. It is **fully opaque**: it was translucent
+ * with a backdrop blur, which meant a row scrolling underneath stayed faintly legible *through*
+ * the dates — the smear the launch review caught. Opacity is not a style choice for a sticky
+ * element; it is the difference between a header and a watermark.
+ *
+ * The today rule is drawn through the header so the present stays locatable while scrolling, but
+ * it is the header's *own* rule, drawn at the header's z-index — the plot's today rule stops at
+ * the top of the plot rather than painting over the dates.
  */
 import { cn } from '@docket/ui';
 import type { JSX } from 'react';
@@ -51,6 +57,18 @@ function buildBands(scale: TimeScale): readonly Band[] {
   return bands;
 }
 
+/**
+ * How close to the trailing edge a label may start, as a percentage of the window.
+ *
+ * @remarks
+ * A label anchored near the trailing edge has room for a glyph or two before the panel cuts it
+ * off, leaving a stray "J" floating in the corner that reads as a rendering fault rather than as a
+ * date. Past this point the mark is simply not drawn — the tick's gridline still shows exactly
+ * where the boundary is, so nothing is lost but the truncation. Set from the widest label the axis
+ * emits (`Q1 '27`) against the narrowest plot the layout permits.
+ */
+const LABEL_EDGE_LIMIT = 92;
+
 /** Props for {@link TimelineAxis}. */
 export interface TimelineAxisProps {
   /** The resolved scale providing ticks and bounds. */
@@ -70,17 +88,19 @@ export default function TimelineAxis({ scale, todayLeft }: TimelineAxisProps): J
 
   return (
     <div className="relative h-11 select-none">
-      {/* Major band — the month, or the year at coarse granularities. */}
-      <div className="border-outline-variant relative h-5 border-b">
-        {bands.map((band) => (
-          <div
-            key={`${band.label}-${band.left}`}
-            className="text-on-surface-variant absolute top-0 flex h-full items-center overflow-hidden px-2 text-[11px] font-semibold whitespace-nowrap"
-            style={{ left: `${band.left}%`, width: `${band.width}%` }}
-          >
-            {band.label}
-          </div>
-        ))}
+      {/* Major band — the month, the year, or the decade at coarse granularities. */}
+      <div className="relative h-5 overflow-hidden">
+        {bands
+          .filter((band) => band.left < LABEL_EDGE_LIMIT)
+          .map((band) => (
+            <div
+              key={`${band.label}-${band.left}`}
+              className="text-on-surface-variant text-label-small absolute top-0 flex h-full items-center overflow-hidden px-2 whitespace-nowrap"
+              style={{ left: `${band.left}%`, width: `${band.width}%` }}
+            >
+              {band.label}
+            </div>
+          ))}
       </div>
 
       {/*
@@ -88,25 +108,31 @@ export default function TimelineAxis({ scale, todayLeft }: TimelineAxisProps): J
         ("Jul AugSepO"), so a container query thins them to every other tick — a purely CSS
         response to the *container's* width, with no device check and no breakpoint prop.
       */}
-      <div className="@container relative h-6">
-        {scale.ticks.map((tick, index) => (
-          <div
-            key={tick.at}
-            className={cn(
-              'text-on-surface-variant absolute top-0 flex h-full items-center px-1.5 text-[11px] tabular-nums',
-              index % 2 === 1 && 'hidden @[22rem]:flex',
-            )}
-            style={{ left: `${pct(tick.at, scale)}%` }}
-          >
-            {tick.label}
-          </div>
-        ))}
+      <div className="@container relative h-6 overflow-hidden">
+        {scale.ticks.map((tick, index) => {
+          const left = pct(tick.at, scale);
+          // Dropped from the tree, not hidden with a class: the thinning rule below re-reveals a
+          // hidden label at wide container widths, so a `hidden` here would lose to it.
+          if (left >= LABEL_EDGE_LIMIT) return null;
+          return (
+            <div
+              key={tick.at}
+              className={cn(
+                'text-on-surface-variant text-label-small absolute top-0 flex h-full items-center px-1.5 tabular-nums',
+                index % 2 === 1 && 'hidden @[22rem]:flex',
+              )}
+              style={{ left: `${left}%` }}
+            >
+              {tick.label}
+            </div>
+          );
+        })}
       </div>
 
       {todayLeft !== null ? (
         <div
           aria-hidden="true"
-          className="bg-primary absolute inset-y-0 z-[1] w-px"
+          className="bg-primary/60 absolute inset-y-0 z-[1] w-px"
           style={{ left: `${todayLeft}%` }}
           title="Today"
         />

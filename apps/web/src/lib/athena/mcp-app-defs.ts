@@ -91,3 +91,59 @@ export async function callMcpAppViewTool(input: {
   const body = (await response.json()) as unknown as McpAppRender;
   return body.result;
 }
+
+/**
+ * Append one entry to the caller's canonical Athena chat and drive a fresh turn over it.
+ *
+ * @remarks
+ * The same endpoint the conversation's own composer uses (`POST /v1/me/athena/chat/messages`).
+ * Reusing it — rather than inventing a widget-only ingress — is what makes "Athena responds to
+ * it" true for free: this is the one call in the whole app that appends to the transcript AND
+ * drives generation, so a widget-originated entry gets exactly the same treatment a typed one
+ * does, with no second, less-tested code path to keep in sync.
+ *
+ * @param text - The content to append, attributed to the caller.
+ * @returns whether the host accepted it.
+ */
+async function postToCanonicalChat(text: string): Promise<boolean> {
+  const response = await api.v1.me.athena.chat.messages.$post({ json: { body: text } });
+  return response.ok;
+}
+
+/**
+ * Post a widget-composed `ui/message` into the Athena conversation.
+ *
+ * @remarks
+ * The MCP Apps extension restricts `ui/message` to the `user` role — a widget is speaking AS the
+ * user, not narrating to them — so the text is posted verbatim, exactly as if the person had typed
+ * it into the composer themselves. That is also why {@link postWidgetModelContext} does NOT share
+ * this framing: the two methods exist precisely because one should read as the user's own words
+ * and the other should not.
+ *
+ * @param text - The message content the widget composed.
+ * @returns whether the host posted it and, if so, that Athena's reply can be expected shortly.
+ */
+export async function postWidgetMessage(text: string): Promise<boolean> {
+  return postToCanonicalChat(text);
+}
+
+/**
+ * Record a widget's `ui/update-model-context` update so the model's next turn reflects it.
+ *
+ * @remarks
+ * Framed as a card update, never as something the person said — the extension draws this exact
+ * distinction ("This event serves a different use case from... `ui/message`"), so unlike
+ * {@link postWidgetMessage} the text is prefixed with the server's name before it reaches the
+ * transcript. Docket's durable transcript has only `user`/`assistant` roles (it is the literal
+ * payload sent to the model), so there is no silent "system context" channel to defer this onto;
+ * posting it through the same turn-driving call is what makes "the next model request's context
+ * contains that content" true without a second, unaudited way for arbitrary third-party HTML to
+ * write into a person's conversation.
+ *
+ * @param serverName - The visible name of the connected server the widget came from.
+ * @param text - The content the widget wants the model to know.
+ * @returns whether the host accepted it.
+ */
+export async function postWidgetModelContext(serverName: string, text: string): Promise<boolean> {
+  return postToCanonicalChat(`${serverName} card update — ${text}`);
+}

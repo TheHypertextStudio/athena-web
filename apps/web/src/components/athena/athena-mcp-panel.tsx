@@ -21,11 +21,13 @@ import {
   callMcpAppViewTool,
   mcpAppKeys,
   mcpAppWidgetsDef,
+  postWidgetMessage,
+  postWidgetModelContext,
   renderMcpAppWidget,
   type McpAppRender,
   type McpAppWidget,
 } from '@/lib/athena/mcp-app-defs';
-import { useApiQuery } from '@/lib/query';
+import { queryKeys, useApiQuery } from '@/lib/query';
 
 import { McpAppView } from './mcp-app-view';
 
@@ -153,6 +155,38 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
   const [widgetContext, setWidgetContext] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const widgets = useApiQuery(mcpAppWidgetsDef);
+  const queryClient = useQueryClient();
+
+  // Both handlers below post into the caller's canonical Athena chat rather than only updating
+  // this panel's own display state — the whole point of `ui/message` and `ui/update-model-context`
+  // is that the *conversation*, not just this sidebar, ends up knowing what happened. The queue is
+  // invalidated afterward so the workbench beside this panel picks up Athena's reply promptly
+  // instead of waiting for its own poll interval.
+  const sayToConversation = useCallback(
+    async (text: string): Promise<boolean> => {
+      const posted = await postWidgetMessage(text);
+      if (!posted) {
+        setFailure(
+          `${rendered?.serverName ?? 'This card'} could not post that to the conversation.`,
+        );
+        return false;
+      }
+      setWidgetSaid(text);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.athena() });
+      return true;
+    },
+    [queryClient, rendered?.serverName],
+  );
+
+  const tellModelContext = useCallback(
+    (text: string): void => {
+      setWidgetContext(text);
+      void postWidgetModelContext(rendered?.serverName ?? 'This card', text).then((posted) => {
+        if (posted) void queryClient.invalidateQueries({ queryKey: queryKeys.athena() });
+      });
+    },
+    [queryClient, rendered?.serverName],
+  );
 
   const show = useCallback(async (widget: McpAppWidget) => {
     setFailure(null);
@@ -287,15 +321,8 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
               setRefreshToken((token) => token + 1);
               return result;
             }}
-            onMessage={(text) => {
-              // Surfaced rather than silently swallowed: a widget that composes a message must be
-              // able to tell whether the host took it.
-              setWidgetSaid(text);
-              return true;
-            }}
-            onModelContext={(text) => {
-              setWidgetContext(text);
-            }}
+            onMessage={sayToConversation}
+            onModelContext={tellModelContext}
           />
           {widgetSaid ? (
             <Text as="p" token="body-small">

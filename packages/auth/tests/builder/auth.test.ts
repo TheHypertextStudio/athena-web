@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { resolve } from 'node:path';
 
+import type * as DocketMail from '@docket/mail';
 import type { Mailer, OutboundMessage } from '@docket/mail';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -159,6 +160,40 @@ describe('resolvePasskeyUser (verified-intent sign-up resolver)', () => {
     expect(resolved).toEqual({ id: 'ada-1', name: 'Ada' });
     expect(created).toEqual([]); // resumed, not duplicated
   });
+
+  it('treats an adapter that omits `accounts` entirely as "no linked social accounts"', async () => {
+    // `PasskeyUserAdapter.findUserByEmail`'s `accounts` field is documented-optional (an adapter
+    // may omit it rather than return an empty array) — this proves the resolver reads that as
+    // "none", not as a thrown/undefined-length crash.
+    const { resolvePasskeyUser } = await import('../../src/index');
+    const id = `${INTENT_PREFIX}noaccounts`;
+    const created: { name: string; email: string; emailVerified: boolean }[] = [];
+    const consumed: string[] = [];
+    const adapter = {
+      findVerificationValue: async (identifier: string) =>
+        identifier === id
+          ? {
+              value: JSON.stringify({ name: 'Ada', email: 'ada-noacc@example.com' }),
+              expiresAt: FUTURE,
+            }
+          : null,
+      deleteVerificationByIdentifier: async (identifier: string) => {
+        consumed.push(identifier);
+      },
+      findUserByEmail: async () => ({ user: { id: 'ada-noacc-1', name: 'Ada' } }), // no `accounts` key
+      countPasskeys: async () => 0,
+      createUser: async (data: { name: string; email: string; emailVerified: boolean }) => {
+        created.push(data);
+        return { id: 'new-user', name: data.name };
+      },
+    };
+
+    const resolved = await resolvePasskeyUser(adapter, id);
+
+    expect(resolved).toEqual({ id: 'ada-noacc-1', name: 'Ada' }); // resumed, not rejected
+    expect(created).toEqual([]);
+    expect(consumed).toContain(id);
+  });
 });
 
 describe('auth config', () => {
@@ -300,6 +335,176 @@ describe('auth config', () => {
     expect(updated?.lastError).toContain('linked account was removed');
   });
 
+  it('does nothing on unlink for a provider that funds no connector (no identity → connector mapping)', async () => {
+    const { auth } = await import('../../src/index');
+    const { account, db, integration, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+
+    const suffix = Math.random().toString(36).slice(2);
+    const [owner] = await db
+      .insert(user)
+      .values({ name: 'Apple Owner', email: `apple-owner-${suffix}@example.com` })
+      .returning();
+    const [linkedAccount] = await db
+      .insert(account)
+      .values({ userId: owner!.id, providerId: 'apple', accountId: `apple-${suffix}` })
+      .returning();
+
+    const before = await db.select().from(integration);
+    await db.delete(account).where(eq(account.id, linkedAccount!.id));
+    await auth.options.databaseHooks?.account?.delete?.after?.(linkedAccount!, null);
+
+    // `apple` funds no connector, so the hook returns before touching any integration row.
+    const after = await db.select().from(integration);
+    expect(after).toEqual(before);
+  });
+
+  it('does nothing on unlink when the account holder has no actor row in any workspace', async () => {
+    const { auth } = await import('../../src/index');
+    const { account, db, integration, user } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+
+    const suffix = Math.random().toString(36).slice(2);
+    // Deliberately no `actor` row for this user — they were never seated in a workspace.
+    const [owner] = await db
+      .insert(user)
+      .values({ name: 'Actorless Owner', email: `actorless-${suffix}@example.com` })
+      .returning();
+    const [linkedAccount] = await db
+      .insert(account)
+      .values({ userId: owner!.id, providerId: 'google', accountId: `google-${suffix}` })
+      .returning();
+
+    const before = await db.select().from(integration);
+    await db.delete(account).where(eq(account.id, linkedAccount!.id));
+    await auth.options.databaseHooks?.account?.delete?.after?.(linkedAccount!, null);
+
+    const after = await db.select().from(integration);
+    expect(after).toEqual(before);
+  });
+
+  /**
+   * Build a live auth instance staged as production with Google configured, sharing the migrated
+   * `@docket/db` `buildAuthOptions` reads through its module-level import — `betterAuth()`
+   * requires no separate migration to reuse it here.
+   *
+   * @param googleOAuthPublic - Defaults to `false` (not yet opened, no test-email allowlist).
+   */
+  async function prodGoogleTestingInstance(googleOAuthPublic = false) {
+    const { buildAuthOptions } = await import('../../src/index');
+    const { betterAuth } = await import('better-auth');
+    const instance = betterAuth(
+      buildAuthOptions(
+        {
+          BETTER_AUTH_SECRET: SECRET,
+          BETTER_AUTH_URL: 'http://localhost:4000',
+          BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
+          BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
+          BETTER_AUTH_TRUSTED_ORIGINS: 'http://localhost:4000',
+          APP_MODE: 'production',
+          GOOGLE_OAUTH_PUBLIC: googleOAuthPublic,
+          GOOGLE_CLIENT_ID: 'goog-id',
+          GOOGLE_CLIENT_SECRET: 'goog-secret',
+        },
+        MAILER_DEPS,
+      ),
+    );
+    const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
+      instance.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: 'http://localhost:4000',
+            ...(cookie ? { cookie } : {}),
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+    return { instance, post };
+  }
+
+  it('blocks Google sign-in when production testing has not opened it to this caller', async () => {
+    const { post } = await prodGoogleTestingInstance();
+    const res = await post('/sign-in/social', { provider: 'google', callbackURL: '/' });
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { message?: string };
+    expect(body.message).toContain('private production testing');
+  });
+
+  it('allows Google sign-in once production testing has opened Google OAuth publicly', async () => {
+    // Not blocked: the guard's `/sign-in/social` check passes, and the request is on that path
+    // (not `/link-social`), so it falls all the way through the hook without throwing —
+    // proving the guard does not accidentally gate a path it was never meant to.
+    const { post } = await prodGoogleTestingInstance(true);
+    const res = await post('/sign-in/social', { provider: 'google', callbackURL: '/' });
+    const body = (await res.json()) as { message?: string };
+    expect(body.message ?? '').not.toContain('private production testing');
+    expect(res.status).not.toBe(403);
+  });
+
+  it('blocks linking a Google account when the signed-in user is not an allowlisted test user', async () => {
+    const { post } = await prodGoogleTestingInstance();
+    const { generateRecoveryCodes } = await import('../../src/index');
+    const { db, user } = await import('@docket/db');
+
+    const email = 'prod-google-link@example.com';
+    const [u] = await db.insert(user).values({ name: 'Not Allowlisted', email }).returning();
+    const codes = await generateRecoveryCodes(u!.id);
+    const armed = await post('/two-factor/recovery-challenge', { email });
+    const challengeCookie = armed.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const verified = await post(
+      '/two-factor/verify-backup-code',
+      { code: codes[0] },
+      challengeCookie,
+    );
+    const sessionCookie = verified.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    expect(sessionCookie).not.toBe('');
+
+    const res = await post('/link-social', { provider: 'google', callbackURL: '/' }, sessionCookie);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { message?: string };
+    expect(body.message).toContain('production test users');
+  });
+
+  it('allows linking a Google account once production testing has opened Google OAuth publicly', async () => {
+    const { post } = await prodGoogleTestingInstance(true);
+    const { generateRecoveryCodes } = await import('../../src/index');
+    const { db, user } = await import('@docket/db');
+
+    const email = 'prod-google-link-public@example.com';
+    const [u] = await db.insert(user).values({ name: 'Public Launch', email }).returning();
+    const codes = await generateRecoveryCodes(u!.id);
+    const armed = await post('/two-factor/recovery-challenge', { email });
+    const challengeCookie = armed.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    const verified = await post(
+      '/two-factor/verify-backup-code',
+      { code: codes[0] },
+      challengeCookie,
+    );
+    const sessionCookie = verified.headers
+      .getSetCookie()
+      .map((c) => c.split(';')[0])
+      .join('; ');
+    expect(sessionCookie).not.toBe('');
+
+    const res = await post('/link-social', { provider: 'google', callbackURL: '/' }, sessionCookie);
+    // Not blocked by our guard: the response is Better Auth's own OAuth-redirect success shape,
+    // never our "production test users" message.
+    const body = (await res.json()) as { message?: string; url?: string };
+    expect(body.message ?? '').not.toContain('production test users');
+    expect(res.status).not.toBe(403);
+  });
+
   it('getRecoveryCodeStatus: null when no codes, count + generatedAt when present', async () => {
     // Validates the recovery-code status path end-to-end — including the load-bearing assumption
     // that the encryption key is `BETTER_AUTH_SECRET` — by storing codes exactly as the twoFactor
@@ -320,6 +525,21 @@ describe('auth config', () => {
     expect(status?.remaining).toBe(3);
     // `backup_codes_generated_at` defaults to now() on insert → a parseable ISO instant.
     expect(Number.isNaN(Date.parse(status?.generatedAt ?? ''))).toBe(false);
+
+    // A row whose decrypted payload is not a JSON array (corrupted, or written by something other
+    // than this module) reports 0 remaining rather than throwing — the count is read defensively.
+    const [corruptUser] = await db
+      .insert(user)
+      .values({ name: 'Corrupt', email: 'corrupt-codes@example.com' })
+      .returning();
+    const corruptEncrypted = await symmetricEncrypt({
+      key: SECRET,
+      data: JSON.stringify({ not: 'an array' }),
+    });
+    await db
+      .insert(twoFactor)
+      .values({ secret: 'x', backupCodes: corruptEncrypted, userId: corruptUser!.id });
+    expect((await getRecoveryCodeStatus(corruptUser!.id))?.remaining).toBe(0);
   });
 
   it('recovery: generateRecoveryCodes → recoveryChallenge → verifyBackupCode, session-less, end-to-end', async () => {
@@ -365,6 +585,46 @@ describe('auth config', () => {
     // 3) The consumed code (and now-cleared challenge) can't be replayed.
     const replay = await post('/two-factor/verify-backup-code', { code: codes[0] }, cookie);
     expect(replay.status).not.toBe(200);
+  });
+
+  it('recovery-challenge: returns the same 200 for an unknown email, without arming a real challenge (anti-enumeration)', async () => {
+    const { auth } = await import('../../src/index');
+    const post = (path: string, body: unknown): Promise<Response> =>
+      auth.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: 'http://localhost:4000' },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    const armed = await post('/two-factor/recovery-challenge', {
+      email: 'no-such-account@example.com',
+    });
+    expect(armed.status).toBe(200);
+    // No account exists for this email, so no challenge cookie is set — nothing was armed.
+    expect(armed.headers.getSetCookie()).toEqual([]);
+  });
+
+  it('recovery-challenge: returns the same 200 for a real user with no recovery codes, without arming a challenge', async () => {
+    const { auth } = await import('../../src/index');
+    const { db, user } = await import('@docket/db');
+
+    const email = 'no-codes-yet@example.com';
+    await db.insert(user).values({ name: 'No Codes', email });
+
+    const post = (path: string, body: unknown): Promise<Response> =>
+      auth.handler(
+        new Request(`http://localhost:4000/api/auth${path}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: 'http://localhost:4000' },
+          body: JSON.stringify(body),
+        }),
+      );
+
+    const armed = await post('/two-factor/recovery-challenge', { email });
+    expect(armed.status).toBe(200);
+    expect(armed.headers.getSetCookie()).toEqual([]);
   });
 
   it('recovery: a successful backup-code sign-in revokes other sessions and notifies the account holder', async () => {
@@ -450,8 +710,11 @@ describe('auth config', () => {
    * Build a live auth instance whose mailer is the capturing test mailer, so the emitted sign-up
    * code can be read out of `sentEmails`. Shares the migrated `@docket/db`, so verification rows and
    * users land in the same database `resolvePasskeyUser` reads.
+   *
+   * @param devEchoSignupCode - Passed through as `AuthDeps.devEchoSignupCode` (defaults to unset,
+   *   matching every deploy outside local/test).
    */
-  async function testAuthWithCapture() {
+  async function testAuthWithCapture(devEchoSignupCode?: boolean) {
     const { buildAuthOptions } = await import('../../src/index');
     const { betterAuth } = await import('better-auth');
     const instance = betterAuth(
@@ -463,7 +726,7 @@ describe('auth config', () => {
           BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
           BETTER_AUTH_TRUSTED_ORIGINS: 'http://localhost:4000',
         },
-        MAILER_DEPS,
+        { ...MAILER_DEPS, ...(devEchoSignupCode ? { devEchoSignupCode: true } : {}) },
       ),
     );
     const post = (path: string, body: unknown): Promise<Response> =>
@@ -579,6 +842,75 @@ describe('auth config', () => {
     // The victim still has exactly their original single passkey — nothing grafted.
     const creds = await db.select().from(passkey);
     expect(creds.filter((c) => c.userId === victim!.id)).toHaveLength(1);
+  });
+
+  it('sign-up challenge: verify-code refuses a code that was never requested or that expired', async () => {
+    const { post } = await testAuthWithCapture();
+    const { verification } = await import('@docket/db');
+
+    // No `/sign-up/request-code` call was ever made for this address — no verification row exists.
+    const neverRequested = await post('/sign-up/verify-code', {
+      email: 'never-requested@example.com',
+      code: '000000',
+    });
+    expect(neverRequested.status).not.toBe(200);
+    expect(await neverRequested.json()).toMatchObject({ code: 'INVALID_CODE' });
+
+    // A code that was requested, but whose verification row has since expired.
+    const email = 'expired-code@example.com';
+    const { post: postForExpiry } = await testAuthWithCapture();
+    await postForExpiry('/sign-up/request-code', { name: 'Late', email });
+    const code = /\b(\d{6})\b/.exec(sentEmails.at(-1)?.text ?? '')?.[1];
+    expect(code).toBeDefined();
+    const { db } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    await db
+      .update(verification)
+      .set({ expiresAt: new Date(Date.now() - 1_000) })
+      .where(eq(verification.identifier, `signup-code:${email}`));
+
+    const expired = await postForExpiry('/sign-up/verify-code', { email, code });
+    expect(expired.status).not.toBe(200);
+    expect(await expired.json()).toMatchObject({ code: 'INVALID_CODE' });
+
+    // The expired row was cleaned up rather than left behind (deleted on the way to the error).
+    const remaining = await db
+      .select({ id: verification.id })
+      .from(verification)
+      .where(eq(verification.identifier, `signup-code:${email}`));
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('sign-up challenge: locks out verify-code after too many wrong attempts, even with a fresh valid code', async () => {
+    const email = 'too-many-attempts@example.com';
+    const { post } = await testAuthWithCapture();
+    await post('/sign-up/request-code', { name: 'Persistent', email });
+    const code = /\b(\d{6})\b/.exec(sentEmails.at(-1)?.text ?? '')?.[1];
+    expect(code).toBeDefined();
+    const wrong = String((Number(code) + 1) % 1_000_000).padStart(6, '0');
+
+    // Five wrong attempts each increment the stored attempt counter without locking out yet.
+    for (let i = 0; i < 5; i += 1) {
+      const attempt = await post('/sign-up/verify-code', { email, code: wrong });
+      expect(attempt.status).not.toBe(200);
+    }
+
+    // The sixth attempt is refused for having exhausted its attempts — even supplying the
+    // genuinely correct code no longer succeeds, because the ceiling is checked first.
+    const lockedOut = await post('/sign-up/verify-code', { email, code });
+    expect(lockedOut.status).not.toBe(200);
+    expect(await lockedOut.json()).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
+  });
+
+  it('sign-up challenge: echoes the plaintext code only when devEchoSignupCode is enabled', async () => {
+    const { post } = await testAuthWithCapture(true);
+    const response = await post('/sign-up/request-code', {
+      name: 'Dev',
+      email: 'dev-echo@example.com',
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { status: boolean; devCode?: string };
+    expect(body.devCode).toMatch(/^\d{6}$/);
   });
 
   it('generateRecoveryCodes: creates a set, enables 2FA, stamps generatedAt; regenerate replaces + advances', async () => {
@@ -785,6 +1117,19 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
 
     expect(res.status).toBe(200);
   });
+
+  it('never reaches the recovery-path check for a delete-passkey call with no session at all', async () => {
+    // With no session, the guard returns early (there is nothing to protect yet) rather than
+    // querying for the caller's remaining passkeys — Better Auth's own session requirement is
+    // what ultimately rejects this call, not our lockout message.
+    const { passkeyId, post } = await signedInUserWithOnePasskey('lockout-no-session@example.com');
+
+    const res = await post('/passkey/delete-passkey', { id: passkeyId });
+
+    expect(res.status).not.toBe(200);
+    const body = (await res.json()) as { message?: string };
+    expect(body.message ?? '').not.toContain('recovery code');
+  });
 });
 
 describe('buildAuthOptions env-gating', () => {
@@ -899,7 +1244,19 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.user?.changeEmail?.enabled).toBe(true);
     // Better Auth also requires `emailVerification.sendVerificationEmail` configured as a gate,
     // even though every Docket user is created emailVerified — see the comment in auth-builder.
-    expect(typeof opts.emailVerification?.sendVerificationEmail).toBe('function');
+    // Not expected to fire in normal operation, but still exercised here as the correct fallback
+    // for the case where a user's `emailVerified` were ever false.
+    const sendVerification = opts.emailVerification?.sendVerificationEmail as (
+      data: { user: { email: string; name: string }; url: string },
+      request?: Request,
+    ) => Promise<void>;
+    expect(typeof sendVerification).toBe('function');
+    await sendVerification({
+      user: { email: 'unverified@example.com', name: 'Grace' },
+      url: 'https://api.docket.localhost/api/auth/verify-email?token=xyz',
+    });
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0]?.to).toBe('unverified@example.com');
 
     const sendConfirmation = opts.user?.changeEmail?.sendChangeEmailConfirmation as (
       data: { user: { email: string; name: string }; newEmail: string; url: string; token: string },
@@ -912,9 +1269,9 @@ describe('buildAuthOptions env-gating', () => {
       token: 'abc',
     });
 
-    expect(sentEmails).toHaveLength(1);
-    expect(sentEmails[0]?.to).toBe('old@example.com');
-    expect(sentEmails[0]?.html).toContain('new@example.com');
+    expect(sentEmails).toHaveLength(2);
+    expect(sentEmails[1]?.to).toBe('old@example.com');
+    expect(sentEmails[1]?.html).toContain('new@example.com');
   });
 
   it('configures twoFactor backup-codes-only for passwordless account recovery', async () => {
@@ -1036,6 +1393,9 @@ describe('buildAuthOptions env-gating', () => {
     expect(canUseGoogleOAuth(staged, 'public@example.com')).toBe(false);
     expect(canUseGoogleOAuth({ ...staged, GOOGLE_OAUTH_PUBLIC: true }, null)).toBe(true);
     expect(canUseGoogleOAuth({ ...staged, APP_MODE: 'local' }, null)).toBe(true);
+    // No email at all (not yet resolved) is refused before an allowlist is even checked.
+    expect(canUseGoogleOAuth(staged, null)).toBe(false);
+    expect(canUseGoogleOAuth(staged, '   ')).toBe(false);
   });
 
   it('mounts Discord with the identify scope as a trusted linking provider when its pair is real', async () => {
@@ -1153,6 +1513,8 @@ describe('buildAuthOptions env-gating', () => {
         GITHUB_APP_CLIENT_SECRET: 'gh-secret',
         LINEAR_CLIENT_ID: 'lin-id',
         LINEAR_CLIENT_SECRET: 'lin-secret',
+        NOTION_CLIENT_ID: 'notion-id',
+        NOTION_CLIENT_SECRET: 'notion-secret',
       };
       expect(configuredSocialProviders(full).sort()).toEqual(
         Object.keys(buildAuthOptions(full, MAILER_DEPS).socialProviders ?? {}).sort(),
@@ -1303,5 +1665,105 @@ describe('buildAuthOptions env-gating', () => {
       protocol: 'auto',
     });
     expect(opts.advanced?.trustedProxyHeaders).toBe(true);
+  });
+
+  it('shares session cookies across a parent domain only when BETTER_AUTH_COOKIE_DOMAIN is set', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const withoutDomain = buildAuthOptions(baseEnv, MAILER_DEPS);
+    expect(withoutDomain.advanced?.crossSubDomainCookies).toBeUndefined();
+
+    const withDomain = buildAuthOptions(
+      { ...baseEnv, BETTER_AUTH_COOKIE_DOMAIN: 'docket.localhost' },
+      MAILER_DEPS,
+    );
+    expect(withDomain.advanced?.crossSubDomainCookies).toEqual({
+      enabled: true,
+      domain: 'docket.localhost',
+    });
+  });
+});
+
+// Runs LAST in the file: both tests here stub process env, mock a neighboring module, and reset
+// the module registry so `src/index.ts`'s module-level `env`-driven wiring re-evaluates with
+// different values — isolated from `buildMailerFromEnv`/`signupChallenge`'s own real behavior
+// (each already proven by its own package/unit tests) so nothing here risks a live network call
+// or needs the migrated test database. `unstubEnvs: true` (vitest preset) reverts the env stubs
+// after each test; the `finally` blocks undo the module mock and reset the module cache too.
+describe('index.ts module-level env-driven wiring', () => {
+  it('forwards every optional mail env var to buildMailerFromEnv when set', async () => {
+    vi.stubEnv('RESEND_API_KEY', 're_test_forwarded_key');
+    vi.stubEnv('MAIL_FROM', 'Docket <noreply@example.com>');
+    vi.stubEnv('SMTP_HOST', 'smtp.example.com');
+    vi.stubEnv('SMTP_PORT', '587');
+    vi.stubEnv('SMTP_SECURE', 'true');
+    vi.stubEnv('SMTP_USER', 'smtp-user');
+    vi.stubEnv('SMTP_PASS', 'smtp-pass');
+
+    let capturedEnv: unknown;
+    vi.doMock('@docket/mail', async (importOriginal) => {
+      const actual = await importOriginal<typeof DocketMail>();
+      return {
+        ...actual,
+        buildMailerFromEnv: (mailerEnv: unknown) => {
+          capturedEnv = mailerEnv;
+          // APP_MODE stays 'test' here, so delegating to the real implementation still returns
+          // the deterministic in-memory capture transport — no network path is reachable.
+          return actual.buildMailerFromEnv(
+            mailerEnv as Parameters<typeof actual.buildMailerFromEnv>[0],
+          );
+        },
+      };
+    });
+    vi.resetModules();
+    try {
+      await import('../../src/index');
+      expect(capturedEnv).toMatchObject({
+        APP_MODE: 'test',
+        RESEND_API_KEY: 're_test_forwarded_key',
+        MAIL_FROM: 'Docket <noreply@example.com>',
+        SMTP_HOST: 'smtp.example.com',
+        SMTP_PORT: '587',
+        SMTP_SECURE: 'true',
+        SMTP_USER: 'smtp-user',
+        SMTP_PASS: 'smtp-pass',
+      });
+    } finally {
+      vi.doUnmock('@docket/mail');
+      vi.resetModules();
+    }
+  });
+
+  it('omits devEchoSignupCode outside local/test, so a production build cannot echo the code', async () => {
+    // Simulating APP_MODE=production trips `@docket/env/api`'s production cross-field rules
+    // (Linear creds, host isolation, "no placeholder values" — unrelated to this module), so
+    // SKIP_ENV_VALIDATION is used here exactly as `@docket/env/api`'s own docstring describes:
+    // it exists so a test can exercise a production-shaped branch in isolation.
+    vi.stubEnv('SKIP_ENV_VALIDATION', 'true');
+    vi.stubEnv('APP_MODE', 'production');
+
+    let capturedDeps: { devEchoCode?: boolean } | undefined;
+    vi.doMock('../../src/signup-challenge', () => ({
+      signupChallenge: (deps: { devEchoCode?: boolean }) => {
+        capturedDeps = deps;
+        // A minimal stand-in plugin — this test only proves what `index.ts` forwards into
+        // `signupChallenge`, never the plugin's own request-handling behavior.
+        return { id: 'signup-challenge', endpoints: {} };
+      },
+    }));
+    // Production also routes `buildMailerFromEnv` through its real-RESEND-credentials branch,
+    // which is irrelevant to what this test proves — stub it out rather than fabricate a
+    // plausible-looking API key.
+    vi.doMock('@docket/mail', () => ({
+      buildMailerFromEnv: () => ({ send: async () => undefined }),
+    }));
+    vi.resetModules();
+    try {
+      await import('../../src/index');
+      expect(capturedDeps?.devEchoCode).toBeUndefined();
+    } finally {
+      vi.doUnmock('../../src/signup-challenge');
+      vi.doUnmock('@docket/mail');
+      vi.resetModules();
+    }
   });
 });

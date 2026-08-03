@@ -1691,7 +1691,7 @@ describe('buildAuthOptions env-gating', () => {
 // after each test; the `finally` blocks undo the module mock and reset the module cache too.
 describe('index.ts module-level env-driven wiring', () => {
   it('forwards every optional mail env var to buildMailerFromEnv when set', async () => {
-    vi.stubEnv('RESEND_API_KEY', 're_test_forwarded_key');
+    vi.stubEnv('RESEND_API_KEY', 're_test_key');
     vi.stubEnv('MAIL_FROM', 'Docket <noreply@example.com>');
     vi.stubEnv('SMTP_HOST', 'smtp.example.com');
     vi.stubEnv('SMTP_PORT', '587');
@@ -1719,7 +1719,7 @@ describe('index.ts module-level env-driven wiring', () => {
       await import('../../src/index');
       expect(capturedEnv).toMatchObject({
         APP_MODE: 'test',
-        RESEND_API_KEY: 're_test_forwarded_key',
+        RESEND_API_KEY: 're_test_key',
         MAIL_FROM: 'Docket <noreply@example.com>',
         SMTP_HOST: 'smtp.example.com',
         SMTP_PORT: '587',

@@ -172,32 +172,38 @@ describe('design token policy', () => {
     }
   });
 
-  it('holds the design system primitives to zero, with no ledger entries permitted', () => {
-    const violations = scanEnforcedRoots().filter((violation) =>
-      violation.file.startsWith(ZERO_TOLERANCE_PREFIX),
-    );
-
-    expect(
-      violations,
-      [
-        'The design system primitives must contain no off-token visual values.',
-        'Type comes from the MD3 roles in primitives/text.tsx; height, padding, and icon size',
-        'come from the scale in primitives/control.tsx; shadows belong to overlays only.',
-        formatViolations(violations),
-      ].join('\n'),
-    ).toEqual([]);
-
-    const ledgered = Object.keys(readLedger()).filter((file) =>
-      file.startsWith(ZERO_TOLERANCE_PREFIX),
-    );
-    expect(
-      ledgered,
-      'The design system itself may not carry design-token debt. Fix the primitive, do not ledger it.',
-    ).toEqual([]);
-  }, // A full-workspace source scan: the monorepo has grown enough that this can exceed the
+  // A full-workspace source scan: the monorepo has grown enough that this can exceed the
   // default 30s timeout under coverage instrumentation on a slower CI runner, even though it
   // finishes in a few seconds locally. Generous, not tuned to a moving target.
-  120_000);
+  const WORKSPACE_SCAN_TIMEOUT_MS = 120_000;
+
+  it(
+    'holds the design system primitives to zero, with no ledger entries permitted',
+    () => {
+      const violations = scanEnforcedRoots().filter((violation) =>
+        violation.file.startsWith(ZERO_TOLERANCE_PREFIX),
+      );
+
+      expect(
+        violations,
+        [
+          'The design system primitives must contain no off-token visual values.',
+          'Type comes from the MD3 roles in primitives/text.tsx; height, padding, and icon size',
+          'come from the scale in primitives/control.tsx; shadows belong to overlays only.',
+          formatViolations(violations),
+        ].join('\n'),
+      ).toEqual([]);
+
+      const ledgered = Object.keys(readLedger()).filter((file) =>
+        file.startsWith(ZERO_TOLERANCE_PREFIX),
+      );
+      expect(
+        ledgered,
+        'The design system itself may not carry design-token debt. Fix the primitive, do not ledger it.',
+      ).toEqual([]);
+    },
+    WORKSPACE_SCAN_TIMEOUT_MS,
+  );
 
   it('ratchets: new debt fails, unchanged debt passes, a cleaned file must be delisted', () => {
     const ledger: DesignTokenDebtLedger = {

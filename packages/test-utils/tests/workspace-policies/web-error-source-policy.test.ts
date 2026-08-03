@@ -282,24 +282,30 @@ describe('web error source policy', () => {
     }
   });
 
-  it('keeps raw server, provider, and exception messages out of production UI source', () => {
-    const violations = PRODUCTION_SOURCE_ROOTS.flatMap((root) =>
-      collectSourceFiles(resolve(WORKSPACE_ROOT, root)).flatMap((file) =>
-        scanSource(file, readFileSync(file, 'utf8')),
-      ),
-    );
-
-    expect(
-      violations,
-      [
-        'Production UI may render only application-owned error copy.',
-        'Use userErrorMessage(error, fallback) for caught/query errors and readProblemError for responses.',
-        'Provider diagnostics and legacy string readers belong only in central classifiers.',
-        formatViolations(violations),
-      ].join('\n'),
-    ).toEqual([]);
-  }, // A full-workspace source scan: the monorepo has grown enough that this can exceed the
+  // A full-workspace source scan: the monorepo has grown enough that this can exceed the
   // default 30s timeout under coverage instrumentation on a slower CI runner, even though it
   // finishes in a few seconds locally. Generous, not tuned to a moving target.
-  120_000);
+  const WORKSPACE_SCAN_TIMEOUT_MS = 120_000;
+
+  it(
+    'keeps raw server, provider, and exception messages out of production UI source',
+    () => {
+      const violations = PRODUCTION_SOURCE_ROOTS.flatMap((root) =>
+        collectSourceFiles(resolve(WORKSPACE_ROOT, root)).flatMap((file) =>
+          scanSource(file, readFileSync(file, 'utf8')),
+        ),
+      );
+
+      expect(
+        violations,
+        [
+          'Production UI may render only application-owned error copy.',
+          'Use userErrorMessage(error, fallback) for caught/query errors and readProblemError for responses.',
+          'Provider diagnostics and legacy string readers belong only in central classifiers.',
+          formatViolations(violations),
+        ].join('\n'),
+      ).toEqual([]);
+    },
+    WORKSPACE_SCAN_TIMEOUT_MS,
+  );
 });

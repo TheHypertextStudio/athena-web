@@ -206,7 +206,13 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # A couple of specs (pwa-offline-sync's reconnect-sync test, fluid-scheduling-gestures' people-
+    # card comparison test) have each independently taken 3-9 minutes under CI load, on top of the
+    # ~15 minutes the other ~50 specs take. 30 minutes was cutting the job off via GitHub's own job
+    # timeout mid-run — the *test* retries were never actually exhausted, so the run reported as
+    # cancelled without ever printing which of the later specs pass or fail. Raised to give the
+    # suite room to actually finish and report real results instead of an artificial cutoff.
+    timeout-minutes: 45
     env:
       PORTLESS_PORT: '1355'
       PORTLESS_HTTPS: '0'

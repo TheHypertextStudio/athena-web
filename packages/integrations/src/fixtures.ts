@@ -65,8 +65,16 @@ export const NOTION_TASKS_DATA_SOURCE_ID = '383c7791-208f-802e-9508-000b6d244e57
  * The mock Notion databases {@link MockConnector.listContainers} offers for `notion`.
  *
  * @remarks
- * Mirrors what the real workspace exposes: the team's own task database plus Notion's built-in
- * personal task database, so the "which databases to sync" picker has selectable data offline.
+ * The first entry is the real LVBT `Tasks Tracker` database. The second, "My Tasks", is NOT a
+ * second real database — it does not mirror anything the live workspace actually exposes as a
+ * syncable data source. A 2026-08-02 re-check against the live LVBT workspace (see
+ * `docs/engineering/specs/notion-sync.md` §3a) found Notion's built-in "My Tasks" sidebar view is
+ * a cross-database "assigned to me" filter with no data source of its own — it 404s on
+ * `GET /v1/data_sources/{id}`, and its rows resolve back to `Tasks Tracker`. A public Notion
+ * integration can never be granted access to it, so the real connector's `listContainers()` will
+ * never offer it. It stays here purely as a second, differently-shaped picker option so
+ * offline/demo mode has more than one selectable database to choose from — not as a claim about
+ * what the live workspace exposes.
  */
 export const NOTION_DATA_SOURCES: readonly ResourceRef[] = [
   { id: NOTION_TASKS_DATA_SOURCE_ID, title: 'Tasks Tracker' },

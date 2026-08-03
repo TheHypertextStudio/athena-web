@@ -108,6 +108,7 @@ export async function dispatchNotificationIntent(
       createdBy: input.createdBy,
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
   if (!intent) throw new Error('Failed to create notification intent');
 
   return dispatchPersistedNotificationIntent(db, intent, {
@@ -153,6 +154,7 @@ export async function dispatchPersistedNotificationIntent(
         suppressions: [],
       })
       .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
     if (!recipient) throw new Error('Failed to create notification recipient');
     recipients.push(recipient);
 
@@ -177,6 +179,7 @@ export async function dispatchPersistedNotificationIntent(
         .set({ suppressions })
         .where(eq(notificationRecipient.id, recipient.id))
         .returning();
+      /* v8 ignore next -- @preserve defensive: update-by-id always returns the updated row */
       if (updated) recipients[recipients.length - 1] = updated;
     }
 
@@ -245,6 +248,9 @@ export async function dispatchPersistedNotificationIntent(
 
   return {
     intentId: intent.id,
+    // unreachable: @preserve defensive: update-by-id always returns the updated row, so the
+    // fallback recomputation never actually runs.
+    /* v8 ignore next */
     status: updatedIntent?.status ?? finalStatusFor(deliveries),
     idempotent: options.idempotent ?? false,
     recipients,
@@ -279,6 +285,7 @@ async function createDelivery(
       sentAt: decision.decision === 'send' && decision.channel === 'web' ? now : null,
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
   if (!delivery) throw new Error('Failed to create notification delivery');
   return delivery;
 }
@@ -289,8 +296,10 @@ function destinationTypeForDecision(
   if (decision.destination) return decision.destination.type;
   if (decision.channel === 'email') return 'email';
   if (decision.channel === 'sms') return 'phone';
-  if (decision.channel === 'push') return 'push_token';
-  return 'in_app';
+  // Only `push` remains here: a null destination is only ever produced for email/sms/push
+  // (handled above) — `web` always resolves a non-null `{ type: 'in_app' }` destination in
+  // preferences.ts, so it never reaches this fallback.
+  return 'push_token';
 }
 
 function destinationForDecision(decision: NotificationChannelDecision): NotificationDestination {

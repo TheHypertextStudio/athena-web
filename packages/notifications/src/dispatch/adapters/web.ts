@@ -44,6 +44,7 @@ export async function deliverWebNotification(
       body: projection.body,
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
   if (!row) throw new Error('Failed to write web notification projection');
   return row;
 }

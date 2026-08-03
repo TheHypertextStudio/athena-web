@@ -52,11 +52,13 @@ async function expandOrganizationAudience(
     );
 
   return dedupeNotificationRecipients(
-    rows.flatMap((row) =>
-      row.userId
-        ? [{ userId: row.userId, organizationId: row.organizationId, reason: 'org_member' }]
-        : [],
-    ),
+    rows.flatMap((row) => {
+      /* v8 ignore start -- unreachable: the query's `isNotNull(actor.userId)` filter
+         guarantees this; only narrows the nullable column type drizzle infers for the select. */
+      if (!row.userId) return [];
+      /* v8 ignore stop */
+      return [{ userId: row.userId, organizationId: row.organizationId, reason: 'org_member' }];
+    }),
   );
 }
 
@@ -128,6 +130,9 @@ async function expandRoleBackedSegment(
   db: Database,
   roleKeys: readonly string[],
 ): Promise<readonly NotificationRecipientInput[]> {
+  // unreachable: the only caller passes `notificationAudienceSegmentRoleKeys('billing_admins')`,
+  // whose catalog is a fixed non-empty array; this guard exists for future role-backed segments.
+  /* v8 ignore next */
   if (roleKeys.length === 0) return dedupeNotificationRecipients([]);
 
   const rows = await db
@@ -184,9 +189,11 @@ async function expandUsersWithoutVerifiedPhoneSegment(
 function toSegmentRecipients(
   rows: readonly { readonly userId: string | null; readonly organizationId: string | null }[],
 ): NotificationRecipientInput[] {
-  return rows.flatMap((row) =>
-    row.userId
-      ? [{ userId: row.userId, organizationId: row.organizationId, reason: 'segment_match' }]
-      : [],
-  );
+  return rows.flatMap((row) => {
+    /* v8 ignore start -- unreachable: every caller's query filters `isNotNull(actor.userId)`;
+       only narrows the nullable column type drizzle infers for the select. */
+    if (!row.userId) return [];
+    /* v8 ignore stop */
+    return [{ userId: row.userId, organizationId: row.organizationId, reason: 'segment_match' }];
+  });
 }

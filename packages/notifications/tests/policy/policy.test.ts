@@ -65,6 +65,41 @@ describe('notification policy', () => {
     expect(approval.approver).toBe('staff');
   });
 
+  it('treats a single explicit user as the only non-multi-recipient audience for SMS', () => {
+    const single = requiresApproval(
+      makeNotificationIntentCreateFixture({
+        audience: notificationAudienceFixtures.user,
+        channels: ['sms'],
+      }),
+    );
+    expect(single.required).toBe(false);
+    expect(single.approver).toBeNull();
+
+    for (const audience of [
+      notificationAudienceFixtures.organization,
+      notificationAudienceFixtures.allUsers,
+      notificationAudienceFixtures.segment,
+    ] as const) {
+      const approval = requiresApproval(
+        makeNotificationIntentCreateFixture({ audience, channels: ['sms'] }),
+      );
+      expect(approval.required).toBe(true);
+      expect(approval.reasons).toContain('sms_multi_recipient');
+    }
+  });
+
+  it('does not require approval when SMS is not among the requested channels', () => {
+    const approval = requiresApproval(
+      makeNotificationIntentCreateFixture({
+        audience: notificationAudienceFixtures.allUsers,
+        channels: ['web'],
+      }),
+    );
+    expect(approval.required).toBe(false);
+    expect(approval.reasons).toEqual([]);
+    expect(approval.approver).toBeNull();
+  });
+
   it('does not allow marketing to ride service-announcement channels', () => {
     for (const channel of ['web', 'email', 'sms', 'push'] as const) {
       expect(categoryAllowsChannel('marketing', channel)).toBe(false);

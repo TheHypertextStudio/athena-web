@@ -812,6 +812,9 @@ importers:
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
+      '@electric-sql/pglite':
+        specifier: 'catalog:'
+        version: 0.5.1
       '@types/node':
         specifier: 26.1.0
         version: 26.1.0

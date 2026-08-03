@@ -71,7 +71,10 @@ function mergeChannelPreferences(
 }
 
 function weekdayName(index: number): (typeof weekdayNames)[number] {
+  /* v8 ignore start -- unreachable: `((index % 7) + 7) % 7` is always in [0, 6], a valid index
+     into the 7-element `weekdayNames`; this only narrows noUncheckedIndexedAccess. */
   return weekdayNames[((index % 7) + 7) % 7] ?? 'sun';
+  /* v8 ignore stop */
 }
 
 function localClockParts(
@@ -86,6 +89,9 @@ function localClockParts(
     hour12: false,
   }).formatToParts(now);
   const weekdayText = parts.find((part) => part.type === 'weekday')?.value.toLowerCase();
+  /* v8 ignore start -- unreachable: requesting `weekday`/`hour`/`minute` from
+     `Intl.DateTimeFormat.formatToParts` always yields those parts for a valid IANA timezone;
+     these fallbacks only narrow the optional-chaining result for the compiler. */
   const hour = parts.find((part) => part.type === 'hour')?.value ?? '00';
   const minute = parts.find((part) => part.type === 'minute')?.value ?? '00';
   const weekday = weekdayNames.findIndex((name) => weekdayText?.startsWith(name));
@@ -94,6 +100,7 @@ function localClockParts(
     weekday: weekday >= 0 ? weekday : 0,
     time: `${hour}:${minute}`,
   };
+  /* v8 ignore stop */
 }
 
 function minutesSinceMidnight(time: string): number {

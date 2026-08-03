@@ -31,6 +31,7 @@ import {
   VapidWebPushSender,
   encryptWebPushPayload,
   vapidAuthorization,
+  vapidKeysAgree,
   vapidKeysFromEnv,
   vapidPublicKeyFor,
   type VapidKeys,
@@ -137,6 +138,20 @@ describe('RFC 8291 payload encryption', () => {
 
     expect(() => encryptWebPushPayload(broken, Buffer.from('x'))).toThrow(WebPushSendError);
   });
+
+  it('round-trips with a fixed ephemeral key, for fully deterministic tests', () => {
+    const { subscription, privateKey, authSecret } = makeSubscription();
+    const payload = Buffer.from('deterministic payload');
+    const ephemeralEcdh = createECDH('prime256v1');
+    ephemeralEcdh.generateKeys();
+    const ephemeral = ephemeralEcdh.getPrivateKey();
+
+    const first = encryptWebPushPayload(subscription, payload, Buffer.alloc(16, 9), ephemeral);
+    const second = encryptWebPushPayload(subscription, payload, Buffer.alloc(16, 9), ephemeral);
+
+    expect(first.equals(second)).toBe(true);
+    expect(decrypt(first, privateKey, authSecret).toString('utf8')).toBe('deterministic payload');
+  });
 });
 
 describe('RFC 8292 VAPID authorization', () => {
@@ -197,6 +212,16 @@ describe('RFC 8292 VAPID authorization', () => {
     ).toBeNull();
     expect(vapidKeysFromEnv({ WEB_PUSH_VAPID_PUBLIC_KEY: keys.publicKey })).toBeNull();
   });
+
+  it('rejects a malformed key pair rather than throwing', () => {
+    const keys = makeVapidKeys();
+
+    expect(vapidKeysAgree({ ...keys, privateKey: 'AAAA' })).toBe(false);
+    expect(vapidKeysAgree({ ...keys, publicKey: 'AAAA' })).toBe(false);
+    expect(vapidKeysAgree({ ...keys, publicKey: Buffer.alloc(65, 1).toString('base64url') })).toBe(
+      false,
+    );
+  });
 });
 
 describe('VapidWebPushSender', () => {
@@ -248,6 +273,44 @@ describe('VapidWebPushSender', () => {
       status: 429,
     });
   });
+
+  it('refuses a subscription whose endpoint is not a valid URL', async () => {
+    const { subscription } = makeSubscription();
+    const broken = { ...subscription, endpoint: 'not a url' };
+    const sender = new VapidWebPushSender(makeVapidKeys(), async () => ({
+      status: 201,
+      ok: true,
+    }));
+
+    await expect(sender.send(broken, message)).rejects.toMatchObject({
+      code: 'invalid_subscription',
+    });
+  });
+
+  it('defaults to the platform fetch when no http transport is injected', async () => {
+    const { subscription } = makeSubscription();
+    const originalFetch = globalThis.fetch;
+    const calls: { url: string; init: RequestInit | undefined }[] = [];
+    globalThis.fetch = async (input: unknown, init?: RequestInit) => {
+      calls.push({ url: String(input), init });
+      return new Response(null, { status: 201 });
+    };
+
+    try {
+      const sender = new VapidWebPushSender(makeVapidKeys());
+      const sent = await sender.send(subscription, message);
+
+      expect(sent.status).toBe(201);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.url).toBe(subscription.endpoint);
+      expect(calls[0]?.init?.method).toBe('POST');
+      expect(
+        (calls[0]?.init?.headers as Record<string, string> | undefined)?.['Content-Encoding'],
+      ).toBe('aes128gcm');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });
 
 describe('elicitation notifications', () => {
@@ -277,6 +340,29 @@ describe('elicitation notifications', () => {
     expect(actions).toHaveLength(WEB_PUSH_MAX_ACTIONS);
     expect(actions.map((a) => a.title)).toEqual(['Acme channel', 'Ops channel']);
     expect(decodeElicitationAnswerAction(actions[0]?.action ?? '')).toBe('acme');
+  });
+
+  it('offers no buttons for a single-option select (really a confirmation)', () => {
+    expect(
+      elicitationPushActions({
+        kind: 'select',
+        multiple: false,
+        options: [{ value: 'acme', label: 'Acme channel', description: null }],
+      }),
+    ).toEqual([]);
+  });
+
+  it('offers no buttons for a multi-select (not a single tappable answer)', () => {
+    expect(
+      elicitationPushActions({
+        kind: 'select',
+        multiple: true,
+        options: [
+          { value: 'acme', label: 'Acme channel', description: null },
+          { value: 'ops', label: 'Ops channel', description: null },
+        ],
+      }),
+    ).toEqual([]);
   });
 
   it('offers no buttons for an answer that cannot be given by tapping', () => {

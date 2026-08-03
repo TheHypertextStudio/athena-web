@@ -91,4 +91,30 @@ describe('notification preference helpers', () => {
       ),
     ).toBe(false);
   });
+
+  it('detects quiet hours within a same-day (non-overnight) window', () => {
+    const sameDayWindow = {
+      enabled: true,
+      start: '12:00',
+      end: '14:00',
+      days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+    } as const;
+
+    // Monday 13:00 UTC — inside the window, on an included day.
+    expect(
+      notificationQuietHoursActive(sameDayWindow, 'UTC', new Date('2026-07-06T13:00:00.000Z')),
+    ).toBe(true);
+    // Monday 11:00 UTC — before the window starts.
+    expect(
+      notificationQuietHoursActive(sameDayWindow, 'UTC', new Date('2026-07-06T11:00:00.000Z')),
+    ).toBe(false);
+    // Monday 15:00 UTC — after the window ends.
+    expect(
+      notificationQuietHoursActive(sameDayWindow, 'UTC', new Date('2026-07-06T15:00:00.000Z')),
+    ).toBe(false);
+    // Saturday 13:00 UTC — inside the clock window, but not an included day.
+    expect(
+      notificationQuietHoursActive(sameDayWindow, 'UTC', new Date('2026-07-11T13:00:00.000Z')),
+    ).toBe(false);
+  });
 });

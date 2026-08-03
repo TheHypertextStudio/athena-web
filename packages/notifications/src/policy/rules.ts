@@ -53,6 +53,10 @@ export function canCreateNotification(input: NotificationPolicyInput): Notificat
 
   for (const channel of input.channels) {
     if (!categoryAllowsChannel(input.category, channel)) {
+      // unreachable: @preserve `categoryAllowsChannel` currently only depends on `category` and
+      // returns false exclusively for 'marketing', so this guard is always true here. The
+      // `category_channel_disallowed` reason is kept for when per-channel policy is added.
+      /* v8 ignore next */
       denialReasons.push(
         input.category === 'marketing'
           ? 'marketing_requires_dedicated_consent_surface'

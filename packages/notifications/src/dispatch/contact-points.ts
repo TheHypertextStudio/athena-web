@@ -41,6 +41,7 @@ export async function ensureAccountEmailContactPoint(
       verifiedAt: new Date(),
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
   if (!created) throw new Error('Failed to create account email contact point');
   return created;
 }

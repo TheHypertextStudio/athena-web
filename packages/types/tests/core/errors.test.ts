@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { Problem, ProblemCode, PUBLIC_PROBLEM_TITLES, publicProblemTitle } from '../../src/errors';
+import {
+  PROBLEM_CATALOG,
+  Problem,
+  ProblemCode,
+  PUBLIC_PROBLEM_TITLES,
+  problemDefinition,
+  publicProblemTitle,
+} from '../../src/errors';
 
 describe('ProblemCode', () => {
   it('accepts every closed code', () => {
@@ -14,6 +21,22 @@ describe('ProblemCode', () => {
 
   it('rejects an unknown code', () => {
     expect(ProblemCode.safeParse('teapot').success).toBe(false);
+  });
+});
+
+describe('problemDefinition', () => {
+  it('resolves a stable code to its public catalog entry', () => {
+    expect(problemDefinition('not_found')).toEqual(PROBLEM_CATALOG.not_found);
+    expect(problemDefinition('not_found')).toMatchObject({
+      code: 'not_found',
+      status: 404,
+      recovery: 'return',
+    });
+  });
+
+  it('returns undefined for a route parameter that is not a known code', () => {
+    expect(problemDefinition('not-a-real-code')).toBeUndefined();
+    expect(problemDefinition('')).toBeUndefined();
   });
 });
 

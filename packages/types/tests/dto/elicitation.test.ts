@@ -18,6 +18,7 @@ import {
   ElicitationSpecSchema,
   UnsupportedElicitationSchemaError,
   elicitationAnswerSchema,
+  elicitationFieldMessage,
   elicitationFromMcpRequestedSchema,
   elicitationFromZod,
   parseElicitationAnswer,
@@ -160,6 +161,48 @@ const ZOD_CASES: readonly ZodCase[] = [
     keys: ['[].key', '[].value'],
     invalid: [{ key: 'a' }],
   },
+  {
+    name: 'single string literal',
+    schema: z.literal('only'),
+    value: 'only',
+    kind: 'select',
+    keys: [],
+    invalid: 'other',
+  },
+  {
+    name: 'unconstrained number',
+    schema: z.number(),
+    value: 3.5,
+    kind: 'number',
+    keys: [],
+    invalid: 'not a number',
+  },
+  {
+    name: 'array with a maximum length',
+    schema: z.array(z.string()).min(1).max(3),
+    value: ['a', 'b'],
+    kind: 'list',
+    keys: [],
+    invalid: [],
+  },
+  {
+    name: 'nonoptional and readonly fields stay required',
+    schema: z.object({ a: z.string().optional().nonoptional(), b: z.string().readonly() }),
+    value: { a: 'x', b: 'y' },
+    kind: 'form',
+    keys: ['a', 'b'],
+    invalid: { a: 1, b: 'y' },
+  },
+  {
+    name: 'single-arm discriminated union with an optional field',
+    schema: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('note'), text: z.string(), tag: z.string().optional() }),
+    ]),
+    value: { kind: 'note', text: 'hi' },
+    kind: 'variant',
+    keys: ['kind=note', 'note.text', 'note.tag'],
+    invalid: { kind: 'note', text: 123 },
+  },
 ];
 
 describe('ATH-46 — any Zod schema is representable as an elicitation', () => {
@@ -209,6 +252,43 @@ describe('ATH-46 — any Zod schema is representable as an elicitation', () => {
     expect(() => elicitationFromZod(z.object({}))).toThrow(UnsupportedElicitationSchemaError);
   });
 
+  it('throws on schema shapes an elicitation control cannot represent even at the edges', () => {
+    // A `transform`/`pipe` schema has no answerable shape — Athena cannot ask for "a value that
+    // gets transformed", only for the value itself.
+    expect(() => elicitationFromZod(z.string().transform((value) => value))).toThrow(
+      UnsupportedElicitationSchemaError,
+    );
+    // A multi-value literal (`z.literal(['a', 'b'])`) and a non-string literal (`z.literal(5)`)
+    // both fall outside the single-string-literal shape a `select` option can carry.
+    expect(() => elicitationFromZod(z.literal(['a', 'b']))).toThrow(
+      UnsupportedElicitationSchemaError,
+    );
+    expect(() => elicitationFromZod(z.literal(5))).toThrow(UnsupportedElicitationSchemaError);
+    // An enum with no members has nothing to offer as an option.
+    expect(() => elicitationFromZod(z.enum([]))).toThrow(UnsupportedElicitationSchemaError);
+    // A discriminated union whose arm keys its discriminator on a non-string literal (e.g. a
+    // number) cannot be rendered as a labeled arm picker.
+    expect(() =>
+      elicitationFromZod(z.discriminatedUnion('kind', [z.object({ kind: z.literal(5) })])),
+    ).toThrow(UnsupportedElicitationSchemaError);
+  });
+
+  it('names non-string-discriminator union arms by their position', () => {
+    let thrown: unknown;
+    try {
+      elicitationFromZod(
+        z.discriminatedUnion('kind', [z.object({ kind: z.literal(5), x: z.string() })]),
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(UnsupportedElicitationSchemaError);
+    const error = thrown as UnsupportedElicitationSchemaError;
+    expect(error.schemaType).toBe('union arm without a string discriminator');
+    expect(error.path).toBe('[0]');
+  });
+
   it('names the offending kind and its path so the failure is diagnosable', () => {
     let thrown: unknown;
     try {
@@ -229,6 +309,14 @@ describe('ATH-46 — any Zod schema is representable as an elicitation', () => {
     expect(spec.kind).toBe('form');
     if (spec.kind !== 'form') throw new Error('expected a form');
     expect(spec.fields.map((field) => field.label)).toEqual(['Due date', 'Assignee Id']);
+  });
+
+  it('falls back to the raw key when titleizing strips it to nothing', () => {
+    const spec = elicitationFromZod(z.object({ _: z.string() }));
+
+    expect(spec.kind).toBe('form');
+    if (spec.kind !== 'form') throw new Error('expected a form');
+    expect(spec.fields.map((field) => field.label)).toEqual(['_']);
   });
 
   it('marks optional, nullable and defaulted fields not-required', () => {
@@ -354,6 +442,23 @@ describe('the six response types', () => {
     expect(parseElicitationAnswer(spec, '2026-08-05T09:30').ok).toBe(false);
   });
 
+  it('accepts a time-only answer when that is the declared precision', () => {
+    const spec: ElicitationSpec = {
+      kind: 'datetime',
+      precision: 'time',
+      timeZone: 'UTC',
+      min: null,
+      max: null,
+    };
+
+    expect(parseElicitationAnswer(spec, '14:05').ok).toBe(true);
+    expect(parseElicitationAnswer(spec, '14:05:30').ok).toBe(true);
+    expect(parseElicitationAnswer(spec, '2026-08-05')).toEqual({
+      ok: false,
+      errors: [{ path: '', text: 'Enter a complete date and time.' }],
+    });
+  });
+
   it('refuses a file of the wrong type or over the size limit', () => {
     const spec: ElicitationSpec = {
       kind: 'file',
@@ -377,6 +482,27 @@ describe('the six response types', () => {
       ok: false,
       errors: [{ path: '', text: 'That file is larger than this request allows.' }],
     });
+  });
+
+  it('accepts several files when the control allows multiple', () => {
+    const spec: ElicitationSpec = {
+      kind: 'file',
+      accept: [],
+      maxBytes: 1000,
+      multiple: true,
+    };
+    const file = (name: string) => ({
+      attachmentId: `att_${name}`,
+      fileName: `${name}.pdf`,
+      contentType: 'application/pdf',
+      byteSize: 900,
+    });
+
+    expect(parseElicitationAnswer(spec, [file('a'), file('b')])).toEqual({
+      ok: true,
+      value: [file('a'), file('b')],
+    });
+    expect(parseElicitationAnswer(spec, []).ok).toBe(false);
   });
 
   it('reports a form error against the field it belongs to', () => {
@@ -411,6 +537,35 @@ describe('the six response types', () => {
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected rejection');
     expect(result.errors.map((error) => error.path).sort()).toEqual(['count', 'title']);
+  });
+});
+
+describe('elicitationFieldMessage', () => {
+  it('translates every Zod issue code this grammar can produce into Docket copy', () => {
+    expect(elicitationFieldMessage(z.email().safeParse('not-an-email').error!.issues[0]!)).toBe(
+      'This answer is not in the expected format.',
+    );
+    expect(elicitationFieldMessage(z.enum(['a', 'b']).safeParse('c').error!.issues[0]!)).toBe(
+      'Choose one of the options offered.',
+    );
+    expect(
+      elicitationFieldMessage(
+        z.object({ a: z.string() }).strict().safeParse({ a: 'x', b: 'y' }).error!.issues[0]!,
+      ),
+    ).toBe('This answer includes something that was not asked for.');
+  });
+
+  it('falls back to a neutral sentence for an issue code this grammar never raises itself', () => {
+    // `not_multiple_of` cannot be produced by any control this module builds (no control declares
+    // a `multipleOf` constraint), so it exercises the same neutral fallback an unforeseen future
+    // Zod issue code would hit — proof the switch cannot go silent instead of refusing.
+    const issue = z.number().multipleOf(2).safeParse(3).error!.issues[0]!;
+    expect(elicitationFieldMessage(issue)).toBe('This answer could not be accepted.');
+  });
+
+  it('treats a non-string issue message as absent rather than matching it as a tag', () => {
+    const issue = { code: 'custom', message: undefined } as unknown as z.core.$ZodIssue;
+    expect(elicitationFieldMessage(issue)).toBe('This answer could not be accepted.');
   });
 });
 
@@ -480,6 +635,67 @@ describe('ATH-47 — MCP spec interop', () => {
     expect(() => elicitationFromMcpRequestedSchema({ type: 'object', properties: {} })).toThrow(
       UnsupportedElicitationSchemaError,
     );
+  });
+
+  it('refuses a requestedSchema that is malformed rather than merely unsupported', () => {
+    // A third-party MCP server is untrusted input — these are not well-formed-but-unsupported
+    // shapes, they are structurally broken payloads that must still fail loudly, not silently
+    // render an empty form.
+    expect(() => elicitationFromMcpRequestedSchema(null)).toThrow(
+      UnsupportedElicitationSchemaError,
+    );
+    expect(() => elicitationFromMcpRequestedSchema('not an object')).toThrow(
+      UnsupportedElicitationSchemaError,
+    );
+    expect(() => elicitationFromMcpRequestedSchema({ type: 'object' })).toThrow(
+      UnsupportedElicitationSchemaError,
+    );
+
+    let thrown: unknown;
+    try {
+      elicitationFromMcpRequestedSchema({
+        type: 'object',
+        properties: { flag: null },
+        required: [],
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(UnsupportedElicitationSchemaError);
+    const error = thrown as UnsupportedElicitationSchemaError;
+    expect(error.schemaType).toBe('unknown');
+    expect(error.path).toBe('flag');
+  });
+
+  it('derives sensible defaults for property variations the JSON Schema subset allows', () => {
+    const spec = elicitationFromMcpRequestedSchema({
+      type: 'object',
+      properties: {
+        count: { type: 'number' },
+        day: { type: 'string', format: 'date' },
+        code: { type: 'string', minLength: 4 },
+      },
+      required: [],
+    });
+
+    expect(spec.kind).toBe('form');
+    if (spec.kind !== 'form') throw new Error('expected a form');
+    const [count, day, code] = spec.fields;
+    expect(count?.control).toEqual({ kind: 'number', integer: false, min: null, max: null });
+    expect(day?.control).toEqual({
+      kind: 'datetime',
+      precision: 'date',
+      timeZone: 'UTC',
+      min: null,
+      max: null,
+    });
+    expect(code?.control).toEqual({
+      kind: 'text',
+      multiline: false,
+      minLength: 4,
+      maxLength: null,
+      placeholder: null,
+    });
   });
 
   it('builds each of the three spec-conformant responses', () => {

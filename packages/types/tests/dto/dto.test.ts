@@ -14,6 +14,8 @@ import {
   ApprovalPolicy,
   ApprovalRouting,
   ApprovalStatus,
+  AthenaInvocationContext,
+  AthenaInvocationContextOut,
   SessionActivityOut,
   SessionActivityType,
   SessionStatus,
@@ -54,6 +56,7 @@ import {
   EntityDisplayOut,
   EntityDisplaySubjectType,
   EntityDisplayUpdate,
+  defaultEntityDisplay,
 } from '../../src/entity-display';
 import {
   HubActivityOut,
@@ -117,7 +120,7 @@ import {
   WorkspaceSettingsUpdate,
 } from '../../src/organization';
 import { ProgramCreate, ProgramOut, ProgramStatus, ProgramUpdate } from '../../src/program';
-import { ProjectCreate, ProjectOut } from '../../src/project';
+import { ProjectCreate, ProjectDependencyCreate, ProjectOut } from '../../src/project';
 import { RoleCreate, RoleOut, RoleUpdate } from '../../src/role';
 import {
   SavedViewCreate,
@@ -134,6 +137,8 @@ import {
   TaskOut,
   TaskProvenance,
   TaskUpdate,
+  dependencyEdgeId,
+  subtaskEdgeId,
 } from '../../src/task';
 import { TeamOut } from '../../src/team';
 import { UpdateCreate, UpdateListQuery, UpdateOut, UpdateSubjectType } from '../../src/update';
@@ -332,6 +337,15 @@ describe('project DTOs', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('ProjectDependencyCreate requires exactly one dependency endpoint', () => {
+    expect(ProjectDependencyCreate.safeParse({ blockingProjectId: ID }).success).toBe(true);
+    expect(ProjectDependencyCreate.safeParse({ blockedProjectId: ID }).success).toBe(true);
+    expect(ProjectDependencyCreate.safeParse({}).success).toBe(false);
+    expect(
+      ProjectDependencyCreate.safeParse({ blockingProjectId: ID, blockedProjectId: ID2 }).success,
+    ).toBe(false);
+  });
 });
 
 describe('task DTOs', () => {
@@ -436,6 +450,11 @@ describe('task DTOs', () => {
   it('TaskUpdate sets and clears startDate', () => {
     expect(TaskUpdate.parse({ startDate: '2026-05-01' }).startDate).toBe('2026-05-01');
     expect(TaskUpdate.parse({ startDate: null }).startDate).toBeNull();
+  });
+
+  it('builds the same synthetic dependency-graph edge id the API and web cache both derive', () => {
+    expect(dependencyEdgeId(ID, ID2)).toBe(`dep:${ID}:${ID2}`);
+    expect(subtaskEdgeId(ID, ID2)).toBe(`sub:${ID}:${ID2}`);
   });
 });
 
@@ -619,6 +638,25 @@ describe('entity display DTOs', () => {
         customized: false,
       }).customized,
     ).toBe(false);
+  });
+
+  it('defaults an Initiative to the target icon and a Project to the folder icon', () => {
+    expect(defaultEntityDisplay('initiative', ID)).toEqual({
+      subjectType: 'initiative',
+      subjectId: ID,
+      iconKey: 'target',
+      colorKey: 'neutral',
+      customColor: null,
+      customized: false,
+    });
+    expect(defaultEntityDisplay('project', ID)).toEqual({
+      subjectType: 'project',
+      subjectId: ID,
+      iconKey: 'folder',
+      colorKey: 'neutral',
+      customColor: null,
+      customized: false,
+    });
   });
 });
 
@@ -1440,6 +1478,24 @@ describe('agent DTOs', () => {
       }).success,
     ).toBe(false);
   });
+
+  it('AthenaInvocationContext requires a workspace or a source, and accepts either alone', () => {
+    expect(AthenaInvocationContext.safeParse({ workspaceId: ID }).success).toBe(true);
+    expect(AthenaInvocationContext.safeParse({ source: { type: 'project', id: ID } }).success).toBe(
+      true,
+    );
+    expect(AthenaInvocationContext.safeParse({}).success).toBe(false);
+  });
+
+  it('AthenaInvocationContextOut requires a workspace or a resolved source, and accepts either alone', () => {
+    expect(AthenaInvocationContextOut.safeParse({ workspaceId: ID }).success).toBe(true);
+    expect(
+      AthenaInvocationContextOut.safeParse({
+        source: { type: 'project', id: ID, label: 'Athena launch' },
+      }).success,
+    ).toBe(true);
+    expect(AthenaInvocationContextOut.safeParse({}).success).toBe(false);
+  });
 });
 
 describe('integration DTOs', () => {
@@ -1896,6 +1952,42 @@ describe('calendar DTOs', () => {
         kind: 'calendar_event',
         title: 'Design review',
         metadata: { calendarId: ID2, connectionId: ID },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('AttachmentCreate requires a url for a url attachment', () => {
+    expect(
+      AttachmentCreate.safeParse({
+        kind: 'url',
+        title: 'Design doc',
+        url: 'https://example.com/doc',
+      }).success,
+    ).toBe(true);
+    expect(AttachmentCreate.safeParse({ kind: 'url', title: 'Design doc' }).success).toBe(false);
+  });
+
+  it('AttachmentCreate requires sourceIntegrationId and externalId for an email attachment', () => {
+    expect(
+      AttachmentCreate.safeParse({
+        kind: 'email',
+        title: 'Re: launch',
+        sourceIntegrationId: ID,
+        externalId: 'thread-1',
+      }).success,
+    ).toBe(true);
+    expect(
+      AttachmentCreate.safeParse({
+        kind: 'email',
+        title: 'Re: launch',
+        sourceIntegrationId: ID,
+      }).success,
+    ).toBe(false);
+    expect(
+      AttachmentCreate.safeParse({
+        kind: 'email',
+        title: 'Re: launch',
+        externalId: 'thread-1',
       }).success,
     ).toBe(false);
   });

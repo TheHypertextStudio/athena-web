@@ -101,6 +101,24 @@ describe('passkeyErrorMessage', () => {
     ).toEqual({ kind: 'cancelled_or_timed_out', message: PASSKEY_PROMPT_CANCELLED_MESSAGE });
   });
 
+  it('reads the message off a real thrown Error, not just an envelope object', () => {
+    // WebAuthn ceremonies reject with real `Error`/`DOMException` instances, not Better Auth's
+    // plain envelope shape — the mapper must read `.message`/`.name` off a thrown exception too.
+    const cancelled = Object.assign(new Error('The operation was not allowed.'), {
+      name: 'NotAllowedError',
+    });
+    expect(passkeyUserMessage(cancelled, TRANSIENT)).toEqual({
+      kind: 'cancelled_or_timed_out',
+      message: PASSKEY_PROMPT_CANCELLED_MESSAGE,
+    });
+
+    const generic = new Error('Something unrelated broke.');
+    expect(passkeyUserMessage(generic, TRANSIENT)).toEqual({
+      kind: 'transient',
+      message: TRANSIENT,
+    });
+  });
+
   it('does not expose unknown upstream messages for other failures', () => {
     expect(passkeyErrorMessage({ status: 400, message: 'Ceremony cancelled.' }, TRANSIENT)).toBe(
       TRANSIENT,

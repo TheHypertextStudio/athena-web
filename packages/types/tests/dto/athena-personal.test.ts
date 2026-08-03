@@ -104,11 +104,45 @@ describe('personal Athena contracts', () => {
     expect(PersonalMcpConnectionUpdate.parse({ name: 'Planning' })).toEqual({
       name: 'Planning',
     });
+    expect(PersonalMcpConnectionUpdate.parse({ alias: 'planning' })).toEqual({
+      alias: 'planning',
+    });
+    expect(PersonalMcpConnectionUpdate.safeParse({}).success).toBe(false);
     expect(
       PersonalMcpConnectionCreate.safeParse({
         url: 'https://mcp.sunsama.com/mcp',
         alias: 'sunsama',
         authMode: 'none',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires a bearer token only when authMode is bearer', () => {
+    expect(
+      PersonalMcpConnectionCreate.safeParse({
+        url: 'https://mcp.example.com/mcp',
+        name: 'Example',
+        alias: 'example',
+        authMode: 'bearer',
+      }).success,
+    ).toBe(false);
+    expect(
+      PersonalMcpConnectionCreate.safeParse({
+        url: 'https://mcp.example.com/mcp',
+        name: 'Example',
+        alias: 'example',
+        authMode: 'bearer',
+        bearerToken: 'secret-token',
+      }).success,
+    ).toBe(true);
+    // A bearer token supplied under any other auth mode is refused, not silently ignored.
+    expect(
+      PersonalMcpConnectionCreate.safeParse({
+        url: 'https://mcp.example.com/mcp',
+        name: 'Example',
+        alias: 'example',
+        authMode: 'none',
+        bearerToken: 'secret-token',
       }).success,
     ).toBe(false);
   });

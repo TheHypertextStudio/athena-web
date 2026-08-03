@@ -14,6 +14,8 @@ import {
   CalendarLayerShareCreate,
   CalendarLayerSharesReplace,
   CalendarLayerOut,
+  CalendarLayerUpdate,
+  CalendarListUpdate,
   CalendarRangeQuery,
   ScheduleComparisonItemOut,
   ScheduleComparisonOut,
@@ -324,6 +326,30 @@ describe('CalendarItemUpdate', () => {
   });
 });
 
+describe('CalendarLayerUpdate', () => {
+  it('accepts a patch that touches at least one layer field', () => {
+    expect(CalendarLayerUpdate.safeParse({ selected: true }).success).toBe(true);
+    expect(CalendarLayerUpdate.safeParse({ visibleByDefault: false }).success).toBe(true);
+    expect(CalendarLayerUpdate.safeParse({ title: 'Work' }).success).toBe(true);
+    expect(CalendarLayerUpdate.safeParse({ color: '#3b82f6' }).success).toBe(true);
+  });
+
+  it('rejects an empty patch (no layer field present)', () => {
+    expect(CalendarLayerUpdate.safeParse({}).success).toBe(false);
+  });
+});
+
+describe('CalendarListUpdate', () => {
+  it('accepts a patch that sets at least one visibility field', () => {
+    expect(CalendarListUpdate.safeParse({ selected: true }).success).toBe(true);
+    expect(CalendarListUpdate.safeParse({ visibleByDefault: false }).success).toBe(true);
+  });
+
+  it('rejects an empty patch (no visibility field present)', () => {
+    expect(CalendarListUpdate.safeParse({}).success).toBe(false);
+  });
+});
+
 describe('CalendarItemTaskLinkCreate', () => {
   it('accepts the contained task role for task stacks inside calendar items', () => {
     expect(CalendarItemTaskRole.parse('contained')).toBe('contained');
@@ -492,6 +518,29 @@ describe('schedule comparison', () => {
       allDayEndDate: null,
     });
     expect(detailed).toHaveProperty('title', 'Design review');
+  });
+
+  it('accepts an all-day comparison item bounded by dates instead of instants', () => {
+    const allDay = ScheduleComparisonItemOut.parse({
+      access: 'busy',
+      startsAt: null,
+      endsAt: null,
+      allDayStartDate: '2026-07-12',
+      allDayEndDate: '2026-07-13',
+    });
+    expect(allDay.allDayStartDate).toBe('2026-07-12');
+  });
+
+  it('refuses an item with neither timed nor all-day bounds', () => {
+    expect(
+      ScheduleComparisonItemOut.safeParse({
+        access: 'busy',
+        startsAt: null,
+        endsAt: null,
+        allDayStartDate: null,
+        allDayEndDate: null,
+      }).success,
+    ).toBe(false);
   });
 
   it('parses person headers alongside permission-filtered items', () => {

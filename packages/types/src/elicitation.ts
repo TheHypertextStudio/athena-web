@@ -724,6 +724,7 @@ function convert(schema: unknown, path: string): ConvertedField {
       return { control: inner.control, required };
     }
     case 'pipe':
+      /* v8 ignore next -- defensive: a real Zod `pipe` def always populates `out`; `in` is an unreachable fallback */
       return convert(def['out'] ?? def['in'], path);
     case 'string': {
       const min = lengthCheck(def, 'min_length', 'minimum');
@@ -768,12 +769,14 @@ function convert(schema: unknown, path: string): ConvertedField {
       };
     case 'enum': {
       const entries = def['entries'];
+      /* v8 ignore start -- defensive: Zod always populates `.entries` as an object for a real `enum` def */
       const values =
         entries && typeof entries === 'object'
           ? Object.values(entries as Record<string, unknown>).filter(
               (value): value is string => typeof value === 'string',
             )
           : [];
+      /* v8 ignore stop */
       if (values.length === 0) throw new UnsupportedElicitationSchemaError('empty enum', path);
       return {
         control: {
@@ -809,6 +812,7 @@ function convert(schema: unknown, path: string): ConvertedField {
       };
     }
     case 'object': {
+      /* v8 ignore next -- defensive: a real Zod `object` def always populates `shape` */
       const shape = (def['shape'] ?? {}) as Record<string, unknown>;
       const fields = Object.entries(shape).map(([key, value]) =>
         fieldOf(key, value, path ? `${path}.${key}` : key),
@@ -818,12 +822,14 @@ function convert(schema: unknown, path: string): ConvertedField {
     }
     case 'union': {
       const discriminator = def['discriminator'];
+      /* v8 ignore next -- defensive: a real Zod `discriminatedUnion` def always populates `options` */
       const options = (def['options'] ?? []) as readonly unknown[];
       if (typeof discriminator !== 'string' || options.length === 0) {
         throw new UnsupportedElicitationSchemaError('non-discriminated union', path);
       }
       const variants = options.map((option, index) => {
         const optionDef = defOf(option);
+        /* v8 ignore next -- defensive: each discriminatedUnion arm is a real Zod `object` def, which always populates `shape` */
         const shape = (optionDef['shape'] ?? {}) as Record<string, unknown>;
         const tag = literalValue(defOf(shape[discriminator]));
         if (tag === null) {

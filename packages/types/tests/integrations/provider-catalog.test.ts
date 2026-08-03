@@ -40,4 +40,12 @@ describe('provider catalog', () => {
     expect(sourceIdentityProvider('gmail')).toBe('google');
     expect(sourceIdentityProvider('google_calendar')).toBe('google');
   });
+
+  test('has no linked identity provider for a source system no directory provider emits', () => {
+    // `docket` (internal), `slack`, `discord`, and `outlook` are valid SourceSystemKind values,
+    // but no entry in the catalog claims them as its `sourceSystem` — there is nothing to resolve
+    // participants through.
+    expect(sourceIdentityProvider('docket')).toBeNull();
+    expect(sourceIdentityProvider('slack')).toBeNull();
+  });
 });

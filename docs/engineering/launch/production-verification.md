@@ -114,6 +114,26 @@ Run this once, first — it produces the session every other row depends on:
 
 ---
 
+## Before the deploy: the 0059 CHECK-constraint preflight
+
+Migration `0059_work_data_constraints.sql` adds thirteen `CHECK` constraints to six tables that
+already hold real rows (`cycle`, `initiative`, `milestone`, `program`, `project`, `task`) — a
+not-blank name, a non-negative estimate, a date within `[1970, 2201)`. On real Postgres,
+`ALTER TABLE ... ADD CONSTRAINT` validates every existing row before it succeeds, so **one**
+violating row anywhere aborts the entire migration transaction. Dev data already turned up a task
+due in 3999 and rows with out-of-range dates, which is why this is a named step rather than an
+assumption. `packages/db/tests/migrations/production-snapshot-restore.test.ts` proves the chain is
+non-destructive against a _synthetic_ dataset and says plainly it cannot cover production's actual
+row shapes — this preflight is the check that closes that gap, read-only, against the real thing:
+
+```bash
+DATABASE_URL_UNPOOLED=<production connection string> pnpm migration:0059:preflight
+```
+
+Fix whatever it reports (or the constraint, if a report is a legitimate historical value worth
+keeping) before `0059` ever reaches step 2 below. It refuses to run against an embedded `pglite:`
+target or with no connection string set, on purpose — this only means something against real data.
+
 ## Author-run commands referenced above
 
 ```bash

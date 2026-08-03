@@ -49,6 +49,7 @@
     "search:backfill": "dotenv -e .env.local -- tsx scripts/search-backfill.ts",
     "search:repair": "dotenv -e .env.local -- tsx scripts/search-backfill.ts --repair",
     "search:process": "dotenv -e .env.local -- tsx scripts/search-process-jobs.ts",
+    "migration:0059:preflight": "tsx scripts/migration-0059-check-constraint-preflight.ts",
     "prepare": "if [ -f scripts/install-git-guardrails.sh ]; then sh scripts/install-git-guardrails.sh; fi && (git update-index --skip-worktree .env.local 2>/dev/null || true)"
   },
   "devDependencies": {
@@ -64,6 +65,7 @@
     "eslint": "catalog:",
     "lint-staged": "^17.0.7",
     "portless": "catalog:",
+    "postgres": "catalog:",
     "prettier": "^3.8.3",
     "prettier-plugin-tailwindcss": "^0.8.0",
     "semantic-release": "^25.0.3",

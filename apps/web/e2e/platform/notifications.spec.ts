@@ -14,8 +14,12 @@ test.describe('notification settings', () => {
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible({
       timeout: TIMEOUTS.ui,
     });
+    // The static heading above renders immediately, but this section waits on this run's first
+    // `/v1/me/notification-preferences` + `/v1/me/contact-points` reads for a brand-new account —
+    // slower than `ui`'s budget under CI load, the same class of first-hit cost `pageReady` exists
+    // for elsewhere in this suite.
     await expect(page.locator('section[aria-label="Notification preferences"]')).toBeVisible({
-      timeout: TIMEOUTS.ui,
+      timeout: TIMEOUTS.pageReady,
     });
 
     const digestEmail = page.getByRole('checkbox', { name: 'Email for Digests' });

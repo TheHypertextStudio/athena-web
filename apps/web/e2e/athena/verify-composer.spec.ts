@@ -6,12 +6,16 @@
  * (so a broken flow fails the run); the screenshots are for human review.
  */
 import { signUpAndOnboard } from '../helpers/app';
-import { myWorkHref } from '../helpers/constants';
+import { myWorkHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { attachShot } from '../helpers/ui';
 
 test.describe('new-task composer', () => {
   test('opens and renders (light, dark, discard)', async ({ page }, testInfo) => {
+    // This is the suite's first hit on '/my-work' and its create-task composer, so it can pay
+    // Turbopack's on-demand compile cost for both — measured well past the default budget on a
+    // busy CI runner (see composer-reset.spec.ts / mcp-connect.spec.ts for the same root cause).
+    test.slow();
     const { orgId } = await signUpAndOnboard(page, 'Composer');
 
     await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });
@@ -24,7 +28,9 @@ test.describe('new-task composer', () => {
       });
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByPlaceholder('Task title')).toBeVisible();
+    await expect(dialog.getByPlaceholder('Task title')).toBeVisible({
+      timeout: TIMEOUTS.pageReady,
+    });
     await page.waitForTimeout(400); // let the open animation settle
     await attachShot(testInfo, dialog, 'composer-light.png');
 

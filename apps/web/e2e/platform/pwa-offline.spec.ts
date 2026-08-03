@@ -139,7 +139,28 @@ test.describe('PWA installability', () => {
       'content',
       /viewport-fit=cover/,
     );
-    await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
+    // Four Apple assets, not one: Safari picks by declared size, and the set is exported from the
+    // committed Icon Composer document (see tests/pwa/apple-icons.test.ts).
+    const appleIcons = page.locator('link[rel="apple-touch-icon"]');
+    await expect(appleIcons).toHaveCount(4);
+    for (const size of ['120x120', '152x152', '167x167', '180x180']) {
+      await expect(page.locator(`link[rel="apple-touch-icon"][sizes="${size}"]`)).toHaveCount(1);
+    }
+  });
+
+  test('serves every Apple icon it advertises', async ({ page, request }) => {
+    await page.goto('/sign-in');
+    const hrefs = await page
+      .locator('link[rel="apple-touch-icon"]')
+      .evaluateAll((links) =>
+        links.map((link) => (link as HTMLLinkElement).getAttribute('href') ?? ''),
+      );
+    expect(hrefs.length).toBe(4);
+    for (const href of hrefs) {
+      const response = await request.get(href);
+      expect(response.status(), `${href} should resolve`).toBe(200);
+      expect(response.headers()['content-type']).toContain('image/png');
+    }
   });
 
   test('every icon the manifest advertises actually resolves', async ({ request }) => {

@@ -2,6 +2,8 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 
+import { purgeAllOutboxes } from '@/components/pwa/outbox-store';
+import { purgeOfflineDocuments } from '@/components/pwa/purge-offline-documents';
 import { signOut } from '@/lib/auth-client';
 import { purgeAllPersistedQueryCaches } from '@/lib/query-persist';
 import { clearSessionSnapshot } from '@/lib/session-snapshot';
@@ -19,12 +21,19 @@ import { clearSessionSnapshot } from '@/lib/session-snapshot';
  * shell render a workspace for someone who is not signed in), then every persisted bucket — not
  * just this user's, since the point is that no previous occupant's data survives.
  *
+ * There are now four such places, not one, and they are cleared together on purpose: the query
+ * buckets, the offline write queue, and the service worker's cached route documents. The last two
+ * arrived with offline support, and each would otherwise let a previous occupant's data — an unsent
+ * change, a rendered workspace shell — outlive their session on a shared device. Unsent changes
+ * *are* discarded by this; the sync indicator is visible the whole time any exist, so signing out
+ * with work still queued is a choice someone can see themselves making.
+ *
  * @param queryClient - The active client, whose in-memory cache is cleared.
  */
 export async function purgeLocalSessionState(queryClient: QueryClient): Promise<void> {
   queryClient.clear();
   clearSessionSnapshot();
-  await purgeAllPersistedQueryCaches();
+  await Promise.all([purgeAllPersistedQueryCaches(), purgeAllOutboxes(), purgeOfflineDocuments()]);
 }
 
 /**

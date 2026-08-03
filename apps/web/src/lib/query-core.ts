@@ -118,11 +118,13 @@ export function createQueryClient(handlers?: { onError?: (error: unknown) => voi
         retry: (failureCount, error) => !(error instanceof SessionExpiredError) && failureCount < 1,
       },
       mutations: {
-        // Counter-intuitive but deliberate. The DEFAULT ('online') *pauses* a mutation while
-        // offline and replays it on reconnect — which is precisely the offline write queue this
-        // app does not want: a write can then land hours later against a server whose state has
-        // moved on, with nobody watching. 'always' attempts it, fails immediately with a
-        // network-level ApiRequestError, and the existing inline error treatment explains it.
+        // Counter-intuitive but deliberate, and now load-bearing for the offline queue. The
+        // DEFAULT ('online') *pauses* a mutation while offline and resumes it later with no
+        // record, no expiry, no attempt limit and nothing on screen — a write landing hours later
+        // against a server whose state has moved on, with nobody watching. 'always' attempts it,
+        // so the request actually reaches `withOfflineOutbox` in `lib/api.ts`, which stores it as
+        // an inspectable, expiring, visible entry (see `components/pwa/outbox-model.ts`). Without
+        // 'always' there is nothing for that wrapper to catch.
         //
         // Queries stay on the default 'online' on purpose: switching them would make every mounted
         // surface fire and fail the instant signal drops, spraying error banners across the app.

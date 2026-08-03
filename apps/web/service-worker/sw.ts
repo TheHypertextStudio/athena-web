@@ -11,20 +11,27 @@
  * Chrome-only feature. The bundler resolves the imports at build time, so the shipped worker is a
  * plain classic script every browser can run.
  *
- * **What this worker deliberately does not do.** It does not queue writes — mutations made offline
- * fail immediately and say so, rather than being replayed later against a server whose state has
- * moved on. It does not cache authenticated responses; see `routing.ts`, where the API rules are
- * the security floor. And it precaches no build manifest, because Next's content-hashed asset URLs
- * make a runtime cache-first strategy self-healing without one.
+ * **What this worker deliberately does not do.** It never caches an API or auth response; see
+ * `routing.ts`, where those two rules are the security floor and admit no exception. It precaches no
+ * build manifest, because Next's content-hashed asset URLs make a runtime cache-first strategy
+ * self-healing without one. And it does not replay writes — the offline write queue lives in the
+ * page (`src/components/pwa/`), where it can show what is pending and be reasoned about by a person,
+ * rather than firing invisibly from a worker nobody is watching.
+ *
+ * It *does* cache route documents, which is a change from the original design and is argued in
+ * `documents.ts`: an app route's HTML is no longer the contentless shell that file's predecessor
+ * assumed, so the cache is keyed on the signed-in user and torn down with the rest of local session
+ * state.
  *
  * The update handshake is why `install` does not call `skipWaiting()`. A new worker installs and
  * waits; the page notices and offers a reload; only on acceptance does the page post
  * `SKIP_WAITING`, the worker activate, and the page reload. Swapping the worker out from under a
  * live tab would otherwise mix old chunks with new ones mid-session.
  */
+import { IDENTITY_CACHE, purgePrivateDocuments, writeOfflineIdentity } from './documents';
 import { answerEndpoint, readPushPayload, resolveNotificationIntent } from './elicitation-push';
 import { routeRequest } from './routing';
-import { cacheFirst, navigateWithFallback, staleWhileRevalidate } from './strategies';
+import { cacheFirst, navigateWithDocumentCache, staleWhileRevalidate } from './strategies';
 
 declare const self: ServiceWorkerGlobalScope;
 
@@ -41,7 +48,15 @@ const PRODUCTION = __SW_MODE__ === 'production';
 const PRECACHE = `docket-precache-${VERSION}`;
 const STATIC_CACHE = `docket-static-${VERSION}`;
 const ASSET_CACHE = `docket-assets-${VERSION}`;
-const OWNED_CACHES = new Set([PRECACHE, STATIC_CACHE, ASSET_CACHE]);
+/**
+ * Route documents served offline. Versioned like the others, so a deploy drops every stored shell
+ * rather than pairing yesterday's HTML with today's chunks.
+ */
+const DOCUMENT_CACHE = `docket-documents-${VERSION}`;
+// IDENTITY_CACHE is deliberately unversioned and therefore listed here: who is signed in does not
+// change across deploys, and evicting it every release would make the first offline launch after
+// each one find nothing.
+const OWNED_CACHES = new Set([PRECACHE, STATIC_CACHE, ASSET_CACHE, DOCUMENT_CACHE, IDENTITY_CACHE]);
 
 const OFFLINE_URL = '/offline.html';
 
@@ -54,8 +69,22 @@ const PRECACHE_URLS = [
   '/icons/icon-512-maskable.png',
 ];
 
-/** How long a navigation waits for the network before falling back to the offline document. */
+/**
+ * How long a navigation waits before a cached copy of the same route is preferred to a response
+ * still in flight.
+ */
 const NAVIGATION_TIMEOUT_MS = 3_000;
+
+/**
+ * The hard ceiling on a navigation that has neither answered nor failed.
+ *
+ * @remarks
+ * Long enough that a cold start, a first compile, or a bad phone connection still wins — showing
+ * "you're offline" to someone who is merely on a slow network is a lie, and it was observed for
+ * real at the old three-second cut-off. Short enough that a connection which accepted the request
+ * and then stalled (a captive portal) resolves to the waiting-room page instead of an empty tab.
+ */
+const NAVIGATION_GIVE_UP_MS = 20_000;
 
 self.addEventListener('install', (event) => {
   // No skipWaiting: waiting is precisely what makes the update prompt possible.
@@ -88,12 +117,26 @@ self.addEventListener('message', (event) => {
   // The field is `type`, never `message`: the repository's error-source policy scans web source for
   // any property named `message`, and the page-side registrar lives under `src/`.
   const data: unknown = event.data;
-  if (
-    typeof data === 'object' &&
-    data !== null &&
-    (data as { type?: unknown }).type === 'SKIP_WAITING'
-  ) {
+  if (typeof data !== 'object' || data === null) return;
+  const type = (data as { type?: unknown }).type;
+
+  if (type === 'SKIP_WAITING') {
     void self.skipWaiting();
+    return;
+  }
+
+  // Who the document cache belongs to. Posted by the page after the session resolves — the worker
+  // has no way to ask, and on a cold offline start it needs the answer before any page exists.
+  if (type === 'OFFLINE_IDENTITY') {
+    const userId = (data as { userId?: unknown }).userId;
+    event.waitUntil(writeOfflineIdentity(typeof userId === 'string' && userId ? userId : null));
+    return;
+  }
+
+  // Sign-out. Paired with the IndexedDB purge in `src/lib/sign-out.ts` so local session state is
+  // cleared from every place it can live, in one action.
+  if (type === 'PURGE_PRIVATE') {
+    event.waitUntil(purgePrivateDocuments());
   }
 });
 
@@ -120,7 +163,15 @@ self.addEventListener('fetch', (event) => {
       return;
     case 'navigation':
       event.respondWith(
-        navigateWithFallback(request, PRECACHE, OFFLINE_URL, NAVIGATION_TIMEOUT_MS),
+        navigateWithDocumentCache(request, {
+          documentCache: DOCUMENT_CACHE,
+          offlineCache: PRECACHE,
+          offlineUrl: OFFLINE_URL,
+          timeoutMs: NAVIGATION_TIMEOUT_MS,
+          giveUpMs: NAVIGATION_GIVE_UP_MS,
+          origin: self.location.origin,
+          online: self.navigator.onLine,
+        }),
       );
       return;
   }

@@ -33,9 +33,16 @@ interface OfflineBannerProps {
  *
  * @remarks
  * Deliberately not dismissible. It is the standing disclosure that everything on screen may be
- * stale and that writes will fail — dismissing it would leave someone editing against a snapshot
- * with no indication anything is wrong. It is also the reason the offline shell is honest rather
- * than a lie: it is visible for the entire time a cached identity is standing in for a live session.
+ * stale — dismissing it would leave someone editing against a snapshot with no indication anything
+ * is wrong. It is also the reason the offline shell is honest rather than a lie: it is visible for
+ * the entire time a cached identity is standing in for a live session.
+ *
+ * The second sentence used to read "Changes can't be saved until you reconnect." That was true when
+ * an offline write failed outright, and became false the moment writes were queued: they are saved,
+ * on this device, and sent on reconnect. The copy now says so, and `OfflineSyncIndicator` (rendered
+ * directly beneath this, from the same banner slot) lists the individual changes with their own
+ * pending markers. The two must stay in step — a promise here that the queue does not keep would be
+ * worse than the pessimism it replaced.
  *
  * Rendered in the shell's `banner` slot (a sibling of `<main>`, not page content) so it never
  * disturbs a page's `h-full` sizing.
@@ -50,7 +57,8 @@ export function OfflineBanner({ online, onRetry }: OfflineBannerProps): JSX.Elem
       <CloudOff aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
       <span className="font-medium">{online ? "Can't reach Docket" : "You're offline"}</span>
       <span className="text-on-surface-variant min-w-0 flex-1">
-        Showing what was loaded earlier. Changes can't be saved until you reconnect.
+        Showing what was loaded earlier. Changes you make are saved on this device and sync
+        automatically once you're back online.
       </span>
       <Button variant="outline" size="sm" onClick={onRetry}>
         Try again

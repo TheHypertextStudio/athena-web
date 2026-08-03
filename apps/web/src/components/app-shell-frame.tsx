@@ -14,7 +14,7 @@ import {
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, ListChecks, Search } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -27,6 +27,7 @@ import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
+import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
 import { QueryPersistence } from '@/components/query-persistence';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
@@ -294,6 +295,9 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
             know whose workspace to search — not once every workspace has loaded. */}
         <CommandPaletteProvider enabled={!identityUnknown}>
           <QueryPersistence userId={userId} />
+          {/* Beside the query cache and for the same reason: both bind local durable state to the
+              resolved account, and this is the first place that id is known. */}
+          <OfflineSyncRuntime userId={userId} />
           <OpenDocumentsProvider userId={userId}>
             <AppShellInner
               identityUnknown={identityUnknown}
@@ -482,6 +486,17 @@ function AppShellInner({
   // the result, so the update prompt can share the one banner slot with the offline notice.
   const { applyUpdate } = useServiceWorkerUpdate();
 
+  // Queued offline writes are a standing fact about this session, not a property of any route, so
+  // the shell owns the disclosure the same way it owns the offline and update notices.
+  const outbox = useOutboxSummary();
+  const hasQueuedWork = outbox.pending > 0 || outbox.stalled > 0;
+  const standingNotice =
+    offline && !unavailable ? (
+      <OfflineBanner online={offline.online} onRetry={offline.onRetry} />
+    ) : applyUpdate ? (
+      <UpdateBanner onApply={applyUpdate} />
+    ) : null;
+
   // The sidebar's unread badge polls on a focus-only minute interval, sharing the inbox's
   // notifications-count cache (queryKeys.notificationsCount()) so the two stay in lock-step.
   const unreadCountQ = useLiveApiQuery(
@@ -652,13 +667,20 @@ function AppShellInner({
           // reloading for a new version is pointless — and would land on the offline page —
           // while there is no connection to fetch it over.
           banner={
-            // Suppressed while `unavailable`: the banner's promise ("showing what was loaded
-            // earlier") is false when nothing was ever loaded, and the content state already says
-            // the same thing better. One offline message, in the right place.
-            offline && !unavailable ? (
-              <OfflineBanner online={offline.online} onRetry={offline.onRetry} />
-            ) : applyUpdate ? (
-              <UpdateBanner onApply={applyUpdate} />
+            // The sync indicator is additive rather than exclusive: "you're offline" and "these
+            // three changes are waiting" are different facts, and collapsing them would drop the
+            // one that is actionable. It renders nothing at all when the queue is empty, which is
+            // why `hasQueuedWork` gates the wrapper — an empty banner slot would still occupy the
+            // shell's gap above `<main>`.
+            //
+            // The offline notice is suppressed while `unavailable`: its promise ("showing what was
+            // loaded earlier") is false when nothing was ever loaded, and the content state already
+            // says the same thing better.
+            standingNotice || hasQueuedWork ? (
+              <Stack gap={2}>
+                {standingNotice}
+                <OfflineSyncIndicator />
+              </Stack>
             ) : undefined
           }
           aside={settingsSurface ? undefined : railAsideFor(identityUnknown, calendarSurface)}

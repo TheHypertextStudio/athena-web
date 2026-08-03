@@ -37,6 +37,14 @@ import {
  * and nothing else.
  */
 
+/**
+ * The DOM lib types `navigator.serviceWorker` as always present. Browsers disagree, so the property
+ * is re-declared as optional and read through this shape.
+ */
+interface MaybeWorkerHost {
+  readonly serviceWorker?: ServiceWorkerContainer;
+}
+
 /** How long to wait between update checks triggered by the tab regaining focus. */
 const UPDATE_CHECK_THROTTLE_MS = 60_000;
 
@@ -60,7 +68,14 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
   const lastCheckRef = useRef(0);
 
   useEffect(() => {
-    if (!('serviceWorker' in navigator)) return undefined;
+    // A truthiness check, not `'serviceWorker' in navigator`. The `in` form is true whenever the
+    // property merely *exists*, which is not the same as it being usable — and the difference is
+    // not hypothetical: with the property present but undefined, this effect used to reach
+    // `navigator.serviceWorker.addEventListener` below and throw a TypeError out of the root
+    // provider, taking the whole application down over an enhancement it can live without. Caught
+    // by e2e/platform/pwa-progressive-enhancement.spec.ts.
+    const container = (navigator as unknown as MaybeWorkerHost).serviceWorker;
+    if (!container) return undefined;
 
     let registration: ServiceWorkerRegistration | undefined;
     let disposed = false;
@@ -69,7 +84,7 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
     // reaches `installed`, but nothing on screen is stale — asking someone to reload a page they
     // just opened would be noise.
     const offerIfStale = (worker: ServiceWorker | null): void => {
-      if (!disposed && worker && navigator.serviceWorker.controller) setWaiting(worker);
+      if (!disposed && worker && container.controller) setWaiting(worker);
     };
 
     const onControllerChange = (): void => {
@@ -81,7 +96,7 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
 
     const register = async (): Promise<void> => {
       try {
-        registration = await navigator.serviceWorker.register('/sw.js');
+        registration = await container.register('/sw.js');
         if (disposed) return;
 
         // A worker may already be waiting from an earlier visit that was never reloaded.
@@ -114,12 +129,12 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       window.addEventListener('load', () => void register(), { once: true });
     }
 
-    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+    container.addEventListener('controllerchange', onControllerChange);
     document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       disposed = true;
-      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+      container.removeEventListener('controllerchange', onControllerChange);
       document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);

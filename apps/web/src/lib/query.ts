@@ -51,6 +51,7 @@ import {
 } from '@tanstack/react-query';
 
 import { useOptionalAuthenticationRecovery } from '@/components/authentication-interlock';
+import { queuedOfflineWrite } from '@/components/pwa/offline-write';
 import { type ApiInfiniteDef, OfflineError } from './query-core';
 
 export * from './query-core';
@@ -223,7 +224,16 @@ export interface ApiMutationOptions<TData, TVariables, TContext> extends Omit<
  * - `invalidateKeys`, the related keys to refetch on settle.
  *
  * Invalidation runs in `onSettled` after any caller-supplied `onSettled`, so a successful write
- * reconciles the optimistic cache with the server's response and a failed one repairs it. All
+ * reconciles the optimistic cache with the server's response and a failed one repairs it.
+ *
+ * One case is neither: a write the offline queue has taken responsibility for. That is not a
+ * failure — the change exists, on the device, and will be sent — so the caller's `onError` and the
+ * invalidation are both skipped, leaving the optimistic cache exactly as the person left it. The
+ * mutation still settles in an error state carrying the queue's own copy ("Saved on this device…"),
+ * so a surface that renders `error.message` says something true rather than claiming the save
+ * failed. See `components/pwa/offline-write.ts`.
+ *
+ * All
  * generics are inferred from `mutationFn`, so the variables and result stay fully typed. A known
  * `unauthorized` response from this foreground operation opens the authentication interlock; it
  * does not redirect or sign the person out, and other 401 codes (including `reauth_required`)
@@ -242,11 +252,29 @@ export function useApiMutation<TData, TVariables, TContext = unknown>(
 ): UseMutationResult<TData, DefaultError, TVariables, TContext> {
   const queryClient = useQueryClient();
   const recoverAuthentication = useOptionalAuthenticationRecovery();
-  const { invalidateKeys, mutationFn, onSettled, ...rest } = options;
+  const { invalidateKeys, mutationFn, onError, onSettled, ...rest } = options;
   return useMutation<TData, DefaultError, TVariables, TContext>({
     ...rest,
-    mutationFn: (variables) => recoverAuthentication(() => mutationFn(variables)),
+    mutationFn: async (variables) => {
+      try {
+        return await recoverAuthentication(() => mutationFn(variables));
+      } catch (caught) {
+        // `unwrap` wraps a rejected request in an `ApiRequestError` carrying this operation's
+        // "could not save" copy. For a change the offline queue has taken responsibility for, that
+        // copy is simply false, so the queued error is surfaced in its own right — its message says
+        // the change is on the device and will sync.
+        throw queuedOfflineWrite(caught) ?? caught;
+      }
+    },
+    onError: (error, variables, onMutateResult, context) => {
+      // A queued write is not a failure. Running the caller's `onError` here would roll the
+      // optimistic cache back — undoing on screen the very change the queue has promised to
+      // deliver, which is the one outcome worse than not queueing at all.
+      if (queuedOfflineWrite(error)) return;
+      onError?.(error, variables, onMutateResult, context);
+    },
     onSettled: async (data, error, variables, onMutateResult, context) => {
+      if (queuedOfflineWrite(error)) return;
       await onSettled?.(data, error, variables, onMutateResult, context);
       if (invalidateKeys && invalidateKeys.length > 0) {
         await Promise.all(

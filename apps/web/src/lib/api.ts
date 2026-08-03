@@ -1,6 +1,8 @@
 import type { AppType } from '@docket/api';
 import { hc } from 'hono/client';
 
+import { withOfflineOutbox } from '@/components/pwa/offline-write';
+
 /**
  * The typed Hono RPC client for the Docket API.
  *
@@ -14,6 +16,12 @@ import { hc } from 'hono/client';
  * `credentials: 'include'` fetch option ensures the cookie is sent even when the client
  * is reconfigured to a cross-origin base.
  *
+ * The `fetch` is wrapped by {@link withOfflineOutbox}, which is the single place a write that could
+ * not be delivered becomes a queued one. It is here rather than at each call site because this is
+ * already the one function every request in the app passes through — that is what makes offline
+ * writing a property of the app rather than a feature individual screens remembered. It only ever
+ * acts on a *rejected* request, so a real server error still reaches the caller untouched.
+ *
  * @example
  * ```ts
  * const res = await api.v1.orgs.$get();
@@ -23,6 +31,7 @@ import { hc } from 'hono/client';
  * ```
  */
 export const api = hc<AppType>('', {
-  fetch: ((input: RequestInfo | URL, init?: RequestInit) =>
-    fetch(input, { ...init, credentials: 'include' })) as typeof fetch,
+  fetch: withOfflineOutbox((input: RequestInfo | URL, init?: RequestInit) =>
+    fetch(input, { ...init, credentials: 'include' }),
+  ),
 });

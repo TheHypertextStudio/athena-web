@@ -1,0 +1,31 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "extended-srgb:0.17255,0.18431,0.23137,1.00000",
+      "extended-srgb:0.07059,0.07451,0.09020,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "Bars.svg",
+          "name": "Bars"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "specular": true,
+      "translucency": {
+        "enabled": true,
+        "value": 0.5
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": ["watchOS"],
+    "squares": ["iOS", "macOS"]
+  }
+}

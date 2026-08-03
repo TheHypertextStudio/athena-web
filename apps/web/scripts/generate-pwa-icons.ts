@@ -14,12 +14,19 @@
  *   a circle/squircle of its choosing; without the inset, the outer bars of the Docket glyph get
  *   clipped. The bleed colour is the mark's own background so the crop is invisible.
  *
- * `apple-icon.png` is written into `src/app/` rather than `public/`: it is a Next.js file
- * convention, so placing it there makes Next emit the `<link rel="apple-touch-icon">` itself. iOS
- * ignores manifest icons for the home screen, so this file is what Safari actually installs, and it
- * must be opaque — iOS composites transparency against black.
+ * **This script no longer writes any Apple asset.** It used to emit `src/app/apple-icon.png` — the
+ * standard maskable render at 180px — which is what Safari installed on the home screen. Apple's
+ * platforms now expect a Liquid Glass icon, which is a layered document rendered by Apple's own
+ * `IconRendering` framework and is not reachable from `sharp` at all. That set is owned by
+ * {@link file://./export-apple-icons.ts}, which reads `design/Docket.icon` and writes
+ * `src/app/apple-icon<n>.png`.
+ *
+ * The split is deliberate rather than tidy-minded: it is what guarantees the Apple work cannot
+ * alter the Android/Chrome icons. Neither script can write the other's outputs, and this one is
+ * still the only writer of every file the manifest names.
  *
  * @see {@link file://../src/app/manifest.ts} which references the `public/icons/*` outputs.
+ * @see {@link file://./export-apple-icons.ts} for the Apple home-screen set.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -67,9 +74,6 @@ const ICONS: readonly IconSpec[] = [
   { outPath: 'public/icons/icon-512.png', size: 512, maskable: false },
   { outPath: 'public/icons/icon-192-maskable.png', size: 192, maskable: true },
   { outPath: 'public/icons/icon-512-maskable.png', size: 512, maskable: true },
-  // iOS home screen. Opaque, no inset: Safari applies its own rounded-rect mask, and the mark's
-  // own 7/32 corner radius already sits inside it.
-  { outPath: 'src/app/apple-icon.png', size: 180, maskable: true },
 ];
 
 /**

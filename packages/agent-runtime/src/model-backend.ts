@@ -191,6 +191,9 @@ function describeBackend(id: ModelBackendId, env: ModelBackendEnv): ModelBackend
         label: BACKEND_LABEL[id],
         routed: false,
         userSupplied: true,
+        /* v8 ignore next -- unreachable: the `missing` check above already required
+           `present(env.ATHENA_LATTICE_BASE_URL)`, so it is always a defined, non-empty string
+           here; this only narrows the `string | undefined` env field's type. */
         baseURL: env.ATHENA_LATTICE_BASE_URL ?? null,
         model,
       };
@@ -207,6 +210,9 @@ function describeBackend(id: ModelBackendId, env: ModelBackendEnv): ModelBackend
         label: BACKEND_LABEL[id],
         routed: true,
         userSupplied: false,
+        /* v8 ignore next -- unreachable: the `missing` check above already required
+           `present(env.CLOUDFLARE_AI_GATEWAY_BASE_URL)`, so it is always a defined, non-empty
+           string here; this only narrows the `string | undefined` env field's type. */
         baseURL: env.CLOUDFLARE_AI_GATEWAY_BASE_URL ?? null,
         model,
       };
@@ -229,6 +235,11 @@ function describeBackend(id: ModelBackendId, env: ModelBackendEnv): ModelBackend
 
 /** The credential a tier authenticates its turns with. */
 function backendCredential(id: ModelBackendId, env: ModelBackendEnv): string {
+  // `resolveModelBackend` always calls `describeBackend` (which validates the tier's required
+  // variables and throws `ModelBackendConfigError` when one is missing) before this — so by the
+  // time this runs, whichever credential a resolved `id` needs is already known to be present.
+  // The `?? ''` fallbacks below are therefore never actually exercised at runtime; they stay
+  // un-ignored because the `if (id === …)` branch they share a line with IS meaningfully tested.
   if (id === 'lattice') return env.ATHENA_LATTICE_API_KEY ?? '';
   if (id === 'mock') return '';
   return env.ANTHROPIC_API_KEY ?? '';

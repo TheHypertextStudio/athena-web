@@ -6,6 +6,7 @@ import {
   MODEL_BACKEND_IDS,
   MockAgentTurnRuntime,
   ModelBackendConfigError,
+  RealAgentTurnRuntime,
   resolveModelBackend,
   selectModelBackendId,
   type ModelBackendEnv,
@@ -151,6 +152,30 @@ describe('resolveModelBackend', () => {
     expect(() => resolveModelBackend({ APP_MODE: 'production' }, { force: 'lattice' })).toThrow(
       /ATHENA_LATTICE_BASE_URL/,
     );
+  });
+
+  it('builds a real turn runtime with no baseURL/gateway token for direct provider access', () => {
+    const backend = resolveModelBackend({
+      APP_MODE: 'production',
+      ANTHROPIC_API_KEY: 'sk-ant-direct',
+    });
+    expect(backend.turnRuntime()).toBeInstanceOf(RealAgentTurnRuntime);
+  });
+
+  it('builds a real turn runtime carrying the router baseURL and gateway token when routed', () => {
+    const backend = resolveModelBackend(ROUTED);
+    expect(backend.descriptor.baseURL).not.toBeNull();
+    expect(backend.turnRuntime()).toBeInstanceOf(RealAgentTurnRuntime);
+  });
+
+  it('builds a real turn runtime for an operator Lattice instance (its own baseURL, no gateway token)', () => {
+    const backend = resolveModelBackend({
+      APP_MODE: 'production',
+      ANTHROPIC_API_KEY: 'sk-ant-docket',
+      ATHENA_LATTICE_BASE_URL: 'https://lattice.internal/v1',
+      ATHENA_LATTICE_API_KEY: 'lattice-key',
+    });
+    expect(backend.turnRuntime()).toBeInstanceOf(RealAgentTurnRuntime);
   });
 
   it('exposes every tier so a surface can enumerate them', () => {

@@ -141,8 +141,12 @@ export function cosineSimilarity(left: readonly number[], right: readonly number
   let leftNorm = 0;
   let rightNorm = 0;
   for (let index = 0; index < length; index += 1) {
+    /* v8 ignore start -- unreachable: `length` is `Math.min(left.length, right.length)`, so
+       `index` is always a valid index into both arrays; this only narrows the
+       `noUncheckedIndexedAccess` `number | undefined` element type. */
     const a = left[index] ?? 0;
     const b = right[index] ?? 0;
+    /* v8 ignore stop */
     dot += a * b;
     leftNorm += a * a;
     rightNorm += b * b;
@@ -225,6 +229,10 @@ export function searchConversation(
     for (const term of new Set(terms)) {
       const frequency = document.terms.filter((candidate) => candidate === term).length;
       if (frequency === 0) continue;
+      /* v8 ignore next -- unreachable: `documentFrequency` was built above from every document's
+         terms, and `term` is only reached here once `frequency > 0` proves it is in THIS
+         document's terms — so it is always already in the map. Only narrows `Map.get`'s
+         `V | undefined` return type. */
       const df = documentFrequency.get(term) ?? 0;
       const idf = Math.log(1 + (documents.length - df + 0.5) / (df + 0.5));
       const denominator =

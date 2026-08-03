@@ -60,8 +60,20 @@ export function toStopReason(raw: string | null | undefined): TurnStopReason {
   }
 }
 
+/**
+ * The subset of {@link TurnContentBlock} {@link toContentBlock} can actually produce.
+ *
+ * @remarks
+ * `TurnContentBlock` also has a `tool_result` member (a reply a *user* turn echoes back), which
+ * this translator never constructs — only a completed provider block buffer (thinking/text/
+ * tool_use) reaches it. Narrowing the return type to just these three lets the caller's
+ * thinking/text/tool_use `if`/`else if`/`else` chain type-check its final `else` as `tool_use`
+ * without a redundant, always-true runtime check standing in for it.
+ */
+type YieldableContentBlock = Extract<TurnContentBlock, { type: 'thinking' | 'text' | 'tool_use' }>;
+
 /** Convert a completed block buffer into a transcript content block. */
-function toContentBlock(buf: TurnBlockBuffer): TurnContentBlock | null {
+function toContentBlock(buf: TurnBlockBuffer): YieldableContentBlock | null {
   if (buf.type === 'thinking') {
     const thinking = buf.text.trim();
     if (!thinking) return null;
@@ -130,7 +142,9 @@ export async function* translateTurnEvents(
           yield { type: 'thinking', text: block.thinking };
         } else if (block.type === 'text') {
           yield { type: 'text', text: block.text };
-        } else if (block.type === 'tool_use') {
+        } else {
+          // `YieldableContentBlock` excludes `tool_result`, so having failed the thinking/text
+          // checks above, `block.type` is exhaustively `tool_use` here — no redundant check.
           yield { type: 'tool_use', id: block.id, name: block.name, input: block.input };
         }
         break;

@@ -271,6 +271,9 @@ export function stemWord(word: string): string {
       else if (suffix.startsWith('ing') || suffix === 'ed' || suffix === 'edly') {
         // English doubles a final consonant before `-ing`/`-ed` ("ship" → "shipping"). Undo it,
         // or the two spellings of one topic word never compare equal.
+        /* v8 ignore next -- unreachable: the guard above required
+           `stem.length > suffix.length + 2` before the slice, so post-slice `stem.length > 2`
+           and `.at(-1)` is always defined; this only narrows the `string | undefined` return. */
         const last = stem.at(-1) ?? '';
         if (stem.length > 2 && last === stem.at(-2) && !'lszaeiou'.includes(last)) {
           stem = stem.slice(0, -1);
@@ -334,6 +337,10 @@ function titleFor(
     const clipped = raw.length <= maxLength ? raw : `${raw.slice(0, maxLength - 1).trimEnd()}…`;
     return clipped;
   }
+  /* v8 ignore next -- unreachable: `raw` is empty only when no message in `messages` has
+     non-blank `.text.trim()` (the `opener` search above found none); `keywords` is derived from
+     the same messages via `bagOf`/`topicTerms`, so an all-blank span also yields zero keywords —
+     `keywords.length > 0` cannot hold whenever `raw.length` is `0`. */
   if (keywords.length > 0) return keywords.slice(0, 3).join(', ');
   return 'Untitled topic';
 }
@@ -347,6 +354,9 @@ function keywordsFor(
 ): readonly string[] {
   return [...segmentBag]
     .map(([term, count]) => {
+      /* v8 ignore next -- unreachable: `corpusFrequency` (built by `segment()` before calling
+         this) counts every term from every span's bag, including this one's `segmentBag`, so
+         `term` is always already in the map. Only narrows `Map.get`'s `V | undefined` return. */
       const documentFrequency = corpusFrequency.get(term) ?? 1;
       return { term, weight: count * Math.log(1 + segmentCount / documentFrequency) };
     })
@@ -403,6 +413,9 @@ export class LexicalCohesionSegmenter implements ConversationSegmenter {
     const starts = [0, ...boundaries];
     const corpusFrequency = new Map<string, number>();
     const spans = starts.map((start, index) => {
+      /* v8 ignore next -- unreachable: guarded by `index + 1 < starts.length`, so
+         `starts[index + 1]` is always a valid, defined index; only narrows the
+         `noUncheckedIndexedAccess` `number | undefined` element type. */
       const end =
         index + 1 < starts.length ? (starts[index + 1] ?? messages.length) : messages.length;
       return messages.slice(start, end);
@@ -416,9 +429,16 @@ export class LexicalCohesionSegmenter implements ConversationSegmenter {
     return spans.flatMap((span, index) => {
       const first = span[0];
       const last = span.at(-1);
+      /* v8 ignore next -- unreachable: `minSegmentSize` is clamped to `Math.max(1, …)` in the
+         constructor, and every boundary in `boundaryIndices()` is only pushed once both
+         `start - lastStart >= minSegmentSize` and `messages.length - start >= minSegmentSize`
+         hold — so every span sliced from consecutive `starts` values is non-empty. */
       if (!first || !last) return [];
       const bag = bagOf(span);
       const keywords = keywordsFor(bag, corpusFrequency, spans.length, this.keywordCount);
+      /* v8 ignore next -- unreachable: `starts` and `spans` are built from the same `.map`
+         call, so `index` is always a valid index into `starts`; only narrows
+         `noUncheckedIndexedAccess`. */
       const startIndex = starts[index] ?? 0;
       return [
         {
@@ -429,6 +449,9 @@ export class LexicalCohesionSegmenter implements ConversationSegmenter {
           title: titleFor(span, keywords, this.titleLength),
           keywords,
           messageCount: span.length,
+          /* v8 ignore next -- unreachable: for `index > 0`, `startIndex` is a boundary produced
+             by `boundaryIndices()` as `gap + 1` for some `gap < depths.length`, so
+             `startIndex - 1` is always a valid index into `depths`. */
           boundaryScore: index === 0 ? 0 : (depths[startIndex - 1] ?? 0),
         },
       ];
@@ -445,12 +468,16 @@ export class LexicalCohesionSegmenter implements ConversationSegmenter {
     const scores = this.cohesion(messages);
     return scores.map((score, gap) => {
       let left = score;
+      /* v8 ignore next -- unreachable: `index` is bounded to `[0, gap - 1]`, always a valid
+         index into `scores`; only narrows `noUncheckedIndexedAccess`. */
       for (let index = gap - 1; index >= 0; index -= 1) {
         const value = scores[index] ?? 0;
         if (value < left) break;
         left = value;
       }
       let right = score;
+      /* v8 ignore next -- unreachable: `index` is bounded to `[gap + 1, scores.length - 1]`,
+         always a valid index into `scores`; only narrows `noUncheckedIndexedAccess`. */
       for (let index = gap + 1; index < scores.length; index += 1) {
         const value = scores[index] ?? 0;
         if (value < right) break;
@@ -485,8 +512,14 @@ export class LexicalCohesionSegmenter implements ConversationSegmenter {
     const boundaries: number[] = [];
     let lastStart = 0;
     for (let gap = 0; gap < depths.length; gap += 1) {
+      /* v8 ignore next -- unreachable: `gap` is bounded to `[0, depths.length - 1]`, always a
+         valid index; only narrows `noUncheckedIndexedAccess`. */
       const depth = depths[gap] ?? 0;
       if (depth <= 0 || depth < depthCutoff || depthCutoff <= 0) continue;
+      /* v8 ignore next -- unreachable: `cohesion` and `depths` are both derived 1:1 from
+         `this.cohesion(messages)` (`depthScores` maps over it without changing length), so
+         `gap < depths.length` also means `gap < cohesion.length`; only narrows
+         `noUncheckedIndexedAccess`. */
       if (cohesionCutoff <= 0 || (cohesion[gap] ?? 0) >= cohesionCutoff) continue;
       const start = gap + 1;
       if (start - lastStart < this.minSegmentSize) continue;

@@ -178,10 +178,14 @@ function findSoleFencedBlock(text: string): FencedBlock | null {
   let match: RegExpExecArray | null;
   let found: { body: string; start: number; end: number } | null = null;
   while ((match = fence.exec(text)) !== null) {
+    /* v8 ignore start -- unreachable: both capture groups use `*` (not `?`), so the group always
+       participates in the match (possibly capturing an empty string); this only narrows the
+       `RegExpExecArray` element type's `noUncheckedIndexedAccess` `string | undefined`. */
     const tag = (match[1] ?? '').toLowerCase();
     if (tag !== '' && tag !== FENCE_TAG) continue;
     if (found) return null;
     found = { body: match[2] ?? '', start: match.index, end: match.index + match[0].length };
+    /* v8 ignore stop */
   }
   if (!found) return null;
   const surroundingText = `${text.slice(0, found.start)}${text.slice(found.end)}`.trim();

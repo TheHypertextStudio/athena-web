@@ -21,6 +21,7 @@ import {
   type TurnMessage,
   type TurnStreamer,
 } from '../../src';
+import { parseToolInput, toStopReason } from '../../src/agent-turn-translate';
 
 type ContentBlockDeltaEvent = Extract<RawMessageStreamEvent, { type: 'content_block_delta' }>;
 
@@ -135,6 +136,41 @@ describe('MockAgentTurnRuntime', () => {
     await expect(
       collect(runtime.streamTurn(inputWithAssistantTurns(SCRIPTED_TURNS.length))),
     ).rejects.toThrow(/script/i);
+  });
+
+  it('skips a tool_result content block instead of yielding an event for it', async () => {
+    // `TurnContentBlock` also allows `tool_result` (a reply the mock echoes back verbatim as
+    // part of the durable message), which is not one of the three kinds this loop translates
+    // into a live event.
+    const runtime = new MockAgentTurnRuntime({
+      script: [
+        {
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'tool_result', toolUseId: 'toolu_1', content: 'ok', isError: false },
+              { type: 'text', text: 'Done.' },
+            ],
+          },
+          stopReason: 'end_turn',
+        },
+      ],
+    });
+    const out = await collect(runtime.streamTurn(inputWithAssistantTurns(0)));
+    expect(out).toEqual([
+      { type: 'text', text: 'Done.' },
+      {
+        type: 'turn_end',
+        stopReason: 'end_turn',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'tool_result', toolUseId: 'toolu_1', content: 'ok', isError: false },
+            { type: 'text', text: 'Done.' },
+          ],
+        },
+      },
+    ]);
   });
 
   it('keeps the Sunsama import script batched and uniquely paired', () => {
@@ -266,6 +302,114 @@ describe('translateTurnEvents', () => {
       { type: 'turn_end', stopReason: 'end_turn', message: { role: 'assistant', content: [] } },
     ]);
   });
+
+  it('skips a blank thinking block (not just a blank text block)', async () => {
+    const out = await collect(
+      translateTurnEvents(
+        asStream([thinkingStart(0), delta(0, { type: 'thinking_delta', thinking: '  ' }), stop(0)]),
+      ),
+    );
+    expect(out).toEqual([
+      { type: 'turn_end', stopReason: 'end_turn', message: { role: 'assistant', content: [] } },
+    ]);
+  });
+
+  it('maps the refusal and max_tokens stop reasons', async () => {
+    const refusal = await collect(translateTurnEvents(asStream([stopReason('refusal')])));
+    expect(refusal[0]).toMatchObject({ stopReason: 'refusal' });
+    const maxTokens = await collect(translateTurnEvents(asStream([stopReason('max_tokens')])));
+    expect(maxTokens[0]).toMatchObject({ stopReason: 'max_tokens' });
+  });
+
+  it('drops an untranslatable block type without yielding or including it in the transcript', async () => {
+    const serverToolStart: RawMessageStreamEvent = {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: {} },
+    } as RawMessageStreamEvent;
+    const out = await collect(translateTurnEvents(asStream([serverToolStart, stop(0)])));
+    expect(out).toEqual([
+      { type: 'turn_end', stopReason: 'end_turn', message: { role: 'assistant', content: [] } },
+    ]);
+  });
+
+  it('ignores deltas and stops for a block index with no matching start (orphan events)', async () => {
+    const out = await collect(
+      translateTurnEvents(
+        asStream([
+          delta(7, { type: 'text_delta', text: 'orphan' }),
+          stop(7),
+          textStart(0),
+          delta(0, { type: 'text_delta', text: 'real' }),
+          stop(0),
+        ]),
+      ),
+    );
+    expect(out[0]).toEqual({ type: 'text', text: 'real' });
+  });
+
+  it('ignores a delta kind it does not translate (e.g. a citations delta on a text block)', async () => {
+    const out = await collect(
+      translateTurnEvents(
+        asStream([
+          textStart(0),
+          delta(0, { type: 'text_delta', text: 'See the source.' }),
+          {
+            type: 'content_block_delta',
+            index: 0,
+            delta: { type: 'citations_delta', citation: {} },
+          } as RawMessageStreamEvent,
+          stop(0),
+        ]),
+      ),
+    );
+    expect(out[0]).toEqual({ type: 'text', text: 'See the source.' });
+  });
+
+  it('ignores stream event types it does not translate (e.g. message_start)', async () => {
+    const out = await collect(
+      translateTurnEvents(
+        asStream([{ type: 'message_start', message: {} } as unknown as RawMessageStreamEvent]),
+      ),
+    );
+    expect(out).toEqual([
+      { type: 'turn_end', stopReason: 'end_turn', message: { role: 'assistant', content: [] } },
+    ]);
+  });
+});
+
+describe('parseToolInput', () => {
+  it('parses an accumulated JSON object', () => {
+    expect(parseToolInput('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it('returns an empty object for a blank payload', () => {
+    expect(parseToolInput('   ')).toEqual({});
+  });
+
+  it('returns an empty object when the JSON parses to a non-object (e.g. a bare string/number)', () => {
+    expect(parseToolInput('"just a string"')).toEqual({});
+    expect(parseToolInput('42')).toEqual({});
+    expect(parseToolInput('null')).toEqual({});
+  });
+
+  it('returns an empty object for malformed JSON rather than throwing', () => {
+    expect(parseToolInput('{not valid')).toEqual({});
+  });
+});
+
+describe('toStopReason', () => {
+  it('maps every known provider stop reason', () => {
+    expect(toStopReason('tool_use')).toBe('tool_use');
+    expect(toStopReason('refusal')).toBe('refusal');
+    expect(toStopReason('max_tokens')).toBe('max_tokens');
+  });
+
+  it('falls back to end_turn for anything else, including null/undefined', () => {
+    expect(toStopReason('pause_turn')).toBe('end_turn');
+    expect(toStopReason(null)).toBe('end_turn');
+    expect(toStopReason(undefined)).toBe('end_turn');
+  });
 });
 
 describe('RealAgentTurnRuntime', () => {
@@ -303,5 +447,20 @@ describe('RealAgentTurnRuntime', () => {
     }).rejects.toThrow(/429/);
     expect(wrapTurnError(new Error('socket hang up')).message).toMatch(/socket hang up/);
     expect(typeof defaultTurnStreamer({ apiKey: 'sk-ant-unit' })).toBe('function');
+  });
+
+  it('wraps an error thrown mid-stream (after the streamer has already opened)', async () => {
+    // eslint-disable-next-line require-yield
+    async function* boom(): AsyncIterable<RawMessageStreamEvent> {
+      throw new Error('connection reset');
+    }
+    const runtime = new RealAgentTurnRuntime({ apiKey: 'k' }, () => boom());
+    await expect(async () => {
+      for await (const _ of runtime.streamTurn(turnInput())) void _;
+    }).rejects.toThrow(/connection reset/);
+  });
+
+  it('falls back to the default SDK-backed streamer when none is injected', () => {
+    expect(() => new RealAgentTurnRuntime({ apiKey: 'sk-ant-unit' })).not.toThrow();
   });
 });

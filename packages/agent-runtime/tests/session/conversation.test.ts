@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   LexicalCohesionSegmenter,
+  cosineSimilarity,
   matchSpans,
   searchConversation,
   stemWord,
@@ -242,6 +243,12 @@ describe('searchConversation', () => {
     expect(result.hits[0]?.message.id).toBe('m011');
     expect(result.hits.at(-1)?.message.id).toBe('m000');
   });
+
+  it('applies a limit to a date-only (no search terms) query too', () => {
+    const result = searchConversation(THREE_TOPICS, {}, { limit: 3 });
+    expect(result.hits).toHaveLength(3);
+    expect(result.total).toBe(THREE_TOPICS.length);
+  });
 });
 
 describe('matchSpans / withinRange / cosine', () => {
@@ -257,5 +264,17 @@ describe('matchSpans / withinRange / cosine', () => {
     expect(withinRange(at)).toBe(true);
     expect(withinRange(at, new Date('2026-06-06T00:00:00.000Z'))).toBe(false);
     expect(withinRange(at, undefined, new Date('2026-06-04T00:00:00.000Z'))).toBe(false);
+  });
+});
+
+describe('cosineSimilarity', () => {
+  it('is 1 for identical vectors and 0 for orthogonal ones', () => {
+    expect(cosineSimilarity([1, 0], [1, 0])).toBeCloseTo(1);
+    expect(cosineSimilarity([1, 0], [0, 1])).toBeCloseTo(0);
+  });
+
+  it('is 0 when either vector is degenerate (all zeros)', () => {
+    expect(cosineSimilarity([0, 0], [1, 1])).toBe(0);
+    expect(cosineSimilarity([1, 1], [0, 0])).toBe(0);
   });
 });

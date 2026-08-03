@@ -6,6 +6,7 @@ import type {
 import { describe, expect, it } from 'vitest';
 
 import type { SessionActionBody, SessionActivity } from '../../src/index';
+import { MockAgentRuntime } from '../../src/mock-agent-runtime';
 import {
   DEFAULT_AGENT_MODEL,
   DEFAULT_MAX_TOKENS,
@@ -294,6 +295,13 @@ describe('wrapError', () => {
     expect(wrapped.message).not.toContain('bad key');
   });
 
+  it('normalizes an APIError with no HTTP status (e.g. a connection failure)', () => {
+    const connErr = new Anthropic.APIConnectionError({ message: 'fetch failed' });
+    expect(connErr).toBeInstanceOf(Anthropic.APIError);
+    expect(wrapError(connErr).message).toContain('unknown');
+    expect(wrapError(connErr).message).not.toContain('fetch failed');
+  });
+
   it('normalizes a generic Error', () => {
     expect(wrapError(new Error('socket hang up')).message).toBe(
       'Anthropic agent runtime failed: socket hang up',
@@ -369,5 +377,58 @@ describe('RealProviderRuntime', () => {
       baseURL: 'https://example.test',
     });
     expect(typeof streamer).toBe('function');
+  });
+
+  it('falls back to the default SDK-backed streamer when none is injected', () => {
+    // Constructing without a streamer must not throw — it should build the default factory
+    // (which itself only constructs a client, never makes a network call).
+    expect(() => new RealProviderRuntime({ apiKey: 'sk-ant-unit' })).not.toThrow();
+  });
+});
+
+describe('MockAgentRuntime', () => {
+  it('replays the default scripted session verbatim and in order, then completes', async () => {
+    const runtime = new MockAgentRuntime();
+    const out = await collect(
+      runtime.startSession({ sessionId: 'sesn_1', task: 'anything', agent: 'athena' }),
+    );
+    expect(out).toEqual<SessionActivity[]>([
+      { type: 'thought', body: 'Reviewing the task and the current board state.' },
+      {
+        type: 'action',
+        body: {
+          kind: 'update_task',
+          summary: 'Move task to In Progress',
+          diff: { state: { from: 'todo', to: 'in_progress' } },
+        },
+        approval: 'proposed',
+      },
+      { type: 'elicitation', body: 'Should I also assign this task to you?' },
+      {
+        type: 'response',
+        body: 'Proposed moving the task to In Progress; awaiting approval.',
+      },
+    ]);
+  });
+
+  it('replays a caller-supplied script instead of the default when given one', async () => {
+    const script: SessionActivity[] = [
+      { type: 'thought', body: 'Custom thought.' },
+      { type: 'response', body: 'Custom response.' },
+    ];
+    const runtime = new MockAgentRuntime({ script });
+    const out = await collect(runtime.startSession({ sessionId: 's', task: 't', agent: 'a' }));
+    expect(out).toEqual(script);
+  });
+
+  it('ignores the input (deterministic, offline — no wall-clock time or randomness)', async () => {
+    const runtime = new MockAgentRuntime({ script: [{ type: 'response', body: 'fixed' }] });
+    const first = await collect(
+      runtime.startSession({ sessionId: 'a', task: 'x', agent: 'athena' }),
+    );
+    const second = await collect(
+      runtime.startSession({ sessionId: 'b', task: 'y', agent: 'other' }),
+    );
+    expect(first).toEqual(second);
   });
 });

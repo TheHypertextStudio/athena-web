@@ -111,6 +111,16 @@ describe('InMemoryAgentBus', () => {
     expect(mine).toEqual(['mine']);
   });
 
+  it('scopes a live subscription to specific session ids', () => {
+    const bus = new InMemoryAgentBus();
+    const seen: string[] = [];
+    bus.subscribe({ sessionIds: ['s_a'] }, (event) => seen.push(event.milestone));
+
+    bus.publish(update({ sessionId: 's_b', milestone: 'other session' }));
+    bus.publish(update({ sessionId: 's_a', milestone: 'tracked session' }));
+    expect(seen).toEqual(['tracked session']);
+  });
+
   it('keeps fanning out when one listener throws, so one consumer cannot stall the others', () => {
     const bus = new InMemoryAgentBus();
     const healthy = vi.fn();

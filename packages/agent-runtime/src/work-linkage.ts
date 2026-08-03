@@ -131,6 +131,10 @@ export function resolveWorkParent(
       const inTitle = profile.title.has(term);
       const inDescription = profile.description.has(term);
       if (!inTitle && !inDescription) continue;
+      /* v8 ignore next -- unreachable: `documentFrequency` was built above from every profile's
+         title/description terms, and `term` is only reached here once it is known to be in this
+         profile's title or description — so it is always already in the map. This only narrows
+         `Map.get`'s `V | undefined` return type. */
       const df = documentFrequency.get(term) ?? 1;
       // A term every candidate shares carries a factor of exactly 1 — it is evidence that the
       // request is about *something here*, not about *this one*. Distinctiveness multiplies it.

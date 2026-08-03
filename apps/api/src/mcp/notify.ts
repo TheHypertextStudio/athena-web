@@ -18,8 +18,11 @@
  * notification is a hint to re-read rather than the data itself.
  */
 import { actor, db, listenToChannel, logLevel, mcpSession, mcpSubscription } from '@docket/db';
+import type { McpDetailedTask } from '@docket/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+
+import { taskListenerUri } from './task-listener-uri';
 
 /** The Postgres channel every api instance fans MCP notifications over. */
 const CHANNEL = 'mcp_notify';
@@ -236,6 +239,58 @@ export async function notifyLog(
       isNull(mcpSession.endedAt),
       inArray(mcpSession.logLevel, wanted),
     )}
+  `);
+}
+
+/**
+ * Push `notifications/tasks` to every session that asked to hear about one task via
+ * `subscriptions/listen` (`apps/api/src/mcp/task-protocol.ts`).
+ *
+ * @remarks
+ * Listener registrations live in `mcp_subscription` under the synthetic URI
+ * {@link "@docket/api".task-store.taskListenerUri} — the exact same "who wants to hear about
+ * this" table `notifications/resources/updated` already uses, rather than a second table, since
+ * both are "a session subscribed to an addressable thing" with identical session-cascade cleanup.
+ *
+ * @param taskId - The task whose status changed.
+ * @param task - The full detailed task, sent inline per the extension's own notification shape.
+ */
+export async function notifyTaskStatus(taskId: string, task: McpDetailedTask): Promise<void> {
+  await db.execute(sql`
+    select ${envelopeSql(
+      sql`${mcpSubscription.sessionId}`,
+      'notifications/tasks',
+      sql`${JSON.stringify(task)}::jsonb`,
+    )}
+    from ${mcpSubscription}
+    where ${eq(mcpSubscription.uri, taskListenerUri(taskId))}
+  `);
+}
+
+/**
+ * Push `notifications/subscriptions/acknowledged` to the session that just sent
+ * `subscriptions/listen` (`apps/api/src/mcp/task-protocol.ts`), naming the task ids it accepted.
+ *
+ * @remarks
+ * Addressed directly by session id rather than through `mcp_subscription`, unlike
+ * {@link notifyTaskStatus}: this is the one-time reply to the request that created those rows, not
+ * a fan-out to everyone listening for something.
+ *
+ * @param sessionId - The session that sent `subscriptions/listen`.
+ * @param taskIds - The task ids the server actually registered a listener for.
+ */
+export async function notifySubscriptionsAcknowledged(
+  sessionId: string,
+  taskIds: readonly string[],
+): Promise<void> {
+  await db.execute(sql`
+    select ${envelopeSql(
+      sql`${mcpSession.id}`,
+      'notifications/subscriptions/acknowledged',
+      sql`json_build_object('notifications', json_build_object('taskIds', ${JSON.stringify([...taskIds])}::jsonb))`,
+    )}
+    from ${mcpSession}
+    where ${eq(mcpSession.id, sessionId)}
   `);
 }
 

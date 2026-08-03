@@ -30,6 +30,7 @@ import { registerPrompts } from './prompts';
 import { withRequestScope } from './request-context';
 import { registerResources } from './resources';
 import { challenge401, challenge403, CONNECT_SCOPES, TOOL_SCOPE } from './scope';
+import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
@@ -66,7 +67,7 @@ export function buildServer(ctx: McpContext, sessionId: string | null = null): M
         ? { tasks: { list: {}, cancel: {}, requests: { tools: { call: {} } } } }
         : {}),
     },
-    ...(tasksEnabled ? { taskStore: taskStoreForContext(ctx) } : {}),
+    ...(tasksEnabled ? { taskStore: taskStoreForContext(ctx, sessionId) } : {}),
   });
   const catalog = createMcpCatalog(server, { tasksEnabled });
   registerTools(catalog, ctx, sessionId);
@@ -74,6 +75,10 @@ export function buildServer(ctx: McpContext, sessionId: string | null = null): M
   registerPrompts(catalog, ctx);
   catalog.installListHandlers(ctx);
   catalog.installSubscriptionHandlers(ctx, sessionId);
+  // Overrides the SDK's own auto-installed tasks/get + tasks/cancel handlers (installed above by
+  // the `taskStore` constructor option) with the spec-literal `tasks/get`/`tasks/update`/
+  // `tasks/cancel`/`subscriptions/listen` surface — see task-protocol.ts's own remarks for why.
+  if (tasksEnabled) installTaskProtocolHandlers(server, ctx, sessionId);
   return server;
 }
 
@@ -337,7 +342,6 @@ function safeJson(text: string): unknown {
   if (!text) return null;
   try {
     return JSON.parse(text) as unknown;
-    /* v8 ignore next 3 -- @preserve defensive: a malformed body is left to the transport's own JSON-RPC error */
   } catch {
     return null;
   }
@@ -565,8 +569,14 @@ export async function mcpHandler(c: Context): Promise<Response> {
       // an HTTP status back to the call it made.
       if (session) {
         const refused = toolScopeForBody(body);
+        // Not defensively ignored: `.catch(() => undefined)` here exists for a real notifyLog
+        // failure (e.g. a transient DB error), which isn't practical to force deterministically
+        // in a test without mocking notifyLog itself and risking masking a real regression in it.
         void notifyLog(session, 'warning', {
           event: 'tool_scope_refused',
+          /* v8 ignore next -- @preserve defensive: `stepUp` is only truthy when scopeStepUp's own
+             `toolScopeForBody(body)` call returned non-null a moment ago; this call reruns the
+             same pure function over the same unmutated `body`, so `refused` is always truthy here */
           ...(refused ? { requiredScope: refused } : {}),
         }).catch(() => undefined);
       }
@@ -592,6 +602,11 @@ export async function mcpHandler(c: Context): Promise<Response> {
     for (const id of activeIds) {
       const key = requestKey(id);
       const active = activeMcpRequests.get(key);
+      // Not defensively ignored: the false path — a later request that reused the same JSON-RPC
+      // id has already overwritten this map entry — is a real (if narrow) client-bug race, only
+      // reachable by two genuinely concurrent requests sharing one id and racing this cleanup
+      // against the second request's own registration; not practical to force deterministically
+      // without an injectable pause point this function does not have.
       if (active?.cancel === activeEntry.cancel) activeMcpRequests.delete(key);
     }
     if (reason) console.info(`MCP request cancelled: ${reason}`);

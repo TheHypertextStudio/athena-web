@@ -191,3 +191,50 @@ export function declaresTasksExtension(params: unknown): boolean {
 export const MCP_TASKS_REQUIRED_CAPABILITY_DATA = {
   requiredCapabilities: { extensions: { [MCP_TASKS_EXTENSION]: {} } },
 } as const;
+
+/** `params` for a `tasks/get` request. */
+export interface McpGetTaskParams {
+  readonly taskId: string;
+}
+
+/** `params` for a `tasks/cancel` request. */
+export interface McpCancelTaskParams {
+  readonly taskId: string;
+}
+
+/** `params` for a `tasks/update` request. */
+export interface McpUpdateTaskParams {
+  readonly taskId: string;
+  readonly inputResponses: McpTaskInputResponses;
+}
+
+/** The empty acknowledgement `tasks/update` and `tasks/cancel` (when not returning a task) share. */
+export interface McpUpdateTaskResult {
+  readonly resultType: typeof MCP_COMPLETE_RESULT_TYPE;
+}
+
+/** `params` for a `subscriptions/listen` request scoped to task status notifications. */
+export interface McpSubscriptionsListenParams {
+  readonly notifications: {
+    readonly taskIds?: readonly string[];
+  };
+}
+
+/** The empty acknowledgement `subscriptions/listen` returns as its RPC result. */
+export type McpSubscriptionsListenResult = Record<string, never>;
+
+/** `params` for the `notifications/subscriptions/acknowledged` push. */
+export interface McpSubscriptionsAcknowledgedParams {
+  readonly notifications: {
+    readonly taskIds?: readonly string[];
+  };
+}
+
+/**
+ * `params` for a `notifications/tasks` push.
+ *
+ * @remarks
+ * Identical to what `tasks/get` would have returned at that moment — a full {@link McpDetailedTask}
+ * — per "Each notification carries a complete `DetailedTask` for the current status."
+ */
+export type McpTaskStatusNotificationParams = McpDetailedTask;

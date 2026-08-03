@@ -934,4 +934,238 @@ describe('search query service', () => {
     expect(result.items.map((item) => item.id)).toEqual([`task:${orgId}:fts_budget_task`]);
     expect(result.items[0]?.matchedFields).toEqual(expect.arrayContaining(['title', 'body']));
   });
+
+  it('filters by kind, rejects a same-family source mismatch, and excludes rows outside a time range', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchKindSourceTimeUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `task:${orgId}:kindfilter_task`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'kindfilter_task',
+        sourceSystem: 'docket',
+        title: 'Kindfilter task result',
+        facet: {},
+        route: entityRoute(orgId, 'task', 'kindfilter_task'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+        occurredAt: new Date('2026-07-10T12:00:00.000Z'),
+      },
+      {
+        id: `project:${orgId}:kindfilter_project`,
+        organizationId: orgId,
+        kind: 'project',
+        family: 'work',
+        sourceTable: 'project',
+        entityId: 'kindfilter_project',
+        sourceSystem: 'linear',
+        title: 'Kindfilter project result',
+        facet: {},
+        route: entityRoute(orgId, 'project', 'kindfilter_project'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+        occurredAt: new Date('2026-07-10T12:00:00.000Z'),
+      },
+      {
+        id: `task:${orgId}:kindfilter_too_early`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'kindfilter_too_early',
+        sourceSystem: 'docket',
+        title: 'Kindfilter task result too early',
+        facet: {},
+        route: entityRoute(orgId, 'task', 'kindfilter_too_early'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+        occurredAt: new Date('2026-07-01T00:00:00.000Z'),
+      },
+      {
+        id: `task:${orgId}:kindfilter_too_late`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'kindfilter_too_late',
+        sourceSystem: 'docket',
+        title: 'Kindfilter task result too late',
+        facet: {},
+        route: entityRoute(orgId, 'task', 'kindfilter_too_late'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+        occurredAt: new Date('2026-07-20T00:00:00.000Z'),
+      },
+    ]);
+
+    const base = { scope: 'hub' as const, caller: { kind: 'user' as const, userId } };
+
+    // `kinds`: both rows match family/text, but only one matches the requested kind.
+    const kindFiltered = await searchWorkspace({
+      ...base,
+      params: { q: 'kindfilter', limit: 10, kinds: ['project'] },
+    });
+    expect(kindFiltered.items.map((item) => item.id)).toEqual([
+      `project:${orgId}:kindfilter_project`,
+    ]);
+
+    // `sources`: same family (work), but the project row's source ('linear') is excluded.
+    const sourceFiltered = await searchWorkspace({
+      ...base,
+      params: { q: 'kindfilter', limit: 10, families: ['work'], sources: ['docket'] },
+    });
+    expect(sourceFiltered.items.some((item) => item.id.includes('kindfilter_project'))).toBe(false);
+    expect(sourceFiltered.items.some((item) => item.id.includes('kindfilter_task'))).toBe(true);
+
+    // `from`/`to`: only the row inside the window survives.
+    const timeRangeFiltered = await searchWorkspace({
+      ...base,
+      params: {
+        q: 'kindfilter task result',
+        limit: 10,
+        from: '2026-07-05T00:00:00.000Z',
+        to: '2026-07-15T00:00:00.000Z',
+      },
+    });
+    expect(timeRangeFiltered.items.map((item) => item.id)).toEqual([
+      `task:${orgId}:kindfilter_task`,
+    ]);
+  });
+
+  it('matches a query that is a mid-title substring rather than a prefix', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'MidTitleSubstringUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:midtitle_task`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'midtitle_task',
+      title: 'Prefix then quasarphrase suffix',
+      facet: {},
+      route: entityRoute(orgId, 'task', 'midtitle_task'),
+      visibility: { mode: 'org_members' },
+      baseRank: 100,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'quasarphrase', limit: 10 },
+    });
+    expect(result.items.map((item) => item.id)).toEqual([`task:${orgId}:midtitle_task`]);
+    expect(result.items[0]?.matchedFields).toContain('title');
+  });
+
+  it('falls back to per-term matching across title, summary, and body independently', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'PerTermFallbackUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    // Neither doc's title/summary/body contains the whole two-word phrase, so both can only
+    // match through the per-term fallback. Each carries both terms (so the AND'd full-text
+    // search still finds it) but split across different fields, so the two docs together
+    // exercise title/summary/body each being a term-match hit and a term-match miss.
+    await db.insert(schema.searchDocument).values([
+      {
+        id: `task:${orgId}:pertermfallback_summary_body`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'pertermfallback_summary_body',
+        title: 'An unrelated title',
+        summary: 'Contains a zircondrift reference',
+        body: 'Also contains wombatshelf somewhere',
+        facet: {},
+        route: entityRoute(orgId, 'task', 'pertermfallback_summary_body'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+      {
+        id: `task:${orgId}:pertermfallback_title_summary`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'pertermfallback_title_summary',
+        title: 'Has zircondrift right in the title',
+        summary: 'And wombatshelf appears here too',
+        body: 'Nothing related in the body at all',
+        facet: {},
+        route: entityRoute(orgId, 'task', 'pertermfallback_title_summary'),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      },
+    ]);
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'zircondrift wombatshelf', limit: 10 },
+    });
+    const byId = new Map(result.items.map((item) => [item.id, item]));
+    expect(byId.get(`task:${orgId}:pertermfallback_summary_body`)?.matchedFields).toEqual([
+      'summary',
+      'body',
+    ]);
+    expect(byId.get(`task:${orgId}:pertermfallback_title_summary`)?.matchedFields).toEqual([
+      'title',
+      'summary',
+    ]);
+  });
+
+  it('surfaces only the external-source action for a document with no internal href', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'ExternalOnlyActionUser');
+    const orgId = await seedOrg(db, schema);
+    await addMember(db, schema, orgId, userId);
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:externalonly_doc`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: 'externalonly_doc',
+      sourceSystem: 'linear',
+      externalUrl: 'https://linear.app/issue/externalonly',
+      title: 'Externalonly linked task',
+      facet: {},
+      route: {
+        type: 'entity',
+        organizationId: orgId,
+        entityKind: 'task',
+        entityId: 'externalonly_doc',
+      },
+      visibility: { mode: 'org_members' },
+      baseRank: 100,
+    });
+
+    const result = await searchWorkspace({
+      scope: 'hub',
+      caller: { kind: 'user', userId },
+      params: { q: 'externalonly', limit: 10 },
+    });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]?.actions).toEqual([
+      {
+        kind: 'open_external',
+        label: 'Open source',
+        href: 'https://linear.app/issue/externalonly',
+      },
+    ]);
+  });
 });

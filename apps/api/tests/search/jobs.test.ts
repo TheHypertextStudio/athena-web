@@ -1,7 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import {
+  getDb,
+  one,
+  seedBaseOrg,
+  seedGoogleAccount,
+  seedUserWithHub,
+} from '../support/routes-harness';
 
 import { backfillSearchIndex, repairSearchIndex } from '../../src/search/backfill';
 import { enqueueSearchIndexJob } from '../../src/search/enqueue';
@@ -347,5 +353,330 @@ describe('search index jobs', () => {
         },
       ]),
     );
+  });
+
+  it('applies the default source-table list and page limit when both are omitted', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Default-scan budget task',
+          description: 'Exercises the omitted sourceTables/limit branches',
+          state: 'todo',
+          visibility: 'public',
+        })
+        .returning(),
+    );
+
+    const result = await backfillSearchIndex();
+
+    expect(result.scanned).toBeGreaterThan(0);
+    const jobs = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'task'),
+          eq(schema.searchIndexJob.entityId, taskRow.id),
+          eq(schema.searchIndexJob.reason, 'backfill'),
+        ),
+      );
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('stops immediately when a source-table entry is empty, scanning and enqueuing nothing', async () => {
+    const result = await backfillSearchIndex({ sourceTables: [''], limit: 10 });
+    expect(result).toEqual({ scanned: 0, enqueued: 0 });
+  });
+
+  it('treats a shape-invalid cursor as absent and restarts the scan from the first table', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Bad-cursor budget task',
+          description: 'Exercises the cursor-shape-invalid fallback branch',
+          state: 'todo',
+          visibility: 'public',
+        })
+        .returning(),
+    );
+    // Valid JSON, valid base64url, but a negative sourceTableIndex fails the shape guard — the
+    // decoder must fall back to "no cursor" rather than skipping ahead or throwing.
+    const badCursor = Buffer.from(
+      JSON.stringify({ sourceTableIndex: -1, rowId: 'whatever' }),
+      'utf8',
+    ).toString('base64url');
+
+    const result = await backfillSearchIndex({
+      sourceTables: ['task'],
+      limit: 50,
+      cursor: badCursor,
+    });
+
+    expect(result.scanned).toBeGreaterThanOrEqual(1);
+    const jobs = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'task'),
+          eq(schema.searchIndexJob.entityId, taskRow.id),
+          eq(schema.searchIndexJob.reason, 'backfill'),
+        ),
+      );
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('applies the default source-table list and page limit for repair when both are omitted', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const sourceUpdatedAt = new Date('2026-07-05T12:00:00.000Z');
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Default-repair budget task',
+          description: 'Exercises the omitted sourceTables/limit branches for repair',
+          state: 'todo',
+          visibility: 'public',
+          updatedAt: sourceUpdatedAt,
+        })
+        .returning(),
+    );
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:${taskRow.id}`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: taskRow.id,
+      title: 'Stale default-repair title',
+      facet: {},
+      route: { type: 'entity', organizationId: orgId, entityKind: 'task', entityId: taskRow.id },
+      visibility: { mode: 'org_members' },
+      sourceUpdatedAt: new Date('2026-07-04T12:00:00.000Z'),
+      indexedAt: new Date('2026-07-04T12:00:00.000Z'),
+    });
+
+    const result = await repairSearchIndex();
+
+    expect(result.scanned).toBeGreaterThan(0);
+    const jobs = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'task'),
+          eq(schema.searchIndexJob.entityId, taskRow.id),
+          eq(schema.searchIndexJob.reason, 'repair'),
+        ),
+      );
+    expect(jobs).toHaveLength(1);
+  });
+
+  it('derives null organizationId and a string userId for a source row with no organization column', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'CalendarBackfillUser');
+    const googleAccountId = `google-${Math.random().toString(36).slice(2, 8)}`;
+    await seedGoogleAccount(db, schema, userId, googleAccountId);
+    const connection = one(
+      await db
+        .insert(schema.calendarConnection)
+        .values({
+          userId,
+          externalAccountId: googleAccountId,
+          accountEmail: 'calendar-backfill@example.com',
+          accountName: 'Calendar Backfill',
+          status: 'connected',
+        })
+        .returning({ id: schema.calendarConnection.id }),
+    );
+    const calendarList = one(
+      await db
+        .insert(schema.calendarList)
+        .values({
+          userId,
+          connectionId: connection.id,
+          externalCalendarId: 'primary',
+          title: 'Primary',
+        })
+        .returning({ id: schema.calendarList.id }),
+    );
+    const event = one(
+      await db
+        .insert(schema.calendarEvent)
+        .values({
+          userId,
+          connectionId: connection.id,
+          calendarId: calendarList.id,
+          externalCalendarId: 'primary',
+          externalEventId: `evt-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'No-org calendar event',
+          startsAt: new Date('2026-07-06T16:00:00.000Z'),
+          endsAt: new Date('2026-07-06T17:00:00.000Z'),
+        })
+        .returning({ id: schema.calendarEvent.id }),
+    );
+
+    const result = await backfillSearchIndex({ sourceTables: ['calendar_event'], limit: 50 });
+    expect(result.enqueued).toBeGreaterThanOrEqual(1);
+
+    const [job] = await db
+      .select({
+        organizationId: schema.searchIndexJob.organizationId,
+        userId: schema.searchIndexJob.userId,
+      })
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'calendar_event'),
+          eq(schema.searchIndexJob.entityId, event.id),
+          eq(schema.searchIndexJob.reason, 'backfill'),
+        ),
+      )
+      .limit(1);
+    expect(job).toMatchObject({ organizationId: null, userId });
+  });
+
+  it('derives null organizationId and a string userId for a repaired row with no organization column', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'CalendarRepairUser');
+    const googleAccountId = `google-${Math.random().toString(36).slice(2, 8)}`;
+    await seedGoogleAccount(db, schema, userId, googleAccountId);
+    const connection = one(
+      await db
+        .insert(schema.calendarConnection)
+        .values({
+          userId,
+          externalAccountId: googleAccountId,
+          accountEmail: 'calendar-repair@example.com',
+          accountName: 'Calendar Repair',
+          status: 'connected',
+        })
+        .returning({ id: schema.calendarConnection.id }),
+    );
+    const calendarList = one(
+      await db
+        .insert(schema.calendarList)
+        .values({
+          userId,
+          connectionId: connection.id,
+          externalCalendarId: 'primary',
+          title: 'Primary',
+        })
+        .returning({ id: schema.calendarList.id }),
+    );
+    const event = one(
+      await db
+        .insert(schema.calendarEvent)
+        .values({
+          userId,
+          connectionId: connection.id,
+          calendarId: calendarList.id,
+          externalCalendarId: 'primary',
+          externalEventId: `evt-${Math.random().toString(36).slice(2, 8)}`,
+          title: 'No-org calendar event for repair',
+          startsAt: new Date('2026-07-06T16:00:00.000Z'),
+          endsAt: new Date('2026-07-06T17:00:00.000Z'),
+        })
+        .returning({ id: schema.calendarEvent.id }),
+    );
+
+    const result = await repairSearchIndex({ sourceTables: ['calendar_event'], limit: 50 });
+    expect(result.enqueued).toBeGreaterThanOrEqual(1);
+
+    const [job] = await db
+      .select({
+        organizationId: schema.searchIndexJob.organizationId,
+        userId: schema.searchIndexJob.userId,
+      })
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'calendar_event'),
+          eq(schema.searchIndexJob.entityId, event.id),
+          eq(schema.searchIndexJob.reason, 'repair'),
+        ),
+      )
+      .limit(1);
+    expect(job).toMatchObject({ organizationId: null, userId });
+  });
+
+  it('does not enqueue a second reindex job when an event has no reindexable entity', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const eventId = `event_no_target_${Math.random().toString(36).slice(2, 10)}`;
+    await db.insert(schema.event).values({
+      id: eventId,
+      organizationId: orgId,
+      createdBy: humanActorId,
+      sourceSystem: 'docket',
+      kind: 'comment',
+      occurredAt: new Date('2026-07-06T09:00:00.000Z'),
+      title: 'A comment with no canonical entity',
+      summary: 'This event carries no entity reference at all',
+      entityKind: null,
+      dedupeKey: `test:${eventId}`,
+    });
+
+    const result = await repairSearchIndex({ sourceTables: ['event'], limit: 50 });
+    expect(result.enqueued).toBeGreaterThanOrEqual(1);
+
+    const jobs = await db
+      .select({ sourceTable: schema.searchIndexJob.sourceTable })
+      .from(schema.searchIndexJob)
+      .where(eq(schema.searchIndexJob.sourceEventId, eventId));
+    // Only the event's own upsert job — no second job pointing at a mapped Docket entity, since
+    // this event's entity is null and eventSearchReindexTarget refuses to invent one.
+    expect(jobs).toEqual([{ sourceTable: 'event' }]);
+  });
+
+  it('resolves freshness from an earlier timestamp column for a source table with no updatedAt', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const labelRow = one(
+      await db
+        .insert(schema.label)
+        .values({
+          organizationId: orgId,
+          teamId,
+          name: `Freshness-${Math.random().toString(36).slice(2, 8)}`,
+          color: '#123456',
+        })
+        .returning({ id: schema.label.id }),
+    );
+
+    const result = await repairSearchIndex({ sourceTables: ['label'], limit: 50 });
+    expect(result.scanned).toBeGreaterThanOrEqual(1);
+
+    const jobs = await db
+      .select()
+      .from(schema.searchIndexJob)
+      .where(
+        and(
+          eq(schema.searchIndexJob.sourceTable, 'label'),
+          eq(schema.searchIndexJob.entityId, labelRow.id),
+          eq(schema.searchIndexJob.reason, 'repair'),
+        ),
+      );
+    expect(jobs).toHaveLength(1);
   });
 });

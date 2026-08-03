@@ -118,7 +118,7 @@ describe('search query — grantable visibility across every subject kind', () =
     },
   );
 
-  it.each(['initiative', 'organization'] as const)(
+  it.each(['initiative', 'organization', 'cycle'] as const)(
     'always resolves a %s subject as visible to a workspace member (no visibility column of its own)',
     async (kind) => {
       const schema = await getDb();
@@ -127,15 +127,40 @@ describe('search query — grantable visibility across every subject kind', () =
       const orgId = await seedOrg(db, schema);
       await addMember(db, schema, orgId, userId);
 
-      const subjectId =
-        kind === 'initiative'
-          ? one(
-              await db
-                .insert(schema.initiative)
-                .values({ organizationId: orgId, name: 'I' })
-                .returning({ id: schema.initiative.id }),
-            ).id
-          : orgId;
+      let subjectId: string;
+      if (kind === 'initiative') {
+        subjectId = one(
+          await db
+            .insert(schema.initiative)
+            .values({ organizationId: orgId, name: 'I' })
+            .returning({ id: schema.initiative.id }),
+        ).id;
+      } else if (kind === 'cycle') {
+        const teamId = one(
+          await db
+            .insert(schema.team)
+            .values({
+              organizationId: orgId,
+              name: 'Cycle Team',
+              key: `C${Math.random().toString(36).slice(2, 6)}`,
+            })
+            .returning({ id: schema.team.id }),
+        ).id;
+        subjectId = one(
+          await db
+            .insert(schema.cycle)
+            .values({
+              organizationId: orgId,
+              teamId,
+              number: 1,
+              startsAt: new Date('2026-07-01T00:00:00.000Z'),
+              endsAt: new Date('2026-07-08T00:00:00.000Z'),
+            })
+            .returning({ id: schema.cycle.id }),
+        ).id;
+      } else {
+        subjectId = orgId;
+      }
 
       const docId = `doc:${orgId}:${kind}-fact`;
       await db.insert(schema.searchDocument).values({

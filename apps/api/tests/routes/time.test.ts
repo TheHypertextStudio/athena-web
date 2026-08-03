@@ -96,6 +96,24 @@ describe('Time Ledger routes', () => {
     expect(new Date(body.serverNow).toString()).not.toBe('Invalid Date');
   });
 
+  // Regression: pausing closes the interval and moves the record to 'paused' without leaving any
+  // open interval behind, so `/active` has to find it by querying `timeRecord` directly rather
+  // than joining through an open `timeInterval` — the join used to make a just-paused record
+  // disappear from `/active` and fall back to the idle "Start a timer" state client-side.
+  it('keeps a paused record as the active tracker instead of reporting no tracker at all', async () => {
+    const record = await startTracking({ context: { label: 'Untangle deployment access' } });
+    const paused = await app.request(`/records/${record.id}/pause`, { method: 'POST' });
+    expect(paused.status).toBe(200);
+    expect((await json<TimeRecordOut>(paused)).status).toBe('paused');
+
+    const active = await app.request('/active');
+    expect(active.status).toBe(200);
+    const body = await json<{ record: TimeRecordOut | null }>(active);
+    expect(body.record?.id).toBe(record.id);
+    expect(body.record?.status).toBe('paused');
+    expect(body.record?.intervals.every((interval) => interval.endedAt !== null)).toBe(true);
+  });
+
   // CORE-43: the thing a timer names is an ordinary task, not a tracking-only entity.
   it('creates a first-class Docket task when tracking is started from a freeform name', async () => {
     const record = await startTracking({

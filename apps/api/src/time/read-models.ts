@@ -28,7 +28,7 @@ import type {
   TimeRecordOut,
   TimeTimelineQuery,
 } from '@docket/types';
-import { and, asc, eq, gt, inArray, isNull, lt, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { canReadTimeContext, resolveTimeHubId } from './access';
@@ -284,28 +284,38 @@ function groupByRecord<T extends { timeRecordId: string }>(rows: readonly T[]): 
   return grouped;
 }
 
-/** Read the shell's active tracker with the same policy as timeline/detail projections. */
+/**
+ * Read the shell's active tracker with the same policy as timeline/detail projections.
+ *
+ * @remarks
+ * The candidate is `timeRecord` itself, not a join through an open `timeInterval`: pausing closes
+ * the interval and moves the record to `status: 'paused'` (see `pauseTimeRecord` in
+ * `./commands.ts`), so a record can be exactly the caller's "one active tracker" — the thing the
+ * shell should keep showing with a Resume control — without having any open interval left.
+ *
+ * `'open'` always outranks `'paused'` in the ordering: `startTimeRecord`/`createTimeRecord` close
+ * out whatever was open before opening the next one (see `closeOpenHumanSegments`), so at most one
+ * `'open'` record can exist per Hub at any instant. `'paused'` records, in contrast, can genuinely
+ * pile up — `closeOpenHumanSegments` only pauses a record that currently holds the open interval,
+ * so a record already paused before a different record starts live is never touched and stays
+ * paused indefinitely. Among paused candidates the most recently updated one wins, because
+ * `updatedAt` is bumped by the pause transition itself (`$onUpdate` on `timeRecord`), which makes
+ * it the correct signal for "the one the caller paused most recently" rather than an arbitrary
+ * long-abandoned session.
+ */
 export async function getActiveTime(userId: string) {
   const hubId = await resolveTimeHubId(userId);
   const now = new Date();
   const active = await db
-    .select({ record: timeRecord })
-    .from(timeInterval)
-    .innerJoin(timeRecord, eq(timeRecord.id, timeInterval.timeRecordId))
-    .where(
-      and(
-        eq(timeInterval.hubId, hubId),
-        eq(timeInterval.userId, userId),
-        eq(timeInterval.mode, 'human_active'),
-        isNull(timeInterval.endedAt),
-      ),
+    .select()
+    .from(timeRecord)
+    .where(and(eq(timeRecord.hubId, hubId), inArray(timeRecord.status, ['open', 'paused'])))
+    .orderBy(
+      sql`case when ${timeRecord.status} = 'open' then 0 else 1 end`,
+      desc(timeRecord.updatedAt),
     )
     .limit(1);
-  const [record] = await hydrateTimeRecords(
-    active.map((row) => row.record),
-    userId,
-    now,
-  );
+  const [record] = await hydrateTimeRecords(active, userId, now);
   const activeAgentExecutions = await db
     .select({
       id: agentExecution.id,
@@ -383,8 +393,12 @@ function mergedElapsedMs(
     .sort((left, right) => left.start - right.start);
   if (spans.length === 0) return 0;
   let elapsedMs = 0;
+  // The length check above guarantees spans[0] exists; the `?.`/`?? 0` only narrow
+  // noUncheckedIndexedAccess's `| undefined` and never actually fall back.
+  /* v8 ignore start -- @preserve defensive: see the comment above */
   let currentStart = spans[0]?.start ?? 0;
   let currentEnd = spans[0]?.end ?? 0;
+  /* v8 ignore stop */
   for (const span of spans.slice(1)) {
     if (span.start <= currentEnd) {
       currentEnd = Math.max(currentEnd, span.end);
@@ -572,14 +586,22 @@ async function resolveTaskPlacements(
   for (const row of taskRows) {
     const programId = row.programId ?? row.projectProgramId;
     const linkedInitiative = row.projectId ? initiativeByProject.get(row.projectId) : undefined;
+    // `task.project_id`/`task.program_id` (and `project.program_id`) all have an
+    // `onDelete: 'set null'` FK, so whenever `row.projectId`/`programId` below is non-null it
+    // always still names a real, joined row — the `?? 'Project'`/`?? 'Program'` fallbacks exist
+    // only to satisfy the join's `| null` column type and this Map's `| undefined` return, and
+    // never actually fire (only relevant when the id is set, per the ternaries below).
+    /* v8 ignore next 2 -- @preserve defensive: see the comment above */
+    const projectLabel = row.projectName ?? 'Project';
+    const programLabel = (programId && programName.get(programId)) ?? 'Program';
     placements.set(row.id, {
       workspace: { key: row.organizationId, label: row.organizationName },
       task: { key: row.id, label: row.title },
       project: row.projectId
-        ? { key: row.projectId, label: row.projectName ?? 'Project' }
+        ? { key: row.projectId, label: projectLabel }
         : { key: 'unassigned:project', label: 'No project' },
       program: programId
-        ? { key: programId, label: programName.get(programId) ?? 'Program' }
+        ? { key: programId, label: programLabel }
         : { key: 'unassigned:program', label: 'No program' },
       initiative: linkedInitiative
         ? { key: linkedInitiative.id, label: linkedInitiative.name }
@@ -630,13 +652,18 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
     const measures = measureRecordInRange(record, start, end, now);
     if (query.groupBy === 'category') {
       const key = record.categoryId ?? 'unclassified';
-      add(
-        key,
-        record.categoryId
-          ? (categoryName.get(record.categoryId) ?? 'Archived category')
-          : 'Uncategorized',
-        measures,
-      );
+      // `time_record.category_id` has an `onDelete: 'set null'` FK to `time_category` — a
+      // deleted category always nulls the reference rather than leaving it dangling, so a
+      // non-null `categoryId` here is always resolvable in `categoryName` (queried for every
+      // category on this Hub, with no archived-state filter). "Archived category" is a label
+      // for a state the data model cannot actually produce; kept as a readable fallback rather
+      // than a thrown assertion, since a UI string is cheap insurance and a throw is not.
+      let categoryLabel = 'Uncategorized';
+      if (record.categoryId) {
+        /* v8 ignore next -- @preserve defensive: see the comment above */
+        categoryLabel = categoryName.get(record.categoryId) ?? 'Archived category';
+      }
+      add(key, categoryLabel, measures);
       continue;
     }
     if (query.groupBy === 'actor') {
@@ -661,6 +688,13 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
       continue;
     }
     const placement = placements.get(record.taskId);
+    // `placements` is resolved (above) for exactly `[...new Set(records.map(r => r.taskId))]`,
+    // and `time_record.task_id` cascade-deletes with its task, so every record's task always
+    // exists and is always in `placements` — every `TaskPlacement` field is always populated
+    // too (`resolveTaskPlacements` sets an explicit "No project"/"No program"/"No initiative"
+    // bucket rather than ever leaving one out). This fallback exists only to satisfy the two
+    // Map/index lookups' `| undefined` types.
+    /* v8 ignore next 4 -- @preserve defensive: see the comment above */
     const bucket = placement?.[query.groupBy] ?? {
       key: `unassigned:${query.groupBy}`,
       label: 'Unassigned',

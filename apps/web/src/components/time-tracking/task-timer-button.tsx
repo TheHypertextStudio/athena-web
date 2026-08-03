@@ -12,6 +12,11 @@
  * Starting while another timer runs is not an error and asks nothing: the server switches
  * atomically and emits one `timer_switched`, so the previous stretch is closed exactly where this
  * one begins. The control simply flips to "Tracking" and the shell's timer follows.
+ *
+ * Every real placement of this control sits *inside* a row that is itself activatable — a table
+ * row's `<Link>`, a `ListRow`'s click-to-open — so the click handler always stops the native event
+ * before it can bubble. Without this the control would both start the timer AND navigate away
+ * (for an anchor-wrapped row) or open the task (for a `ListRow`), on every single click.
  */
 import {
   Button,
@@ -67,7 +72,13 @@ export function TaskTimerButton({
             aria-pressed={active}
             data-testid={`task-timer-${taskId}`}
             disabled={controls.busy}
-            onClick={() => {
+            onClick={(event) => {
+              // Every real host is an activatable row (a task-table `<Link>`, a `ListRow`'s
+              // click-to-open). Stopping propagation keeps the row's own handler from also
+              // firing; preventing default keeps an anchor-wrapped row from navigating away —
+              // stopPropagation alone does not cancel that native default action.
+              event.preventDefault();
+              event.stopPropagation();
               if (active) {
                 void controls.pause();
                 return;

@@ -128,7 +128,7 @@ const time = new Hono<AppEnv>()
       summary: 'Break down Time Ledger effort',
       response: TimeBreakdownOut,
       description:
-        'Group the caller’s personal Time Ledger by workspace, task, project, category, or actor. Workspace/task/project credit comes only from explicit allocations; related context never silently becomes billable or reportable time.',
+        'Group the caller’s personal Time Ledger by workspace, task, project, program, initiative, category, or actor. Workspace/task/project credit comes from explicit allocations; program and initiative are derived from the tracked task’s place in the work hierarchy (task → project → program, and project/program → initiative). Related context never silently becomes billable or reportable time, and a task with no program/initiative lands in an explicit `unassigned:*` bucket rather than being dropped.',
     }),
     zQuery(TimeBreakdownQuery),
     async (c) => {

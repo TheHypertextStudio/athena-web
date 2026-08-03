@@ -22,6 +22,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { CycleId, OrganizationId, ProjectId, TaskId, TeamId } from '@docket/types';
 import type { CycleBurnupOut, CycleDetail, TaskOut } from '@docket/types';
+import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { JSX } from 'react';
@@ -44,6 +45,31 @@ vi.mock('@/lib/query', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/use-org-capability', () => ({ useOrgCapability }));
+
+// The task table's rows each grow a CORE-40 `TaskTimerButton`, which reads the caller's one
+// tracker via `useLiveApiQuery` — a real hook this file does not stub (see the `@/lib/query`
+// mock above). Mock the transport it calls through instead of the query layer, so that read
+// resolves to "nothing tracked" rather than reaching the network from a test.
+vi.mock('@/lib/api', () => ({
+  api: {
+    v1: {
+      time: {
+        active: {
+          $get: vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                record: null,
+                serverNow: new Date().toISOString(),
+                activeAgentExecutions: [],
+              }),
+          }),
+        },
+      },
+    },
+  },
+}));
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ orgId: ORG_ID, cycleId: CYCLE_ID }),
@@ -182,7 +208,9 @@ function renderPage(
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const wrapper = ({ children }: { children: JSX.Element }): JSX.Element => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <TooltipProvider>{children}</TooltipProvider>
+    </QueryClientProvider>
   );
   const { container } = render(wrapper({ children: <CycleDetailPage /> }));
   return container;

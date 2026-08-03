@@ -8,8 +8,7 @@
  */
 import type { JSX } from 'react';
 
-import { TimeAnalytics } from '@/components/time-tracking/time-analytics';
-import { TimeSharePanel } from '@/components/time-tracking/time-share-panel';
+import { TimeAnalytics, TimeSharePanel } from '@/components/time-tracking';
 
 /** Static metadata for the time-reports surface. */
 export const metadata = { title: 'Time · Docket' };

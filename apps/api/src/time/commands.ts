@@ -120,6 +120,10 @@ async function latestSegmentForRecord(recordId: string): Promise<JoinCandidate |
     )
     .orderBy(desc(timeInterval.startedAt))
     .limit(1);
+  // A record's creation transaction always inserts its first `human_active` interval (see
+  // `createTimeRecord` below), and no route ever hard-deletes an interval — only supersedes it in
+  // place. A record reachable here (past `getOwnedRecord`) therefore always has at least one row.
+  /* v8 ignore next -- @preserve defensive: every owned record has at least one human_active interval */
   return rows[0] ?? null;
 }
 
@@ -152,6 +156,9 @@ async function toTimeRecordOut(
   now = new Date(),
 ): Promise<TimeRecordInput> {
   const [hydrated] = await hydrateTimeRecords([record], userId, now);
+  // `hydrateTimeRecords` maps its input array 1:1 to its output array; passing exactly one record
+  // always yields exactly one hydrated record back.
+  /* v8 ignore next -- @preserve defensive: hydrateTimeRecords always returns one row per input */
   if (!hydrated) throw new NotFoundError('Time record not found');
   return hydrated;
 }
@@ -183,6 +190,9 @@ async function refreshRecordEnvelope(recordId: string, now: Date): Promise<void>
     .select()
     .from(timeInterval)
     .where(and(eq(timeInterval.timeRecordId, recordId), isNull(timeInterval.supersededById)));
+  // Every call site runs immediately after mutating this record's intervals (adding, closing, or
+  // reopening one), so a non-superseded interval always exists by the time this query runs.
+  /* v8 ignore next -- @preserve defensive: caller always leaves at least one live interval */
   if (intervals.length === 0) return;
   const starts = intervals.map((interval) => interval.startedAt.getTime());
   const ends = intervals.map((interval) => (interval.endedAt ?? now).getTime());
@@ -312,6 +322,7 @@ export async function createTimeRecord(
           : { startedAt: historicalStart, endedAt: historicalEnd, closedAt: now }),
       })
       .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!inserted) throw new Error('time record insert returned no row');
     if (contexts.length > 0) {
       await tx.insert(timeContext).values(
@@ -348,6 +359,9 @@ export async function createTimeRecord(
         : captureSource === 'reconstructed'
           ? 'reconstructed_entry'
           : 'manual_entry',
+      // The guard above (`!live && (!historicalStart || !historicalEnd)`) already proved both are
+      // non-null on every path that reaches here with `live` false, so these are unreachable.
+      /* v8 ignore next 2 -- @preserve defensive: historical bounds are already validated non-null */
       startedAt: live ? now : (historicalStart ?? now),
       ...(live ? {} : { endedAt: historicalEnd ?? now, closedAt: now }),
     });
@@ -470,9 +484,20 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
     });
     const [resumed] = await tx
       .update(timeRecord)
-      .set({ status: 'open', startedAt: record.startedAt ?? now, endedAt: null, closedAt: null })
+      .set({
+        status: 'open',
+        // The column is nullable at the type level, but every insert in this module always sets
+        // it and no update ever clears it, so a record reachable here always already has one.
+        /* v8 ignore next -- @preserve defensive: startedAt is always set once a record exists */
+        startedAt: record.startedAt ?? now,
+        endedAt: null,
+        closedAt: null,
+      })
       .where(eq(timeRecord.id, id))
       .returning();
+    // `id` was already confirmed to exist under this Hub by `getOwnedRecord` earlier in this same
+    // request, and no route deletes a time record.
+    /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
     if (!resumed) throw new NotFoundError('Time record not found');
     return { record: resumed, switchedFrom };
   });
@@ -514,6 +539,7 @@ export async function pauseTimeRecord(userId: string, id: string): Promise<TimeR
     .set({ status: 'paused' })
     .where(eq(timeRecord.id, id))
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!updated) throw new NotFoundError('Time record not found');
   await refreshRecordEnvelope(id, now);
   const hydrated = await toTimeRecordOut(updated, userId, now);
@@ -568,6 +594,7 @@ export async function stopTimeRecord(userId: string, id: string): Promise<TimeRe
     .set({ status: 'closed', closedAt: now, endedAt: now })
     .where(eq(timeRecord.id, id))
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!updated) throw new NotFoundError('Time record not found');
   const hydrated = await toTimeRecordOut(updated, userId, now);
   if (anchor) {
@@ -599,6 +626,7 @@ export async function updateTimeRecord(
     })
     .where(and(eq(timeRecord.id, id), eq(timeRecord.hubId, hubId)))
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!updated) throw new NotFoundError('Time record not found');
   return toTimeRecordOut(updated, userId);
 }
@@ -633,6 +661,7 @@ export async function addHistoricalInterval(
     .set({ status: record.status === 'open' ? 'open' : 'closed' })
     .where(eq(timeRecord.id, id))
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!updated) throw new NotFoundError('Time record not found');
   return toTimeRecordOut(updated, userId, now);
 }
@@ -716,6 +745,7 @@ export async function createTimeCategory(
       sort: input.sort ?? 0,
     })
     .returning();
+  /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!created) throw new Error('time category insert returned no row');
   return toTimeCategoryOut(created);
 }

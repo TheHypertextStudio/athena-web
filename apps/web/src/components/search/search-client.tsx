@@ -17,6 +17,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { DatePicker } from '@/components/date-picker';
 import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
 import { OrgChip } from '@/components/org-chip';
+import { TaskTimerButton } from '@/components/time-tracking';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { hrefForSearchResult, isExternalSearchHref } from '@/lib/search-route';
@@ -499,13 +500,28 @@ export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   );
 }
 
-function SearchResultRow({
-  result,
-  orgName,
-}: {
+/** Props for {@link SearchResultRow}. */
+export interface SearchResultRowProps {
+  /** The result to render. */
   result: SearchResult;
+  /** Resolve an org id to its display name for the {@link OrgChip}. */
   orgName: (orgId: string) => string;
-}): JSX.Element {
+}
+
+/**
+ * One `/search` result row: the kind icon, title, org chip, snippet and matched-field pills,
+ * linking to the result's canonical destination.
+ *
+ * @remarks
+ * A `task` result additionally grows the CORE-40 {@link TaskTimerButton} beside the link — the
+ * one place search shows a task, so it is also a place that offers to start tracking it. Exported
+ * (rather than kept module-private) so that affordance can be pinned in isolation without
+ * standing up the whole filtered-search page.
+ *
+ * @param props - See {@link SearchResultRowProps}.
+ * @returns the row.
+ */
+export function SearchResultRow({ result, orgName }: SearchResultRowProps): JSX.Element {
   const href = hrefForSearchResult(result);
   const Icon = SEARCH_KIND_ICON[result.kind];
   const content = (
@@ -545,18 +561,34 @@ function SearchResultRow({
     </div>
   );
 
-  if (!href) return content;
-  if (isExternalSearchHref(href)) {
-    return (
-      <a href={href} target="_blank" rel="noreferrer" className="block">
-        {content}
-      </a>
-    );
-  }
-  return (
+  const linked = !href ? (
+    content
+  ) : isExternalSearchHref(href) ? (
+    <a href={href} target="_blank" rel="noreferrer" className="block">
+      {content}
+    </a>
+  ) : (
     <Link href={href} className="block">
       {content}
     </Link>
+  );
+
+  // A task result additionally offers the CORE-40 start-timer affordance beside the link, so
+  // tracking it does not require opening the task detail first. The task's real id is
+  // `route.entityId`, not `result.id` — the top-level id is a composite search-document id
+  // (`searchDocumentId(kind, orgId, row.id)`), which the timer API would reject.
+  const taskId =
+    result.kind === 'task' && result.route.type === 'entity' ? result.route.entityId : null;
+
+  if (!taskId) return linked;
+
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <div className="min-w-0 flex-1">{linked}</div>
+      <div className="shrink-0 pt-3">
+        <TaskTimerButton taskId={taskId} title={result.title} controlSize="sm" withLabel={false} />
+      </div>
+    </div>
   );
 }
 

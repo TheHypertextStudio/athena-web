@@ -155,6 +155,7 @@ export async function beginAgentExecution(
               startedAt: now,
             })
             .returning({ id: timeRecord.id, hubId: timeRecord.hubId });
+          /* v8 ignore next -- @preserve defensive: insert always returns a row */
           if (!record) throw new Error('agent time record insert returned no row');
           agentRecord = {
             timeRecordId: record.id,

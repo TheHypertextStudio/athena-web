@@ -375,4 +375,89 @@ describe('Time Ledger agent execution bridge', () => {
     );
     expect(child).toEqual({ id: childExecutionId, parentExecutionId });
   });
+
+  it('refuses a subagent execution whose claimed parent does not exist', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'MissingParent');
+    const orgId = await seedOrg(schema.db, schema);
+    const humanActorId = await addMember(schema.db, schema, orgId, userId);
+    const agentActor = one(
+      await schema.db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
+        .returning({ id: schema.actor.id }),
+    );
+    const agent = one(
+      await schema.db
+        .insert(schema.agent)
+        .values({ organizationId: orgId, actorId: agentActor.id })
+        .returning({ id: schema.agent.id }),
+    );
+    const childSession = one(
+      await schema.db
+        .insert(schema.agentSession)
+        .values({
+          organizationId: orgId,
+          agentId: agent.id,
+          initiatorId: humanActorId,
+          trigger: 'delegation',
+          status: 'running',
+        })
+        .returning({ id: schema.agentSession.id }),
+    );
+
+    await expect(
+      beginSubagentExecution('00000000000000000000000000', childSession.id),
+    ).rejects.toThrow('Parent agent execution not found');
+  });
+
+  it('refuses a subagent execution whose initiator does not match its parent’s', async () => {
+    const schema = await getDb();
+    const parentUserId = await seedUserWithHub(schema.db, schema, 'ParentInitiator');
+    const childUserId = await seedUserWithHub(schema.db, schema, 'ChildInitiator');
+    const orgId = await seedOrg(schema.db, schema);
+    const parentActorId = await addMember(schema.db, schema, orgId, parentUserId);
+    const childActorId = await addMember(schema.db, schema, orgId, childUserId);
+    const agentActor = one(
+      await schema.db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'agent', displayName: 'Athena' })
+        .returning({ id: schema.actor.id }),
+    );
+    const agent = one(
+      await schema.db
+        .insert(schema.agent)
+        .values({ organizationId: orgId, actorId: agentActor.id })
+        .returning({ id: schema.agent.id }),
+    );
+    const parentSession = one(
+      await schema.db
+        .insert(schema.agentSession)
+        .values({
+          organizationId: orgId,
+          agentId: agent.id,
+          initiatorId: parentActorId,
+          trigger: 'delegation',
+          status: 'running',
+        })
+        .returning({ id: schema.agentSession.id }),
+    );
+    const childSession = one(
+      await schema.db
+        .insert(schema.agentSession)
+        .values({
+          organizationId: orgId,
+          agentId: agent.id,
+          initiatorId: childActorId,
+          trigger: 'delegation',
+          status: 'running',
+        })
+        .returning({ id: schema.agentSession.id }),
+    );
+
+    const parentExecutionId = await beginAgentExecution(parentSession.id);
+    await expect(beginSubagentExecution(parentExecutionId, childSession.id)).rejects.toThrow(
+      'Subagent execution must keep its parent’s initiator',
+    );
+  });
 });

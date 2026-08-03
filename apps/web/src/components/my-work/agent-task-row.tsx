@@ -12,6 +12,7 @@ import type { DragSource } from '@docket/ui/lib/draggable';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { TaskTimerButton } from '@/components/time-tracking';
 
 import { LiveSessionPill, type PillStatus } from './live-session-pill';
 
@@ -71,6 +72,10 @@ export interface AgentTaskRowProps {
  * (rather than the preset `TaskRow`) precisely because the preset has no slot for the pill.
  * The avatar encodes the actor's kind by shape, so an agent delegate is visually distinct
  * from a human assignee without a legend.
+ *
+ * The trailing {@link TaskTimerButton} (CORE-40) is a `ListCell` like every other slot, so its
+ * click is stopped from reaching the row's own `onActivate` the same way {@link LiveSessionPill}
+ * already reaches through to its own `href` — a click on either never opens the task underneath.
  */
 export function AgentTaskRow({
   task,
@@ -116,6 +121,9 @@ export function AgentTaskRow({
           />
         </ListCell>
       ) : null}
+      <ListCell className="shrink-0">
+        <TaskTimerButton taskId={task.id} title={task.title} controlSize="sm" withLabel={false} />
+      </ListCell>
     </ListRow>
   );
 }

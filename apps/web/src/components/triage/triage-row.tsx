@@ -5,13 +5,15 @@
  *
  * @remarks
  * Composes the design-system {@link ListRow} + {@link ListCell} primitives (rather than the
- * canned {@link TaskRow} preset) because a Triage row carries two extra affordances a plain
+ * canned {@link TaskRow} preset) because a Triage row carries three extra affordances a plain
  * task row does not: a leading-metadata {@link SourceTag | provenance pill} (native vs
- * linked-from-a-provider — the first thing a triager reads) and a trailing
- * {@link TriageActions | sort-it menu}. The row still reads like every other Docket list row:
- * a leading {@link StatusIcon} colored by the task's workflow-state *type*, the title, then
- * the assignee. Activating the row (click / Enter) opens the task detail; the source link and
- * the action trigger both stop propagation so they never hijack that activation.
+ * linked-from-a-provider — the first thing a triager reads), a trailing
+ * {@link TaskTimerButton | track-timer control} (CORE-40 — Triage is a task list like any
+ * other), and a trailing {@link TriageActions | sort-it menu}. The row still reads like every
+ * other Docket list row: a leading {@link StatusIcon} colored by the task's workflow-state
+ * *type*, the title, then the assignee. Activating the row (click / Enter) opens the task
+ * detail; the source link, the timer control, and the action trigger all stop propagation so
+ * none of them hijack that activation.
  *
  * Two inline pop-up affordances make the row feel responsive: the assignee avatar reveals a
  * {@link HoverCard} preview on hover/focus, and right-clicking (or long-pressing) the row opens
@@ -46,6 +48,7 @@ import {
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { TaskTimerButton } from '@/components/time-tracking';
 
 import { SourceTag } from './source-tag';
 import { TriageActions, type TriageDestination } from './triage-actions';
@@ -221,6 +224,15 @@ export function TriageRow({
               </HoverCard>
             </ListCell>
           ) : null}
+
+          <ListCell className="shrink-0">
+            <TaskTimerButton
+              taskId={task.id}
+              title={task.title}
+              controlSize="sm"
+              withLabel={false}
+            />
+          </ListCell>
 
           <ListCell className="shrink-0">
             <TriageActions

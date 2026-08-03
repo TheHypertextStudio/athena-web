@@ -40,6 +40,7 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { TaskTimerButton } from '@/components/time-tracking';
 import { entityDragSource } from '@/lib/entity-drag';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -184,6 +185,18 @@ export function buildTaskColumns({
         const estimate = formatEstimate(task.estimateMinutes);
         return <span className="text-on-surface-variant tabular-nums">{estimate ?? '—'}</span>;
       },
+    },
+    // Track — the universal start-timer affordance (CORE-40): every task list is a place a task
+    // is "represented", so every row offers it, icon-only to stay dense. Kept a tier longer than
+    // the metadata columns (priority 1 vs. 2/3) since it is an action, not a fact about the task.
+    {
+      key: 'timer',
+      header: '',
+      width: '2.25rem',
+      priority: 1,
+      render: (task) => (
+        <TaskTimerButton taskId={task.id} title={task.title} controlSize="sm" withLabel={false} />
+      ),
     },
   ];
 }

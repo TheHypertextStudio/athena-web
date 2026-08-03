@@ -17,9 +17,14 @@ import '@testing-library/jest-dom/vitest';
  *
  * The query layer is mocked at the module boundary (the pattern
  * `tests/agenda/agenda-context-navigation.test.tsx` uses) so the surface renders synchronously
- * from fixtures with no network and no `QueryClientProvider`.
+ * from fixtures with no network. A `QueryClientProvider` is still required, though: the shared
+ * `TaskTable` the overview renders through grows a CORE-40 `TaskTimerButton` per row, and that
+ * control reads the caller's one tracker via the real (unstubbed) `useLiveApiQuery` — so
+ * `renderWithProviders` below supplies a client and mocks the transport it calls through.
  */
-import type { JSX } from 'react';
+import { TooltipProvider } from '@docket/ui/primitives';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { JSX, ReactElement } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -180,6 +185,31 @@ vi.mock('../../src/lib/use-org-capability', () => ({
   useOrgCapability: () => false,
 }));
 
+// The overview's task rows each grow a CORE-40 `TaskTimerButton`, which reads the caller's one
+// tracker via `useLiveApiQuery` — a real hook the `../../src/lib/query` mock above does not stub.
+// Mock the transport it calls through instead, so that read resolves to "nothing tracked" rather
+// than reaching the network from a test.
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      time: {
+        active: {
+          $get: vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: () =>
+              Promise.resolve({
+                record: null,
+                serverNow: new Date().toISOString(),
+                activeAgentExecutions: [],
+              }),
+          }),
+        },
+      },
+    },
+  },
+}));
+
 import { CycleOut } from '@docket/types';
 
 import CyclesClient from '../../src/app/(app)/orgs/[orgId]/cycles/cycles-client';
@@ -187,6 +217,20 @@ import {
   ActiveCycleOverview,
   runwayLabel,
 } from '../../src/components/cycles/active-cycle-overview';
+
+/**
+ * Render `ui` inside the query client + tooltip provider the overview's per-row
+ * {@link TaskTimerButton} (CORE-40) needs — mirrors the app root's real `TooltipProvider`
+ * placement (see `tests/components/views/task-table.test.tsx`'s identical helper).
+ */
+function renderWithProviders(ui: ReactElement): ReturnType<typeof render> {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <TooltipProvider>{ui}</TooltipProvider>
+    </QueryClientProvider>,
+  );
+}
 
 /**
  * The active cycle as the schema produces it.
@@ -204,7 +248,7 @@ function overviewRegion(): HTMLElement {
 
 describe('Cycles list', () => {
   it('never renders a cycle as its auto-roll number', () => {
-    const { container } = render(<CyclesClient />);
+    const { container } = renderWithProviders(<CyclesClient />);
     expect(container.textContent).not.toMatch(RAW_NUMBER_NAME);
     expect(container.textContent).not.toContain('1000135');
     expect(container.textContent).not.toContain('1000136');
@@ -214,14 +258,14 @@ describe('Cycles list', () => {
   });
 
   it('renders the page title with no subtitle beneath it', () => {
-    const { container } = render(<CyclesClient />);
+    const { container } = renderWithProviders(<CyclesClient />);
     expect(screen.getByRole('heading', { level: 1, name: 'Cycles' })).toBeInTheDocument();
     expect(container.textContent).not.toContain('roll automatically on your cadence');
     expect(container.textContent).not.toContain("what's live now");
   });
 
   it('heads the list with a focused overview of the active cycle', () => {
-    render(<CyclesClient />);
+    renderWithProviders(<CyclesClient />);
     const overview = overviewRegion();
 
     // Identity + an explicit active indicator.
@@ -252,7 +296,7 @@ describe('Cycles list', () => {
 
   it('renders the overview tasks through the shared task table', () => {
     fixtures.taskTableCalls.length = 0;
-    render(<CyclesClient />);
+    renderWithProviders(<CyclesClient />);
     const overview = overviewRegion();
 
     expect(fixtures.taskTableCalls).toHaveLength(1);
@@ -262,7 +306,7 @@ describe('Cycles list', () => {
   });
 
   it('keeps the active cycle in the roster below, so filters stay honest', () => {
-    render(<CyclesClient />);
+    renderWithProviders(<CyclesClient />);
     // The roster grid still carries a row for the active cycle: the overview subordinates the
     // roster by weight, it does not hide anything from it.
     const roster = screen.getByRole('grid', { name: /active cycles/i });
@@ -272,7 +316,7 @@ describe('Cycles list', () => {
 
 describe('ActiveCycleOverview', () => {
   it('omits the carryover metric when nothing is still open', () => {
-    render(
+    renderWithProviders(
       <ActiveCycleOverview
         orgId={ORG_ID}
         cycle={ACTIVE_CYCLE}
@@ -289,7 +333,7 @@ describe('ActiveCycleOverview', () => {
       name: 'Launch week',
       displayName: 'Launch week',
     });
-    render(
+    renderWithProviders(
       <ActiveCycleOverview orgId={ORG_ID} cycle={named} stats={fixtures.stats} cycleNoun="Cycle" />,
     );
     const runway = runwayLabel(fixtures.activeCycle.startsAt, fixtures.activeCycle.endsAt);
@@ -299,7 +343,7 @@ describe('ActiveCycleOverview', () => {
   });
 
   it('states the workload unit as a readable word, never an abbreviation', () => {
-    render(
+    renderWithProviders(
       <ActiveCycleOverview
         orgId={ORG_ID}
         cycle={ACTIVE_CYCLE}
@@ -341,7 +385,7 @@ describe('runwayLabel', () => {
 
 describe('upcoming roster rows', () => {
   it('keeps them present but visually secondary to the overview', () => {
-    render(<CyclesClient />);
+    renderWithProviders(<CyclesClient />);
     const upcoming = screen.getByRole('row', { name: 'Aug 3 – Aug 9' });
     expect(upcoming).toHaveAttribute('href', `/orgs/${ORG_ID}/cycles/${UPCOMING_CYCLE_ID}`);
 
@@ -352,7 +396,7 @@ describe('upcoming roster rows', () => {
   });
 
   it('scopes its filter/group catalog to the org teams the page loaded', () => {
-    render(<CyclesClient />);
+    renderWithProviders(<CyclesClient />);
     // Grouping defaults to status, so both cadence segments are labeled rather than the roster
     // being one undifferentiated list.
     expect(screen.getByRole('grid', { name: /active cycles/i })).toBeInTheDocument();

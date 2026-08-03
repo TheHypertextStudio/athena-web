@@ -7,6 +7,59 @@
 
 ## Active Tasks
 
+### [LAUNCH-TIME-003] Finish the CORE-40 timer rollout and re-gate Time Tracking / Weekly auto-scheduling
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-02
+- **Completed**: 2026-08-02
+- **Priority**: P0
+- **Closes**: Round-2 live re-verification of CORE-35 through CORE-49 and WIL-14 through WIL-24 in
+  `docs/engineering/launch-compliance.json`.
+- **Summary**: Wired the CORE-40 `TaskTimerButton` into the last remaining task-list hosts that
+  didn't already carry it — the shared task table, the Program work board's row (both its
+  inline-editable and read-only shapes, which required un-nesting the row from `<button>` to a
+  plain container so the timer control can sit beside the title instead of inside another
+  button), Triage rows, My Work's agent-task rows, and task results in global search (which needed
+  the real task id pulled from `route.entityId` rather than the composite search-document id).
+  `TaskTimerButton` itself now calls `preventDefault`/`stopPropagation` on its click so it never
+  also activates the row underneath it (open the task, or for an anchor-wrapped row, navigate
+  away). Added `/* v8 ignore next -- @preserve defensive */` coverage annotations to the
+  already-correct but untested "insert/update always returns a row" guards in
+  `apps/api/src/time/commands.ts` and `agent-execution.ts`, and corrected the `/v1/time/breakdown`
+  OpenAPI description to name `program`/`initiative` and the `unassigned:*` bucket (CORE-49),
+  which the route already implemented but the docstring hadn't caught up to. Added dedicated
+  coverage for the timer wiring (`work-board-timer.test.tsx`, `search-client.test.tsx`,
+  `triage-row.test.tsx`, `agent-task-row.test.tsx` under `tests/my-work/`) and for the Time Ledger
+  access-policy and command edge cases the route-level tests don't reach
+  (`apps/api/tests/time/access.test.ts`, `apps/api/tests/routes/time-edge-cases.test.ts`); fixed
+  three pre-existing board/cycle tests that broke once every row grew a network-backed timer
+  control (`work-board-cycle-headings.test.tsx`, `cycle-detail.test.tsx`, `cycles-list.test.tsx`)
+  by supplying a `QueryClientProvider`/`TooltipProvider` and mocking the `time.active` transport.
+  Then re-verified all 15 Time Tracking (CORE-35..49) and all 11 Weekly auto-scheduling
+  (WIL-14..24) requirements against the live dev stack with fresh evidence (live curl/API
+  round-trips, re-run targeted test cases, and code reads), replaced every evidence string in
+  `docs/engineering/launch-compliance.json` for those 26 requirements with the round-2 findings,
+  and regenerated `docs/engineering/launch-compliance.md` via `scripts/launch-scorecard.ts` — all
+  26 requirements confirm `pass`.
+- **Files Changed**: `apps/api/src/routes/time.ts`, `apps/api/src/time/commands.ts`,
+  `apps/api/src/time/agent-execution.ts`, `apps/api/tests/time/agent-execution.test.ts`,
+  `apps/api/tests/time/access.test.ts`, `apps/api/tests/routes/time-edge-cases.test.ts`,
+  `apps/web/src/app/(app)/time/page.tsx`, `apps/web/src/components/my-work/agent-task-row.tsx`,
+  `apps/web/src/components/programs/work-board.tsx`,
+  `apps/web/src/components/search/search-client.tsx`,
+  `apps/web/src/components/time-tracking/task-timer-button.tsx`,
+  `apps/web/src/components/triage/triage-row.tsx`, `apps/web/src/components/views/task-table.tsx`,
+  and their corresponding test files under `apps/web/tests/`; `docs/engineering/launch-compliance.json`
+  and `docs/engineering/launch-compliance.md`.
+- **Learnings**: A row that becomes a drag source and later also grows a trailing action control
+  can no longer safely be a single `<button>` — the Program work board's read-only row had to move
+  from `<button>` (whole row) to a plain container with an inner title `<button>`, which is the
+  same shape Triage and the task table already used for exactly this reason.
+- **Notes**: Left `apps/api/src/services/scheduling/repository.ts`, `apps/api/src/time/read-models.ts`,
+  and their existing test files untouched — a concurrent lane owns coverage work there. No
+  scheduling source changed in this pass; the WIL-14..24 re-verification confirmed already-shipped
+  behavior from prior commits (`d68fd505`, `8af7cd44`, `edfa06b6`) rather than landing new code.
+
 ### [LAUNCH-TIME-002] Close CORE-36 (paused-timer visibility) and CORE-40 (calendar-block timer)
 
 - **Status**: COMPLETED

@@ -13,13 +13,42 @@ import '@testing-library/jest-dom/vitest';
  * ever shows the number.
  */
 import { CycleId, type ProgramWorkOut, TaskOut } from '@docket/types';
+import { TooltipProvider } from '@docket/ui/primitives';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { WorkBoard } from '../../src/components/programs/work-board';
+const { activeGet } = vi.hoisted(() => ({ activeGet: vi.fn() }));
+
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      time: {
+        active: { $get: activeGet },
+        records: { $post: vi.fn() },
+      },
+    },
+  },
+}));
+
+const { WorkBoard } = await import('../../src/components/programs/work-board');
 
 const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const TEAM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FA4';
+
+beforeEach(() => {
+  activeGet.mockReset();
+  activeGet.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: () =>
+      Promise.resolve({
+        record: null,
+        serverNow: new Date().toISOString(),
+        activeAgentExecutions: [],
+      }),
+  });
+});
 
 /** The auto-roll key range the audit found leaking into headings as "Cycle 1000137". */
 const RAW_NUMBER_NAME = /Cycle \d{5,}/;
@@ -83,18 +112,25 @@ function group(
 
 /** Render the board with the given groups and the default vocabulary. */
 function renderBoard(groups: ProgramWorkOut['groups']): { readonly container: HTMLElement } {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
   return render(
-    <WorkBoard
-      work={{ groups }}
-      loading={false}
-      error={null}
-      cycleLabel="Cycle"
-      taskNoun="task"
-      taskNounPlural="tasks"
-      projectNoun="project"
-      canEdit={false}
-      onOpenTask={vi.fn()}
-    />,
+    <QueryClientProvider client={client}>
+      <TooltipProvider>
+        <WorkBoard
+          work={{ groups }}
+          loading={false}
+          error={null}
+          cycleLabel="Cycle"
+          taskNoun="task"
+          taskNounPlural="tasks"
+          projectNoun="project"
+          canEdit={false}
+          onOpenTask={vi.fn()}
+        />
+      </TooltipProvider>
+    </QueryClientProvider>,
   );
 }
 

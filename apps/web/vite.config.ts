@@ -22,6 +22,7 @@ import { docketVitest } from '../../tooling/vitest/preset';
 const config = docketVitest({
   environment: 'jsdom',
   react: true,
+  setupFiles: ['./vitest.setup.ts'],
   coverageInclude: [
     'src/components/settings/sections.ts',
     // The open-documents route matcher is pure logic with a behavioral guard (it rejects

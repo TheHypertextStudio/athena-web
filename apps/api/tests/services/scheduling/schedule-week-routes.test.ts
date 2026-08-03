@@ -3,7 +3,13 @@ import { and, eq, isNotNull } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import scheduleWeek from '../../../src/routes/schedule-week';
-import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../../support/routes-harness';
+import {
+  appWithSession,
+  fakeSession,
+  getDb,
+  one,
+  seedUserWithHub,
+} from '../../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -464,6 +470,17 @@ describe('GET /schedule-week — coverage', () => {
     expect(plan.coverage.protectedMinutes).toBeGreaterThan(0);
   });
 
+  it('defaults weekStartDate to the current week in the Hub timezone when the query param is omitted', async () => {
+    const { app } = await seedPlanner('PlannerDefaultWeek');
+    const res = await app.request('/');
+    expect(res.status).toBe(200);
+    const plan = (await res.json()) as { runId: string | null; weekStartDate: string };
+    // Nothing was ever generated for this fresh Hub, so there is no run to report.
+    expect(plan.runId).toBeNull();
+    // A Monday, in YYYY-MM-DD form — the shape `weekStartOf(localDateString(...))` produces.
+    expect(plan.weekStartDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
   it("keeps a scheduler-placed block's workspace attribution across a reload, not just the POST response", async () => {
     // Regression: `persistPlannedBlocks` never wrote `organization_id` to `calendar_item`, and
     // `loadWeekBlocks` hardcoded it back out as `null` on every read — so the POST response
@@ -543,6 +560,67 @@ describe('GET /schedule-week — coverage', () => {
         and(eq(schema.calendarItem.userId, userId), eq(schema.calendarItem.origin, 'scheduler')),
       );
     expect(rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe('schedule-week — authentication and Hub resolution', () => {
+  it('401s every route when there is no session', async () => {
+    const app = appWithSession(scheduleWeek, null);
+    expect((await app.request('/shapes')).status).toBe(401);
+    expect((await app.request('/preferences')).status).toBe(401);
+    expect(
+      (
+        await app.request('/preferences', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      ).status,
+    ).toBe(401);
+    expect((await app.request('/', { method: 'POST' })).status).toBe(401);
+    expect((await app.request('/')).status).toBe(401);
+  });
+
+  it('404s Hub-scoped routes for a session user with no Hub row', async () => {
+    const noHubUserId = one(
+      await db
+        .insert(schema.user)
+        .values({ name: 'NoHubScheduler', email: `no-hub-scheduler-${Math.random()}@x.test` })
+        .returning({ id: schema.user.id }),
+    ).id;
+    const app = appWithSession(scheduleWeek, fakeSession(noHubUserId));
+    expect((await app.request('/preferences')).status).toBe(404);
+    expect(
+      (
+        await app.request('/preferences', {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await app.request('/', { method: 'POST' })).status).toBe(404);
+    expect((await app.request('/')).status).toBe(404);
+  });
+});
+
+describe('POST /schedule-week — optional generation flags', () => {
+  it('computes the identical week and writes nothing when dryRun is true, with replaceExisting explicitly false', async () => {
+    const { app, hubId } = await seedPlanner('PlannerDryRun');
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ weekStartDate: WEEK, dryRun: true, replaceExisting: false }),
+    });
+    expect(res.status).toBe(200);
+    const plan = (await res.json()) as { blocks: unknown[] };
+    expect(plan.blocks.length).toBeGreaterThan(0);
+
+    const runs = await db
+      .select({ id: schema.scheduleRun.id })
+      .from(schema.scheduleRun)
+      .where(eq(schema.scheduleRun.hubId, hubId));
+    expect(runs).toEqual([]);
   });
 });
 

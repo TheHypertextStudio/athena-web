@@ -171,4 +171,73 @@ describe('workspace schedule comparison', () => {
     );
     expect((await suspendedCaller.request(`${base}&actorIds=${actorId}`)).status).toBe(404);
   });
+
+  it('reports a null timezone and no items for an active actor with no linked user', async () => {
+    const schema = await getDb();
+    // seedBaseOrg's human actor is deliberately unclaimed: active + human, but userId is null.
+    const org = await seedBaseOrg(schema.db, schema);
+    const callerUserId = await seedUserWithHub(schema.db, schema, 'ScheduleCallerUnclaimed');
+    const callerActorId = await addMember(schema.db, schema, org.orgId, callerUserId);
+    const app = appWithActor(
+      schedulesRouter,
+      org.orgId,
+      [],
+      callerActorId,
+      fakeSession(callerUserId),
+    );
+    const base = '/schedules?start=2026-08-04T00%3A00%3A00.000Z&end=2026-08-05T00%3A00%3A00.000Z';
+
+    const response = await app.request(`${base}&actorIds=${org.humanActorId}`);
+    expect(response.status).toBe(200);
+    const comparison = await body<ScheduleComparisonOut>(response);
+    expect(comparison.people).toEqual([
+      expect.objectContaining({ actorId: org.humanActorId, timezone: null, items: [] }),
+    ]);
+  });
+
+  it('leaves timezone null when neither the Hub preferences nor the shared layer name one', async () => {
+    const schema = await getDb();
+    const org = await seedBaseOrg(schema.db, schema);
+    // A fresh Hub's preferences default to `{}` — no timezone — and this layer names none either.
+    const personUserId = await seedUserWithHub(schema.db, schema, 'NoTzPerson');
+    const personActorId = await addMember(schema.db, schema, org.orgId, personUserId);
+    const callerUserId = await seedUserWithHub(schema.db, schema, 'NoTzCaller');
+    const callerActorId = await addMember(schema.db, schema, org.orgId, callerUserId);
+
+    const layer = one(
+      await schema.db
+        .insert(schema.calendarLayer)
+        .values({
+          userId: personUserId,
+          provider: 'docket',
+          sourceKind: 'native_blocks',
+          title: 'No timezone layer',
+          timezone: null,
+          editableCore: true,
+        })
+        .returning({ id: schema.calendarLayer.id }),
+    );
+    await schema.db.insert(schema.calendarLayerShare).values({
+      layerId: layer.id,
+      organizationId: org.orgId,
+      access: 'busy',
+      createdBy: personActorId,
+    });
+
+    const app = appWithActor(
+      schedulesRouter,
+      org.orgId,
+      [],
+      callerActorId,
+      fakeSession(callerUserId),
+    );
+    const res = await app.request(
+      `/schedules?start=2026-08-04T00%3A00%3A00.000Z&end=2026-08-05T00%3A00%3A00.000Z&actorIds=${personActorId}`,
+    );
+    expect(res.status).toBe(200);
+    const comparison = await body<ScheduleComparisonOut>(res);
+    expect(comparison.people).toEqual([
+      expect.objectContaining({ actorId: personActorId, timezone: null }),
+    ]);
+  });
 });

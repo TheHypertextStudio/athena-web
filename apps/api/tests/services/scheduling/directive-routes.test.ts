@@ -4,7 +4,13 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import directiveFeed from '../../../src/routes/schedule-week-directive';
 import scheduleWeek from '../../../src/routes/schedule-week';
-import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../../support/routes-harness';
+import {
+  appWithSession,
+  fakeSession,
+  getDb,
+  one,
+  seedUserWithHub,
+} from '../../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -74,6 +80,53 @@ async function seedDay(label: string, options: { plan?: boolean } = {}): Promise
 
   return { directive, planner, userId, hubId: hubRow.id };
 }
+
+describe('directive feed — authentication and Hub resolution', () => {
+  it('401s every route when there is no session', async () => {
+    const app = appWithSession(directiveFeed, null);
+    expect((await app.request(`/?date=${DAY}`)).status).toBe(401);
+    expect(
+      (
+        await app.request('/acknowledge', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ directiveId: 'd_1', appliedPosture: 'on_track', enforced: false }),
+        })
+      ).status,
+    ).toBe(401);
+    expect((await app.request(`/day-start?date=${DAY}`)).status).toBe(401);
+    expect(
+      (await app.request(`/day-start/acknowledge?date=${DAY}`, { method: 'POST' })).status,
+    ).toBe(401);
+    expect((await app.request(`/check-ins?date=${DAY}`)).status).toBe(401);
+    expect(
+      (
+        await app.request('/check-ins/ci_1/respond', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ response: 'on_track' }),
+        })
+      ).status,
+    ).toBe(401);
+    expect((await app.request(`/reorganize?date=${DAY}`, { method: 'POST' })).status).toBe(401);
+    expect((await app.request(`/review?date=${DAY}`)).status).toBe(401);
+  });
+
+  it('404s Hub-scoped reads for a session user with no Hub row', async () => {
+    const noHubUserId = one(
+      await db
+        .insert(schema.user)
+        .values({ name: 'NoHubDirective', email: `no-hub-directive-${Math.random()}@x.test` })
+        .returning({ id: schema.user.id }),
+    ).id;
+    const app = appWithSession(directiveFeed, fakeSession(noHubUserId));
+    expect((await app.request(`/?date=${DAY}`)).status).toBe(404);
+    expect((await app.request(`/day-start?date=${DAY}`)).status).toBe(404);
+    expect((await app.request(`/check-ins?date=${DAY}`)).status).toBe(404);
+    expect((await app.request(`/reorganize?date=${DAY}`, { method: 'POST' })).status).toBe(404);
+    expect((await app.request(`/review?date=${DAY}`)).status).toBe(404);
+  });
+});
 
 describe('GET /directive/day-start — the wake handshake', () => {
   it('reports a not-ready state instead of an empty agenda when nothing has been planned', async () => {
@@ -241,6 +294,28 @@ describe('GET /directive/check-ins — repeated check-ins against the day’s go
     const unanswered = after.items.filter((i) => i.id !== target?.id);
     expect(unanswered.length).toBeGreaterThan(0);
     expect(unanswered.every((i) => i.response === null)).toBe(true);
+  });
+
+  it('accepts a response with no note at all', async () => {
+    const { directive } = await seedDay('DirectiveRespondNoNote');
+    const listed = (await (await directive.request(`/check-ins?date=${DAY}`)).json()) as {
+      items: { id: string }[];
+    };
+    const target = listed.items[0];
+    expect(target).toBeDefined();
+
+    const res = await directive.request(`/check-ins/${target?.id ?? ''}/respond`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ response: 'done' }),
+    });
+    expect(res.status).toBe(200);
+    const after = (await res.json()) as {
+      items: { id: string; response: string | null; respondedAt: string | null }[];
+    };
+    const answered = after.items.find((i) => i.id === target?.id);
+    expect(answered?.response).toBe('done');
+    expect(answered?.respondedAt).not.toBeNull();
   });
 
   it('refuses to answer a check-in belonging to someone else', async () => {
@@ -484,6 +559,25 @@ describe('the end-of-day review gates the close of the day', () => {
     await stubClient.poll();
     expect(stubClient.holding, 'all three steps done — the gate releases').toBe(false);
     expect(stubClient.outstanding).toEqual([]);
+  });
+
+  it('accepts a "completed" disposition with neither a reschedule date nor a reason', async () => {
+    const { directive } = await seedDay('DirectiveCompletedDisposition');
+    const opened = (await (await directive.request(`/review?date=${DAY}`)).json()) as {
+      items: { key: string }[];
+    };
+    const res = await directive.request(`/review/disposition?date=${DAY}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: opened.items[0]?.key, disposition: 'completed' }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      items: { disposition: string | null; rescheduledTo: string | null; reason: string | null }[];
+    };
+    expect(body.items[0]?.disposition).toBe('completed');
+    expect(body.items[0]?.rescheduledTo).toBeNull();
+    expect(body.items[0]?.reason).toBeNull();
   });
 
   it('refuses to drop an item without a reason', async () => {

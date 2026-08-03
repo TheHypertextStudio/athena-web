@@ -71,6 +71,14 @@ describe('toCalendarConnectionOut', () => {
     });
     expect(out.scopeState).toBeNull();
   });
+
+  it('passes a present scopeState through unchanged', () => {
+    const out = toCalendarConnectionOut(
+      { ...base, status: 'connected', scopeState: 'partial' } as never,
+      { total: 0, enabled: 0 },
+    );
+    expect(out.scopeState).toBe('partial');
+  });
 });
 
 describe('toCalendarListOut', () => {

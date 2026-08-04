@@ -26,6 +26,10 @@ export const MilestoneCreate = z
       .string()
       .min(1)
       .describe('Human-readable milestone label (e.g. "Beta", "GA"). Required, non-empty.'),
+    description: z
+      .string()
+      .optional()
+      .describe('Optional long-form note for the milestone. Omit for none.'),
     targetDate: z.iso
       .date()
       .optional()
@@ -54,6 +58,11 @@ export const MilestoneUpdate = z
       .describe(
         'New milestone label. Omit to leave the name unchanged; must be non-empty when set.',
       ),
+    description: z
+      .string()
+      .nullable()
+      .optional()
+      .describe('New long-form note. Omit to leave unchanged; pass `null` to clear it.'),
     targetDate: z.iso
       .date()
       .nullable()
@@ -84,6 +93,10 @@ export const MilestoneOut = z
       'The Project this milestone belongs to. Immutable after creation.',
     ),
     name: z.string().describe('Human-readable milestone label.'),
+    description: z
+      .string()
+      .nullable()
+      .describe('Long-form note for the milestone, or `null` when none is set.'),
     targetDate: z
       .string()
       .nullable()

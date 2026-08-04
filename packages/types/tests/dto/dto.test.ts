@@ -833,6 +833,7 @@ describe('milestone DTOs', () => {
         organizationId: ID2,
         projectId: ID,
         name: 'M',
+        description: null,
         targetDate: null,
         sort: 0,
         createdAt: 'x',

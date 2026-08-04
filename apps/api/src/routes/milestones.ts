@@ -29,6 +29,7 @@ function toOut(m: MilestoneRow): z.input<typeof MilestoneOut> {
     organizationId: m.organizationId,
     projectId: m.projectId,
     name: m.name,
+    description: m.description,
     targetDate: m.targetDate?.toISOString() ?? null,
     sort: m.sort,
     createdAt: m.createdAt.toISOString(),
@@ -66,7 +67,7 @@ const milestones = new Hono<AppEnv>()
       summary: 'Create a milestone',
       capability: 'contribute',
       response: MilestoneOut,
-      description: `Create a milestone within a Project. The body's \`projectId\` is required and is re-read scoped to the caller's org BEFORE inserting (404 \`Project not found\`, existence-hiding for cross-tenant ids) — a milestone can never be parented to another tenant's project. \`targetDate\` is an optional ISO date (the checkpoint's planned completion, which drives its on-track/at-risk signal relative to today); \`sort\` defaults to \`0\` when omitted and orders the milestone among its siblings. The parent project is fixed at creation and cannot be moved later (\`MilestoneUpdate\` has no \`projectId\`). Requires \`contribute\`. Returns the created {@link MilestoneOut}.`,
+      description: `Create a milestone within a Project. The body's \`projectId\` is required and is re-read scoped to the caller's org BEFORE inserting (404 \`Project not found\`, existence-hiding for cross-tenant ids) — a milestone can never be parented to another tenant's project. \`description\` is an optional long-form note (omit for none); \`targetDate\` is an optional ISO date (the checkpoint's planned completion, which drives its on-track/at-risk signal relative to today); \`sort\` defaults to \`0\` when omitted and orders the milestone among its siblings. The parent project is fixed at creation and cannot be moved later (\`MilestoneUpdate\` has no \`projectId\`). Requires \`contribute\`. Returns the created {@link MilestoneOut}.`,
     }),
     zJson(MilestoneCreate),
     async (c) => {
@@ -86,6 +87,7 @@ const milestones = new Hono<AppEnv>()
           organizationId: orgId,
           projectId: body.projectId,
           name: body.name,
+          description: body.description ?? null,
           targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
           sort: body.sort ?? 0,
           createdBy: actorId,
@@ -104,7 +106,7 @@ const milestones = new Hono<AppEnv>()
       tag: 'Milestones',
       summary: 'Get a milestone',
       response: MilestoneOut,
-      description: `Fetch a single milestone by id, scoped to the caller's org (404 \`Milestone not found\` when absent or cross-tenant). Returns the {@link MilestoneOut} — its parent \`projectId\`, \`name\`, optional \`targetDate\`, and \`sort\` position. Read-only; org membership suffices. Tasks are grouped under their milestone via the tasks/project endpoints; this read returns the milestone metadata only.`,
+      description: `Fetch a single milestone by id, scoped to the caller's org (404 \`Milestone not found\` when absent or cross-tenant). Returns the {@link MilestoneOut} — its parent \`projectId\`, \`name\`, optional \`description\` and \`targetDate\`, and \`sort\` position. Read-only; org membership suffices. Tasks are grouped under their milestone via the tasks/project endpoints; this read returns the milestone metadata only.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -128,7 +130,7 @@ const milestones = new Hono<AppEnv>()
       summary: 'Update a milestone',
       capability: 'contribute',
       response: MilestoneOut,
-      description: `Partially update a milestone's \`name\`, \`targetDate\`, and/or \`sort\`. Each field is optional: an absent key leaves the column untouched, and an explicit \`null\` \`targetDate\` clears the date (making the checkpoint undated). The parent project is immutable — there is intentionally no \`projectId\` in the body, so a milestone cannot be moved between projects (delete and recreate to re-parent). Editing \`sort\` reorders the milestone among its siblings on the project timeline. 404 (\`Milestone not found\`) when absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link MilestoneOut}.`,
+      description: `Partially update a milestone's \`name\`, \`description\`, \`targetDate\`, and/or \`sort\`. Each field is optional: an absent key leaves the column untouched, and an explicit \`null\` \`description\`/\`targetDate\` clears it (an undated checkpoint, or one with no note). The parent project is immutable — there is intentionally no \`projectId\` in the body, so a milestone cannot be moved between projects (delete and recreate to re-parent). Editing \`sort\` reorders the milestone among its siblings on the project timeline. 404 (\`Milestone not found\`) when absent or cross-tenant. Requires \`contribute\`. Returns the updated {@link MilestoneOut}.`,
     }),
     zParam(idParam),
     zJson(MilestoneUpdate),
@@ -140,6 +142,7 @@ const milestones = new Hono<AppEnv>()
         .update(milestone)
         .set({
           ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.description !== undefined ? { description: body.description } : {}),
           ...(body.targetDate !== undefined
             ? { targetDate: body.targetDate ? new Date(body.targetDate) : null }
             : {}),

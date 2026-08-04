@@ -76,25 +76,38 @@ export async function assertRefInOrg(
 }
 
 /**
- * Assert that a referenced Milestone belongs to the caller's org, or throw
- * {@link NotFoundError}.
+ * Assert that a referenced Milestone belongs to the caller's org AND to the given
+ * Project, or throw.
  *
  * @remarks
- * `milestone` has no `organization_id` column (its tenant is its parent project's),
- * so we join `milestone → project` and scope by the project's `organization_id`.
+ * We join `milestone → project` and scope by the project's `organization_id` to hide
+ * cross-tenant milestones behind a 404, same as {@link assertRefInOrg}. Beyond tenant
+ * isolation, a milestone can only ever group tasks within its own Project, so once the
+ * milestone is confirmed in-org we additionally check it belongs to `projectId` (the
+ * task's own, current-or-incoming project) and reject the mismatch with a
+ * {@link ValidationError} — the milestone exists and is in-org, it just isn't a valid
+ * choice for this task, which is a validation failure rather than a hidden-existence one.
+ * A `null`/`undefined` `milestoneId` is a no-op.
  */
 export async function assertMilestoneInOrg(
   orgId: string,
   milestoneId: string | null | undefined,
+  projectId: string | null | undefined,
 ): Promise<void> {
   if (milestoneId === null || milestoneId === undefined) return;
   const rows = await db
-    .select({ id: milestone.id })
+    .select({ id: milestone.id, projectId: milestone.projectId })
     .from(milestone)
     .innerJoin(project, eq(milestone.projectId, project.id))
     .where(and(eq(milestone.id, milestoneId), eq(project.organizationId, orgId)))
     .limit(1);
-  if (!rows[0]) throw new NotFoundError('Milestone not found');
+  const row = rows[0];
+  if (!row) throw new NotFoundError('Milestone not found');
+  if (row.projectId !== projectId) {
+    throw new ValidationError([
+      { message: "Milestone must belong to the task's project", path: ['milestoneId'] },
+    ]);
+  }
 }
 
 /** The minimal task columns needed to decide view access. */

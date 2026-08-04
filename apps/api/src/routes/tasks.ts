@@ -128,7 +128,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
       await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
-      await assertMilestoneInOrg(orgId, body.milestoneId);
+      await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId);
       if (body.parentTaskId !== undefined) await loadTask(orgId, body.parentTaskId);
 
       // resolveStateTransition validates the state key and derives terminal timestamps so
@@ -309,7 +309,17 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
       await assertRefInOrg(program, orgId, body.programId, 'Program not found');
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
-      await assertMilestoneInOrg(orgId, body.milestoneId);
+      // Effective project for milestone scoping: the incoming `projectId` when the patch
+      // re-points the task, otherwise its current one — loaded lazily, only when a
+      // non-null `milestoneId` is actually being set and the patch doesn't already carry
+      // a `projectId` to check against.
+      const effectiveProjectId =
+        body.milestoneId == null
+          ? undefined
+          : body.projectId !== undefined
+            ? body.projectId
+            : (await loadTask(orgId, id)).projectId;
+      await assertMilestoneInOrg(orgId, body.milestoneId, effectiveProjectId);
 
       // Reparent (RESTful: `parentTaskId` is a property of the task). Validate the new parent is a
       // real in-org task and not the task itself; the acyclic guard runs in the write tx below.

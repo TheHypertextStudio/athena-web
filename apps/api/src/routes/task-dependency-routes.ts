@@ -81,7 +81,7 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       await assertRefInOrg(actor, orgId, body.assigneeId, 'Assignee not found');
       await assertRefInOrg(project, orgId, body.projectId, 'Project not found');
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
-      await assertMilestoneInOrg(orgId, body.milestoneId);
+      await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId ?? parent.projectId);
 
       const state = body.state ?? parent.state;
 

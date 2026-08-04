@@ -181,6 +181,7 @@ export const milestone = pgTable(
       .notNull()
       .references(() => project.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
+    description: text('description'),
     targetDate: timestamp('target_date'),
     sort: integer('sort').notNull().default(0),
   },

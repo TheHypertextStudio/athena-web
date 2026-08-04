@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, type JSX } from 'react';
+import type { JSX } from 'react';
 
 import NotificationsSettingsPage from '@/app/(app)/orgs/[orgId]/settings/notifications/page';
 import { usePersonalWorkspaceId } from '@/components/settings/use-personal-workspace-id';
@@ -13,6 +13,5 @@ export default function GlobalNotificationsSettingsPage(): JSX.Element {
       <p className="text-on-surface-variant text-body-medium">Loading notification settings…</p>
     );
   }
-  const params = useMemo(() => Promise.resolve({ orgId }), [orgId]);
-  return <NotificationsSettingsPage params={params} />;
+  return <NotificationsSettingsPage />;
 }

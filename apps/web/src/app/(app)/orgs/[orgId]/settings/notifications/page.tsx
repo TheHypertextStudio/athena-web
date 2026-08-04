@@ -10,7 +10,7 @@
  */
 import type { ContactPointCreate, NotificationPreferencePatch } from '@docket/notifications';
 import { Skeleton } from '@docket/ui/primitives';
-import { use, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ContactPointsSection } from '@/components/settings/contact-points-section';
@@ -32,15 +32,18 @@ import {
 /**
  * The Notifications settings route.
  *
- * @param props - The dynamic route params (a Promise in the App Router).
+ * @remarks
+ * The data here is caller-owned (`/v1/me/*`, no `orgId` in the query keys), so — unlike its
+ * settings siblings — this page never needs the dynamic route's `params`. It used to call
+ * `use(params)` and discard the result, a no-op that under `next dev`/Turbopack a repeated
+ * client-side navigation back to this same route could occasionally trip into a bogus "async
+ * Client Component" runtime-error overlay, crashing the whole page render before this
+ * component's own error handling ever got a chance to run — no network failure involved, just a
+ * dead `use()` call with nothing depending on its resolved value. Dropping the `params` prop
+ * entirely (rather than destructuring and ignoring `orgId`) removes the trap.
  * @returns the rendered section.
  */
-export default function NotificationsSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  use(params);
+export default function NotificationsSettingsPage(): JSX.Element {
   const { activeOrg } = useActiveOrg();
   const section = settingsSections(activeOrg?.isPersonal ?? false).find(
     (candidate) => candidate.key === 'notifications',

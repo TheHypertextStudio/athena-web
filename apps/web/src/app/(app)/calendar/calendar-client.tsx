@@ -209,7 +209,20 @@ export default function CalendarClient(): JSX.Element {
         onNext={() => {
           navigate('next');
         }}
-        onAxisChange={setAxis}
+        onAxisChange={(nextAxis) => {
+          // `anchorDate` doubles as "the dates axis's left-most rendered lane": once the canvas
+          // measures a viewport wide enough to show more than one lane, `onVisibleLaneCountChange`
+          // below recenters it backward so `today` lands mid-window with leading context days. That
+          // recentered value is correct for the dates axis, but the people axis is always a single
+          // day — reusing the drifted anchor made switching to People silently compare and render
+          // whatever day happened to be the dates view's left edge instead of today.
+          if (nextAxis === 'people' && axis !== 'people' && anchorDate !== today) {
+            visibleDateRangeRef.current = null;
+            setVisibleDateRange(null);
+            setAnchorDate(today);
+          }
+          setAxis(nextAxis);
+        }}
         onZoomChange={(nextPixelsPerHour) => {
           pixelsPerHourEdited.current = true;
           applyPixelsPerHour(nextPixelsPerHour);

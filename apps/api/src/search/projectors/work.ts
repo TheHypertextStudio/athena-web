@@ -125,10 +125,17 @@ export const initiativeSearchProjector = preloadedProjector<NamedWorkRow>('initi
 
 /** Projector for project milestone search documents. */
 export const milestoneSearchProjector = preloadedProjector<
-  OrgScopedRow & { projectId: string; name: string; targetDate?: Date | null; sort?: number }
+  OrgScopedRow & {
+    projectId: string;
+    name: string;
+    description?: string | null;
+    targetDate?: Date | null;
+    sort?: number;
+  }
 >('milestone', (row) => ({
   ...workDocument(row, 'milestone', row.name, {
     summary: row.targetDate?.toISOString() ?? null,
+    body: row.description ?? null,
     facet: {
       projectId: row.projectId,
       targetDate: row.targetDate?.toISOString() ?? null,

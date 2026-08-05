@@ -73,7 +73,7 @@ export function EntityDocument({
       {showLabel ? (
         <p className="text-on-surface-variant text-label-medium mb-2">Contents</p>
       ) : null}
-      <ol className="space-y-1">
+      <ol className="space-y-2">
         {headings.map((heading) => (
           <li key={heading.id} style={{ paddingLeft: `${(heading.level - 1) * 12}px` }}>
             <a
@@ -88,8 +88,8 @@ export function EntityDocument({
               }}
               className={
                 activeId === heading.id
-                  ? 'text-on-surface text-label-medium flex min-h-10 items-center @4xl:min-h-0'
-                  : 'text-on-surface-variant hover:text-on-surface text-label-medium flex min-h-10 items-center @4xl:min-h-0'
+                  ? 'text-on-surface text-body-small flex min-h-10 items-center @4xl:min-h-0'
+                  : 'text-on-surface-variant hover:text-on-surface text-body-small flex min-h-10 items-center @4xl:min-h-0'
               }
             >
               {heading.text}
@@ -134,7 +134,7 @@ export function EntityDocument({
          */}
         <div
           ref={rootRef}
-          className="entity-document bg-surface-container-low flex min-h-56 flex-col rounded-xl p-4 print:bg-transparent print:p-0"
+          className="entity-document bg-surface-container-low flex min-h-56 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
         >
           <EditableFreeformText
             value={value}

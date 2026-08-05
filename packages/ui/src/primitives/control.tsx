@@ -183,7 +183,7 @@ export const CONTROL: Readonly<Record<ControlSize, ControlMetrics>> = {
     iconApply: '[&_svg]:size-4.5!',
     iconPx: 18,
     labelToken: 'label-large',
-    fieldToken: 'body-medium',
+    fieldToken: 'body-small',
   },
   lg: {
     height: 'h-9',
@@ -197,7 +197,7 @@ export const CONTROL: Readonly<Record<ControlSize, ControlMetrics>> = {
     iconApply: '[&_svg]:size-4.5!',
     iconPx: 18,
     labelToken: 'label-large',
-    fieldToken: 'body-medium',
+    fieldToken: 'body-small',
   },
   xl: {
     height: 'h-10',
@@ -211,7 +211,7 @@ export const CONTROL: Readonly<Record<ControlSize, ControlMetrics>> = {
     iconApply: '[&_svg]:size-5!',
     iconPx: 20,
     labelToken: 'label-large',
-    fieldToken: 'body-large',
+    fieldToken: 'body-medium',
   },
 } as const;
 

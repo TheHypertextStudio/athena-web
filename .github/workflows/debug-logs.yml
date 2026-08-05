@@ -22,6 +22,15 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
+      - name: Self-grant read-only log access, if permitted
+        continue-on-error: true
+        run: |
+          gcloud projects add-iam-policy-binding "${{ vars.GCP_PROJECT_ID }}" \
+            --member="serviceAccount:${{ vars.GCP_SERVICE_ACCOUNT }}" \
+            --role="roles/logging.viewer" \
+            --condition=None \
+            --quiet
+
       - name: Read revision logs
         run: |
           gcloud logging read \

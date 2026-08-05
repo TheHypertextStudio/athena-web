@@ -41,6 +41,8 @@ declare const __SW_BUILD_ID__: string;
 declare const __SW_MODE__: string;
 /** Replaced at build time with `NEXT_PUBLIC_API_URL` — a worker cannot read the app's env. */
 declare const __SW_API_ORIGIN__: string;
+/** Replaced at build time with every `/_next/static` URL. Empty in development. */
+declare const __SW_PRECACHE__: readonly string[];
 
 const VERSION = __SW_BUILD_ID__;
 const PRODUCTION = __SW_MODE__ === 'production';
@@ -109,9 +111,59 @@ self.addEventListener('activate', (event) => {
       // Safe here because activation only follows an accepted update (or every tab closing), so no
       // live tab is swapped mid-session.
       await self.clients.claim();
+      // Deliberately not awaited, and deliberately not in `install`. Blocking installation on a few
+      // megabytes would make every release wait on the slowest connection before the update prompt
+      // could even appear; this fills in behind a working app instead.
+      void warmBuildAssets();
     })(),
   );
 });
+
+/**
+ * Fetch every build asset into the static cache, so a route nobody has visited can still render.
+ *
+ * @remarks
+ * This is what makes offline coverage a property of the *release* rather than of where a person
+ * happened to browse. Without it, cache-first only ever holds the chunks already fetched, so the
+ * route you need on the train is the one you never opened.
+ *
+ * Three things keep it polite. It runs after activation rather than during install, so it never
+ * delays an update. It skips outright when the browser reports Data Saver, because a few megabytes
+ * of speculative download is exactly what that setting exists to refuse. And it goes a few at a
+ * time, so it neither saturates the connection nor queues 200 requests ahead of anything the person
+ * actually asked for.
+ *
+ * Individual failures are ignored: a missed asset is fetched on demand later by the normal
+ * cache-first rule, which is the behaviour that existed before any of this.
+ */
+async function warmBuildAssets(): Promise<void> {
+  if (__SW_PRECACHE__.length === 0) return;
+  // `connection` is not in the standard ServiceWorker lib; the cast is the narrowest acknowledgement.
+  const saveData = (self.navigator as unknown as { connection?: { saveData?: boolean } }).connection
+    ?.saveData;
+  if (saveData === true) return;
+
+  try {
+    const cache = await caches.open(STATIC_CACHE);
+    const missing: string[] = [];
+    for (const url of __SW_PRECACHE__) {
+      if (!(await cache.match(url))) missing.push(url);
+    }
+
+    const BATCH = 6;
+    for (let index = 0; index < missing.length; index += BATCH) {
+      await Promise.all(
+        missing.slice(index, index + BATCH).map((url) =>
+          cache.add(url).catch(() => {
+            /* Fetched on demand later by the cache-first rule. */
+          }),
+        ),
+      );
+    }
+  } catch {
+    /* Storage denied or quota exhausted. Offline coverage narrows; nothing else changes. */
+  }
+}
 
 self.addEventListener('message', (event) => {
   // The field is `type`, never `message`: the repository's error-source policy scans web source for

@@ -79,9 +79,12 @@ failure surfaces as a blank route months later to whoever lost their connection.
 from `src/app/(app)` by two rules: the page is a client component, or it has exactly one sibling
 `*-client.tsx`.
 
-A page matching neither is a **build failure**, not a skip. Four redirect-only pages and the shell
-route itself are declared in `ROUTES_NOT_IN_TABLE` with reasons. Four pages that composed client
-components inline were split into the standard shape rather than teaching the generator about them.
+A page matching neither is a **build failure**, not a skip, and so is a page whose client entry takes
+props — the table mounts a route with no props, because offline there is no server to resolve Next's
+`params` promise. Four redirect-only pages are declared in `ROUTES_NOT_IN_TABLE` with reasons.
+Twenty-one pages were reshaped rather than teaching the generator about them: sixteen that took the
+`params` promise now read `useAppParams`, four that composed client components inline were split, and
+the graph route gained a prop-free entry that resolves its scope from the URL.
 
 `tests/lib/offline-routes.test.ts` asserts that regenerating produces exactly what is committed.
 
@@ -104,9 +107,11 @@ on. Equal means the document is being used as intended and `children` — the re
 prefetched data — renders untouched. Different means it is standing in, and the outlet mounts the
 requested route's own component instead.
 
-The comparison runs through `useSyncExternalStore`, whose server snapshot reports the document's own
-path. The first client render therefore reproduces the server HTML exactly, and the real URL lands
-in a follow-up render rather than as a hydration error.
+The comparison reads `useAppLocation`, not `window.location` directly, and that matters twice. Its
+server snapshot reports the document's own path, so the first client render reproduces the server
+HTML exactly and the real URL arrives in a follow-up render rather than as a hydration error. And
+offline navigation writes to that same store, so a click that swaps the route re-renders the slot —
+without it the previous page would stay on screen under the new URL.
 
 The shell sits _below_ the route's own document in the fallback order: a document rendered for this
 route carries its own server-prefetched data and hydrates against its own tree.
@@ -116,14 +121,27 @@ route carries its own server-prefetched data and hydrates against its own tree.
 **Precache anything that will not take a surprising amount of space on the device.** That is a
 measured byte budget checked at build time, not a curated route list.
 
-Route **code** is precached: it is identical for every user, and it is the difference between a page
-rendering and not. Per-object **data** is never precached — a workspace's objects run to megabytes —
-so which entities are available offline is whatever the person actually loaded, held in the
-persisted query cache.
+Measured against a real production build, the whole of `.next/static` is **239 assets, 7.8 MB on
+disk, 2.0 MB gzipped over the wire** — every route's code, every stylesheet, every font. At that
+size there is nothing to choose between, so everything ships. `PRECACHE_BUDGET_BYTES` is 12 MB, and
+exceeding it **fails the build** with the ten largest assets named. It never drops them quietly: a
+precache that silently shrinks is a feature that silently stops working, for someone who is offline
+and cannot be told.
+
+Route **code** is precached because it is identical for every user and it is the difference between
+a page rendering and not. Per-object **data** never is — a workspace's objects run to megabytes — so
+which entities are available offline is whatever the person actually loaded, held in the persisted
+query cache.
+
+The warm runs **after** activation, not during install, so a release is never held up by a few
+megabytes on a slow connection, and it is skipped outright when the browser reports Data Saver. It
+goes six at a time so it never queues ahead of something the person actually asked for, and a failed
+asset is simply fetched on demand later by the ordinary cache-first rule.
 
 `routing.ts` used to argue that this worker needs no precache manifest, because content-hashed URLs
 make cache-first self-healing. That is true about correctness and false about coverage: a chunk
 never fetched is not in the cache, which is exactly why a route nobody visited cannot render.
+Cache-first cannot fix that, because there is nothing to be first about.
 
 ## Multi-user safety
 

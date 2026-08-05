@@ -7,11 +7,17 @@
  * is the part where a mistake is expensive — caching an authenticated API response, or swallowing
  * a dev-server request and breaking hot reload.
  *
- * There is deliberately no precache manifest anywhere in this worker. Next emits content-hashed,
- * immutable filenames under `/_next/static`, so a cache-first strategy is self-healing: a new build
- * requests new URLs and simply misses. That is the entire reason this codebase needs no build-time
- * manifest generator (and therefore no Workbox or Serwist, both of which are webpack plugins that
- * would force this Turbopack app onto the webpack builder).
+ * Next emits content-hashed, immutable filenames under `/_next/static`, so cache-first is
+ * self-healing: a new build requests new URLs and simply misses. That is why nothing here needs
+ * Workbox or Serwist, both of which are webpack plugins that would force this Turbopack app onto
+ * the webpack builder.
+ *
+ * **It is not, however, why this worker once had no precache manifest.** That argument was made
+ * here and it was wrong: self-healing is a property of *correctness*, not of *coverage*. A chunk
+ * that has never been fetched is not in the cache, so cache-first has nothing to be first about —
+ * which is exactly why a route nobody visited could not render offline. `scripts/precache-manifest.ts`
+ * now lists every emitted asset, under a build-enforced byte budget, and `sw.ts` warms them after
+ * activation. See `docs/engineering/specs/offline.md`.
  */
 
 /** What the fetch handler should do with a request. */

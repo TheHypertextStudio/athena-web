@@ -31,6 +31,14 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  assertWithinBudget,
+  collectPrecacheAssets,
+  formatBytes,
+  totalBytes,
+  type PrecacheAsset,
+} from './precache-manifest';
+
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Next's build id, or `'dev'` when no production build is present. */
@@ -58,6 +66,18 @@ const production = process.argv.includes('--production');
 // `dev` so restarting the dev server never masquerades as a new version.
 const buildId = production ? readBuildId() : 'dev';
 
+/**
+ * The assets to precache, and nothing in development.
+ *
+ * @remarks
+ * Turbopack rebuilds dev chunks in place under the same paths, so a dev precache would pin stale
+ * code — the same reason `routing.ts` only caches `/_next/static` in production builds.
+ */
+const precache: readonly PrecacheAsset[] = production
+  ? collectPrecacheAssets(join(WEB_ROOT, '.next/static'))
+  : [];
+assertWithinBudget(precache);
+
 await build({
   absWorkingDir: WEB_ROOT,
   entryPoints: ['service-worker/sw.ts'],
@@ -74,9 +94,17 @@ await build({
     // The worker answers Athena's questions straight from a notification, which means it needs the
     // API origin; a service worker cannot read `process.env` at runtime, so it is baked in here.
     __SW_API_ORIGIN__: JSON.stringify(process.env['NEXT_PUBLIC_API_URL'] ?? ''),
+    // Inlined rather than fetched at runtime: a manifest request would be one more thing that can
+    // fail, and the list has to be part of the bytes the browser diffs when deciding an update
+    // exists — otherwise a release that only changed which assets exist would not install.
+    __SW_PRECACHE__: JSON.stringify(precache.map((asset) => asset.url)),
   },
 });
 
 process.stdout.write(
-  `public/sw.js — build ${buildId} (${production ? 'production' : 'development'})\n`,
+  `public/sw.js — build ${buildId} (${production ? 'production' : 'development'})` +
+    (production
+      ? `, precaching ${String(precache.length)} assets (${formatBytes(totalBytes(precache))})`
+      : '') +
+    '\n',
 );

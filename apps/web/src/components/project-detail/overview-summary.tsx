@@ -29,6 +29,7 @@ import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
+import { countTasksByMilestone } from '@/lib/milestone-progress';
 import { STATE_GROUP_LABEL, STATE_GROUP_ORDER, stateTypeOf } from '@/lib/work-state';
 
 /** A task paired with its resolved milestone id (mirrors the Tasks-tab shape). */
@@ -69,11 +70,6 @@ const STATE_BAR_CLASS: Record<WorkflowStateType, string> = {
 /** The synthesized Unscheduled bucket id. */
 const UNSCHEDULED_ID = '__unscheduled__';
 
-/** Whether a canonical state type counts as "done" for milestone completion. */
-function isComplete(type: WorkflowStateType): boolean {
-  return type === 'completed';
-}
-
 /**
  * The state-distribution + by-milestone breakdown card.
  *
@@ -103,14 +99,7 @@ export function OverviewSummary({
     milestones.forEach((m, i) => order.set(m.id, i));
     const name = new Map<string, string>(milestones.map((m) => [m.id, m.name]));
 
-    const buckets = new Map<string, { done: number; total: number }>();
-    for (const t of tasks) {
-      const key = t.milestoneId ?? UNSCHEDULED_ID;
-      const bucket = buckets.get(key) ?? { done: 0, total: 0 };
-      bucket.total += 1;
-      if (isComplete(stateTypeOf(t.task.state))) bucket.done += 1;
-      buckets.set(key, bucket);
-    }
+    const buckets = countTasksByMilestone(tasks, UNSCHEDULED_ID);
 
     return [...buckets.entries()]
       .map(([id, b]) => ({

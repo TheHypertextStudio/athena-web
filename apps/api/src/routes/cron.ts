@@ -25,6 +25,7 @@ import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
 import { getContainer } from '../container';
+import { sweepLegacyMentions } from '../content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
 import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
@@ -103,6 +104,14 @@ const cron = new Hono()
   // are created `pending` by the mention reconciler so a description save never waits on a
   // third-party fetch; the lease lives on the row, so a scheduler retry re-claims rather than
   // duplicating.
+  // One-way conversion of prose still holding the shortcode mention form an earlier
+  // implementation stored. Idempotent and self-limiting: once no row matches, every tick is a
+  // single indexed scan that finds nothing.
+  .post('/legacy-mentions', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepLegacyMentions();
+    return c.json({ swept: true, ...result });
+  })
   .post('/unfurl-resources', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepResourceUnfurls(getContainer().unfurler, new Date());

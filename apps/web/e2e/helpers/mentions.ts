@@ -7,7 +7,7 @@
  * though the picker were broken, so {@link waitForMentionable} polls the same endpoint the picker
  * calls until the entity is actually findable.
  */
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 
 import { TIMEOUTS } from './constants';
 import { expect } from './fixtures';
@@ -82,12 +82,18 @@ export async function waitForMentionable(
 }
 
 /**
- * Type an `@` query into the focused field and wait for the menu to list something.
+ * Type an `@` query into a field and wait for the menu to list something.
  *
- * @param page - The page whose caret is already where the mention belongs.
+ * @remarks
+ * Types through the locator rather than through `page.keyboard`, so the keys are delivered to the
+ * field itself. A page-level `keyboard.type` goes wherever focus happens to be, and a composer
+ * that has not finished hydrating swallows the whole string with no error — which reads as a
+ * broken picker rather than a mistargeted test.
+ *
+ * @param field - The field the mention belongs in.
  * @param query - The characters to type after the `@`.
  */
-export async function openMentionMenu(page: Page, query: string): Promise<void> {
-  await page.keyboard.type(`@${query}`);
-  await expect(page.getByRole('option').first()).toBeVisible({ timeout: TIMEOUTS.ui });
+export async function openMentionMenu(field: Locator, query: string): Promise<void> {
+  await field.pressSequentially(`@${query}`);
+  await expect(field.page().getByRole('option').first()).toBeVisible({ timeout: TIMEOUTS.ui });
 }

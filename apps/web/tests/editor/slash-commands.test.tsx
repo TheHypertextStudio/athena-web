@@ -17,6 +17,7 @@ import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
  */
 vi.mock('@/components/active-org', () => ({
   useOptionalActiveOrg: () => ({ activeOrgId: 'org_1' }),
+  useActiveOrgIdOptional: () => 'org_1',
   useActiveOrg: () => ({ activeOrgId: 'org_1' }),
 }));
 
@@ -188,7 +189,7 @@ describe('the slash insert menu', () => {
 
 describe('slash-command ranking', () => {
   it('matches slash commands on keywords, not only labels', () => {
-    expect(rankSlashCommands('bullet').map((command) => command.id)).toContain('bulletList');
+    expect(rankSlashCommands('bullet').map((command) => command.id)).toContain('bullet-list');
   });
 
   it('returns every command for an empty query', () => {

@@ -18,6 +18,7 @@ import { db } from '@docket/db';
 import { sweepAccountExports } from './account/export';
 import { sweepAccountDeletions } from './account/lifecycle';
 import { getContainer } from './container';
+import { sweepLegacyMentions } from './content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from './content/unfurl-sweep';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
 import { processSearchIndexJobs } from './search/process-jobs';
@@ -40,6 +41,7 @@ export function startDevScheduler(): void {
       await sweepElicitations(now);
       await processSearchIndexJobs({ limit: 50 });
       await sweepResourceUnfurls(getContainer().unfurler, now);
+      await sweepLegacyMentions();
     } catch (err) {
       console.error('[dev-cron] sweep failed:', err);
     }

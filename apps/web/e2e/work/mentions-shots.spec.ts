@@ -36,8 +36,8 @@ test.describe('mention visuals', () => {
 
       await prose.click();
       await page.keyboard.press('End');
-      await page.keyboard.type(' Blocked by ');
-      await openMentionMenu(page, 'z');
+      await prose.pressSequentially(' Blocked by ');
+      await openMentionMenu(prose, 'z');
 
       // The grouped menu is the state most worth looking at: it is where a missing separator or a
       // section header at the wrong tonal step shows up.

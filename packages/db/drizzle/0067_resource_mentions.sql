@@ -2,7 +2,7 @@ CREATE TYPE "public"."external_resource_type" AS ENUM('document', 'spreadsheet',
 CREATE TYPE "public"."mention_entity_kind" AS ENUM('task', 'project', 'program', 'initiative', 'cycle', 'milestone', 'team', 'actor', 'agent_session', 'comment', 'update');--> statement-breakpoint
 CREATE TYPE "public"."mention_subject_type" AS ENUM('task', 'project', 'program', 'initiative', 'comment', 'update');--> statement-breakpoint
 CREATE TYPE "public"."mention_target_kind" AS ENUM('entity', 'external');--> statement-breakpoint
-CREATE TYPE "public"."resource_provider" AS ENUM('web', 'google_drive');--> statement-breakpoint
+CREATE TYPE "public"."resource_provider" AS ENUM('web', 'google_drive', 'onedrive', 'sharepoint', 'notion', 'dropbox', 'box', 'figma', 'confluence');--> statement-breakpoint
 CREATE TYPE "public"."resource_unfurl_status" AS ENUM('pending', 'ok', 'forbidden', 'requires_connection', 'unsupported', 'failed');--> statement-breakpoint
 ALTER TYPE "public"."source_system" ADD VALUE 'google_drive' BEFORE 'outlook';--> statement-breakpoint
 CREATE TABLE "external_resource" (

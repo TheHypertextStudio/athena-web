@@ -16,6 +16,7 @@ import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
 
 vi.mock('@/components/active-org', () => ({
   useOptionalActiveOrg: () => null,
+  useActiveOrgIdOptional: () => null,
   useActiveOrg: () => ({ activeOrgId: 'org_1' }),
 }));
 

@@ -36,8 +36,8 @@ test.describe('mentions', () => {
 
     await prose.click();
     await page.keyboard.press('End');
-    await page.keyboard.type(' Blocked by ');
-    await openMentionMenu(page, 'zep');
+    await prose.pressSequentially(' Blocked by ');
+    await openMentionMenu(prose, 'zep');
     await expect(page.getByRole('option', { name: new RegExp(taskTitle) })).toBeVisible();
     await page.keyboard.press('Enter');
     await expect(page.locator('[data-mention-kind]').filter({ hasText: taskTitle })).toHaveCount(1);
@@ -97,13 +97,41 @@ test.describe('mentions', () => {
     await expect(composer).toHaveAttribute('aria-expanded', 'false');
 
     await composer.click();
-    await page.keyboard.type('Blocked by ');
-    await openMentionMenu(page, 'zep');
+    await composer.pressSequentially('Blocked by ');
+    await openMentionMenu(composer, 'zep');
     await expect(composer).toHaveAttribute('aria-expanded', 'true');
     await page.keyboard.press('Enter');
     await expect(composer).toHaveValue(
       `Blocked by [${taskTitle}](/orgs/${orgId}/tasks/${taskId} "docket:v1:task:${taskId}") `,
     );
+  });
+
+  test("`@` and `/` stay out of each other's way in the same editor", async ({ page }) => {
+    const { orgId } = await signUpAndOnboard(page, 'MentionsSlash');
+    const { projectId, taskTitle } = await seedMentionFixtures(page, orgId);
+    await waitForMentionable(page, orgId, 'zep', taskTitle);
+
+    await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
+    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
+
+    // They are two separate runs on two separate plugins, so the risk worth a test is that one
+    // run leaks into the other: the slash menu answering an `@`, or a mention menu still holding
+    // the arrow keys once the reader has moved on to inserting a block.
+    await prose.click();
+    await page.keyboard.press('End');
+    await page.keyboard.press('Enter');
+    await prose.pressSequentially('/bul');
+    await expect(page.getByRole('listbox', { name: 'Insert a block' })).toBeVisible();
+    await expect(page.getByRole('listbox', { name: 'Mention a resource' })).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expect(prose.locator('ul li')).toHaveCount(1);
+
+    await openMentionMenu(prose, 'zep');
+    await expect(page.getByRole('listbox', { name: 'Mention a resource' })).toBeVisible();
+    await expect(page.getByRole('listbox', { name: 'Insert a block' })).toHaveCount(0);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-mention-kind]').filter({ hasText: taskTitle })).toHaveCount(1);
   });
 
   test('a model-context surface dismisses cleanly and inserts a bare title', async ({ page }) => {
@@ -116,8 +144,8 @@ test.describe('mentions', () => {
     await expect(capture).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
     await capture.click();
-    await page.keyboard.type('Follow up on ');
-    await openMentionMenu(page, 'zep');
+    await capture.pressSequentially('Follow up on ');
+    await openMentionMenu(capture, 'zep');
 
     await page.keyboard.press('Escape');
     await expect(page.getByRole('listbox')).toHaveCount(0);
@@ -131,8 +159,8 @@ test.describe('mentions', () => {
 
     // A fresh attempt still opens, so one Escape never disables the field for good.
     await page.keyboard.press('End');
-    await page.keyboard.type(' and ');
-    await openMentionMenu(page, 'zep');
+    await capture.pressSequentially(' and ');
+    await openMentionMenu(capture, 'zep');
     await page.keyboard.press('Enter');
 
     // Context mode writes a bare title: Markdown link syntax in a model prompt is noise.

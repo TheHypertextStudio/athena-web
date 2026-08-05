@@ -36,11 +36,8 @@ import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import {
-  AppliedTemplateNotice,
-  ComposerTemplateControl,
-} from '@/components/composer/template-menu';
-import { useComposerDraft } from '@/components/composer/use-composer-draft';
+import { ComposerTemplateControl } from '@/components/composer/template-menu';
+import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
@@ -113,20 +110,19 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   const projectNounLower = projectNoun.toLowerCase();
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
-  const { draft, setField, updateDraft, applyTemplate, undoTemplate, appliedTemplate } =
-    useComposerDraft<ProjectDraft>({
-      name: '',
-      summary: '',
-      description: '',
-      teamOverride: null,
-      leadId: null,
-      programId: defaultProgramId ?? null,
-      status: 'planned',
-      health: null,
-      startDate: null,
-      targetDate: null,
-      initiativeIds: [],
-    });
+  const { draft, setField, updateDraft } = useComposerDraft<ProjectDraft>({
+    name: '',
+    summary: '',
+    description: '',
+    teamOverride: null,
+    leadId: null,
+    programId: defaultProgramId ?? null,
+    status: 'planned',
+    health: null,
+    startDate: null,
+    targetDate: null,
+    initiativeIds: [],
+  });
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,21 +198,17 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           orgId={orgId}
           kind="project"
           open={open}
-          appliedId={appliedTemplate?.id ?? null}
           autoApplyId={defaultTemplateId}
           onApply={(chosen) => {
-            applyTemplate(templatePatch(chosen.payload, 'project'), {
-              id: chosen.id,
-              name: chosen.name,
-            });
+            updateDraft((current) =>
+              templateMerge(current, templatePatch(chosen.payload, 'project'), {
+                document: 'description',
+                labels: ['name', 'summary'],
+              }),
+            );
           }}
           disabled={creating}
         />
-      }
-      notice={
-        appliedTemplate ? (
-          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
-        ) : null
       }
       title={draft.name}
       onTitleChange={(next) => {

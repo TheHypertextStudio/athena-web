@@ -47,11 +47,8 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import {
-  AppliedTemplateNotice,
-  ComposerTemplateControl,
-} from '@/components/composer/template-menu';
-import { useComposerDraft } from '@/components/composer/use-composer-draft';
+import { ComposerTemplateControl } from '@/components/composer/template-menu';
+import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
@@ -130,22 +127,21 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
   const { scale: estimationScale } = useEstimationScale(orgId);
-  const { draft, setField, updateDraft, applyTemplate, undoTemplate, appliedTemplate } =
-    useComposerDraft<TaskDraft>({
-      title: '',
-      description: '',
-      teamOverride: null,
-      state: null,
-      priority: 'none',
-      assigneeId: defaultAssigneeId,
-      projectId: defaultProjectId,
-      milestoneId: null,
-      cycleId: null,
-      startDate: null,
-      dueDate: null,
-      labelIds: [],
-      estimate: null,
-    });
+  const { draft, setField, updateDraft } = useComposerDraft<TaskDraft>({
+    title: '',
+    description: '',
+    teamOverride: null,
+    state: null,
+    priority: 'none',
+    assigneeId: defaultAssigneeId,
+    projectId: defaultProjectId,
+    milestoneId: null,
+    cycleId: null,
+    startDate: null,
+    dueDate: null,
+    labelIds: [],
+    estimate: null,
+  });
 
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
   const [creating, setCreating] = useState(false);
@@ -270,21 +266,17 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           orgId={orgId}
           kind="task"
           open={open}
-          appliedId={appliedTemplate?.id ?? null}
           autoApplyId={defaultTemplateId}
           onApply={(chosen) => {
-            applyTemplate(templatePatch(chosen.payload, 'task'), {
-              id: chosen.id,
-              name: chosen.name,
-            });
+            updateDraft((current) =>
+              templateMerge(current, templatePatch(chosen.payload, 'task'), {
+                document: 'description',
+                labels: ['title'],
+              }),
+            );
           }}
           disabled={creating}
         />
-      }
-      notice={
-        appliedTemplate ? (
-          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
-        ) : null
       }
       title={draft.title}
       onTitleChange={(next) => {

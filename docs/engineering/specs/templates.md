@@ -126,13 +126,32 @@ graph LR
 dialog's top row, opposite the breadcrumb. It is deliberately **not** a suggestion-chip row: a chip
 row suits a fixed set of two or three, and a template list is unbounded, has to show scope, and
 needs a route out to management. It is also deliberately **not** in the property strip — every pill
-there sets one field, and a template rewrites the draft. See `docs/design/design-system.md` §3,
-which this change revised.
+there sets one field, and a template reaches the whole draft. See `docs/design/design-system.md`
+§3, which this change revised.
 
-**2. The draft** — `components/composer/use-composer-draft.ts`. Each composer holds its fields as
-one value so a template can fill all of them at once and one assignment can undo it. Applying
-**merges**: a title already typed survives a template that does not mention titles. An inline
-`Applied X. Undo` line restores the exact pre-apply draft, one step.
+**2. The draft, and what applying actually does** — `components/composer/use-composer-draft.ts`.
+Each composer holds its fields as one value, and `templateMerge` decides how a template's fields
+land. The rule is one sentence: **a template never removes anything the author wrote.**
+
+| Field kind                          | Behaviour                               | Why                                                                                         |
+| ----------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------- |
+| the document (`description`)        | **appended**, separated by a blank line | Two outlines stacked is a readable document; a replaced one is lost work.                   |
+| single-line labels (title, summary) | filled only while blank                 | A title cannot be appended to, and overwriting one discards typed words.                    |
+| everything else (enums)             | set                                     | They show in the property strip and are one click to change, so nothing written is at risk. |
+
+This is the whole fix for the defect the slice exists to remove. The old picker called
+`setBody(GUIDED_DOCUMENT)` and destroyed typed text; the answer is not a confirmation prompt or an
+undo affordance but for the action to take nothing away in the first place. Two consequences worth
+stating, because they are why there is no undo, no "Applied" banner, and no applied state on the
+trigger:
+
+- **Applying is repeatable.** A second template adds a second outline beneath the first.
+- **A template picked by mistake is deleted the way any other text is** — select it and press
+  delete. There is nothing bespoke to learn.
+
+An earlier revision did ship an `Applied X. Undo` line under the property strip. It was removed:
+it protected against a loss that no longer happens, and it cost a whole horizontal band between
+the properties and the primary action, in the slot that otherwise renders errors.
 
 > `updateDraft` returns the current state unchanged when a patch changes nothing. This is
 > load-bearing, not an optimisation. The task composer fills its status from an effect whose

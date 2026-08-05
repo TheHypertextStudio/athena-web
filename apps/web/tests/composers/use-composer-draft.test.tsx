@@ -4,25 +4,32 @@
  * @remarks
  * The behaviour under test is the fix for the defect this slice exists to remove: the old
  * initiative picker called `setBody(GUIDED_DOCUMENT)` on every click, which destroyed typed text
- * with no confirmation and no way back. The two properties that matter are that an apply *merges*
- * rather than replaces, and that a single undo restores exactly what was on screen beforehand.
+ * with no confirmation and no way back. The answer is not a confirmation prompt or an undo
+ * affordance — it is that applying a template takes nothing away, so there is nothing to undo.
  */
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { useComposerDraft } from '../../src/components/composer/use-composer-draft';
+import { templateMerge, useComposerDraft } from '../../src/components/composer/use-composer-draft';
 
 interface Draft {
   name: string;
+  summary: string;
   description: string;
   priority: 'none' | 'high';
-  ownerId: string | null;
+  health: 'on_track' | null;
 }
 
-const EMPTY: Draft = { name: '', description: '', priority: 'none', ownerId: null };
+const EMPTY: Draft = {
+  name: '',
+  summary: '',
+  description: '',
+  priority: 'none',
+  health: null,
+};
 
-const BUG = { id: 'tpl_bug', name: 'Bug report' };
-const SPIKE = { id: 'tpl_spike', name: 'Research spike' };
+/** How the initiative-shaped composers absorb a template. */
+const RULE = { document: 'description', labels: ['name', 'summary'] } as const;
 
 afterEach(cleanup);
 
@@ -37,100 +44,21 @@ describe('useComposerDraft', () => {
     expect(result.current.draft).toEqual({ ...EMPTY, name: 'Checkout is broken' });
   });
 
-  it('merges a template instead of replacing the draft, so typed text survives', () => {
-    const { result } = renderHook(() => useComposerDraft<Draft>(EMPTY));
-
-    act(() => {
-      result.current.setField('name', 'Checkout is broken');
-      result.current.setField('ownerId', 'actor_1');
-    });
-    act(() => {
-      result.current.applyTemplate({ description: '## Steps', priority: 'high' }, BUG);
-    });
-
-    expect(result.current.draft).toEqual({
-      name: 'Checkout is broken',
-      description: '## Steps',
-      priority: 'high',
-      ownerId: 'actor_1',
-    });
-    expect(result.current.appliedTemplate).toEqual(BUG);
-  });
-
-  it('restores the exact pre-apply draft on undo', () => {
-    const { result } = renderHook(() => useComposerDraft<Draft>(EMPTY));
-
-    act(() => {
-      result.current.setField('name', 'Checkout is broken');
-      result.current.setField('description', 'notes I typed myself');
-    });
-    const before = result.current.draft;
-
-    act(() => {
-      result.current.applyTemplate({ description: '## Steps', priority: 'high' }, BUG);
-    });
-    expect(result.current.draft.description).toBe('## Steps');
-
-    act(() => {
-      result.current.undoTemplate();
-    });
-
-    expect(result.current.draft).toEqual(before);
-    expect(result.current.appliedTemplate).toBeNull();
-  });
-
-  it('undoes only the most recent apply, not back past the first one', () => {
-    const { result } = renderHook(() => useComposerDraft<Draft>(EMPTY));
-
-    act(() => {
-      result.current.applyTemplate({ description: '## Steps', priority: 'high' }, BUG);
-    });
-    const afterFirst = result.current.draft;
-
-    act(() => {
-      result.current.applyTemplate({ description: '## Question' }, SPIKE);
-    });
-    expect(result.current.appliedTemplate).toEqual(SPIKE);
-
-    act(() => {
-      result.current.undoTemplate();
-    });
-
-    // Back to the bug-report draft, not to the empty one. A control labelled "Undo" returns what
-    // was on screen when it was pressed; walking further back would be a history nobody can see.
-    expect(result.current.draft).toEqual(afterFirst);
-  });
-
-  it('is inert when undo is pressed with nothing applied', () => {
-    const { result } = renderHook(() => useComposerDraft<Draft>(EMPTY));
-
-    act(() => {
-      result.current.setField('name', 'Untouched');
-    });
-    act(() => {
-      result.current.undoTemplate();
-    });
-
-    expect(result.current.draft).toEqual({ ...EMPTY, name: 'Untouched' });
-  });
-
   it('derives a field from the current draft without the caller reading it', () => {
     const { result } = renderHook(() => useComposerDraft<Draft>(EMPTY));
 
     act(() => {
       result.current.updateDraft((current) =>
-        current.ownerId === null ? { ownerId: 'actor_default' } : {},
+        current.health === null ? { health: 'on_track' as const } : {},
       );
     });
     act(() => {
-      result.current.updateDraft((current) =>
-        current.ownerId === null ? { ownerId: 'actor_second' } : {},
-      );
+      result.current.updateDraft((current) => (current.health === null ? { health: null } : {}));
     });
 
     // The second call is a no-op because the first already filled the field — this is what stops
     // a composer's "default it once the team resolves" effect from clobbering a chosen value.
-    expect(result.current.draft.ownerId).toBe('actor_default');
+    expect(result.current.draft.health).toBe('on_track');
   });
 
   it('keeps the draft identity stable when a patch changes nothing', () => {
@@ -150,7 +78,7 @@ describe('useComposerDraft', () => {
     expect(result.current.draft).toBe(settled);
 
     act(() => {
-      result.current.updateDraft(() => ({ priority: 'high' }));
+      result.current.updateDraft(() => ({ priority: 'high' as const }));
     });
     expect(result.current.draft).toBe(settled);
 
@@ -159,14 +87,84 @@ describe('useComposerDraft', () => {
     });
     expect(result.current.draft).toBe(settled);
   });
+});
 
-  it('does not arm the undo for a derived default', () => {
-    const { result } = renderHook(() => useComposerDraft<Draft>(EMPTY));
-
-    act(() => {
-      result.current.updateDraft(() => ({ priority: 'high' }));
+describe('templateMerge', () => {
+  it('uses the template body when the draft has none', () => {
+    expect(templateMerge(EMPTY, { description: '## Steps' }, RULE)).toEqual({
+      description: '## Steps',
     });
+  });
 
-    expect(result.current.appliedTemplate).toBeNull();
+  it('appends to a body the author already typed, rather than replacing it', () => {
+    const typed: Draft = { ...EMPTY, description: 'notes I typed myself' };
+
+    expect(templateMerge(typed, { description: '## Steps' }, RULE)).toEqual({
+      description: 'notes I typed myself\n\n## Steps',
+    });
+  });
+
+  it('stacks a second template under the first', () => {
+    const once: Draft = { ...EMPTY, description: '## Steps' };
+
+    expect(templateMerge(once, { description: '## Question' }, RULE)).toEqual({
+      description: '## Steps\n\n## Question',
+    });
+  });
+
+  it('treats a whitespace-only body as empty rather than appending to nothing', () => {
+    const blank: Draft = { ...EMPTY, description: '   \n  ' };
+
+    expect(templateMerge(blank, { description: '## Steps' }, RULE)).toEqual({
+      description: '## Steps',
+    });
+  });
+
+  it('fills a blank title but never overwrites one', () => {
+    expect(templateMerge(EMPTY, { name: 'Bug: ' }, RULE)).toEqual({ name: 'Bug: ' });
+
+    const named: Draft = { ...EMPTY, name: 'Checkout is broken' };
+    expect(templateMerge(named, { name: 'Bug: ' }, RULE)).toEqual({});
+  });
+
+  it('sets properties outright, since the strip shows them and nothing written is at risk', () => {
+    const chosen: Draft = { ...EMPTY, priority: 'none' };
+
+    expect(templateMerge(chosen, { priority: 'high', health: 'on_track' }, RULE)).toEqual({
+      priority: 'high',
+      health: 'on_track',
+    });
+  });
+
+  it('asserts only the fields the template names', () => {
+    const filled: Draft = { ...EMPTY, priority: 'high', summary: 'mine' };
+
+    // A template that mentions only a body leaves the priority and summary exactly as they were.
+    expect(templateMerge(filled, { description: '## Steps' }, RULE)).toEqual({
+      description: '## Steps',
+    });
+  });
+
+  it('never removes anything the author wrote', () => {
+    const authored: Draft = {
+      name: 'Checkout is broken',
+      summary: 'Customers cannot pay',
+      description: 'It started on Tuesday.',
+      priority: 'high',
+      health: 'on_track',
+    };
+
+    const merged = {
+      ...authored,
+      ...templateMerge(
+        authored,
+        { name: 'Bug: ', summary: 'One line', description: '## Steps' },
+        RULE,
+      ),
+    };
+
+    expect(merged.name).toBe('Checkout is broken');
+    expect(merged.summary).toBe('Customers cannot pay');
+    expect(merged.description).toContain('It started on Tuesday.');
   });
 });

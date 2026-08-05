@@ -34,11 +34,8 @@ import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import {
-  AppliedTemplateNotice,
-  ComposerTemplateControl,
-} from '@/components/composer/template-menu';
-import { useComposerDraft } from '@/components/composer/use-composer-draft';
+import { ComposerTemplateControl } from '@/components/composer/template-menu';
+import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
@@ -108,7 +105,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   const initiativeNounLower = initiativeNoun.toLowerCase();
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
-  const { draft, setField, applyTemplate, undoTemplate, appliedTemplate } =
+  const { draft, setField, updateDraft } =
     useComposerDraft<InitiativeDraft>(EMPTY_INITIATIVE_DRAFT);
 
   const [creating, setCreating] = useState(false);
@@ -169,21 +166,17 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
           orgId={orgId}
           kind="initiative"
           open={open}
-          appliedId={appliedTemplate?.id ?? null}
           autoApplyId={defaultTemplateId}
           onApply={(chosen) => {
-            applyTemplate(templatePatch(chosen.payload, 'initiative'), {
-              id: chosen.id,
-              name: chosen.name,
-            });
+            updateDraft((current) =>
+              templateMerge(current, templatePatch(chosen.payload, 'initiative'), {
+                document: 'description',
+                labels: ['name', 'summary'],
+              }),
+            );
           }}
           disabled={creating}
         />
-      }
-      notice={
-        appliedTemplate ? (
-          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
-        ) : null
       }
       title={draft.name}
       onTitleChange={(next) => {

@@ -51,8 +51,6 @@ const SCOPE_ORDER: readonly TemplateOut['scope'][] = ['organization', 'team', 'p
 export interface TemplateMenuProps {
   /** The templates that create this composer's kind. */
   templates: readonly TemplateOut[];
-  /** The template the draft currently has applied, if any. */
-  appliedId: string | null;
   /** Apply a template to the draft. */
   onApply: (template: TemplateOut) => void;
   /** Where "Manage templates…" leads (the workspace's Templates settings). */
@@ -70,14 +68,12 @@ export interface TemplateMenuProps {
  */
 export function TemplateMenu({
   templates,
-  appliedId,
   onApply,
   manageHref,
   disabled,
 }: TemplateMenuProps): JSX.Element | null {
   if (templates.length === 0) return null;
 
-  const applied = templates.find((template) => template.id === appliedId);
   const ordered = sortTemplates(templates);
   const groups = SCOPE_ORDER.map((scope) => ({
     scope,
@@ -98,7 +94,7 @@ export function TemplateMenu({
           className="text-on-surface-variant max-w-56"
         >
           <LayoutTemplate className="size-4 shrink-0" />
-          <span className="truncate">{applied ? applied.name : 'Template'}</span>
+          <span className="truncate">Template</span>
           <ChevronDown className="size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
@@ -115,7 +111,6 @@ export function TemplateMenu({
                   onApply(template);
                 }}
                 {...(template.description ? { supporting: template.description } : {})}
-                {...(template.id === appliedId ? { trailingText: 'Applied' } : {})}
               >
                 {template.name}
               </DropdownMenuItem>
@@ -142,8 +137,6 @@ export interface ComposerTemplateControlProps {
   kind: TemplateTargetType;
   /** Whether the composer is open — the read is skipped while it is not. */
   open: boolean;
-  /** The template the draft currently has applied, if any. */
-  appliedId: string | null;
   /** Apply a template to the draft. */
   onApply: (template: TemplateOut) => void;
   /**
@@ -174,7 +167,6 @@ export function ComposerTemplateControl({
   orgId,
   kind,
   open,
-  appliedId,
   onApply,
   autoApplyId = null,
   disabled,
@@ -184,8 +176,7 @@ export function ComposerTemplateControl({
   // Memoized so the auto-apply effect below is not re-entered on every unrelated render.
   const templates = useMemo(() => items ?? [], [items]);
 
-  // Guarded by a ref rather than by `appliedId`, so undoing an auto-applied template does not
-  // immediately re-apply it — an undo that undoes itself is not an undo.
+  // Guarded by a ref so a re-render after the merge does not apply the same template twice.
   const autoApplied = useRef(false);
   useEffect(() => {
     if (!autoApplyId || autoApplied.current) return;
@@ -201,44 +192,9 @@ export function ComposerTemplateControl({
   return (
     <TemplateMenu
       templates={templates}
-      appliedId={appliedId}
       onApply={onApply}
       manageHref={sectionHref(orgId, 'templates')}
       disabled={disabled}
     />
-  );
-}
-
-/** Props for {@link AppliedTemplateNotice}. */
-export interface AppliedTemplateNoticeProps {
-  /** The applied template's name. */
-  name: string;
-  /** Restore the draft to the instant before the template was applied. */
-  onUndo: () => void;
-}
-
-/**
- * The line that says a template was applied, and offers the way back.
- *
- * @remarks
- * Applying a template is accepted unconditionally — no confirmation dialog, no disabled state,
- * no refusal when the draft already holds typed text. The consequence is reported here instead,
- * next to a single-click undo. That is the trade the product makes everywhere: never stop someone
- * mid-gesture to ask whether they meant it, and always leave a way back once they have.
- *
- * `role="status"` rather than `role="alert"`: this is the composer confirming what it did on
- * request, so it should not interrupt a screen reader mid-sentence.
- *
- * @param props - The {@link AppliedTemplateNoticeProps}.
- * @returns the rendered notice.
- */
-export function AppliedTemplateNotice({ name, onUndo }: AppliedTemplateNoticeProps): JSX.Element {
-  return (
-    <p role="status" className="text-on-surface-variant text-body-medium flex items-center gap-1">
-      <span className="min-w-0 truncate">Applied {name}.</span>
-      <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={onUndo}>
-        Undo
-      </Button>
-    </p>
   );
 }

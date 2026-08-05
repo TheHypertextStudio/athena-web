@@ -64,12 +64,6 @@ export interface ComposerShellProps {
    * the thing it makes.
    */
   leadingFields?: ReactNode;
-  /**
-   * A transient, non-blocking message shown with the actions region — currently the applied-template
-   * line and its undo. Distinct from {@link ComposerShellProps.error}: a notice reports something
-   * the composer did on request, not something that went wrong.
-   */
-  notice?: ReactNode;
   /** The current title text. */
   title: string;
   /** Report a changed title. */
@@ -124,7 +118,6 @@ export function ComposerShell({
   context,
   templateSlot,
   leadingFields,
-  notice,
   title,
   onTitleChange,
   titlePlaceholder,
@@ -262,7 +255,6 @@ export function ComposerShell({
         {/* Properties: one compact row of Linear-style pills. */}
         <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
           <PropertyStrip>{children}</PropertyStrip>
-          {notice}
           {error ? (
             <p role="alert" className="text-error text-body-medium">
               {error}

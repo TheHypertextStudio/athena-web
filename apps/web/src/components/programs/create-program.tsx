@@ -30,11 +30,8 @@ import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
-import {
-  AppliedTemplateNotice,
-  ComposerTemplateControl,
-} from '@/components/composer/template-menu';
-import { useComposerDraft } from '@/components/composer/use-composer-draft';
+import { ComposerTemplateControl } from '@/components/composer/template-menu';
+import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
@@ -89,16 +86,15 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   const programNounLower = programNoun.toLowerCase();
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
-  const { draft, setField, applyTemplate, undoTemplate, appliedTemplate } =
-    useComposerDraft<ProgramDraft>({
-      name: '',
-      summary: '',
-      description: '',
-      ownerId: null,
-      status: 'active',
-      health: null,
-      visibility: 'public',
-    });
+  const { draft, setField, updateDraft } = useComposerDraft<ProgramDraft>({
+    name: '',
+    summary: '',
+    description: '',
+    ownerId: null,
+    status: 'active',
+    health: null,
+    visibility: 'public',
+  });
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -154,21 +150,17 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
           orgId={orgId}
           kind="program"
           open={open}
-          appliedId={appliedTemplate?.id ?? null}
           autoApplyId={defaultTemplateId}
           onApply={(chosen) => {
-            applyTemplate(templatePatch(chosen.payload, 'program'), {
-              id: chosen.id,
-              name: chosen.name,
-            });
+            updateDraft((current) =>
+              templateMerge(current, templatePatch(chosen.payload, 'program'), {
+                document: 'description',
+                labels: ['name', 'summary'],
+              }),
+            );
           }}
           disabled={creating}
         />
-      }
-      notice={
-        appliedTemplate ? (
-          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
-        ) : null
       }
       title={draft.name}
       onTitleChange={(next) => {

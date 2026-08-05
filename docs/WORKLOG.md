@@ -7,6 +7,75 @@
 
 ## Active Tasks
 
+### [TEMPLATES-001] Give Docket a template system that exists
+
+- **Status**: REVIEW
+- **Started**: 2026-08-05
+- **Priority**: P1
+- **Description**: Docket had no template system. The whole feature was twenty lines inside
+  `apps/web/src/components/initiatives/create-initiative.tsx` — a hardcoded `GUIDED_DOCUMENT`
+  markdown constant, a `template` state variable that never reached the server, and three `Button`
+  toggles rendered as the first children of the property strip. There was no table, no DTO, no
+  route, no settings page, and no other composer had any template affordance at all.
+- **The three defects being fixed**:
+  - Line 227 ran `setBody(value === 'blank' ? '' : GUIDED_DOCUMENT)`. Choosing a template
+    destroyed whatever the author had typed, with no confirmation and no undo. "Blank" emptied it.
+  - "Strategic initiative" and "Objective" inserted the **identical** body, differing only in which
+    button rendered `variant="secondary"` — a Craft Rubric dimension-7 "nothing dead" failure.
+  - A control that rewrote the whole document sat inline with six controls that each set one field,
+    and sat _below_ the field it rewrote.
+- **Approach**: one `template` table modelled on `saved_view` (three-tier scope, jsonb payload,
+  `auditColumns()`); a Zod discriminated union on `targetType` whose members are partials of each
+  kind's `*Create` body; twelve shipped defaults seeded lazily as editable `is_seed` rows following
+  the `DEFAULT_RULES` precedent; and four entry points over one implementation — a composer
+  dropdown, the settings page, the template editor, and the command palette.
+- **Subtasks**:
+  - [x] `template` table, `template_target_type` enum, migration `0068`, `TemplateId`
+  - [x] `packages/types/src/template.ts` — draft union + Create/Update/Out
+  - [x] `apps/api/src/routes/templates.ts` + lazy idempotent seed of 12 defaults (11 tests)
+  - [x] `useComposerDraft` + `templateMerge`, adopted by all four create composers
+  - [x] Composer template menu; applying appends and never removes authored text
+  - [x] Settings → Templates page, and the editor that reuses the create composer
+  - [x] Command-palette create actions + `Create from template` section
+  - [x] `docs/engineering/specs/templates.md`; `docs/design/design-system.md` §3 revised
+  - [x] Screenshots at 1440×900 and 390×844, light and dark, against a real seeded workspace
+  - [ ] `/design-review` pass over the composer and the settings page
+- **Decisions**:
+  - **Applying a template appends; it never overwrites.** The first build merged the body and
+    offered an `Applied X. Undo` line to make the overwrite recoverable. That solved the wrong
+    problem — the fix is for the action to take nothing away, not to make the taking reversible.
+    The body appends, a title or summary is filled only while blank, enums are set outright, and
+    the undo, the banner and the snapshot machinery all went with it. Applying is now repeatable:
+    a second template stacks a second outline.
+  - **Payloads carry no row references or dates.** A template naming a departed actor or a closed
+    project fails to apply, and pruning those on delete costs more than the convenience. `labelIds`
+    is the exception (org-scoped, long-lived). Workflow state is excluded separately: a state key
+    belongs to one team's workflow and a template is org-wide.
+  - **The picker is a menu, not suggestion chips.** This contradicts the prior
+    `docs/design/design-system.md` §3 guidance, which is revised in the same change. A chip row
+    suits a fixed set of two or three; a template list is unbounded, must show scope, and needs a
+    route out to management.
+  - **Deleting a shipped default is permanent.** Seeding is guarded on "does this org hold any
+    template at all", which is the intended reading of "editable".
+  - **Templates are not search-indexed**, to avoid widening `search_document_kind` for a fourth
+    route to something already reachable three ways.
+- **Learnings**:
+  - The draft hook's `updateDraft` originally minted a new draft object even for a patch that
+    changed nothing. The task composer fills its status from an effect whose dependencies are
+    rebuilt every render, so that became an infinite re-render — surfaced as a 30s timeout in
+    `create-task.test.tsx`, not as anything resembling a loop. Returning the current state
+    unchanged is load-bearing and is pinned by a test rather than a comment.
+  - The palette's create and template commands were gated on `scope === 'org'`, and the palette
+    opens in Hub scope, so the whole feature was unreachable from the keyboard. Types, lint and
+    tests were all green; only a screenshot showed it. The scope toggle governs search breadth,
+    never where a new entity lands.
+  - A rebase onto main silently dropped this entry and `DTO-CLEAR-001` from `docs/WORKLOG.md`
+    while reporting success, because main had rewritten the same region of Active Tasks. Check
+    `git show <sha> -- docs/WORKLOG.md` after rebasing a branch that edits this file.
+- **Notes**: `DTO-CLEAR-001` was filed from this work — `packages/types/src/` holds 172
+  `.nullable().optional()` declarations against a standing rule, and the fix needs a wire-format
+  decision rather than a mechanical edit.
+
 ### [MENUS-001] One menu, built to the MD3 Expressive vertical-menu spec
 
 - **Status**: COMPLETED
@@ -6252,6 +6321,32 @@ Run `pnpm typecheck`, `pnpm lint`, `pnpm test`, and `pnpm build` after each batc
 ---
 
 ## Backlog
+
+### [DTO-CLEAR-001] Decide how an update DTO expresses "clear this field"
+
+- **Priority**: P2
+- **Description**: `packages/types/src/` holds 172 `.nullable().optional()` field declarations
+  across 31 files, against a standing rule that the two modifiers must never be combined. The
+  count is concentrated in the update DTOs: `task.ts` (32), `agent.ts` (19), `project.ts` (13),
+  `hub.ts` (11), `program.ts` (10), `team.ts` (9), `initiative.ts` (7).
+- **Why it is not a mechanical fix**: an update DTO encodes three states, not two. Omitting a key
+  means "leave unchanged", sending a value means "set it", and sending `null` means "clear it".
+  `TaskUpdate.dueDate` needs all three. Dropping `.nullable()` loses the ability to clear a field;
+  dropping `.optional()` forces every patch to restate every field it does not intend to touch.
+  The rule therefore requires a wire-format decision before any edit.
+- **Options**:
+  - A per-type sentinel (empty string for text, a `"none"` member for enums). No new field, but
+    the sentinel differs per type and every consumer has to know which one applies.
+  - An explicit `clear: string[]` alongside the patch. Uniform across every DTO, one extra field,
+    and it makes a destructive intent visible at the call site instead of hiding it in a `null`.
+    This is the recommended option.
+- **Scope**: ~31 DTO files plus every route that currently reads `null` as "clear", plus the
+  clients that send it. Breaking API change; needs its own branch.
+- **Dependencies**: none
+- **Notes**: `packages/types/src/template.ts` (added by TEMPLATES-001, 2026-08-05) already has
+  zero occurrences. It sidesteps the problem rather than solving it — nothing in a template needs
+  clearing, so `description` clears with an empty string and `teamId` is dropped server-side when
+  the scope moves off `team`. That approach does not generalize to a date or a foreign key.
 
 ### Phase 1: Core Platform (P0)
 

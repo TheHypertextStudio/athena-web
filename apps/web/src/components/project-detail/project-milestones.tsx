@@ -78,7 +78,7 @@ export function ProjectMilestonesPanel({
     >
       <div className="flex items-center gap-2">
         <DecorativeIcon icon={Flag} />
-        <h2 className="text-on-surface text-body-medium font-semibold">Milestones</h2>
+        <h2 className="text-on-surface text-title-small">Milestones</h2>
       </div>
 
       {ordered.length === 0 ? (
@@ -106,7 +106,7 @@ export function ProjectMilestonesPanel({
                     }}
                     canEdit={canEdit}
                     ariaLabel="Milestone name"
-                    className="text-on-surface text-body-large font-medium"
+                    className="text-on-surface text-title-small"
                   />
                   <div className="flex shrink-0 items-center gap-1">
                     <DatePicker
@@ -163,7 +163,7 @@ export function ProjectMilestonesPanel({
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <span className="text-on-surface-variant shrink-0 text-xs tabular-nums">
+                    <span className="text-on-surface-variant text-label-small shrink-0 tabular-nums">
                       {progress.done}/{progress.total}
                     </span>
                   </div>

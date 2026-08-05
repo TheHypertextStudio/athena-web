@@ -90,6 +90,34 @@ Host matching is exact or dot-bounded, so `contoso.sharepoint.com` matches and
 `sharepoint.com.attacker.example` does not. That boundary is what keeps a lookalike host from
 being handed a viewer's credential.
 
+## How the pieces are wired
+
+A domain write publishes one event to `EntityWriteBus`
+(`apps/api/src/events/entity-write-bus.ts`) and knows nothing about who listens. Three subscribers
+are registered at `entity-write-registry.ts`: the search index, the mention reconciler, and the MCP
+notifier. Adding a listener touches that registry and the new subscriber, never the ~40 call sites
+that write entities.
+
+Subscribers are isolated. One that throws is reported by name and the rest still run, because a
+failing notification is a display bug while failing the caller's write would be a lost edit. They
+run concurrently, and `publish` is awaited so someone who saves a description and switches tabs
+does not race the reconcile.
+
+Storage is three ports in `mention-ports.ts` — mention edges, shared resource rows, subject prose —
+each naming an operation the domain performs rather than exposing a query builder, so a caller
+cannot reach past the port and write its own `WHERE`. `drizzle-mention-storage.ts` is the only
+module in the slice that knows tables exist. The edge write is `replaceForSubject`, because the
+domain operation _is_ a convergence: the caller has derived the complete truth and the store's job
+is to match it.
+
+Reaching a connected source goes through `ConnectorGateway` (`connector-gateway.ts`), which exists
+because the alternative was a service importing from `../routes/`. The port says "give me a
+resource search for this provider on behalf of this actor, or tell me why you cannot" and says
+nothing about tokens or OAuth.
+
+The payoff is `reconcile-mentions-in-memory.test.ts`: twelve domain rules verified in well under a
+second with no database, leaving the companion suite over the real adapter to prove the SQL.
+
 ## Two independent permission gates
 
 A forged `docket:` marker naming another org's task is refused at **write** time: reconcile proves

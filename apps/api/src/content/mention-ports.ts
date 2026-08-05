@@ -67,16 +67,32 @@ export interface MentionRepository {
   deleteForSubject(subjectType: MentionSubjectType, subjectId: string): Promise<void>;
 }
 
-/** A resource row as the slice reads it back. */
+/**
+ * A resource row as the slice reads it back.
+ *
+ * @remarks
+ * Carries exactly what a preview renders, which is what makes it a port rather than a leak: a
+ * caller can build an `ExternalResourceOut` from this without reaching for the table, and the
+ * lease and retry columns stay where they belong — with the sweep that owns them.
+ */
 export interface StoredResource {
   readonly id: string;
   readonly organizationId: string;
   readonly provider: ResourceProvider;
   readonly canonicalKey: string;
   readonly canonicalUrl: string;
+  readonly externalId: string | null;
   readonly resourceType: ExternalResourceType;
   readonly title: string | null;
+  readonly description: string | null;
+  readonly siteName: string | null;
+  readonly iconUrl: string | null;
+  readonly thumbnailUrl: string | null;
+  readonly mimeType: string | null;
+  readonly ownerLabel: string | null;
+  readonly externalUpdatedAt: Date | null;
   readonly unfurlStatus: ExternalResourceOut['unfurlStatus'];
+  readonly fetchedAt: Date | null;
 }
 
 /** What to create when a URL is referenced for the first time. */

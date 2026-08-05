@@ -16,14 +16,15 @@
  * a placeholder — no field at all, because a card that renders "Restricted task" still confirms
  * that the id names something real.
  */
-import { and, eq, inArray } from 'drizzle-orm';
 import type { MentionCard, MentionRef } from '@docket/types';
 import { canonicalizeResourceUrl, mentionRefKey } from '@docket/types';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 
 import { entityMentionHref, type EntityMentionRef as EntityRef } from './mention-href';
-import { toExternalResourceOut, type ExternalResourceRow } from './resource-view';
+import { createDrizzleMentionStorage } from './drizzle-mention-storage';
+import type { ExternalResourceRepository, StoredResource } from './mention-ports';
+import { toExternalResourceOut } from './resource-view';
 
 /** A card for an entity the caller may not see: the id, and nothing that describes it. */
 function inaccessibleCard(ref: EntityRef): MentionCard {
@@ -73,14 +74,16 @@ async function loadVisibleEntities(
   );
 }
 
-/** Load the shared resource rows behind a batch of external refs. */
+/** Load the shared resource rows behind a batch of external refs, keyed by the URL as written. */
 async function loadResources(
+  resources: ExternalResourceRepository,
   orgId: string,
   refs: readonly ExternalRef[],
-): Promise<Map<string, ExternalResourceRow>> {
+): Promise<Map<string, StoredResource>> {
   if (refs.length === 0) return new Map();
-  const schema = await import('@docket/db');
 
+  // Two authors can write the same document as two different URLs, so the lookup goes through the
+  // canonical key and the result is mapped back to whichever URL each reference used.
   const byKey = new Map<string, string>();
   for (const ref of refs) {
     const canonical = canonicalizeResourceUrl(ref.url);
@@ -88,17 +91,8 @@ async function loadResources(
   }
   if (byKey.size === 0) return new Map();
 
-  const rows = await schema.db
-    .select()
-    .from(schema.externalResource)
-    .where(
-      and(
-        eq(schema.externalResource.organizationId, orgId),
-        inArray(schema.externalResource.canonicalKey, [...byKey.keys()]),
-      ),
-    );
-
-  const out = new Map<string, ExternalResourceRow>();
+  const rows = await resources.findByKeys(orgId, [...byKey.keys()]);
+  const out = new Map<string, StoredResource>();
   for (const row of rows) {
     const url = byKey.get(row.canonicalKey);
     if (url !== undefined) out.set(url, row);
@@ -108,6 +102,8 @@ async function loadResources(
 
 /** One surface's worth of references to resolve. */
 export interface MentionHydrateRequest {
+  /** Where resource rows are read from. Injected, so hydration is testable with no database. */
+  readonly resources?: ExternalResourceRepository;
   /** Whose access decides what each card may say. */
   readonly caller: SearchCaller;
   /** The workspace the references were authored in. */
@@ -128,7 +124,11 @@ export async function hydrateMentions(input: MentionHydrateRequest): Promise<Men
 
   const [entities, resources] = await Promise.all([
     loadVisibleEntities(input.caller, input.orgId, entityRefs),
-    loadResources(input.orgId, externalRefs),
+    loadResources(
+      input.resources ?? createDrizzleMentionStorage().resources,
+      input.orgId,
+      externalRefs,
+    ),
   ]);
 
   const seen = new Set<string>();

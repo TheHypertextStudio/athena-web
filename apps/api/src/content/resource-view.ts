@@ -10,11 +10,9 @@
  * deliberately not projected. They are how the sweep coordinates with itself, and a client that
  * could read them would start rendering our retry state as if it were the resource's state.
  */
-import type { externalResource } from '@docket/db';
 import type { ExternalResourceOut } from '@docket/types';
 
-/** A stored resource row, as selected. */
-export type ExternalResourceRow = typeof externalResource.$inferSelect;
+import type { StoredResource } from './mention-ports';
 
 /**
  * Project one stored resource onto its wire shape.
@@ -22,7 +20,7 @@ export type ExternalResourceRow = typeof externalResource.$inferSelect;
  * @param row - The stored row.
  * @returns The client-visible resource.
  */
-export function toExternalResourceOut(row: ExternalResourceRow): ExternalResourceOut {
+export function toExternalResourceOut(row: StoredResource): ExternalResourceOut {
   return {
     id: row.id as ExternalResourceOut['id'],
     organizationId: row.organizationId as ExternalResourceOut['organizationId'],

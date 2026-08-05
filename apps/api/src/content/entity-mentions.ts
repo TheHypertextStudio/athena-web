@@ -10,17 +10,20 @@
  * appears in travels with it, so the tab can say "in Description" rather than leaving the reader to
  * wonder where it came from.
  */
-import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { EntityMention, MentionRef, MentionSubjectType } from '@docket/types';
 import { mentionRefKey } from '@docket/types';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 
 import { entityMentionHref } from './mention-href';
-import { toExternalResourceOut, type ExternalResourceRow } from './resource-view';
+import { createDrizzleMentionStorage } from './drizzle-mention-storage';
+import type { ExternalResourceRepository, MentionStorage, StoredResource } from './mention-ports';
+import { toExternalResourceOut } from './resource-view';
 
 /** What the Resources tab asks for. */
 export interface EntityMentionsQuery {
+  /** Where edges and resource rows are read from. Injected, so this is testable with no database. */
+  readonly storage?: MentionStorage;
   /** Whose access decides which referenced entities are named. */
   readonly caller: SearchCaller;
   /** The workspace the subject lives in. */
@@ -63,19 +66,12 @@ interface Accumulated {
 export async function loadEntityMentions(
   input: EntityMentionsQuery,
 ): Promise<EntityMentionsResult> {
-  const schema = await import('@docket/db');
-
-  const rows = await schema.db
-    .select()
-    .from(schema.mention)
-    .where(
-      and(
-        eq(schema.mention.organizationId, input.orgId),
-        eq(schema.mention.subjectType, input.subjectType),
-        eq(schema.mention.subjectId, input.subjectId),
-      ),
-    )
-    .orderBy(asc(schema.mention.field), asc(schema.mention.position));
+  const storage = input.storage ?? createDrizzleMentionStorage();
+  const rows = await storage.mentions.listForSubject({
+    organizationId: input.orgId,
+    subjectType: input.subjectType,
+    subjectId: input.subjectId,
+  });
 
   if (rows.length === 0) return { external: [], entities: [] };
 
@@ -111,7 +107,7 @@ export async function loadEntityMentions(
     .filter((id): id is string => id !== null);
 
   const [resources, visibleEntityIds] = await Promise.all([
-    loadResources(input.orgId, resourceIds),
+    loadResources(storage.resources, input.orgId, resourceIds),
     loadVisibleEntityIds(input, [...accumulated.values()]),
   ]);
 
@@ -170,19 +166,10 @@ async function loadVisibleEntityIds(
 
 /** Load the shared resource rows for a batch of ids. */
 async function loadResources(
+  resources: ExternalResourceRepository,
   orgId: string,
   ids: readonly string[],
-): Promise<Map<string, ExternalResourceRow>> {
-  if (ids.length === 0) return new Map();
-  const schema = await import('@docket/db');
-  const rows = await schema.db
-    .select()
-    .from(schema.externalResource)
-    .where(
-      and(
-        eq(schema.externalResource.organizationId, orgId),
-        inArray(schema.externalResource.id, [...ids]),
-      ),
-    );
+): Promise<Map<string, StoredResource>> {
+  const rows = await resources.findByIds(orgId, ids);
   return new Map(rows.map((row) => [row.id, row]));
 }

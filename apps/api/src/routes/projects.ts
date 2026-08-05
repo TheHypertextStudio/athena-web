@@ -196,19 +196,20 @@ const projects = new Hono<AppEnv>()
       summary: 'Create a project',
       capability: 'contribute',
       response: ProjectOut,
-      description: `Create a bounded, dated effort (a Project moves \`planned → active → completed\`, or is \`canceled\`). The \`organizationId\` comes from the path. \`startDate\`/\`targetDate\` are optional ISO dates parsed to timestamps; \`leadId\` and \`teamId\` are optional references and \`initiativeIds\` is an optional set of themes to associate at creation. Tenant isolation: a supplied \`leadId\` (Actor) and \`teamId\` (Team) are each re-read scoped to the caller's org and rejected with 404 (\`Lead not found\` / \`Team not found\`, existence-hiding) when they belong to another tenant — the bare FKs target global PKs without a tenant constraint, so this guard is what prevents cross-org attachment. (\`programId\` is not accepted on create; set it later via PATCH.) Every \`initiativeIds\` entry is validated to live in the org BEFORE the write (404 \`Initiative not found\` on any miss) and de-duplicated so the \`initiative_project\` join's composite PK never collides. The project row and its initiative links are written in a single transaction, so a partial create (project saved but links lost) is impossible. Side effect: emits a \`created\` observation. Requires \`contribute\`. Returns the created {@link ProjectOut}. Track completion via \`GET /:id/progress\`.`,
+      description: `Create a bounded, dated effort (a Project moves \`planned → active → completed\`, or is \`canceled\`). The \`organizationId\` comes from the path. \`startDate\`/\`targetDate\` are optional ISO dates parsed to timestamps; \`leadId\`, \`teamId\`, and \`programId\` are optional references, \`status\`/\`health\` optionally set the initial lifecycle state (status defaults to \`planned\`), and \`initiativeIds\` is an optional set of themes to associate at creation. Tenant isolation: a supplied \`leadId\` (Actor), \`teamId\` (Team), and \`programId\` (Program) are each re-read scoped to the caller's org and rejected with 404 (\`Lead not found\` / \`Team not found\` / \`Program not found\`, existence-hiding) when they belong to another tenant — the bare FKs target global PKs without a tenant constraint, so this guard is what prevents cross-org attachment. Every \`initiativeIds\` entry is validated to live in the org BEFORE the write (404 \`Initiative not found\` on any miss) and de-duplicated so the \`initiative_project\` join's composite PK never collides. The project row and its initiative links are written in a single transaction, so a partial create (project saved but links lost) is impossible. Side effect: emits a \`created\` observation. Requires \`contribute\`. Returns the created {@link ProjectOut}. Track completion via \`GET /:id/progress\`.`,
     }),
     zJson(ProjectCreate),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
 
-      // Tenant isolation: a body-provided lead/team must live in the caller's org. The bare
-      // FK references each table's global PK, so without this a CREATE could attach another
-      // tenant's actor/team to this project — exactly the gap PATCH already closes. Omitted
-      // fields are no-ops inside the helper. (`programId` is not on ProjectCreate.)
+      // Tenant isolation: a body-provided lead/team/program must live in the caller's org.
+      // The bare FK references each table's global PK, so without this a CREATE could attach
+      // another tenant's actor/team/program to this project — exactly the gap PATCH already
+      // closes. Omitted fields are no-ops inside the helper.
       await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
       await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
+      await assertRefInOrg(program, orgId, body.programId, 'Program not found');
 
       // `initiativeIds` writes `initiative_project` association rows; validate each lives in
       // the caller's org BEFORE the transaction so a bad id rejects the whole create.
@@ -227,6 +228,9 @@ const projects = new Hono<AppEnv>()
             description: body.description,
             leadId: body.leadId,
             teamId: body.teamId,
+            programId: body.programId,
+            ...(body.status !== undefined ? { status: body.status } : {}),
+            health: body.health,
             startDate: body.startDate ? new Date(body.startDate) : undefined,
             targetDate: body.targetDate ? new Date(body.targetDate) : undefined,
             createdBy: actorId,

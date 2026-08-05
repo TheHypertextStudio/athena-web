@@ -18,7 +18,7 @@
  *
  * @see {@link actorOptions} and friends for the pure DTO→option mappers this composes.
  */
-import type { CycleOut, WorkflowState } from '@docket/types';
+import type { CycleOut, MilestoneOut, ProjectOut, WorkflowState } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
@@ -40,7 +40,8 @@ export type ComposerOptionKind =
   | 'programs'
   | 'initiatives'
   | 'labels'
-  | 'cycles';
+  | 'cycles'
+  | 'milestones';
 
 /** The resolved option arrays + loaders returned by {@link useComposerOptions}. */
 export interface ComposerOptions {
@@ -48,6 +49,9 @@ export interface ComposerOptions {
   readonly actorOptions: readonly PickerOption[];
   /** Project entity options. */
   readonly projectOptions: readonly PickerOption[];
+  /** The org's raw projects (each carries its `programId`, for callers that need more than a
+   * value/label pair — e.g. scoping to "projects not yet filed under this Program"). */
+  readonly projects: readonly ProjectOut[];
   /** Program entity options. */
   readonly programOptions: readonly PickerOption[];
   /** Initiative entity options. */
@@ -56,6 +60,8 @@ export interface ComposerOptions {
   readonly labelOptions: readonly PickerOption[];
   /** The org's raw cycles (each carries its `teamId` so callers can scope to a team). */
   readonly cycles: readonly CycleOut[];
+  /** The org's raw milestones (each carries its `projectId` so callers can scope to a project). */
+  readonly milestones: readonly MilestoneOut[];
   /** Whether any requested list is still loading. */
   readonly loading: boolean;
   /**
@@ -140,6 +146,14 @@ export function useComposerOptions(
       { enabled: on('cycles'), staleTime: STALE.static },
     ),
   );
+  const milestonesQ = useApiQuery(
+    apiQueryOptions(
+      ['org', orgId, 'milestones'],
+      () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
+      'Could not load milestones.',
+      { enabled: on('milestones'), staleTime: STALE.static },
+    ),
+  );
 
   // Only enabled, first-loading queries contribute (a gated-off query is idle, not loading).
   const loading =
@@ -149,7 +163,8 @@ export function useComposerOptions(
     programsQ.isLoading ||
     initiativesQ.isLoading ||
     labelsQ.isLoading ||
-    cyclesQ.isLoading;
+    cyclesQ.isLoading ||
+    milestonesQ.isLoading;
 
   const workflowStatesFor = useCallback(
     async (teamId: string | null): Promise<readonly WorkflowState[]> => {
@@ -178,18 +193,32 @@ export function useComposerOptions(
   const initiatives = initiativesQ.data?.items ?? [];
   const labels = labelsQ.data?.items ?? [];
   const cycles = cyclesQ.data?.items ?? [];
+  const milestones = milestonesQ.data?.items ?? [];
 
   return useMemo(
     () => ({
       actorOptions: actorOptions(members, agents),
       projectOptions: projectOptions(projects),
+      projects,
       programOptions: programOptions(programs),
       initiativeOptions: initiativeOptions(initiatives),
       labelOptions: labelOptions(labels),
       cycles,
+      milestones,
       loading,
       workflowStatesFor,
     }),
-    [members, agents, projects, programs, initiatives, labels, cycles, loading, workflowStatesFor],
+    [
+      members,
+      agents,
+      projects,
+      programs,
+      initiatives,
+      labels,
+      cycles,
+      milestones,
+      loading,
+      workflowStatesFor,
+    ],
   );
 }

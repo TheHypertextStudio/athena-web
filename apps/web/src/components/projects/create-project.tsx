@@ -5,12 +5,12 @@
  *
  * @remarks
  * A Project is a *bounded* effort, so the composer captures the fields that give it shape on day
- * one: a title + description body, and an inline strip of compact property pickers — the team it
- * belongs to, its lead, its start→target timeline, and any cross-cutting
- * {@link useVocabulary | initiatives} it advances. (A Project's lifecycle `status`/`health` and
- * its parent `program` are set later on the detail screen — they are intentionally not part of the
- * create DTO.) Sensible defaults keep it fast: only a name is required; the team defaults to the
- * org's default. Built on the shared {@link ComposerShell} + the `@docket/ui` compact pickers.
+ * one: a title + description body, and an inline strip of compact property pickers — its status,
+ * health, the team it belongs to, its lead, its start→target timeline, the
+ * {@link useVocabulary | program} it's filed under, and any cross-cutting initiatives it advances.
+ * Sensible defaults keep it fast: only a name is required; the team defaults to the org's default
+ * and status defaults to `planned`. Built on the shared {@link ComposerShell} + the `@docket/ui`
+ * compact pickers.
  *
  * The dialog is *controlled* by the host page so the page's header "New {project}" button and its
  * empty-state "Create your first {project}" CTA both open the *same* dialog. This component owns
@@ -21,23 +21,40 @@
  * to its detail.
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
- * @see {@link useComposerOptions} for the lead + initiative option sources.
+ * @see {@link useComposerOptions} for the lead + program + initiative option sources.
  */
-import { ActorId, InitiativeId, type ProjectOut, TeamId, type TeamOut } from '@docket/types';
-import { ActorPicker, DateRangePicker, LabelsPicker } from '@docket/ui/components';
+import {
+  ActorId,
+  type Health,
+  InitiativeId,
+  type ProjectOut,
+  type ProjectStatus,
+  ProgramId,
+  TeamId,
+  type TeamOut,
+} from '@docket/types';
+import {
+  ActorPicker,
+  DateRangePicker,
+  EntityPicker,
+  EnumPicker,
+  LabelsPicker,
+} from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import { HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { projectStatusOptions } from '@/components/property-pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The lists this composer's pickers draw from. */
-const COMPOSER_INCLUDE = ['actors', 'initiatives'] as const;
+const COMPOSER_INCLUDE = ['actors', 'programs', 'initiatives'] as const;
 
 /** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
 function triggerDate(value: string | null): string | undefined {
@@ -56,6 +73,9 @@ export interface CreateProjectDialogProps {
   defaultTeamId: string | null;
   /** Whether the active org's teams are still loading. */
   teamsLoading: boolean;
+  /** The program id the new project is pre-filed under, or `null` for none (e.g. opened from a
+   * Program's own Projects tab). The picker remains editable — this only seeds the draft. */
+  defaultProgramId?: string | null;
   /** Whether the dialog is open (the host page owns this state). */
   open: boolean;
   /** Notify the parent that the open state changed (Esc, backdrop, X, Cancel, or success). */
@@ -76,6 +96,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   teams,
   defaultTeamId,
   teamsLoading,
+  defaultProgramId,
   open,
   onOpenChange,
   onCreated,
@@ -84,12 +105,16 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   const initiativeNoun = useVocabulary('initiative');
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+  const programLabel = useVocabulary('program');
 
   const [name, setName] = useState('');
   const [summary, setSummary] = useState('');
   const [body, setBody] = useState('');
   const [teamOverride, setTeamOverride] = useState<string | null>(null);
   const [leadId, setLeadId] = useState<string | null>(null);
+  const [programId, setProgramId] = useState<string | null>(defaultProgramId ?? null);
+  const [status, setStatus] = useState<ProjectStatus>('planned');
+  const [health, setHealth] = useState<Health | null>(null);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [targetDate, setTargetDate] = useState<string | null>(null);
   const [initiativeIds, setInitiativeIds] = useState<readonly string[]>([]);
@@ -123,6 +148,9 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
           ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
           ...(leadId ? { leadId: ActorId.parse(leadId) } : {}),
+          ...(programId ? { programId: ProgramId.parse(programId) } : {}),
+          status,
+          ...(health ? { health } : {}),
           ...(startDate ? { startDate } : {}),
           ...(targetDate ? { targetDate } : {}),
           ...(initiativeIds.length > 0
@@ -153,6 +181,9 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     body,
     teamId,
     leadId,
+    programId,
+    status,
+    health,
     startDate,
     targetDate,
     initiativeIds,
@@ -183,6 +214,25 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       onSubmit={() => void submit()}
       submitLabel={`Create ${projectNoun}`}
     >
+      <EnumPicker
+        options={projectStatusOptions()}
+        value={status}
+        onChange={(next) => {
+          if (next) setStatus(next);
+        }}
+        placeholder="Status"
+        ariaLabel="Status"
+        disabled={creating}
+      />
+      <EnumPicker
+        options={HEALTH_OPTIONS}
+        value={health}
+        onChange={setHealth}
+        placeholder="Set health"
+        clearLabel="No health"
+        ariaLabel="Health"
+        disabled={creating}
+      />
       <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
       <ActorPicker
         options={options.actorOptions}
@@ -191,6 +241,16 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
         placeholder="Set lead"
         clearLabel="No lead"
         ariaLabel="Lead"
+        disabled={creating}
+      />
+      <EntityPicker
+        options={options.programOptions}
+        value={programId}
+        onChange={setProgramId}
+        placeholder={`Set ${programLabel.toLowerCase()}`}
+        clearLabel={`No ${programLabel.toLowerCase()}`}
+        searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
+        ariaLabel={programLabel}
         disabled={creating}
       />
       <DateRangePicker

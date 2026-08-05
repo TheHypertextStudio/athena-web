@@ -20,6 +20,21 @@ import {
   TeamId,
 } from './primitives';
 
+/**
+ * A Project's lifecycle status.
+ *
+ * @remarks
+ * Mirrors the `project_status` Postgres enum (data-model §4): a bounded effort moves
+ * `planned → active → completed`, or is `canceled`.
+ */
+export const ProjectStatus = z
+  .enum(['planned', 'active', 'completed', 'canceled'])
+  .describe(
+    'Project lifecycle status (mirrors the `project_status` Postgres enum). `planned` = scoped but not started; `active` = in progress; `completed` = finished successfully; `canceled` = abandoned. `completed` and `canceled` are the two terminal states (a Project is terminal for an Initiative’s derived-`completed` roll-up when in either).',
+  );
+/** Project lifecycle status value. */
+export type ProjectStatus = z.infer<typeof ProjectStatus>;
+
 /** Body for creating a Project (organizationId comes from the path, never the body). */
 export const ProjectCreate = z
   .object({
@@ -39,6 +54,13 @@ export const ProjectCreate = z
     teamId: TeamId.optional().describe(
       'Optional owning Team. Must reference a Team in the caller’s org (404 otherwise).',
     ),
+    programId: ProgramId.optional().describe(
+      'Optional Program to file the project under at creation. Must reference a Program in the caller’s org (404 otherwise).',
+    ),
+    status: ProjectStatus.optional().describe(
+      'Optional initial lifecycle status. Defaults to `planned` when omitted.',
+    ),
+    health: Health.optional().describe('Optional initial health verdict.'),
     startDate: z.iso
       .date()
       .optional()
@@ -55,7 +77,7 @@ export const ProjectCreate = z
       .array(InitiativeId)
       .optional()
       .describe(
-        'Optional set of Initiative themes to associate at creation (writes `initiative_project` edges). Each id must live in the caller’s org (404 on any miss); duplicates are de-duplicated. Note `programId` is NOT accepted here — file the project under a Program later via PATCH.',
+        'Optional set of Initiative themes to associate at creation (writes `initiative_project` edges). Each id must live in the caller’s org (404 on any miss); duplicates are de-duplicated.',
       ),
     labelIds: z
       .array(LabelId)
@@ -65,21 +87,6 @@ export const ProjectCreate = z
   .meta({ id: 'ProjectCreate', description: 'Create a project within an organization.' });
 /** Validated project-create body. */
 export type ProjectCreate = z.infer<typeof ProjectCreate>;
-
-/**
- * A Project's lifecycle status.
- *
- * @remarks
- * Mirrors the `project_status` Postgres enum (data-model §4): a bounded effort moves
- * `planned → active → completed`, or is `canceled`.
- */
-export const ProjectStatus = z
-  .enum(['planned', 'active', 'completed', 'canceled'])
-  .describe(
-    'Project lifecycle status (mirrors the `project_status` Postgres enum). `planned` = scoped but not started; `active` = in progress; `completed` = finished successfully; `canceled` = abandoned. `completed` and `canceled` are the two terminal states (a Project is terminal for an Initiative’s derived-`completed` roll-up when in either).',
-  );
-/** Project lifecycle status value. */
-export type ProjectStatus = z.infer<typeof ProjectStatus>;
 
 /**
  * Body for partially updating a Project (organizationId comes from the path, never the body).
@@ -114,7 +121,7 @@ export const ProjectUpdate = z
     programId: ProgramId.nullable()
       .optional()
       .describe(
-        'File the project under a Program (must be a Program in the caller’s org), or `null` to unfile it. Omit to leave unchanged. This is the only way to set a project’s Program (it is not accepted on create).',
+        'File the project under a Program (must be a Program in the caller’s org), or `null` to unfile it. Omit to leave unchanged.',
       ),
     teamId: TeamId.nullable()
       .optional()

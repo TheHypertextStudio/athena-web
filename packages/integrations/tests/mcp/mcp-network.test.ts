@@ -332,6 +332,39 @@ describe('MCP outbound network policy', () => {
     ).rejects.toThrow(/header/i);
   });
 
+  it('normalizes a non-Error thrown while checking header bounds into a real Error', async () => {
+    // `assertHeaderBounds` only ever throws `Error` itself, but the guard around it is written
+    // defensively (any thrown value is possible from a non-conformant `Headers` implementation).
+    // A fake response whose `headers.forEach` throws a bare string exercises that fallback path.
+    const request = vi.fn<McpPinnedRequest>(async () => {
+      return {
+        headers: {
+          forEach: () => {
+            throw 'boom'; // eslint-disable-line @typescript-eslint/only-throw-error -- simulates a non-conformant Headers implementation
+          },
+        },
+        body: null,
+      } as unknown as Response;
+    });
+    await expect(
+      createMcpSafeFetch({ lookup: publicLookup, request })('https://public.example/mcp'),
+    ).rejects.toThrow('Invalid MCP response headers');
+  });
+
+  it('falls back to a generic abort error when the caller aborts with a non-Error reason', async () => {
+    // `abortable`'s rejection path prefers `signal.reason` when it's already an `Error`, but a
+    // caller may abort with any value (a bare string, a code, etc.) — this exercises the fallback
+    // that normalizes such a reason into a real `Error` during the DNS-resolution wait.
+    const controller = new AbortController();
+    const lookup: McpDnsLookup = () => new Promise(() => undefined); // never resolves
+    const request = response();
+    const fetchPromise = createMcpSafeFetch({ lookup, request })('https://public.example/mcp', {
+      signal: controller.signal,
+    });
+    controller.abort('caller went away');
+    await expect(fetchPromise).rejects.toThrow('MCP request aborted');
+  });
+
   it('resolves the response as-is when a redirect status carries no Location header', async () => {
     const request = response('', { status: 302 });
     const result = await createMcpSafeFetch({ lookup: publicLookup, request })(

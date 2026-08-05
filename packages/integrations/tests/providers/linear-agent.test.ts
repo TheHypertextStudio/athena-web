@@ -157,6 +157,34 @@ describe('exchangeLinearAgentCode / refreshLinearAgentToken', () => {
     }
   });
 
+  it('falls back to the platform fetch when refreshing without an injected transport', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            access_token: 'refreshed',
+            token_type: 'Bearer',
+            expires_in: 1,
+            scope: 's',
+            refresh_token: 'r2',
+          }),
+          { status: 200 },
+        ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const tokens = await refreshLinearAgentToken({
+        clientId: 'c',
+        clientSecret: 's',
+        refreshToken: 'old_refresh',
+      });
+      expect(tokens.accessToken).toBe('refreshed');
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('throws a network ConnectorError when the request never completes', async () => {
     const http: HttpClient = () => Promise.reject(new Error('ECONNREFUSED'));
     await expect(

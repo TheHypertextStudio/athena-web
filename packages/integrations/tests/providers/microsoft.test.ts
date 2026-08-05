@@ -302,6 +302,45 @@ describe('MicrosoftProviderClient listThreads (delta protocol)', () => {
     expect(page.threads[0]?.receivedAt).toBe('2026-07-01T12:00:00Z');
   });
 
+  it('treats a missing receivedDateTime as older than a dated message, and a dated one as newer than a missing one', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith("/me/mailFolders('inbox')/messages/delta")) {
+        return {
+          value: [
+            // First message for conv-1 has no receivedDateTime at all — exercises the `?? ''`
+            // fallback on the "prior" side of the comparison for the next message in the group.
+            graphMessage({ id: 'msg-0', conversationId: 'conv-1', receivedDateTime: undefined }),
+            graphMessage({
+              id: 'msg-1',
+              conversationId: 'conv-1',
+              receivedDateTime: '2026-07-01T12:00:00Z',
+            }),
+            // First message for conv-2 is dated; the second has no receivedDateTime — exercises
+            // the `?? ''` fallback on the "current message" side, which must not replace it.
+            graphMessage({
+              id: 'msg-2',
+              conversationId: 'conv-2',
+              receivedDateTime: '2026-07-01T12:00:00Z',
+            }),
+            graphMessage({ id: 'msg-3', conversationId: 'conv-2', receivedDateTime: undefined }),
+          ],
+          '@odata.deltaLink':
+            "https://graph.microsoft.com/v1.0/me/mailFolders('inbox')/messages/delta?$deltatoken=z",
+        };
+      }
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await client(http).listThreads({ connectionId: 'c', maxThreads: 50 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    const byConversation = new Map(page.threads.map((t) => [t.threadId, t]));
+    // conv-1: the dated msg-1 replaced the undated msg-0.
+    expect(byConversation.get('conv-1')?.receivedAt).toBe('2026-07-01T12:00:00Z');
+    // conv-2: the undated msg-3 did NOT replace the dated msg-2.
+    expect(byConversation.get('conv-2')?.receivedAt).toBe('2026-07-01T12:00:00Z');
+  });
+
   it('resumes from the page itself (not an empty cursor) when a page has no links and no progress was made', async () => {
     const http = new RecordingHttp();
     // No `value` key at all — exercises the same `?? []` fallback as an empty array would.

@@ -316,6 +316,25 @@ describe('GmailProviderClient listThreads', () => {
     expect(page.threads.map((t) => t.threadId)).toEqual(['t1']);
   });
 
+  it('cold pull skips a thread whose threads.get response omits the messages key entirely', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/me/threads?')) {
+        return { threads: [{ id: 'no-messages-key' }, { id: 't1' }] };
+      }
+      // No `messages` key at all (as opposed to an explicit empty array) — exercises the
+      // `json.messages ?? []` fallback in `hydrateSummaries`.
+      if (path.startsWith('/users/me/threads/no-messages-key')) return { id: 'no-messages-key' };
+      if (path.startsWith('/users/me/threads/t1')) return threadJson('t1');
+      if (path.startsWith('/users/me/profile')) return { historyId: 'h1' };
+      throw new Error(`unexpected path ${path}`);
+    };
+    const page = await gmailClient(http).listThreads({ connectionId: 'c', maxThreads: 50 });
+    expect(page.kind).toBe('page');
+    if (page.kind !== 'page') return;
+    expect(page.threads.map((t) => t.threadId)).toEqual(['t1']);
+  });
+
   it('cold pull tolerates a listing page with no threads key', async () => {
     const http = new RecordingHttp();
     http.respond = (path) => {

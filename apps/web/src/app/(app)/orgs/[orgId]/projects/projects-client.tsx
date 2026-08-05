@@ -25,6 +25,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import { CreateProjectDialog } from '@/components/projects/create-project';
+import { useComposeRequest } from '@/components/composer/use-compose-param';
 import { buildProjectCatalog } from '@/components/projects/project-catalog';
 import { buildProjectTimelineCatalog } from '@/components/projects/project-timeline-catalog';
 import { ProjectStatusBadge } from '@/components/projects/project-status';
@@ -356,6 +357,7 @@ export default function ProjectsListClient(): JSX.Element {
   const projectsNoun = useVocabulary('project', { plural: true });
   const teamNoun = useVocabulary('team');
   const [createOpen, setCreateOpen] = useState(false);
+  const composeTemplateId = useComposeRequest(setCreateOpen);
   const pathname = useAppPathname();
   const searchParams = useAppSearchParams();
   const search = searchParams.toString();
@@ -690,6 +692,7 @@ export default function ProjectsListClient(): JSX.Element {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={handleCreated}
+        defaultTemplateId={composeTemplateId}
       />
 
       {/* placeholder: the project rows — how many projects the workspace has and each one's name,

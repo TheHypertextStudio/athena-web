@@ -1,0 +1,244 @@
+'use client';
+
+/**
+ * The create composer's template control.
+ *
+ * @remarks
+ * ## Why a menu and not a chip row
+ *
+ * `docs/design/design-system.md` assigns template pickers to the MD3 suggestion-chip register.
+ * That is right for a fixed set of two or three and wrong here. A workspace ships with three
+ * templates per kind and may author any number beyond that, so the control has to hold an
+ * unbounded list, group it by who can see each entry, and carry a route out to where templates
+ * are managed. A row of chips does none of those things, and a wrapping row of nine chips is what
+ * `packages/ui/src/primitives/chip.tsx` was written to stop.
+ *
+ * ## Why the top row and not the property strip
+ *
+ * Every pill in the strip sets one field. A template rewrites the draft. The old initiative
+ * picker sat among the pills — and below the description it silently overwrote — which is exactly
+ * how a control with that reach comes to look like one without it.
+ */
+import type { TemplateOut, TemplateTargetType } from '@docket/types';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@docket/ui/primitives';
+import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
+import Link from 'next/link';
+import { type JSX, useEffect, useMemo, useRef } from 'react';
+
+import { sectionHref } from '@/components/settings/sections';
+import { sortTemplates, templatesOfKindDef } from '@/components/templates/queries';
+import { useApiQuery } from '@/lib/query';
+
+/** How each scope is titled where templates are grouped. */
+const SCOPE_LABEL: Record<TemplateOut['scope'], string> = {
+  organization: 'Workspace',
+  team: 'Team',
+  personal: 'Yours',
+};
+
+/** The order groups appear in — shared before private, since shared is the common case. */
+const SCOPE_ORDER: readonly TemplateOut['scope'][] = ['organization', 'team', 'personal'];
+
+/** Props for {@link TemplateMenu}. */
+export interface TemplateMenuProps {
+  /** The templates that create this composer's kind. */
+  templates: readonly TemplateOut[];
+  /** The template the draft currently has applied, if any. */
+  appliedId: string | null;
+  /** Apply a template to the draft. */
+  onApply: (template: TemplateOut) => void;
+  /** Where "Manage templates…" leads (the workspace's Templates settings). */
+  manageHref: string;
+  /** Whether the composer is submitting, which disables the control with everything else. */
+  disabled: boolean;
+}
+
+/**
+ * The composer's template dropdown.
+ *
+ * @param props - The {@link TemplateMenuProps}.
+ * @returns the rendered control, or nothing at all when the workspace has no templates for this
+ * kind and no way to reach the manage screen would help — an empty menu is worse than no menu.
+ */
+export function TemplateMenu({
+  templates,
+  appliedId,
+  onApply,
+  manageHref,
+  disabled,
+}: TemplateMenuProps): JSX.Element | null {
+  if (templates.length === 0) return null;
+
+  const applied = templates.find((template) => template.id === appliedId);
+  const ordered = sortTemplates(templates);
+  const groups = SCOPE_ORDER.map((scope) => ({
+    scope,
+    items: ordered.filter((template) => template.scope === scope),
+  })).filter((group) => group.items.length > 0);
+  // A single group needs no heading: the heading would be the only thing distinguishing rows that
+  // are already alike, which is a label doing no work.
+  const showHeadings = groups.length > 1;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={disabled}
+          className="text-on-surface-variant max-w-56"
+        >
+          <LayoutTemplate className="size-4 shrink-0" />
+          <span className="truncate">{applied ? applied.name : 'Template'}</span>
+          <ChevronDown className="size-4 shrink-0" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72">
+        {groups.map((group) => (
+          <div key={group.scope}>
+            {showHeadings ? (
+              <DropdownMenuLabel>{SCOPE_LABEL[group.scope]}</DropdownMenuLabel>
+            ) : null}
+            {group.items.map((template) => (
+              <DropdownMenuItem
+                key={template.id}
+                onSelect={() => {
+                  onApply(template);
+                }}
+                {...(template.description ? { supporting: template.description } : {})}
+                {...(template.id === appliedId ? { trailingText: 'Applied' } : {})}
+              >
+                {template.name}
+              </DropdownMenuItem>
+            ))}
+          </div>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href={manageHref}>
+            <Settings />
+            Manage templates…
+          </Link>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/** Props for {@link ComposerTemplateControl}. */
+export interface ComposerTemplateControlProps {
+  /** The org whose templates to offer (from the route). */
+  orgId: string;
+  /** The kind this composer creates. */
+  kind: TemplateTargetType;
+  /** Whether the composer is open — the read is skipped while it is not. */
+  open: boolean;
+  /** The template the draft currently has applied, if any. */
+  appliedId: string | null;
+  /** Apply a template to the draft. */
+  onApply: (template: TemplateOut) => void;
+  /**
+   * A template to apply as soon as the list loads, from a `?template=` compose request.
+   *
+   * @remarks
+   * Applied once per open. A command palette entry that says "New task from Bug report" has to
+   * deliver the bug-report outline, and the page it lands on cannot know the payload until this
+   * read resolves.
+   */
+  autoApplyId?: string | null;
+  /** Whether the composer is submitting. */
+  disabled: boolean;
+}
+
+/**
+ * The data-connected template control every create composer mounts.
+ *
+ * @remarks
+ * The composers each supply `kind` and an `onApply` that merges into their own draft; everything
+ * else — the read, the ordering, the manage link, the auto-apply, the empty case — lives here, so
+ * the four composers cannot drift apart in how templates behave.
+ *
+ * @param props - The {@link ComposerTemplateControlProps}.
+ * @returns the rendered control, or nothing when the workspace has no templates of this kind.
+ */
+export function ComposerTemplateControl({
+  orgId,
+  kind,
+  open,
+  appliedId,
+  onApply,
+  autoApplyId = null,
+  disabled,
+}: ComposerTemplateControlProps): JSX.Element | null {
+  const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: open });
+  const items = query.data?.items;
+  // Memoized so the auto-apply effect below is not re-entered on every unrelated render.
+  const templates = useMemo(() => items ?? [], [items]);
+
+  // Guarded by a ref rather than by `appliedId`, so undoing an auto-applied template does not
+  // immediately re-apply it — an undo that undoes itself is not an undo.
+  const autoApplied = useRef(false);
+  useEffect(() => {
+    if (!autoApplyId || autoApplied.current) return;
+    const match = templates.find((template) => template.id === autoApplyId);
+    if (!match) return;
+    autoApplied.current = true;
+    onApply(match);
+  }, [autoApplyId, templates, onApply]);
+
+  // A failed or pending read renders nothing rather than a disabled control. The composer's job
+  // is creating the entity; a template is an accelerant, and a broken accelerant should get out
+  // of the way instead of sitting there greyed out asking to be understood.
+  return (
+    <TemplateMenu
+      templates={templates}
+      appliedId={appliedId}
+      onApply={onApply}
+      manageHref={sectionHref(orgId, 'templates')}
+      disabled={disabled}
+    />
+  );
+}
+
+/** Props for {@link AppliedTemplateNotice}. */
+export interface AppliedTemplateNoticeProps {
+  /** The applied template's name. */
+  name: string;
+  /** Restore the draft to the instant before the template was applied. */
+  onUndo: () => void;
+}
+
+/**
+ * The line that says a template was applied, and offers the way back.
+ *
+ * @remarks
+ * Applying a template is accepted unconditionally — no confirmation dialog, no disabled state,
+ * no refusal when the draft already holds typed text. The consequence is reported here instead,
+ * next to a single-click undo. That is the trade the product makes everywhere: never stop someone
+ * mid-gesture to ask whether they meant it, and always leave a way back once they have.
+ *
+ * `role="status"` rather than `role="alert"`: this is the composer confirming what it did on
+ * request, so it should not interrupt a screen reader mid-sentence.
+ *
+ * @param props - The {@link AppliedTemplateNoticeProps}.
+ * @returns the rendered notice.
+ */
+export function AppliedTemplateNotice({ name, onUndo }: AppliedTemplateNoticeProps): JSX.Element {
+  return (
+    <p role="status" className="text-on-surface-variant text-body-medium flex items-center gap-1">
+      <span className="min-w-0 truncate">Applied {name}.</span>
+      <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={onUndo}>
+        Undo
+      </Button>
+    </p>
+  );
+}

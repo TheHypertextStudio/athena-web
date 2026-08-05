@@ -18,7 +18,7 @@ export type PaletteScope = 'hub' | 'org';
  * Drives the grouped section headers in the palette list and is purely presentational —
  * selection behavior lives on each item's {@link PaletteItem.run}.
  */
-export type PaletteSection = 'navigation' | 'actions' | 'organizations' | 'results';
+export type PaletteSection = 'navigation' | 'actions' | 'templates' | 'organizations' | 'results';
 
 /**
  * A single, selectable row in the command palette.
@@ -42,6 +42,15 @@ export interface PaletteItem {
   icon: LucideIcon;
   /** Extra terms (besides `label`) the local filter matches against. */
   keywords?: readonly string[];
+  /**
+   * Hide this item until the user has typed something.
+   *
+   * @remarks
+   * For rows that are worth finding but not worth listing — a workspace's dozen templates would
+   * otherwise fill the idle palette and push the destinations people actually open it for below
+   * the fold.
+   */
+  requiresQuery?: boolean;
   /**
    * The org this item belongs to, when org-chipped (search hits, org switches, org-scoped
    * navigation). Omitted for Hub-global navigation/actions.

@@ -23,6 +23,7 @@ import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import { CreateInitiativeDialog } from '@/components/initiatives/create-initiative';
+import { useComposeRequest } from '@/components/composer/use-compose-param';
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
@@ -259,6 +260,7 @@ export default function InitiativesListClient(): JSX.Element {
   const initiativeNoun = useVocabulary('initiative');
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const [createOpen, setCreateOpen] = useState(false);
+  const composeTemplateId = useComposeRequest(setCreateOpen);
   const [attentionIndex, setAttentionIndex] = useState(0);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
   const catalog = useMemo(() => buildInitiativeCatalog(), []);
@@ -573,6 +575,7 @@ export default function InitiativesListClient(): JSX.Element {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={handleCreated}
+        defaultTemplateId={composeTemplateId}
       />
 
       {!overview.isPending && !overview.isError ? (

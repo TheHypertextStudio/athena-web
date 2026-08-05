@@ -38,7 +38,10 @@ export function filterCommands(
   query: string,
 ): readonly PaletteItem[] {
   const q = query.trim().toLowerCase();
-  if (q.length === 0) return items;
+  // An idle palette shows the commands worth offering unprompted. Items that opted out — the
+  // per-template create rows, of which a workspace has a dozen before anyone authors one — would
+  // otherwise bury the handful of rows a person opened the palette to reach.
+  if (q.length === 0) return items.filter((item) => !item.requiresQuery);
   return items.filter((item) => {
     if (subsequenceMatch(item.label, q)) return true;
     return (item.keywords ?? []).some((kw) => subsequenceMatch(kw, q));

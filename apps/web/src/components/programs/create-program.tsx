@@ -12,7 +12,7 @@
  * `@docket/ui` compact pickers.
  *
  * The dialog is *controlled* by the host page so its header "New {program}" button and empty-state
- * CTA open the *same* dialog. This component owns only the form's transient field state, which
+ * CTA open the *same* dialog. Its fields live in one {@link useComposerDraft} value, which
  * {@link withComposerReset} scopes to a single open so every open starts from a pristine draft
  * however the previous one ended. The parent is handed the created {@link ProgramOut} through
  * {@link CreateProgramDialogProps.onCreated} so it can optimistically prepend the new row + route.
@@ -26,23 +26,35 @@ import {
   type ProgramStatus,
   type Visibility,
 } from '@docket/types';
-import { ActorPicker, EnumPicker } from '@docket/ui/components';
-import { Activity } from '@docket/ui/icons';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import {
+  AppliedTemplateNotice,
+  ComposerTemplateControl,
+} from '@/components/composer/template-menu';
+import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { enumOptions, HEALTH_OPTIONS, VISIBILITY_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
-import { STATUS_LABEL } from '@/components/programs/program-status';
+import { templatePatch } from '@/components/templates/queries';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+
+import { ProgramComposerPickers } from './program-form-pickers';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors'] as const;
 
-/** The Program lifecycle statuses, ordered live → quiet. */
-const PROGRAM_STATUS_ORDER: readonly ProgramStatus[] = ['active', 'paused', 'archived'];
+/** Every field the program composer holds, as one value. */
+export interface ProgramDraft {
+  name: string;
+  summary: string;
+  description: string;
+  ownerId: string | null;
+  status: ProgramStatus;
+  health: Health | null;
+  visibility: Visibility;
+}
 
 /** Props for {@link CreateProgramDialog}. */
 export interface CreateProgramDialogProps {
@@ -56,6 +68,8 @@ export interface CreateProgramDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Notify the parent that a program was created, so it can prepend + route. */
   onCreated: (program: ProgramOut) => void;
+  /** A template to apply on open, from a `?template=` compose request. */
+  defaultTemplateId?: string | null;
 }
 
 /**
@@ -70,41 +84,45 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
   open,
   onOpenChange,
   onCreated,
+  defaultTemplateId = null,
 }: CreateProgramDialogProps): JSX.Element {
   const programNounLower = programNoun.toLowerCase();
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+  const { draft, setField, applyTemplate, undoTemplate, appliedTemplate } =
+    useComposerDraft<ProgramDraft>({
+      name: '',
+      summary: '',
+      description: '',
+      ownerId: null,
+      status: 'active',
+      health: null,
+      visibility: 'public',
+    });
 
-  const [name, setName] = useState('');
-  const [summary, setSummary] = useState('');
-  const [body, setBody] = useState('');
-  const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [status, setStatus] = useState<ProgramStatus>('active');
-  const [health, setHealth] = useState<Health | null>(null);
-  const [visibility, setVisibility] = useState<Visibility>('public');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = name.trim().length > 0;
+  const canSubmit = draft.name.trim().length > 0;
 
   /** Create the program with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
-    const trimmed = name.trim();
+    const trimmed = draft.name.trim();
     if (trimmed.length === 0) return;
     setCreating(true);
     setError(null);
     try {
-      const trimmedBody = body.trim();
+      const trimmedBody = draft.description.trim();
       const res = await api.v1.orgs[':orgId'].programs.$post({
         param: { orgId },
         json: {
           name: trimmed,
-          status,
-          visibility,
-          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
+          status: draft.status,
+          visibility: draft.visibility,
+          ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(ownerId ? { ownerId: ActorId.parse(ownerId) } : {}),
-          ...(health ? { health } : {}),
+          ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
+          ...(draft.health ? { health: draft.health } : {}),
         },
       });
       if (!res.ok) {
@@ -124,34 +142,49 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
     } finally {
       setCreating(false);
     }
-  }, [
-    name,
-    summary,
-    body,
-    status,
-    visibility,
-    ownerId,
-    health,
-    orgId,
-    programNounLower,
-    onOpenChange,
-    onCreated,
-  ]);
+  }, [draft, orgId, programNounLower, onOpenChange, onCreated]);
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
-      heading={`New ${programNoun.toLowerCase()}`}
-      title={name}
-      onTitleChange={setName}
+      heading={`New ${programNounLower}`}
+      templateSlot={
+        <ComposerTemplateControl
+          orgId={orgId}
+          kind="program"
+          open={open}
+          appliedId={appliedTemplate?.id ?? null}
+          autoApplyId={defaultTemplateId}
+          onApply={(chosen) => {
+            applyTemplate(templatePatch(chosen.payload, 'program'), {
+              id: chosen.id,
+              name: chosen.name,
+            });
+          }}
+          disabled={creating}
+        />
+      }
+      notice={
+        appliedTemplate ? (
+          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
+        ) : null
+      }
+      title={draft.name}
+      onTitleChange={(next) => {
+        setField('name', next);
+      }}
       titlePlaceholder={`${programNoun} name`}
-      summary={summary}
-      onSummaryChange={setSummary}
+      summary={draft.summary}
+      onSummaryChange={(next) => {
+        setField('summary', next);
+      }}
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
-      body={body}
-      onBodyChange={setBody}
+      body={draft.description}
+      onBodyChange={(next) => {
+        setField('description', next);
+      }}
       bodyPlaceholder="Add a description…"
       error={error}
       creating={creating}
@@ -159,43 +192,24 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
       onSubmit={() => void submit()}
       submitLabel={`Create ${programNoun}`}
     >
-      <ActorPicker
-        options={options.actorOptions}
-        value={ownerId}
-        onChange={setOwnerId}
-        placeholder="Set owner"
-        clearLabel="No owner"
-        ariaLabel="Owner"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={enumOptions(PROGRAM_STATUS_ORDER, STATUS_LABEL)}
-        value={status}
-        onChange={(next) => {
-          if (next) setStatus(next);
+      <ProgramComposerPickers
+        actorOptions={options.actorOptions}
+        ownerId={draft.ownerId}
+        onOwnerChange={(next) => {
+          setField('ownerId', next);
         }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={setHealth}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={VISIBILITY_OPTIONS}
-        value={visibility}
-        onChange={(next) => {
-          if (next) setVisibility(next);
+        status={draft.status}
+        onStatusChange={(next) => {
+          setField('status', next);
         }}
-        placeholder="Visibility"
-        ariaLabel="Visibility"
+        health={draft.health}
+        onHealthChange={(next) => {
+          setField('health', next);
+        }}
+        visibility={draft.visibility}
+        onVisibilityChange={(next) => {
+          setField('visibility', next);
+        }}
         disabled={creating}
       />
     </ComposerShell>

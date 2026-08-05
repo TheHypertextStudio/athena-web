@@ -20,6 +20,7 @@ const SECTION_ORDER: readonly { section: PaletteSection; label: string }[] = [
   { section: 'results', label: 'Search results' },
   { section: 'navigation', label: 'Navigate' },
   { section: 'actions', label: 'Actions' },
+  { section: 'templates', label: 'Create from template' },
   { section: 'organizations', label: 'Switch workspace' },
 ];
 
@@ -99,7 +100,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     };
   }, [open]);
 
-  const commands = useCommandActions({ scope, close: onClose });
+  const commands = useCommandActions({ scope, open, close: onClose });
   const { results, loading, error, hasQuery } = useHubSearch({ query, scope, close: onClose });
 
   // The static (navigation/actions/org) commands matching the query.

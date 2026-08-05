@@ -3,6 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 
 import { DENSITIES, useContextState } from '@docket/ui/components';
+import { useVocabulary } from '@docket/ui/hooks';
 import {
   Building,
   FolderKanban,
@@ -10,6 +11,7 @@ import {
   Home,
   Inbox,
   Layers,
+  LayoutTemplate,
   Library,
   ListChecks,
   LogOut,
@@ -22,10 +24,27 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { composeHref } from '@/components/composer/use-compose-param';
+import { sortTemplates, templatesDef } from '@/components/templates/queries';
+import { useApiQuery } from '@/lib/query';
 import { signOutAndPurge } from '@/lib/sign-out';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
 import type { PaletteItem, PaletteScope } from './types';
+
+/**
+ * The four kinds the palette can create, and the list route that owns each composer.
+ *
+ * @remarks
+ * Labels are resolved through the workspace's vocabulary at build time below, so a workspace that
+ * calls Initiatives "Campaigns" gets "New campaign" rather than a term nobody there uses.
+ */
+const CREATABLE = [
+  { kind: 'task', path: 'tasks', keywords: ['new', 'create', 'add', 'issue'] },
+  { kind: 'project', path: 'projects', keywords: ['new', 'create', 'add'] },
+  { kind: 'initiative', path: 'initiatives', keywords: ['new', 'create', 'add', 'goal', 'theme'] },
+  { kind: 'program', path: 'programs', keywords: ['new', 'create', 'add', 'stream'] },
+] as const;
 
 /** The org-scoped sidebar destinations a command can jump to, with labels + glyphs. */
 const ORG_DESTINATIONS = [
@@ -50,6 +69,8 @@ const ORG_DESTINATIONS = [
 interface CommandActionsInput {
   /** The active search scope (governs org-local navigation availability). */
   scope: PaletteScope;
+  /** Whether the palette is open; the template read is skipped while it is not. */
+  open: boolean;
   /** Close the palette; every command calls this immediately before navigating. */
   close: () => void;
 }
@@ -64,20 +85,51 @@ interface CommandActionsInput {
  * - **navigation** — the Hub destinations (Today, Inbox, Portfolio) always; when an org is
  *   bound (and the scope is `org`) the org-scoped sidebar destinations for that org, each
  *   org-chipped.
- * - **actions** — global actions (new organization, sign out).
+ * - **actions** — global actions (create each kind of work, new organization, sign out).
+ * - **templates** — one "New {kind} from {template}" command per template in the bound org,
+ *   hidden until the user types (see {@link PaletteItem.requiresQuery}).
  * - **organizations** — one "switch to <org>" command per membership, org-chipped.
+ *
+ * A create command navigates to the list page that owns that composer and asks it to open, via
+ * the `?compose=1` convention in {@link useComposeParam}. The palette does not own a second copy
+ * of any create dialog: one implementation, reachable from the header button, the empty state,
+ * and here — the same rule `editor/slash-commands.ts` states for the slash menu.
  *
  * Every command closes the palette before performing its navigation/effect, so selection
  * feels instant and the overlay never lingers.
  *
- * @param input - The active scope and the palette's `close` callback.
- * @returns the static commands in display order (navigation → actions → organizations).
+ * @param input - The active scope, open state, and the palette's `close` callback.
+ * @returns the static commands in display order.
  */
-export function useCommandActions({ scope, close }: CommandActionsInput): readonly PaletteItem[] {
+export function useCommandActions({
+  scope,
+  open,
+  close,
+}: CommandActionsInput): readonly PaletteItem[] {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { orgs, activeOrgId, orgName } = useActiveOrg();
   const { density, setDensity } = useContextState();
+  const taskNoun = useVocabulary('task');
+  const projectNoun = useVocabulary('project');
+  const initiativeNoun = useVocabulary('initiative');
+  const programNoun = useVocabulary('program');
+
+  const templatesQuery = useApiQuery({
+    ...templatesDef(activeOrgId ?? ''),
+    enabled: open && scope === 'org' && activeOrgId !== null,
+  });
+  const templateItems = templatesQuery.data?.items;
+
+  const nounFor = useMemo<Record<(typeof CREATABLE)[number]['kind'], string>>(
+    () => ({
+      task: taskNoun,
+      project: projectNoun,
+      initiative: initiativeNoun,
+      program: programNoun,
+    }),
+    [taskNoun, projectNoun, initiativeNoun, programNoun],
+  );
 
   return useMemo<readonly PaletteItem[]>(() => {
     /** Wrap a navigation in the close-then-push lifecycle every command shares. */
@@ -135,6 +187,23 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
       }
     }
 
+    // ── Actions: create one of each kind of work, in the bound org ────────────
+    if (scope === 'org' && activeOrgId) {
+      const name = orgName(activeOrgId);
+      for (const creatable of CREATABLE) {
+        const noun = nounFor[creatable.kind];
+        items.push({
+          id: `action:new:${creatable.kind}`,
+          section: 'actions',
+          label: `New ${noun.toLowerCase()}`,
+          icon: Plus,
+          keywords: [...creatable.keywords, noun],
+          org: { id: activeOrgId, name },
+          run: go(composeHref(`/orgs/${activeOrgId}/${creatable.path}`)),
+        });
+      }
+    }
+
     // ── Actions: global ───────────────────────────────────────────────────────
     items.push(
       {
@@ -174,6 +243,29 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
       },
     );
 
+    // ── Templates: one command per template, hidden until the user types ──────
+    if (scope === 'org' && activeOrgId && templateItems) {
+      const name = orgName(activeOrgId);
+      const pathFor = new Map(CREATABLE.map((c) => [c.kind, c.path]));
+      for (const template of sortTemplates(templateItems)) {
+        const path = pathFor.get(template.targetType);
+        /* v8 ignore next -- @preserve every target type has a route; the map cannot miss */
+        if (!path) continue;
+        const noun = nounFor[template.targetType];
+        items.push({
+          id: `template:${template.id}`,
+          section: 'templates',
+          label: `New ${noun.toLowerCase()} from ${template.name}`,
+          hint: noun,
+          icon: LayoutTemplate,
+          keywords: [template.name, noun, 'template', 'new', 'create'],
+          org: { id: activeOrgId, name },
+          requiresQuery: true,
+          run: go(composeHref(`/orgs/${activeOrgId}/${path}`, template.id)),
+        });
+      }
+    }
+
     // ── Organizations: switch context ─────────────────────────────────────────
     for (const org of orgs) {
       items.push({
@@ -188,5 +280,16 @@ export function useCommandActions({ scope, close }: CommandActionsInput): readon
     }
 
     return items;
-  }, [scope, activeOrgId, orgs, orgName, router, close, density, setDensity]);
+  }, [
+    scope,
+    activeOrgId,
+    orgs,
+    orgName,
+    router,
+    close,
+    density,
+    setDensity,
+    templateItems,
+    nounFor,
+  ]);
 }

@@ -50,6 +50,12 @@ export const queryKeys = {
     ['org', orgId, 'email-suggestions', suggestionId, 'thread'] as const,
   automationRules: (orgId: string) => ['org', orgId, 'automation-rules'] as const,
   savedViews: (orgId: string) => ['org', orgId, 'saved-views'] as const,
+  // The settings page reads every kind at once and each composer picker reads one, so the kind is
+  // part of the key: the four picker reads cache apart, and the coarse `templates(orgId)` prefix
+  // invalidates all of them plus the settings list after any write.
+  templates: (orgId: string) => ['org', orgId, 'templates'] as const,
+  templatesOfKind: (orgId: string, targetType: string) =>
+    ['org', orgId, 'templates', targetType] as const,
   agents: (orgId: string) => ['org', orgId, 'agents'] as const,
   sessions: (orgId: string) => ['org', orgId, 'sessions'] as const,
   views: (orgId: string) => ['org', orgId, 'views'] as const,

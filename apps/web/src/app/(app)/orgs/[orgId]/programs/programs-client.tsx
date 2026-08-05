@@ -18,6 +18,7 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { CreateProgramDialog } from '@/components/programs/create-program';
+import { useComposeRequest } from '@/components/composer/use-compose-param';
 import { buildProgramCatalog } from '@/components/programs/program-catalog';
 import { statusGlyphType } from '@/components/programs/program-status';
 import { applyView, EMPTY_GROUP_ID } from '@/components/views/apply-view';
@@ -81,6 +82,7 @@ export default function ProgramsListClient(): JSX.Element {
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const [createOpen, setCreateOpen] = useState(false);
+  const composeTemplateId = useComposeRequest(setCreateOpen);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   // The roster is the primary slice (its load gates the page); projects, tasks, and members
@@ -285,6 +287,7 @@ export default function ProgramsListClient(): JSX.Element {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={handleCreated}
+        defaultTemplateId={composeTemplateId}
       />
 
       {loading ? (

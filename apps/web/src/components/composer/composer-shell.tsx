@@ -45,6 +45,31 @@ export interface ComposerShellProps {
   /** Optional context shown next to `icon` (e.g. the team name). Purely visual — `heading` alone
    *  names the dialog for assistive tech. */
   context?: ReactNode;
+  /**
+   * The template control, pinned to the right of the top row.
+   *
+   * @remarks
+   * Deliberately not one of the {@link ComposerShellProps.children} property pills. Every pill in
+   * that strip sets one field; a template rewrites the whole draft. Putting a control with that
+   * reach among controls without it — and *below* the description it rewrites — is what made the
+   * old initiative picker read as a property and behave as a bulldozer.
+   */
+  templateSlot?: ReactNode;
+  /**
+   * Extra fields rendered above the title, for composers whose subject is not the entity itself.
+   *
+   * @remarks
+   * The template editor uses this for the template's own name and sharing scope: below them the
+   * shell renders the ordinary entity fields, so authoring a template looks exactly like creating
+   * the thing it makes.
+   */
+  leadingFields?: ReactNode;
+  /**
+   * A transient, non-blocking message shown with the actions region — currently the applied-template
+   * line and its undo. Distinct from {@link ComposerShellProps.error}: a notice reports something
+   * the composer did on request, not something that went wrong.
+   */
+  notice?: ReactNode;
   /** The current title text. */
   title: string;
   /** Report a changed title. */
@@ -97,6 +122,9 @@ export function ComposerShell({
   heading,
   icon,
   context,
+  templateSlot,
+  leadingFields,
+  notice,
   title,
   onTitleChange,
   titlePlaceholder,
@@ -150,9 +178,10 @@ export function ComposerShell({
         {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
         <DialogTitle className="sr-only">{heading}</DialogTitle>
 
-        {/* Breadcrumb: only rendered when there's real context to show (e.g. a team), so a composer
-            with neither an icon nor a context starts flush at the title field below. */}
-        {icon || context ? (
+        {/* Top row: the breadcrumb on the left, the template control on the right. Rendered only
+            when one of them has something to show, so a composer with neither starts flush at the
+            title field below. `pr-16` reserves the close button's corner. */}
+        {icon || context || templateSlot ? (
           <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
             {icon ? (
               <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
@@ -162,6 +191,7 @@ export function ComposerShell({
             {context ? (
               <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
             ) : null}
+            {templateSlot ? <div className="ml-auto shrink-0">{templateSlot}</div> : null}
           </div>
         ) : null}
 
@@ -172,8 +202,10 @@ export function ComposerShell({
             event.preventDefault();
             if (canSubmit && !creating) onSubmit();
           }}
-          className={cn('flex flex-col px-6', icon || context ? 'pt-3' : 'pt-5')}
+          className={cn('flex flex-col px-6', icon || context || templateSlot ? 'pt-3' : 'pt-5')}
         >
+          {leadingFields ? <div className="flex flex-col gap-3 pb-4">{leadingFields}</div> : null}
+
           {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
           <div className="flex flex-col gap-1 pb-3">
             <input
@@ -230,6 +262,7 @@ export function ComposerShell({
         {/* Properties: one compact row of Linear-style pills. */}
         <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
           <PropertyStrip>{children}</PropertyStrip>
+          {notice}
           {error ? (
             <p role="alert" className="text-error text-body-medium">
               {error}

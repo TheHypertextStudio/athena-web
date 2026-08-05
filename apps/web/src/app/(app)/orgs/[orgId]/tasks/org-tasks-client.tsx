@@ -28,6 +28,7 @@ import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { CreateTaskDialog } from '@/components/tasks/create-task';
+import { useComposeRequest } from '@/components/composer/use-compose-param';
 import { applyView } from '@/components/views/apply-view';
 import type { FieldOption } from '@/components/views/field-catalog';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
@@ -52,6 +53,7 @@ export default function OrgTasksClient(): JSX.Element {
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
   const [createOpen, setCreateOpen] = useState(false);
+  const composeTemplateId = useComposeRequest(setCreateOpen);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
 
   const tasksQ = useApiListQuery(
@@ -210,6 +212,7 @@ export default function OrgTasksClient(): JSX.Element {
         open={createOpen}
         onOpenChange={setCreateOpen}
         onCreated={handleCreated}
+        defaultTemplateId={composeTemplateId}
       />
 
       {/* placeholder: the task rows — how many tasks the workspace has and each one's title,

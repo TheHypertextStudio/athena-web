@@ -25,6 +25,9 @@
  * matching pickers. The dialog is *controlled* by the host: the page owns `open` and is handed the
  * created {@link TaskOut} through {@link CreateTaskDialogProps.onCreated} to prepend + route.
  *
+ * Every field lives in one {@link useComposerDraft} value so a template can fill them together and
+ * that action can be undone in one step.
+ *
  * @see {@link useComposerOptions} for the assignee / project / cycle / label option sources.
  */
 import {
@@ -44,9 +47,15 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import {
+  AppliedTemplateNotice,
+  ComposerTemplateControl,
+} from '@/components/composer/template-menu';
+import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { templatePatch } from '@/components/templates/queries';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 
@@ -54,6 +63,25 @@ import { TaskComposerPickers } from './task-form-pickers';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'projects', 'cycles', 'labels', 'milestones'] as const;
+
+/** Every field the task composer holds, as one value. */
+export interface TaskDraft {
+  title: string;
+  description: string;
+  /** The team chosen in the picker, or null to follow the org default. */
+  teamOverride: string | null;
+  state: string | null;
+  priority: Priority;
+  assigneeId: string | null;
+  projectId: string | null;
+  milestoneId: string | null;
+  cycleId: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  labelIds: readonly string[];
+  /** Coarse effort estimate in the workspace's scale, or null for none. */
+  estimate: number | null;
+}
 
 /** Props for {@link CreateTaskDialog}. */
 export interface CreateTaskDialogProps {
@@ -75,6 +103,8 @@ export interface CreateTaskDialogProps {
   defaultProjectId?: string | null;
   /** Pre-seed the assignee picker (e.g. opening from My Work's "Assigned to me" tab). */
   defaultAssigneeId?: string | null;
+  /** A template to apply on open, from a `?template=` compose request. */
+  defaultTemplateId?: string | null;
 }
 
 /**
@@ -93,31 +123,35 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   onCreated,
   defaultProjectId = null,
   defaultAssigneeId = null,
+  defaultTemplateId = null,
 }: CreateTaskDialogProps): JSX.Element {
   const projectNoun = useVocabulary('project');
   const cycleNoun = useVocabulary('cycle');
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
   const { scale: estimationScale } = useEstimationScale(orgId);
+  const { draft, setField, updateDraft, applyTemplate, undoTemplate, appliedTemplate } =
+    useComposerDraft<TaskDraft>({
+      title: '',
+      description: '',
+      teamOverride: null,
+      state: null,
+      priority: 'none',
+      assigneeId: defaultAssigneeId,
+      projectId: defaultProjectId,
+      milestoneId: null,
+      cycleId: null,
+      startDate: null,
+      dueDate: null,
+      labelIds: [],
+      estimate: null,
+    });
 
-  const [title, setTitle] = useState('');
-  const [body, setBody] = useState('');
-  const [teamOverride, setTeamOverride] = useState<string | null>(null);
-  const [state, setState] = useState<string | null>(null);
-  const [priority, setPriority] = useState<Priority>('none');
-  const [assigneeId, setAssigneeId] = useState<string | null>(defaultAssigneeId);
-  const [projectId, setProjectId] = useState<string | null>(defaultProjectId);
-  const [milestoneId, setMilestoneId] = useState<string | null>(null);
-  const [cycleId, setCycleId] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<string | null>(null);
-  const [dueDate, setDueDate] = useState<string | null>(null);
-  const [labelIds, setLabelIds] = useState<readonly string[]>([]);
-  const [estimate, setEstimate] = useState<number | null>(null);
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const teamId = teamOverride ?? defaultTeamId;
+  const teamId = draft.teamOverride ?? defaultTeamId;
   // The breadcrumb shows the team the task will land in (its workflow + triage owner).
   const teamName = teams.find((team) => team.id === teamId)?.name;
 
@@ -130,12 +164,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       const states = await options.workflowStatesFor(teamId);
       if (!live.current) return;
       setWorkflowStates(states);
-      setState((current) => current ?? states[0]?.key ?? null);
+      updateDraft((current) => (current.state === null ? { state: states[0]?.key ?? null } : {}));
     })();
     return () => {
       live.current = false;
     };
-  }, [open, teamId, options]);
+  }, [open, teamId, options, updateDraft]);
 
   // Cycles are org-wide; scope the picker to the chosen team's cadence. The label is the cycle's
   // server-derived `displayName` (its author name, else its window) — never the stored `number`,
@@ -150,51 +184,60 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   // project is currently chosen — same rule the task detail rail applies post-creation.
   const milestoneOptionsForProject = useMemo(() => {
     return options.milestones
-      .filter((milestone) => milestone.projectId === projectId)
+      .filter((milestone) => milestone.projectId === draft.projectId)
       .map((milestone) => ({ value: milestone.id, label: milestone.name }));
-  }, [options.milestones, projectId]);
+  }, [options.milestones, draft.projectId]);
 
   /** Changing the project invalidates any milestone chosen under the previous one. */
-  const changeProject = useCallback((id: string | null): void => {
-    setProjectId(id);
-    setMilestoneId(null);
-  }, []);
+  const changeProject = useCallback(
+    (id: string | null): void => {
+      updateDraft(() => ({ projectId: id, milestoneId: null }));
+    },
+    [updateDraft],
+  );
 
   const statusOptions = useMemo(() => workflowStateOptions(workflowStates), [workflowStates]);
 
   /** Toggle a label id in/out of the selected set. */
-  const toggleLabel = useCallback((id: string): void => {
-    setLabelIds((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
-    );
-  }, []);
+  const toggleLabel = useCallback(
+    (id: string): void => {
+      updateDraft((current) => ({
+        labelIds: current.labelIds.includes(id)
+          ? current.labelIds.filter((value) => value !== id)
+          : [...current.labelIds, id],
+      }));
+    },
+    [updateDraft],
+  );
 
-  const canSubmit = title.trim().length > 0 && teamId !== null && !teamsLoading;
+  const canSubmit = draft.title.trim().length > 0 && teamId !== null && !teamsLoading;
 
   /** Create the task with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
-    const trimmed = title.trim();
+    const trimmed = draft.title.trim();
     if (trimmed.length === 0 || !teamId) return;
     setCreating(true);
     setError(null);
     try {
-      const trimmedBody = body.trim();
+      const trimmedBody = draft.description.trim();
       const res = await api.v1.orgs[':orgId'].tasks.$post({
         param: { orgId },
         json: {
           title: trimmed,
           teamId: TeamId.parse(teamId),
-          priority,
+          priority: draft.priority,
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(state ? { state } : {}),
-          ...(assigneeId ? { assigneeId: ActorId.parse(assigneeId) } : {}),
-          ...(projectId ? { projectId: ProjectId.parse(projectId) } : {}),
-          ...(milestoneId ? { milestoneId: MilestoneId.parse(milestoneId) } : {}),
-          ...(cycleId ? { cycleId: CycleId.parse(cycleId) } : {}),
-          ...(startDate ? { startDate } : {}),
-          ...(dueDate ? { dueDate } : {}),
-          ...(labelIds.length > 0 ? { labels: labelIds.map((id) => LabelId.parse(id)) } : {}),
-          ...(estimate !== null ? { estimate } : {}),
+          ...(draft.state ? { state: draft.state } : {}),
+          ...(draft.assigneeId ? { assigneeId: ActorId.parse(draft.assigneeId) } : {}),
+          ...(draft.projectId ? { projectId: ProjectId.parse(draft.projectId) } : {}),
+          ...(draft.milestoneId ? { milestoneId: MilestoneId.parse(draft.milestoneId) } : {}),
+          ...(draft.cycleId ? { cycleId: CycleId.parse(draft.cycleId) } : {}),
+          ...(draft.startDate ? { startDate: draft.startDate } : {}),
+          ...(draft.dueDate ? { dueDate: draft.dueDate } : {}),
+          ...(draft.labelIds.length > 0
+            ? { labels: draft.labelIds.map((id) => LabelId.parse(id)) }
+            : {}),
+          ...(draft.estimate !== null ? { estimate: draft.estimate } : {}),
         },
       });
       if (!res.ok) {
@@ -214,24 +257,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     } finally {
       setCreating(false);
     }
-  }, [
-    title,
-    body,
-    teamId,
-    priority,
-    state,
-    assigneeId,
-    projectId,
-    milestoneId,
-    cycleId,
-    startDate,
-    dueDate,
-    labelIds,
-    estimate,
-    orgId,
-    onOpenChange,
-    onCreated,
-  ]);
+  }, [draft, teamId, orgId, onOpenChange, onCreated]);
 
   return (
     <ComposerShell
@@ -239,11 +265,36 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       onOpenChange={onOpenChange}
       heading="New task"
       context={teams.length > 1 ? teamName : undefined}
-      title={title}
-      onTitleChange={setTitle}
+      templateSlot={
+        <ComposerTemplateControl
+          orgId={orgId}
+          kind="task"
+          open={open}
+          appliedId={appliedTemplate?.id ?? null}
+          autoApplyId={defaultTemplateId}
+          onApply={(chosen) => {
+            applyTemplate(templatePatch(chosen.payload, 'task'), {
+              id: chosen.id,
+              name: chosen.name,
+            });
+          }}
+          disabled={creating}
+        />
+      }
+      notice={
+        appliedTemplate ? (
+          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
+        ) : null
+      }
+      title={draft.title}
+      onTitleChange={(next) => {
+        setField('title', next);
+      }}
       titlePlaceholder="Task title"
-      body={body}
-      onBodyChange={setBody}
+      body={draft.description}
+      onBodyChange={(next) => {
+        setField('description', next);
+      }}
       bodyPlaceholder="Add a description…"
       error={error}
       creating={creating}
@@ -255,36 +306,54 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         teams={teams}
         teamId={teamId}
         statusOptions={statusOptions}
-        state={state}
-        priority={priority}
-        assigneeId={assigneeId}
+        state={draft.state}
+        priority={draft.priority}
+        assigneeId={draft.assigneeId}
         actorOptions={options.actorOptions}
-        projectId={projectId}
+        projectId={draft.projectId}
         projectOptions={options.projectOptions}
         projectNoun={projectNoun}
-        milestoneId={milestoneId}
+        milestoneId={draft.milestoneId}
         milestoneOptionsForProject={milestoneOptionsForProject}
-        cycleId={cycleId}
+        cycleId={draft.cycleId}
         cycleOptionsForTeam={cycleOptionsForTeam}
         cycleNoun={cycleNoun}
-        startDate={startDate}
-        dueDate={dueDate}
-        labelIds={labelIds}
+        startDate={draft.startDate}
+        dueDate={draft.dueDate}
+        labelIds={draft.labelIds}
         labelOptions={options.labelOptions}
         estimationScale={estimationScale}
-        estimate={estimate}
+        estimate={draft.estimate}
         creating={creating}
-        onTeamChange={setTeamOverride}
-        onStateChange={setState}
-        onPriorityChange={setPriority}
-        onAssigneeChange={setAssigneeId}
+        onTeamChange={(next) => {
+          setField('teamOverride', next);
+        }}
+        onStateChange={(next) => {
+          setField('state', next);
+        }}
+        onPriorityChange={(next) => {
+          setField('priority', next);
+        }}
+        onAssigneeChange={(next) => {
+          setField('assigneeId', next);
+        }}
         onProjectChange={changeProject}
-        onMilestoneChange={setMilestoneId}
-        onCycleChange={setCycleId}
-        onStartDateChange={setStartDate}
-        onDueDateChange={setDueDate}
+        onMilestoneChange={(next) => {
+          setField('milestoneId', next);
+        }}
+        onCycleChange={(next) => {
+          setField('cycleId', next);
+        }}
+        onStartDateChange={(next) => {
+          setField('startDate', next);
+        }}
+        onDueDateChange={(next) => {
+          setField('dueDate', next);
+        }}
         onLabelToggle={toggleLabel}
-        onEstimateChange={setEstimate}
+        onEstimateChange={(next) => {
+          setField('estimate', next);
+        }}
       />
     </ComposerShell>
   );

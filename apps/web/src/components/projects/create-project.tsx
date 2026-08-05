@@ -13,12 +13,11 @@
  * compact pickers.
  *
  * The dialog is *controlled* by the host page so the page's header "New {project}" button and its
- * empty-state "Create your first {project}" CTA both open the *same* dialog. This component owns
- * only the form's transient field state; {@link withComposerReset} scopes that state to a single
- * open, so every open starts from a pristine draft however the previous one ended. The parent owns
- * the roster and is handed the created {@link ProjectOut} through
- * {@link CreateProjectDialogProps.onCreated} so it can optimistically prepend the new row and route
- * to its detail.
+ * empty-state "Create your first {project}" CTA both open the *same* dialog. Its fields live in one
+ * {@link useComposerDraft} value, which {@link withComposerReset} scopes to a single open, so every
+ * open starts from a pristine draft however the previous one ended. The parent owns the roster and
+ * is handed the created {@link ProjectOut} through {@link CreateProjectDialogProps.onCreated} so it
+ * can optimistically prepend the new row and route to its detail.
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` the {@link TeamPicker} is driven from.
  * @see {@link useComposerOptions} for the lead + program + initiative option sources.
@@ -33,32 +32,39 @@ import {
   TeamId,
   type TeamOut,
 } from '@docket/types';
-import {
-  ActorPicker,
-  DateRangePicker,
-  EntityPicker,
-  EnumPicker,
-  LabelsPicker,
-} from '@docket/ui/components';
-import { useVocabulary } from '@docket/ui/hooks';
-import { Activity, Layers, Target } from '@docket/ui/icons';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import {
+  AppliedTemplateNotice,
+  ComposerTemplateControl,
+} from '@/components/composer/template-menu';
+import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { HEALTH_OPTIONS, PROJECT_STATUS_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
-import { TeamPicker } from '@/components/teams/team-picker';
-import { formatCalendarDate } from '@/lib/format-date';
+import { templatePatch } from '@/components/templates/queries';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+
+import { ProjectComposerPickers } from './project-form-pickers';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors', 'programs', 'initiatives'] as const;
 
-/** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
-function triggerDate(value: string | null): string | undefined {
-  return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
+/** Every field the project composer holds, as one value. */
+export interface ProjectDraft {
+  name: string;
+  summary: string;
+  description: string;
+  /** The team chosen in the picker, or null to follow the org default. */
+  teamOverride: string | null;
+  leadId: string | null;
+  programId: string | null;
+  status: ProjectStatus;
+  health: Health | null;
+  startDate: string | null;
+  targetDate: string | null;
+  initiativeIds: readonly string[];
 }
 
 /** Props for {@link CreateProjectDialog}. */
@@ -82,6 +88,8 @@ export interface CreateProjectDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Notify the parent that a project was created, so it can prepend + route. */
   onCreated: (project: ProjectOut) => void;
+  /** A template to apply on open, from a `?template=` compose request. */
+  defaultTemplateId?: string | null;
 }
 
 /**
@@ -100,61 +108,68 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
   open,
   onOpenChange,
   onCreated,
+  defaultTemplateId = null,
 }: CreateProjectDialogProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
-  const initiativeNoun = useVocabulary('initiative');
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
-  const programLabel = useVocabulary('program');
+  const { draft, setField, updateDraft, applyTemplate, undoTemplate, appliedTemplate } =
+    useComposerDraft<ProjectDraft>({
+      name: '',
+      summary: '',
+      description: '',
+      teamOverride: null,
+      leadId: null,
+      programId: defaultProgramId ?? null,
+      status: 'planned',
+      health: null,
+      startDate: null,
+      targetDate: null,
+      initiativeIds: [],
+    });
 
-  const [name, setName] = useState('');
-  const [summary, setSummary] = useState('');
-  const [body, setBody] = useState('');
-  const [teamOverride, setTeamOverride] = useState<string | null>(null);
-  const [leadId, setLeadId] = useState<string | null>(null);
-  const [programId, setProgramId] = useState<string | null>(defaultProgramId ?? null);
-  const [status, setStatus] = useState<ProjectStatus>('planned');
-  const [health, setHealth] = useState<Health | null>(null);
-  const [startDate, setStartDate] = useState<string | null>(null);
-  const [targetDate, setTargetDate] = useState<string | null>(null);
-  const [initiativeIds, setInitiativeIds] = useState<readonly string[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const teamId = teamOverride ?? defaultTeamId;
+  const teamId = draft.teamOverride ?? defaultTeamId;
 
   /** Toggle an initiative id in/out of the selected set. */
-  const toggleInitiative = useCallback((id: string): void => {
-    setInitiativeIds((current) =>
-      current.includes(id) ? current.filter((value) => value !== id) : [...current, id],
-    );
-  }, []);
+  const toggleInitiative = useCallback(
+    (id: string): void => {
+      updateDraft((current) => ({
+        initiativeIds: current.initiativeIds.includes(id)
+          ? current.initiativeIds.filter((value) => value !== id)
+          : [...current.initiativeIds, id],
+      }));
+    },
+    [updateDraft],
+  );
 
-  const canSubmit = name.trim().length > 0 && !teamsLoading;
+  const canSubmit = draft.name.trim().length > 0 && !teamsLoading;
 
   /** Create the project with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
-    const trimmed = name.trim();
+    const trimmed = draft.name.trim();
     if (trimmed.length === 0) return;
     setCreating(true);
     setError(null);
     try {
-      const trimmedBody = body.trim();
+      const trimmedBody = draft.description.trim();
       const res = await api.v1.orgs[':orgId'].projects.$post({
         param: { orgId },
         json: {
           name: trimmed,
-          ...(summary.trim().length > 0 ? { summary: summary.trim() } : {}),
+          ...(draft.summary.trim().length > 0 ? { summary: draft.summary.trim() } : {}),
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
           ...(teamId ? { teamId: TeamId.parse(teamId) } : {}),
-          ...(leadId ? { leadId: ActorId.parse(leadId) } : {}),
-          ...(programId ? { programId: ProgramId.parse(programId) } : {}),
-          status,
-          ...(health ? { health } : {}),
-          ...(startDate ? { startDate } : {}),
-          ...(targetDate ? { targetDate } : {}),
-          ...(initiativeIds.length > 0
-            ? { initiativeIds: initiativeIds.map((id) => InitiativeId.parse(id)) }
+          ...(draft.leadId ? { leadId: ActorId.parse(draft.leadId) } : {}),
+          ...(draft.programId ? { programId: ProgramId.parse(draft.programId) } : {}),
+          status: draft.status,
+          ...(draft.health ? { health: draft.health } : {}),
+          ...(draft.startDate ? { startDate: draft.startDate } : {}),
+          ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
+          ...(draft.initiativeIds.length > 0
+            ? { initiativeIds: draft.initiativeIds.map((id) => InitiativeId.parse(id)) }
             : {}),
         },
       });
@@ -175,38 +190,49 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
     } finally {
       setCreating(false);
     }
-  }, [
-    name,
-    summary,
-    body,
-    teamId,
-    leadId,
-    programId,
-    status,
-    health,
-    startDate,
-    targetDate,
-    initiativeIds,
-    orgId,
-    projectNounLower,
-    onOpenChange,
-    onCreated,
-  ]);
+  }, [draft, teamId, orgId, projectNounLower, onOpenChange, onCreated]);
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
-      heading={`New ${projectNoun.toLowerCase()}`}
-      title={name}
-      onTitleChange={setName}
+      heading={`New ${projectNounLower}`}
+      templateSlot={
+        <ComposerTemplateControl
+          orgId={orgId}
+          kind="project"
+          open={open}
+          appliedId={appliedTemplate?.id ?? null}
+          autoApplyId={defaultTemplateId}
+          onApply={(chosen) => {
+            applyTemplate(templatePatch(chosen.payload, 'project'), {
+              id: chosen.id,
+              name: chosen.name,
+            });
+          }}
+          disabled={creating}
+        />
+      }
+      notice={
+        appliedTemplate ? (
+          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
+        ) : null
+      }
+      title={draft.name}
+      onTitleChange={(next) => {
+        setField('name', next);
+      }}
       titlePlaceholder={`${projectNoun} name`}
-      summary={summary}
-      onSummaryChange={setSummary}
+      summary={draft.summary}
+      onSummaryChange={(next) => {
+        setField('summary', next);
+      }}
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
-      body={body}
-      onBodyChange={setBody}
+      body={draft.description}
+      onBodyChange={(next) => {
+        setField('description', next);
+      }}
       bodyPlaceholder="Add a description…"
       error={error}
       creating={creating}
@@ -214,69 +240,40 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       onSubmit={() => void submit()}
       submitLabel={`Create ${projectNoun}`}
     >
-      <EnumPicker
-        options={PROJECT_STATUS_OPTIONS}
-        value={status}
-        onChange={(next) => {
-          if (next) setStatus(next);
+      <ProjectComposerPickers
+        status={draft.status}
+        onStatusChange={(next) => {
+          setField('status', next);
         }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={setHealth}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        disabled={creating}
-      />
-      <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
-      <ActorPicker
-        options={options.actorOptions}
-        value={leadId}
-        onChange={setLeadId}
-        placeholder="Set lead"
-        clearLabel="No lead"
-        ariaLabel="Lead"
-        disabled={creating}
-      />
-      <EntityPicker
-        options={options.programOptions}
-        value={programId}
-        onChange={setProgramId}
-        placeholder={`Set ${programLabel.toLowerCase()}`}
-        triggerIcon={<Layers className="text-on-surface-variant size-4" />}
-        clearLabel={`No ${programLabel.toLowerCase()}`}
-        searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
-        ariaLabel={programLabel}
-        disabled={creating}
-      />
-      <DateRangePicker
-        value={{ start: startDate, end: targetDate }}
-        onChange={({ start, end }) => {
-          setStartDate(start);
-          setTargetDate(end);
+        health={draft.health}
+        onHealthChange={(next) => {
+          setField('health', next);
         }}
-        placeholder="Set timeline"
-        formatLabel={triggerDate}
-        ariaLabel="Timeline"
-        startLabel="Start"
-        endLabel="Target"
-        disabled={creating}
-      />
-      <LabelsPicker
-        options={options.initiativeOptions}
-        value={initiativeIds}
-        onToggle={toggleInitiative}
-        placeholder={`Link ${initiativeNoun.toLowerCase()}s`}
-        triggerIcon={<Target className="text-on-surface-variant size-4" />}
-        searchPlaceholder={`Search ${initiativeNoun.toLowerCase()}s…`}
-        emptyText={`No ${initiativeNoun.toLowerCase()}s`}
-        ariaLabel={`${initiativeNoun}s`}
+        references={{
+          teams,
+          teamId,
+          onTeamChange: (next) => {
+            setField('teamOverride', next);
+          },
+          actorOptions: options.actorOptions,
+          leadId: draft.leadId,
+          onLeadChange: (next) => {
+            setField('leadId', next);
+          },
+          programOptions: options.programOptions,
+          programId: draft.programId,
+          onProgramChange: (next) => {
+            setField('programId', next);
+          },
+          startDate: draft.startDate,
+          targetDate: draft.targetDate,
+          onTimelineChange: ({ start, end }) => {
+            updateDraft(() => ({ startDate: start, targetDate: end }));
+          },
+          initiativeOptions: options.initiativeOptions,
+          initiativeIds: draft.initiativeIds,
+          onInitiativeToggle: toggleInitiative,
+        }}
         disabled={creating}
       />
     </ComposerShell>

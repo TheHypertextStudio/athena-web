@@ -1,22 +1,24 @@
 'use client';
 
 /**
- * The robust "New {initiative}" create composer for the Initiatives list.
+ * The "New {initiative}" create composer for the Initiatives list.
  *
  * @remarks
  * An Initiative is a cross-cutting *theme* that holds no work of its own — it associates
  * many-to-many with Projects + Programs (those links come later on the detail screen). The
- * composer still captures the framing fields: a title + description body, and an inline strip of
- * compact pickers — its owner, its status (active / completed), its target date, and its health
- * verdict. Sensible defaults keep it fast: only a name is required; status defaults to "Active".
- * Built on the shared {@link ComposerShell} + the `@docket/ui` compact pickers.
+ * composer captures the framing fields: a title + description body, and an inline strip of
+ * compact pickers — its owner, its status, its target date, and its health verdict. Sensible
+ * defaults keep it fast: only a name is required; status defaults to "Active".
  *
  * The dialog is *controlled* by the host page so its header "New {initiative}" button and
- * empty-state CTA open the *same* dialog. This component owns only the form's transient field
- * state, which {@link withComposerReset} scopes to a single open so every open starts from a
- * pristine draft however the previous one ended. The parent is handed the created
- * {@link InitiativeOut}
- * through {@link CreateInitiativeDialogProps.onCreated} so it can route to its (empty) detail.
+ * empty-state CTA open the *same* dialog. Its fields live in one {@link useComposerDraft} value,
+ * which is what lets a template fill all of them in one action and lets that action be undone.
+ * {@link withComposerReset} scopes the whole draft to a single open, so every open starts pristine
+ * however the previous one ended.
+ *
+ * The template control sits in the top row, not among the property pills — see
+ * {@link TemplateMenu} for why. Applying a template merges its fields and offers an inline undo;
+ * it never silently discards typed text, which the previous three-button strip did on every click.
  *
  * @see {@link useComposerOptions} for the owner option source.
  */
@@ -28,68 +30,50 @@ import {
   type InitiativeStatus,
   type InitiativeUpdateCadence,
 } from '@docket/types';
-import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
-import { Activity } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
+import {
+  AppliedTemplateNotice,
+  ComposerTemplateControl,
+} from '@/components/composer/template-menu';
+import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
-import { formatCalendarDate } from '@/lib/format-date';
+import { templatePatch } from '@/components/templates/queries';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+
+import { InitiativeComposerPickers } from './initiative-form-pickers';
 
 /** The lists this composer's pickers draw from. */
 const COMPOSER_INCLUDE = ['actors'] as const;
 
-/** The Initiative statuses, ordered open → done. */
-const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
-  'proposed',
-  'active',
-  'completed',
-  'canceled',
-];
-const INITIATIVE_STATUS_LABEL: Record<InitiativeStatus, string> = {
-  proposed: 'Proposed',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-};
-const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
-const PRIORITY_LABEL: Record<InitiativePriority, string> = {
-  none: 'No priority',
-  low: 'Low priority',
-  medium: 'Medium priority',
-  high: 'High priority',
-};
-const CADENCE_ORDER: readonly InitiativeUpdateCadence[] = [
-  'weekly',
-  'biweekly',
-  'monthly',
-  'quarterly',
-  'none',
-];
-const CADENCE_LABEL: Record<InitiativeUpdateCadence, string> = {
-  weekly: 'Weekly updates',
-  biweekly: 'Biweekly updates',
-  monthly: 'Monthly updates',
-  quarterly: 'Quarterly updates',
-  none: 'No update cadence',
-};
-const GUIDED_DOCUMENT = `# Overview
-
-# Motivation and Purpose
-
-# Desired Outcome
-
-# Approach`;
-
-/** Format an ISO date for a picker trigger, narrowing the app helper's `null` to `undefined`. */
-function triggerDate(value: string | null): string | undefined {
-  return formatCalendarDate(value, { month: 'short', day: 'numeric' }) ?? undefined;
+/** Every field the initiative composer holds, as one value. */
+export interface InitiativeDraft {
+  name: string;
+  summary: string;
+  description: string;
+  ownerId: string | null;
+  status: InitiativeStatus;
+  targetDate: string | null;
+  health: Health | null;
+  priority: InitiativePriority;
+  updateCadence: InitiativeUpdateCadence;
 }
+
+/** The draft a freshly-opened composer starts from. */
+export const EMPTY_INITIATIVE_DRAFT: InitiativeDraft = {
+  name: '',
+  summary: '',
+  description: '',
+  ownerId: null,
+  status: 'active',
+  targetDate: null,
+  health: null,
+  priority: 'none',
+  updateCadence: 'monthly',
+};
 
 /** Props for {@link CreateInitiativeDialog}. */
 export interface CreateInitiativeDialogProps {
@@ -103,10 +87,12 @@ export interface CreateInitiativeDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Notify the parent that an initiative was created, so it can route to its detail. */
   onCreated: (initiative: InitiativeOut) => void;
+  /** A template to apply on open, from a `?template=` compose request. */
+  defaultTemplateId?: string | null;
 }
 
 /**
- * The robust initiative-create composer dialog.
+ * The initiative-create composer dialog.
  *
  * @param props - The {@link CreateInitiativeDialogProps}.
  * @returns the rendered composer.
@@ -117,46 +103,39 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   open,
   onOpenChange,
   onCreated,
+  defaultTemplateId = null,
 }: CreateInitiativeDialogProps): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+  const { draft, setField, applyTemplate, undoTemplate, appliedTemplate } =
+    useComposerDraft<InitiativeDraft>(EMPTY_INITIATIVE_DRAFT);
 
-  const [name, setName] = useState('');
-  const [summary, setSummary] = useState('');
-  const [body, setBody] = useState('');
-  const [ownerId, setOwnerId] = useState<string | null>(null);
-  const [status, setStatus] = useState<InitiativeStatus>('active');
-  const [targetDate, setTargetDate] = useState<string | null>(null);
-  const [health, setHealth] = useState<Health | null>(null);
-  const [priority, setPriority] = useState<InitiativePriority>('none');
-  const [updateCadence, setUpdateCadence] = useState<InitiativeUpdateCadence>('monthly');
-  const [template, setTemplate] = useState<'blank' | 'strategic' | 'objective'>('blank');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = name.trim().length > 0;
+  const canSubmit = draft.name.trim().length > 0;
 
   /** Create the theme with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
-    const trimmed = name.trim();
+    const trimmed = draft.name.trim();
     if (trimmed.length === 0) return;
     setCreating(true);
     setError(null);
     try {
-      const trimmedBody = body.trim();
+      const trimmedBody = draft.description.trim();
       const res = await api.v1.orgs[':orgId'].initiatives.$post({
         param: { orgId },
         json: {
           name: trimmed,
-          ...(summary.trim() ? { summary: summary.trim() } : {}),
-          status,
-          priority,
-          updateCadence,
+          ...(draft.summary.trim() ? { summary: draft.summary.trim() } : {}),
+          status: draft.status,
+          priority: draft.priority,
+          updateCadence: draft.updateCadence,
           ...(trimmedBody.length > 0 ? { description: trimmedBody } : {}),
-          ...(ownerId ? { ownerId: ActorId.parse(ownerId) } : {}),
-          ...(targetDate ? { targetDate } : {}),
-          ...(health ? { health } : {}),
+          ...(draft.ownerId ? { ownerId: ActorId.parse(draft.ownerId) } : {}),
+          ...(draft.targetDate ? { targetDate: draft.targetDate } : {}),
+          ...(draft.health ? { health: draft.health } : {}),
         },
       });
       if (!res.ok) {
@@ -178,36 +157,49 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     } finally {
       setCreating(false);
     }
-  }, [
-    name,
-    body,
-    summary,
-    status,
-    ownerId,
-    targetDate,
-    health,
-    priority,
-    updateCadence,
-    orgId,
-    initiativeNounLower,
-    onOpenChange,
-    onCreated,
-  ]);
+  }, [draft, orgId, initiativeNounLower, onOpenChange, onCreated]);
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
-      heading={`New ${initiativeNoun.toLowerCase()}`}
-      title={name}
-      onTitleChange={setName}
+      heading={`New ${initiativeNounLower}`}
+      templateSlot={
+        <ComposerTemplateControl
+          orgId={orgId}
+          kind="initiative"
+          open={open}
+          appliedId={appliedTemplate?.id ?? null}
+          autoApplyId={defaultTemplateId}
+          onApply={(chosen) => {
+            applyTemplate(templatePatch(chosen.payload, 'initiative'), {
+              id: chosen.id,
+              name: chosen.name,
+            });
+          }}
+          disabled={creating}
+        />
+      }
+      notice={
+        appliedTemplate ? (
+          <AppliedTemplateNotice name={appliedTemplate.name} onUndo={undoTemplate} />
+        ) : null
+      }
+      title={draft.name}
+      onTitleChange={(next) => {
+        setField('name', next);
+      }}
       titlePlaceholder={`${initiativeNoun} name`}
-      summary={summary}
-      onSummaryChange={setSummary}
+      summary={draft.summary}
+      onSummaryChange={(next) => {
+        setField('summary', next);
+      }}
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
-      body={body}
-      onBodyChange={setBody}
+      body={draft.description}
+      onBodyChange={(next) => {
+        setField('description', next);
+      }}
       bodyPlaceholder="Add a description…"
       error={error}
       creating={creating}
@@ -215,81 +207,32 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       onSubmit={() => void submit()}
       submitLabel={`Create ${initiativeNoun}`}
     >
-      <div className="flex flex-wrap gap-1" aria-label="Document template">
-        {(['blank', 'strategic', 'objective'] as const).map((value) => (
-          <Button
-            key={value}
-            type="button"
-            size="sm"
-            variant={template === value ? 'secondary' : 'ghost'}
-            onClick={() => {
-              setTemplate(value);
-              setBody(value === 'blank' ? '' : GUIDED_DOCUMENT);
-            }}
-          >
-            {value === 'blank'
-              ? 'Blank'
-              : value === 'strategic'
-                ? 'Strategic initiative'
-                : 'Objective'}
-          </Button>
-        ))}
-      </div>
-      <ActorPicker
-        options={options.actorOptions}
-        value={ownerId}
-        onChange={setOwnerId}
-        placeholder="Set owner"
-        clearLabel="No owner"
-        ariaLabel="Owner"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={enumOptions(INITIATIVE_STATUS_ORDER, INITIATIVE_STATUS_LABEL)}
-        value={status}
-        onChange={(next) => {
-          if (next) setStatus(next);
+      <InitiativeComposerPickers
+        actorOptions={options.actorOptions}
+        ownerId={draft.ownerId}
+        onOwnerChange={(next) => {
+          setField('ownerId', next);
         }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={creating}
-      />
-      <DatePicker
-        value={targetDate}
-        onChange={setTargetDate}
-        placeholder="Set target"
-        formatLabel={triggerDate}
-        ariaLabel="Target date"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={setHealth}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
-        value={priority}
-        onChange={(next) => {
-          if (next) setPriority(next);
+        status={draft.status}
+        onStatusChange={(next) => {
+          setField('status', next);
         }}
-        placeholder="Priority"
-        ariaLabel="Priority"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
-        value={updateCadence}
-        onChange={(next) => {
-          if (next) setUpdateCadence(next);
+        targetDate={draft.targetDate}
+        onTargetDateChange={(next) => {
+          setField('targetDate', next);
         }}
-        placeholder="Update cadence"
-        ariaLabel="Update cadence"
+        health={draft.health}
+        onHealthChange={(next) => {
+          setField('health', next);
+        }}
+        priority={draft.priority}
+        onPriorityChange={(next) => {
+          setField('priority', next);
+        }}
+        updateCadence={draft.updateCadence}
+        onUpdateCadenceChange={(next) => {
+          setField('updateCadence', next);
+        }}
         disabled={creating}
       />
     </ComposerShell>

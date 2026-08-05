@@ -16,11 +16,18 @@
  *    `flex-nowrap`, the title truncates, and the `controls` slot is expected to collapse its own
  *    overflow into a menu. A bar whose height depends on the viewport reflows the page under it.
  *
+ * ## The navigation slot is an icon, not a sentence
+ *
+ * MD3's top app bar opens with a navigation icon, and the destination lives in its accessible
+ * name. A text link beside the heading instead reads as a subtitle — "Dependency graph · Back to
+ * workspace" parses as one phrase, and the eye has to work out that half of it is a control. The
+ * slot therefore takes an icon button, rendered *before* the title where a reader looks for it.
+ *
  * @example
  * ```tsx
  * <AppBar
  *   title="Dependency graph"
- *   leading={<BackLink href={…}>Back to workspace</BackLink>}
+ *   navigation={<BackButton href={…} label="Back to workspace" />}
  *   actions={<Button …>Share</Button>}
  *   controls={<FilterToolbar … />}
  * />
@@ -38,8 +45,14 @@ export interface AppBarProps {
    * for a surface whose title is an inline-edit field or carries a badge.
    */
   title: React.ReactNode;
-  /** Leading slot beside the title — typically a back link or a scope chip. */
-  leading?: React.ReactNode;
+  /**
+   * The navigation affordance, rendered before the title — typically a back button.
+   *
+   * @remarks
+   * Expected to be an icon button whose `aria-label` names the destination, per MD3's leading
+   * navigation icon. Putting a labelled link here instead turns the masthead into a sentence.
+   */
+  navigation?: React.ReactNode;
   /** Trailing slot, pinned to the end of the title row — page-level actions. */
   actions?: React.ReactNode;
   /**
@@ -62,7 +75,7 @@ export interface AppBarProps {
  */
 export function AppBar({
   title,
-  leading,
+  navigation,
   actions,
   controls,
   className,
@@ -70,17 +83,17 @@ export function AppBar({
   return (
     <Surface
       as="header"
-      tone="chrome"
+      tone="card"
       shape="none"
       className={cn('flex flex-col gap-2 px-4 pt-3 pb-2.5 @2xl:px-6', className)}
     >
-      <div className="flex min-w-0 flex-nowrap items-baseline gap-3">
+      <div className="flex min-w-0 flex-nowrap items-center gap-2">
+        {navigation}
         {typeof title === 'string' ? (
-          <h1 className="text-on-surface text-title-medium shrink-0 truncate">{title}</h1>
+          <h1 className="text-on-surface text-title-medium min-w-0 truncate">{title}</h1>
         ) : (
           title
         )}
-        {leading}
         {actions ? (
           <>
             <span className="flex-1" aria-hidden="true" />

@@ -20,7 +20,7 @@
  *
  * @example
  * ```tsx
- * <Surface tone="chrome" as="header">…</Surface>
+ * <Surface tone="card" as="header">…</Surface>
  * <Surface tone="card" pad="comfortable">…</Surface>
  * <Surface tone="prominent" pad="tight" shape="pill">Dependency removed</Surface>
  * ```
@@ -34,17 +34,25 @@ import { cn } from '../lib/utils';
  * The tonal steps a surface can take, in ramp order.
  *
  * @remarks
- * These are named for the job, not the colour, because the job is what a reader needs and what
- * survives a re-tone. `page` is the canvas everything else sits on; `chrome` is persistent
- * furniture (an app bar, a toolbar band) that must read as distinct from the content it frames;
- * `card` is a discrete piece of content within a region; `raised` is a card that has to separate
- * itself from a `card` behind it; `sunken` is a well *below* the page, for an inset region such as
- * a code block or a drop target.
+ * Each name is one step on the ramp, and no two names share a step — a duplicate would be the
+ * thing that quietly drifts apart later. `page` is the surface a route's content sits on; `card`
+ * is a region raised off it, which covers both a discrete card and a band of furniture such as an
+ * app bar; `raised` is a card that has to separate itself from a `card` behind it; `prominent` is
+ * the top of the ramp, for a floating strip over content; `sunken` is a well *below* the page, for
+ * an inset region such as a code block or a drop target.
+ *
+ * ## Why an app bar is `card`, one step from `page`, and not two
+ *
+ * The app shell paints a `surface-container` backdrop and floats the route's content on it as a
+ * rounded `surface` card. An app bar therefore lives *inside* that content card, and taking
+ * `surface-container` for it paints the bar the same colour as the backdrop *behind* the card —
+ * which is exactly how it looked: the card's top edge dissolved into the shell gutter and the bar
+ * read as part of the window rather than as part of the page. One step up from `page` separates a
+ * bar from the content below it without colliding with the frame around it.
  */
 const SURFACE_TONE = {
   page: 'bg-surface text-on-surface',
   sunken: 'bg-surface-container-lowest text-on-surface',
-  chrome: 'bg-surface-container text-on-surface',
   card: 'bg-surface-container-low text-on-surface',
   raised: 'bg-surface-container-high text-on-surface',
   prominent: 'bg-surface-container-highest text-on-surface',

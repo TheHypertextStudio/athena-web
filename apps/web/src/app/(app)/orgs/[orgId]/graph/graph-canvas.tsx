@@ -12,13 +12,13 @@
  * table mounts a route with no props. `graph-client.tsx` resolves the scope from the URL and renders
  * this.
  *
- * The page chrome is one {@link AppBar}: the title, the back link, and the view controls are slots
- * in a single tonal band, so nothing here spells out a background or draws a rule. The canvas below
- * sits on the page surface, and the tonal step between the two is what separates them.
+ * The page chrome is one {@link AppBar}: the back affordance, the title, and the view controls are
+ * slots in a single tonal band, so nothing here spells out a background or draws a rule. The canvas
+ * below sits on the page surface, and the tonal step between the two is what separates them.
  */
 import { AppBar } from '@docket/ui/components';
 import { ChevronLeft } from '@docket/ui/icons';
-import { Surface } from '@docket/ui/primitives';
+import { Button, Surface, Tooltip, TooltipContent, TooltipTrigger } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
@@ -64,14 +64,17 @@ export default function GraphCanvas({ scope }: GraphCanvasProps): JSX.Element {
         renderChrome={(bar) => (
           <AppBar
             title="Dependency graph"
-            leading={
-              <Link
-                href={back.href}
-                className="text-on-surface-variant hover:text-on-surface text-label-large inline-flex min-w-0 items-center gap-1"
-              >
-                <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">{back.label}</span>
-              </Link>
+            navigation={
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" iconOnly asChild aria-label={back.label}>
+                    <Link href={back.href}>
+                      <ChevronLeft aria-hidden="true" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{back.label}</TooltipContent>
+              </Tooltip>
             }
             controls={bar}
           />

@@ -15,7 +15,7 @@ import {
   PersonalRuntimeUnreachableError,
   personalRuntimeTarget,
 } from '@docket/integrations';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 /** One recorded outbound request. */
 interface Recorded {
@@ -64,6 +64,14 @@ describe('personalRuntimeTarget', () => {
 
   it('refuses a blank id instead of building `lattice:personal:`', () => {
     expect(() => personalRuntimeTarget('   ')).toThrow(LatticeError);
+  });
+
+  it('accepts an already-built target or a runtime resource, not just a bare id', () => {
+    // listPersonalRuntimes hands back full resource records; callers must be able to feed one
+    // straight back in without extracting the id themselves first.
+    expect(personalRuntimeTarget({ latticeId: 'lat_xyz', model: 'ignored-on-the-way-in' })).toEqual(
+      { latticeId: 'lat_xyz', model: 'lattice:personal:lat_xyz' },
+    );
   });
 });
 
@@ -180,6 +188,115 @@ describe('LatticeClient wire contract', () => {
     await expect(client.listPersonalRuntimes()).rejects.toMatchObject({
       code: 'transport_error',
       status: 0,
+    });
+  });
+
+  it('sends a canonical model id straight through, not just a personal-runtime target', async () => {
+    const { fetch, calls } = recordingFetch(200, {
+      id: 'chat_1',
+      object: 'chat.completion',
+      model: 'gpt-4o',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'hi' } }],
+    });
+    const client = new LatticeClient({ credential: { kind: 'oauth', accessToken: 't' }, fetch });
+
+    await client.chatComplete({ model: 'gpt-4o', messages: [{ role: 'user', content: 'hi' }] });
+
+    expect(calls[0]?.body).toMatchObject({ model: 'gpt-4o' });
+  });
+
+  it('sends the idempotency key header when the caller supplies one', async () => {
+    const { fetch, calls } = recordingFetch(200, {
+      id: 'chat_1',
+      object: 'chat.completion',
+      model: 'lattice:personal:lat_abc',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'hi' } }],
+    });
+    const client = new LatticeClient({ credential: { kind: 'oauth', accessToken: 't' }, fetch });
+
+    await client.chatCompleteForPersonalRuntime('lat_abc', {
+      messages: [{ role: 'user', content: 'hi' }],
+      idempotencyKey: 'idem-key-1',
+    });
+
+    expect(calls[0]?.headers['idempotency-key']).toBe('idem-key-1');
+  });
+
+  it('falls back to the platform fetch when no transport is injected', async () => {
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ runtimes: [] }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const client = new LatticeClient({
+        credential: { kind: 'oauth', accessToken: 't' },
+        baseUrl: 'https://gateway.test',
+      });
+      await client.listPersonalRuntimes();
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('treats an empty error body as an HTTP-coded failure without inventing a message', async () => {
+    const fetch = (async () => new Response('', { status: 502 })) as typeof globalThis.fetch;
+    const client = new LatticeClient({ credential: { kind: 'oauth', accessToken: 't' }, fetch });
+
+    await expect(client.listPersonalRuntimes()).rejects.toMatchObject({
+      code: 'http_502',
+      status: 502,
+      message: 'Gateway returned HTTP 502',
+    });
+  });
+
+  it('treats a non-JSON error body (e.g. an HTML error page) the same as an empty one', async () => {
+    const fetch = (async () =>
+      new Response('<html><body>502 Bad Gateway</body></html>', {
+        status: 502,
+        headers: { 'content-type': 'text/html' },
+      })) as typeof globalThis.fetch;
+    const client = new LatticeClient({ credential: { kind: 'oauth', accessToken: 't' }, fetch });
+
+    await expect(client.listPersonalRuntimes()).rejects.toMatchObject({
+      code: 'http_502',
+      status: 502,
+    });
+  });
+
+  it('reports fetch failed when the transport throws something that is not an Error', async () => {
+    const failing = (async () => {
+      // Exercises the non-Error fallback path, which requires throwing something that isn't one.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw { code: 'ECONNRESET' };
+    }) as typeof globalThis.fetch;
+    const client = new LatticeClient({
+      credential: { kind: 'oauth', accessToken: 't' },
+      fetch: failing,
+    });
+
+    await expect(client.listPersonalRuntimes()).rejects.toMatchObject({
+      code: 'transport_error',
+      message: 'fetch failed',
+    });
+  });
+
+  it('aborts the request once it outlasts the configured timeout', async () => {
+    const hangingFetch = ((_input: string | URL, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          reject(new Error('The operation was aborted'));
+        });
+      })) as typeof globalThis.fetch;
+    const client = new LatticeClient({
+      credential: { kind: 'oauth', accessToken: 't' },
+      fetch: hangingFetch,
+      timeoutMs: 5,
+    });
+
+    await expect(client.listPersonalRuntimes()).rejects.toMatchObject({
+      code: 'transport_error',
+      message: 'The operation was aborted',
     });
   });
 

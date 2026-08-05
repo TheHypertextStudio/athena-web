@@ -11,6 +11,7 @@ import {
   LATTICE_UNAVAILABLE_REASONS,
   LatticeError,
   LatticeUnavailableError,
+  PersonalRuntimeRequiresUserTokenError,
   PersonalRuntimeUnreachableError,
   deviceUnavailableReason,
   listLatticeDevices,
@@ -19,7 +20,7 @@ import {
   toLatticeUnavailable,
   type LatticeGatewayContext,
 } from '@docket/integrations';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 /** Build one gateway runtime record. */
 function runtime(
@@ -83,6 +84,36 @@ function json(status: number, body: unknown): Response {
   });
 }
 
+describe('clientFor', () => {
+  it('defaults to the production gateway and the platform fetch when neither is overridden', async () => {
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/v1/personal-runtimes') {
+        return json(200, { runtimes: [runtime('lat_a', 'reachable')] });
+      }
+      return new Response('{}', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      // No baseUrl and no fetch override: exercises the branches that omit both from the SDK
+      // options, falling back to the SDK's own defaults (production gateway, platform fetch).
+      const devices = await listLatticeDevices({ accessToken: 'tok' });
+      expect(devices.map((device) => device.id)).toEqual(['lat_a']);
+      expect(fetchMock).toHaveBeenCalled();
+      const [calledUrl] = fetchMock.mock.calls[0] as [string];
+      expect(calledUrl).toContain('/v1/personal-runtimes');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('forwards a caller-supplied request timeout to the SDK client', async () => {
+    const { context } = gatewayFetch({ runtimes: () => json(200, { runtimes: [] }) });
+    const withTimeout: LatticeGatewayContext = { ...context, timeoutMs: 5_000 };
+    await expect(listLatticeDevices(withTimeout)).resolves.toEqual([]);
+  });
+});
+
 describe('deviceUnavailableReason', () => {
   it('maps every device state, and only `reachable` can serve a turn', () => {
     expect(deviceUnavailableReason('reachable')).toBeNull();
@@ -133,6 +164,28 @@ describe('toLatticeUnavailable', () => {
     const mapped = toLatticeUnavailable(new LatticeError(0, 'transport_error', 'ENOTFOUND'));
     expect(mapped.detail).toBe('ENOTFOUND');
     expect(LATTICE_UNAVAILABLE_REASONS).toContain(mapped.reason);
+  });
+
+  it('passes an already-mapped LatticeUnavailableError through unchanged', () => {
+    // A caller that re-maps a cause it already mapped must not wrap it a second time, or the
+    // original reason and detail could be lost.
+    const original = new LatticeUnavailableError('device_offline', 'daemon asleep');
+    expect(toLatticeUnavailable(original)).toBe(original);
+  });
+
+  it('maps the client-side "requires a user token" guard onto authorization_expired', () => {
+    // Docket only ever builds an OAuth credential, so reaching this guard means the stored grant
+    // was dropped between load and use — "reconnect" is the only action that fixes it.
+    const cause = new PersonalRuntimeRequiresUserTokenError();
+    const mapped = toLatticeUnavailable(cause);
+    expect(mapped.reason).toBe('authorization_expired');
+    expect(mapped.detail).toBe(cause.message);
+  });
+
+  it('falls back to a generic message when the thrown value is not even an Error', () => {
+    const mapped = toLatticeUnavailable('a raw string, not an Error instance');
+    expect(mapped.reason).toBe('gateway_error');
+    expect(mapped.detail).toBe('unknown Lattice failure');
   });
 });
 
@@ -189,6 +242,16 @@ describe('listLatticeDevices', () => {
     });
     expect(await readLatticeDevice(context, 'lat_missing')).toBeNull();
   });
+
+  it('reports lastSeenAt as null for a device the relay has never seen', async () => {
+    const neverSeen = runtime('lat_new', 'unpaired');
+    delete neverSeen['lastSeenAt'];
+    const { context } = gatewayFetch({
+      runtimes: () => json(200, { runtimes: [neverSeen] }),
+    });
+    const devices = await listLatticeDevices(context);
+    expect(devices[0]?.lastSeenAt).toBeNull();
+  });
 });
 
 describe('runLatticeChat never falls back', () => {
@@ -244,6 +307,45 @@ describe('runLatticeChat never falls back', () => {
     await expect(
       runLatticeChat(context, { deviceId: 'lat_a', messages: [{ role: 'user', content: 'hi' }] }),
     ).rejects.toMatchObject({ reason: 'device_offline' });
+  });
+
+  it('forwards maxTokens, temperature and an idempotency key to the device dispatch', async () => {
+    let capturedBody: Record<string, unknown> | undefined;
+    let capturedHeaders: Headers | undefined;
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/v1/personal-runtimes') {
+        return json(200, { runtimes: [runtime('lat_a', 'reachable')] });
+      }
+      if (path === '/v1/chat/completions') {
+        capturedBody =
+          typeof init?.body === 'string'
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : undefined;
+        capturedHeaders = new Headers(init?.headers);
+        return json(200, {
+          id: 'c1',
+          object: 'chat.completion',
+          model: 'lattice:personal:lat_a',
+          choices: [{ index: 0, message: { role: 'assistant', content: 'ok' } }],
+        });
+      }
+      return new Response('{}', { status: 404 });
+    }) as typeof globalThis.fetch;
+
+    await runLatticeChat(
+      { accessToken: 'tok', baseUrl: 'https://gateway.test', fetch: fetchImpl },
+      {
+        deviceId: 'lat_a',
+        messages: [{ role: 'user', content: 'hi' }],
+        maxTokens: 256,
+        temperature: 0.4,
+        idempotencyKey: 'idem-1',
+      },
+    );
+
+    expect(capturedBody).toMatchObject({ max_tokens: 256, temperature: 0.4 });
+    expect(capturedHeaders?.get('idempotency-key')).toBe('idem-1');
   });
 
   it('reports an unreachable gateway rather than answering from anywhere else', async () => {

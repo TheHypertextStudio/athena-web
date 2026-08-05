@@ -23,7 +23,7 @@ import {
   type LatticeCredentialRecord,
   type LatticeOAuthClientConfig,
 } from '@docket/integrations';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 /** A deterministic byte source so the PKCE verifier is reproducible. */
 const fixedRandom = (size: number): Buffer => Buffer.alloc(size, 7);
@@ -172,6 +172,138 @@ describe('completeLatticeAuthorization', () => {
         credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
       }),
     ).rejects.toMatchObject({ code: 'invalid_grant' });
+  });
+
+  it('reads an empty token response as no grant rather than throwing on malformed JSON', async () => {
+    const fetch = (async () => new Response('', { status: 200 })) as typeof globalThis.fetch;
+
+    await expect(
+      completeLatticeAuthorization(config({ fetch }), {
+        authorizationCode: 'c',
+        credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_grant' });
+  });
+
+  it('reads a non-JSON token response (e.g. an HTML error page) as no grant', async () => {
+    const fetch = (async () =>
+      new Response('<html><body>502 Bad Gateway</body></html>', {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+      })) as typeof globalThis.fetch;
+
+    await expect(
+      completeLatticeAuthorization(config({ fetch }), {
+        authorizationCode: 'c',
+        credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_grant' });
+  });
+
+  it('stores a null scope rather than a stringified undefined when the issuer omits it', async () => {
+    const { fetch } = tokenFetch(200, { access_token: 'at_no_scope', expires_in: 3600 });
+
+    const record = await completeLatticeAuthorization(config({ fetch }), {
+      authorizationCode: 'c',
+      credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+    });
+
+    expect(record.scope).toBeNull();
+  });
+
+  it('stores a null lifetime rather than NaN when the issuer omits expires_in', async () => {
+    const { fetch } = tokenFetch(200, { access_token: 'at_no_expiry' });
+
+    const record = await completeLatticeAuthorization(config({ fetch }), {
+      authorizationCode: 'c',
+      credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+    });
+
+    expect(record.expiresInSeconds).toBeNull();
+  });
+
+  it('omits client_secret from the form when the client is public rather than confidential', async () => {
+    const { fetch, forms } = tokenFetch(200, {
+      access_token: 'at_public',
+      expires_in: 3600,
+    });
+
+    await completeLatticeAuthorization(config({ clientSecret: undefined, fetch }), {
+      authorizationCode: 'c',
+      credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+    });
+
+    expect(forms[0]?.has('client_secret')).toBe(false);
+  });
+
+  it('treats a non-ok response with no recognizable body as an HTTP-coded failure', async () => {
+    const fetch = (async () =>
+      new Response(JSON.stringify({ unexpected: true }), {
+        status: 500,
+      })) as typeof globalThis.fetch;
+
+    const failure = await completeLatticeAuthorization(config({ fetch }), {
+      authorizationCode: 'c',
+      credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(LatticeOAuthError);
+    expect((failure as LatticeOAuthError).code).toBe('http_500');
+    expect((failure as LatticeOAuthError).message).toBe('token endpoint returned HTTP 500');
+  });
+
+  it('reports a transport failure with the underlying Error’s message', async () => {
+    const fetch = (async () => {
+      throw new Error('getaddrinfo ENOTFOUND accounts.uselovelace.com');
+    }) as typeof globalThis.fetch;
+
+    const failure = await completeLatticeAuthorization(config({ fetch }), {
+      authorizationCode: 'c',
+      credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(LatticeOAuthError);
+    expect((failure as LatticeOAuthError).code).toBe('transport_error');
+    expect((failure as LatticeOAuthError).message).toBe(
+      'getaddrinfo ENOTFOUND accounts.uselovelace.com',
+    );
+  });
+
+  it('falls back to a generic message when the token request throws a non-Error value', async () => {
+    const fetch = (async () => {
+      // Exercises the non-Error fallback path, which requires throwing something that isn't one.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw 'connection reset';
+    }) as typeof globalThis.fetch;
+
+    const failure = await completeLatticeAuthorization(config({ fetch }), {
+      authorizationCode: 'c',
+      credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+    }).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(LatticeOAuthError);
+    expect((failure as LatticeOAuthError).code).toBe('transport_error');
+    expect((failure as LatticeOAuthError).message).toBe('token request failed');
+  });
+
+  it('falls back to the platform fetch when no transport is injected', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ access_token: 'at_global', expires_in: 3600 }), {
+          status: 200,
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const record = await completeLatticeAuthorization(config({ fetch: undefined }), {
+        authorizationCode: 'c',
+        credential: { kind: 'lattice_oauth_pending', codeVerifier: 'v' },
+      });
+      expect(record.accessToken).toBe('at_global');
+      expect(fetchMock).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

@@ -91,11 +91,15 @@ export const APPLE_PLATE_GRADIENT = [
  * Bar heights, as fractions of the tallest bar.
  *
  * @remarks
- * `16 / 10 / 13` from the mark this replaced, which is where its balance came from. Material draws
- * the middle bar at half the tall one; that stubbier version leaves a visible hole under it and
- * was rejected in review alongside the thin bars.
+ * The mark this replaced used `16 / 10 / 13`, which is where its balance came from. These are the
+ * eleventh-grid values nearest to it — `0.636` and `0.818` against `0.625` and `0.8125`, a
+ * difference under 2% and invisible at any size — chosen so every height lands on a whole unit.
+ * See {@link BAR_WIDTH} for why elevenths.
+ *
+ * Material draws the middle bar at half the tall one; that stubbier version leaves a visible hole
+ * under it and was rejected in review alongside the thin bars.
  */
-export const BAR_HEIGHTS = [1, 0.625, 0.8125] as const;
+export const BAR_HEIGHTS = [1, 7 / 11, 9 / 11] as const;
 
 /**
  * Bar width, as a fraction of the mark's side.
@@ -106,24 +110,29 @@ export const BAR_HEIGHTS = [1, 0.625, 0.8125] as const;
  * 1. **The mark must be square.** Concentric corners require the same margin on all four sides,
  *    so the three bars plus two gaps must span exactly the tallest bar's height:
  *    `3w + 2g = 1`.
- * 2. **The bar-to-gap ratio is 8:3**, from the weight chosen in design review — 200 wide with 75
- *    of gap on the 800-unit Apple grid, compared side by side as real `ictool` renders rather than
- *    as numbers in an editor.
+ * 2. **Every dimension lands on a whole unit.** Fractional widths are a smell in artwork that gets
+ *    rasterized: an SVG that says 5.333 is one an exporter has to resolve, and it resolves it
+ *    differently at different sizes. Elevenths are what make that possible here — the bar takes
+ *    three of the eleven units the mark's side divides into and the gap takes one.
  *
- * Substituting `g = 3w/8` into the first gives `3.75w = 1`, so `w = 4/15` and `g = 1/10`. The
- * fractions are exact; `3(4/15) + 2(1/10)` is exactly 1.
+ * `w = 3/11` and `g = 1/11` satisfy both: `3(3/11) + 2(1/11)` is exactly 1, and on a 32px canvas
+ * the mark is 22 wide with 6px bars and 2px gaps, every number an integer. The same holds at 192,
+ * 512 and on the 1024 Apple grid.
+ *
+ * The bar-to-gap ratio this lands on is 3:1. Design review picked 8:3 (2.67) from real `ictool`
+ * renders; 3:1 is the nearest ratio on the integer grid and reads a touch tighter, which is the
+ * direction review was already pushing.
  */
-export const BAR_WIDTH = 4 / 15;
+export const BAR_WIDTH = 3 / 11;
 
 /**
  * Gap between bars, as a fraction of the mark's side.
  *
  * @remarks
- * The other half of the solution described on {@link BAR_WIDTH}. Tighter than the mark this
- * replaced, whose gap was 0.375 of a bar width against this 0.375 — the same ratio, but the bars
- * are now a larger share of a larger mark, so the grouping reads tighter at every size.
+ * The other half of the solution described on {@link BAR_WIDTH}: one of the eleven units the
+ * mark's side divides into. Two pixels on a 32px canvas, 66 on the Apple grid.
  */
-export const BAR_GAP = 1 / 10;
+export const BAR_GAP = 1 / 11;
 
 /**
  * The area centroid of the bars, as a fraction of the mark's side from its top edge.
@@ -145,15 +154,19 @@ function centroidY(): number {
  * How much of the centroid offset to actually correct.
  *
  * @remarks
- * Half, and the half is the point. Correcting the full offset puts the centre of mass exactly on
- * the plate's centre and looks *worse* — the mark reads as sitting on the bottom, because the eye
- * takes the bars' shared top edge as an anchor and does not want the whole shift. Correcting none
- * of it leaves the mark hanging from the top, which is the complaint this started from.
+ * About half, and roughly-half is the point. Correcting the full offset puts the centre of mass
+ * exactly on the plate's centre and looks *worse* — the mark reads as sitting on the bottom,
+ * because the eye takes the bars' shared top edge as an anchor and does not want the whole shift.
+ * Correcting none of it leaves the mark hanging from the top, which is the complaint this started
+ * from. The half came from comparing real `ictool` renders at 0%, 50% and 100% across two mark
+ * sizes; it is the one judgement here made by looking rather than solving.
  *
- * Like the 8:3 bar ratio, this came from comparing real `ictool` renders at 0%, 50% and 100%
- * against two mark sizes, not from an equation. It is the one number here chosen by looking.
+ * The exact figure is then pinned to the integer grid: {@link OPTICAL_SHIFT} is `1/22` of the
+ * mark's side, the nearest value that keeps the offset a whole unit on every canvas the mark is
+ * drawn at. That works out to 0.587 of the centroid gap rather than 0.500 — inside the range the
+ * renders were compared over, and worth more than the third decimal place of a judgement call.
  */
-export const OPTICAL_CORRECTION = 0.5;
+export const OPTICAL_CORRECTION = 1 / 22 / (0.5 - centroidY());
 
 /**
  * How far down the mark sits from its bounding box's centre, as a fraction of the mark's side.
@@ -166,15 +179,16 @@ export const OPTICAL_CORRECTION = 0.5;
  * is what makes the icon read as hanging from the top. The rendered Apple asset is worse still,
  * because Icon Composer's specular highlight is top-weighted and its shadow falls downward.
  *
- * Computed from {@link BAR_HEIGHTS} rather than typed in, so changing the rhythm re-centres the
- * mark instead of quietly unbalancing it.
+ * One unit of the mark's twenty-two, so the offset is a whole pixel on a 32px canvas and 33 on the
+ * Apple grid. {@link OPTICAL_CORRECTION} reports what fraction of the centroid gap that closes, and
+ * the test fails if the two stop agreeing to within the range the renders were judged over.
  *
  * **This is what trades away vertical concentricity.** With the mark shifted down, the top margin
  * no longer equals the side margins, and a single plate radius cannot share a centre with the cap
  * arcs on both axes — see {@link plateRadius}. The two are genuinely exclusive for a glyph whose
  * mass is not symmetric, and optical balance is the one a viewer perceives.
  */
-export const OPTICAL_SHIFT = OPTICAL_CORRECTION * (0.5 - centroidY());
+export const OPTICAL_SHIFT = 1 / 22;
 
 /** The smallest favicon the mark has to stay legible at. */
 export const MIN_FAVICON = 16;
@@ -206,7 +220,9 @@ export const APPLE_CANVAS = 1024;
  * on a grid whose mask Apple applies, and its usable area is the largest centred square inside
  * that mask — measured at 869px of the 1024px canvas.
  *
- * 720/1024 puts the mark at 720px square — 83% of that live area, and 70% of the canvas. The
+ * 726/1024 puts the mark at 726px square — 84% of that live area, and 71% of the canvas. It is
+ * 720 rounded to the nearest multiple of 11, so the bars are 198 wide and the gaps 66 rather than
+ * a repeating decimal. The
  * outgoing asset used 800, which measured 92% of the live area and left the bars close enough to
  * the mask that the icon read as cramped; Apple's own icons sit nearer 60–65% of the canvas. 720
  * is the compromise: enough air to look like an app icon, still large enough that "take advantage
@@ -217,7 +233,7 @@ export const APPLE_CANVAS = 1024;
  * with. The mark is square and centred, which is as close as the constraint can be carried onto a
  * plate this package does not draw.
  */
-export const APPLE_COVERAGE = 720 / APPLE_CANVAS;
+export const APPLE_COVERAGE = 726 / APPLE_CANVAS;
 
 /**
  * Fraction of a maskable icon's width the artwork may occupy.

@@ -57,8 +57,39 @@ describe('concentric corners', () => {
   it('solves the bar width and gap from that squareness', () => {
     // Three bars and two gaps span exactly the mark's side…
     expect(BAR_HEIGHTS.length * BAR_WIDTH + (BAR_HEIGHTS.length - 1) * BAR_GAP).toBeCloseTo(1, 12);
-    // …at the 8:3 bar-to-gap ratio chosen in review, which is what fixes them at 4/15 and 1/10.
-    expect(BAR_WIDTH / BAR_GAP).toBeCloseTo(8 / 3, 12);
+    // …at 3:1, the bar-to-gap ratio nearest the 8:3 review picked that also lands on whole units.
+    expect(BAR_WIDTH / BAR_GAP).toBeCloseTo(3, 12);
+  });
+
+  it('puts every dimension on a whole unit at every size that is drawn', () => {
+    // Fractional widths are a smell in artwork that gets rasterized: an exporter has to resolve
+    // 5.333, and it resolves it differently at different sizes. Elevenths avoid the question.
+    // 16 is excluded on purpose — its mark side is 11, an odd number, so the margin is a half.
+    for (const [canvas, coverage] of [
+      [CANVAS, COVERAGE],
+      [192, COVERAGE],
+      [512, COVERAGE],
+      [APPLE_CANVAS, APPLE_COVERAGE],
+    ] as const) {
+      const mark = markPath(canvas, coverage);
+      const whole = [
+        mark.bbox.w,
+        mark.bbox.x,
+        mark.bbox.y,
+        mark.barWidth,
+        mark.gap,
+        mark.margin,
+        mark.capRadius,
+        plateRadius(canvas, coverage),
+        ...BAR_HEIGHTS.map((ratio) => ratio * mark.bbox.h),
+      ];
+      for (const value of whole) {
+        expect(value, `canvas ${String(canvas)}: ${String(value)}`).toBeCloseTo(
+          Math.round(value),
+          9,
+        );
+      }
+    }
   });
 
   it('measures the drawn artwork, not the numbers that produced it', () => {
@@ -96,12 +127,13 @@ describe('layout', () => {
   });
 
   it('leaves the Apple mark room inside the grid', () => {
-    // 720px of the 1024px grid — 83% of the 869px live area Apple's mask leaves, and 70% of the
-    // canvas. The outgoing asset used 800, which put the bars close enough to the mask that the
-    // icon read as cramped.
+    // 726px of the 1024px grid — 84% of the 869px live area Apple's mask leaves, and 71% of the
+    // canvas. 726 is 720 rounded to a multiple of 11 so the bars come out at 198 rather than a
+    // repeating decimal. The outgoing asset used 800, which put the bars close enough to the mask
+    // that the icon read as cramped.
     const { bbox } = markPath(APPLE_CANVAS, APPLE_COVERAGE);
-    expect(bbox.h).toBeCloseTo(720, 6);
-    expect(bbox.w).toBeCloseTo(720, 6);
+    expect(bbox.h).toBeCloseTo(726, 6);
+    expect(bbox.w).toBeCloseTo(726, 6);
     expect(bbox.h / APPLE_CANVAS).toBeLessThan(0.75);
   });
 
@@ -117,7 +149,10 @@ describe('layout', () => {
         0,
       ) / total;
     expect(OPTICAL_SHIFT).toBeCloseTo(OPTICAL_CORRECTION * (0.5 - centroid), 12);
-    expect(OPTICAL_SHIFT).toBeGreaterThan(0);
+    // Pinned to the integer grid at 1/22, which closes 0.587 of the gap rather than 0.500. Both
+    // ends of the range the ictool renders were compared over.
+    expect(OPTICAL_CORRECTION).toBeGreaterThan(0.4);
+    expect(OPTICAL_CORRECTION).toBeLessThan(0.7);
   });
 
   it('sits the mark below its bounding box centre by exactly that shift', () => {

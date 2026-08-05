@@ -36,25 +36,40 @@ was concentric with nothing. It is now `margin + r` — 8.667 on a 32px canvas.
 
 The vertical half of this is later given up on purpose; see [Optical centring](#optical-centring).
 
-Squareness plus the 8:3 bar-to-gap ratio chosen in review fixes the rest by substitution:
-`3w + 2(3w/8) = 1` gives `w = 4/15` and `g = 1/10`, exactly, and `3(4/15) + 2(1/10)` is exactly 1.
+Squareness plus one more requirement fixes the rest: **every dimension lands on a whole unit.**
+Fractional widths are a smell in artwork that gets rasterized — an SVG that says 5.333 is one an
+exporter has to resolve, and it resolves it differently at different sizes.
+
+Elevenths are what satisfy both. The bar takes three of the eleven units the mark's side divides
+into and the gap takes one, so `3(3/11) + 2(1/11)` is exactly 1. On a 32px canvas that is a 22px
+mark with 6px bars, 2px gaps, a 5px margin and an `rx` of exactly 8. The same holds at 192, 512 and
+on the 1024 Apple grid.
+
+The bar-to-gap ratio this lands on is 3:1. Review picked 8:3 (2.67) from real `ictool` renders;
+3:1 is the nearest ratio on the integer grid and reads a touch tighter, which is where review was
+pushing anyway.
 
 ## The other derived numbers
 
-| Constant         | Value              | Solved from                                                                                                                 |
-| ---------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `BAR_WIDTH`      | 4/15 of the mark   | Squareness plus the 8:3 ratio above                                                                                         |
-| `BAR_GAP`        | 1/10 of the mark   | Same solution                                                                                                               |
-| `BAR_HEIGHTS`    | 1 : 0.625 : 0.8125 | The 16/10/13 of the mark this replaced, which is where its balance came from                                                |
-| `COVERAGE`       | 0.625              | `BAR_GAP × COVERAGE × 16 ≥ 1` at equality — the smallest mark whose gaps still clear one device pixel in a 16px browser tab |
-| `APPLE_COVERAGE` | 720/1024           | 83% of the live area and 70% of the canvas — enough air to read as an app icon; 800 was cramped against the mask            |
-| `OPTICAL_SHIFT`  | 0.0397 of the mark | Half the gap between the ink's centroid (0.4207) and the box's centre, so the mark's mass sits near the plate's             |
-| `PLATE`          | `#265ADF`          | `--primary`, `oklch(0.52 0.21 264)`, converted through Oklab                                                                |
+| Constant         | Value            | Solved from                                                                                                                 |
+| ---------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `BAR_WIDTH`      | 3/11 of the mark | Squareness plus whole units — three of the mark's eleven                                                                    |
+| `BAR_GAP`        | 1/11 of the mark | Same solution — one of the eleven                                                                                           |
+| `BAR_HEIGHTS`    | 1 : 7/11 : 9/11  | The eleventh-grid values nearest the 16/10/13 of the mark this replaced, under 2% off                                       |
+| `COVERAGE`       | 11/16            | `BAR_GAP × COVERAGE × 16 ≥ 1` at equality — the smallest mark whose gaps still clear one device pixel in a 16px browser tab |
+| `APPLE_COVERAGE` | 726/1024         | 84% of the live area and 71% of the canvas; 720 rounded to a multiple of 11 so the bars land on 198                         |
+| `OPTICAL_SHIFT`  | 1/22 of the mark | About half the gap between the ink's centroid (0.4226) and the box's centre, pinned to a whole unit                         |
+| `PLATE`          | `#265ADF`        | `--primary`, `oklch(0.52 0.21 264)`, converted through Oklab                                                                |
 
-The 8:3 ratio is the one number that came from looking rather than solving. Five candidate weights
-were exported through `ictool` at 1024px and compared as real Liquid Glass renders; 200 wide with
-75 of gap on the 800-unit grid won. The ceiling was the mask — at 260 wide the mark spans 910
-units against a live area measured at 869, and the outer bars break clearance.
+The bar weight is the one thing that came from looking rather than solving. Five candidates were
+exported through `ictool` at 1024px and compared as real Liquid Glass renders; 200 wide with 75 of
+gap on the 800-unit grid won, and the integer grid rounds that to 3:1. The ceiling was the mask —
+at 260 wide the mark spanned 910 units against a live area measured at 869, and the outer bars
+broke clearance.
+
+**Every drawn dimension is a whole number** at 32, 192, 512 and 1024, and a test asserts it. The
+16px favicon is the exception: its mark side is 11, an odd number, so the margin is a half — and at
+that size the icon is rasterized anyway.
 
 ## Provenance, stated honestly
 
@@ -106,17 +121,18 @@ of them could have followed the theme anyway.
 ## Optical centring
 
 The bars are top-aligned with descending heights, so their ink is not evenly distributed inside
-their bounding box. The area centroid sits at **0.4207** of the mark's side rather than 0.5.
+their bounding box. The area centroid sits at **0.4226** of the mark's side rather than 0.5.
 Centring the box therefore leaves the mark's visual mass 7.9% of its height above the plate's
 centre, and the empty band under the two short bars is what makes the icon read as hanging from
 the top. In the Apple render it measures worse still, because Icon Composer's specular highlight is
 top-weighted and its shadow falls downward.
 
-`OPTICAL_CORRECTION` closes **half** that gap, and the half matters. Correcting all of it puts the
+`OPTICAL_SHIFT` closes **about half** that gap, and roughly-half is the point. Correcting all of it puts the
 centre of mass exactly on the plate's centre and looks worse — the mark reads as sitting on the
 bottom, because the eye anchors on the bars' shared top edge. Correcting none of it is the original
-complaint. Like the 8:3 bar ratio, the half came from comparing real `ictool` renders at 0%, 50%
-and 100% across two mark sizes.
+complaint. The half came from comparing real `ictool` renders at 0%, 50% and 100% across two mark
+sizes. The exact figure is then pinned to the grid at `1/22` of the mark — a whole unit on every
+canvas — which closes 0.587 of the gap rather than 0.500, inside the range those renders covered.
 
 **This is what trades away vertical concentricity.** With the mark shifted down, the top margin no
 longer equals the side margins, and a single plate radius cannot share a centre with the cap arcs
@@ -129,8 +145,9 @@ concentricity violation at the top is not.
 
 The web mark sits on a plate this package draws and is bounded by the 16px favicon. The Apple mark
 sits on a grid whose mask Apple applies, and its usable area is the largest centred square inside
-that mask — measured at 869px of the 1024px canvas. At `720/1024` the mark is 720px square: 83% of
-that live area, 70% of the canvas.
+that mask — measured at 869px of the 1024px canvas. At `726/1024` the mark is 726px square: 84% of
+that live area, 71% of the canvas. 726 rather than 720 because it is the nearest multiple of 11, so
+the bars come out at 198 and the gaps at 66.
 
 It was 800 first, which measured 92% of the live area and put the bars close enough to the mask
 that the icon read as cramped — Apple's own icons sit nearer 60–65% of the canvas. The geometry

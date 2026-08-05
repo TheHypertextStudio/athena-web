@@ -82,7 +82,7 @@
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/settings/work-structure/page.tsx": {
-    "raw-type-utility": 9
+    "raw-type-utility": 16
   },
   "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx": {
     "raw-type-utility": 4
@@ -102,7 +102,7 @@
   "apps/web/src/app/(app)/settings/athena/page.tsx": {
     "raw-type-utility": 12
   },
-  "apps/web/src/app/(app)/settings/data-privacy/page.tsx": {
+  "apps/web/src/app/(app)/settings/data-privacy/data-privacy-client.tsx": {
     "raw-type-utility": 4
   },
   "apps/web/src/app/(app)/settings/profile/page.tsx": {
@@ -236,7 +236,7 @@
     "raw-type-utility": 2
   },
   "apps/web/src/components/command-palette/command-palette.tsx": {
-    "raw-type-utility": 4
+    "raw-type-utility": 1
   },
   "apps/web/src/components/command-palette/scope-toggle.tsx": {
     "raw-type-utility": 4
@@ -335,7 +335,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/mentions/mention-menu.tsx": {
-    "raw-type-utility": 3
+    "raw-type-utility": 1
   },
   "apps/web/src/components/my-work/live-session-pill.tsx": {
     "raw-type-utility": 2

@@ -261,7 +261,27 @@ jobs:
       - name: Start dev stack
         run: pnpm dev > /tmp/dev.log 2>&1 &
 
-      - run: pnpm --filter @docket/web exec playwright install --with-deps chromium
+      # The browser binary is keyed to the exact Playwright version, not the commit — it changes
+      # only when package.json's Playwright dependency does, but was being downloaded and
+      # installed from scratch on every shard of every run regardless (~30s × 4 shards, every
+      # push). `--with-deps` also apt-installs OS-level libraries every time with no cache at all.
+      - uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browser
+        run: pnpm --filter @docket/web exec playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      # `--with-deps` (above) is what apt-installs Chromium's OS-level libraries; a cache hit
+      # skips that step entirely, so those libraries never get installed on a cache hit. Playwright
+      # itself has no "verify OS deps only" mode, so this reinstalls just the OS package layer —
+      # fast (apt's own cache), and safe to always run.
+      - name: Install Playwright OS dependencies
+        run: pnpm --filter @docket/web exec playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
 
       - name: Wait for the stack
         run: |

@@ -1,0 +1,141 @@
+/**
+ * The `@`-mention round trip, end to end.
+ *
+ * @remarks
+ * The assertion that earns its keep is insert-then-reload. A mention is stored as an ordinary
+ * Markdown link carrying a machine ref in the link-title slot, so it has to survive being
+ * serialized to Markdown, written to a text column, parsed back by the editor's tokenizer, and
+ * rendered as a node — and every one of those steps has a failure mode that types, lint, and the
+ * unit suite are blind to.
+ *
+ * Escape is covered for the same reason: it was a real defect that only appeared against a real
+ * Radix layer, which answers Escape from a capture-phase document listener and so closes the menu
+ * before the field's own key handler ever runs.
+ *
+ * Two tests rather than four, because each sign-up is a full passkey ceremony against the one
+ * shared PGlite writer, and four in a file is where this started failing for reasons that had
+ * nothing to do with mentions.
+ */
+import { signUpAndOnboard } from '../helpers/app';
+import { orgHref, TIMEOUTS } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { apiFetch } from '../helpers/net';
+import { openMentionMenu, seedMentionFixtures, waitForMentionable } from '../helpers/mentions';
+
+test.describe('mentions', () => {
+  test('a mention in prose persists, reloads as a chip, and lands in Resources', async ({
+    page,
+  }) => {
+    const { orgId } = await signUpAndOnboard(page, 'Mentions');
+    const { projectId, taskId, taskTitle } = await seedMentionFixtures(page, orgId);
+    await waitForMentionable(page, orgId, 'zep', taskTitle);
+
+    await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
+    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
+
+    await prose.click();
+    await page.keyboard.press('End');
+    await page.keyboard.type(' Blocked by ');
+    await openMentionMenu(page, 'zep');
+    await expect(page.getByRole('option', { name: new RegExp(taskTitle) })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[data-mention-kind]').filter({ hasText: taskTitle })).toHaveCount(1);
+
+    // The editor autosaves after a beat of quiet and several PATCHes fly during one edit, so wait
+    // on the stored value rather than on a request. This also pins the storage format: what lands
+    // in the column is an ordinary Markdown link whose title slot carries the machine ref.
+    await expect
+      .poll(
+        async () => {
+          const row = await apiFetch(page, `/v1/orgs/${orgId}/projects/${projectId}`);
+          return (row.body as { description: string | null }).description ?? '';
+        },
+        { timeout: TIMEOUTS.sweep, message: 'the description should store the mention marker' },
+      )
+      .toContain(`"docket:v1:task:${taskId}"`);
+
+    // Reconcile rides the write-through seam post-commit, so the edge follows the save rather
+    // than arriving with it. Poll the read model before asking the UI about it, or a slow tick
+    // reads as a missing feature.
+    await expect
+      .poll(
+        async () => {
+          const row = await apiFetch(page, `/v1/orgs/${orgId}/projects/${projectId}/mentions`);
+          const entities = (row.body as { entities?: { label: string }[] }).entities ?? [];
+          return entities.some((entity) => entity.label === taskTitle);
+        },
+        { timeout: TIMEOUTS.sweep, message: 'reconcile should derive the edge from the prose' },
+      )
+      .toBe(true);
+
+    // The app persists its query cache and writes it on a throttle, so a reload fired the instant
+    // the server has the value can rehydrate the pre-edit snapshot and serve it while it is still
+    // inside its staleness window. Give the client's own write a beat before reloading — this is a
+    // race in the test, not in the feature, and a sleep is the honest way to describe it.
+    await page.waitForTimeout(2000);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-mention-kind]').filter({ hasText: taskTitle })).toHaveCount(
+      1,
+      {
+        timeout: TIMEOUTS.pageReady,
+      },
+    );
+
+    await page.getByRole('tab', { name: /resources/i }).click();
+    await expect(page.getByRole('heading', { name: 'Related records' })).toBeVisible({
+      timeout: TIMEOUTS.sweep,
+    });
+    await expect(page.getByText(taskTitle).first()).toBeVisible();
+
+    // The Updates composer is a plain textarea, and prose mode there writes the same link form.
+    await page.getByRole('tab', { name: /updates/i }).click();
+    const composer = page.locator('#program-update-body');
+    await expect(composer).toBeVisible({ timeout: TIMEOUTS.pageReady });
+    // Combobox semantics only where a picker exists, and expanded only once one is on screen.
+    await expect(composer).toHaveAttribute('role', 'combobox');
+    await expect(composer).toHaveAttribute('aria-expanded', 'false');
+
+    await composer.click();
+    await page.keyboard.type('Blocked by ');
+    await openMentionMenu(page, 'zep');
+    await expect(composer).toHaveAttribute('aria-expanded', 'true');
+    await page.keyboard.press('Enter');
+    await expect(composer).toHaveValue(
+      `Blocked by [${taskTitle}](/orgs/${orgId}/tasks/${taskId} "docket:v1:task:${taskId}") `,
+    );
+  });
+
+  test('a model-context surface dismisses cleanly and inserts a bare title', async ({ page }) => {
+    const { orgId } = await signUpAndOnboard(page, 'MentionsCtx');
+    const { taskTitle } = await seedMentionFixtures(page, orgId);
+    await waitForMentionable(page, orgId, 'zep', taskTitle);
+
+    await page.goto('/today', { waitUntil: 'domcontentloaded' });
+    const capture = page.locator('textarea').first();
+    await expect(capture).toBeVisible({ timeout: TIMEOUTS.pageReady });
+
+    await capture.click();
+    await page.keyboard.type('Follow up on ');
+    await openMentionMenu(page, 'zep');
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+    await expect(capture).toHaveValue('Follow up on @zep');
+
+    // A caret move re-reads the trigger, and the dismissal has to survive that, or the menu
+    // reopens under a reader who just asked it to go away.
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForTimeout(400);
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+
+    // A fresh attempt still opens, so one Escape never disables the field for good.
+    await page.keyboard.press('End');
+    await page.keyboard.type(' and ');
+    await openMentionMenu(page, 'zep');
+    await page.keyboard.press('Enter');
+
+    // Context mode writes a bare title: Markdown link syntax in a model prompt is noise.
+    await expect(capture).toHaveValue(`Follow up on @zep and @${taskTitle} `);
+  });
+});

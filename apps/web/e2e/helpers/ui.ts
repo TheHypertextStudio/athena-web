@@ -24,3 +24,20 @@ export async function attachShot(
 ): Promise<void> {
   await testInfo.attach(name, { body: await target.screenshot(), contentType: 'image/png' });
 }
+
+/**
+ * Switch the page between the light and dark themes for a screenshot.
+ *
+ * @remarks
+ * The design system expresses dark mode with `@media (prefers-color-scheme: dark)` and nothing
+ * else — there is no `.dark` class and no `data-theme` attribute. Toggling a class therefore
+ * changes nothing while looking like it worked, which is how several specs came to attach
+ * light-mode screenshots under a `-dark` filename. Emulating the media query is the only thing
+ * that actually flips it.
+ *
+ * @param page - The page to re-render.
+ * @param scheme - Which theme to render in.
+ */
+export async function setColorScheme(page: Page, scheme: 'light' | 'dark'): Promise<void> {
+  await page.emulateMedia({ colorScheme: scheme });
+}

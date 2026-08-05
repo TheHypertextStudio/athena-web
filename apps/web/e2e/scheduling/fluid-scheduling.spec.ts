@@ -20,6 +20,7 @@ import {
   scheduleViewport,
 } from '../helpers/calendar-ui';
 import { expect, test } from '../helpers/fixtures';
+import { setColorScheme } from '../helpers/ui';
 
 const ANCHOR_DATE = '2026-07-13';
 const ANCHOR_TIME = `${ANCHOR_DATE}T17:00:00.000Z`;
@@ -110,16 +111,12 @@ test.describe('fluid scheduling interaction contract', () => {
     expect(await hasVisibleKeyboardFocus(page, newButton)).toBe(true);
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-light');
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.evaluate(() => {
-      document.documentElement.classList.add('dark');
-    });
+    await setColorScheme(page, 'dark');
     await expect(page.locator('html')).toHaveClass(/\bdark\b/);
     expect(await renderedContrastRatio(calendarHeading)).toBeGreaterThanOrEqual(4.5);
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-dark');
     await page.emulateMedia({ colorScheme: 'light' });
-    await page.evaluate(() => {
-      document.documentElement.classList.remove('dark');
-    });
+    await setColorScheme(page, 'light');
 
     await page.setViewportSize({ width: 1920, height: 900 });
     await expect.poll(() => measuredLaneCount(schedule)).toBeGreaterThan(desktopLaneCount);
@@ -276,9 +273,7 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect(createdBody).toBeVisible();
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-light');
     await page.emulateMedia({ colorScheme: 'dark' });
-    await page.evaluate(() => {
-      document.documentElement.classList.add('dark');
-    });
+    await setColorScheme(page, 'dark');
     await expect(page.locator('html')).toHaveClass(/\bdark\b/);
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-dark');
     await page.setViewportSize({ width: 320, height: 844 });

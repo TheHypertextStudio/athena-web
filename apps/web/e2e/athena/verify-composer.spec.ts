@@ -8,7 +8,7 @@
 import { signUpAndOnboard } from '../helpers/app';
 import { myWorkHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
-import { attachShot } from '../helpers/ui';
+import { attachShot, setColorScheme } from '../helpers/ui';
 
 test.describe('new-task composer', () => {
   test('opens and renders (light, dark, discard)', async ({ page }, testInfo) => {
@@ -36,14 +36,10 @@ test.describe('new-task composer', () => {
     await page.waitForTimeout(400); // let the open animation settle
     await attachShot(testInfo, dialog, 'composer-light.png');
 
-    await page.evaluate(() => {
-      document.documentElement.classList.add('dark');
-    });
+    await setColorScheme(page, 'dark');
     await page.waitForTimeout(250);
     await attachShot(testInfo, dialog, 'composer-dark.png');
-    await page.evaluate(() => {
-      document.documentElement.classList.remove('dark');
-    });
+    await setColorScheme(page, 'light');
 
     await dialog.getByPlaceholder('Task title').fill('Ship the launch page');
     await dialog

@@ -222,7 +222,14 @@ export function useTaskMutations(
     onSuccess: (updated) => {
       adoptTaskOut(updated);
     },
-    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+    // The Resources tab's derived sections are a projection of this record's prose, and the query
+    // cache survives a reload — so without this, adding a mention to the description leaves that
+    // tab showing the pre-edit answer until the staleness tier happens to expire.
+    invalidateKeys: [
+      detailKey,
+      queryKeys.tasks(orgId),
+      queryKeys.entityMentions(orgId, 'task', taskId),
+    ],
   });
 
   const addSubtaskMutation = useApiMutation<TaskOut, string>({

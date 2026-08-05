@@ -3,17 +3,24 @@
  *
  * @remarks
  * In production the cron sweeps are driven by GCP Cloud Scheduler (`scripts/scheduler-setup.ts`),
- * which does not exist locally — so during `pnpm dev` the export/deletion/calendar sweeps would
- * never run and an export (or a calendar sync) would sit stale forever. This runs the **same**
- * sweep functions on a short interval, in the API process (sharing the single PGlite writer), so
- * the local flow completes responsively. It is started from `server.ts` ONLY when
- * `APP_MODE === 'local'`; prod is untouched.
+ * which does not exist locally — so during `pnpm dev` the sweeps would never run and an export (or
+ * a calendar sync) would sit stale forever. This runs the **same** sweep functions on a short
+ * interval, in the API process (sharing the single PGlite writer), so the local flow completes
+ * responsively. It is started from `server.ts` ONLY when `APP_MODE === 'local'`; prod is untouched.
+ *
+ * The search-index drain belongs here for a sharper reason than responsiveness. Nothing local was
+ * draining it, so `search_document` stayed empty in development and every feature reading it — the
+ * command palette, the search page, the `@` picker — looked broken rather than merely slow, which
+ * is a much more expensive kind of wrong to debug.
  */
 import { db } from '@docket/db';
 
 import { sweepAccountExports } from './account/export';
 import { sweepAccountDeletions } from './account/lifecycle';
+import { getContainer } from './container';
+import { sweepResourceUnfurls } from './content/unfurl-sweep';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
+import { processSearchIndexJobs } from './search/process-jobs';
 import { sweepElicitations } from './services/elicitation-service';
 
 /** How often the dev scheduler runs the account sweeps (short, so exports feel responsive). */
@@ -31,6 +38,8 @@ export function startDevScheduler(): void {
       // arrive and "nothing pends forever" would be false in exactly the environment it is
       // demonstrated in.
       await sweepElicitations(now);
+      await processSearchIndexJobs({ limit: 50 });
+      await sweepResourceUnfurls(getContainer().unfurler, now);
     } catch (err) {
       console.error('[dev-cron] sweep failed:', err);
     }

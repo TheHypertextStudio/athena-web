@@ -284,7 +284,20 @@ The four MD3 chip types, and what each one is _for_:
 | **assist**     | "do something to this object"        | property chips that open a picker — "No priority", "+ Set owner", "Set due date" |
 | **filter**     | "narrow what I am looking at"        | filter-bar chips, "Assigned to me", saved-view toggles                           |
 | **input**      | "here is a discrete thing you chose" | assignee, label, project, and cycle chips inside fields and property rows        |
-| **suggestion** | "here is something you might want"   | Athena suggestions, template pickers in create dialogs                           |
+| **suggestion** | "here is something you might want"   | Athena suggestions                                                               |
+
+#### Template pickers are not chips
+
+An earlier version of this table assigned "template pickers in create dialogs" to the suggestion
+register, and the create composers now deliberately do not follow it. A suggestion-chip row is the
+right control for a fixed set of two or three. A template list is none of those things: a
+workspace ships with three templates per kind and may author any number beyond that, each one has
+a scope that has to be visible, and the control needs a route out to where templates are managed.
+
+The composers use a `DropdownMenu` in the dialog's top row instead — see
+`components/composer/template-menu.tsx`. It sits opposite the breadcrumb rather than inside the
+property strip, because every chip in that strip sets one field and a template rewrites the whole
+draft; a control with that reach should not look like one without it.
 
 ### Docket's three documented deviations
 

@@ -424,11 +424,17 @@ export function menuLabel(variant: MenuVariant): string {
  * `menu-item.first-child.shape` (12dp), and a 12dp row cannot sit inside an 8dp block without its
  * corner overhanging the one that is meant to clip it. Recorded in
  * `docs/design/references/md3-menus.md` as a deliberate deviation.
+ *
+ * The same geometry is why there is no padding here, and why `group.padding` (2dp) is spent on the
+ * row gap instead. A 12dp row inset 2dp inside a 12dp block needs a 10dp corner to sit flush, and
+ * there is no 10dp step; at 12dp it overhangs and `overflow-hidden` shaves the corner square. The
+ * figure shows the selected row's fill meeting the block's corner exactly, with no inset, which is
+ * what a zero-padding block gives.
  */
 export function menuGroup(variant: MenuVariant, sections: MenuSections = 'gap'): string {
   if (sections === 'divider') return '';
   return cn(
-    'flex flex-col gap-0.5 overflow-hidden rounded-corner-md p-0.5 shadow-level2',
+    'flex flex-col gap-0.5 overflow-hidden rounded-corner-md shadow-level2',
     MENU_SURFACE[variant],
   );
 }

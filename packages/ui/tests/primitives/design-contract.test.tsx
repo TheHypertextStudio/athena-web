@@ -524,8 +524,11 @@ describe('MD3 menu spec — layout and shape', () => {
     expect(grouped).toContain('bg-surface-container-low');
     expect(grouped).toContain('shadow-level2');
     expect(grouped).toContain('rounded-corner-md');
-    expect(grouped).toContain('p-0.5');
     expect(grouped).toContain('gap-0.5');
+    // No padding: a 12dp row inset 2dp inside a 12dp block would need a 10dp corner to sit flush,
+    // and at 12dp it overhangs and gets shaved square by the block's own `overflow-hidden`. The
+    // 2dp of `group.padding` is spent on the row gap instead.
+    expect(grouped).not.toMatch(/(?:^|\s)p-0\.5(?:\s|$)/);
     expect(menuGroup('vibrant', 'gap')).toContain('bg-tertiary-container');
   });
 

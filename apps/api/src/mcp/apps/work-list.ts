@@ -16,7 +16,7 @@ const BODY = `
 <div class="headline" id="headline" aria-live="polite"></div>
 <div class="rows" id="rows"></div>
 <div class="actions">
-  <button id="open" hidden>Open in Docket</button>
+  <button id="open" class="quiet" hidden>Open in Docket</button>
 </div>`;
 
 const SCRIPT = String.raw`
@@ -47,7 +47,9 @@ const SCRIPT = String.raw`
     if (badge) {
       const span = document.createElement('span');
       span.className = 'muted';
-      span.textContent = String(badge).replace(/_/g, ' ');
+      // The team's own name for the state, spelled the way a person writes it. The glyph beside it
+      // already carries the canonical type, so the two say different things on purpose.
+      span.textContent = window.docket.label(badge);
       node.appendChild(span);
     }
     return node;

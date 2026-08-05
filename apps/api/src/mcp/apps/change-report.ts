@@ -18,10 +18,11 @@ import { appDocument } from './runtime';
 const BODY = `
 <div class="headline" id="headline" aria-live="polite"></div>
 <div class="rows" id="rows"></div>
+<div class="group-label" id="skipped-label" hidden></div>
 <div class="rows skipped" id="skipped"></div>
 <div class="actions">
   <button id="undo" hidden>Undo</button>
-  <button id="open" hidden>Open in Docket</button>
+  <button id="open" class="quiet" hidden>Open in Docket</button>
 </div>`;
 
 /**
@@ -41,6 +42,66 @@ const SCRIPT = String.raw`
   const INLINE_ROWS = 3;
   let state = null;
 
+  // One card serves capture, update, archive and organize, so the verb comes from the tool the
+  // host says it rendered rather than from the payload. "Changed 1 item" for an archive is not
+  // wrong so much as useless: the person needs to know which of four things just happened.
+  const VERB = {
+    capture: 'Captured',
+    update: 'Changed',
+    archive: 'Archived',
+    organize: 'Filed',
+  };
+  const NOTHING = {
+    capture: 'Nothing captured',
+    update: 'Nothing changed',
+    archive: 'Nothing archived',
+    organize: 'Nothing to file',
+  };
+  const LEFT_ALONE = {
+    capture: 'Not captured',
+    update: 'Not changed',
+    archive: 'Not archived',
+    organize: 'Not filed',
+  };
+
+  // Wire keys are not labels. Anything absent falls back to de-camel-casing, so a field added to a
+  // write tool reads acceptably on the day it ships rather than as 'targetDate'.
+  const FIELD_LABEL = {
+    state: 'State',
+    status: 'Status',
+    dueDate: 'Due',
+    startDate: 'Start',
+    targetDate: 'Target',
+    priority: 'Priority',
+    title: 'Title',
+    name: 'Name',
+    description: 'Description',
+    estimate: 'Estimate',
+    assigneeId: 'Assignee',
+    delegateId: 'Delegate',
+    projectId: 'Project',
+    programId: 'Program',
+    milestoneId: 'Milestone',
+    cycleId: 'Cycle',
+    parentTaskId: 'Parent',
+    health: 'Health',
+    labels: 'Labels',
+  };
+
+  function toolName() {
+    const info = window.docket.hostContext.toolInfo;
+    return (info && info.tool && info.tool.name) || '';
+  }
+
+  function fieldLabel(field) {
+    return (
+      FIELD_LABEL[field] ||
+      String(field).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
+    );
+  }
+
+  const valueLabel = (value) => window.docket.label(value);
+
   function text(node, value) { node.textContent = value; }
 
   function diffRow(item) {
@@ -56,17 +117,20 @@ const SCRIPT = String.raw`
       const d = document.createElement('span');
       d.className = 'diff';
       const f = fields[0];
+      const label = document.createElement('span');
+      label.className = 'muted';
+      label.textContent = fieldLabel(f.field) + ' ';
       const from = document.createElement('span');
       from.className = 'from';
-      from.textContent = f.field + ': ' + f.from;
+      from.textContent = valueLabel(f.from);
       const arrow = document.createTextNode(' → ');
       const to = document.createElement('span');
       to.className = 'to';
-      to.textContent = f.to;
-      d.append(from, arrow, to);
+      to.textContent = valueLabel(f.to);
+      d.append(label, from, arrow, to);
       // The clamp keeps the row a row; the full pair stays reachable on hover and to a screen
       // reader, because a truncated diff a person cannot expand is worse than no diff.
-      d.title = f.field + ': ' + f.from + ' → ' + f.to;
+      d.title = fieldLabel(f.field) + ': ' + valueLabel(f.from) + ' → ' + valueLabel(f.to);
       if (fields.length > 1) {
         const more = document.createElement('span');
         more.className = 'muted';
@@ -100,23 +164,28 @@ const SCRIPT = String.raw`
   }
 
   function headlineFor(data) {
+    const tool = toolName();
+    const verb = VERB[tool] || 'Changed';
+
     if (typeof data.changed === 'number') {
       const n = data.changed;
-      const noun = n === 1 ? 'item' : 'items';
-      return n === 0 ? 'Nothing changed' : 'Changed ' + n + ' ' + noun;
+      if (n === 0) {
+        return NOTHING[tool] || 'Nothing changed';
+      }
+      return verb + ' ' + n + ' ' + (n === 1 ? 'item' : 'items');
     }
     if (typeof data.created === 'number') {
       const parts = [];
       if (data.created > 0) {
-        parts.push('Created ' + data.created);
+        parts.push(verb + ' ' + data.created);
       }
       if (data.matched > 0) {
         parts.push('matched ' + data.matched + ' already there');
       }
-      return parts.length > 0 ? parts.join(', ') : 'Nothing to do';
+      return parts.length > 0 ? parts.join(', ') : NOTHING[tool] || 'Nothing to do';
     }
     if (data.title) {
-      return 'Captured “' + data.title + '”';
+      return verb + ' “' + data.title + '”';
     }
     return 'Done';
   }
@@ -154,9 +223,20 @@ const SCRIPT = String.raw`
       rows.appendChild(more);
     }
 
+    const left = data.skipped || [];
     const skipped = el('skipped');
     skipped.replaceChildren();
-    for (const item of data.skipped || []) skipped.appendChild(skippedRow(item));
+    for (const item of left) {
+      skipped.appendChild(skippedRow(item));
+    }
+    // A bulk write routinely half-succeeds. Without a heading the untouched half reads as more of
+    // the same list, which is the one reading that makes the card actively misleading.
+    const skippedLabel = el('skipped-label');
+    skippedLabel.hidden = left.length === 0;
+    skippedLabel.textContent =
+      left.length === 0
+        ? ''
+        : (LEFT_ALONE[toolName()] || 'Not changed') + ' — ' + String(left.length);
 
     el('undo').hidden = !data.changeSetId;
     el('open').hidden = items.length === 0;
@@ -176,6 +256,7 @@ const SCRIPT = String.raw`
       text(el('headline'), 'Undone');
       el('rows').replaceChildren();
       el('skipped').replaceChildren();
+      el('skipped-label').hidden = true;
       button.hidden = true;
       // Without this the agent keeps answering as though the change still stands.
       await window.docket.tell('The user undid that change from the report card. It no longer applies.');

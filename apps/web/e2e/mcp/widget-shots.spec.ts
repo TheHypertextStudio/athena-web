@@ -68,6 +68,15 @@ const HOST_VARIABLES: Readonly<Record<'light' | 'dark', Readonly<Record<string, 
 interface WidgetCase {
   readonly name: string;
   readonly html: string;
+  /**
+   * The tool the host says produced this card.
+   *
+   * @remarks
+   * Not cosmetic. One change-report document serves `capture`, `update`, `archive` and `organize`,
+   * and it reads the tool name out of `hostContext.toolInfo` to decide whether four rows were
+   * changed, archived, or filed. Getting this wrong in a fixture would photograph the wrong copy.
+   */
+  readonly tool: string;
   readonly input: Readonly<Record<string, unknown>>;
   /** `null` means the host never delivers a result, which is the loading state. */
   readonly result: Readonly<Record<string, unknown>> | null;
@@ -78,12 +87,14 @@ interface WidgetCase {
 const CASES: readonly WidgetCase[] = [
   {
     name: 'change-report-loading',
+    tool: 'update',
     html: CHANGE_REPORT_HTML,
     input: { orgId: 'org_1' },
     result: null,
   },
   {
     name: 'change-report-long-diff',
+    tool: 'update',
     html: CHANGE_REPORT_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -104,6 +115,7 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'change-report-bulk-with-skips',
+    tool: 'update',
     html: CHANGE_REPORT_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -141,12 +153,46 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'change-report-nothing-changed',
+    tool: 'update',
     html: CHANGE_REPORT_HTML,
     input: { orgId: 'org_1' },
     result: { structuredContent: { changed: 0, changes: [] } },
   },
   {
+    // Same document, same payload shape, different tool. The headline and the skipped heading both
+    // have to follow the verb, or one card silently reports an archive as an edit.
+    name: 'change-report-archived',
+    tool: 'archive',
+    html: CHANGE_REPORT_HTML,
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        changed: 2,
+        changeSetId: 'cs_3',
+        changes: [
+          { id: 't_1', title: 'Legacy pass reconciliation', fields: [] },
+          { id: 't_2', title: 'Pilot retro notes', fields: [] },
+        ],
+        skipped: [{ id: 't_3', title: 'Board packet — September', reason: 'already_archived' }],
+      },
+    },
+  },
+  {
+    name: 'change-report-captured',
+    tool: 'capture',
+    html: CHANGE_REPORT_HTML,
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        id: 't_9',
+        title: 'Chase the RTC coordination reply',
+        changeSetId: 'cs_4',
+      },
+    },
+  },
+  {
     name: 'change-report-failed',
+    tool: 'update',
     html: CHANGE_REPORT_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -156,6 +202,7 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'change-report-cancelled',
+    tool: 'update',
     html: CHANGE_REPORT_HTML,
     input: { orgId: 'org_1' },
     result: null,
@@ -163,6 +210,7 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'work-list-populated',
+    tool: 'list_work',
     html: WORK_LIST_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -195,6 +243,7 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'work-list-every-state-type',
+    tool: 'list_work',
     html: WORK_LIST_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -234,12 +283,14 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'work-list-empty',
+    tool: 'list_work',
     html: WORK_LIST_HTML,
     input: { orgId: 'org_1' },
     result: { structuredContent: { entity: 'task', items: [] } },
   },
   {
     name: 'entity-populated',
+    tool: 'get',
     html: ENTITY_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -261,6 +312,7 @@ const CASES: readonly WidgetCase[] = [
   },
   {
     name: 'plan-populated',
+    tool: 'plan_day',
     html: PLAN_HTML,
     input: { orgId: 'org_1' },
     result: {
@@ -325,7 +377,7 @@ function harnessPage(
     containerDimensions: { maxHeight: 640 },
     locale: 'en-US',
     platform: 'web',
-    toolInfo: { tool: { name: testCase.name.split('-')[0] } },
+    toolInfo: { tool: { name: testCase.tool } },
     ...(variables ? { styles: { variables } } : {}),
   };
 

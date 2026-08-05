@@ -177,6 +177,24 @@ export const RUNTIME_JS = String.raw`
       '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.8" fill="currentColor"/><path d="M5.9 5.9 10.1 10.1M10.1 5.9 5.9 10.1" fill="none" stroke="var(--color-background-primary)" stroke-width="1.7" stroke-linecap="round"/></svg>',
   };
 
+  function label(value) {
+    const raw = String(value === null || value === undefined ? '' : value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      const when = new Date(raw + 'T00:00:00');
+      // The host told us its locale, so a date reads the way the reader writes dates.
+      return isNaN(when.getTime())
+        ? raw
+        : when.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    // Only lower_snake wire enums get rewritten. A title, an id, a sentence, or anything a person
+    // typed has to survive untouched, so the test is on the shape rather than on a list of keys.
+    if (!/^[a-z][a-z0-9]*(_[a-z0-9]+)*$/.test(raw)) {
+      return raw;
+    }
+    const spaced = raw.replace(/_/g, ' ');
+    return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+  }
+
   function stateGlyph(type) {
     const markup = STATE_GLYPHS[type];
     if (!markup) {
@@ -369,6 +387,8 @@ export const RUNTIME_JS = String.raw`
     },
     /** The status glyph for a canonical workflow-state type, or null when it does not resolve. */
     stateGlyph,
+    /** A wire value rendered for a person: snake_case enums and ISO dates, everything else as-is. */
+    label,
     call(name, args) {
       return request('tools/call', { name, arguments: args });
     },
@@ -541,6 +561,24 @@ button {
 button:hover { background: var(--color-background-secondary); }
 button:disabled { opacity: 0.5; cursor: default; }
 button:focus-visible { outline: 2px solid var(--color-ring-primary); outline-offset: 2px; }
+
+/* One bordered action per card and the rest quiet. Filling a button would mean choosing a
+   foreground against a host-supplied colour whose contrast nobody here can check. */
+button.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+button.quiet:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+
+/* Names the block below it. A group of rows with no heading reads as more of the same thing,
+   which for skipped work is the opposite of true. */
+.group-label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+  line-height: var(--font-text-sm-line-height);
+  font-weight: var(--font-weight-medium);
+}
 .empty { color: var(--color-text-secondary); }
 
 /* A tick is the one control someone taps rather than clicks, so it carries a real target even

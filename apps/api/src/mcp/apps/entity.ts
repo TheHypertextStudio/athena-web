@@ -21,7 +21,7 @@ const BODY = `
 <div class="muted" id="origin"></div>
 <div class="actions">
   <button id="done" hidden>Mark done</button>
-  <button id="open" hidden>Open in Docket</button>
+  <button id="open" class="quiet" hidden>Open in Docket</button>
 </div>`;
 
 const SCRIPT = String.raw`
@@ -69,13 +69,13 @@ const SCRIPT = String.raw`
       if (glyph) {
         facts.appendChild(glyph);
       }
-      facts.appendChild(fact('State', String(state).replace(/_/g, ' ')));
+      facts.appendChild(fact('State', window.docket.label(state)));
     }
     if (entity.priority && entity.priority !== 'none') {
-      facts.appendChild(fact('Priority', entity.priority));
+      facts.appendChild(fact('Priority', window.docket.label(entity.priority)));
     }
     if (entity.dueDate) {
-      facts.appendChild(fact('Due', String(entity.dueDate).slice(0, 10)));
+      facts.appendChild(fact('Due', window.docket.label(String(entity.dueDate).slice(0, 10))));
     }
     if (Array.isArray(entity.blockedBy) && entity.blockedBy.length > 0) {
       facts.appendChild(fact('Blocked by', String(entity.blockedBy.length)));

@@ -13,7 +13,6 @@
  * before the clock will run at all. Naming an unanchored session is what creates its ordinary
  * Docket task, so the field is the same control whether it is anchoring or renaming.
  */
-import type { TimeAnchorSuggestion } from '@docket/types';
 import { Pause, Play, Stop } from '@docket/ui/icons';
 import {
   Button,
@@ -40,8 +39,8 @@ export interface FocusSessionProps {
   readonly unanchored: boolean;
   /** Tracked milliseconds, ticking while running. */
   readonly elapsedMs: number;
-  /** The block this session was started from, when it was started from one. */
-  readonly provenance: TimeAnchorSuggestion | null;
+  /** Whether this session was started from a block on the caller's own calendar. */
+  readonly fromPlan: boolean;
   /** Shown under the controls when finishing was refused for want of a name. */
   readonly notice: string | null;
   /** The timer transitions. */
@@ -52,22 +51,18 @@ export interface FocusSessionProps {
   readonly nameFieldId: string;
 }
 
-/** Name the block a session came from, e.g. `From your 2–3pm block`. */
-function provenanceLine(
-  provenance: TimeAnchorSuggestion | null,
-  unanchored: boolean,
-): string | null {
+/**
+ * Say where this session came from, when there is something to say.
+ *
+ * @remarks
+ * Read from the record's own `planning_context` rather than from the live suggestion. The
+ * suggestion answers "what should I be on *now*", so it is deliberately absent once an anchored
+ * session is running — asking it where a session that started an hour ago came from would get
+ * either silence or, worse, whatever block happens to cover the present minute instead.
+ */
+function provenanceLine(fromPlan: boolean, unanchored: boolean): string | null {
   if (unanchored) return 'Not linked to a task yet';
-  if (!provenance?.startsAt || !provenance.endsAt) return null;
-  const from = new Date(provenance.startsAt);
-  const to = new Date(provenance.endsAt);
-  const time = (value: Date): string =>
-    value
-      .toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-      .replace(':00', '')
-      .toLowerCase()
-      .replace(' ', '');
-  return `From your ${time(from)}–${time(to)} block`;
+  return fromPlan ? 'Started from your calendar' : null;
 }
 
 /** The running or paused session card. */
@@ -76,13 +71,13 @@ export default function FocusSession({
   title,
   unanchored,
   elapsedMs,
-  provenance,
+  fromPlan,
   notice,
   controls,
   onRequestName,
   nameFieldId,
 }: FocusSessionProps): JSX.Element {
-  const provenanceText = provenanceLine(provenance, unanchored);
+  const provenanceText = provenanceLine(fromPlan, unanchored);
 
   return (
     <div
@@ -112,7 +107,7 @@ export default function FocusSession({
         </Text>
       </div>
 
-      <div id={nameFieldId}>
+      <div id={nameFieldId} className="min-w-0">
         <EditableTitle
           value={title}
           onSave={(next) => {
@@ -121,7 +116,7 @@ export default function FocusSession({
           canEdit
           ariaLabel="What you are working on"
           placeholder="What are you working on?"
-          className="text-on-surface text-body-medium w-full"
+          className="text-on-surface text-body-medium block w-full min-w-0 truncate"
         />
       </div>
 

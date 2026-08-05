@@ -54,10 +54,10 @@ export function TaskTimerButton({
   controlSize,
   withLabel = true,
 }: TaskTimerButtonProps): JSX.Element {
-  const { record, running } = useTimerState();
+  const { record, phase } = useTimerState();
   const controls = useTimerControls(record?.id ?? null);
   const tracking = record?.taskId === taskId;
-  const active = tracking && running;
+  const active = tracking && phase === 'running';
 
   const label = active ? 'Pause tracking' : tracking ? 'Resume tracking' : 'Track this task';
 
@@ -71,7 +71,9 @@ export function TaskTimerButton({
             aria-label={label}
             aria-pressed={active}
             data-testid={`task-timer-${taskId}`}
-            disabled={controls.busy}
+            // Only its own transitions disable it. A single shared `busy` meant starting a timer
+            // anywhere greyed out every row's control at once.
+            disabled={controls.starting || controls.transitioning}
             onClick={(event) => {
               // Every real host is an activatable row (a task-table `<Link>`, a `ListRow`'s
               // click-to-open). Stopping propagation keeps the row's own handler from also

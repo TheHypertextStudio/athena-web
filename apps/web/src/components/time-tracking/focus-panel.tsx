@@ -84,13 +84,15 @@ export default function FocusPanel(): JSX.Element {
     <section aria-label="Focus" className="flex h-full min-h-0 flex-col">
       <header className="shrink-0 px-3 pt-3 pb-2">
         <h2 className="text-on-surface text-title-small">Focus</h2>
+        {/* Never the task's name: the card beneath already carries it, and the header repeating
+            it cost two lines saying one thing. This line says only what state the timer is in. */}
         <Text token="body-small" tone="muted">
           {phase === 'running'
             ? 'Tracking'
             : phase === 'paused'
               ? 'Paused'
               : nudging && suggestion
-                ? `${suggestion.title} is scheduled now`
+                ? 'Your block started'
                 : 'Nothing tracking'}
         </Text>
       </header>
@@ -102,7 +104,9 @@ export default function FocusPanel(): JSX.Element {
             title={title}
             unanchored={unanchored}
             elapsedMs={elapsedMs}
-            provenance={suggestion}
+            // The record's own link back to the block that planned it, written at start. The live
+            // suggestion answers a different question and is absent while this session runs.
+            fromPlan={record.contexts.some((context) => context.role === 'planning_context')}
             notice={notice}
             controls={controls}
             nameFieldId={nameFieldId}

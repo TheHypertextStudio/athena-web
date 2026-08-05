@@ -77,7 +77,7 @@ export default function FocusIdle({
             {REASON[suggestion.source]}
           </Text>
           <Button
-            variant="primary"
+            variant="default"
             controlSize="sm"
             className="w-full"
             data-testid="timer-start-suggested"

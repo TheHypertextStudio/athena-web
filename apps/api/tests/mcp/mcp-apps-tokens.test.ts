@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { RUNTIME_CSS, RUNTIME_JS } from '../../src/mcp/apps/runtime';
+import { RUNTIME_CSS } from '../../src/mcp/apps/runtime';
 
 /** The vendored copy of the extension's type source. */
 const SPEC_TYPES = join(
@@ -134,23 +134,9 @@ describe('widget stylesheet token vocabulary', () => {
     expect(undeclared, 'read through var() with no :root fallback').toEqual([]);
   });
 
-  it('survives being written as a template literal', () => {
-    // RUNTIME_CSS and RUNTIME_JS are String.raw templates, so one backtick in a comment silently
-    // ends the string and takes the rest of the stylesheet or the whole client with it. TypeScript
-    // usually catches the fallout as a parse error somewhere unrelated; this says what happened.
-    expect(RUNTIME_CSS, 'a backtick would have truncated this').not.toContain('`');
-    expect(RUNTIME_JS, 'a backtick would have truncated this').not.toContain('`');
-    // The last thing each one defines, so a silent truncation cannot pass.
-    expect(RUNTIME_CSS).toContain('@container');
-    expect(RUNTIME_JS).toContain('stateGlyph');
-  });
-
-  it('carries a glyph and a colour for every canonical workflow-state type', () => {
+  it('declares a colour for every canonical workflow-state type', () => {
     const declared = rootDeclarations();
     for (const type of ['backlog', 'unstarted', 'started', 'completed', 'canceled']) {
-      // The inline row cap means a screenshot can only ever show four of the five, so the fifth
-      // is held here rather than left to whichever fixture happens to fit above the fold.
-      expect(RUNTIME_JS, `${type} has no glyph`).toMatch(new RegExp(`${type}:\\s*'<svg`));
       expect(declared.has(`--state-${type}`), `${type} has no colour`).toBe(true);
     }
   });

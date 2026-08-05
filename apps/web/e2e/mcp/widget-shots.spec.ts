@@ -545,6 +545,54 @@ for (const palette of PALETTES) {
             // on a connected third-party server it is attacker-authored.
             await expect(body).not.toContainText('TypeError');
 
+            if (testCase.name === 'work-list-fullscreen') {
+              // The expanded list is the only case that shows all five state glyphs at once — the
+              // inline cap hides the fifth. Asserting on what rendered, rather than on the markup
+              // that produced it, is what makes this catch a glyph that silently draws nothing.
+              const glyphs = await body.locator('.glyph').evaluateAll((nodes) =>
+                nodes
+                  .flatMap((node) => [...node.classList])
+                  .filter((name) => name.startsWith('state-'))
+                  .sort(),
+              );
+              expect(glyphs).toEqual([
+                'state-backlog',
+                'state-canceled',
+                'state-completed',
+                'state-started',
+                'state-started',
+                'state-unstarted',
+                'state-unstarted',
+              ]);
+              // The row whose state its team no longer lists draws no glyph at all, because a
+              // wrong one is worse than none.
+              await expect(body).toContainText('State not recognised');
+            }
+
+            // Every control is reachable and says what it is. The rubric's a11y gate asks for
+            // keyboard operability and labelled controls, and a card whose only affordance is an
+            // unnamed glyph button fails it — which is what the day plan's ticks used to be.
+            const controls = body.locator(
+              'button:not([hidden]), select:not([hidden]), input:not([hidden])',
+            );
+            if (testCase.name === 'entity-populated') {
+              // Asserting a filtered list is empty passes just as well when the locator matched
+              // nothing. This is the case with the most controls, so it is the one that proves the
+              // check is looking at something.
+              expect(await controls.count()).toBeGreaterThanOrEqual(3);
+            }
+            const unnamed = await controls.evaluateAll((nodes) =>
+              nodes
+                .filter((node) => {
+                  const label = node.closest('label');
+                  const aria = node.getAttribute('aria-label') ?? '';
+                  const wrapping = label ? label.textContent : '';
+                  return `${aria}${wrapping}${node.textContent}`.trim() === '';
+                })
+                .map((node) => node.outerHTML.slice(0, 60)),
+            );
+            expect(unnamed, 'controls with no accessible name').toEqual([]);
+
             await page.screenshot({
               path: join(SHOT_DIR, `${testCase.name}-${palette}-${theme}-${width.name}.png`),
             });

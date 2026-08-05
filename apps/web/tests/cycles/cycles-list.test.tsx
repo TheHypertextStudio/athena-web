@@ -315,7 +315,7 @@ describe('Cycles list', () => {
     // The roster grid still carries a row for the active cycle: the overview subordinates the
     // roster by weight, it does not hide anything from it.
     const roster = screen.getByRole('grid', { name: /active cycles/i });
-    expect(within(roster).getByRole('row', { name: 'Jul 27 – Aug 2' })).toBeInTheDocument();
+    expect(within(roster).getByRole('row', { name: 'Jul 27 – Aug 2, Core' })).toBeInTheDocument();
   });
 });
 
@@ -325,6 +325,7 @@ describe('ActiveCycleOverview', () => {
       <ActiveCycleOverview
         orgId={ORG_ID}
         cycle={ACTIVE_CYCLE}
+        teamName="Platform"
         stats={{ ...fixtures.stats, carryover: 0 }}
         cycleNoun="Cycle"
       />,
@@ -339,7 +340,13 @@ describe('ActiveCycleOverview', () => {
       displayName: 'Launch week',
     });
     renderWithProviders(
-      <ActiveCycleOverview orgId={ORG_ID} cycle={named} stats={fixtures.stats} cycleNoun="Cycle" />,
+      <ActiveCycleOverview
+        orgId={ORG_ID}
+        cycle={named}
+        teamName="Platform"
+        stats={fixtures.stats}
+        cycleNoun="Cycle"
+      />,
     );
     const runway = runwayLabel(fixtures.activeCycle.startsAt, fixtures.activeCycle.endsAt);
     expect(
@@ -352,6 +359,7 @@ describe('ActiveCycleOverview', () => {
       <ActiveCycleOverview
         orgId={ORG_ID}
         cycle={ACTIVE_CYCLE}
+        teamName="Platform"
         stats={fixtures.stats}
         cycleNoun="Cycle"
       />,
@@ -391,7 +399,7 @@ describe('runwayLabel', () => {
 describe('upcoming roster rows', () => {
   it('keeps them present but visually secondary to the overview', () => {
     renderWithProviders(<CyclesClient />);
-    const upcoming = screen.getByRole('row', { name: 'Aug 3 – Aug 9' });
+    const upcoming = screen.getByRole('row', { name: 'Aug 3 – Aug 9, Core' });
     expect(upcoming).toHaveAttribute('href', `/orgs/${ORG_ID}/cycles/${UPCOMING_CYCLE_ID}`);
 
     // Overview identity is a title token; roster titles are body text — subordination by weight.

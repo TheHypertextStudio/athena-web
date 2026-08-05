@@ -88,6 +88,15 @@ export interface ActiveCycleOverviewProps {
   readonly orgId: string;
   /** The cycle currently running — see {@link findActiveCycle}. */
   readonly cycle: CycleOut;
+  /**
+   * The owning team's display name.
+   *
+   * @remarks
+   * A multi-team workspace can have several teams each correctly running their own current
+   * cadence; {@link findActiveCycle} surfaces only one of them here. Naming its team keeps
+   * this overview from reading as *the* org-wide active cycle when it is really one team's.
+   */
+  readonly teamName: string;
   /** The cycle's pace stats from the roster read, or `null` while they load. */
   readonly stats: CycleStats | null;
   /** The vocabulary-skinned singular cycle noun (e.g. "Cycle", "Sprint"). */
@@ -103,6 +112,7 @@ export interface ActiveCycleOverviewProps {
 export function ActiveCycleOverview({
   orgId,
   cycle,
+  teamName,
   stats,
   cycleNoun,
 }: ActiveCycleOverviewProps): JSX.Element {
@@ -164,6 +174,7 @@ export function ActiveCycleOverview({
           {cycle.displayName}
         </h2>
         <Badge variant={statusBadgeVariant('active')}>{STATUS_LABEL.active}</Badge>
+        <span className="text-on-surface-variant text-label-large">{teamName}</span>
         <Link
           href={detailHref}
           className="text-primary text-label-large ml-auto shrink-0 hover:underline"

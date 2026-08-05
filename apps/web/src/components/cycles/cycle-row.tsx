@@ -34,6 +34,17 @@ export interface CycleRowProps {
   cycle: CycleOut;
   /** The cycle's rolled-up stats, or `null` while they load (or if they failed). */
   stats: CycleStats | null;
+  /**
+   * The owning team's display name.
+   *
+   * @remarks
+   * Every cycle belongs to exactly one team, but the roster is org-wide: grouping by status
+   * (the default view) can legitimately place several teams' own current cadences side by
+   * side, each correctly "Active." Without a team name on the row, that reads as a bug
+   * ("why are there three active cycles?") rather than as several teams each running their
+   * own week — so the row always names its team, not only when grouped by team.
+   */
+  teamName: string;
   /** The (vocabulary-resolved) singular cycle noun (e.g. "Cycle", "Sprint"). */
   cycleNoun: string;
   /** Href to the cycle's detail screen. */
@@ -59,6 +70,7 @@ export interface CycleRowProps {
 export function CycleRow({
   cycle,
   stats,
+  teamName,
   cycleNoun,
   href,
   onPrefetch,
@@ -71,6 +83,11 @@ export function CycleRow({
   // idempotency key (1000137) and is never shown; the row used to print it both as the title
   // fallback and as a trailing chip beside a named cycle.
   const title = cycle.displayName;
+  // The window rides beside the team name only when it isn't already the title: an unnamed
+  // cycle's title already IS its window, so repeating it would print the same string twice.
+  const subtitle = [cycle.name ? formatWindow(cycle.startsAt, cycle.endsAt) : null, teamName]
+    .filter((part): part is string => part !== null)
+    .join(' · ');
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 
@@ -87,7 +104,7 @@ export function CycleRow({
     <Link
       href={href}
       role="row"
-      aria-label={title}
+      aria-label={`${title}, ${teamName}`}
       {...dragProps}
       onMouseEnter={onPrefetch}
       onFocus={onPrefetch}
@@ -123,14 +140,7 @@ export function CycleRow({
               </span>
             )}
           </span>
-          {/* The window rides under the title only when it adds something: an unnamed cycle's
-              title already *is* its window, so repeating it would print the same string twice in
-              one row. */}
-          {cycle.name ? (
-            <p className="text-on-surface-variant text-body-small mt-0.5">
-              {formatWindow(cycle.startsAt, cycle.endsAt)}
-            </p>
-          ) : null}
+          <p className="text-on-surface-variant text-body-small mt-0.5 truncate">{subtitle}</p>
         </div>
       </div>
       <div className="px-3">

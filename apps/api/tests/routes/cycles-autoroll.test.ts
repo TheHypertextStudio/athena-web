@@ -326,6 +326,55 @@ describe('cycle auto-roll defers to an active linked (mirrored) provider', () =>
   });
 });
 
+describe('cycle auto-roll sweeps stale native status', () => {
+  it('flips a native cycle whose window has already ended from `active` to `completed`', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    // Stamped `active` as if inserted during its own week, but that week is long over — the bug
+    // this sweep fixes: nothing else ever revisits a native cycle's status after insert.
+    const [stale] = await db
+      .insert(schema.cycle)
+      .values({
+        organizationId: orgId,
+        teamId,
+        number: 5,
+        startsAt: new Date('2020-01-06T00:00:00.000Z'),
+        endsAt: new Date('2020-01-12T23:59:59.999Z'),
+        status: 'active',
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.cycle.id });
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    await writer.request(`/current?teamId=${teamId}`);
+
+    const [row] = await db
+      .select({ status: schema.cycle.status })
+      .from(schema.cycle)
+      .where(eq(schema.cycle.id, stale!.id));
+    expect(row!.status).toBe('completed');
+  });
+
+  it('never touches a linked (provider-mirrored) cycle, even when its window has ended', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integrationId = await makeIntegration(orgId, 'connected');
+    // makeLinkedCycle's window (2026-01-01 – 2026-01-08) is already in the past.
+    await makeLinkedCycle(orgId, teamId, integrationId);
+    const [linked] = await db
+      .select({ id: schema.cycle.id })
+      .from(schema.cycle)
+      .where(and(eq(schema.cycle.teamId, teamId), eq(schema.cycle.source, 'linked')));
+
+    const writer = appWithActor(cycles, orgId, ['view'], humanActorId);
+    await writer.request(`/current?teamId=${teamId}`);
+
+    const [row] = await db
+      .select({ status: schema.cycle.status })
+      .from(schema.cycle)
+      .where(eq(schema.cycle.id, linked!.id));
+    expect(row!.status).toBe('active');
+  });
+});
+
 describe('cycle list surfaces isCurrent', () => {
   it('flags the date-current cycle in the GET / list', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

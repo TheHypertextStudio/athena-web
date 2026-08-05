@@ -180,6 +180,7 @@ export default function CyclesClient(): JSX.Element {
     (cycle: CycleOut): CycleRowProps => ({
       cycle,
       stats: statsById[cycle.id] ?? null,
+      teamName: teamNameById.get(cycle.teamId) ?? cycle.teamId,
       cycleNoun,
       href: `/orgs/${orgId}/cycles/${cycle.id}`,
       onPrefetch: () => {
@@ -193,7 +194,7 @@ export default function CyclesClient(): JSX.Element {
         router.push(`/orgs/${orgId}/cycles/${cycle.id}`);
       },
     }),
-    [cycleNoun, orgId, statsById, prefetch, canRename, renameCycle, router],
+    [cycleNoun, orgId, statsById, teamNameById, prefetch, canRename, renameCycle, router],
   );
 
   /** The cycle running right now — the overview's subject, when there is one. */
@@ -218,6 +219,7 @@ export default function CyclesClient(): JSX.Element {
         <ActiveCycleOverview
           orgId={orgId}
           cycle={activeCycle}
+          teamName={teamNameById.get(activeCycle.teamId) ?? activeCycle.teamId}
           stats={statsById[activeCycle.id] ?? null}
           cycleNoun={cycleNoun}
         />

@@ -161,13 +161,13 @@ export async function ensureCycleWindow(
   actorId: string | null,
   now: Date,
 ): Promise<CycleRow[]> {
+  const existing = await db
+    .select()
+    .from(cycle)
+    .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
+
   if (!(await hasActiveLinkedCycle(orgId, teamId))) {
     const slots: CycleWindowSlot[] = rollingWindow(now, cadenceWeeks);
-
-    const existing = await db
-      .select()
-      .from(cycle)
-      .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
     const existingNumbers = new Set(existing.map((c) => c.number));
 
     const toInsert = slots
@@ -190,6 +190,27 @@ export async function ensureCycleWindow(
           target: [cycle.teamId, cycle.number],
         });
     }
+  }
+
+  // A native cycle's `status` is otherwise stamped once at insert (above) and never
+  // revisited, so a row whose window has since ended (or started) would read
+  // `active`/`upcoming` forever — which is exactly how a past week's cycle keeps showing
+  // up as "Active" alongside the real current one. Re-derive and correct it here, on every
+  // call, so the stored column stays truthful for every reader (list grouping, badges,
+  // filters) instead of only the one live `isCurrent` computation on read. A linked cycle's
+  // status is provider-owned and left untouched.
+  const staleNativeUpdates = existing
+    .filter((c) => c.source === 'native')
+    .flatMap((row) => {
+      const status = deriveStatus(row, now);
+      return status !== row.status ? [{ id: row.id, status }] : [];
+    });
+  if (staleNativeUpdates.length > 0) {
+    await Promise.all(
+      staleNativeUpdates.map(({ id, status }) =>
+        db.update(cycle).set({ status }).where(eq(cycle.id, id)),
+      ),
+    );
   }
 
   return db

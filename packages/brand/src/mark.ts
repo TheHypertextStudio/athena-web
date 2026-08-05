@@ -43,44 +43,49 @@ export const PROVENANCE = {
   notTaken: 'bar width, gap, heights, and corner radii; no path data is quoted',
 } as const;
 
-/** The plate behind the mark, and the bleed colour behind a maskable icon. */
-export const PLATE = '#1C1C1F';
-
-/** The bars. One value in both schemes: the plate is what changes, never the ink. */
+/** The bars, on every surface and at every size. */
 export const INK = '#FAFAFA';
 
 /**
- * The design token the accent bar is painted with.
+ * The design token the plate is painted with.
  *
  * @remarks
  * Docket's tokens are OKLCH and shift between light and dark; an installed icon is a single fixed
  * image and cannot follow them. The light-mode value is the one that carries the brand — it is the
- * indigo that appears on buttons, focus rings and selection — so that is the one baked in.
- * `--primary` in dark mode is a pale periwinkle that reads as a tinted white bar rather than as a
- * colour, which defeats the point of accenting a bar at all.
+ * indigo on buttons, focus rings and selection — so that is the one baked in. `--primary` in dark
+ * mode is a pale periwinkle that white bars would vanish against.
  *
  * @see {@link file://../../ui/src/styles/globals.css} — the declaration this must stay equal to.
  */
-export const ACCENT_TOKEN = { name: '--primary', scheme: 'light', oklch: 'oklch(0.52 0.21 264)' };
+export const PLATE_TOKEN = { name: '--primary', scheme: 'light', oklch: 'oklch(0.52 0.21 264)' };
 
 /**
- * The accent bar's fill: `--primary`, converted from OKLCH.
+ * The plate: `--primary`, converted from OKLCH.
  *
  * @remarks
  * Computed rather than pasted, and {@link file://../tests/mark.test.ts} re-reads the stylesheet and
  * re-derives it, so editing the token without regenerating the icons fails the suite instead of
  * leaving the mark quietly off-brand.
+ *
+ * The plate carried `#1C1C1F` until design review: an accent bar in `--primary` against near-black
+ * reads muddy, and the Liquid Glass specular edge makes it worse. Putting the brand colour on the
+ * plate instead of on one bar removes the pairing rather than tuning it, and lets all three bars
+ * stay white — which is also what keeps them legible at 16px.
  */
-export const ACCENT = oklchToHex(0.52, 0.21, 264);
+export const PLATE = oklchToHex(0.52, 0.21, 264);
 
 /**
- * Which bar carries the accent.
+ * The Apple plate's gradient, as sRGB triples in the form `icon.json` stores.
  *
  * @remarks
- * The last one. It is the medium-height bar on the right, so the colour lands on a shape big
- * enough to read at 16px without becoming the dominant element the way the tallest bar would.
+ * Icon Composer fills the plate with a vertical gradient rather than a flat colour, which is what
+ * gives the glass something to refract. These are {@link PLATE_TOKEN} at OKLCH lightness 0.58 and
+ * 0.44 — the same relative lift the outgoing near-black plate used, applied to the brand hue.
  */
-export const ACCENT_BAR = 2;
+export const APPLE_PLATE_GRADIENT = [
+  [0.22745, 0.43922, 0.93333],
+  [0.07843, 0.2588, 0.7451],
+] as const;
 
 /**
  * Bar heights, as fractions of the tallest bar.
@@ -181,7 +186,7 @@ export interface Bounds {
 
 /** A path laid out on a specific canvas. */
 export interface MarkGeometry {
-  /** Each bar as its own subpath, left to right, so {@link ACCENT_BAR} can be painted separately. */
+  /** Each bar as its own subpath, left to right. */
   readonly bars: readonly string[];
   /** Every bar joined — one `d` attribute covering the whole mark, for measuring it. */
   readonly d: string;

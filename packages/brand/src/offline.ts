@@ -12,7 +12,7 @@
  * wants the expected markup must not trigger a write.
  */
 import { OFFLINE_MARK_SIZE } from './paths';
-import { themedMarkSvg } from './svg';
+import { faviconSvg } from './svg';
 
 /** The container in the offline page whose entire contents are the mark. */
 const DISC_OPEN = '<div class="disc" aria-hidden="true">';
@@ -26,7 +26,7 @@ const DISC_INDENT = ' '.repeat(8);
  * @returns The indented `<svg>` element, with no trailing newline.
  */
 export function offlineMarkMarkup(): string {
-  return themedMarkSvg(OFFLINE_MARK_SIZE)
+  return faviconSvg(OFFLINE_MARK_SIZE)
     .trimEnd()
     .split('\n')
     .map((line) => DISC_INDENT + line)

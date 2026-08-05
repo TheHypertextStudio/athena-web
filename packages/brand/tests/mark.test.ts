@@ -5,22 +5,22 @@ import { describe, expect, it } from 'vitest';
 
 import { inGamut, oklchToHex, parseOklch } from '../src/color';
 import {
-  ACCENT,
-  ACCENT_BAR,
-  ACCENT_TOKEN,
   APPLE_CANVAS,
   APPLE_COVERAGE,
   BAR_GAP,
   BAR_HEIGHTS,
   BAR_WIDTH,
   COVERAGE,
+  INK,
   markPath,
   MIN_FAVICON,
   pathBounds,
+  PLATE,
   plateRadius,
+  PLATE_TOKEN,
 } from '../src/mark';
 import { REPO_ROOT } from '../src/paths';
-import { bareMarkSvg, CANVAS, opaqueMarkSvg, themedMarkSvg } from '../src/svg';
+import { bareMarkSvg, CANVAS, faviconSvg, platedMarkSvg } from '../src/svg';
 
 /**
  * The mark's geometry, checked against the constraints it was solved from rather than against
@@ -101,19 +101,19 @@ describe('layout', () => {
   });
 });
 
-describe('the accent', () => {
+describe('the plate colour', () => {
   it('equals the --primary design token, converted rather than pasted', () => {
     const css = readFileSync(join(REPO_ROOT, 'packages/ui/src/styles/globals.css'), 'utf8');
     // The first `--primary:` declaration is the light-scheme one; the dark override comes later
     // inside a media query.
     const declared = /--primary:\s*(oklch\([^)]*\))/.exec(css)?.[1];
     expect(declared, '--primary is declared in globals.css').toBeTruthy();
-    expect(declared).toBe(ACCENT_TOKEN.oklch);
+    expect(declared).toBe(PLATE_TOKEN.oklch);
 
     const { lightness, chroma, hue } = parseOklch(declared ?? '');
     // Changing the token without re-running `pnpm icons` fails here rather than leaving the icon
     // quietly off-brand.
-    expect(ACCENT).toBe(oklchToHex(lightness, chroma, hue));
+    expect(PLATE).toBe(oklchToHex(lightness, chroma, hue));
   });
 
   it('converts OKLCH correctly at the anchors', () => {
@@ -124,7 +124,7 @@ describe('the accent', () => {
   });
 
   it('produces a colour sRGB can actually show', () => {
-    const { lightness, chroma, hue } = parseOklch(ACCENT_TOKEN.oklch);
+    const { lightness, chroma, hue } = parseOklch(PLATE_TOKEN.oklch);
     expect(chroma).toBeGreaterThan(0);
     // Round-tripping the hex must not have needed clamping, or the icon would not match the token.
     const hex = oklchToHex(lightness, chroma, hue);
@@ -137,41 +137,35 @@ describe('the accent', () => {
     expect(() => parseOklch('var(--primary)')).toThrow(/Not an oklch/);
   });
 
-  it('paints the last bar and only the last bar', () => {
-    const svg = themedMarkSvg();
-    const { bars } = markPath(CANVAS);
-    expect(ACCENT_BAR).toBe(bars.length - 1);
-    expect(svg).toContain(`<path fill="${ACCENT}" d="${bars[ACCENT_BAR] ?? ''}"`);
-    for (const [index, subpath] of bars.entries()) {
-      if (index !== ACCENT_BAR) {
-        expect(svg).not.toContain(`fill="${ACCENT}" d="${subpath}"`);
-      }
-    }
+  it('keeps every bar white, so the brand colour is the plate and not one stripe', () => {
+    // An accent bar in --primary against the old near-black plate read muddy, and the specular
+    // edge made it worse. Moving the colour to the plate is what let the bars stay legible.
+    const svg = faviconSvg();
+    expect(svg).toContain(`fill="${PLATE}"`);
+    expect((svg.match(/<path /g) ?? []).length).toBe(1);
+    expect(svg).toContain(`<path fill="${INK}"`);
   });
 });
 
 describe('the documents built from it', () => {
-  it('makes the plate the default and its removal the override', () => {
-    // Safari renders SVG favicons but ignores their media queries. Whichever branch is the default
-    // is the one Safari shows, so the plate has to be it.
-    const svg = themedMarkSvg();
-    const plateDefault = svg.indexOf('.plate { fill: #1C1C1F }');
-    const darkOverride = svg.indexOf('@media (prefers-color-scheme: dark)');
-    expect(plateDefault).toBeGreaterThan(-1);
-    expect(darkOverride).toBeGreaterThan(plateDefault);
-    expect(svg).toContain('.plate { fill: none }');
+  it('carries no colour-scheme branch on any surface', () => {
+    // The plate was near-black once and vanished into a dark tab strip, so it was dropped under a
+    // dark-mode media query. An indigo plate has an edge against light and dark chrome alike, so
+    // that branch would now be dropping the brand colour to solve a problem that no longer exists.
+    for (const svg of [faviconSvg(), faviconSvg(28), platedMarkSvg(512)]) {
+      expect(svg).not.toContain('prefers-color-scheme');
+      expect(svg).not.toContain('<style');
+    }
   });
 
-  it('never puts a media query in a document that gets rasterized', () => {
-    // An installed icon is one fixed image. If the PWA renderer read the themed favicon instead,
-    // the committed PNG would depend on how a rasterizer treats a query it cannot evaluate.
-    expect(opaqueMarkSvg(512)).not.toContain('prefers-color-scheme');
-    expect(opaqueMarkSvg(512)).toContain('fill="#1C1C1F"');
+  it('draws the favicon and the offline page from one document', () => {
+    // Same coordinate space at two display sizes, so the two can only differ in width and height.
+    expect(faviconSvg(28).replace(/(width|height)="28"/g, '$1="32"')).toBe(faviconSvg());
   });
 
   it('gives every plate the concentric radius', () => {
-    expect(themedMarkSvg()).toContain(`rx="${Number(plateRadius(CANVAS).toFixed(3)).toString()}"`);
-    expect(opaqueMarkSvg(512)).toContain(`rx="${Number(plateRadius(512).toFixed(3)).toString()}"`);
+    expect(faviconSvg()).toContain(`rx="${Number(plateRadius(CANVAS).toFixed(3)).toString()}"`);
+    expect(platedMarkSvg(512)).toContain(`rx="${Number(plateRadius(512).toFixed(3)).toString()}"`);
   });
 
   it('gives the Apple layer no plate of its own', () => {
@@ -179,7 +173,7 @@ describe('the documents built from it', () => {
     // it. A rect here would sit as a flat slab underneath the material.
     const layer = bareMarkSvg(APPLE_CANVAS, APPLE_COVERAGE);
     expect(layer).not.toContain('<rect');
-    expect(layer).not.toContain('#1C1C1F');
-    expect(layer).toContain(ACCENT);
+    expect(layer).not.toContain(PLATE);
+    expect(layer).toContain(INK);
   });
 });

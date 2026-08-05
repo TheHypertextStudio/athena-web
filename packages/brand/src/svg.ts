@@ -2,7 +2,7 @@
  * SVG documents built from {@link markPath}. Every renderer and the offline-page drift check emit
  * their markup through these, so no two callers can disagree about what the mark looks like.
  */
-import { ACCENT, ACCENT_BAR, COVERAGE, INK, markPath, PLATE, plateRadius } from './mark';
+import { COVERAGE, INK, markPath, PLATE, plateRadius } from './mark';
 
 /** The coordinate space every web-side document is authored in. */
 export const CANVAS = 32;
@@ -13,70 +13,49 @@ function trim(value: number): string {
 }
 
 /**
- * The bars, as two `<path>` elements: the plain ones and the accented one.
+ * The mark on its plate.
  *
  * @remarks
- * Two elements rather than three so the markup stays small, and rather than one so the last bar
- * can carry {@link ACCENT}. Order matters only for readability; the bars do not overlap.
+ * One document for every raster surface — favicon, PWA icons, the offline page — because the plate
+ * is the brand colour and needs no per-scheme branch.
  *
- * @param bars - Per-bar subpaths from {@link markPath}.
- * @param indent - Leading whitespace for each line.
- * @returns The two elements, newline-separated.
- */
-function barPaths(bars: readonly string[], indent: string): string {
-  const plain = bars.filter((_, index) => index !== ACCENT_BAR).join('');
-  const accent = bars[ACCENT_BAR] ?? '';
-  return `${indent}<path fill="${INK}" d="${plain}" />\n${indent}<path fill="${ACCENT}" d="${accent}" />`;
-}
-
-/**
- * The mark on a plate that disappears in dark mode.
+ * It used to carry one: the plate was near-black and vanished into a dark browser tab strip, so it
+ * was dropped under `@media (prefers-color-scheme: dark)` to leave the bars reading as a glyph.
+ * An indigo plate has an edge against light and dark chrome alike, so that branch now solves a
+ * problem that no longer exists — and would actively hurt, since dropping the plate in dark mode
+ * is dropping the brand colour. It is gone, and the icon is one fixed image everywhere.
  *
- * @remarks
- * Chrome, Firefox and Edge re-evaluate `prefers-color-scheme` inside an SVG favicon and repaint
- * when the OS theme flips. Safari renders the file but ignores the media query, which is why the
- * plate is the *default* branch and its removal is the override: Safari and every rasterizer land
- * on the fully-painted tile, and only a browser that understands the query drops the plate.
- *
- * Without this the dark tile sits on a dark tab strip as a black rectangle with no edge. With it,
- * the bars read as a glyph directly on the strip.
- *
- * @param size - Rendered width and height. The coordinate space stays {@link CANVAS}.
+ * @param size - Rendered width and height.
+ * @param coverage - Fraction of the canvas the mark spans. Defaults to {@link COVERAGE}.
+ * @param viewBox - Coordinate space. Defaults to `size`, so the document is 1:1.
  * @returns A complete SVG document.
  */
-export function themedMarkSvg(size: number = CANVAS): string {
-  const { bars } = markPath(CANVAS);
-  return `<svg width="${trim(size)}" height="${trim(size)}" viewBox="0 0 ${trim(CANVAS)} ${trim(CANVAS)}" xmlns="http://www.w3.org/2000/svg">
-  <style>
-    .plate { fill: ${PLATE} }
-    @media (prefers-color-scheme: dark) { .plate { fill: none } }
-  </style>
-  <rect class="plate" width="${trim(CANVAS)}" height="${trim(CANVAS)}" rx="${trim(plateRadius(CANVAS))}" />
-${barPaths(bars, '  ')}
+export function platedMarkSvg(
+  size: number,
+  coverage: number = COVERAGE,
+  viewBox: number = size,
+): string {
+  const { bars } = markPath(viewBox, coverage);
+  return `<svg width="${trim(size)}" height="${trim(size)}" viewBox="0 0 ${trim(viewBox)} ${trim(viewBox)}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${trim(viewBox)}" height="${trim(viewBox)}" rx="${trim(plateRadius(viewBox, coverage))}" fill="${PLATE}" />
+  <path fill="${INK}" d="${bars.join('')}" />
 </svg>
 `;
 }
 
 /**
- * The mark on a plate that is always painted.
+ * The mark at the favicon's authored size.
  *
  * @remarks
- * What the PWA icons rasterize from. An installed icon is one fixed image the OS keeps on a home
- * screen, so it must not inherit the favicon's dark branch — and rasterizing
- * {@link themedMarkSvg} would make the result depend on how the rasterizer treats a media query it
- * cannot evaluate. Emitting the plate unconditionally removes the question.
+ * Fixed at the {@link CANVAS} coordinate space regardless of how large it is drawn, so the favicon
+ * and the copy inlined into the offline page are the same document at two display sizes rather
+ * than two documents that have to be kept equal.
  *
- * @param size - Edge length of both the document and its coordinate space.
- * @param coverage - Fraction of the canvas the mark spans. Defaults to {@link COVERAGE}.
- * @returns A complete SVG document with an opaque plate.
+ * @param size - Rendered width and height. Defaults to {@link CANVAS}.
+ * @returns A complete SVG document.
  */
-export function opaqueMarkSvg(size: number, coverage: number = COVERAGE): string {
-  const { bars } = markPath(size, coverage);
-  return `<svg width="${trim(size)}" height="${trim(size)}" viewBox="0 0 ${trim(size)} ${trim(size)}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${trim(size)}" height="${trim(size)}" rx="${trim(plateRadius(size, coverage))}" fill="${PLATE}" />
-${barPaths(bars, '  ')}
-</svg>
-`;
+export function faviconSvg(size: number = CANVAS): string {
+  return platedMarkSvg(size, COVERAGE, CANVAS);
 }
 
 /**
@@ -94,7 +73,7 @@ ${barPaths(bars, '  ')}
 export function bareMarkSvg(size: number, coverage: number): string {
   const { bars } = markPath(size, coverage);
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${trim(size)}" height="${trim(size)}" viewBox="0 0 ${trim(size)} ${trim(size)}">
-${barPaths(bars, '  ')}
+  <path fill="${INK}" d="${bars.join('')}" />
 </svg>
 `;
 }

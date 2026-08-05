@@ -14,11 +14,9 @@
  *   a circle or squircle of its choosing; without the inset the outer bars get clipped, and the
  *   bleed is the mark's own plate colour so the crop is invisible.
  *
- * **This script writes no Apple asset, and rasterizes no themed SVG.** It builds its own opaque
- * document through {@link file://./svg.ts | opaqueMarkSvg} rather than reading the favicon,
- * because the favicon carries a `prefers-color-scheme` rule and an installed icon is a single
- * fixed image — the output must not depend on how a rasterizer treats a media query it cannot
- * evaluate.
+ * **This script writes no Apple asset.** It builds its own document through
+ * {@link file://./svg.ts | platedMarkSvg} rather than reading `icon.svg` off disk, so a stale or
+ * hand-edited favicon cannot silently become the installed icon.
  *
  * @see {@link file://../../../apps/web/src/app/manifest.ts} which references these outputs.
  * @see {@link file://./render-apple.ts} for the Apple home-screen set, which this must never touch.
@@ -30,7 +28,7 @@ import sharp from 'sharp';
 
 import { MASKABLE_SCALE, PLATE } from './mark';
 import { PWA_ICONS_DIR } from './paths';
-import { opaqueMarkSvg } from './svg';
+import { platedMarkSvg } from './svg';
 
 /** A single generated icon file. */
 interface IconSpec {
@@ -63,7 +61,7 @@ const ICONS: readonly IconSpec[] = [
 async function renderIcon(spec: IconSpec): Promise<number> {
   const { name, size, maskable } = spec;
   const artworkSize = maskable ? Math.round(size * MASKABLE_SCALE) : size;
-  const artwork = await sharp(Buffer.from(opaqueMarkSvg(artworkSize)))
+  const artwork = await sharp(Buffer.from(platedMarkSvg(artworkSize)))
     .png()
     .toBuffer();
 

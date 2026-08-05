@@ -5,9 +5,8 @@ editing any icon asset: they are all generated, and hand-editing one puts it bac
 
 ## What it is
 
-Three vertical stadium bars — tall, short, medium — on a rounded plate. The first two are `#FAFAFA`;
-the third is `#265ADF`, the `--primary` design token converted from OKLCH. The plate is `#1C1C1F`,
-and it disappears in dark mode.
+Three white stadium bars — tall, short, medium — on a `#265ADF` plate, which is the `--primary`
+design token converted from OKLCH. One fixed image on every surface, in both colour schemes.
 
 `packages/brand/src/mark.ts` is the only file in the repository that knows any of this. The
 favicon, the PWA icon set, the Apple Icon Composer layer and the copy inlined into the offline page
@@ -47,7 +46,7 @@ Squareness plus the 8:3 bar-to-gap ratio chosen in review fixes the rest by subs
 | `BAR_HEIGHTS`    | 1 : 0.625 : 0.8125 | The 16/10/13 of the mark this replaced, which is where its balance came from                                                |
 | `COVERAGE`       | 0.625              | `BAR_GAP × COVERAGE × 16 ≥ 1` at equality — the smallest mark whose gaps still clear one device pixel in a 16px browser tab |
 | `APPLE_COVERAGE` | 800/1024           | The height the outgoing Apple asset used, so the redesign stayed about the bars rather than the size                        |
-| `ACCENT`         | `#265ADF`          | `--primary`, `oklch(0.52 0.21 264)`, converted through Oklab                                                                |
+| `PLATE`          | `#265ADF`          | `--primary`, `oklch(0.52 0.21 264)`, converted through Oklab                                                                |
 
 The 8:3 ratio is the one number that came from looking rather than solving. Five candidate weights
 were exported through `ictool` at 1024px and compared as real Liquid Glass renders; 200 wide with
@@ -68,40 +67,38 @@ would be false.
 The mark is therefore Docket's own, which is worth knowing for the reason it is worth wanting: a
 stock icon cannot be a distinctive trademark. This one can be, though nobody has filed anything.
 
-## The accent
+## The plate colour
 
 `--primary` is OKLCH and shifts between light and dark. An installed icon is a single fixed image
 and cannot follow a token, so the light-mode value is baked in — it is the indigo that appears on
-buttons, focus rings and selection. `--primary` in dark mode is a pale periwinkle that would read
-as a tinted white bar rather than as a colour.
+buttons, focus rings and selection. `--primary` in dark mode is a pale periwinkle that white bars
+would vanish against.
 
 `packages/brand/src/color.ts` does the conversion (Oklab, then the sRGB transfer function, no
 dependency), and the test re-reads `packages/ui/src/styles/globals.css` and re-derives it. Change
 the token without re-running `pnpm icons` and the suite fails rather than the icon going quietly
 off-brand.
 
-## Theme adaptivity, and its limits
+The colour was briefly on one bar instead, against a near-black plate. Design review rejected it:
+`#265ADF` on `#1C1C1F` is a low-contrast pairing, and the Liquid Glass specular edge muddies it
+further. Moving the brand colour to the plate removes the pairing rather than tuning it, and lets
+all three bars stay white — which is also what keeps them legible at 16px.
 
-Only `icon.svg` adapts. It carries the plate as the default rule and drops it under
-`@media (prefers-color-scheme: dark)`, so in a dark browser tab the bars read as a glyph on the tab
-strip instead of a black tile with no edge.
+The Apple plate is a vertical gradient rather than a flat fill, because the glass needs something
+to refract. Its stops are the same token at OKLCH lightness 0.58 and 0.44, the same relative lift
+the outgoing near-black plate used.
 
-The plate is the _default_ branch and its removal is the _override_, deliberately: Safari renders
-SVG favicons but ignores their embedded media queries, so whichever branch is the default is the
-one Safari shows.
+## No colour-scheme branch
 
-| Surface                             | Adapts | Why                                                                                             |
-| ----------------------------------- | ------ | ----------------------------------------------------------------------------------------------- |
-| Browser tab — Chrome, Firefox, Edge | Yes    | They re-evaluate `prefers-color-scheme` inside an SVG favicon and repaint on an OS theme change |
-| Browser tab — Safari                | No     | Renders the file, ignores the media query; lands on the plated default                          |
-| Offline page                        | Yes    | Same document, inlined                                                                          |
-| Installed PWA, Android              | No     | Manifest icons are fixed images; the spec has no colour-scheme variants                         |
-| iOS home screen web clip            | No     | Apple has never offered a dark or tinted appearance for a web clip                              |
-| Apple native target                 | Would  | No native target exists in this repository                                                      |
+`icon.svg` briefly carried one. The plate was near-black, which vanished into a dark browser tab
+strip, so it was dropped under `@media (prefers-color-scheme: dark)` to leave the bars reading as a
+glyph on the strip.
 
-Because the PWA icons must not inherit any of this, `render-pwa.ts` builds its own opaque document
-rather than rasterizing `icon.svg`. Rasterizing the themed file would make a committed PNG depend
-on how librsvg happens to treat a media query it cannot evaluate.
+An indigo plate has an edge against light and dark chrome alike, so that branch now solves a
+problem that no longer exists — and dropping the plate in dark mode would mean dropping the brand
+colour. It is gone. The mark is one fixed image everywhere, which is also what every other surface
+needed: a manifest icon, an `apple-touch-icon` and a maskable PNG are all single images, and none
+of them could have followed the theme anyway.
 
 ## Why the Apple canvas differs
 
@@ -134,7 +131,14 @@ All six are exported to `apps/web/design/exports/` as 1024px masters.
 The other five exist to be reviewed and as groundwork for a native target; nothing displays them
 today.
 
-They are currently **auto-derived** by Icon Composer from the single `Default` fill, not authored.
+The plate's gradient in `icon.json` was set by editing that file directly, because access to
+Icon Composer.app was declined. The fill is a data value in a committed source document and
+`ictool` still performs every render, so CAL-38's requirement — that the shipped assets are exports
+of an Icon Composer document — holds. Note the deviation anyway: the file is Icon Composer's to
+own, and the next person to open it in the app should confirm it round-trips.
+
+The five non-`Default` appearances are **auto-derived** by Icon Composer from the single `Default`
+fill, not authored.
 The `Dark` rendition loses the plate gradient and flattens to a solid dark grey, and the tinted pair
 falls back to `ictool`'s default tint rather than a monochrome layer the OS can drive. Giving each
 appearance its own fill has to happen in Icon Composer.app — `docs/engineering/launch-compliance.json`

@@ -50,6 +50,12 @@ describe('normalizeResourceUrl', () => {
     );
   });
 
+  it('leaves two distinct keys already in ascending order untouched', () => {
+    expect(normalizeResourceUrl('https://example.com/a?a=1&b=2')).toBe(
+      'https://example.com/a?a=1&b=2',
+    );
+  });
+
   it('strips a trailing slash from a path but never empties the root', () => {
     expect(normalizeResourceUrl('https://example.com/a/')).toBe('https://example.com/a');
     expect(normalizeResourceUrl('https://example.com/')).toBe('https://example.com/');

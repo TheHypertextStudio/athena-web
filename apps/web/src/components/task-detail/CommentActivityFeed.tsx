@@ -264,18 +264,21 @@ export function CommentActivityFeed({
              * you type it, `@` references a task or project, `/` inserts a block. A comment used
              * to be a bare `<textarea>`, so the one place people write to each other was the one
              * place none of that worked.
+             *
+             * The background/padding is on the editor's own surface, not a separate wrapping div:
+             * that surface already turns a click anywhere inside it — including its own padding —
+             * into a focus. A wrapping div would look identical but leave its inset dead to click.
              */}
-            <div className="bg-surface-container rounded-md p-3">
-              <FreeformTextEditor
-                value={body}
-                onChange={setBody}
-                placeholder="Leave a comment…"
-                ariaLabel="Add a comment"
-                onSubmit={() => {
-                  void post();
-                }}
-              />
-            </div>
+            <FreeformTextEditor
+              value={body}
+              onChange={setBody}
+              placeholder="Leave a comment…"
+              ariaLabel="Add a comment"
+              onSubmit={() => {
+                void post();
+              }}
+              className="bg-surface-container rounded-md p-3"
+            />
             <div className="flex items-center justify-between">
               <Text token="label-small" tone="muted">
                 ⌘↵ to send

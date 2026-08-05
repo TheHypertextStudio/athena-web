@@ -8,8 +8,10 @@ import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ComposerShell } from '@/components/composer/composer-shell';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
+import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
 
 import { makeQueryWrapper } from '../support/query';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
@@ -194,13 +196,69 @@ describe('clicking an editor-shaped surface starts editing', () => {
     const surface = await screen.findByLabelText('Description');
     expect(surface.getAttribute('contenteditable')).toBe('false');
   });
+
+  it('focuses the composer body editor from a click on its own tinted background/padding', async () => {
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New task"
+        title=""
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Task name"
+        body=""
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add description"
+        creating={false}
+        canSubmit={false}
+        onSubmit={vi.fn()}
+        submitLabel="Create"
+      >
+        <div />
+      </ComposerShell>,
+    );
+    const surface = await screen.findByRole('textbox', { name: 'Add description' });
+    // There is no separate padded wrapper: the background/padding live on the same element the
+    // editor already makes clickable everywhere, so this *is* the click-anywhere surface.
+    const box = surface.closest('[data-editor-surface]');
+    expect(box).not.toBeNull();
+    fireEvent.mouseDown(box as HTMLElement, { bubbles: true });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(surface);
+    });
+  });
+
+  it('focuses the comment composer from a click on its own tinted background/padding', async () => {
+    renderEditor(
+      <CommentActivityFeed
+        comments={[]}
+        activities={[]}
+        resolveActor={() => ({ name: 'Ada', kind: 'human' })}
+        onComment={vi.fn(async () => undefined)}
+        canComment
+      />,
+    );
+    const surface = await screen.findByRole('textbox', { name: 'Add a comment' });
+    const box = surface.closest('[data-editor-surface]');
+    expect(box).not.toBeNull();
+    fireEvent.mouseDown(box as HTMLElement, { bubbles: true });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(surface);
+    });
+  });
 });
 
 describe('editor insets are symmetric', () => {
   /** Repository root, derived from this file rather than the process CWD. */
   const REPO_ROOT = resolve(import.meta.dirname, '../../../..');
 
-  /** Every editor container class string in the app, with its file. */
+  /**
+   * Every editor container class string in the app, with its file — both the reusable document
+   * card (tagged `entity-document`) and any call site that gives `FreeformTextEditor` its own
+   * tinted background directly (composer bodies, the comment composer). A `bg-*` class is what
+   * marks a `FreeformTextEditor` className as *drawing* the visual container rather than just
+   * forwarding type styling, which is the only case this inset rule applies to.
+   */
   function editorContainers(): readonly { readonly path: string; readonly classes: string }[] {
     const found: { path: string; classes: string }[] = [];
     const walk = (dir: string): void => {
@@ -212,11 +270,14 @@ describe('editor insets are symmetric', () => {
         }
         if (!entry.endsWith('.tsx')) continue;
         const text = readFileSync(full, 'utf8');
+        const path = relative(REPO_ROOT, full).split(/[\\/]/).join('/');
         for (const match of text.matchAll(/className="([^"]*\bentity-document\b[^"]*)"/g)) {
-          found.push({
-            path: relative(REPO_ROOT, full).split(/[\\/]/).join('/'),
-            classes: match[1] ?? '',
-          });
+          found.push({ path, classes: match[1] ?? '' });
+        }
+        for (const match of text.matchAll(/<FreeformTextEditor[^]*?\/>/g)) {
+          const classNameMatch = /className="([^"]*)"/.exec(match[0]);
+          const classes = classNameMatch?.[1] ?? '';
+          if (/(^|\s)bg-/.test(classes)) found.push({ path, classes });
         }
       }
     };
@@ -224,7 +285,7 @@ describe('editor insets are symmetric', () => {
     return found;
   }
 
-  it('uses one padding value on all four sides of every document editor', () => {
+  it('uses one padding value on all four sides of every visually tinted editor surface', () => {
     const containers = editorContainers();
     expect(containers.length).toBeGreaterThan(0);
     for (const container of containers) {

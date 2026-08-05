@@ -203,7 +203,17 @@ export function ComposerShell({
           </div>
 
           {bodyPlaceholder !== undefined ? (
-            <div className="bg-surface-container-low mt-3 rounded-lg px-3 py-2">
+            <>
+              {/* Divide the header from the body so the title reads as a distinct document heading. */}
+              <Separator />
+              {/*
+               * The background/padding lives on the editor's own surface, not a wrapping div —
+               * that surface is what already turns a click anywhere inside it (including the
+               * padding) into a focus. A separate padded wrapper would look identical but leave
+               * its own inset dead: clicking there would land on this div instead of the editor,
+               * and nothing would happen. `p-3`, not `px-3 py-2`, so the inset reads the same on
+               * every side.
+               */}
               <FreeformTextEditor
                 value={body}
                 disabled={creating}
@@ -213,9 +223,9 @@ export function ComposerShell({
                 onSubmit={() => {
                   if (canSubmit && !creating) onSubmit();
                 }}
-                className="max-h-[40vh] min-h-28 overflow-y-auto py-1"
+                className="bg-surface-container-low mt-3 max-h-[40vh] min-h-28 overflow-y-auto rounded-lg p-3"
               />
-            </div>
+            </>
           ) : null}
         </form>
 

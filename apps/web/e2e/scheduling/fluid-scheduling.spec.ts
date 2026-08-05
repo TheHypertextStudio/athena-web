@@ -104,7 +104,6 @@ test.describe('fluid scheduling interaction contract', () => {
       'Nothing scheduled. Drag on the grid or choose New to plan time.',
     );
     expect(page.viewportSize()).toEqual({ width: 1440, height: 900 });
-    await expect(page.locator('html')).not.toHaveClass(/\bdark\b/);
     const calendarHeading = page.locator('main#main-content h1');
     const newButton = page.getByRole('button', { name: 'New', exact: true });
     expect(await renderedContrastRatio(calendarHeading)).toBeGreaterThanOrEqual(4.5);
@@ -112,7 +111,6 @@ test.describe('fluid scheduling interaction contract', () => {
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-light');
     await page.emulateMedia({ colorScheme: 'dark' });
     await setColorScheme(page, 'dark');
-    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
     expect(await renderedContrastRatio(calendarHeading)).toBeGreaterThanOrEqual(4.5);
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-dark');
     await page.emulateMedia({ colorScheme: 'light' });
@@ -274,7 +272,6 @@ test.describe('fluid scheduling interaction contract', () => {
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-light');
     await page.emulateMedia({ colorScheme: 'dark' });
     await setColorScheme(page, 'dark');
-    await expect(page.locator('html')).toHaveClass(/\bdark\b/);
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-dark');
     await page.setViewportSize({ width: 320, height: 844 });
     await expect

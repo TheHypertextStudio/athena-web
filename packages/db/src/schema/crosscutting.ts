@@ -14,6 +14,7 @@ import {
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
   type EntityDisplaySubjectType,
+  type TemplateDraft,
 } from '@docket/types';
 import {
   boolean,
@@ -63,6 +64,7 @@ import {
   syncRunPurpose,
   syncRunStatus,
   syncTrigger,
+  templateTargetType,
   updateSubjectType,
   viewScope,
   visibility,
@@ -84,6 +86,7 @@ import type {
   ViewGrouping,
   ViewSort,
 } from '../types';
+import { notBlank } from './constraints';
 import { actor, auditColumns, hub, organization, team } from './identity';
 
 const entityDisplayIconKeyList = sql.raw(
@@ -813,4 +816,41 @@ export const savedView = pgTable(
     sort: jsonb('sort').$type<ViewSort[]>().notNull().default([]),
   },
   (t) => [index('saved_view_org_idx').on(t.organizationId)],
+);
+
+/**
+ * A reusable pre-filled draft for one of the four authored work kinds.
+ *
+ * @remarks
+ * A template is a {@link savedView} for creation rather than for reading: a named, scoped,
+ * user-authored configuration whose payload is a partial of the target kind's create body. The
+ * shipped defaults are seeded per org as ordinary `is_seed` rows, so a workspace can rename,
+ * rewrite or delete any of them — the same "defaults are data, not code branches" rule the
+ * automation rules follow.
+ *
+ * `payload` holds no foreign key to an actor, team, project, milestone or cycle. A template that
+ * names a person who has left or a project that has closed is a template that fails to apply, and
+ * pruning those references on every delete is a maintenance burden with no matching benefit.
+ * Label ids are the one exception: they are org-scoped, stable, and the reference a "Bug report"
+ * template actually needs.
+ */
+export const template = pgTable(
+  'template',
+  {
+    ...auditColumns(),
+    targetType: templateTargetType('target_type').notNull(),
+    name: text('name').notNull(),
+    description: text('description'),
+    scope: viewScope('scope').notNull().default('personal'),
+    ownerActorId: text('owner_actor_id').references(() => actor.id, { onDelete: 'set null' }),
+    teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
+    payload: jsonb('payload').$type<TemplateDraft>().notNull(),
+    isSeed: boolean('is_seed').notNull().default(false),
+  },
+  (t) => [
+    // Every read is "the templates this org has for this kind" — the picker never lists across
+    // kinds, and the settings page queries each kind's group separately.
+    index('template_org_target_idx').on(t.organizationId, t.targetType),
+    notBlank('template_name_not_blank', t.name),
+  ],
 );

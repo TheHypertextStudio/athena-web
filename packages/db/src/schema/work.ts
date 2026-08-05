@@ -30,6 +30,7 @@ import {
   taskPriority,
   visibility,
 } from '../enums';
+import { notBlank } from './constraints';
 import { actor, auditColumns, team } from './identity';
 import { integration } from './crosscutting';
 
@@ -62,26 +63,6 @@ function dateInRange(name: string, column: SQLWrapper) {
   const floor = sql.raw(`'${TASK_DATE_FLOOR}'`);
   const ceiling = sql.raw(`'${TASK_DATE_CEILING}'`);
   return check(name, sql`${column} is null or (${column} >= ${floor} and ${column} < ${ceiling})`);
-}
-
-/**
- * A CHECK asserting a required name column holds at least one non-whitespace character.
- *
- * @remarks
- * `NOT NULL` permits `''` and `'   '`, which render as a blank row a reader cannot click,
- * search or tell apart from its neighbours — an unusable record that no surface can repair
- * because it looks like nothing is there.
- *
- * The test is `~ '[^[:space:]]'` rather than `length(btrim(x)) > 0` because Postgres' one-argument
- * `btrim` strips spaces and nothing else: a title of a single tab survives that check and is just
- * as blank on screen. The POSIX class covers tabs, newlines and the rest.
- *
- * @param name - The constraint name, `<table>_<column>_not_blank` by convention.
- * @param column - The text column to require content in.
- * @returns the drizzle CHECK constraint to spread into a table's extras list.
- */
-function notBlank(name: string, column: SQLWrapper) {
-  return check(name, sql`${column} ~ ${sql.raw("'[^[:space:]]'")}`);
 }
 
 /** A cross-cutting theme over Projects/Programs (m2m); contains no work itself. */

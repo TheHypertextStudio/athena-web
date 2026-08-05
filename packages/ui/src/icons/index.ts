@@ -41,6 +41,7 @@ export { default as CircleDashed } from '@mui/icons-material/RadioButtonUnchecke
 export { default as CircleDot } from '@mui/icons-material/RadioButtonChecked';
 export { default as CloudOff } from '@mui/icons-material/CloudOff';
 export { default as Code } from '@mui/icons-material/Code';
+export { default as Copy } from '@mui/icons-material/ContentCopyOutlined';
 export { default as Divider } from '@mui/icons-material/HorizontalRule';
 export { default as FormatQuote } from '@mui/icons-material/FormatQuote';
 export { default as Heading } from '@mui/icons-material/Title';
@@ -78,6 +79,7 @@ export { default as Inbox } from '@mui/icons-material/Inbox';
 export { default as Layers } from '@mui/icons-material/Layers';
 export { default as Link } from '@mui/icons-material/Link';
 export { default as LayoutGrid } from '@mui/icons-material/GridView';
+export { default as LayoutTemplate } from '@mui/icons-material/DashboardCustomizeOutlined';
 export { default as LogOut } from '@mui/icons-material/Logout';
 export { default as Mail } from '@mui/icons-material/Mail';
 export { default as MapPin } from '@mui/icons-material/PlaceOutlined';

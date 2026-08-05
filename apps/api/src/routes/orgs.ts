@@ -72,6 +72,7 @@ import projectRollup from './project-rollup';
 import projectResources from './project-resources';
 import roles from './roles';
 import savedViews from './saved-views';
+import templates from './templates';
 import { entityMentionRoutes } from './entity-mentions';
 import mentions from './mentions';
 import references from './references';
@@ -456,6 +457,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/comments', comments)
   .route('/:orgId/updates', updates)
   .route('/:orgId/saved-views', savedViews)
+  .route('/:orgId/templates', templates)
   .route('/:orgId/search', search)
   .route('/:orgId/mentions', mentions)
   // The inbound direction: what points *at* a thing. One mount for every target kind.

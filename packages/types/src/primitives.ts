@@ -123,6 +123,10 @@ export const UpdateId = id<'UpdateId'>().describe(
 export const SavedViewId = id<'SavedViewId'>().describe(
   'ULID id of a SavedView — a stored filter/sort/grouping configuration over a work list.',
 );
+/** Branded `Template` id. */
+export const TemplateId = id<'TemplateId'>().describe(
+  'ULID id of a Template — a reusable pre-filled draft for creating a Task, Project, Initiative, or Program.',
+);
 /** Branded `Agent` id. */
 export const AgentId = id<'AgentId'>().describe(
   'ULID id of an Agent — a configured AI worker that can be invoked to act within an org.',

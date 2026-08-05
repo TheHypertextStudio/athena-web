@@ -528,8 +528,22 @@ export const invitationStatus = pgEnum('invitation_status', [
 ]);
 /** Idempotency-key record status (frozen addition). */
 export const idempotencyStatus = pgEnum('idempotency_status', ['in_progress', 'completed']);
-/** Saved-view sharing scope (frozen addition). */
+/** Saved-view sharing scope (frozen addition). Reused by `template.scope`. */
 export const viewScope = pgEnum('view_scope', ['personal', 'team', 'organization']);
+
+/**
+ * The entity kinds a template may pre-fill (frozen addition).
+ *
+ * @remarks
+ * Only the four kinds with a create composer and a document body to seed. A Cycle is a date
+ * window and a Team is structural, so neither has a draft worth storing.
+ */
+export const templateTargetType = pgEnum('template_target_type', [
+  'task',
+  'project',
+  'initiative',
+  'program',
+]);
 
 /** Broad information architecture family for one indexed search document. */
 export const searchDocumentFamily = pgEnum('search_document_family', [

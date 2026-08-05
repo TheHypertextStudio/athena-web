@@ -123,10 +123,30 @@ that is already one solid block, renders nothing whatsoever. Under this layout t
 container's fill, padding, elevation, and clipping; the container keeps only its size, stacking,
 motion, and scrolling.
 
-**Deviation.** `group.shape` is `corner.small` (8dp), and Docket uses `corner.medium` (12dp)
-instead. The measurements figure marks every one of these block corners 12, and geometry forces it
-regardless: the first and last rows inside a group take `menu-item.first-child.shape` (12dp), and a
-12dp row cannot sit inside an 8dp block without its corner overhanging the one meant to clip it.
+**Section gap.** Between whole sections Docket uses 4dp (`space50`), not the 2dp
+`md.comp.menus.gap` gives. Sampling the spec figure pixel by pixel shows its seam really is 2dp;
+what makes it read there is the lower block's drop shadow darkening the page behind it, and
+Docket's `level2` is lighter, so 2dp of bare backdrop disappears. The gap is the entire point of
+this layout, so it takes the next measurement step rather than being correct and invisible. Rows
+inside a section keep the 2dp token.
+
+**Group corners are not uniform.** A group is `group.shape` (`corner.small`, 8dp) on the edges
+facing a gap and `container.shape` (`corner.large`, 16dp) where it is the menu's own outer
+boundary. The figure marks 16 at the top of the menu and 8 at the seam, and the difference carries
+meaning: a tighter radius at the seam is what makes two blocks read as one menu that has been cut,
+rather than as two menus that happen to be stacked. A single group is both first and last, so it
+renders as an ordinary 16dp menu.
+
+The 12dp `menu-item.first-child.shape` follows from that arithmetic rather than being set on the
+row: 16dp outer less the 4dp inset is 12dp, and 8dp at a seam less the same inset is 4dp — the
+row's own `menu-item.shape`, which is why a row at a seam needs no override. The edge corner is
+applied by whichever element owns the padded surface, not by the row, because "am I on the menu's
+outer edge?" is not a question a row can answer: a row at a seam is its block's last child and is
+not on the edge.
+
+**Group padding.** A group carries the same 4dp inset the container does — a group is the
+container's surface repeated per section, and the gap is the only difference between the two
+layouts.
 
 ### Typography
 
@@ -209,10 +229,16 @@ Active: state layer `on-tertiary-container` @ 0.08. Disabled: opacity 0.38.
 ## Known gaps in the spec itself
 
 **Divider colour.** The anatomy diagram lists an optional divider, and the measurements figure
-shows one, but neither expressive colour set defines a divider token. `Menu (baseline)` gives
-`divider.color = surface-variant` and `divider.height = 1dp`. Docket resolves this to
-`outline-variant` in both mappings, which is the role the rest of the design system uses for a
-hairline rule.
+shows one, but neither expressive colour set defines a divider token. The role therefore comes from
+the Divider component: `md.comp.divider.color` is `outline-variant` at `md.comp.divider.thickness`
+1dp. (`Menu (baseline)` gives `surface-variant`; that is the legacy value and Docket does not use
+it.)
+
+Vibrant is the exception. `outline-variant` is drawn from the neutral-variant palette and the
+Divider component assumes a neutral surface, so on `tertiary-container` it is a grey hairline that
+belongs to no tonal family and barely resolves in dark. With no published token to defer to, the
+vibrant divider is `on-tertiary-container` at 20% — the surface's own "on" role, held to a
+hairline's weight, which is what every other mark on a vibrant menu uses.
 
 **Badge.** The anatomy names an optional badge; no expressive token set defines its colour or
 shape. Docket tints it with the mapping's supporting-text role.

@@ -31,6 +31,7 @@ import {
   menuGroup,
   menuItemClass,
   menuLabel,
+  menuSeparator,
   menuSupporting,
   menuTrailingText,
 } from '../../src/primitives/menu-styles';
@@ -503,9 +504,14 @@ describe('MD3 menu spec — layout and shape', () => {
     // menu-item.selected.shape 12dp.
     const row = menuItemClass('standard');
     expect(row).toContain('rounded-corner-xs');
-    expect(row).toContain('first:rounded-t-corner-md');
-    expect(row).toContain('last:rounded-b-corner-md');
     expect(menuItemClass('standard', { selected: true })).toContain('rounded-corner-md');
+    // The 12dp edge corner belongs to whichever element owns the padded surface, because "is this
+    // row on the menu's outer edge?" is not a question the row can answer: at a seam in a gapped
+    // menu it is its block's last child and is not on the edge at all.
+    expect(row).not.toContain('first:rounded-t-corner-md');
+    expect(menuContentClass('standard', 'md', 'divider')).toContain(
+      '[&>[role^=menuitem]:first-child]:rounded-t-corner-md',
+    );
   });
 
   it('stacks rows 2dp apart, which is what gives a row its corner in the first place', () => {
@@ -514,6 +520,9 @@ describe('MD3 menu spec — layout and shape', () => {
     // and bottom. A flush list would not need a 4dp corner on each row.
     expect(menuContentClass('standard')).toContain('gap-0.5');
     expect(menuContentClass('standard')).toContain('flex flex-col');
+    // Rows inside a section keep the 2dp token; whole sections are separated by the wider step.
+    expect(menuGroup('standard', 'gap')).toContain('gap-0.5');
+    expect(menuContentClass('standard', 'md', 'gap')).toContain('gap-1');
   });
 
   it('paints each section as its own filled block under the gap layout', () => {
@@ -523,12 +532,25 @@ describe('MD3 menu spec — layout and shape', () => {
     const grouped = menuGroup('standard', 'gap');
     expect(grouped).toContain('bg-surface-container-low');
     expect(grouped).toContain('shadow-level2');
-    expect(grouped).toContain('rounded-corner-md');
     expect(grouped).toContain('gap-0.5');
-    // No padding: a 12dp row inset 2dp inside a 12dp block would need a 10dp corner to sit flush,
-    // and at 12dp it overhangs and gets shaved square by the block's own `overflow-hidden`. The
-    // 2dp of `group.padding` is spent on the row gap instead.
-    expect(grouped).not.toMatch(/(?:^|\s)p-0\.5(?:\s|$)/);
+    // A group is the container's surface repeated per section, so rows keep the same 4dp inset
+    // they have under the divider layout. The gap is the only difference between the two.
+    expect(grouped).toContain('p-1');
+    expect(grouped).toContain(MENU_METRICS.containerPadding);
+  });
+
+  it('rounds a group tighter at the seam than at the menu edge', () => {
+    // group.shape corner.small (8dp) on the edges facing a gap; container.shape corner.large
+    // (16dp) where the group IS the menu's outer boundary. Uniform corners would read as two
+    // separate menus stacked, rather than as one menu cut in two.
+    const grouped = menuGroup('standard', 'gap');
+    expect(grouped).toContain('rounded-corner-sm');
+    expect(grouped).toContain('first:rounded-t-corner-lg');
+    expect(grouped).toContain('last:rounded-b-corner-lg');
+    // 16dp outer less the 4dp inset is the 12dp the outermost rows take; 8dp at the seam less the
+    // same inset is 4dp, which is the row's own shape and why a seam row needs no override.
+    expect(grouped).toContain('first:[&>[role^=menuitem]:first-child]:rounded-t-corner-md');
+    expect(grouped).toContain('last:[&>[role^=menuitem]:last-child]:rounded-b-corner-md');
     expect(menuGroup('vibrant', 'gap')).toContain('bg-tertiary-container');
   });
 
@@ -615,6 +637,14 @@ describe('MD3 menu spec — standard colour mapping', () => {
     expect(menuItemClass('standard')).not.toContain('opacity-50');
   });
 
+  it('draws the divider in the Divider component role, not the baseline menu one', () => {
+    // Neither expressive colour set publishes a divider token, so the role comes from
+    // md.comp.divider.color = outline-variant. The baseline menu's surface-variant is legacy.
+    expect(menuSeparator('standard')).toContain('bg-outline-variant');
+    expect(menuSeparator('standard')).toContain('h-px');
+    expect(menuSeparator('standard')).not.toContain('surface-variant"');
+  });
+
   it('tones section labels and supporting content to on-surface-variant', () => {
     expect(menuLabel('standard')).toContain('text-on-surface-variant');
     expect(menuSupporting('standard')).toContain('text-on-surface-variant');
@@ -651,6 +681,13 @@ describe('MD3 menu spec — vibrant colour mapping', () => {
     expect(row).toContain('hover:bg-on-tertiary-container/8');
     expect(row).toContain('focus:not-hover:bg-on-tertiary-container/10');
     expect(row).toContain('active:bg-on-tertiary-container/10');
+  });
+
+  it('keeps the divider inside the tertiary family rather than on a neutral outline', () => {
+    // outline-variant is a neutral-variant role and the Divider component assumes a neutral
+    // surface; on tertiary-container it is a grey hairline belonging to no tonal family.
+    expect(menuSeparator('vibrant')).toContain('bg-on-tertiary-container/20');
+    expect(menuSeparator('vibrant')).not.toContain('outline-variant');
   });
 
   it('mixes a selected row state layer into its own container, not into the menu behind it', () => {

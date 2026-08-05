@@ -143,6 +143,13 @@ export const DEFAULT_MENU_SECTIONS: MenuSections = 'divider';
  * rows are discrete 4dp pills stacked 2dp apart on the container fill, and the measurements
  * figure's 48dp row bracket is that: the 44dp `menu-item.height` plus 2dp of gap top and bottom.
  *
+ * **Section gap — a deliberate deviation.** Between whole sections the gap is 4dp
+ * (`md.sys.measurement.space50`), not the 2dp the token gives. Sampling the spec figure shows its
+ * seam really is 2dp; what makes it read there is the lower block's drop shadow darkening the page
+ * behind it, and Docket's `level2` is lighter than the figure's, so 2dp of bare backdrop
+ * disappears. The gap is the entire point of this layout, so it takes the next measurement step
+ * up rather than being technically correct and invisible.
+ *
  * **Shape morphing.** The spec gives a menu two container shapes: `active.container.shape`
  * (16dp) while it holds focus, and `inactive.container.shape` (8dp) once it has revealed a
  * submenu. Radix portals `SubContent` out of its parent, so the open `SubTrigger` stays inside
@@ -155,7 +162,7 @@ export const DEFAULT_MENU_SECTIONS: MenuSections = 'divider';
  * step, and the spec's colour list for menus has no outline role in it.
  */
 const menuContentBase =
-  'z-[120] max-w-[calc(100vw-1.5rem)] flex flex-col gap-0.5 rounded-corner-lg ' +
+  'z-[120] max-w-[calc(100vw-1.5rem)] flex flex-col rounded-corner-lg ' +
   'has-data-[state=open]:rounded-corner-sm transition-[border-radius] ' +
   'data-[state=open]:animate-in data-[state=closed]:animate-out ' +
   'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ' +
@@ -198,12 +205,18 @@ export function menuContentClass(
     menuContentBase,
     MENU_WIDTH[width],
     sections === 'gap'
-      ? // Colour still cascades to the rows; only the painted surface moves to the groups.
+      ? // Colour still cascades to the rows; only the painted surface moves to the groups. The
+        // flex gap here separates whole sections rather than rows, so it is the wider step.
         cn(
-          'bg-transparent',
+          'gap-1 bg-transparent',
           variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface',
         )
-      : cn('overflow-hidden p-1 shadow-level2', MENU_SURFACE[variant]),
+      : cn(
+          'gap-0.5 overflow-hidden p-1 shadow-level2',
+          '[&>[role^=menuitem]:first-child]:rounded-t-corner-md',
+          '[&>[role^=menuitem]:last-child]:rounded-b-corner-md',
+          MENU_SURFACE[variant],
+        ),
   );
 }
 
@@ -211,17 +224,19 @@ export function menuContentClass(
  * Structural classes for an interactive menu row, shared by both mappings.
  *
  * @remarks
- * `menu-item.shape` is `corner.extra-small` (4dp). The first and last rows take
- * `corner.medium` (12dp) on the edge facing the container and keep 4dp on the edge facing
- * their neighbour — that is what the spec's `inner-corner.corner-size` means, and it is what
- * makes a menu read as one shape rather than a stack of pills.
+ * `menu-item.shape` is `corner.extra-small` (4dp), and that is all a row sets for itself. The
+ * 12dp `first-child`/`last-child` corner is applied by the *parent* — {@link menuContentClass}
+ * under the divider layout, {@link menuGroup} under the gap one — because "am I on the menu's
+ * outer edge?" is a question only the parent can answer. A row at the bottom of the first block
+ * of a gapped menu is its block's last child and is not on the menu's edge at all; it keeps 4dp,
+ * which is exactly the spec's `inner-corner.corner-size`.
  *
  * Disabled is `opacity-38`, not `opacity-50`: 0.38 is the literal every MD3 disabled token
  * carries.
  */
 const menuItemBase =
   'relative flex min-h-11 cursor-default items-center gap-3 px-4 py-2 ' +
-  'rounded-corner-xs first:rounded-t-corner-md last:rounded-b-corner-md ' +
+  'rounded-corner-xs ' +
   'text-label-large transition-colors outline-none select-none ' +
   'data-[disabled]:pointer-events-none data-[disabled]:opacity-38 ' +
   '[&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0';
@@ -418,23 +433,30 @@ export function menuLabel(variant: MenuVariant): string {
  * sections. Written as a transparent 8dp wrapper — which is what this was — it renders nothing
  * whatsoever, because an unfilled corner against an already-solid container is invisible.
  *
- * The corner is `corner.medium` (12dp), not the 8dp `md.comp.menus.group.shape` names. Two reasons
- * to prefer the figure here over the token: the measurements figure marks every one of these block
- * corners 12, and geometry forces it anyway — the first and last rows inside a group take
- * `menu-item.first-child.shape` (12dp), and a 12dp row cannot sit inside an 8dp block without its
- * corner overhanging the one that is meant to clip it. Recorded in
- * `docs/design/references/md3-menus.md` as a deliberate deviation.
+ * **The corners are not uniform.** A group is `corner.small` (8dp) — which is exactly what
+ * `md.comp.menus.group.shape` names — on the edges facing a gap, and `corner.large` (16dp) on the
+ * edges that are the menu's own outer boundary. The measurements figure marks 16 at the top of the
+ * menu and 8 at the seam between two blocks, and the difference is load-bearing: a smaller radius
+ * at the seam is what makes two blocks read as one menu that has been cut, rather than as two
+ * separate menus that happen to be stacked. A single group is both first and last, so it renders
+ * as an ordinary 16dp menu.
  *
- * The same geometry is why there is no padding here, and why `group.padding` (2dp) is spent on the
- * row gap instead. A 12dp row inset 2dp inside a 12dp block needs a 10dp corner to sit flush, and
- * there is no 10dp step; at 12dp it overhangs and `overflow-hidden` shaves the corner square. The
- * figure shows the selected row's fill meeting the block's corner exactly, with no inset, which is
- * what a zero-padding block gives.
+ * There is no padding, and `group.padding` (2dp) is spent on the row gap instead. The figure shows
+ * the selected row's fill meeting the block's corner exactly, with no inset; with padding, a row
+ * whose corner is larger than the block's remaining inner radius overhangs and `overflow-hidden`
+ * shaves it square.
  */
 export function menuGroup(variant: MenuVariant, sections: MenuSections = 'gap'): string {
   if (sections === 'divider') return '';
   return cn(
-    'flex flex-col gap-0.5 overflow-hidden rounded-corner-md shadow-level2',
+    'flex flex-col gap-0.5 overflow-hidden p-1 shadow-level2',
+    // Small at the seam, large at the menu's outer edge. A single group is both first and last,
+    // so it reads as an ordinary 16dp menu.
+    'rounded-corner-sm first:rounded-t-corner-lg last:rounded-b-corner-lg',
+    // Only the outermost rows of the outermost blocks sit on the menu's edge and take 12dp; a row
+    // at a seam keeps its own 4dp, which is what stops it overhanging the 8dp corner there.
+    'first:[&>[role^=menuitem]:first-child]:rounded-t-corner-md',
+    'last:[&>[role^=menuitem]:last-child]:rounded-b-corner-md',
     MENU_SURFACE[variant],
   );
 }
@@ -447,17 +469,26 @@ export function menuGroup(variant: MenuVariant, sections: MenuSections = 'gap'):
  *
  * @remarks
  * Neither expressive colour set defines a divider token — the anatomy names one and the colour
- * tables stop at 11 elements without it. `outline-variant` is the role the rest of the design
- * system uses for a hairline, and it is what the baseline menu's `divider.color`
- * (`surface-variant`) maps onto here. The 8dp of vertical space is the baseline spec's
- * `divider top/bottom padding`, which expressive does not restate.
+ * tables stop at 11 elements without it — so the role comes from the Divider component instead:
+ * `md.comp.divider.color` is `outline-variant` at `md.comp.divider.thickness` 1dp. (The baseline
+ * menu's `surface-variant` is the legacy value and is not what this uses.)
  *
- * Inset within the container's own padding rather than bled edge to edge, so it reads as a rule
- * *between* rows rather than a seam across the container.
+ * **Vibrant does not take `outline-variant`.** That role is drawn from the neutral-variant
+ * palette, and the Divider component assumes it sits on a neutral surface; on `tertiary-container`
+ * it is a grey hairline that belongs to no tonal family and, in dark, barely resolves at all. With
+ * no published token to defer to, the divider there is the surface's own `on-tertiary-container`
+ * held back to a hairline's weight — the same role every other mark on a vibrant menu uses.
+ *
+ * The 8dp of vertical space is the baseline spec's `divider top/bottom padding`, which expressive
+ * does not restate. Inset within the container's own padding rather than bled edge to edge, so it
+ * reads as a rule *between* rows rather than a seam across the container.
  */
-export function menuSeparator(_variant: MenuVariant): string {
+export function menuSeparator(variant: MenuVariant): string {
   // 6px here plus the container's own 2dp row gap is the baseline spec's 8dp of divider padding.
-  return 'bg-outline-variant my-1.5 h-px';
+  return cn(
+    'my-1.5 h-px',
+    variant === 'vibrant' ? 'bg-on-tertiary-container/20' : 'bg-outline-variant',
+  );
 }
 
 /**

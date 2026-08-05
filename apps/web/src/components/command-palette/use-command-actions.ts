@@ -117,7 +117,7 @@ export function useCommandActions({
 
   const templatesQuery = useApiQuery({
     ...templatesDef(activeOrgId ?? ''),
-    enabled: open && scope === 'org' && activeOrgId !== null,
+    enabled: open && activeOrgId !== null,
   });
   const templateItems = templatesQuery.data?.items;
 
@@ -188,7 +188,11 @@ export function useCommandActions({
     }
 
     // ── Actions: create one of each kind of work, in the bound org ────────────
-    if (scope === 'org' && activeOrgId) {
+    // Gated on a bound org, NOT on the scope toggle. That toggle governs how wide a *search*
+    // reaches and which navigation destinations are offered; it says nothing about where a new
+    // task would land, which is always the org the route is in. Gating on it meant the palette
+    // opened in Hub scope — its default — and offered no way to create anything at all.
+    if (activeOrgId) {
       const name = orgName(activeOrgId);
       for (const creatable of CREATABLE) {
         const noun = nounFor[creatable.kind];
@@ -244,7 +248,7 @@ export function useCommandActions({
     );
 
     // ── Templates: one command per template, hidden until the user types ──────
-    if (scope === 'org' && activeOrgId && templateItems) {
+    if (activeOrgId && templateItems) {
       const name = orgName(activeOrgId);
       const pathFor = new Map(CREATABLE.map((c) => [c.kind, c.path]));
       for (const template of sortTemplates(templateItems)) {

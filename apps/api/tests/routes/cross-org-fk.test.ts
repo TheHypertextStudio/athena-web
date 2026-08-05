@@ -279,6 +279,27 @@ describe('task create cross-org FK hardening', () => {
     expect((await json<{ code: string }>(res)).code).toBe('not_found');
   });
 
+  it('rejects a create whose milestone belongs to a different project in the same org (422)', async () => {
+    const a = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, a.orgId, ['contribute'], a.humanActorId);
+    const projectA = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const projectB = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const milestoneInB = await seedMilestone(a.orgId, projectB, a.humanActorId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        title: 'T',
+        teamId: a.teamId,
+        projectId: projectA,
+        milestoneId: milestoneInB,
+      }),
+    });
+    expect(res.status).toBe(422);
+    expect((await json<{ code: string }>(res)).code).toBe('validation_error');
+  });
+
   it('accepts a create with in-org references', async () => {
     const a = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, a.orgId, ['contribute', 'assign'], a.humanActorId);
@@ -386,6 +407,48 @@ describe('task PATCH cross-org FK hardening', () => {
     expect((await json<{ code: string }>(res)).code).toBe('not_found');
   });
 
+  it("rejects re-pointing to a milestone from a different project, relying on the task's existing project (422)", async () => {
+    const a = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, a.orgId, ['contribute'], a.humanActorId);
+    const projectA = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const taskId = await createTask(writer, a.teamId, { projectId: projectA });
+    const projectB = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const milestoneInB = await seedMilestone(a.orgId, projectB, a.humanActorId);
+
+    // No `projectId` in this patch — the lazy `loadTask` path resolves the task's existing
+    // project (projectA) and rejects the mismatch against milestoneInB's project (projectB).
+    const res = await writer.request(`/${taskId}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ milestoneId: milestoneInB }),
+    });
+    expect(res.status).toBe(422);
+    expect((await json<{ code: string }>(res)).code).toBe('validation_error');
+  });
+
+  it('accepts a milestone when the same patch also re-points projectId to match it', async () => {
+    const a = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, a.orgId, ['contribute'], a.humanActorId);
+    const projectA = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const taskId = await createTask(writer, a.teamId, { projectId: projectA });
+    const projectB = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const milestoneInB = await seedMilestone(a.orgId, projectB, a.humanActorId);
+
+    const res = await writer.request(`/${taskId}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ projectId: projectB, milestoneId: milestoneInB }),
+    });
+    expect(res.status).toBe(200);
+
+    const [row] = await db
+      .select({ projectId: schema.task.projectId, milestoneId: schema.task.milestoneId })
+      .from(schema.task)
+      .where(eq(schema.task.id, taskId));
+    expect(row!.projectId).toBe(projectB);
+    expect(row!.milestoneId).toBe(milestoneInB);
+  });
+
   it('accepts in-org references on a task PATCH', async () => {
     const a = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, a.orgId, ['contribute', 'assign'], a.humanActorId);
@@ -474,6 +537,25 @@ describe('subtask create cross-org FK hardening', () => {
       .from(schema.task)
       .where(eq(schema.task.parentTaskId, parentId));
     expect(subtasks).toHaveLength(0);
+  });
+
+  it("rejects a subtask milestone from a different project than the parent's inherited one (422)", async () => {
+    const a = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, a.orgId, ['contribute', 'assign'], a.humanActorId);
+    const projectA = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const parentId = await createTask(writer, a.teamId, { projectId: projectA });
+    const projectB = await seedProject(a.orgId, a.teamId, a.humanActorId);
+    const milestoneInB = await seedMilestone(a.orgId, projectB, a.humanActorId);
+
+    // The subtask has no explicit `projectId`, so it inherits the parent's (projectA) — the
+    // milestone from projectB is rejected against that inherited project.
+    const res = await writer.request(`/${parentId}/subtasks`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: 'Sub', milestoneId: milestoneInB }),
+    });
+    expect(res.status).toBe(422);
+    expect((await json<{ code: string }>(res)).code).toBe('validation_error');
   });
 
   it('accepts in-org body references on a subtask create', async () => {

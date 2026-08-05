@@ -131,6 +131,77 @@ describe('milestones detail: delete nulls referencing tasks', () => {
   });
 });
 
+describe('milestones detail: description field', () => {
+  it('round-trips a description through create and read', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(orgId, teamId, humanActorId);
+
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId, name: 'Beta', description: 'Some notes' }),
+    });
+    expect(created.status).toBe(200);
+    const body = await json<{ id: string; description: string | null }>(created);
+    expect(body.description).toBe('Some notes');
+
+    const fetched = await writer.request(`/${body.id}`, { method: 'GET' });
+    expect((await json<{ description: string | null }>(fetched)).description).toBe('Some notes');
+  });
+
+  it('omitting description on create leaves it null', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(orgId, teamId, humanActorId);
+
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId, name: 'Beta' }),
+    });
+    expect((await json<{ description: string | null }>(created)).description).toBeNull();
+  });
+
+  it('an explicit null on patch clears the description', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
+
+    await writer.request(`/${milestoneId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ description: 'Has notes' }),
+    });
+    const cleared = await writer.request(`/${milestoneId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ description: null }),
+    });
+    expect((await json<{ description: string | null }>(cleared)).description).toBeNull();
+  });
+
+  it('omitting description on patch leaves it unchanged', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(milestones, orgId, ['contribute'], humanActorId);
+    const projectId = await seedProject(orgId, teamId, humanActorId);
+    const milestoneId = await seedMilestone(orgId, projectId, humanActorId);
+
+    await writer.request(`/${milestoneId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ description: 'Keep me' }),
+    });
+    const renamed = await writer.request(`/${milestoneId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Renamed' }),
+    });
+    expect((await json<{ description: string | null }>(renamed)).description).toBe('Keep me');
+  });
+});
+
 describe('milestones detail: invalid input', () => {
   it('422s on an empty name in the create body (rejected before any db work)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);

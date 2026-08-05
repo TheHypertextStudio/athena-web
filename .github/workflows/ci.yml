@@ -204,19 +204,20 @@ jobs:
   # exactly the topology `pnpm dev` gives a developer — including the MCP OAuth flows
   # (register → consent → token → Bearer /mcp), which .env.local enables locally.
   e2e:
-    name: E2E
+    name: E2E (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    # A couple of specs (pwa-offline-sync's reconnect-sync test, fluid-scheduling-gestures' people-
-    # card comparison test) have each independently taken 3-9 minutes under CI load, on top of the
-    # ~15 minutes the other ~50 specs take. With Playwright's own 2 retries, a spec that fails
-    # deterministically (not just slow) pays that cost up to 3 times over — 45 minutes still cut
-    # the job off via GitHub's own job timeout mid-run, before Playwright's retries were exhausted,
-    # so the run reported as cancelled without ever printing which specs actually pass or fail.
-    # Two of these are already-open, tracked bugs (not new — see follow-up work on the calendar
-    # People-axis toggle and the fluid-scheduling range-request assertion); once fixed, actual
-    # runtime should drop well under this ceiling again. Raised to give the suite room to actually
-    # finish and report real results instead of a second artificial cutoff.
-    timeout-minutes: 60
+    # The suite ran all 55 specs on a single worker in one job (`workers: 1` in
+    # playwright.config.ts — every spec mutates the one shared embedded dev database, so more
+    # workers *within one dev stack* isn't safe) and was taking 35-45+ minutes wall-clock. Splitting
+    # across a matrix instead of raising workers keeps that single-worker-per-database invariant —
+    # each shard is a genuinely separate runner with its own dev stack and its own embedded
+    # database — while running shards in parallel. `fail-fast: false` so one shard's failure
+    # doesn't cancel the others' results.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    timeout-minutes: 20
     env:
       PORTLESS_PORT: '1355'
       PORTLESS_HTTPS: '0'
@@ -276,7 +277,7 @@ jobs:
           tail -100 /tmp/dev.log >&2
           exit 1
 
-      - run: pnpm --filter @docket/web test:e2e
+      - run: pnpm --filter @docket/web exec playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
       - name: Dev stack log on failure
         if: failure()
@@ -285,7 +286,7 @@ jobs:
       - uses: actions/upload-artifact@v6
         if: failure()
         with:
-          name: playwright-artifacts
+          name: playwright-artifacts-${{ matrix.shard }}
           path: |
             apps/web/playwright-report/
             apps/web/test-results/

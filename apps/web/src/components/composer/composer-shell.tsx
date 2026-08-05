@@ -22,7 +22,7 @@
  * (`surface-container-high`); structure comes from the borderless tonal property pills, not from
  * extra surfaces or outlines.
  */
-import { Button, Dialog, DialogContent, DialogTitle, Separator } from '@docket/ui/primitives';
+import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, useId, useState } from 'react';
 
@@ -202,23 +202,19 @@ export function ComposerShell({
           </div>
 
           {bodyPlaceholder !== undefined ? (
-            <>
-              {/* Divide the header from the body so the title reads as a distinct document heading. */}
-              <Separator />
-              <div className="bg-surface-container-low mt-3 rounded-lg px-3 py-2">
-                <FreeformTextEditor
-                  value={body}
-                  disabled={creating}
-                  onChange={onBodyChange}
-                  placeholder={bodyPlaceholder}
-                  ariaLabel={bodyPlaceholder}
-                  onSubmit={() => {
-                    if (canSubmit && !creating) onSubmit();
-                  }}
-                  className="max-h-[40vh] min-h-28 overflow-y-auto py-1"
-                />
-              </div>
-            </>
+            <div className="bg-surface-container-low mt-3 rounded-lg px-3 py-2">
+              <FreeformTextEditor
+                value={body}
+                disabled={creating}
+                onChange={onBodyChange}
+                placeholder={bodyPlaceholder}
+                ariaLabel={bodyPlaceholder}
+                onSubmit={() => {
+                  if (canSubmit && !creating) onSubmit();
+                }}
+                className="max-h-[40vh] min-h-28 overflow-y-auto py-1"
+              />
+            </div>
           ) : null}
         </form>
 

@@ -166,6 +166,10 @@ export async function ensureCycleWindow(
     .from(cycle)
     .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)));
 
+  // Rows actually created below (`RETURNING` reports only the ones that landed, never the ones
+  // `onConflictDoNothing` skipped), so the caller's result can be assembled from `existing` +
+  // `inserted` without a third round-trip back to the same team's rows at the end of this call.
+  let inserted: CycleRow[] = [];
   if (!(await hasActiveLinkedCycle(orgId, teamId))) {
     const slots: CycleWindowSlot[] = rollingWindow(now, cadenceWeeks);
     const existingNumbers = new Set(existing.map((c) => c.number));
@@ -183,12 +187,13 @@ export async function ensureCycleWindow(
       }));
 
     if (toInsert.length > 0) {
-      await db
+      inserted = await db
         .insert(cycle)
         .values(toInsert)
         .onConflictDoNothing({
           target: [cycle.teamId, cycle.number],
-        });
+        })
+        .returning();
     }
   }
 
@@ -199,25 +204,30 @@ export async function ensureCycleWindow(
   // call, so the stored column stays truthful for every reader (list grouping, badges,
   // filters) instead of only the one live `isCurrent` computation on read. A linked cycle's
   // status is provider-owned and left untouched.
-  const staleNativeUpdates = existing
-    .filter((c) => c.source === 'native')
-    .flatMap((row) => {
-      const status = deriveStatus(row, now);
-      return status !== row.status ? [{ id: row.id, status }] : [];
-    });
-  if (staleNativeUpdates.length > 0) {
+  const staleNativeUpdates = new Map(
+    existing
+      .filter((c) => c.source === 'native')
+      .flatMap((row) => {
+        const status = deriveStatus(row, now);
+        return status !== row.status ? [[row.id, status] as const] : [];
+      }),
+  );
+  if (staleNativeUpdates.size > 0) {
     await Promise.all(
-      staleNativeUpdates.map(({ id, status }) =>
+      [...staleNativeUpdates].map(([id, status]) =>
         db.update(cycle).set({ status }).where(eq(cycle.id, id)),
       ),
     );
   }
 
-  return db
-    .select()
-    .from(cycle)
-    .where(and(eq(cycle.teamId, teamId), eq(cycle.organizationId, orgId)))
-    .orderBy(cycle.number);
+  const result = [
+    ...existing.map((row) => {
+      const status = staleNativeUpdates.get(row.id);
+      return status ? { ...row, status } : row;
+    }),
+    ...inserted,
+  ];
+  return result.sort((a, b) => a.number - b.number);
 }
 
 /**

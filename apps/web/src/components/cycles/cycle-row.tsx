@@ -85,9 +85,9 @@ export function CycleRow({
   const title = cycle.displayName;
   // The window rides beside the team name only when it isn't already the title: an unnamed
   // cycle's title already IS its window, so repeating it would print the same string twice.
-  const subtitle = [cycle.name ? formatWindow(cycle.startsAt, cycle.endsAt) : null, teamName]
-    .filter((part): part is string => part !== null)
-    .join(' · ');
+  const subtitle = cycle.name
+    ? `${formatWindow(cycle.startsAt, cycle.endsAt)} · ${teamName}`
+    : teamName;
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 

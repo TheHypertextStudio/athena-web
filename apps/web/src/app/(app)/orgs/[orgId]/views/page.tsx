@@ -143,7 +143,7 @@ export default function ViewsPage(): JSX.Element {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="gap-1.5"
+                  className="min-h-10 gap-1.5 @2xl:min-h-8"
                   onClick={() => {
                     resetSave();
                     setComposerOpen((open) => !open);

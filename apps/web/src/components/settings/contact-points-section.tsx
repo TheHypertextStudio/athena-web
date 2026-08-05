@@ -104,6 +104,7 @@ export function ContactPointsSection({
             value={destination}
             disabled={creating}
             autoComplete={autocomplete}
+            controlSize="lg"
             onChange={(event) => {
               setDestination(event.target.value);
             }}

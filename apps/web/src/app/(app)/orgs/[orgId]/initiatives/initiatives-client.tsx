@@ -218,7 +218,7 @@ function AttentionSurface({
           data-testid="initiative-attention-controls"
           className="flex items-center justify-between gap-3"
         >
-          <Button asChild size="sm" variant="outline" className="min-h-10 @2xl:min-h-0">
+          <Button asChild size="sm" variant="outline" className="min-h-10 @2xl:min-h-8">
             <Link href={href}>{item.action === 'update' ? 'Post update' : 'Open'}</Link>
           </Button>
           {count > 1 ? (
@@ -226,6 +226,7 @@ function AttentionSurface({
               <Button
                 variant="ghost"
                 size="icon"
+                className="size-10 @2xl:size-8"
                 aria-label="Previous attention item"
                 onClick={onPrevious}
               >
@@ -234,7 +235,13 @@ function AttentionSurface({
               <span className="text-on-surface-variant min-w-8 text-center text-xs tabular-nums">
                 {index + 1}/{count}
               </span>
-              <Button variant="ghost" size="icon" aria-label="Next attention item" onClick={onNext}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-10 @2xl:size-8"
+                aria-label="Next attention item"
+                onClick={onNext}
+              >
                 <ChevronRight aria-hidden className="size-4" />
               </Button>
             </div>

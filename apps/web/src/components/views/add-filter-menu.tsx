@@ -33,7 +33,7 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5 px-2.5 @2xl:px-3"
+          className="min-h-10 gap-1.5 px-2.5 @2xl:min-h-8 @2xl:px-3"
           aria-label="Add filter"
         >
           <Plus className="size-4" aria-hidden="true" />

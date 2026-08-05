@@ -347,9 +347,13 @@ describe('AppShell rail', () => {
   it('opens to a share of the viewport, never a fixed column', () => {
     renderWithRail(() => true);
 
-    // A viewport *share* capped at 22rem. The bare fixed width this replaced is what let a docked
-    // rail take 352px out of a 1024px window the moment a media query flipped.
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-[min(17vw,22rem)]');
+    // A viewport *share*, floored at 17.5rem and capped at 22rem. The bare fixed width this
+    // replaced is what let a docked rail take 352px out of a 1024px window the moment a media
+    // query flipped; the floor is what keeps the rail readable at the bottom of the range without
+    // reintroducing that step.
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
+      'w-[clamp(17.5rem,17vw,22rem)]',
+    );
   });
 
   it('collapses and re-expands from its own activity-bar icon', () => {
@@ -360,7 +364,9 @@ describe('AppShell rail', () => {
 
     const activityBar = screen.getByRole('navigation', { name: 'Panels' });
     fireEvent.click(within(activityBar).getByRole('button', { name: 'Tasks' }));
-    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-[min(17vw,22rem)]');
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
+      'w-[clamp(17.5rem,17vw,22rem)]',
+    );
   });
 
   it('arms the width transition only for the duration of the collapse/expand motion', async () => {

@@ -35,6 +35,7 @@ import {
   SHELL_MAIN_MIN_VIEWPORT_SHARE,
   shellMainInlineSize,
 } from '../../../src/components/shell/AppShell';
+import { RAIL_MIN_INLINE_SIZE_PX } from '../../../src/components/shell/ShellAside';
 import { ContextProvider } from '../../../src/components/shell/ContextProvider';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import type { Workspace } from '../../../src/components/shell/workspaces';
@@ -56,18 +57,31 @@ function columnWidthPx(element: Element, prefix: string): number | null {
  * The rail's width law, read back out of the class the component rendered.
  *
  * @remarks
- * Deliberately strict: it matches only a `min(<share>vw, <cap>rem)` expression. A plain `w-[22rem]`
- * — the exact shape of the original bug — does not parse, and every guarantee below fails loudly
- * instead of silently checking a stale constant.
+ * Deliberately strict: it matches only a `clamp(<floor>rem, <share>vw, <cap>rem)` expression. A
+ * plain `w-[22rem]` — the exact shape of the original bug — does not parse, and every guarantee
+ * below fails loudly instead of silently checking a stale constant.
+ *
+ * The floor is part of the law rather than a detail of it. A share alone bottoms out at 174px on a
+ * 1024px window, and the panels the rail hosts are unreadable there.
  */
-function parseRailWidthLaw(className: string): { share: number; capPx: number } {
-  const match = /w-\[min\((\d+(?:\.\d+)?)vw,(\d+(?:\.\d+)?)rem\)\]/.exec(className);
-  if (!match?.[1] || !match[2]) {
+function parseRailWidthLaw(className: string): {
+  share: number;
+  floorPx: number;
+  capPx: number;
+} {
+  const match = /w-\[clamp\((\d+(?:\.\d+)?)rem,(\d+(?:\.\d+)?)vw,(\d+(?:\.\d+)?)rem\)\]/.exec(
+    className,
+  );
+  if (!match?.[1] || !match[2] || !match[3]) {
     throw new Error(
-      `The rail must size itself as a viewport share capped in rem — got "${className}"`,
+      `The rail must size itself as a viewport share floored and capped in rem — got "${className}"`,
     );
   }
-  return { share: Number(match[1]) / 100, capPx: Number(match[2]) * 16 };
+  return {
+    floorPx: Number(match[1]) * 16,
+    share: Number(match[2]) / 100,
+    capPx: Number(match[3]) * 16,
+  };
 }
 
 const PANEL = { id: 'tasks', label: 'Tasks', icon: <Home />, node: <div>Task list</div> };
@@ -115,6 +129,7 @@ function renderShell(): void {
 interface ShellGeometry {
   readonly chromePx: number;
   readonly railShare: number;
+  readonly railFloorPx: number;
   readonly railCapPx: number;
 }
 
@@ -153,6 +168,7 @@ function readGeometry(): ShellGeometry {
       navWidth +
       barWidth,
     railShare: rail.share,
+    railFloorPx: rail.floorPx,
     railCapPx: rail.capPx,
   };
 }
@@ -160,7 +176,9 @@ function readGeometry(): ShellGeometry {
 /** `<main>`'s width at a viewport, from the geometry the components actually rendered. */
 function mainWidth(geometry: ShellGeometry, viewport: number, railExpanded: boolean): number {
   if (viewport < SHELL_DESKTOP_MIN_PX) return viewport;
-  const rail = railExpanded ? Math.min(geometry.railShare * viewport, geometry.railCapPx) : 0;
+  const rail = railExpanded
+    ? Math.min(Math.max(geometry.railShare * viewport, geometry.railFloorPx), geometry.railCapPx)
+    : 0;
   return viewport - geometry.chromePx - rail;
 }
 
@@ -177,10 +195,13 @@ describe('AppShell layout contract — geometry read from the rendered shell', (
     const geometry = readGeometry();
 
     // A share strictly below 1 is what makes `<main>` gain from every pixel the window gains; a cap
-    // is what hands the surplus back to `<main>` on very wide displays.
+    // is what hands the surplus back to `<main>` on very wide displays; a floor is what stops the
+    // rail becoming too narrow to read at the bottom of the desktop range.
     expect(geometry.railShare).toBeGreaterThan(0);
     expect(geometry.railShare).toBeLessThan(1);
     expect(geometry.railCapPx).toBeGreaterThan(0);
+    expect(geometry.railFloorPx).toBeGreaterThanOrEqual(RAIL_MIN_INLINE_SIZE_PX);
+    expect(geometry.railFloorPx).toBeLessThanOrEqual(geometry.railCapPx);
     // The constant chrome is what the exported contract advertises; drift here changes the floor.
     expect(geometry.chromePx).toBe(SHELL_DESKTOP_CHROME_PX);
   });
@@ -200,9 +221,9 @@ describe('AppShell layout contract — geometry read from the rendered shell', (
   });
 });
 
-describe('AppShell layout contract — <main> keeps a majority, and widening never costs it', () => {
+describe('AppShell layout contract — <main> keeps its floor, and widening never costs it', () => {
   for (const { label, expanded } of RAIL_STATES) {
-    it(`never drops <main> below half the viewport with the rail ${label}`, () => {
+    it(`never drops <main> below its guaranteed share with the rail ${label}`, () => {
       renderShell();
       const geometry = readGeometry();
 

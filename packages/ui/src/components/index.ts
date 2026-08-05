@@ -127,6 +127,7 @@ export {
   type AppShellAside,
   RAIL_INLINE_SIZE,
   RAIL_MAX_INLINE_SIZE_PX,
+  RAIL_MIN_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
   type RailPanel,
   type RailPanelStatus,

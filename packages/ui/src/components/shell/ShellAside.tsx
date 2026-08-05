@@ -19,13 +19,16 @@
  * **internal-only** — a curated set of Docket-native panels, never a gallery of third-party add-ons.
  *
  * @remarks **The width law.** The rail's inline size is {@link RAIL_INLINE_SIZE} — a *share* of the
- * viewport, floored at nothing and ceilinged at 22rem — never a fixed width that appears at a
- * breakpoint. This is the whole fix for the shell's worst layout bug: a fixed 22rem rail that docked
- * at a threshold made `<main>` **narrower at a wider window** (measured: 1119px of main at 1439px of
- * viewport, 760px at 1440px). A width that is continuous and monotonically increasing in the viewport
+ * viewport, floored at 17.5rem and ceilinged at 22rem — never a fixed width that appears at a
+ * breakpoint. Continuity is the whole fix for the shell's worst layout bug: a fixed 22rem rail that
+ * docked at a threshold made `<main>` **narrower at a wider window** (measured: 1119px of main at
+ * 1439px of viewport, 760px at 1440px). A width that is continuous, and whose slope stays under 1,
  * cannot do that — see the contract on {@link AppShell}. Concretely `<main>` = viewport − 328px of
- * fixed chrome − this rail, so the share is chosen such that `<main>` keeps a **majority of the
- * viewport at every width the rail can dock at**, and that share only grows as the window widens.
+ * fixed chrome − this rail.
+ *
+ * The floor is a deliberate departure from "a share and nothing else". A pure share bottoms out at
+ * 174px on a 1024px window, which is narrower than the content it is meant to hold; the floor buys
+ * the rail its legibility back and costs `<main>` its majority in the 1024–1279 band alone.
  */
 import * as React from 'react';
 
@@ -46,27 +49,38 @@ export const SHELL_ASIDE_ID = 'shell-aside';
 export const SHELL_ASIDE_SHEET_ID = 'shell-aside-sheet';
 
 /**
- * The rail's inline size as a CSS length: a viewport share, capped at 22rem.
+ * The rail's inline size as a CSS length: a viewport share, floored at 17.5rem and capped at 22rem.
  *
  * @remarks
  * Exported so the shell's layout contract is one number rather than a class string repeated in two
  * places, and so tests can assert against the same source the component renders from.
  *
- * `17vw` is the largest share that leaves `<main>` a majority of the viewport at the narrowest width
- * the rail docks at (1024px: 1024 − 328px of chrome − 174px of rail = 522px of `<main>`, 50.9%). The
- * `min()` caps the rail at 22rem so it stops growing on very wide displays and hands the surplus to
- * `<main>` — which only ever *raises* `<main>`'s share, so the cap cannot break monotonicity.
+ * **The floor is the point.** A share alone made the rail 174px at 1024px, and a 174px panel is not
+ * a panel — every title in it truncated, and the Focus panel's own controls had to drop their
+ * labels to fit. The share was never chosen for legibility: it was the largest number that still
+ * left `<main>` a *majority* of a 1024px window, which is a rule about `<main>` being read as a
+ * rule about the rail. 17.5rem (280px) is instead the narrowest the rail is worth docking at, and
+ * `<main>`'s guarantee was lowered to match (see {@link AppShell.SHELL_MAIN_MIN_VIEWPORT_SHARE}) —
+ * the two cannot both hold at 1024px, and a rail nobody can read is the worse thing to keep.
+ *
+ * `17vw` still governs the middle, so the rail only starts growing again past ~1647px, and the
+ * `22rem` cap stops it on very wide displays and hands the surplus to `<main>`. Every regime has a
+ * slope below 1, so `<main>` still gains from every pixel the window gains — the monotonicity
+ * guarantee is untouched, and it is the one the original fixed-width rail actually broke.
  */
-export const RAIL_INLINE_SIZE = 'min(17vw, 22rem)';
+export const RAIL_INLINE_SIZE = 'clamp(17.5rem, 17vw, 22rem)';
 
-/** The share of the viewport the rail takes before its 22rem cap applies. Mirrors {@link RAIL_INLINE_SIZE}. */
+/** The share of the viewport the rail takes between its floor and its cap. Mirrors {@link RAIL_INLINE_SIZE}. */
 export const RAIL_VIEWPORT_SHARE = 0.17;
+
+/** The rail's minimum inline size in px (the `17.5rem` floor in {@link RAIL_INLINE_SIZE}). */
+export const RAIL_MIN_INLINE_SIZE_PX = 280;
 
 /** The rail's maximum inline size in px (the `22rem` cap in {@link RAIL_INLINE_SIZE}). */
 export const RAIL_MAX_INLINE_SIZE_PX = 352;
 
 /** The Tailwind width utility for {@link RAIL_INLINE_SIZE}; kept literal so the scanner emits it. */
-const RAIL_WIDTH_CLASS = 'w-[min(17vw,22rem)]';
+const RAIL_WIDTH_CLASS = 'w-[clamp(17.5rem,17vw,22rem)]';
 
 /** How long the collapse/expand motion is armed for — matches the `--dur-slow` token (240ms). */
 const RAIL_TOGGLE_DURATION_MS = 240;

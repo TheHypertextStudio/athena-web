@@ -43,16 +43,22 @@
  * `<main>`, so the shell — not the screen — owns how much of the window a screen gets. Three
  * guarantees, in force at every width, in every rail state, after any sequence of interactions:
  *
- * 1. **Floor.** `<main>` is never narrower than half the viewport. Below `lg` it is the *entire*
- *    viewport; at `lg` and up it is the viewport minus a constant 328px of chrome (240px sidebar,
- *    48px activity bar, 40px of gutters) minus the rail, and the rail's width law
- *    ({@link RAIL_INLINE_SIZE}) is chosen so the remainder is a majority at the narrowest desktop
- *    width. Measured floor: 50.9% at 1024px with the rail expanded.
+ * 1. **Floor.** `<main>` is never narrower than 40% of the viewport, and never below 416px. Below
+ *    `lg` it is the *entire* viewport; at `lg` and up it is the viewport minus a constant 328px of
+ *    chrome (240px sidebar, 48px activity bar, 40px of gutters) minus the rail. Measured floor:
+ *    40.6% (416px) at 1024px with the rail expanded, rising to 57.8% by 1440px.
+ *
+ *    This floor used to be a *majority*, and the rail was sized by whatever was left under it —
+ *    which is how the rail ended up 174px wide on a 1024px window, too narrow to read the panel it
+ *    hosts. The two are one equation: `rail ≤ 0.5 × viewport − 328`, so a majority at 1024px caps
+ *    the rail at 184px. Giving the rail a 280px floor ({@link RAIL_INLINE_SIZE}) spends `<main>`'s
+ *    majority in the 1024–1279 band to buy it. Above 1280px `<main>` is a majority again anyway.
  * 2. **Monotonicity.** Within a layout regime, widening the window never narrows `<main>` — neither
  *    in pixels nor as a share of the viewport. The rail contributes no step to that curve at any
  *    width, because it never *appears* at a threshold: it is in the layout at every desktop width,
- *    and its width is `min(17vw, 22rem)` — continuous, and with a slope below 1 so `<main>` still
- *    gains from every pixel the window gains.
+ *    and its width is `clamp(17.5rem, 17vw, 22rem)` — continuous, and with a slope below 1 in every
+ *    regime so `<main>` still gains from every pixel the window gains. This is the guarantee the
+ *    old fixed-width rail actually broke, and nothing here relaxes it.
  * 3. **No occlusion.** At `lg` and up the rail is a flex *sibling* of `<main>`, never a layer over
  *    it, so `<main>`'s rect is also its usable area. Below `lg` the rail is a modal {@link Sheet}
  *    that costs `<main>` nothing.
@@ -79,6 +85,7 @@ import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
 import {
   RAIL_MAX_INLINE_SIZE_PX,
+  RAIL_MIN_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
   SHELL_ASIDE_SHEET_ID,
   ShellAside,
@@ -126,16 +133,21 @@ export const SHELL_DESKTOP_CHROME_PX = 328;
 
 /**
  * The share of the viewport `<main>` is guaranteed at **every** width, in **every** rail state,
- * after any sequence of interactions — a majority, and the floor the shell's layout test enforces
- * over every integer width from 320px to 3840px.
+ * after any sequence of interactions — the floor the shell's layout test enforces over every
+ * integer width from 320px to 3840px.
  *
  * @remarks
  * A screen may size itself against this without asking the shell anything: whatever the window is,
  * at least this much of it is the screen's. The binding case is the narrowest desktop width with the
- * rail open (1024px → 522px of `<main>`, 50.9%); every other width has more headroom, and the share
- * only rises from there.
+ * rail open (1024px → 416px of `<main>`, 40.6%); every other width has more headroom, and the share
+ * only rises from there — past 1280px it is a majority again.
+ *
+ * It was 0.5 while the rail was sized by subtraction. Holding a majority at 1024px caps the rail at
+ * 184px, and a 184px rail cannot show the panels it exists for, so the guarantee moved rather than
+ * the panels getting narrower. Raising this back means shrinking {@link RAIL_INLINE_SIZE}'s floor
+ * by exactly the same number of pixels; they are one equation, not two knobs.
  */
-export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.5;
+export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.4;
 
 /**
  * `<main>`'s inline size, in px, for a viewport width and rail state — the shell's layout contract
@@ -155,14 +167,17 @@ export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.5;
  *
  * @example
  * ```ts
- * shellMainInlineSize(1440, true); // 867 — a majority of the viewport
+ * shellMainInlineSize(1440, true); // 832 — a majority of the viewport
  * ```
  */
 export function shellMainInlineSize(viewportWidth: number, railExpanded: boolean): number {
   // Below the one breakpoint the nav is a drawer and the rail is modal, so `<main>` is the viewport.
   if (viewportWidth < SHELL_DESKTOP_MIN_PX) return viewportWidth;
   const rail = railExpanded
-    ? Math.min(RAIL_VIEWPORT_SHARE * viewportWidth, RAIL_MAX_INLINE_SIZE_PX)
+    ? Math.min(
+        Math.max(RAIL_VIEWPORT_SHARE * viewportWidth, RAIL_MIN_INLINE_SIZE_PX),
+        RAIL_MAX_INLINE_SIZE_PX,
+      )
     : 0;
   return viewportWidth - SHELL_DESKTOP_CHROME_PX - rail;
 }

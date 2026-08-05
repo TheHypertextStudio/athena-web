@@ -29,7 +29,7 @@ import { ProgramProjectsPanel } from '@/components/programs/program-projects-pan
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
-import { memberActorOptions } from '@/components/property-pickers/options';
+import { memberActorOptions } from '@/components/pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';

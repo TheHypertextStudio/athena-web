@@ -43,7 +43,7 @@ import {
   InitiativePropertiesPanel,
 } from '@/components/initiatives/properties-panel';
 
-import { memberActorOptions } from '@/components/property-pickers/options';
+import { memberActorOptions } from '@/components/pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';

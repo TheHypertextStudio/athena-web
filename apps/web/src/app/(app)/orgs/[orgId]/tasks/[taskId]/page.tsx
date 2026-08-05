@@ -35,7 +35,7 @@ import {
   memberActorOptions,
   programOptions as toProgramOptions,
   projectOptions as toProjectOptions,
-} from '@/components/property-pickers/options';
+} from '@/components/pickers/options';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';

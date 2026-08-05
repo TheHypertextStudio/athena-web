@@ -23,7 +23,7 @@ import { type CycleStatus } from '@docket/types';
 import { DateRangePicker, EnumPicker } from '@docket/ui/components';
 import type { JSX } from 'react';
 
-import { cycleStatusOptions } from '@/components/property-pickers/options';
+import { CYCLE_STATUS_OPTIONS } from '@/components/pickers/options';
 import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -91,7 +91,7 @@ export function CycleMetadata({
   return (
     <>
       <EnumPicker<CycleStatus>
-        options={cycleStatusOptions()}
+        options={CYCLE_STATUS_OPTIONS}
         value={status}
         onChange={(next) => {
           if (next) onStatusChange(next);

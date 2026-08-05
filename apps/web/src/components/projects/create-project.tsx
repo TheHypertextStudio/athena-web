@@ -47,9 +47,8 @@ import { type JSX, useCallback, useState } from 'react';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { HEALTH_OPTIONS } from '@/components/pickers/options';
+import { HEALTH_OPTIONS, PROJECT_STATUS_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
-import { projectStatusOptions } from '@/components/property-pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
@@ -216,7 +215,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       submitLabel={`Create ${projectNoun}`}
     >
       <EnumPicker
-        options={projectStatusOptions()}
+        options={PROJECT_STATUS_OPTIONS}
         value={status}
         onChange={(next) => {
           if (next) setStatus(next);

@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 
 import { statusGlyphType as cycleStatusGlyphType } from '@/components/cycles/cycle-status';
 import {
-  cycleStatusOptions,
-  initiativeStatusOptions,
-  programStatusOptions,
-  projectStatusOptions,
-} from '@/components/property-pickers/options';
+  CYCLE_STATUS_OPTIONS,
+  INITIATIVE_STATUS_OPTIONS,
+  PROGRAM_STATUS_OPTIONS,
+  PROJECT_STATUS_OPTIONS,
+} from '@/components/pickers/options';
 import { statusGlyphType as programStatusGlyphType } from '@/components/programs/program-status';
 import { statusGlyphType as projectStatusGlyphType } from '@/components/projects/project-status';
 
@@ -30,28 +30,28 @@ function glyphType(icon: unknown): unknown {
  */
 describe('status picker options reuse the row glyph, not a bare label', () => {
   it('gives every project status option the same StatusIcon its list row renders', () => {
-    for (const option of projectStatusOptions()) {
+    for (const option of PROJECT_STATUS_OPTIONS) {
       expect(option.icon, option.label).toBeTruthy();
       expect(glyphType(option.icon), option.label).toBe(projectStatusGlyphType(option.value));
     }
   });
 
   it('gives every program status option the same StatusIcon its list row renders', () => {
-    for (const option of programStatusOptions()) {
+    for (const option of PROGRAM_STATUS_OPTIONS) {
       expect(option.icon, option.label).toBeTruthy();
       expect(glyphType(option.icon), option.label).toBe(programStatusGlyphType(option.value));
     }
   });
 
   it('gives every cycle status option the same StatusIcon a cycle row renders', () => {
-    for (const option of cycleStatusOptions()) {
+    for (const option of CYCLE_STATUS_OPTIONS) {
       expect(option.icon, option.label).toBeTruthy();
       expect(glyphType(option.icon), option.label).toBe(cycleStatusGlyphType(option.value));
     }
   });
 
   it('leaves initiative status options icon-less — no reusable glyph exists yet', () => {
-    for (const option of initiativeStatusOptions()) {
+    for (const option of INITIATIVE_STATUS_OPTIONS) {
       expect(option.icon, option.label).toBeUndefined();
     }
   });

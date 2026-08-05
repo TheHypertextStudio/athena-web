@@ -5,7 +5,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { VISIBILITY_DESCRIPTION, visibilityOptions } from '@/components/property-pickers/options';
+import { VISIBILITY_OPTIONS } from '@/components/pickers/options';
 
 /**
  * The public/private control explains itself at the point of use.
@@ -25,7 +25,7 @@ describe('the visibility control explains itself', () => {
     const user = userEvent.setup();
     render(
       <EnumPicker
-        options={visibilityOptions()}
+        options={VISIBILITY_OPTIONS}
         value="public"
         onChange={vi.fn()}
         placeholder="Set visibility"
@@ -44,16 +44,16 @@ describe('the visibility control explains itself', () => {
   });
 
   it('names an audience in every description — never a bare label', () => {
-    for (const [setting, description] of Object.entries(VISIBILITY_DESCRIPTION)) {
-      expect(description, setting).toMatch(/anyone|everyone|people|workspace/i);
-      expect(description.length, setting).toBeGreaterThan(20);
+    for (const option of VISIBILITY_OPTIONS) {
+      expect(option.supporting, option.value).toMatch(/anyone|everyone|people|workspace/i);
+      expect(option.supporting?.length, option.value).toBeGreaterThan(20);
     }
   });
 
   it('carries a glyph on each choice so the two are distinguishable at a glance', () => {
-    for (const option of visibilityOptions()) {
+    for (const option of VISIBILITY_OPTIONS) {
       expect(option.icon).toBeTruthy();
-      expect(option.supporting).toBe(VISIBILITY_DESCRIPTION[option.value]);
+      expect(option.supporting).toBeTruthy();
     }
   });
 });

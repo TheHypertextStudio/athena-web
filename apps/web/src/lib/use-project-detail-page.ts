@@ -8,7 +8,7 @@ import {
   initiativeOptions as toInitiativeOptions,
   memberActorOptions,
   programOptions as toProgramOptions,
-} from '@/components/property-pickers/options';
+} from '@/components/pickers/options';
 import { api } from '@/lib/api';
 import { projectDetailDef } from '@/lib/fetch-project-detail';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';

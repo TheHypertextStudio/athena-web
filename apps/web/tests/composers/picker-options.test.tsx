@@ -23,6 +23,7 @@ import {
 } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
+import { formatWindow } from '../../src/components/cycles/format-window';
 import {
   actorOptions,
   cycleOptions,
@@ -174,8 +175,8 @@ describe('picker option mappers', () => {
       status: 'active',
       createdAt: CREATED_AT,
     });
-    const options = cycleOptions([named, unnamed]);
-    expect(options).toEqual([
+    const options = cycleOptions([named, unnamed], formatWindow);
+    expect(options).toMatchObject([
       { value: IDS.cycleNamed, label: 'Launch' },
       { value: IDS.cycleUnnamed, label: 'Jul 20 – Aug 3' },
     ]);

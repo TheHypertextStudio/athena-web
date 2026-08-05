@@ -14,8 +14,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, Layers, Target } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
-import { HEALTH_OPTIONS } from '@/components/pickers/options';
-import { projectStatusOptions } from '@/components/property-pickers/options';
+import { HEALTH_OPTIONS, labelOptions, PROJECT_STATUS_OPTIONS } from '@/components/pickers/options';
 import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -78,27 +77,13 @@ export function PropertiesPanel({
   const initiativeLabel = useVocabulary('initiative');
   const readOnly = !canEdit;
 
-  const labelOptions = useMemo<readonly PickerOption[]>(
-    () =>
-      availableLabels.map((label) => ({
-        value: label.id,
-        label: label.name,
-        icon: (
-          <span
-            aria-hidden
-            className="size-2 rounded-full"
-            style={{ backgroundColor: label.color }}
-          />
-        ),
-      })),
-    [availableLabels],
-  );
+  const labelPickerOptions = useMemo(() => labelOptions(availableLabels), [availableLabels]);
   const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
 
   return (
     <>
       <EnumPicker<ProjectStatus>
-        options={projectStatusOptions()}
+        options={PROJECT_STATUS_OPTIONS}
         value={status}
         onChange={(next) => {
           if (next) onStatusChange(next);
@@ -162,7 +147,7 @@ export function PropertiesPanel({
         {...CHIP}
       />
       <LabelsPicker
-        options={labelOptions}
+        options={labelPickerOptions}
         value={labelIds}
         onToggle={(labelId) => {
           const next = labelIds.includes(labelId)

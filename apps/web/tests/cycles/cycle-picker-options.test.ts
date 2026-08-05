@@ -10,7 +10,7 @@
 import { CycleOut } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
-import { cycleOptions } from '../../src/components/property-pickers/options';
+import { cycleOptions } from '../../src/components/pickers/options';
 import { formatWindow } from '../../src/components/cycles/format-window';
 
 const IDS = {

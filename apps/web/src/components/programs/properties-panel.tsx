@@ -22,12 +22,12 @@ import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/component
 import { Activity } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
-import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
 import {
-  healthOptions,
-  programStatusOptions,
-  visibilityOptions,
-} from '@/components/property-pickers/options';
+  HEALTH_OPTIONS,
+  PROGRAM_STATUS_OPTIONS,
+  VISIBILITY_OPTIONS,
+} from '@/components/pickers/options';
+import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
 
 /** Props for {@link ProgramPropertiesPanel}. */
 export interface ProgramPropertiesPanelProps {
@@ -54,6 +54,9 @@ export interface ProgramPropertiesPanelProps {
   onVisibilityChange: (visibility: Visibility) => void;
 }
 
+/** Shared chip trigger wiring so every property in the metadata row reads as the same pill. */
+const CHIP = { triggerVariant: 'ghost', triggerClassName: ENTITY_METADATA_CHIP_CLASS } as const;
+
 /**
  * The interactive program properties chips.
  *
@@ -77,7 +80,7 @@ export function ProgramPropertiesPanel({
   return (
     <>
       <EnumPicker<ProgramStatus>
-        options={programStatusOptions()}
+        options={PROGRAM_STATUS_OPTIONS}
         value={status}
         onChange={(next) => {
           if (next) onStatusChange(next);
@@ -85,11 +88,10 @@ export function ProgramPropertiesPanel({
         placeholder="Set status"
         ariaLabel="Status"
         readOnly={readOnly}
-        triggerVariant="ghost"
-        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+        {...CHIP}
       />
       <EnumPicker<Health>
-        options={healthOptions()}
+        options={HEALTH_OPTIONS}
         value={health}
         onChange={onHealthChange}
         placeholder="Set health"
@@ -97,8 +99,7 @@ export function ProgramPropertiesPanel({
         clearLabel="No health"
         ariaLabel="Health"
         readOnly={readOnly}
-        triggerVariant="ghost"
-        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+        {...CHIP}
       />
       <ActorPicker
         options={memberOptions}
@@ -108,11 +109,10 @@ export function ProgramPropertiesPanel({
         clearLabel="No owner"
         ariaLabel="Owner"
         readOnly={readOnly}
-        triggerVariant="ghost"
-        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+        {...CHIP}
       />
       <EnumPicker<Visibility>
-        options={visibilityOptions()}
+        options={VISIBILITY_OPTIONS}
         value={visibility}
         onChange={(next) => {
           if (next) onVisibilityChange(next);
@@ -120,8 +120,7 @@ export function ProgramPropertiesPanel({
         placeholder="Set visibility"
         ariaLabel="Visibility"
         readOnly={readOnly}
-        triggerVariant="ghost"
-        triggerClassName={ENTITY_METADATA_CHIP_CLASS}
+        {...CHIP}
       />
     </>
   );

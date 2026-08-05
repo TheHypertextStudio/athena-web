@@ -15,6 +15,7 @@ describe('provider catalog', () => {
       'gmail',
       'gtasks',
       'calendar',
+      'drive',
       'github',
       'linear',
       'notion',
@@ -29,6 +30,7 @@ describe('provider catalog', () => {
     expect(providerSourceSystem('gmail')).toBe('gmail');
     expect(providerSourceSystem('calendar')).toBe('google_calendar');
     expect(providerSourceSystem('gtasks')).toBeNull();
+    expect(providerSourceSystem('drive')).toBe('google_drive');
   });
 
   test('maps connector and source ids to their linked identity providers', () => {

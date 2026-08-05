@@ -1,25 +1,36 @@
 /**
- * The external wave of the `@` picker: resources from the caller's own connected apps.
+ * The external wave of the `@` picker: resources from the caller's own connected sources.
  *
  * @remarks
- * Fans out to every provider the caller has connected that can search resources, under a per-
- * provider deadline, and reports each one's outcome as data inside a successful response. One
- * degraded app must never remove the results of the others, and must never fail the request — the
- * user is mid-keystroke, and an error there would empty a menu they are actively reading.
+ * Fans out to every connection whose connector offers the resource-search capability, under a
+ * per-source deadline, and reports each outcome as data inside a successful response. One degraded
+ * source must never remove another's results, and must never fail the request — the user is
+ * mid-keystroke, and an error there empties a menu they are reading.
  *
- * Scoping to `createdBy = actorId` is a security requirement, not a filter. The token that funds a
- * provider call belongs to whoever connected the integration, so fanning out to a colleague's
- * connection would search *their* Drive with *their* credential and hand the results to someone
- * else.
+ * Nothing here names a source. Which connections participate comes from the capability the
+ * connector declares, so adding OneDrive or Notion is an adapter plus a manifest entry.
+ *
+ * Scoping to `createdBy = actorId` is a security requirement, not a filter: the credential funding
+ * a call belongs to whoever connected the integration, so fanning out to a colleague's connection
+ * would search *their* account with *their* credential and hand the results to someone else.
  */
-import { and, eq, inArray } from 'drizzle-orm';
-import type { ConnectorProvider } from '@docket/integrations';
-import type { MentionItem, MentionProviderStatus, ResourceProvider } from '@docket/types';
+import { and, eq } from 'drizzle-orm';
+import {
+  PROVIDER_CATALOG,
+  ResourceProvider,
+  mentionRefKey,
+  type ConnectorProviderId,
+  type MentionItem,
+  type MentionProviderStatus,
+} from '@docket/types';
+import { ConnectorError, type ExternalResource } from '@docket/integrations';
 
-/** How long one provider may take before its results stop being worth waiting for. */
+import { connectorFor, resolveConnectorToken } from '../routes/integration-provider';
+
+/** How long one source may take before its results stop being worth waiting for. */
 export const PROVIDER_DEADLINE_MS = 1_200;
 
-/** One provider's outcome for this fan-out. */
+/** One source's outcome for this fan-out. */
 export interface MentionProviderOutcome {
   readonly provider: ResourceProvider;
   readonly status: MentionProviderStatus;
@@ -31,16 +42,6 @@ export interface MentionExternalResult {
   readonly items: MentionItem[];
   readonly providers: MentionProviderOutcome[];
 }
-
-/**
- * Providers that can answer a resource search today.
- *
- * @remarks
- * Empty until the Drive adapter lands. Deliberately a real, empty list rather than a stub that
- * fabricates results: with nothing connected the picker shows no Files group at all, which is the
- * truthful state and exactly what a workspace with no connected apps should see.
- */
-const RESOURCE_SEARCH_PROVIDERS: readonly ConnectorProvider[] = [];
 
 /** What the external picker wave needs to fan out. */
 export interface ExternalMentionQuery {
@@ -54,19 +55,116 @@ export interface ExternalMentionQuery {
   readonly limit: number;
 }
 
+/** One source's contribution to the fan-out. */
+interface SourceOutcome {
+  readonly outcome: MentionProviderOutcome;
+  readonly resources: readonly ExternalResource[];
+}
+
+/** Map a connector failure onto the closed status enum the client branches on. */
+function statusForError(err: unknown): MentionProviderStatus {
+  if (err instanceof ConnectorError) {
+    if (err.kind === 'auth') return 'reauth_required';
+    if (err.kind === 'rate_limit') return 'throttled';
+    return 'unavailable';
+  }
+  if (err instanceof Error && err.name === 'TimeoutError') return 'timed_out';
+  return 'unavailable';
+}
+
 /**
- * Search the caller's connected apps.
+ * The resource-provider id a connector's results belong to.
+ *
+ * @remarks
+ * Parsed rather than cast: the two enums overlap but are not the same set, and a connector whose
+ * source system is not a resource provider falls back to the generic label instead of asserting a
+ * membership that is not there.
+ */
+function resourceProviderFor(provider: ConnectorProviderId): ResourceProvider {
+  const parsed = ResourceProvider.safeParse(PROVIDER_CATALOG[provider].sourceSystem);
+  return parsed.success ? parsed.data : 'web';
+}
+
+/** Project one source result into a picker row. */
+function toMentionItem(resource: ExternalResource): MentionItem {
+  const ref = { kind: 'external', url: resource.url } as const;
+  return {
+    origin: 'external',
+    id: mentionRefKey(ref),
+    ref,
+    provider: resource.provider,
+    resourceType: resource.resourceType,
+    title: resource.title,
+    // One line of context, ordered by what orients fastest: who owns it, then where it lives.
+    subtitle: resource.ownerLabel ?? resource.containerLabel ?? null,
+    url: resource.url,
+    iconUrl: resource.iconUrl ?? null,
+    modifiedAt: resource.modifiedAt ?? null,
+    score: 0,
+  };
+}
+
+/** Search one connection, returning undefined when its source is not searchable at all. */
+async function searchOneSource(
+  input: ExternalMentionQuery,
+  connection: { id: string; provider: string },
+  query: string,
+): Promise<SourceOutcome | undefined> {
+  const provider = connection.provider as ConnectorProviderId;
+  const resourceProvider = resourceProviderFor(provider);
+  const startedAt = Date.now();
+
+  const token = await resolveConnectorToken(input.actorId, provider);
+  if (!token.ok) {
+    return {
+      outcome: {
+        provider: resourceProvider,
+        status: token.reason === 'needs_reauth' ? 'reauth_required' : 'not_connected',
+        tookMs: Date.now() - startedAt,
+      },
+      resources: [],
+    };
+  }
+
+  const search = connectorFor(provider, token.token).asResourceSearch?.();
+  // An absent capability is not a failure: most connected sources simply are not searchable, and
+  // reporting them would fill the menu's footer with status nobody can act on.
+  if (search === undefined) return undefined;
+
+  try {
+    const page = await search.searchResources({
+      connectionId: connection.id,
+      query,
+      limit: input.limit,
+      signal: AbortSignal.timeout(PROVIDER_DEADLINE_MS),
+    });
+    return {
+      outcome: { provider: resourceProvider, status: 'ok', tookMs: Date.now() - startedAt },
+      resources: page.resources,
+    };
+  } catch (err) {
+    return {
+      outcome: {
+        provider: resourceProvider,
+        status: statusForError(err),
+        tookMs: Date.now() - startedAt,
+      },
+      resources: [],
+    };
+  }
+}
+
+/**
+ * Search the caller's connected sources.
  *
  * @param input - The caller's actor, their org, the typed query, and how many rows to return.
- * @returns Rows and per-provider outcomes.
+ * @returns Rows and per-source outcomes.
  */
 export async function searchExternalMentions(
   input: ExternalMentionQuery,
 ): Promise<MentionExternalResult> {
   const query = input.query.trim();
-  if (query.length === 0 || RESOURCE_SEARCH_PROVIDERS.length === 0) {
-    return { items: [], providers: [] };
-  }
+  if (query.length === 0) return { items: [], providers: [] };
 
   const schema = await import('@docket/db');
   const connections = await schema.db
@@ -76,31 +174,33 @@ export async function searchExternalMentions(
       and(
         eq(schema.integration.organizationId, input.orgId),
         eq(schema.integration.status, 'connected'),
-        // The caller's own connections only. See the module remarks: the credential belongs to
-        // whoever connected it.
+        // The caller's own connections only. See the module remarks.
         eq(schema.integration.createdBy, input.actorId),
-        inArray(schema.integration.provider, [...RESOURCE_SEARCH_PROVIDERS]),
       ),
     );
 
   if (connections.length === 0) return { items: [], providers: [] };
 
-  // Each provider is raced against the deadline independently, so a slow one cannot extend the
-  // wait for a fast one; `allSettled` then means a thrown adapter cannot take down the response.
+  // Each source is raced against the deadline independently, so a slow one cannot extend the wait
+  // for a fast one; `allSettled` then means a thrown adapter cannot take down the response.
   const settled = await Promise.allSettled(
-    connections.map(async (connection) => {
-      const startedAt = Date.now();
-      const status: MentionProviderStatus = 'not_connected';
-      return {
-        provider: connection.provider as ResourceProvider,
-        status,
-        tookMs: Date.now() - startedAt,
-      };
-    }),
+    connections.map((connection) => searchOneSource(input, connection, query)),
   );
 
-  const providers = settled.flatMap((result) =>
-    result.status === 'fulfilled' ? [result.value] : [],
-  );
-  return { items: [], providers };
+  const providers: MentionProviderOutcome[] = [];
+  const items: MentionItem[] = [];
+  const seen = new Set<string>();
+
+  for (const result of settled) {
+    if (result.status !== 'fulfilled' || result.value === undefined) continue;
+    providers.push(result.value.outcome);
+    for (const resource of result.value.resources) {
+      const item = toMentionItem(resource);
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      items.push(item);
+    }
+  }
+
+  return { items, providers };
 }

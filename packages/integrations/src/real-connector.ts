@@ -43,7 +43,11 @@ import type { WorkGraphConnector } from './work-graph';
 import { defaultHttpClient, type HttpClient } from './http';
 import { GitHubProviderClient } from './github';
 import { LinearProviderClient } from './linear';
-import { GoogleCalendarProviderClient, GoogleTasksProviderClient } from './google';
+import {
+  GoogleCalendarProviderClient,
+  GoogleDriveProviderClient,
+  GoogleTasksProviderClient,
+} from './google';
 import { GmailProviderClient } from './gmail';
 import { NOTION_API_BASE, NotionProviderClient } from './notion';
 import { ProviderHttp } from './provider-http';
@@ -53,12 +57,15 @@ import {
   isWorkGraphProviderClient,
   type ConnectorProviderClient,
 } from './provider-client';
+import { isResourceSearchClient } from './resource-search';
+import type { ResourceSearch } from './resource-search';
 export type { GoogleProduct } from './google';
 export type { ConnectorProviderClient, ResolvedAccount } from './provider-client';
 export {
   GitHubProviderClient,
   LinearProviderClient,
   GoogleCalendarProviderClient,
+  GoogleDriveProviderClient,
   GoogleTasksProviderClient,
 };
 export { GmailProviderClient } from './gmail';
@@ -85,6 +92,7 @@ export const PROVIDER_API_BASE: Readonly<Record<ConnectorProvider, string>> = {
   calendar: 'https://www.googleapis.com/calendar/v3',
   gtasks: 'https://tasks.googleapis.com/tasks/v1',
   notion: NOTION_API_BASE,
+  drive: 'https://www.googleapis.com/drive/v3',
 };
 
 /**
@@ -107,6 +115,7 @@ export const PROVIDER_CLIENT_FACTORIES: Readonly<
   calendar: (http) => new GoogleCalendarProviderClient(http),
   gtasks: (http) => new GoogleTasksProviderClient(http),
   notion: (http) => new NotionProviderClient(http),
+  drive: (http) => new GoogleDriveProviderClient(http),
 };
 
 /**
@@ -243,6 +252,19 @@ export class RealConnector implements Connector {
       applyMailAction: (input) => client.applyMailAction(input),
       fetchThread: (input) => client.fetchThread(input),
     };
+  }
+
+  /**
+   * {@inheritDoc Connector.asResourceSearch}
+   *
+   * @remarks
+   * Narrowed structurally, like {@link RealConnector.asWritable} and
+   * {@link RealConnector.asMailActor}: a client either implements the capability or it does not,
+   * so the manifest and the code cannot drift apart.
+   */
+  asResourceSearch(): ResourceSearch | undefined {
+    const client = this.client;
+    return isResourceSearchClient(client) ? client : undefined;
   }
 
   /**

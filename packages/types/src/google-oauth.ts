@@ -5,6 +5,16 @@ export const GOOGLE_CONNECTOR_SCOPES = {
     'https://www.googleapis.com/auth/calendar.events',
   ],
   gtasks: ['https://www.googleapis.com/auth/tasks'],
+  /**
+   * Metadata only, and deliberately not `drive.readonly`.
+   *
+   * @remarks
+   * Both are Google-restricted scopes carrying the same verification and security-assessment
+   * burden, so the choice is about what we must justify holding. Metadata-only reads exactly the
+   * fields a preview renders and cannot read file contents at all, which makes "Docket never reads
+   * your documents" a true sentence. The cost is thumbnails, which need content scope.
+   */
+  drive: ['https://www.googleapis.com/auth/drive.metadata.readonly'],
   gmail: ['https://www.googleapis.com/auth/gmail.modify'],
 } as const;
 

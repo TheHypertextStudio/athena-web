@@ -13,6 +13,7 @@
 import type { ConnectorProviderId } from '@docket/types';
 
 import type { MailActions } from './mail';
+import type { ResourceSearch } from './resource-search';
 import type { WorkGraphConnector } from './work-graph';
 
 /**
@@ -362,6 +363,16 @@ export interface Connector {
    * other provider omits it or returns `undefined`.
    */
   asWorkGraph?(): WorkGraphConnector | undefined;
+
+  /**
+   * Search this connection's resources, for the `@` picker.
+   *
+   * @remarks
+   * Discovered exactly like {@link Connector.asWritable} and {@link Connector.asMailActor}. A source
+   * whose resources are searchable returns a {@link ResourceSearch}; every other source omits it,
+   * so the picker's fan-out never has to know which is which.
+   */
+  asResourceSearch?(): ResourceSearch | undefined;
 
   /**
    * Enumerate the external containers (e.g. Google Tasks lists) this connection can sync from,

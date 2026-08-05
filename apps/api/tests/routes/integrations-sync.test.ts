@@ -101,7 +101,15 @@ describe('integrations directory', () => {
     const dir = await body<DirectoryRes>(res);
 
     const providers = dir.providers.map((p) => p.provider).sort();
-    expect(providers).toEqual(['calendar', 'github', 'gmail', 'gtasks', 'linear', 'notion']);
+    expect(providers).toEqual([
+      'calendar',
+      'drive',
+      'github',
+      'gmail',
+      'gtasks',
+      'linear',
+      'notion',
+    ]);
 
     const github = dir.providers.find((p) => p.provider === 'github')!;
     expect(github.name).toBe('GitHub');
@@ -591,7 +599,9 @@ describe('integrations connect lifecycle (validate before connected)', () => {
     const res = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ provider: 'drive', pattern: 'connector', status: 'connected' }),
+      // `outlook` is a dormant legacy id that is deliberately not a supported connector, so it
+      // exercises the allowlist without depending on any provider staying unsupported forever.
+      body: JSON.stringify({ provider: 'outlook', pattern: 'connector', status: 'connected' }),
     });
     expect(res.status).toBe(422);
   });

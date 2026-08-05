@@ -21,6 +21,7 @@ export * from './mcp-apps-host';
 export * from './mcp-apps-sandbox';
 export * from './mcp-connector';
 export * from './mcp-network';
+export * from './resource-search';
 export * from './safe-fetch';
 export * from './unfurl';
 export * from './mcp-oauth';

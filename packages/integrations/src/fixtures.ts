@@ -83,6 +83,8 @@ export const NOTION_DATA_SOURCES: readonly ResourceRef[] = [
 
 /** One deterministic imported item per provider, with provenance. */
 export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly ImportedItem[]>> = {
+  // Drive contributes documents to reference, never work items to import.
+  drive: [],
   github: [
     {
       id: '01HZ0000000000000000GH0001',
@@ -546,3 +548,62 @@ export const MAIL_THREAD_SUMMARIES: Readonly<
     },
   ],
 };
+
+/**
+ * Deterministic resources the mock connector searches, so the picker's external wave works with
+ * no external account at all.
+ *
+ * @remarks
+ * Shaped like a real source's results — a mix of document kinds, one in a shared container, one
+ * owned by somebody else — because a fixture that is all one shape hides every rendering bug that
+ * variety would surface. Every `modifiedAt` sits at or below {@link FIXED_NOW}.
+ */
+export const RESOURCE_FIXTURES = [
+  {
+    provider: 'google_drive' as const,
+    externalId: '01HZDRIVE0001',
+    resourceType: 'document' as const,
+    title: 'Q3 launch plan',
+    url: 'https://docs.google.com/document/d/01HZDRIVE0001/edit',
+    ownerLabel: 'Ada Lovelace',
+    modifiedAt: '2026-06-28T09:15:00.000Z',
+  },
+  {
+    provider: 'google_drive' as const,
+    externalId: '01HZDRIVE0002',
+    resourceType: 'spreadsheet' as const,
+    title: 'Launch budget',
+    url: 'https://docs.google.com/spreadsheets/d/01HZDRIVE0002/edit',
+    ownerLabel: 'Priya Raman',
+    containerLabel: 'Design',
+    modifiedAt: '2026-06-27T16:40:00.000Z',
+  },
+  {
+    provider: 'google_drive' as const,
+    externalId: '01HZDRIVE0003',
+    resourceType: 'presentation' as const,
+    title: 'Platform review deck',
+    url: 'https://docs.google.com/presentation/d/01HZDRIVE0003/edit',
+    ownerLabel: 'Ada Lovelace',
+    modifiedAt: '2026-06-20T11:05:00.000Z',
+  },
+  {
+    provider: 'google_drive' as const,
+    externalId: '01HZDRIVE0004',
+    resourceType: 'pdf' as const,
+    title: 'Security review.pdf',
+    url: 'https://drive.google.com/file/d/01HZDRIVE0004/view',
+    ownerLabel: 'Priya Raman',
+    modifiedAt: '2026-05-30T08:00:00.000Z',
+  },
+  {
+    provider: 'google_drive' as const,
+    externalId: '01HZDRIVE0005',
+    resourceType: 'folder' as const,
+    title: 'Platform archive',
+    url: 'https://drive.google.com/drive/folders/01HZDRIVE0005',
+    ownerLabel: 'Ada Lovelace',
+    containerLabel: 'Engineering',
+    modifiedAt: '2026-04-11T13:22:00.000Z',
+  },
+] as const;

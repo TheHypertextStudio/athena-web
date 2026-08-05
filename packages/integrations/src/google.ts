@@ -22,6 +22,7 @@ import type {
   ResourceRef,
   TaskPushOp,
 } from './connector';
+import type { ExternalResourceType } from '@docket/types';
 import { ConnectorError } from './connector-error';
 import type {
   ConnectorProviderClient,
@@ -29,10 +30,17 @@ import type {
   WritableConnectorProviderClient,
 } from './provider-client';
 import type { ProviderHttp } from './provider-http';
+import type {
+  ExternalResource,
+  ResolveResourceInput,
+  ResourceSearch,
+  ResourceSearchInput,
+  ResourceSearchPage,
+} from './resource-search';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 
 /** The Google products served by the per-product clients in this module + `./gmail`. */
-export type GoogleProduct = Extract<ConnectorProvider, 'gmail' | 'calendar' | 'gtasks'>;
+export type GoogleProduct = Extract<ConnectorProvider, 'gmail' | 'calendar' | 'gtasks' | 'drive'>;
 /** Google Tasks list-collection payload (used for identity + container enumeration). */
 interface TaskListsPayload {
   items?: { id?: string; title?: string }[];
@@ -340,5 +348,166 @@ export class GoogleTasksProviderClient implements WritableConnectorProviderClien
       externalUpdatedAt: t.updated,
       ...(t.etag ? { externalEtag: t.etag } : {}),
     };
+  }
+}
+
+/** A Drive file as the `files` API returns it, restricted to the fields the picker asks for. */
+interface DriveFile {
+  id?: string;
+  name?: string;
+  mimeType?: string;
+  description?: string;
+  iconLink?: string;
+  webViewLink?: string;
+  modifiedTime?: string;
+  owners?: { displayName?: string }[];
+}
+
+/** Drive's `files.list` response. */
+interface DriveFileList {
+  files?: DriveFile[];
+}
+
+/** The fields the picker and hovercard need, and nothing else. */
+const DRIVE_FIELDS =
+  'files(id,name,mimeType,description,iconLink,webViewLink,modifiedTime,owners(displayName))';
+
+/** How many results one picker keystroke asks Drive for. */
+const DRIVE_PAGE_SIZE = 10;
+
+/**
+ * Map a Drive MIME type onto Docket's own resource taxonomy.
+ *
+ * @remarks
+ * Exhaustive by construction: anything unrecognized becomes `file`, which is true rather than a
+ * guess. A raw MIME type must never reach the UI.
+ */
+function driveResourceType(mimeType: string | undefined): ExternalResourceType {
+  if (mimeType === undefined) return 'file';
+  if (mimeType === 'application/vnd.google-apps.document') return 'document';
+  if (mimeType === 'application/vnd.google-apps.spreadsheet') return 'spreadsheet';
+  if (mimeType === 'application/vnd.google-apps.presentation') return 'presentation';
+  if (mimeType === 'application/vnd.google-apps.folder') return 'folder';
+  if (mimeType === 'application/vnd.google-apps.form') return 'page';
+  if (mimeType === 'application/pdf') return 'pdf';
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('video/')) return 'video';
+  return 'file';
+}
+
+/**
+ * Escape a value for Drive's query language.
+ *
+ * @remarks
+ * Drive delimits query literals with `'`, so a name containing one would produce a 400 on every
+ * keystroke. The backslash is escaped first, or escaping the quote would itself be undone.
+ */
+export function escapeDriveQuery(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+/** Project one Drive file into the shared resource shape. */
+function toExternalResource(file: DriveFile): ExternalResource | undefined {
+  if (file.id === undefined || file.webViewLink === undefined) return undefined;
+  const ownerLabel = file.owners?.[0]?.displayName;
+  return {
+    provider: 'google_drive',
+    externalId: file.id,
+    resourceType: driveResourceType(file.mimeType),
+    title: file.name ?? file.id,
+    url: file.webViewLink,
+    // Omitted rather than nulled when Drive does not report it: an absent field renders as nothing,
+    // where a fabricated one renders as a fact.
+    ...(file.mimeType === undefined ? {} : { mimeType: file.mimeType }),
+    ...(file.iconLink === undefined ? {} : { iconUrl: file.iconLink }),
+    ...(file.description === undefined ? {} : { description: file.description }),
+    ...(ownerLabel === undefined ? {} : { ownerLabel }),
+    ...(file.modifiedTime === undefined ? {} : { modifiedAt: file.modifiedTime }),
+  };
+}
+
+/**
+ * Google Drive as a searchable resource source.
+ *
+ * @remarks
+ * Contributes no work items, so `importWork` returns nothing and `mirrorStatus` reports idle —
+ * truthfully, rather than pretending to sync. Its whole purpose is {@link ResourceSearch}.
+ *
+ * Search deliberately does not paginate: the picker wants the best ten under a deadline, not
+ * completeness, and a second page would arrive after the user has typed another character.
+ */
+export class GoogleDriveProviderClient implements ConnectorProviderClient, ResourceSearch {
+  /** @param http - The provider HTTP wrapper bound to the Drive API base. */
+  constructor(private readonly http: ProviderHttp) {}
+
+  /** {@inheritDoc ConnectorProviderClient.resolveAccount} */
+  async resolveAccount(): Promise<ResolvedAccount | undefined> {
+    const json = await this.http.getJson<{ user?: { emailAddress?: string } }>(
+      '/about?fields=user(emailAddress)',
+    );
+    const label = json.user?.emailAddress;
+    return label === undefined ? undefined : { label };
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.importWork} — Drive holds documents, not work items. */
+  importWork(): Promise<ImportedItem[]> {
+    return Promise.resolve([]);
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.mirrorStatus} — nothing to mirror. */
+  mirrorStatus(input: MirrorStatusInput): Promise<MirrorResult> {
+    return Promise.resolve({ connectionId: input.connectionId, status: 'idle', itemCount: 0 });
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.resolveExternalUrl} */
+  async resolveExternalUrl(input: LinkResourceInput): Promise<string | undefined> {
+    const found = await this.resolveResource({ externalId: input.externalId });
+    return found?.url;
+  }
+
+  /** {@inheritDoc ConnectorProviderClient.listContainers} — the shared drives available. */
+  async listContainers(): Promise<ResourceRef[]> {
+    const json = await this.http.getJson<{ drives?: { id?: string; name?: string }[] }>(
+      '/drives?pageSize=100&fields=drives(id,name)',
+    );
+    return (json.drives ?? []).flatMap((drive) =>
+      drive.id === undefined ? [] : [{ id: drive.id, title: drive.name ?? drive.id }],
+    );
+  }
+
+  /** {@inheritDoc ResourceSearch.searchResources} */
+  async searchResources(input: ResourceSearchInput): Promise<ResourceSearchPage> {
+    const needle = input.query.trim();
+    const limit = Math.min(input.limit, DRIVE_PAGE_SIZE);
+    // `trashed = false` is always ANDed: a deleted file must never be offered as mentionable.
+    const q =
+      needle === ''
+        ? 'trashed = false'
+        : `name contains '${escapeDriveQuery(needle)}' and trashed = false`;
+    const orderBy = needle === '' ? 'viewedByMeTime desc' : 'modifiedTime desc';
+    const path =
+      `/files?q=${encodeURIComponent(q)}&fields=${encodeURIComponent(DRIVE_FIELDS)}` +
+      `&orderBy=${encodeURIComponent(orderBy)}&pageSize=${limit}` +
+      `&corpora=allDrives&includeItemsFromAllDrives=true&supportsAllDrives=true&spaces=drive`;
+
+    const json = await this.http.getJson<DriveFileList>(path);
+    const files = json.files ?? [];
+    return {
+      resources: files.flatMap((file) => {
+        const resource = toExternalResource(file);
+        return resource === undefined ? [] : [resource];
+      }),
+      // A full page means Drive cut the result set, which the client must not narrow locally.
+      truncated: files.length >= limit,
+    };
+  }
+
+  /** {@inheritDoc ResourceSearch.resolveResource} */
+  async resolveResource(input: ResolveResourceInput): Promise<ExternalResource | undefined> {
+    const fields = DRIVE_FIELDS.replace(/^files\(/, '').replace(/\)$/, '');
+    const json = await this.http.getJson<DriveFile>(
+      `/files/${encodeURIComponent(input.externalId)}?fields=${encodeURIComponent(fields)}&supportsAllDrives=true`,
+    );
+    return toExternalResource(json);
   }
 }

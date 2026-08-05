@@ -16,6 +16,7 @@ import {
   LINEAR_WORK_GRAPH,
   MAIL_THREAD_SUMMARIES,
   NOTION_DATA_SOURCES,
+  RESOURCE_FIXTURES,
 } from './fixtures';
 import type {
   ConnectInput,
@@ -45,6 +46,8 @@ import type {
   MailThread,
 } from './mail';
 import { MAIL_CAPABLE_PROVIDERS } from './mail';
+import { RESOURCE_SEARCH_CAPABLE_PROVIDERS } from './resource-search';
+import type { ExternalResource, ResourceSearch } from './resource-search';
 import type {
   ExternalWorkflowState,
   PullWorkGraphInput,
@@ -272,6 +275,34 @@ export class MockConnector implements Connector {
    * {@link MockConnector.asMailActor}) — a CONCRETE method, not omitted, so
    * `mock.asWorkGraph()` never throws for callers that skip the `?.`.
    */
+  /**
+   * {@inheritDoc Connector.asResourceSearch}
+   *
+   * @remarks
+   * Gated by the same manifest the real clients are checked against, so the mock and the live
+   * adapters can never disagree about which sources are searchable.
+   */
+  asResourceSearch(): ResourceSearch | undefined {
+    if (!RESOURCE_SEARCH_CAPABLE_PROVIDERS.has(this.provider)) return undefined;
+    return {
+      searchResources: ({ query, limit }) => {
+        const needle = query.trim().toLowerCase();
+        const hits: ExternalResource[] = RESOURCE_FIXTURES.filter(
+          (resource) => needle === '' || resource.title.toLowerCase().includes(needle),
+        ).map((resource) => ({ ...resource }));
+        hits.sort((a, b) => (b.modifiedAt ?? '').localeCompare(a.modifiedAt ?? ''));
+        return Promise.resolve({
+          resources: hits.slice(0, limit),
+          truncated: hits.length > limit,
+        });
+      },
+      resolveResource: ({ externalId }) => {
+        const found = RESOURCE_FIXTURES.find((resource) => resource.externalId === externalId);
+        return Promise.resolve(found === undefined ? undefined : { ...found });
+      },
+    };
+  }
+
   asWorkGraph(): WorkGraphConnector | undefined {
     if (this.provider !== 'linear') return undefined;
     return {

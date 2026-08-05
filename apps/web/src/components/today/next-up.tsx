@@ -131,7 +131,7 @@ export default function NextUp({
                   href={`/orgs/${orgId}/tasks/${taskId}`}
                   {...dragProps}
                   className={cn(
-                    'group border-outline-variant bg-surface-container-low hover:bg-surface-container hover:border-outline focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-[background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none active:scale-[0.99] motion-safe:hover:-translate-y-px',
+                    'group border-outline-variant bg-surface-container-low hover:bg-surface-container active:bg-surface-container-high hover:border-outline focus-visible:ring-ring flex items-center gap-4 rounded-xl border px-4 py-3.5 transition-[background-color,border-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm focus-visible:ring-2 focus-visible:outline-none motion-safe:hover:-translate-y-px',
                     dragProps?.className,
                   )}
                 >

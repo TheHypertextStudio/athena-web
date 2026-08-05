@@ -15,7 +15,7 @@ export function SchedulingAllDayMoveControl({
     <button
       type="button"
       aria-label={`Move ${itemTitle}`}
-      className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high mx-0.5 size-5 shrink-0 cursor-move touch-none rounded opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
+      className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high mx-0.5 size-5 shrink-0 cursor-grab touch-none rounded opacity-0 transition-opacity outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
       onPointerDown={gesture.onMovePointerDown}
       onKeyDown={gesture.onMoveKeyDown}
     >

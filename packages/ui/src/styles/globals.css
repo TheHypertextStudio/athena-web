@@ -477,6 +477,34 @@
   }
 
   /*
+   * Native cursor affordance for every plain `<button>` (and any `role="button"` element that
+   * isn't one). Unlike `<a href>`, browsers do not give `<button>` a pointer cursor by default —
+   * and Tailwind's preflight doesn't add one either — so every button in this product rendered
+   * the platform's default arrow cursor until a caller remembered to add `cursor-pointer` by
+   * hand. That is exactly the ad hoc, easy-to-forget state this rule exists to end: one base-layer
+   * declaration reaches every button `@docket/ui` or an app renders, including ones that don't
+   * exist yet.
+   *
+   * The fuller cursor contract — pointer for a single action, grab/grabbing for a draggable
+   * object, no-drop/not-allowed for a refusing target — lives in
+   * `apps/web/src/lib/actions/cursor.ts`; this is the one piece of it that has to be a global
+   * rule rather than a Tailwind literal, because it has to reach `packages/ui`'s own primitives
+   * too. A component that deliberately wants a different resting cursor (a menu row's
+   * `cursor-default`, a drag handle's `cursor-grab`) still wins: Tailwind's `utilities` layer is
+   * declared after `base` (`@layer theme, base, components, utilities`), so any `cursor-*`
+   * utility class on the element overrides this rule regardless of selector specificity.
+   */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+
+  /*
    * MD3 menu leading-icon column.
    *
    * MD3 reserves a leading slot on every row of a menu in which *any* row has a leading icon, so

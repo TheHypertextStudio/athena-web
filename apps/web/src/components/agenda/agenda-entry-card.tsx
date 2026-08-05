@@ -86,16 +86,18 @@ export default function AgendaEntryCard({
   const checkRef = useRef<HTMLButtonElement>(null);
   const block = layout === 'block';
 
-  /** Toggle done, and on *completing* a task give the check a quick satisfying pop (Web Animations). */
+  /** Toggle done, and on *completing* a task give the check a quick satisfying flash (Web Animations). */
   function onToggle(): void {
     const marking = !entry.done;
     toggleDone(entry);
     const el = checkRef.current;
     if (marking && el && 'animate' in el && !prefersReducedMotion()) {
-      el.animate(
-        [{ transform: 'scale(1)' }, { transform: 'scale(1.4)' }, { transform: 'scale(1)' }],
-        { duration: 280, easing: 'cubic-bezier(0.2, 0, 0, 1)' },
-      );
+      // Opacity only — never scale. A control must measure identically at rest and mid-gesture,
+      // so the "pop" reads as a brief dip-and-return in opacity rather than a size change.
+      el.animate([{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], {
+        duration: 280,
+        easing: 'cubic-bezier(0.2, 0, 0, 1)',
+      });
     }
   }
   const time = isTimeboxed(entry)
@@ -166,7 +168,7 @@ export default function AgendaEntryCard({
           aria-pressed={entry.done}
           aria-label={entry.done ? 'Mark not done' : 'Mark done'}
           onClick={onToggle}
-          className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring relative z-10 mt-0.5 shrink-0 rounded-full transition-[color,transform] duration-(--dur-fast) hover:scale-110 focus-visible:ring-2 focus-visible:outline-none active:scale-90 [&_svg]:size-4"
+          className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring relative z-10 mt-0.5 shrink-0 rounded-full transition-[color,background-color] duration-(--dur-fast) focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4"
         >
           {entry.done ? <CheckCircle2 className="text-primary" /> : <Circle />}
         </button>

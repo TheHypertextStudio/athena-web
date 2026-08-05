@@ -275,7 +275,7 @@ export function SchedulingItemCard({
           <button
             type="button"
             aria-label={`Move ${item.title}`}
-            className="text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring absolute top-0.5 right-0.5 z-30 size-6 cursor-move rounded opacity-0 transition-[color,background-color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
+            className="text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container-highest focus-visible:ring-ring absolute top-0.5 right-0.5 z-30 size-6 cursor-grab rounded opacity-0 transition-[color,background-color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset active:cursor-grabbing motion-reduce:transition-none [@media(pointer:coarse)]:size-11 [@media(pointer:coarse)]:opacity-100"
             onPointerDown={gesture.onMovePointerDown}
             onKeyDown={gesture.onMoveKeyDown}
           >

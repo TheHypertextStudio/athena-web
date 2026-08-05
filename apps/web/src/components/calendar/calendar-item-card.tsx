@@ -275,7 +275,7 @@ export default function CalendarItemCard({
             onPointerDown={(event) => {
               onDragHandlePointerDown(item.id, event);
             }}
-            className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring cursor-grab touch-none rounded-sm focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4"
+            className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring cursor-grab touch-none rounded-sm focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing [&_svg]:size-4"
           >
             <MoreHorizontal />
           </button>

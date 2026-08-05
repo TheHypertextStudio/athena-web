@@ -11,22 +11,28 @@
 export { APPLE_ICONS, type AppleIconExport, type AppleRendition } from './apple-icons';
 export { offlineMarkMarkup, withRegeneratedMark } from './offline';
 export {
+  ACCENT,
+  ACCENT_BAR,
+  ACCENT_TOKEN,
   APPLE_CANVAS,
   APPLE_COVERAGE,
-  barSubpaths,
+  BAR_GAP,
+  BAR_HEIGHTS,
+  BAR_WIDTH,
   COVERAGE,
-  GAP_RATIO,
-  GLYPH,
   INK,
   markPath,
   MASKABLE_SCALE,
+  MIN_FAVICON,
   pathBounds,
   PLATE,
-  PLATE_RADIUS_RATIO,
+  plateRadius,
+  PROVENANCE,
   type Bounds,
   type MarkGeometry,
 } from './mark';
 export { bareMarkSvg, CANVAS, opaqueMarkSvg, themedMarkSvg } from './svg';
+export { inGamut, oklchToHex, parseOklch } from './color';
 export {
   APPLE_LAYER,
   EXPORTS_DIR,

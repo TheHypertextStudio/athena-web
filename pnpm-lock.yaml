@@ -684,9 +684,6 @@ importers:
       svg-path-bbox:
         specifier: ^2.1.0
         version: 2.1.0
-      svgpath:
-        specifier: ^2.6.0
-        version: 2.6.0
     devDependencies:
       '@docket/eslint-config':
         specifier: workspace:*
@@ -694,9 +691,6 @@ importers:
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
-      '@mui/icons-material':
-        specifier: ^9.0.1
-        version: 9.0.1(@mui/material@9.0.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.2.17)(react@19.2.7))(@types/react@19.2.17)(react@19.2.7))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@types/react@19.2.17)(react@19.2.7)
       '@types/node':
         specifier: 26.1.0
         version: 26.1.0

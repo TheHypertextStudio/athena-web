@@ -1,115 +1,152 @@
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { inGamut, oklchToHex, parseOklch } from '../src/color';
 import {
+  ACCENT,
+  ACCENT_BAR,
+  ACCENT_TOKEN,
   APPLE_CANVAS,
   APPLE_COVERAGE,
-  barSubpaths,
+  BAR_GAP,
+  BAR_HEIGHTS,
+  BAR_WIDTH,
   COVERAGE,
-  GAP_RATIO,
-  GLYPH,
   markPath,
+  MIN_FAVICON,
   pathBounds,
+  plateRadius,
 } from '../src/mark';
+import { REPO_ROOT } from '../src/paths';
 import { bareMarkSvg, CANVAS, opaqueMarkSvg, themedMarkSvg } from '../src/svg';
 
 /**
- * The mark's geometry, checked against the thing it is derived from rather than against numbers
- * restated here.
+ * The mark's geometry, checked against the constraints it was solved from rather than against
+ * numbers restated here.
  *
  * @remarks
- * Two properties are worth more than the rest. The first is provenance: the path is a copy of an
- * upstream glyph, and a copy that nobody checks is a fork. The second is the 16px legibility
- * floor, which is the only reason {@link GAP_RATIO} is 0.5 rather than something tighter — without
- * a test, the next person to want "more cohesion" lowers it and the bars silently merge in the
- * browser tab.
+ * Three properties carry the design and everything else follows from them: the corners are
+ * concentric, the gap survives a 16px favicon, and the accent equals the design token. Each is
+ * asserted directly, so loosening any one of them fails loudly instead of degrading the icon
+ * quietly.
  */
 
-const require = createRequire(import.meta.url);
-
-describe('provenance', () => {
-  it('quotes the installed Material glyph exactly', () => {
-    // Resolved from the package root rather than by subpath: the package's `exports` map rewrites
-    // a bare specifier and lands on `ViewKanbanRounded.js.js`.
-    const root = dirname(require.resolve('@mui/icons-material/package.json'));
-    const source = readFileSync(join(root, `${GLYPH.module}.js`), 'utf8');
-    const upstream = /d:\s*"([^"]+)"/.exec(source)?.[1];
-    expect(upstream, 'ViewKanbanRounded.js exposes a path').toBeTruthy();
-    // If Material redraws the icon, this fails and somebody decides whether Docket follows —
-    // rather than the two quietly diverging.
-    expect(GLYPH.d).toBe(upstream);
-  });
-
-  it('takes the three bars and leaves the frame behind', () => {
-    const bars = barSubpaths();
-    expect(bars).toHaveLength(3);
-    // The frame's own subpath spans the full 24-unit box; no bar may.
-    for (const bar of bars) {
-      expect(pathBounds(bar).w).toBeLessThan(GLYPH.viewBox / 2);
+describe('concentric corners', () => {
+  it('centres the plate’s corner arc on the bars’ cap arcs', () => {
+    // The governing constraint. The plate's top-left arc is centred at (R, R); the left bar's top
+    // cap is centred at (margin + r, margin + r). Concentric means those are the same point.
+    for (const canvas of [16, 32, 180, 512]) {
+      const { margin, capRadius } = markPath(canvas);
+      expect(plateRadius(canvas), `canvas ${String(canvas)}`).toBeCloseTo(margin + capRadius, 10);
     }
   });
 
-  it('is drawn from bars of one uniform width', () => {
-    // The pitch calculation assumes it. Compared with a tolerance because the widths come from
-    // solving bezier extrema, which lands on 2.0000000000000036 rather than 2.
-    const widths = barSubpaths().map((bar) => pathBounds(bar).w);
-    for (const width of widths) {
-      expect(width).toBeCloseTo(widths[0] ?? 0, 9);
+  it('keeps the mark square, which is what makes one radius possible', () => {
+    // With unequal margins the cap centre is at (margin_x + r, margin_y + r), which no single
+    // plate radius can meet on both axes.
+    for (const canvas of [16, 32, APPLE_CANVAS]) {
+      const { bbox } = markPath(canvas);
+      expect(bbox.w, `canvas ${String(canvas)}`).toBeCloseTo(bbox.h, 10);
     }
+  });
+
+  it('solves the bar width and gap from that squareness', () => {
+    // Three bars and two gaps span exactly the mark's side…
+    expect(BAR_HEIGHTS.length * BAR_WIDTH + (BAR_HEIGHTS.length - 1) * BAR_GAP).toBeCloseTo(1, 12);
+    // …at the 8:3 bar-to-gap ratio chosen in review, which is what fixes them at 4/15 and 1/10.
+    expect(BAR_WIDTH / BAR_GAP).toBeCloseTo(8 / 3, 12);
+  });
+
+  it('measures the drawn artwork, not the numbers that produced it', () => {
+    // pathBounds reads the emitted arcs back. If the stadium caps were malformed — wrong sweep,
+    // wrong radius — the measured box would not match the computed one.
+    const { d, bbox } = markPath(CANVAS);
+    const measured = pathBounds(d);
+    expect(measured.x).toBeCloseTo(bbox.x, 2);
+    expect(measured.y).toBeCloseTo(bbox.y, 2);
+    expect(measured.w).toBeCloseTo(bbox.w, 2);
+    expect(measured.h).toBeCloseTo(bbox.h, 2);
   });
 });
 
 describe('layout', () => {
-  it('spans the requested fraction of the canvas on its longer axis', () => {
-    const mark = markPath(CANVAS);
-    expect(Math.max(mark.bbox.w, mark.bbox.h) / CANVAS).toBeCloseTo(COVERAGE, 10);
+  it('derives the web coverage from the 16px legibility floor', () => {
+    // Below one device pixel the gap antialiases into a grey smear and the three bars read as one
+    // blob. COVERAGE is the solution of that inequality at equality, so this lands on exactly 1.
+    expect(markPath(MIN_FAVICON).gap).toBeCloseTo(1, 12);
+    expect(COVERAGE).toBeCloseTo(1 / (BAR_GAP * MIN_FAVICON), 12);
   });
 
-  it('is taller than it is wide, and keeps that ratio at every size', () => {
-    const small = markPath(16);
-    const large = markPath(APPLE_CANVAS);
-    expect(small.bbox.h).toBeGreaterThan(small.bbox.w);
-    expect(small.bbox.w / small.bbox.h).toBeCloseTo(large.bbox.w / large.bbox.h, 10);
+  it('descends tall, short, medium', () => {
+    const { bars } = markPath(CANVAS);
+    const heights = bars.map((subpath) => pathBounds(subpath).h);
+    expect(heights[0]).toBeGreaterThan(heights[2] ?? 0);
+    expect(heights[2]).toBeGreaterThan(heights[1] ?? 0);
   });
 
-  it('centres the ink, not the glyph’s nominal box', () => {
-    // Material's 24-unit box carries empty margin. Centring on it rather than on the measured
-    // artwork would leave the mark sitting low and left on the plate.
-    const mark = markPath(CANVAS);
-    expect(mark.bbox.x + mark.bbox.w / 2).toBeCloseTo(CANVAS / 2, 10);
-    expect(mark.bbox.y + mark.bbox.h / 2).toBeCloseTo(CANVAS / 2, 10);
+  it('top-aligns every bar', () => {
+    const { bars, bbox } = markPath(CANVAS);
+    for (const subpath of bars) {
+      expect(pathBounds(subpath).y).toBeCloseTo(bbox.y, 2);
+    }
   });
 
-  it('spaces the bars at the declared fraction of their width', () => {
-    const mark = markPath(CANVAS);
-    expect(mark.gap / mark.barWidth).toBeCloseTo(GAP_RATIO, 10);
+  it('scales the Apple layer to the height the outgoing asset used', () => {
+    // 800px of the 1024px grid — 92% of the 869px live area Apple's mask leaves.
+    const { bbox } = markPath(APPLE_CANVAS, APPLE_COVERAGE);
+    expect(bbox.h).toBeCloseTo(800, 6);
+    expect(bbox.w).toBeCloseTo(800, 6);
+  });
+});
+
+describe('the accent', () => {
+  it('equals the --primary design token, converted rather than pasted', () => {
+    const css = readFileSync(join(REPO_ROOT, 'packages/ui/src/styles/globals.css'), 'utf8');
+    // The first `--primary:` declaration is the light-scheme one; the dark override comes later
+    // inside a media query.
+    const declared = /--primary:\s*(oklch\([^)]*\))/.exec(css)?.[1];
+    expect(declared, '--primary is declared in globals.css').toBeTruthy();
+    expect(declared).toBe(ACCENT_TOKEN.oklch);
+
+    const { lightness, chroma, hue } = parseOklch(declared ?? '');
+    // Changing the token without re-running `pnpm icons` fails here rather than leaving the icon
+    // quietly off-brand.
+    expect(ACCENT).toBe(oklchToHex(lightness, chroma, hue));
   });
 
-  it('puts the bars on an even pitch', () => {
-    const mark = markPath(CANVAS);
-    const lefts = mark.d
-      .split(/(?=M)/)
-      .filter(Boolean)
-      .map((bar) => pathBounds(bar).x);
-    expect(lefts).toHaveLength(3);
-    const pitches = lefts.slice(1).map((left, index) => left - (lefts[index] ?? 0));
-    expect(pitches[0]).toBeCloseTo(pitches[1] ?? 0, 6);
-    expect(pitches[0]).toBeCloseTo(mark.barWidth + mark.gap, 6);
+  it('converts OKLCH correctly at the anchors', () => {
+    expect(oklchToHex(1, 0, 0)).toBe('#FFFFFF');
+    expect(oklchToHex(0, 0, 0)).toBe('#000000');
+    // A neutral mid-grey: Oklab lightness 0.5 is well below sRGB's 50%.
+    expect(oklchToHex(0.5, 0, 0)).toBe('#636363');
   });
 
-  it('keeps a whole device pixel between bars at the smallest favicon', () => {
-    // The reason GAP_RATIO is 0.5. Below one pixel the three bars render as a grey smear, and a
-    // 16px favicon is the size at which that first happens.
-    expect(markPath(16).gap).toBeGreaterThanOrEqual(1);
+  it('produces a colour sRGB can actually show', () => {
+    const { lightness, chroma, hue } = parseOklch(ACCENT_TOKEN.oklch);
+    expect(chroma).toBeGreaterThan(0);
+    // Round-tripping the hex must not have needed clamping, or the icon would not match the token.
+    const hex = oklchToHex(lightness, chroma, hue);
+    const channels = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255);
+    expect(inGamut({ r: channels[0] ?? 0, g: channels[1] ?? 0, b: channels[2] ?? 0 })).toBe(true);
   });
 
-  it('scales the Apple layer to the same height the outgoing asset used', () => {
-    // 800px of the 1024px grid — 92% of the 869px live area Apple's mask leaves. Held constant so
-    // this change is about the glyph, not about the size.
-    expect(markPath(APPLE_CANVAS, APPLE_COVERAGE).bbox.h).toBeCloseTo(800, 6);
+  it('rejects a token shape it would otherwise misread', () => {
+    expect(() => parseOklch('oklch(0.52 0.21 264 / 50%)')).toThrow(/Not an oklch/);
+    expect(() => parseOklch('var(--primary)')).toThrow(/Not an oklch/);
+  });
+
+  it('paints the last bar and only the last bar', () => {
+    const svg = themedMarkSvg();
+    const { bars } = markPath(CANVAS);
+    expect(ACCENT_BAR).toBe(bars.length - 1);
+    expect(svg).toContain(`<path fill="${ACCENT}" d="${bars[ACCENT_BAR] ?? ''}"`);
+    for (const [index, subpath] of bars.entries()) {
+      if (index !== ACCENT_BAR) {
+        expect(svg).not.toContain(`fill="${ACCENT}" d="${subpath}"`);
+      }
+    }
   });
 });
 
@@ -132,17 +169,17 @@ describe('the documents built from it', () => {
     expect(opaqueMarkSvg(512)).toContain('fill="#1C1C1F"');
   });
 
+  it('gives every plate the concentric radius', () => {
+    expect(themedMarkSvg()).toContain(`rx="${Number(plateRadius(CANVAS).toFixed(3)).toString()}"`);
+    expect(opaqueMarkSvg(512)).toContain(`rx="${Number(plateRadius(512).toFixed(3)).toString()}"`);
+  });
+
   it('gives the Apple layer no plate of its own', () => {
     // Apple's plate is the gradient in `icon.json`, and `IconRendering` applies the glass around
     // it. A rect here would sit as a flat slab underneath the material.
     const layer = bareMarkSvg(APPLE_CANVAS, APPLE_COVERAGE);
     expect(layer).not.toContain('<rect');
     expect(layer).not.toContain('#1C1C1F');
-  });
-
-  it('renders one path per document, from the same geometry', () => {
-    const { d } = markPath(CANVAS);
-    expect(themedMarkSvg()).toContain(d);
-    expect(themedMarkSvg(28)).toContain(d);
+    expect(layer).toContain(ACCENT);
   });
 });

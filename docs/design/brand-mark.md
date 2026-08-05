@@ -5,60 +5,80 @@ editing any icon asset: they are all generated, and hand-editing one puts it bac
 
 ## What it is
 
-Three vertical stadium bars — tall, short, medium — in `#FAFAFA` on a `#1C1C1F` rounded plate. The
-bars are not drawn by us. They are the three bar subpaths of **Material Symbols `view_kanban`**,
-shipped as `@mui/icons-material/ViewKanbanRounded` and already a dependency of this repository.
-Material Symbols are Apache-2.0.
+Three vertical stadium bars — tall, short, medium — on a rounded plate. The first two are `#FAFAFA`;
+the third is `#265ADF`, the `--primary` design token converted from OKLCH. The plate is `#1C1C1F`,
+and it disappears in dark mode.
 
-`packages/brand/src/mark.ts` is the only file in the repository that knows this. Everything else —
-the favicon, the PWA icon set, the Apple layer, the copy inlined into the offline page — is
-generated from it by `pnpm icons`.
+`packages/brand/src/mark.ts` is the only file in the repository that knows any of this. The
+favicon, the PWA icon set, the Apple Icon Composer layer and the copy inlined into the offline page
+are all generated from it by `pnpm icons`.
 
-## Why an off-the-shelf glyph
+## Concentric corners
 
-The mark this replaced was three hand-typed `<rect>` elements added in commit `260b784f`, whose
-actual purpose was fixing a favicon 404. The only rationale ever recorded was the phrase "a small
-board mark." Nothing explained why three bars, why their 16/10/13 heights, or why they were
-top-aligned — and top-aligned solid bars with the middle one shortest read as a bar chart, not a
-board.
+This is the constraint everything else is solved from.
 
-Taking Google's glyph fixes the part that was actually broken. The proportions are drawn by people
-who draw icons, they are tested at small sizes, and the file states its own provenance. What it
-does not fix: **a stock icon cannot be a distinctive trademark.** Docket has the same mark as any
-other product that reached for `view_kanban`. This is a waypoint. If Docket ever wants a
-defensible mark, that is a separate piece of work and it starts from a brief, not from an icon set.
+Two rounded shapes nest correctly when their corner arcs **share a centre**, not when their radii
+match. The plate's top-left arc is centred at `(R, R)`. The left bar's top cap is a semicircle of
+radius `r = barWidth / 2`, centred at `(margin + r, margin + r)`. Setting those equal gives:
 
-## The two constants
+```
+R = margin + r
+```
 
-Both are derived. Neither was nudged until it looked right.
+That single equation has two consequences worth stating, because both look like arbitrary design
+choices until you see where they come from.
 
-| Constant    | Value | Where it comes from                                                                                                                                                                                                                   |
-| ----------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `COVERAGE`  | 0.69  | The fraction of the canvas the mark's longer dimension spans. The outgoing mark covered 47%, which left it floating in a mostly empty tile.                                                                                           |
-| `GAP_RATIO` | 0.5   | Gap between bars as a fraction of bar width. Material draws 1.0, which reads as three separate strokes. 0.5 is the floor: at a 16px favicon it works out to ~1.1 device pixels, and below one pixel the bars merge into a grey smear. |
+**The mark's bounding box has to be square.** With different horizontal and vertical margins the
+cap centre sits at `(margin_x + r, margin_y + r)`, which no single plate radius can meet on both
+axes. So three bars plus two gaps must span exactly the tallest bar's height.
 
-The bars are taller than they are wide (aspect 0.8), so `COVERAGE` governs the height and the
-width follows. Scaling both axes to 69% independently would distort a glyph whose proportions are
-not ours to change.
+**The plate radius is derived, not fixed.** It was `rx="7"` from the day the mark was drawn, which
+was concentric with nothing. It is now `margin + r` — 8.667 on a 32px canvas.
 
-`packages/brand/tests/mark.test.ts` asserts the one-pixel floor directly, so lowering `GAP_RATIO`
-for "more cohesion" fails the suite rather than quietly breaking the favicon.
+Squareness plus the 8:3 bar-to-gap ratio chosen in review fixes the rest by substitution:
+`3w + 2(3w/8) = 1` gives `w = 4/15` and `g = 1/10`, exactly, and `3(4/15) + 2(1/10)` is exactly 1.
 
-## Why the Apple canvas differs
+## The other derived numbers
 
-The web mark sits on a plate it draws itself and needs margin inside it. The Apple mark sits on a
-grid whose mask Apple applies, and its usable area is the largest centred square inside that mask
-— measured at 869px of the 1024px canvas. `APPLE_COVERAGE` is `800/1024`, which puts the mark's
-height at 92% of that live area.
+| Constant         | Value              | Solved from                                                                                                                 |
+| ---------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `BAR_WIDTH`      | 4/15 of the mark   | Squareness plus the 8:3 ratio above                                                                                         |
+| `BAR_GAP`        | 1/10 of the mark   | Same solution                                                                                                               |
+| `BAR_HEIGHTS`    | 1 : 0.625 : 0.8125 | The 16/10/13 of the mark this replaced, which is where its balance came from                                                |
+| `COVERAGE`       | 0.625              | `BAR_GAP × COVERAGE × 16 ≥ 1` at equality — the smallest mark whose gaps still clear one device pixel in a 16px browser tab |
+| `APPLE_COVERAGE` | 800/1024           | The height the outgoing Apple asset used, so the redesign stayed about the bars rather than the size                        |
+| `ACCENT`         | `#265ADF`          | `--primary`, `oklch(0.52 0.21 264)`, converted through Oklab                                                                |
 
-800px is exactly what the previous asset used. Holding it constant kept this change about the
-glyph rather than about the size, and preserved the mask clearance
-`apps/web/tests/pwa/apple-icons.test.ts` enforces.
+The 8:3 ratio is the one number that came from looking rather than solving. Five candidate weights
+were exported through `ictool` at 1024px and compared as real Liquid Glass renders; 200 wide with
+75 of gap on the 800-unit grid won. The ceiling was the mask — at 260 wide the mark spans 910
+units against a live area measured at 869, and the outer bars break clearance.
 
-That test's width bound is looser than its height bound (0.7 against 0.9) because the glyph's
-aspect is 0.8: a mark that fills the height cannot also fill the width. The stronger assertion
-sitting next to it is that the Apple layer's aspect ratio matches the web mark's exactly — the two
-are the same shape scaled, not the two independently-drawn variants they used to be.
+## Provenance, stated honestly
+
+The redesign started from Material Symbols' `view_kanban` and for one commit quoted its path data
+verbatim. That was rejected in review: Material's bars are 0.20 of the glyph height against the old
+mark's 0.25, and under the Liquid Glass specular edge they read as long and thin.
+
+What survives from Material is the **composition** — three bars, top-aligned, stadium ends, tall
+then short then medium. Every proportion is Docket's. No upstream path data is quoted,
+`@mui/icons-material` is not a dependency of `packages/brand`, and calling the mark "off the shelf"
+would be false.
+
+The mark is therefore Docket's own, which is worth knowing for the reason it is worth wanting: a
+stock icon cannot be a distinctive trademark. This one can be, though nobody has filed anything.
+
+## The accent
+
+`--primary` is OKLCH and shifts between light and dark. An installed icon is a single fixed image
+and cannot follow a token, so the light-mode value is baked in — it is the indigo that appears on
+buttons, focus rings and selection. `--primary` in dark mode is a pale periwinkle that would read
+as a tinted white bar rather than as a colour.
+
+`packages/brand/src/color.ts` does the conversion (Oklab, then the sRGB transfer function, no
+dependency), and the test re-reads `packages/ui/src/styles/globals.css` and re-derives it. Change
+the token without re-running `pnpm icons` and the suite fails rather than the icon going quietly
+off-brand.
 
 ## Theme adaptivity, and its limits
 
@@ -83,6 +103,28 @@ Because the PWA icons must not inherit any of this, `render-pwa.ts` builds its o
 rather than rasterizing `icon.svg`. Rasterizing the themed file would make a committed PNG depend
 on how librsvg happens to treat a media query it cannot evaluate.
 
+## Why the Apple canvas differs
+
+The web mark sits on a plate this package draws and is bounded by the 16px favicon. The Apple mark
+sits on a grid whose mask Apple applies, and its usable area is the largest centred square inside
+that mask — measured at 869px of the 1024px canvas. At `800/1024` the mark is 800px square, 92% of
+that live area on both axes.
+
+**Concentricity is not defined against Apple's mask.** It is a continuous-curvature squircle, not a
+rounded rectangle with a circular corner arc, so there is no radius to share a centre with. The
+mark is square and centred, which is as far as the constraint carries onto a plate this package
+does not draw.
+
+## Why the bars are four arcs each, not two
+
+Each stadium cap is two quarter arcs rather than one semicircle, so the topmost and bottommost
+points are explicit coordinates.
+
+A single semicircle puts them at the arc's extremum, where the sagitta is
+`r − sqrt(r² − (chord/2)²)`. Rounding the radius and the chord to three decimals independently
+leaves them a hair apart, the square root amplifies that hair, and a 0.001 rounding became a 0.05
+error in the measured bounding box — which is how the geometry tests caught it.
+
 ## The Apple appearances
 
 `ictool` renders six: `Default`, `Dark`, `TintedLight`, `TintedDark`, `ClearLight`, `ClearDark`.
@@ -93,9 +135,9 @@ The other five exist to be reviewed and as groundwork for a native target; nothi
 today.
 
 They are currently **auto-derived** by Icon Composer from the single `Default` fill, not authored.
-The `Dark` rendition loses the plate gradient and flattens to a solid dark grey, and the tinted
-pair falls back to `ictool`'s default tint rather than a monochrome layer the OS can tint. Giving
-each appearance its own fill has to happen in Icon Composer.app — `docs/engineering/launch-compliance.json`
+The `Dark` rendition loses the plate gradient and flattens to a solid dark grey, and the tinted pair
+falls back to `ictool`'s default tint rather than a monochrome layer the OS can drive. Giving each
+appearance its own fill has to happen in Icon Composer.app — `docs/engineering/launch-compliance.json`
 CAL-38 requires Apple's own tool, so hand-editing `icon.json` is not an option.
 
 ## Regenerating
@@ -105,8 +147,8 @@ pnpm icons
 ```
 
 Runs, in order: the favicon and the offline page's inline copy, the PWA set, the Apple layer, and
-the `ictool` export. The last step needs a Mac with Xcode 26; it refuses to run rather than
-falling back to an approximation of an Apple render.
+the `ictool` export. The last step needs a Mac with Xcode 26; it refuses to run rather than falling
+back to an approximation of an Apple render.
 
 Changing the mark means changing `mark.ts` and re-running that. Editing `icon.svg`,
 `Assets/Bars.svg`, `public/icons/*` or the offline page directly is undone by the next run, and

@@ -25,13 +25,11 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "svg-path-bbox": "^2.1.0",
-    "svgpath": "^2.6.0"
+    "svg-path-bbox": "^2.1.0"
   },
   "devDependencies": {
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
-    "@mui/icons-material": "^9.0.1",
     "@types/node": "catalog:",
     "sharp": "^0.35.3"
   }

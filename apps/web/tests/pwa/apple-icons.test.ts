@@ -6,6 +6,7 @@ import {
   APPLE_CANVAS,
   APPLE_ICONS,
   ICON_DOCUMENT,
+  APPLE_COVERAGE,
   markPath,
   pathBounds,
   REPO_ROOT,
@@ -69,9 +70,12 @@ function codeOf(file: string): string {
  */
 function markBounds(): Bounds {
   const layer = readFileSync(join(ICON_DOCUMENT, 'Assets/Bars.svg'), 'utf8');
-  const d = /<path[^>]*\sd="([^"]+)"/.exec(layer)?.[1];
-  expect(d, 'the Icon Composer layer contains a path').toBeTruthy();
-  return pathBounds(d ?? '');
+  // Every path, not the first one. The layer is two elements — the plain bars and the accented
+  // one — so measuring a single match would silently drop the right-hand bar and understate the
+  // mark's width by a third.
+  const paths = [...layer.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((match) => match[1] ?? '');
+  expect(paths.length, 'the Icon Composer layer contains paths').toBeGreaterThan(0);
+  return pathBounds(paths.join(''));
 }
 
 interface Raster {
@@ -152,7 +156,9 @@ describe('the Apple icon source document', () => {
     // re-export after changing the glyph — which is exactly how the old hand-synchronised copies
     // drifted apart.
     const layer = readFileSync(join(ICON_DOCUMENT, 'Assets/Bars.svg'), 'utf8');
-    expect(layer).toContain(markPath(APPLE_CANVAS, 800 / APPLE_CANVAS).d);
+    for (const subpath of markPath(APPLE_CANVAS, APPLE_COVERAGE).bars) {
+      expect(layer).toContain(subpath);
+    }
   });
 
   it('is rendered by Apple’s exporter, never by this repository', () => {
@@ -272,7 +278,7 @@ describe('use of the Apple icon grid', () => {
     // would be a worse icon, not a better-covered one. The previous asset used roughly a quarter
     // of the canvas, which is what "take advantage of space" was asking about.
     expect(mark.h / live).toBeGreaterThan(0.9);
-    expect(mark.w / live).toBeGreaterThan(0.7);
+    expect(mark.w / live).toBeGreaterThan(0.9);
   });
 
   it('keeps the glyph’s own proportions', () => {

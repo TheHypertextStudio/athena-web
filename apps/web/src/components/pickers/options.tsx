@@ -152,7 +152,10 @@ const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
  * without inventing a new one.
  */
 export const INITIATIVE_STATUS_OPTIONS: readonly PickerOption<InitiativeStatus>[] =
-  INITIATIVE_STATUS_ORDER.map((status) => ({ value: status, label: INITIATIVE_STATUS_LABEL[status] }));
+  INITIATIVE_STATUS_ORDER.map((status) => ({
+    value: status,
+    label: INITIATIVE_STATUS_LABEL[status],
+  }));
 
 /** Human label for each {@link CycleStatus}. */
 const CYCLE_STATUS_LABEL: Record<CycleStatus, string> = {

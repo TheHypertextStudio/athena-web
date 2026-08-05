@@ -40,7 +40,6 @@ import {
   type WorkflowState,
 } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { TaskAlt } from '@docket/ui/icons';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -234,7 +233,6 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       open={open}
       onOpenChange={onOpenChange}
       heading="New task"
-      icon={<TaskAlt aria-hidden="true" />}
       context={teams.length > 1 ? teamName : undefined}
       title={title}
       onTitleChange={setTitle}

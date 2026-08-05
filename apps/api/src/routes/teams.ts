@@ -29,6 +29,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
+import { archiveTeamActor, createTeamActor, renameTeamActor } from './team-actor';
 
 type TeamRow = typeof team.$inferSelect;
 
@@ -111,23 +112,33 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
       const { orgId } = c.get('actorCtx');
       const body = c.req.valid('json');
       await assertKeyAvailable(orgId, body.key);
-      const inserted = await db
-        .insert(team)
-        .values({
+      // The team and its shadow actor land together or not at all: a team with no actor cannot be
+      // named as an owner, which fails silently at assignment time rather than here.
+      const row = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(team)
+          .values({
+            organizationId: orgId,
+            name: body.name,
+            key: body.key,
+            summary: body.summary ?? null,
+            description: body.description ?? null,
+            workflowStates: body.workflowStates ?? [...defaultWorkflowStates],
+            triageEnabled: body.triageEnabled ?? true,
+            agentGuidance: body.agentGuidance ?? null,
+            approvalRouting: body.approvalRouting ?? null,
+          })
+          .returning();
+        const created = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+        if (!created) throw new Error('team insert returned no row');
+        await createTeamActor(tx, {
           organizationId: orgId,
-          name: body.name,
-          key: body.key,
-          summary: body.summary ?? null,
-          description: body.description ?? null,
-          workflowStates: body.workflowStates ?? [...defaultWorkflowStates],
-          triageEnabled: body.triageEnabled ?? true,
-          agentGuidance: body.agentGuidance ?? null,
-          approvalRouting: body.approvalRouting ?? null,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('team insert returned no row');
+          teamId: created.id,
+          name: created.name,
+        });
+        return created;
+      });
       await enqueueSearchUpsert(orgId, 'team', row.id);
       return ok(c, TeamDetail, toOut(row));
     },
@@ -198,9 +209,15 @@ Setting \`workflowStates\` **replaces the entire array** (it is not a merge). \`
         return ok(c, TeamDetail, toOut(existing));
       }
 
-      const updated = await db.update(team).set(patch).where(where).returning();
-      const row = updated[0];
-      if (!row) throw new NotFoundError('Team not found');
+      const row = await db.transaction(async (tx) => {
+        const updated = await tx.update(team).set(patch).where(where).returning();
+        const patched = updated[0];
+        if (!patched) throw new NotFoundError('Team not found');
+        // The actor keeps its own copy of the name so an owner chip renders without joining
+        // `team`; a rename that skipped this would leave the pickers offering the old one.
+        if (body.name !== undefined) await renameTeamActor(tx, patched.id, patched.name);
+        return patched;
+      });
       await enqueueSearchUpsert(orgId, 'team', row.id);
       return ok(c, TeamDetail, toOut(row));
     },
@@ -222,13 +239,19 @@ After archival the team disappears from \`GET /\` and \`GET /:teamId\` (both fil
       const { orgId } = c.get('actorCtx');
       const { teamId } = c.req.valid('param');
       const archivedAt = new Date();
-      const updated = await db
-        .update(team)
-        .set({ archivedAt })
-        .where(and(eq(team.id, teamId), eq(team.organizationId, orgId), isNull(team.archivedAt)))
-        .returning({ id: team.id, archivedAt: team.archivedAt });
-      const row = updated[0];
-      if (!row) throw new NotFoundError('Team not found');
+      const row = await db.transaction(async (tx) => {
+        const updated = await tx
+          .update(team)
+          .set({ archivedAt })
+          .where(and(eq(team.id, teamId), eq(team.organizationId, orgId), isNull(team.archivedAt)))
+          .returning({ id: team.id, archivedAt: team.archivedAt });
+        const archived = updated[0];
+        if (!archived) throw new NotFoundError('Team not found');
+        // Soft-delete the actor too, so the team stops being offered for new assignments while
+        // the work it already owns keeps a resolvable owner.
+        await archiveTeamActor(tx, archived.id, archivedAt);
+        return archived;
+      });
       /* v8 ignore next -- @preserve defensive: the just-set archivedAt is always present on the returned row */
       const archivedIso = (row.archivedAt ?? archivedAt).toISOString();
       await enqueueSearchDelete(orgId, 'team', row.id);

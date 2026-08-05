@@ -43,6 +43,7 @@ import { orgContextMiddleware } from '../permissions/org-context-middleware';
 import { enqueueSearchUpsert } from '../search/write-through';
 import { initiativeHierarchyDepth } from './initiative-hierarchy';
 import { SYSTEM_ROLES, resolveUniqueSlug, slugify, toOrgOut } from './org-helpers';
+import { createTeamActor } from './team-actor';
 import activity from './activity';
 import stream from './stream';
 import agentSessions from './agent-sessions';
@@ -246,12 +247,17 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
         /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
         if (!defaultTeam) throw new Error('default team insert returned no row');
 
-        await tx
-          .insert(actor)
-          .values({ organizationId: org.id, kind: 'team', displayName: defaultTeam.name });
-        await tx
-          .insert(teamMember)
-          .values({ teamId: defaultTeam.id, actorId: ownerActor.id, organizationId: org.id });
+        await createTeamActor(tx, {
+          organizationId: org.id,
+          teamId: defaultTeam.id,
+          name: defaultTeam.name,
+        });
+        await tx.insert(teamMember).values({
+          teamId: defaultTeam.id,
+          actorId: ownerActor.id,
+          organizationId: org.id,
+          role: 'manager',
+        });
 
         // Materialize the owner/admin/member role base as grants at the org root.
         const grantValues: (typeof grant.$inferInsert)[] = [];

@@ -344,4 +344,70 @@ describe('teams router', () => {
       ).status,
     ).toBe(422);
   });
+
+  // The database check constraint can only say the shape is legal. That a team's actor is created,
+  // renamed and archived *with* it is a lifecycle the constraint cannot express, so it is asserted
+  // here — a team whose actor went missing cannot be named as an owner, and nothing would say so
+  // until an assignment silently had nowhere to go.
+  it('carries a shadow actor through create, rename and archive', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(teams, orgId, ['manage'], humanActorId);
+    const { and, eq } = await import('drizzle-orm');
+
+    /** Read the shadow actor for a team, or null when it has none. */
+    async function shadow(
+      teamId: string,
+    ): Promise<{ displayName: string; kind: string; archivedAt: Date | null } | null> {
+      const rows = await db
+        .select({
+          displayName: schema.actor.displayName,
+          kind: schema.actor.kind,
+          archivedAt: schema.actor.archivedAt,
+        })
+        .from(schema.actor)
+        .where(and(eq(schema.actor.teamId, teamId), eq(schema.actor.organizationId, orgId)))
+        .limit(1);
+      return rows[0] ?? null;
+    }
+
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Comms Committee', key: uniqueKey() }),
+    });
+    expect(created.status).toBe(200);
+    const teamId = (await json<TeamBody>(created)).id;
+
+    expect(await shadow(teamId)).toEqual({
+      displayName: 'Comms Committee',
+      kind: 'team',
+      archivedAt: null,
+    });
+
+    // A rename has to reach the actor's own copy of the name, or the owner pickers keep offering
+    // the old one with no error anywhere to notice.
+    const renamed = await writer.request(`/${teamId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Communications' }),
+    });
+    expect(renamed.status).toBe(200);
+    expect((await shadow(teamId))?.displayName).toBe('Communications');
+
+    // A patch that does not touch the name leaves the actor alone.
+    await writer.request(`/${teamId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ triageEnabled: false }),
+    });
+    expect((await shadow(teamId))?.displayName).toBe('Communications');
+
+    // Archiving soft-deletes the actor rather than removing it, so work the team already owns
+    // keeps a resolvable owner instead of having its owner_id nulled out.
+    const archived = await writer.request(`/${teamId}`, { method: 'DELETE' });
+    expect(archived.status).toBe(200);
+    const afterArchive = await shadow(teamId);
+    expect(afterArchive).not.toBeNull();
+    expect(afterArchive?.archivedAt).toBeInstanceOf(Date);
+  });
 });

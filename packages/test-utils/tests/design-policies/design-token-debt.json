@@ -401,12 +401,6 @@
   "apps/web/src/components/project-detail/overview-summary.tsx": {
     "raw-type-utility": 7
   },
-  "apps/web/src/components/project-detail/progress-bar.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/project-detail/project-dependencies.tsx": {
-    "raw-type-utility": 4
-  },
   "apps/web/src/components/projects/project-catalog.ts": {
     "raw-type-utility": 1
   },

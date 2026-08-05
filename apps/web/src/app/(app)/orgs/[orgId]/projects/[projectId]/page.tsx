@@ -41,7 +41,6 @@ import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
-import { WeightedProgress } from '@/components/project-detail/progress-bar';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { projectStatusOf } from '@/components/project-detail/project-config';
@@ -87,7 +86,6 @@ export default function ProjectDetailPage(): JSX.Element {
     canEdit,
     programOptions,
     initiativeOptions,
-    progress,
     agentsHere,
     agentActivity,
     initiativeIds,
@@ -456,11 +454,6 @@ export default function ProjectDetailPage(): JSX.Element {
             highlightId={highlightMilestoneId}
           />
 
-          {progress ? (
-            <section className="bg-surface-container-low rounded-xl p-4" aria-label="Progress">
-              <WeightedProgress progress={progress} />
-            </section>
-          ) : null}
           <AgentsStrip agents={agentsHere} />
           <AgentActivityFeed activities={agentActivity} />
 

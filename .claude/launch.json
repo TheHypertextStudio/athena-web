@@ -3,10 +3,12 @@
   "configurations": [
     {
       "name": "docket-web",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
-      "port": 4000,
-      "url": "https://docket.localhost"
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "pnpm exec dotenv -e .env.local -- pnpm exec turbo run dev --filter=@docket/web --filter=@docket/api"
+      ],
+      "port": 4000
     }
   ]
 }

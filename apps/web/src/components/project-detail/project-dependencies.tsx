@@ -39,7 +39,7 @@ export function ProjectDependenciesPanel({
     <section aria-label="Project dependencies" className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <DecorativeIcon icon={LinkIcon} />
-        <h2 className="text-on-surface text-body-medium font-semibold">Dependencies</h2>
+        <h2 className="text-on-surface text-title-small">Dependencies</h2>
       </div>
       {/* placeholder: what this project blocks and is blocked by — the linked items and their
           titles and states. The "Dependencies" heading and both column labels are static copy and
@@ -120,9 +120,9 @@ function DependencyColumn({
   onRemove,
 }: DependencyColumnProps): JSX.Element {
   return (
-    <div className="border-outline-variant bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl border p-3">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex min-w-0 items-center justify-between gap-2">
-        <h3 className="text-on-surface text-body-medium min-w-0 truncate font-medium">{title}</h3>
+        <h3 className="text-on-surface-variant text-label-large min-w-0 truncate">{title}</h3>
         {canEdit ? (
           <EntityPicker
             options={pickerOptions}
@@ -140,14 +140,14 @@ function DependencyColumn({
         ) : null}
       </div>
       {projects.length === 0 ? (
-        <p className="text-on-surface-variant text-xs">{emptyText}</p>
+        <p className="text-on-surface-variant text-body-small">{emptyText}</p>
       ) : (
         <ul className="flex flex-col gap-1">
           {projects.map((project) => (
             <li key={project.id} className="flex min-w-0 items-center gap-1">
               <Link
                 href={`/orgs/${orgId}/projects/${project.id}`}
-                className="text-on-surface hover:text-primary min-w-0 flex-1 truncate rounded px-1 py-1 text-sm transition-colors"
+                className="text-on-surface hover:text-primary text-body-medium min-w-0 flex-1 truncate rounded px-1 py-1 transition-colors"
               >
                 {project.name}
               </Link>

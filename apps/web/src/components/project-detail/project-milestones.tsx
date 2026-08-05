@@ -17,7 +17,7 @@
  */
 import type { MilestoneOut } from '@docket/types';
 import { DatePicker } from '@docket/ui/components';
-import { Flag, Plus, X } from '@docket/ui/icons';
+import { Flag, X } from '@docket/ui/icons';
 import { Button, DecorativeIcon } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
 import { type JSX, useMemo, useState } from 'react';
@@ -72,10 +72,7 @@ export function ProjectMilestonesPanel({
   const ordered = useMemo(() => [...milestones].sort((a, b) => a.sort - b.sort), [milestones]);
 
   return (
-    <section
-      aria-label="Milestones"
-      className="border-outline-variant bg-surface-container-low flex flex-col gap-4 rounded-xl border p-4"
-    >
+    <section aria-label="Milestones" className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <DecorativeIcon icon={Flag} />
         <h2 className="text-on-surface text-title-small">Milestones</h2>
@@ -211,13 +208,11 @@ function QuickAddMilestoneRow({ onAdd, disabled }: QuickAddMilestoneRowProps): J
 
   return (
     <form
-      className="border-outline-variant focus-within:border-primary flex items-center gap-2 rounded-lg border border-dashed px-3 transition-colors"
       onSubmit={(event) => {
         event.preventDefault();
         add();
       }}
     >
-      <Plus aria-hidden className="text-on-surface-variant size-4 shrink-0" />
       <input
         value={name}
         disabled={disabled}
@@ -232,7 +227,7 @@ function QuickAddMilestoneRow({ onAdd, disabled }: QuickAddMilestoneRowProps): J
             add();
           }
         }}
-        className="text-body-medium text-on-surface placeholder:text-on-surface-variant h-11 flex-1 bg-transparent outline-none"
+        className="border-outline-variant focus:border-primary text-body-medium text-on-surface placeholder:text-on-surface-variant h-10 w-full rounded-lg border bg-transparent px-3 outline-none"
       />
     </form>
   );

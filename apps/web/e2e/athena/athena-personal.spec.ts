@@ -274,6 +274,9 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   await expect(page.getByText(/sunsama_create_task/)).toBeVisible();
   await page.getByRole('form', { name: 'Steer Athena' }).scrollIntoViewIfNeeded();
   await expect(page.getByText('Added 2 blocks to Thursday', { exact: true })).toBeVisible();
+  // `combobox`, not `textbox`: the composer has an `@` picker attached, and ARIA's role for a
+  // field that opens a list of options is combobox. A `textbox` query cannot match it while
+  // `MentionTextarea` sets that role.
   await expect(page.getByRole('combobox', { name: 'Add context or answer' })).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('athena-mobile-below-fold.png'),

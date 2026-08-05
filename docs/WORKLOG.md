@@ -9,8 +9,11 @@
 
 ### [MENTIONS-001] Reference any resource from inside prose with `@`
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-04
+- **Completed**: 2026-08-05 — deployed to production; `0067_resource_mentions` applied by the
+  deploy job, and `/v1/orgs/:orgId/mentions/{search,external,hydrate}` plus the four
+  `:id/mentions` reads answer on `docket-api.hypertext.studio`.
 - **Priority**: P1
 - **Description**: Typing `@` in any text surface opens an autocomplete that searches local
   Docket entities and the user's connected external apps (Google Drive first). The result

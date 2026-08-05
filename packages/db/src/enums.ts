@@ -46,6 +46,23 @@ export const cycleStatus = pgEnum('cycle_status', ['upcoming', 'active', 'comple
 export const health = pgEnum('health', ['on_track', 'at_risk', 'off_track']);
 /** Task priority. */
 export const taskPriority = pgEnum('task_priority', ['none', 'urgent', 'high', 'medium', 'low']);
+/**
+ * The workspace-wide task-estimation scale — which set of point values `task.estimate` is
+ * chosen from, mirroring Linear's per-workspace estimate setting.
+ *
+ * @remarks
+ * `none` turns estimation off entirely (no picker renders; existing `estimate` values are left
+ * alone but nothing new can be set). The other four each map to a fixed, ordered set of point
+ * values — see `ESTIMATION_SCALES` in `@docket/types`, the single source of truth both the
+ * settings picker and the task estimate picker read from.
+ */
+export const estimationScale = pgEnum('estimation_scale', [
+  'none',
+  'exponential',
+  'fibonacci',
+  'linear',
+  't_shirt',
+]);
 
 /** Whether a Task is Docket-native or linked from an external integration. */
 export const provenanceSource = pgEnum('provenance_source', ['native', 'linked']);

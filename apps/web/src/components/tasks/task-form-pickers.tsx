@@ -1,6 +1,6 @@
 'use client';
 
-import type { Priority, TeamOut } from '@docket/types';
+import type { EstimationScale, Priority, TeamOut } from '@docket/types';
 import {
   ActorPicker,
   DatePicker,
@@ -13,6 +13,7 @@ import { Flag, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
+import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
 import { TeamPicker } from '@/components/teams/team-picker';
 import { formatCalendarDate } from '@/lib/format-date';
 
@@ -36,6 +37,9 @@ interface TaskComposerPickersProps {
   dueDate: string | null;
   labelIds: readonly string[];
   labelOptions: readonly PickerOption[];
+  /** The workspace's configured estimation scale, or `null` while it loads. */
+  estimationScale: EstimationScale | null;
+  estimate: number | null;
   creating: boolean;
   onTeamChange: (id: string | null) => void;
   onStateChange: (state: string | null) => void;
@@ -47,6 +51,7 @@ interface TaskComposerPickersProps {
   onStartDateChange: (d: string | null) => void;
   onDueDateChange: (d: string | null) => void;
   onLabelToggle: (id: string) => void;
+  onEstimateChange: (value: number | null) => void;
 }
 
 function triggerDate(value: string | null): string | undefined {
@@ -74,6 +79,8 @@ export function TaskComposerPickers({
   dueDate,
   labelIds,
   labelOptions,
+  estimationScale,
+  estimate,
   creating,
   onTeamChange,
   onStateChange,
@@ -85,6 +92,7 @@ export function TaskComposerPickers({
   onStartDateChange,
   onDueDateChange,
   onLabelToggle,
+  onEstimateChange,
 }: TaskComposerPickersProps): JSX.Element {
   const projectNounLower = projectNoun.toLowerCase();
   const cycleNounLower = cycleNoun.toLowerCase();
@@ -183,6 +191,14 @@ export function TaskComposerPickers({
         ariaLabel="Labels"
         disabled={creating}
       />
+      {estimationScale && estimationScale !== 'none' ? (
+        <EstimatePicker
+          scale={estimationScale}
+          value={estimate}
+          onChange={onEstimateChange}
+          disabled={creating}
+        />
+      ) : null}
     </>
   );
 }

@@ -1,9 +1,13 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
-
-import type { WorkspaceSettingsOut } from '@docket/types';
+import {
+  ESTIMATION_SCALE_LABEL,
+  ESTIMATION_SCALES,
+  type EstimationScale,
+  type WorkspaceSettingsOut,
+} from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
+import { useAppParams } from '@/lib/app-location';
 import { useEffect, useState, type JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
@@ -11,6 +15,21 @@ import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
+
+/** The estimation scales offered, in picker order. */
+const ESTIMATION_SCALE_ORDER: readonly EstimationScale[] = [
+  'none',
+  'exponential',
+  'fibonacci',
+  'linear',
+  't_shirt',
+];
+
+/** The point values a scale offers, rendered as picker sub-copy (e.g. "1, 2, 4, 8, 16, 32"). */
+function scaleValuesCopy(scale: EstimationScale): string | null {
+  const options = ESTIMATION_SCALES[scale];
+  return options.length > 0 ? options.map((o) => o.label).join(', ') : null;
+}
 
 /** Configure the maximum Initiative hierarchy depth for a workspace. */
 export default function WorkStructureSettingsPage(): JSX.Element {
@@ -29,11 +48,15 @@ export default function WorkStructureSettingsPage(): JSX.Element {
     15_000,
   );
   const [depth, setDepth] = useState(2);
+  const [scale, setScale] = useState<EstimationScale>('fibonacci');
   useEffect(() => {
-    if (settingsQ.data) setDepth(settingsQ.data.initiativeMaxDepth);
+    if (settingsQ.data) {
+      setDepth(settingsQ.data.initiativeMaxDepth);
+      setScale(settingsQ.data.estimationScale);
+    }
   }, [settingsQ.data]);
 
-  const save = useApiMutation<WorkspaceSettingsOut, number>({
+  const saveDepth = useApiMutation<WorkspaceSettingsOut, number>({
     mutationFn: (initiativeMaxDepth) =>
       unwrap(
         () =>
@@ -46,17 +69,31 @@ export default function WorkStructureSettingsPage(): JSX.Element {
     invalidateKeys: [key, queryKeys.initiatives(orgId)],
   });
 
+  const saveScale = useApiMutation<WorkspaceSettingsOut, EstimationScale>({
+    mutationFn: (estimationScale) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].settings['work-structure'].$patch({
+            param: { orgId },
+            json: { estimationScale },
+          }),
+        'Could not save the estimation scale.',
+      ),
+    invalidateKeys: [key],
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader
         title="Work structure"
-        description="Keep initiatives strategic by limiting how deeply they can be nested."
+        description="Keep initiatives strategic by limiting how deeply they can be nested, and choose how the team sizes work."
       />
 
-      {/* placeholder: the workspace's configured initiative-nesting depth, and whether the caller
-          is permitted to change it. The heading and explanation above are static copy. */}
+      {/* placeholder: the workspace's configured initiative-nesting depth and estimation scale,
+          and whether the caller is permitted to change them. The headings and explanations above
+          are static copy. */}
       {settingsQ.isPending ? (
-        <Skeleton className="h-44 max-w-2xl rounded-lg" />
+        <Skeleton className="h-96 max-w-2xl rounded-lg" />
       ) : settingsQ.isError ? (
         <p role="status" className="text-on-surface-variant text-sm">
           Work structure is temporarily unavailable. We&apos;ll keep checking automatically.
@@ -84,13 +121,13 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                 key={value}
                 type="button"
                 aria-pressed={depth === value}
-                disabled={permissionLoading || !canManage || save.isPending}
+                disabled={permissionLoading || !canManage || saveDepth.isPending}
                 onClick={() => {
                   setDepth(value);
                   // Autosave immediately, but only when the choice actually differs from
                   // what's persisted — never re-save an unchanged value.
                   if (value !== settingsQ.data.initiativeMaxDepth) {
-                    save.mutate(value);
+                    saveDepth.mutate(value);
                   }
                 }}
                 className={`focus-visible:ring-ring size-10 rounded-md border text-sm font-medium focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
@@ -105,17 +142,80 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           </fieldset>
 
           <div className="flex min-h-5 items-center gap-2 text-xs" aria-live="polite">
-            {save.isPending ? (
+            {saveDepth.isPending ? (
               <span className="text-on-surface-variant">Saving…</span>
-            ) : save.error ? (
+            ) : saveDepth.error ? (
               <span role="alert" className="text-error">
-                {userErrorMessage(save.error, 'Could not save work structure settings.')}
+                {userErrorMessage(saveDepth.error, 'Could not save work structure settings.')}
               </span>
-            ) : save.isSuccess ? (
+            ) : saveDepth.isSuccess ? (
               <span className="text-on-surface-variant">Saved</span>
             ) : (
               <span className="text-on-surface-variant">
                 Current maximum: {settingsQ.data.initiativeMaxDepth}
+              </span>
+            )}
+          </div>
+
+          <div>
+            <h3 id="estimation-scale" className="text-on-surface text-sm font-semibold">
+              Estimation scale
+            </h3>
+            <p className="text-on-surface-variant mt-1 text-sm leading-relaxed">
+              The set of point values shown when estimating a task&apos;s size.
+            </p>
+          </div>
+
+          <fieldset
+            className="flex flex-col gap-2"
+            aria-label="Estimation scale"
+            aria-labelledby="estimation-scale"
+          >
+            {ESTIMATION_SCALE_ORDER.map((value) => {
+              const valuesCopy = scaleValuesCopy(value);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={scale === value}
+                  disabled={permissionLoading || !canManage || saveScale.isPending}
+                  onClick={() => {
+                    setScale(value);
+                    if (value !== settingsQ.data.estimationScale) {
+                      saveScale.mutate(value);
+                    }
+                  }}
+                  className={`focus-visible:ring-ring flex flex-col items-start rounded-md border px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+                    scale === value
+                      ? 'border-primary bg-primary text-on-primary'
+                      : 'border-outline-variant text-on-surface hover:bg-surface-container'
+                  }`}
+                >
+                  <span className="text-sm font-medium">{ESTIMATION_SCALE_LABEL[value]}</span>
+                  {valuesCopy ? (
+                    <span
+                      className={`text-xs ${scale === value ? 'text-on-primary/80' : 'text-on-surface-variant'}`}
+                    >
+                      {valuesCopy}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </fieldset>
+
+          <div className="flex min-h-5 items-center gap-2 text-xs" aria-live="polite">
+            {saveScale.isPending ? (
+              <span className="text-on-surface-variant">Saving…</span>
+            ) : saveScale.error ? (
+              <span role="alert" className="text-error">
+                {userErrorMessage(saveScale.error, 'Could not save the estimation scale.')}
+              </span>
+            ) : saveScale.isSuccess ? (
+              <span className="text-on-surface-variant">Saved</span>
+            ) : (
+              <span className="text-on-surface-variant">
+                Current scale: {ESTIMATION_SCALE_LABEL[settingsQ.data.estimationScale]}
               </span>
             )}
           </div>

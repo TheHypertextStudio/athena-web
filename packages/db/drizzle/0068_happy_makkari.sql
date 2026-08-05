@@ -1,0 +1,2 @@
+CREATE TYPE "public"."estimation_scale" AS ENUM('none', 'exponential', 'fibonacci', 'linear', 't_shirt');--> statement-breakpoint
+ALTER TABLE "organization" ADD COLUMN "estimation_scale" "estimation_scale" DEFAULT 'fibonacci' NOT NULL;

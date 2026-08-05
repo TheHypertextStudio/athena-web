@@ -47,6 +47,7 @@ import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
+import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 import { TaskComposerPickers } from './task-form-pickers';
@@ -97,6 +98,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const cycleNoun = useVocabulary('cycle');
 
   const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+  const { scale: estimationScale } = useEstimationScale(orgId);
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -110,6 +112,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [startDate, setStartDate] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [labelIds, setLabelIds] = useState<readonly string[]>([]);
+  const [estimate, setEstimate] = useState<number | null>(null);
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +194,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           ...(startDate ? { startDate } : {}),
           ...(dueDate ? { dueDate } : {}),
           ...(labelIds.length > 0 ? { labels: labelIds.map((id) => LabelId.parse(id)) } : {}),
+          ...(estimate !== null ? { estimate } : {}),
         },
       });
       if (!res.ok) {
@@ -223,6 +227,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     startDate,
     dueDate,
     labelIds,
+    estimate,
     orgId,
     onOpenChange,
     onCreated,
@@ -266,6 +271,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         dueDate={dueDate}
         labelIds={labelIds}
         labelOptions={options.labelOptions}
+        estimationScale={estimationScale}
+        estimate={estimate}
         creating={creating}
         onTeamChange={setTeamOverride}
         onStateChange={setState}
@@ -277,6 +284,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         onStartDateChange={setStartDate}
         onDueDateChange={setDueDate}
         onLabelToggle={toggleLabel}
+        onEstimateChange={setEstimate}
       />
     </ComposerShell>
   );

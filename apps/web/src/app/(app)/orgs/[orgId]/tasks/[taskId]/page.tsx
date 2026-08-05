@@ -37,6 +37,7 @@ import {
   programOptions as toProgramOptions,
   projectOptions as toProjectOptions,
 } from '@/components/pickers/options';
+import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
@@ -89,6 +90,8 @@ export default function TaskDetailPage(): JSX.Element {
     deletePending,
     deleteError,
   } = useTaskMutations(orgId, taskId, detailKey, detailKey);
+
+  const { scale: estimationScale } = useEstimationScale(orgId);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -366,6 +369,7 @@ export default function TaskDetailPage(): JSX.Element {
           programOptions={programOptions}
           milestoneOptions={milestoneOptions}
           cycleOptions={cycleOptions}
+          estimationScale={estimationScale}
           canEdit={canEdit}
           onPatch={patchTask}
         />

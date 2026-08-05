@@ -31,7 +31,7 @@
  * read-only state and pending state are controlled by the parent so the rail has no mutation state
  * of its own.
  */
-import type { TaskDetail } from '@docket/types';
+import type { EstimationScale, TaskDetail } from '@docket/types';
 import { DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
 import { Flag, FolderKanban, Layers, RefreshCw } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -39,6 +39,7 @@ import type { JSX, ReactNode } from 'react';
 
 import { formatCalendarDate } from '@/lib/format-date';
 import type { TaskPatch } from '@/lib/use-task-mutations';
+import { EstimatePicker } from './EstimatePicker';
 import { PropertyRow } from './PropertyRow';
 
 /**
@@ -118,6 +119,15 @@ export interface TaskPropertiesRailProps {
   programOptions: readonly PickerOption[];
   milestoneOptions: readonly PickerOption[];
   cycleOptions: readonly PickerOption[];
+  /**
+   * The workspace's configured estimation scale, or `null` while it loads.
+   *
+   * @remarks
+   * The Estimate row renders only once this resolves to a scale other than `'none'` — a
+   * workspace that has turned estimation off gets no row at all, and a still-loading scale gets
+   * no picker offering the wrong (or zero) choices rather than a flash of one.
+   */
+  estimationScale: EstimationScale | null;
   canEdit: boolean;
   onPatch: (patch: TaskPatch) => void;
 }
@@ -136,6 +146,7 @@ export function TaskPropertiesRail({
   programOptions,
   milestoneOptions,
   cycleOptions,
+  estimationScale,
   canEdit,
   onPatch,
 }: TaskPropertiesRailProps): JSX.Element {
@@ -258,15 +269,19 @@ export function TaskPropertiesRail({
           />
         </PropertyRow>
 
-        <PropertyRow label="Estimate">
-          {typeof task.estimate === 'number' ? (
-            <PropertyText>
-              {task.estimate} {task.estimate === 1 ? 'point' : 'points'}
-            </PropertyText>
-          ) : (
-            <PropertyText muted>None</PropertyText>
-          )}
-        </PropertyRow>
+        {estimationScale && estimationScale !== 'none' ? (
+          <PropertyRow label="Estimate">
+            <EstimatePicker
+              scale={estimationScale}
+              value={task.estimate ?? null}
+              onChange={(estimate) => {
+                onPatch({ estimate });
+              }}
+              readOnly={!canEdit}
+              triggerClassName={PROPERTY_CONTROL_CLASS}
+            />
+          </PropertyRow>
+        ) : null}
 
         <PropertyRow label="Created">
           <PropertyText muted>{formatDate(task.createdAt)}</PropertyText>

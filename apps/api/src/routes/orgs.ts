@@ -298,13 +298,16 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
       tag: 'Orgs',
       summary: 'Get workspace work-structure settings',
       description:
-        'Returns the workspace-owned structural constraints that govern strategic work, including the maximum total depth permitted for Initiative hierarchies in this workspace context.',
+        'Returns the workspace-owned structural constraints that govern strategic work: the maximum total depth permitted for Initiative hierarchies, and the task-estimation scale.',
       response: WorkspaceSettingsOut,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const rows = await db
-        .select({ initiativeMaxDepth: organization.initiativeMaxDepth })
+        .select({
+          initiativeMaxDepth: organization.initiativeMaxDepth,
+          estimationScale: organization.estimationScale,
+        })
         .from(organization)
         .where(eq(organization.id, orgId))
         .limit(1);
@@ -322,7 +325,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
       tag: 'Orgs',
       summary: 'Update workspace work-structure settings',
       description:
-        'Updates workspace-owned structural constraints. Reducing Initiative depth is rejected when an existing hierarchy would exceed the requested maximum, so no links are silently discarded.',
+        'Updates workspace-owned structural constraints. Reducing Initiative depth is rejected when an existing hierarchy would exceed the requested maximum, so no links are silently discarded. Changing the estimation scale re-interprets existing task estimates under the new scale rather than clearing them.',
       capability: 'manage',
       response: WorkspaceSettingsOut,
     }),
@@ -352,7 +355,10 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
           .update(organization)
           .set(body)
           .where(eq(organization.id, orgId))
-          .returning({ initiativeMaxDepth: organization.initiativeMaxDepth });
+          .returning({
+            initiativeMaxDepth: organization.initiativeMaxDepth,
+            estimationScale: organization.estimationScale,
+          });
         return rows[0];
       });
       /* v8 ignore next -- @preserve org context middleware proved the workspace exists */

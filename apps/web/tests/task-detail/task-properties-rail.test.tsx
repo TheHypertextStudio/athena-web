@@ -62,6 +62,7 @@ function renderRail(
       programOptions={[]}
       milestoneOptions={[]}
       cycleOptions={[]}
+      estimationScale="fibonacci"
       canEdit
       onPatch={vi.fn()}
       {...props}
@@ -178,6 +179,41 @@ describe('TaskPropertiesRail — anticipated start', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Clear' }));
 
     expect(onPatch).toHaveBeenCalledWith({ startDate: null });
+  });
+});
+
+describe('TaskPropertiesRail — estimate', () => {
+  it('hides the row entirely when the workspace has no estimates configured', () => {
+    renderRail({ estimationScale: 'none' });
+    expect(screen.queryByText('Estimate')).not.toBeInTheDocument();
+  });
+
+  it('hides the row while the workspace scale is still loading', () => {
+    renderRail({ estimationScale: null });
+    expect(screen.queryByText('Estimate')).not.toBeInTheDocument();
+  });
+
+  it("offers the workspace scale's values and patches `estimate` on selection", async () => {
+    const onPatch = vi.fn();
+    renderRail({ estimationScale: 'fibonacci', onPatch });
+
+    expect(screen.getByRole('button', { name: 'Estimate — not set' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate — not set' }));
+    // The listbox row's accessible `option` role sits on the `<li>` wrapper; the click handler
+    // lives on its inner `<button>`, which is what a real click actually lands on.
+    fireEvent.click(await screen.findByRole('button', { name: '8' }));
+
+    expect(onPatch).toHaveBeenCalledWith({ estimate: 8 });
+  });
+
+  it('clears a set estimate back to null through the clear row', async () => {
+    const onPatch = vi.fn();
+    renderRail({ task: task({ estimate: 3 }), estimationScale: 'fibonacci', onPatch });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate — 3' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'None' }));
+
+    expect(onPatch).toHaveBeenCalledWith({ estimate: null });
   });
 });
 

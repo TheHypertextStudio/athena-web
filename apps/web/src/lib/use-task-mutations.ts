@@ -45,6 +45,8 @@ export interface TaskPatch {
   programId?: string | null;
   milestoneId?: string | null;
   cycleId?: string | null;
+  /** New point estimate, or `null` to clear it. */
+  estimate?: number | null;
   /**
    * The anticipated start date as a bare `YYYY-MM-DD` calendar day, or `null` to clear it.
    *
@@ -200,6 +202,7 @@ export function useTaskMutations(
         ...(patch.cycleId !== undefined
           ? { cycleId: patch.cycleId === null ? null : CycleId.parse(patch.cycleId) }
           : {}),
+        ...(patch.estimate !== undefined ? { estimate: patch.estimate } : {}),
         ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
         ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
       };

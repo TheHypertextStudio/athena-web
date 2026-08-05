@@ -407,8 +407,9 @@ export const TaskUpdate = z
     estimate: z
       .number()
       .int()
+      .nullable()
       .optional()
-      .describe('New point estimate (integer). Omit to leave unchanged.'),
+      .describe('New point estimate (integer), or null to clear. Omit to leave unchanged.'),
     estimateMinutes: z
       .number()
       .int()

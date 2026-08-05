@@ -173,6 +173,66 @@ export const OrgSummary = z
 /** Organization summary value. */
 export type OrgSummary = z.infer<typeof OrgSummary>;
 
+/**
+ * The workspace-wide task-estimation scale — which fixed set of point values `task.estimate`
+ * is chosen from, mirroring Linear's per-workspace estimate setting.
+ *
+ * @remarks
+ * `none` turns estimation off entirely: no picker renders anywhere in the product, though any
+ * `estimate` already stored on a task is left alone rather than silently cleared. See
+ * {@link ESTIMATION_SCALES} for the point values/labels each of the other four scales offers.
+ */
+export const EstimationScale = z
+  .enum(['none', 'exponential', 'fibonacci', 'linear', 't_shirt'])
+  .describe(
+    "The workspace's task-estimation scale: 'none' (no estimates), 'exponential' " +
+      "(1, 2, 4, 8, 16, 32), 'fibonacci' (0, 1, 2, 3, 5, 8, 13, 21), 'linear' (1–10), or " +
+      "'t_shirt' (XS–XL).",
+  );
+/** Workspace estimation-scale value. */
+export type EstimationScale = z.infer<typeof EstimationScale>;
+
+/** One selectable point value a task estimate picker offers, under a given scale. */
+export interface EstimationScaleOption {
+  /** The integer persisted to `task.estimate`. */
+  readonly value: number;
+  /** The label a picker shows for this value (a bare number for every scale but t-shirt). */
+  readonly label: string;
+}
+
+/** Human label for each {@link EstimationScale}, for the workspace settings picker. */
+export const ESTIMATION_SCALE_LABEL: Readonly<Record<EstimationScale, string>> = {
+  none: 'No estimates',
+  exponential: 'Exponential',
+  fibonacci: 'Fibonacci',
+  linear: 'Linear',
+  t_shirt: 'T-shirt sizes',
+};
+
+/**
+ * The single source of truth for what point values each {@link EstimationScale} offers, in
+ * picker order. Read by both the workspace settings picker (to describe each scale option) and
+ * the task estimate picker (to build its choices once a workspace's scale is known).
+ */
+export const ESTIMATION_SCALES: Readonly<
+  Record<EstimationScale, readonly EstimationScaleOption[]>
+> = {
+  none: [],
+  exponential: [1, 2, 4, 8, 16, 32].map((value) => ({ value, label: String(value) })),
+  fibonacci: [0, 1, 2, 3, 5, 8, 13, 21].map((value) => ({ value, label: String(value) })),
+  linear: Array.from({ length: 10 }, (_, i) => i + 1).map((value) => ({
+    value,
+    label: String(value),
+  })),
+  t_shirt: [
+    { value: 1, label: 'XS' },
+    { value: 2, label: 'S' },
+    { value: 3, label: 'M' },
+    { value: 5, label: 'L' },
+    { value: 8, label: 'XL' },
+  ],
+};
+
 /** Settings that control the work model within one workspace context. */
 export const WorkspaceSettingsOut = z
   .object({
@@ -182,6 +242,10 @@ export const WorkspaceSettingsOut = z
       .min(1)
       .max(5)
       .describe('Maximum total levels in the workspace Initiative hierarchy.'),
+    estimationScale: EstimationScale.describe(
+      "The workspace's task-estimation scale. Determines which point values the task " +
+        'estimate picker offers; see {@link ESTIMATION_SCALES}.',
+    ),
   })
   .meta({ id: 'WorkspaceSettingsOut', description: 'Workspace work-structure settings.' });
 /** Workspace settings representation. */

@@ -17,6 +17,7 @@
 import { z } from 'zod';
 
 import { Priority } from './capability';
+import { CursorQuery } from './pagination';
 import {
   ActorId,
   CycleId,
@@ -28,6 +29,15 @@ import {
   TaskId,
   TeamId,
 } from './primitives';
+
+/** Query filters for listing tasks. */
+export const TaskListQuery = CursorQuery.extend({
+  programId: ProgramId.optional().describe(
+    'Restrict the list to tasks under a Program — carrying its `programId` directly, or belonging to one of the Program’s Projects. Omit for the full active-task list.',
+  ),
+}).meta({ id: 'TaskListQuery', description: 'Query filters for listing tasks.' });
+/** Validated task-list query value. */
+export type TaskListQuery = z.infer<typeof TaskListQuery>;
 
 /**
  * The earliest calendar day any task date may name.

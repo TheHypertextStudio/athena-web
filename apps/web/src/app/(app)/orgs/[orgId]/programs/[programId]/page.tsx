@@ -1,7 +1,6 @@
 'use client';
 
-import type { ProgramWorkOut, TaskOut, UpdateOut } from '@docket/types';
-import { CycleId, TeamId } from '@docket/types';
+import type { UpdateOut } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
@@ -26,23 +25,21 @@ import { EntityDocument } from '@/components/editor/entity-document';
 import { EntityIconGlyph } from '@/components/initiatives/initiative-icon-picker';
 import { PageContainer } from '@/components/views/page-layout';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
-import { type FlowMetrics } from '@/components/programs/flow-snapshot';
+import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
+import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
-import { WorkBoard } from '@/components/programs/work-board';
 import { memberActorOptions } from '@/components/property-pickers/options';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { useActiveOrg } from '@/components/active-org';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
-import { useRenameTask } from '@/lib/use-rename-task';
-import { stateTypeOf } from '@/lib/work-state';
 import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 
-type TabId = 'overview' | 'work' | 'updates';
+type TabId = 'overview' | 'projects' | 'work' | 'updates';
 
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
@@ -50,15 +47,14 @@ export default function ProgramDetailPage(): JSX.Element {
   const params = useParams<{ orgId: string; programId: string }>();
   const { orgId, programId } = params;
 
-  const { defaultTeamId } = useActiveOrg();
+  const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
   const programLabel = useVocabulary('program');
-  const projectNoun = useVocabulary('project').toLowerCase();
-  const cycleLabel = useVocabulary('cycle');
-  const taskNoun = useVocabulary('task').toLowerCase();
-  const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
+  const projectNounCased = useVocabulary('project');
 
   const detailKey = queryKeys.program(orgId, programId);
-  const workKey = useMemo(() => [...detailKey, 'work'] as const, [detailKey]);
+  // Same key `ProgramWorkView` builds internally for its own task-list read, so the tab badge's
+  // count and the tab's own content share one cached fetch instead of two round trips.
+  const workTasksKey = useMemo(() => [...detailKey, 'tasks'] as const, [detailKey]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const [tab, setTab] = useState<TabId>('overview');
@@ -76,18 +72,14 @@ export default function ProgramDetailPage(): JSX.Element {
   const agents = detail?.agents ?? [];
   const roles = detail?.roles ?? [];
 
-  const workQ = useApiQuery(
+  const workTasksQ = useApiQuery(
     apiQueryOptions(
-      workKey,
-      () =>
-        api.v1.orgs[':orgId'].programs[':id'].work.$get({
-          param: { orgId, id: programId },
-          query: {},
-        }),
+      workTasksKey,
+      () => api.v1.orgs[':orgId'].tasks.$get({ param: { orgId }, query: { programId } }),
       "Could not load this program's work.",
     ),
   );
-  const work: ProgramWorkOut | null = workQ.data ?? null;
+  const workCount = workTasksQ.data?.items.length ?? 0;
 
   const updatesQ = useApiQuery(
     apiQueryOptions(
@@ -115,31 +107,6 @@ export default function ProgramDetailPage(): JSX.Element {
         : { name: 'System', kind: 'human' };
   }, [members, agents]);
 
-  const metrics = useMemo<FlowMetrics>(() => {
-    let inFlight = 0;
-    let queued = 0;
-    let done = 0;
-    const cycleIds = new Set<string>();
-    for (const group of work?.groups ?? []) {
-      if (group.cycle.id) cycleIds.add(group.cycle.id);
-      for (const segment of group.segments) {
-        for (const task of segment.tasks) {
-          const type = stateTypeOf(task.state);
-          if (type === 'started') inFlight += 1;
-          else if (type === 'completed') done += 1;
-          else if (type !== 'canceled') queued += 1;
-        }
-      }
-    }
-    return {
-      inFlight,
-      queued,
-      done,
-      activeCycles: cycleIds.size,
-      projects: program?.rollup.projects ?? 0,
-    };
-  }, [work, program]);
-
   const { patchProgram, postUpdate, propsError, updatePosting, updateError } = useProgramMutations(
     orgId,
     programId,
@@ -149,28 +116,6 @@ export default function ProgramDetailPage(): JSX.Element {
   );
 
   const canEdit = useOrgCapability(members, roles, 'manage');
-
-  // Rename any task on the board in place, then refresh the cycle-grouped work view.
-  const renameWorkTask = useRenameTask(orgId, [workKey]);
-  // Inline quick-add: create a task committed to a given cycle from just a typed title. Attaches to
-  // the viewer's default team (the board itself is team-agnostic); disabled when there is no team.
-  const createWorkTask = useApiMutation<TaskOut, { cycleId: string; title: string }>({
-    mutationFn: ({ cycleId, title }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].tasks.$post({
-            param: { orgId },
-            json: {
-              title,
-              teamId: TeamId.parse(defaultTeamId ?? ''),
-              priority: 'none',
-              cycleId: CycleId.parse(cycleId),
-            },
-          }),
-        `Could not add the ${taskNoun}.`,
-      ),
-    invalidateKeys: [workKey],
-  });
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const deleteProgram = useApiMutation({
@@ -194,11 +139,14 @@ export default function ProgramDetailPage(): JSX.Element {
     () => [
       { value: 'overview', label: 'Overview' },
       {
+        value: 'projects',
+        label: 'Projects',
+        ...(program?.rollup.projects ? { count: program.rollup.projects } : {}),
+      },
+      {
         value: 'work',
         label: 'Work',
-        ...(metrics.inFlight + metrics.queued + metrics.done
-          ? { count: metrics.inFlight + metrics.queued + metrics.done }
-          : {}),
+        ...(workCount ? { count: workCount } : {}),
       },
       {
         value: 'updates',
@@ -206,7 +154,7 @@ export default function ProgramDetailPage(): JSX.Element {
         ...(updates.length ? { count: updates.length } : {}),
       },
     ],
-    [metrics, updates.length],
+    [program?.rollup.projects, workCount, updates.length],
   );
 
   if (detailQ.isPending) {
@@ -367,30 +315,27 @@ export default function ProgramDetailPage(): JSX.Element {
         </div>
       ) : null}
 
+      {tab === 'projects' ? (
+        <div role="tabpanel" id="tabpanel-projects" aria-labelledby="tab-projects">
+          <ProgramProjectsPanel
+            orgId={orgId}
+            programId={programId}
+            programDetailKey={detailKey}
+            projectNoun={projectNounCased}
+            teams={teams}
+            defaultTeamId={defaultTeamId}
+            teamsLoading={teamsLoading}
+            canEdit={canEdit}
+            onOpenProject={(projectId) => {
+              router.push(`/orgs/${orgId}/projects/${projectId}`);
+            }}
+          />
+        </div>
+      ) : null}
+
       {tab === 'work' ? (
         <div role="tabpanel" id="tabpanel-work" aria-labelledby="tab-work">
-          <WorkBoard
-            work={work}
-            loading={workQ.isPending}
-            error={
-              workQ.isError ? userErrorMessage(workQ.error, 'Could not load this program.') : null
-            }
-            cycleLabel={cycleLabel}
-            taskNoun={taskNoun}
-            taskNounPlural={taskNounPlural}
-            projectNoun={projectNoun}
-            canEdit={canEdit}
-            onOpenTask={(taskId) => {
-              router.push(`/orgs/${orgId}/tasks/${taskId}`);
-            }}
-            onRename={renameWorkTask}
-            {...(defaultTeamId
-              ? {
-                  onAddTask: (cycleId: string, title: string) =>
-                    createWorkTask.mutateAsync({ cycleId, title }).then(() => undefined),
-                }
-              : {})}
-          />
+          <ProgramWorkView orgId={orgId} programId={programId} />
         </div>
       ) : null}
 

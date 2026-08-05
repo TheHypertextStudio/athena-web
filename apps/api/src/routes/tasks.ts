@@ -2,16 +2,16 @@
 import { type Capability, satisfies } from '@docket/authz';
 import { actor, cycle, db, program, project, task, taskDependency, team } from '@docket/db';
 import {
-  CursorQuery,
   pageOf,
   TaskArchived,
   TaskCreate,
   TaskDetail,
+  TaskListQuery,
   TaskOut,
   TaskStateUpdate,
   TaskUpdate,
 } from '@docket/types';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
@@ -202,12 +202,28 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       response: pageOf(TaskOut),
       description: `List the org's active (non-archived) tasks, newest-first. Ordering is a stable keyset on \`(createdAt DESC, id DESC)\`, so paging never skips or repeats a row even as tasks are created concurrently. Archived (soft-deleted) tasks are excluded — fetch those contexts via their parent/project surfaces, not here.
 
-Pagination is opt-in via the cursor query: omit \`limit\` to receive the full active-task list in one response (legacy behavior); supply \`limit\` to receive a bounded page plus a \`nextCursor\` you pass back as \`cursor\` to fetch the next page. \`nextCursor\` is \`null\` on the final page. Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
+Pagination is opt-in via the cursor query: omit \`limit\` to receive the full active-task list in one response (legacy behavior); supply \`limit\` to receive a bounded page plus a \`nextCursor\` you pass back as \`cursor\` to fetch the next page. \`nextCursor\` is \`null\` on the final page. An optional \`programId\` narrows the list to tasks under that Program — carrying its \`program_id\` directly, or belonging to one of the Program's Projects (the same union a Program's own work view applies). Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
     }),
-    zQuery(CursorQuery),
+    zQuery(TaskListQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const { cursor, limit } = c.req.valid('query');
+      const { cursor, limit, programId } = c.req.valid('query');
+
+      // Same "under the Program" union the Program's own work view applies: a task carrying the
+      // Program directly, or belonging to one of the Program's Projects.
+      let programFilter;
+      if (programId !== undefined) {
+        const projectRows = await db
+          .select({ id: project.id })
+          .from(project)
+          .where(and(eq(project.programId, programId), eq(project.organizationId, orgId)));
+        const projectIds = projectRows.map((p) => p.id);
+        programFilter =
+          projectIds.length > 0
+            ? or(eq(task.programId, programId), inArray(task.projectId, projectIds))
+            : eq(task.programId, programId);
+      }
+
       // Keyset-paginate newest-first (createdAt, id tiebreak). `limit` is optional: omitted returns
       // the full active-task list as before; supplied returns a bounded page + `nextCursor`.
       const base = db
@@ -218,6 +234,7 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
             eq(task.organizationId, orgId),
             isNull(task.archivedAt),
             seekAfter(task.createdAt, task.id, cursor),
+            ...(programFilter ? [programFilter] : []),
           ),
         )
         .orderBy(desc(task.createdAt), desc(task.id));

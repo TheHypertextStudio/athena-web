@@ -143,6 +143,7 @@ export const SourceSystemKind = z.enum([
   'discord',
   'google_calendar',
   'gmail',
+  'google_drive',
   'outlook',
 ]);
 /** Source-system value. */

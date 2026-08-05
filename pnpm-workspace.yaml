@@ -46,6 +46,11 @@ catalog:
   # Validation — Zod v4 repo-wide
   zod: ^4.4.3
 
+  # Markdown lexer. Pinned to the same major `@tiptap/markdown` depends on, because the
+  # editor and `reconcileMentions` must agree byte for byte about what counts as a link:
+  # a mention the server does not extract is a mention that never reaches a Resources tab.
+  marked: ^17.0.6
+
   # Better Auth — pinned EXACT 1.6.14 (not a range), incl. every runtime plugin package.
   better-auth: 1.6.14
   # Passkey (WebAuthn) is the primary, passwordless credential. It ships as a SEPARATE

@@ -621,6 +621,7 @@ export const sourceSystem = pgEnum('source_system', [
   'discord',
   'google_calendar',
   'gmail',
+  'google_drive',
   'outlook',
 ]);
 
@@ -722,3 +723,110 @@ export const logLevel = pgEnum('log_level', [
  * where reversing means removing the edge rather than restoring a prior column value.
  */
 export const changeSetOp = pgEnum('change_set_op', ['create', 'update', 'archive', 'link']);
+
+/**
+ * Which system owns an {@link externalResource}.
+ *
+ * @remarks
+ * Narrower than {@link sourceSystem} on purpose: this names only the systems we can *resolve
+ * metadata from*, not every system we observe events from. `web` is the generic case — any URL
+ * unfurled over HTTP with no provider credential involved. Provider members mirror the
+ * `sourceSystem` spelling (`google_drive`, not the connector's short `drive`) so the two enums
+ * never disagree about what to call the same product.
+ */
+export const resourceProvider = pgEnum('resource_provider', ['web', 'google_drive']);
+/**
+ * The app-owned shape of a referenced resource, used to pick its glyph and label.
+ *
+ * @remarks
+ * Deliberately a closed Docket taxonomy rather than a MIME type or a provider string: the
+ * hovercard renders from this, and a provider that invents a new document flavor must be mapped
+ * into these terms by its adapter rather than leaking a raw value into the UI. `unknown` is the
+ * honest state for a resource whose unfurl has not resolved yet — never a fabricated guess.
+ */
+export const externalResourceType = pgEnum('external_resource_type', [
+  'document',
+  'spreadsheet',
+  'presentation',
+  'folder',
+  'pdf',
+  'image',
+  'video',
+  'file',
+  'issue',
+  'message',
+  'event',
+  'page',
+  'unknown',
+]);
+/**
+ * How far metadata resolution got for an {@link externalResource}.
+ *
+ * @remarks
+ * `pending` is the state every row is born in, because the write path never makes a network
+ * call. The three terminal-until-something-changes states are distinguished because the UI says
+ * a different true thing for each: `forbidden` means the credential is live but the user cannot
+ * see the resource, `requires_connection` means we recognized the provider but hold no
+ * credential for it, and `unsupported` means the URL is not something we can unfurl at all
+ * (a non-HTTPS scheme, or a content type we refuse to parse). `failed` is the retry-exhausted
+ * bucket.
+ */
+export const resourceUnfurlStatus = pgEnum('resource_unfurl_status', [
+  'pending',
+  'ok',
+  'forbidden',
+  'requires_connection',
+  'unsupported',
+  'failed',
+]);
+/**
+ * The entity whose prose a {@link mention} was authored in.
+ *
+ * @remarks
+ * Polymorphic on `(subjectType, subjectId)` like {@link commentSubjectType} and
+ * {@link attachmentSubjectType}. Every member here must have a Markdown-bearing column that
+ * `reconcileMentions` knows how to read; adding a member without adding it to `MARKDOWN_FIELDS`
+ * produces a subject whose mentions are silently never extracted.
+ */
+export const mentionSubjectType = pgEnum('mention_subject_type', [
+  'task',
+  'project',
+  'program',
+  'initiative',
+  'comment',
+  'update',
+]);
+/**
+ * Which arm of a {@link mention} carries its target.
+ *
+ * @remarks
+ * The two arms are enforced by CHECK constraints rather than trusted: `entity` requires
+ * `targetEntityKind` + `targetEntityId` and forbids `externalResourceId`, and `external` requires
+ * the inverse. The discriminator exists so a query can filter without testing three columns for
+ * null; it is not the boundary — the boundary is the pair of constraints plus the discriminated
+ * union in `packages/types/src/mention.ts`.
+ */
+export const mentionTargetKind = pgEnum('mention_target_kind', ['entity', 'external']);
+/**
+ * The kind of Docket entity an internal {@link mention} points at.
+ *
+ * @remarks
+ * Its own enum rather than a reuse of `resourceKind`, which is the authz grant-target enum and
+ * carries permission semantics that must not widen as a side effect of making something
+ * mentionable. It is also deliberately not MCP's `READABLE_TYPES`, for the mirror-image reason:
+ * widening that set would expand the MCP resource surface. Every member must have an entry in
+ * the mention href map, which an exhaustiveness test enforces.
+ */
+export const mentionEntityKind = pgEnum('mention_entity_kind', [
+  'task',
+  'project',
+  'program',
+  'initiative',
+  'cycle',
+  'milestone',
+  'team',
+  'actor',
+  'agent_session',
+  'comment',
+  'update',
+]);

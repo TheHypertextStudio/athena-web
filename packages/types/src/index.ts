@@ -25,6 +25,8 @@ export * from './label';
 export * from './comment';
 export * from './attachment';
 export * from './athena-mail';
+export * from './resource';
+export * from './mention';
 export * from './automation';
 export * from './email-suggestion';
 export * from './update';

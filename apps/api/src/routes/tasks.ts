@@ -25,7 +25,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { enqueueSearchIndexJob } from '../search/enqueue';
+import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import { emitEvent } from './event-emit';
 import {
@@ -79,18 +79,22 @@ function assertTaskWindowOrdered(
   ]);
 }
 
+/**
+ * Ride the shared write-through seam for every task write.
+ *
+ * @remarks
+ * Calling `enqueueSearchIndexJob` directly here would quietly skip the two other things that seam
+ * does: MCP subscribers would never learn the task changed, and a task description's references
+ * would never be extracted. Anything that writes a task goes through {@link enqueueSearchUpsert}.
+ */
 async function enqueueTaskSearchIndex(
   organizationId: string,
   entityId: string,
   operation: 'upsert' | 'delete' = 'upsert',
 ): Promise<void> {
-  await enqueueSearchIndexJob({
-    organizationId,
-    sourceTable: 'task',
-    entityId,
-    operation,
-    reason: 'entity_write',
-  });
+  await (operation === 'upsert'
+    ? enqueueSearchUpsert(organizationId, 'task', entityId)
+    : enqueueSearchDelete(organizationId, 'task', entityId));
 }
 
 /** Tasks router: lifecycle (create/list/detail/update/archive/state) + subtasks + dependencies. */

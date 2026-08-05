@@ -232,6 +232,15 @@ export const CalendarItemWriteId = id<'CalendarItemWriteId'>().describe(
   'ULID id of a CalendarItemWrite — one provider-bound outbox write.',
 );
 
+/** Branded `ExternalResource` id (one deduped resource outside Docket). */
+export const ExternalResourceId = id<'ExternalResourceId'>().describe(
+  'ULID id of an ExternalResource — one deduped resource outside Docket that someone has referenced.',
+);
+/** Branded `Mention` id (one reference authored inside an entity's prose). */
+export const MentionId = id<'MentionId'>().describe(
+  "ULID id of a Mention — one reference authored inside an entity's prose.",
+);
+
 /** An ISO date (`YYYY-MM-DD`) string. */
 export const DateString = z.iso
   .date()

@@ -339,10 +339,14 @@ const programs = new Hono<AppEnv>()
       // Group by cycle (null = "no cycle"), then segment by project (null = "no project").
       // A Map<cycleKey, Map<projectKey, tasks[]>> preserves first-seen ordering, which the
       // `desc(createdAt)` query fixes deterministically.
+      // `'\0'` stands in for a null id because no ULID can contain it, so the sentinel cannot
+      // collide with a real key. Written as an escape rather than a literal NUL byte: the raw
+      // character made this file test as binary, so grep and every other text tool silently
+      // skipped it — which is how a wrong claim about this file's search hooks got made.
       const groups = new Map<string, Map<string, TaskRow[]>>();
       for (const t of taskRows) {
-        const cycleKey = t.cycleId ?? ' ';
-        const projectKey = t.projectId ?? ' ';
+        const cycleKey = t.cycleId ?? '\0';
+        const projectKey = t.projectId ?? '\0';
         const byProject = groups.get(cycleKey) ?? new Map<string, TaskRow[]>();
         if (!groups.has(cycleKey)) groups.set(cycleKey, byProject);
         const bucket = byProject.get(projectKey) ?? [];
@@ -352,7 +356,7 @@ const programs = new Hono<AppEnv>()
 
       const payload: z.input<typeof ProgramWorkOut> = {
         groups: [...groups.entries()].map(([cycleKey, byProject]) => {
-          const cy = cycleKey === ' ' ? null : cycleById.get(cycleKey);
+          const cy = cycleKey === '\0' ? null : cycleById.get(cycleKey);
           return {
             cycle:
               cy == null
@@ -365,7 +369,7 @@ const programs = new Hono<AppEnv>()
                   },
             segments: [...byProject.entries()].map(([projectKey, tasks]) => ({
               project:
-                projectKey === ' '
+                projectKey === '\0'
                   ? { id: null }
                   : {
                       id: projectKey,

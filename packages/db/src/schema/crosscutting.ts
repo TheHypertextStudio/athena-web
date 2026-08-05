@@ -683,6 +683,18 @@ export const attachment = pgTable(
     }),
     externalId: text('external_id'),
     metadata: jsonb('metadata'),
+    /**
+     * The shared `external_resource` row holding this attachment's fetched metadata, when it has
+     * one. Set for `url` attachments so a hand-added link renders with the same favicon, site
+     * name, and preview as a link someone `@`-mentioned, rather than as a bare title.
+     *
+     * Plain text rather than a real FK: `external_resource` lives in `schema/resources.ts`, which
+     * already imports this island for {@link integration}, and drizzle cannot express the back
+     * reference without a circular import. Same precedent as
+     * {@link emailSuggestion.createdTaskId}. Nothing deletes `external_resource` rows, so the id
+     * cannot dangle.
+     */
+    externalResourceId: text('external_resource_id'),
     // `file` kind: bytes in blob storage under `blobKey`, with display/download metadata.
     blobKey: text('blob_key'),
     fileName: text('file_name'),

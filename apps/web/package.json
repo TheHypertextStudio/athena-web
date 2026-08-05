@@ -53,6 +53,7 @@
     "react-dom": "catalog:"
   },
   "devDependencies": {
+    "@docket/brand": "workspace:*",
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",

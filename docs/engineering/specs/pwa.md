@@ -22,7 +22,7 @@ surface fail loudly the instant signal drops.
 | Concern                      | Where                                                                                   |
 | ---------------------------- | --------------------------------------------------------------------------------------- |
 | Manifest                     | `apps/web/src/app/manifest.ts` (Next metadata route — typechecked, not a static file)   |
-| Icons                        | `apps/web/scripts/generate-pwa-icons.ts` → `public/icons/*`, `src/app/apple-icon.png`   |
+| Brand mark + icon generators | `packages/brand` → `src/app/icon.svg`, `public/icons/*`, `src/app/apple-icon<n>.png`    |
 | Document metadata            | `metadata` + `viewport` exports in `apps/web/src/app/layout.tsx`                        |
 | Standalone chrome            | `h-dvh` and `env(safe-area-inset-*)` in `packages/ui/src/components/shell/AppShell.tsx` |
 | Service worker               | `apps/web/service-worker/{sw,routing,strategies}.ts` → bundled to `public/sw.js`        |

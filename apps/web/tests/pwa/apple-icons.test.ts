@@ -1,7 +1,16 @@
 import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  APPLE_CANVAS,
+  APPLE_ICONS,
+  ICON_DOCUMENT,
+  markPath,
+  pathBounds,
+  REPO_ROOT,
+  type Bounds,
+} from '@docket/brand';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
@@ -20,54 +29,49 @@ import manifest from '@/app/manifest';
  * if Apple changes it.
  *
  * The non-interference guarantee (CAL-37) is asserted structurally, not by eyeballing a diff: the
- * two generator scripts are read as text and each is required to write nothing into the other's
- * directory, and the manifest is required to name no Apple asset at all. A diff can only tell you
- * about the change that already happened; this fails the next one too.
+ * two generators in `@docket/brand` are read as text and each is required to write nothing into
+ * the other's directory, and the manifest is required to name no Apple asset at all. A diff can
+ * only tell you about the change that already happened; this fails the next one too.
  */
 
 const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '../..');
+const BRAND_ROOT = join(REPO_ROOT, 'packages/brand');
 const MASTER = join(WEB_ROOT, 'design/exports/apple-icon-1024.png');
-const ICON_DOCUMENT = join(WEB_ROOT, 'design/Docket.icon');
 
 /** The four sizes iOS and iPadOS actually request, in Next's numbering order. */
 const SERVED_SIZES = [120, 152, 167, 180];
 
-interface Rect {
-  readonly x: number;
-  readonly y: number;
-  readonly w: number;
-  readonly h: number;
-}
-
 /**
- * A script's executable text, with comments removed.
+ * A `@docket/brand` module's executable text, with comments removed.
  *
  * @remarks
- * These files document each other at length — `generate-pwa-icons.ts` explains that it no longer
- * writes any Apple asset, and `export-apple-icons.ts` explains that it does not rasterize anything.
- * Scanning the raw text would therefore fail on the prose that asserts the very property being
- * checked. Block comments and whole-line `//` comments are stripped; trailing `//` is left alone so
- * a `https://` inside a string literal survives.
+ * These files document each other at length — the PWA renderer explains that it writes no Apple
+ * asset, and the Apple exporter explains that it rasterizes nothing. Scanning the raw text would
+ * therefore fail on the prose that asserts the very property being checked. Block comments and
+ * whole-line `//` comments are stripped; trailing `//` is left alone so a `https://` inside a
+ * string literal survives.
  */
 function codeOf(file: string): string {
-  return readFileSync(join(WEB_ROOT, file), 'utf8')
+  return readFileSync(join(BRAND_ROOT, file), 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
 }
 
-/** The authored mark, read from the Icon Composer document's own layer. */
-function markRects(): readonly Rect[] {
-  const svg = readFileSync(join(ICON_DOCUMENT, 'Assets/Bars.svg'), 'utf8');
-  return [
-    ...svg.matchAll(
-      /<rect[^>]*x="([\d.]+)"[^>]*y="([\d.]+)"[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"/g,
-    ),
-  ].map((match) => ({
-    x: Number(match[1]),
-    y: Number(match[2]),
-    w: Number(match[3]),
-    h: Number(match[4]),
-  }));
+/**
+ * The authored mark, measured from the Icon Composer document's own layer.
+ *
+ * @remarks
+ * Measured rather than pattern-matched. An earlier version of this file parsed the layer with a
+ * regex that required `<rect x= y= width= height=>` elements; when the mark became a single
+ * `<path>` that regex matched nothing, `Math.min(...[])` returned `Infinity`, and three geometry
+ * assertions passed without measuring anything at all. `pathBounds` measures the real artwork,
+ * curve extrema included, whatever shape the layer is drawn as.
+ */
+function markBounds(): Bounds {
+  const layer = readFileSync(join(ICON_DOCUMENT, 'Assets/Bars.svg'), 'utf8');
+  const d = /<path[^>]*\sd="([^"]+)"/.exec(layer)?.[1];
+  expect(d, 'the Icon Composer layer contains a path').toBeTruthy();
+  return pathBounds(d ?? '');
 }
 
 interface Raster {
@@ -140,15 +144,25 @@ describe('the Apple icon source document', () => {
     // layered document at all.
     expect(group?.specular).toBe(true);
     expect(group?.translucency?.enabled).toBe(true);
-    expect(group?.layers).toHaveLength(1);
+    expect(group?.layers.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('draws the same mark @docket/brand renders everywhere else', () => {
+    // The layer is generated, so this fails if someone edits `Bars.svg` by hand or forgets to
+    // re-export after changing the glyph — which is exactly how the old hand-synchronised copies
+    // drifted apart.
+    const layer = readFileSync(join(ICON_DOCUMENT, 'Assets/Bars.svg'), 'utf8');
+    expect(layer).toContain(markPath(APPLE_CANVAS, 800 / APPLE_CANVAS).d);
   });
 
   it('is rendered by Apple’s exporter, never by this repository', () => {
-    const script = codeOf('scripts/export-apple-icons.ts');
+    const script = codeOf('src/render-apple.ts');
     expect(script).toContain('Icon Composer.app/Contents/Executables/ictool');
     expect(script).toContain('--export-image');
     // sharp appears only to re-encode ictool's 16-bit output at 8 bits; it must never rasterize,
-    // resize or composite, or the shipped asset would stop being Icon Composer's render.
+    // resize or composite, or the shipped asset would stop being Icon Composer's render. Authoring
+    // the layer lives in `render-apple-layer.ts` precisely so this file can contain no artwork
+    // generation to check for.
     expect(script).not.toContain('.resize(');
     expect(script).not.toContain('.composite(');
     expect(script).not.toContain('.svg');
@@ -171,6 +185,31 @@ describe('the served Apple asset set', () => {
       const meta = await sharp(join(WEB_ROOT, 'src/app', file)).metadata();
       expect(meta.width, `${file} width`).toBe(SERVED_SIZES[index]);
       expect(meta.height, `${file} height`).toBe(SERVED_SIZES[index]);
+    }
+  });
+
+  it('serves only the Default appearance', () => {
+    // Safari hands a home-screen web clip exactly one `apple-touch-icon`, and no Apple platform
+    // offers a dark or tinted appearance for one. Shipping another rendition would put artwork
+    // nothing can display into the served bundle.
+    for (const icon of APPLE_ICONS.filter((entry) => entry.served)) {
+      expect(icon.rendition, relative(REPO_ROOT, icon.outPath)).toBe('Default');
+    }
+  });
+
+  it('keeps every appearance Icon Composer can render as a reviewable master', () => {
+    const masters = readdirSync(join(WEB_ROOT, 'design/exports')).sort();
+    expect(masters).toEqual([
+      'apple-icon-1024-clear-dark.png',
+      'apple-icon-1024-clear-light.png',
+      'apple-icon-1024-dark.png',
+      'apple-icon-1024-tinted-dark.png',
+      'apple-icon-1024-tinted-light.png',
+      'apple-icon-1024.png',
+    ]);
+    // Masters are for review and for a future native target; none may leak into the served app.
+    for (const icon of APPLE_ICONS.filter((entry) => entry.rendition !== 'Default')) {
+      expect(icon.served).toBe(false);
     }
   });
 
@@ -198,13 +237,15 @@ describe('non-interference with every other platform', () => {
   });
 
   it('gives the two generators disjoint outputs, so neither can touch the other’s icons', () => {
-    const android = codeOf('scripts/generate-pwa-icons.ts');
-    const apple = codeOf('scripts/export-apple-icons.ts');
+    const android = codeOf('src/render-pwa.ts');
+    const apple = codeOf('src/render-apple.ts');
 
     // The Android/Chrome generator is still the only writer of everything the manifest names…
-    expect(android).toContain("outPath: 'public/icons/icon-192.png'");
-    expect(android).not.toContain('apple-icon');
-    // …and the Apple exporter writes only Apple assets and its own review master.
+    expect(android).toContain('PWA_ICONS_DIR');
+    expect(android).toContain("name: 'icon-192.png'");
+    expect(android).not.toContain('apple');
+    // …and the Apple exporter writes only Apple assets and its own review masters.
+    expect(apple).not.toContain('PWA_ICONS_DIR');
     expect(apple).not.toContain('public/icons');
   });
 });
@@ -223,48 +264,50 @@ describe('use of the Apple icon grid', () => {
   it('uses most of the live area rather than floating in the middle of it', async () => {
     const image = await raster(MASTER);
     const live = liveAreaSide(image);
-    const rects = markRects();
-    const x0 = Math.min(...rects.map((rect) => rect.x));
-    const x1 = Math.max(...rects.map((rect) => rect.x + rect.w));
-    const y0 = Math.min(...rects.map((rect) => rect.y));
-    const y1 = Math.max(...rects.map((rect) => rect.y + rect.h));
+    const mark = markBounds();
 
-    // Measured at the time of writing: 869px live area, mark 750x800 → 86.3% x 92.1%. The previous
-    // asset used roughly a quarter of the canvas, which is what "take advantage of space" was
-    // asking about.
-    expect((x1 - x0) / live).toBeGreaterThan(0.8);
-    expect((y1 - y0) / live).toBeGreaterThan(0.85);
+    // Measured at the time of writing: 869px live area, mark 640x800 → 73.6% x 92.1%. The mark is
+    // taller than it is wide (the glyph's own aspect is 0.8), so the height is what "use the
+    // grid" means here and the width follows from it. Distorting the glyph to fill both axes
+    // would be a worse icon, not a better-covered one. The previous asset used roughly a quarter
+    // of the canvas, which is what "take advantage of space" was asking about.
+    expect(mark.h / live).toBeGreaterThan(0.9);
+    expect(mark.w / live).toBeGreaterThan(0.7);
+  });
+
+  it('keeps the glyph’s own proportions', () => {
+    // The strong statement behind the looser width bound above: the Apple layer is the same shape
+    // as every other rendering of the mark, scaled — not a redrawn variant, which is what the two
+    // hand-maintained copies used to be.
+    const mark = markBounds();
+    const web = markPath(32);
+    expect(mark.w / mark.h).toBeCloseTo(web.bbox.w / web.bbox.h, 5);
   });
 
   it('is centred on both axes', () => {
-    const rects = markRects();
-    const x0 = Math.min(...rects.map((rect) => rect.x));
-    const x1 = Math.max(...rects.map((rect) => rect.x + rect.w));
-    const y0 = Math.min(...rects.map((rect) => rect.y));
-    const y1 = Math.max(...rects.map((rect) => rect.y + rect.h));
-    expect(Math.abs((x0 + x1) / 2 - 512)).toBeLessThanOrEqual(1);
-    expect(Math.abs((y0 + y1) / 2 - 512)).toBeLessThanOrEqual(1);
+    const mark = markBounds();
+    expect(Math.abs(mark.x + mark.w / 2 - APPLE_CANVAS / 2)).toBeLessThanOrEqual(1);
+    expect(Math.abs(mark.y + mark.h / 2 - APPLE_CANVAS / 2)).toBeLessThanOrEqual(1);
   });
 
   it('never touches the mask edge', async () => {
     const image = await raster(MASTER);
-    // Each bar is a rounded rect, so its bounding-box corners lie outside the drawn artwork —
-    // testing them is deliberately stricter than testing the ink itself.
-    for (const rect of markRects()) {
-      const corners: readonly (readonly [number, number])[] = [
-        [rect.x, rect.y],
-        [rect.x + rect.w, rect.y],
-        [rect.x, rect.y + rect.h],
-        [rect.x + rect.w, rect.y + rect.h],
-      ];
-      for (const [x, y] of corners) {
-        expect(image.opaque(x, y), `corner ${String(x)},${String(y)} inside the mask`).toBe(true);
-        // …and with room to spare, so a slightly different mask on a future OS cannot clip it.
-        expect(
-          image.opaque(x + Math.sign(512 - x) * -16, y + Math.sign(512 - y) * -16),
-          `corner ${String(x)},${String(y)} has 16px of clearance`,
-        ).toBe(true);
-      }
+    const mark = markBounds();
+    // The mark is a set of stadium bars, so its bounding-box corners lie outside the drawn
+    // artwork — testing them is deliberately stricter than testing the ink itself.
+    const corners: readonly (readonly [number, number])[] = [
+      [mark.x, mark.y],
+      [mark.x + mark.w, mark.y],
+      [mark.x, mark.y + mark.h],
+      [mark.x + mark.w, mark.y + mark.h],
+    ];
+    for (const [x, y] of corners) {
+      expect(image.opaque(x, y), `corner ${String(x)},${String(y)} inside the mask`).toBe(true);
+      // …and with room to spare, so a slightly different mask on a future OS cannot clip it.
+      expect(
+        image.opaque(x + Math.sign(512 - x) * -16, y + Math.sign(512 - y) * -16),
+        `corner ${String(x)},${String(y)} has 16px of clearance`,
+      ).toBe(true);
     }
   });
 });

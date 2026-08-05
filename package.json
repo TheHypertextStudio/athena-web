@@ -27,6 +27,7 @@
     "secret-scan": "tsx scripts/secret-scan.ts",
     "launch:verify-prod": "tsx scripts/production-verify.ts",
     "launch:record": "tsx scripts/launch-record.ts",
+    "icons": "pnpm --filter @docket/brand icons",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "integrations": "tsx scripts/integrations-setup.ts",
     "env:check": "tsx scripts/env-check.ts",

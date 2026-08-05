@@ -181,6 +181,22 @@ Every normal commit requires a substantive body with at least 100 non-comment ch
 must use plain language rather than a mandatory template. Explain what changed and why it belongs
 in the feature-oriented slice; use larger Markdown sections only when they improve readability.
 
+**Scopes:**
+
+The scope names the product or domain area a change lands in. There is no commitlint config; the
+declaration is [`COMMIT_SCOPES.txt`](COMMIT_SCOPES.txt) at the repository root, which
+`scripts/validate-commit-message.mjs` reads and the `commit-msg` hook enforces. Do not restate the
+list here — a second copy is a copy that goes stale, and the hook will reject anything that
+disagrees with the file.
+
+A scope is a product or domain area, **not a workspace directory**. `design` covers brand and
+visual work wherever it lives; `web` covers the product app. There is deliberately no scope per
+`packages/*` entry.
+
+Omit the scope only when a change touches the whole repository. If a change genuinely needs a
+scope the file does not have, add the line to `COMMIT_SCOPES.txt` in the same commit rather than
+coining one silently.
+
 **Examples:**
 
 ```

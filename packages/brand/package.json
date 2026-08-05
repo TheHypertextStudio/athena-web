@@ -1,0 +1,38 @@
+{
+  "name": "@docket/brand",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Docket brand mark — the single source of the app icon, and the generators for every asset derived from it.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./mark": "./src/mark.ts"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "icons": "pnpm icons:web && pnpm icons:pwa && pnpm icons:apple:layer && pnpm icons:apple",
+    "icons:web": "tsx src/render-web.ts",
+    "icons:pwa": "tsx src/render-pwa.ts",
+    "icons:apple:layer": "tsx src/render-apple-layer.ts",
+    "icons:apple": "tsx src/render-apple.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "svg-path-bbox": "^2.1.0",
+    "svgpath": "^2.6.0"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@mui/icons-material": "^9.0.1",
+    "@types/node": "catalog:",
+    "sharp": "^0.35.3"
+  }
+}

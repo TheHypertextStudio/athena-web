@@ -109,11 +109,11 @@ test.describe('fluid scheduling interaction contract', () => {
     expect(await renderedContrastRatio(calendarHeading)).toBeGreaterThanOrEqual(4.5);
     expect(await hasVisibleKeyboardFocus(page, newButton)).toBe(true);
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-light');
-    await page.emulateMedia({ colorScheme: 'dark' });
     await setColorScheme(page, 'dark');
+    // The theme is `@media (prefers-color-scheme: dark)` and nothing else, so there is no class to
+    // assert. Contrast holding at the dark palette is the real evidence the switch took.
     expect(await renderedContrastRatio(calendarHeading)).toBeGreaterThanOrEqual(4.5);
     await attachCalendarScreenshot(page, testInfo, 'calendar-desktop-dark');
-    await page.emulateMedia({ colorScheme: 'light' });
     await setColorScheme(page, 'light');
 
     await page.setViewportSize({ width: 1920, height: 900 });
@@ -270,7 +270,6 @@ test.describe('fluid scheduling interaction contract', () => {
     await createdBody.scrollIntoViewIfNeeded();
     await expect(createdBody).toBeVisible();
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-light');
-    await page.emulateMedia({ colorScheme: 'dark' });
     await setColorScheme(page, 'dark');
     await attachCalendarScreenshot(page, testInfo, 'calendar-narrow-dark');
     await page.setViewportSize({ width: 320, height: 844 });

@@ -28,6 +28,20 @@ describe('normalizeResourceUrl', () => {
     expect(normalizeResourceUrl('https://example.com:8443/a')).toBe('https://example.com:8443/a');
   });
 
+  it('sorts parameters, so two spellings of one address dedupe to the same key', () => {
+    expect(normalizeResourceUrl('https://example.com/a?c=3&a=1&b=2')).toBe(
+      'https://example.com/a?a=1&b=2&c=3',
+    );
+  });
+
+  it('keeps a repeated parameter, in the order it was written', () => {
+    // Two URLs differing only in the order of repeated values are different URLs, so the sort
+    // must leave equal keys alone rather than reordering them into a canonical-looking lie.
+    expect(normalizeResourceUrl('https://example.com/a?tag=b&tag=a')).toBe(
+      'https://example.com/a?tag=b&tag=a',
+    );
+  });
+
   it('drops the fragment', () => {
     expect(normalizeResourceUrl('https://example.com/a#section-3')).toBe('https://example.com/a');
   });

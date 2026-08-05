@@ -274,7 +274,7 @@ test('personal Athena dock, workbench, context, redirects, and responsive themes
   await expect(page.getByText(/sunsama_create_task/)).toBeVisible();
   await page.getByRole('form', { name: 'Steer Athena' }).scrollIntoViewIfNeeded();
   await expect(page.getByText('Added 2 blocks to Thursday', { exact: true })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Add context or answer' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Add context or answer' })).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath('athena-mobile-below-fold.png'),
     fullPage: false,

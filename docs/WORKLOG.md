@@ -7,6 +7,133 @@
 
 ## Active Tasks
 
+### [MENTIONS-001] Reference any resource from inside prose with `@`
+
+- **Status**: REVIEW
+- **Started**: 2026-08-04
+- **Priority**: P1
+- **Description**: Typing `@` in any text surface opens an autocomplete that searches local
+  Docket entities and the user's connected external apps (Google Drive first). The result
+  inserts as an inline chip that navigates on click and shows a rich preview on hover. Every
+  referenced thing — including a bare pasted URL — carries structured metadata, and anything
+  referenced inside an entity's prose surfaces in that entity's Resources tab without anyone
+  attaching it by hand.
+- **Approach**: A mention is stored as an ordinary Markdown link carrying a machine ref in the
+  link-title slot (`[Label](href "docket:v1:<ref>")`), so descriptions stay Markdown strings and
+  dumb renderers degrade to a normal clickable link. Three new tables split by disclosure
+  boundary: `external_resource` (org-scoped, deduped, written only when a mention lands in
+  shared prose), `mention` (the polymorphic edge with a CHECK-enforced XOR between its entity and
+  external arms), and `mention_usage` (per-user recents/affinity, no metadata columns). Reconcile
+  rides the existing `enqueueSearchUpsert` write-through seam.
+- **Decisions**: Drive ships on `drive.metadata.readonly` behind Google verification + CASA
+  Tier-2, with fixtures so local/test need no Google account (no thumbnails in v1). Mentions
+  reach every typing surface including the plain textareas. A URL the user typed stays an
+  enriched link — favicon plus hovercard, text preserved — with a Google-Docs-style `Tab` to
+  convert it into a real chip.
+- **Subtasks**:
+  - [x] Phase 0 — verify the `@tiptap/core@3.27.3` markdown API and pick the serializer path
+  - [x] Phase 1 — schema, migration 0057, DTOs, reconcile, write-through seam fix
+  - [x] Phase 2 — local search wave, recents, hydrate, unfurl port and sweep
+  - [x] Phase 3 — `ResourceSearch` capability, Google Drive adapter, external fan-out
+  - [x] Phase 4 — mention menu, chip, hovercard, Tiptap node in rich text
+  - [x] Phase 5 — enriched links and `Tab`-to-chip
+  - [x] Phase 6 — `MentionTextarea` across the plain-text surfaces
+  - [x] Phase 7 — Resources tab derived sections
+- **Provider-agnostic by construction**: `RESOURCE_PROVIDERS` in `@docket/types` declares each
+  structured source's hosts, URL shapes, and whether it needs a credential, and every layer
+  iterates it rather than naming a product. Eight sources are recognized today (Drive, OneDrive,
+  SharePoint, Notion, Dropbox, Box, Figma, Confluence); Drive is the first with a search adapter.
+  A test asserts the registry and the `resource_provider` Postgres enum agree, so adding a source
+  without a migration fails a test rather than an insert. Searching is a fourth connector
+  capability (`asResourceSearch`), discovered structurally like `asWritable`, so the fan-out names
+  no product. See `docs/engineering/specs/resource-mentions.md`.
+- **Verified in a browser** (2026-08-04, real passkey session against the running stack): the menu
+  opens on `@` and anchors to the caret; results group by entity kind across tasks, projects, and
+  initiatives; arrow keys move the highlight; Enter inserts a chip; the chip renders with its kind
+  glyph and tonal background; hovering shows the preview card; and the chip **survives a page
+  reload**, which exercises the whole round trip through stored Markdown and back.
+- **Four defects that only the browser caught**, all fixed: the menu pooled every work item into
+  one section so a matched project was buried under eight matched tasks; the chip rendered as a
+  blue underlined link because the editor's `[&_a]:underline` outranks the chip's `no-underline`;
+  the hovercard showed a globe and the raw enum `task` for Docket entities; and the chip had no
+  leading glyph. Types, lint, and 1,051 unit tests were green through all four.
+- **Four more defects the browser caught in Phase 6**, all fixed. Escape closed the menu and the
+  very next event reopened it, because Radix answers Escape from a capture-phase listener on the
+  document: by the time the field's own key handler ran, the trigger was already gone, so nothing
+  recorded the dismissal and the `keyup` that followed re-derived the same trigger. The dismissal
+  now lives wherever the close lands, keyed to the `@`'s position, and both the textarea and the
+  editor read the trigger from a ref so a keystroke is never handled against a stale render. The
+  Today box and all four Athena composers asked the route context for their workspace and got
+  nothing, because none of those surfaces sit under `/orgs/:orgId` — they now use the workspace
+  they already hold, via `useMentionOrgId`. A picker row showed the entity's description, which
+  is Markdown, so a row for a project with a mention in its description read as link source code
+  and squeezed the title down to `Platfo…`; the row now carries the parent's title or nothing.
+- **Two more defects the end-to-end pass found.** The Resources tab read a stale answer: the query
+  cache is persisted across reloads, and nothing invalidated the derived-mentions key when a
+  description was saved, so adding a mention to prose left that tab showing the pre-edit result
+  until the staleness tier happened to expire. The four prose-bearing patch mutations now
+  invalidate it. Separately, the dev scheduler never drained the search-index outbox, so
+  `search_document` stayed empty in local development and everything reading it — the palette, the
+  search page, the `@` picker — looked broken rather than merely unindexed. The drain (and the
+  resource-unfurl sweep beside it) now rides the same 3-second tick as the other local sweeps.
+- **Dark-mode screenshots across the e2e suite were never dark.** Three specs toggled a `.dark`
+  class, but the design system expresses dark mode with `@media (prefers-color-scheme: dark)` and
+  nothing else, so those files were light-mode captures under a `-dark` name. `setColorScheme`
+  emulates the media query instead, which is the only thing that flips it.
+- **`CommentActivityFeed` has no call site**, so the comment composer named in the plan is wired
+  but unreachable in the app today. Its sibling prose surface, the entity Updates composer, is
+  mounted on project, initiative, and program detail and is what was verified.
+- **Running the dev stack in a worktree needs three env overrides**, because `.env.local` names the
+  unprefixed hosts while portless serves branch-prefixed ones: `API_URL`, `BETTER_AUTH_URL`, and —
+  the one whose failure is least legible — `BETTER_AUTH_TRUSTED_ORIGINS`, which otherwise rejects
+  sign-up with only `Invalid origin` in the API log.
+- **The dev scheduler did not drain the search-index outbox** during these runs; the picker looked
+  broken until `POST /internal/cron/search-index` was called by hand, which then processed 15 jobs
+  successfully. Worth a look on its own — it is not caused by this branch, but it makes any
+  search-dependent feature look broken in local development.
+- **Notes (Phase 0)**: `@tiptap/core@3.27.3` exports `createInlineMarkdownSpec`,
+  `parseMarkdown`, `renderMarkdown`, `markdownTokenizer`, `MarkdownManager`, and `posToDOMRect`.
+  `createInlineMarkdownSpec` is **not** usable here — it emits a shortcode syntax
+  (`[mention id=… label=…]`), not a Markdown link, which defeats the graceful-degradation reason
+  for choosing the link form. The node therefore declares `markdownTokenName: 'link'` with hand-
+  written `parseMarkdown`/`renderMarkdown`. `MarkdownManager.registerExtension` keys its parse
+  registry by token name and `parseTokenWithHandlers` tries each registered handler in order,
+  falling through when one returns null or an empty array — so the mention handler claims only
+  links whose `title` carries the marker and the built-in Link mark keeps the rest. Ordering
+  comes from extension priority, so the node must outrank `@tiptap/extension-link` (1000).
+- **Latent bug found while planning**: `apps/api/src/routes/tasks.ts` reindexed through
+  `enqueueSearchIndexJob` directly rather than `enqueueSearchUpsert`, so every task write skipped
+  the MCP `announce()` — and would have skipped mention reconcile too. Fixed in Phase 1.
+- **A second reported bug was not real, and why that matters**: planning also claimed
+  `apps/api/src/routes/programs.ts` had no search hook. It has had one all along (lines 159 and
+  245). The claim came from `grep` returning nothing for that file — because the file contained
+  four **raw NUL bytes**, used as `t.cycleId ?? '<NUL>'` sentinels in the work-grouping keys, which
+  made every text tool classify it as binary and skip its matches silently. `git diff`, code
+  search, and review tooling were all equally blind to it. The sentinels are now written as `'\0'`
+  escapes: identical runtime value, and the file is text again. Treat "grep found nothing" as
+  evidence only after confirming the file is greppable.
+
+- **Main shipped a competing `@` system on 2026-08-02** (`ef7f62b8`), which this branch — cut 125
+  commits earlier — never saw. Reconciled by keeping the superset: `@` uses this branch's
+  Markdown-link form, because the shortcode it replaces holds a kind and an id and no URL and so
+  can never point at a Drive file, and renders as literal brackets in any export; `/` keeps main's
+  slash commands whole, in their own hook on their own trigger character. Main's comment-composer
+  upgrade stays and now inherits external resources. Prose already stored in shortcode form is
+  converted by an idempotent sweep, `POST /internal/cron/legacy-mentions`, which also rides the dev
+  scheduler's tick.
+- **Three things CI caught that a green local run did not.** `@docket/types` holds a 100% branch
+  threshold, and the parameter-sort comparator's `a > b` arm needs three parameters to fire — with
+  two, V8's insertion sort only ever calls it the other way. The Athena composer's role moved from
+  `textbox` to `combobox` now that it has a picker, which an e2e query still assumed. And a
+  scheduling spec asserted `html` carries a `dark` class after its theme toggle, which only ever
+  passed because the test itself added that class; the app switches on `prefers-color-scheme`
+  alone.
+- **The rebase across 125 commits dropped this entry once**, because `rerere` auto-resolved the
+  WORKLOG conflict by taking main's side. Worth knowing for the next long-lived branch: a
+  documentation file is exactly the kind of conflict a cached resolution gets silently wrong.
+
+---
+
 ### [LAUNCH-TIME-003] Finish the CORE-40 timer rollout and re-gate Time Tracking / Weekly auto-scheduling
 
 - **Status**: COMPLETED

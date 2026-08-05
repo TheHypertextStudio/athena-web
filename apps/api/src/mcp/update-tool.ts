@@ -322,18 +322,33 @@ async function buildPatch(
  */
 const DISPLAY_LIMIT = 200;
 
-/** Shorten one rendered value, marking the cut so nobody reads a truncation as the whole value. */
+/**
+ * Shorten one rendered value, marking the cut so nobody reads a truncation as the whole value.
+ *
+ * @remarks
+ * Applied when a diff line is *built*, never when two values are compared. Clamping before the
+ * comparison made any edit past this limit invisible: two 900-character descriptions sharing their
+ * first 199 characters compared equal, so the field dropped out of the diff, the row never reached
+ * `changes`, and the write landed with `changed: 0`, an empty change set (nothing for `undo` to
+ * reverse) and no search reindex.
+ */
 function clamp(text: string): string {
   return text.length > DISPLAY_LIMIT ? text.slice(0, DISPLAY_LIMIT - 1).trimEnd() + '…' : text;
 }
 
-/** Render one value for a diff line, so a report card reads without a type switch. */
+/**
+ * Render one value for comparison, so a report card reads without a type switch.
+ *
+ * @remarks
+ * Lossless on purpose — this is what decides whether a field moved. {@link displayLine} is the
+ * presentation form.
+ */
 function display(value: unknown): string {
   if (value === null || value === undefined) {
     return 'none';
   }
   if (typeof value === 'string') {
-    return clamp(value);
+    return value;
   }
   // Dates are the only tracked non-primitive, and only their day matters in a diff line.
   if (value instanceof Date) {
@@ -342,7 +357,12 @@ function display(value: unknown): string {
   if (typeof value === 'number' || typeof value === 'boolean') {
     return String(value);
   }
-  return clamp(JSON.stringify(value));
+  return JSON.stringify(value);
+}
+
+/** The same value, shortened for the one place it is shown rather than compared. */
+function displayLine(value: unknown): string {
+  return clamp(display(value));
 }
 
 /**
@@ -368,7 +388,7 @@ function diff(
 ): { field: string; from: string; to: string }[] {
   return Object.keys(after)
     .filter((key) => display(before[key]) !== display(after[key]))
-    .map((key) => ({ field: key, from: display(before[key]), to: display(after[key]) }));
+    .map((key) => ({ field: key, from: displayLine(before[key]), to: displayLine(after[key]) }));
 }
 
 /** Register `update` on `server`. */

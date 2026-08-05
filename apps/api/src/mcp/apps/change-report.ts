@@ -95,7 +95,7 @@ const SCRIPT = String.raw`
 
   function fieldLabel(field) {
     return (
-      FIELD_LABEL[field] ||
+      window.docket.own(FIELD_LABEL, field) ||
       String(field).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
     );
   }
@@ -152,25 +152,29 @@ const SCRIPT = String.raw`
     const reason = document.createElement('span');
     reason.className = 'reason';
     // Spelled out, because "not_permitted" is a wire value, not something to show a person.
-    reason.textContent = ({
-      not_permitted: 'you cannot edit this one',
-      already_archived: 'already archived',
-      not_archived: 'was not archived',
-      changed_since: 'someone else changed it',
-      gone: 'no longer exists',
-    })[item.reason] || item.reason;
+    reason.textContent =
+      window.docket.own(
+        {
+          not_permitted: 'you cannot edit this one',
+          already_archived: 'already archived',
+          not_archived: 'was not archived',
+          changed_since: 'someone else changed it',
+          gone: 'no longer exists',
+        },
+        item.reason,
+      ) || item.reason;
     row.append(name, reason);
     return row;
   }
 
   function headlineFor(data) {
     const tool = toolName();
-    const verb = VERB[tool] || 'Changed';
+    const verb = window.docket.own(VERB, tool) || 'Changed';
 
     if (typeof data.changed === 'number') {
       const n = data.changed;
       if (n === 0) {
-        return NOTHING[tool] || 'Nothing changed';
+        return window.docket.own(NOTHING, tool) || 'Nothing changed';
       }
       return verb + ' ' + n + ' ' + (n === 1 ? 'item' : 'items');
     }
@@ -182,7 +186,7 @@ const SCRIPT = String.raw`
       if (data.matched > 0) {
         parts.push('matched ' + data.matched + ' already there');
       }
-      return parts.length > 0 ? parts.join(', ') : NOTHING[tool] || 'Nothing to do';
+      return parts.length > 0 ? parts.join(', ') : window.docket.own(NOTHING, tool) || 'Nothing to do';
     }
     if (data.title) {
       return verb + ' “' + data.title + '”';
@@ -215,7 +219,9 @@ const SCRIPT = String.raw`
     const rows = el('rows');
     rows.replaceChildren();
     const items = itemsOf(data);
-    for (const item of items.slice(0, INLINE_ROWS)) rows.appendChild(diffRow(item));
+    for (const item of items.slice(0, INLINE_ROWS)) {
+      rows.appendChild(diffRow(item));
+    }
     if (items.length > INLINE_ROWS) {
       const more = document.createElement('div');
       more.className = 'muted';
@@ -236,7 +242,7 @@ const SCRIPT = String.raw`
     skippedLabel.textContent =
       left.length === 0
         ? ''
-        : (LEFT_ALONE[toolName()] || 'Not changed') + ' — ' + String(left.length);
+        : (window.docket.own(LEFT_ALONE, toolName()) || 'Not changed') + ' — ' + String(left.length);
 
     el('undo').hidden = !data.changeSetId;
     el('open').hidden = items.length === 0;

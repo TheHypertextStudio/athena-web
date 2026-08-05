@@ -58,7 +58,7 @@ const SCRIPT = String.raw`
     // The client name when an agent made it, the tool otherwise — "created by capture" means
     // nothing to a person, but "created by Claude" does.
     const who = origin.client || 'an agent';
-    const when = origin.at ? new Date(origin.at).toLocaleDateString() : '';
+    const when = origin.at ? window.docket.date(origin.at) : '';
     return 'Created by ' + who + (when ? ' on ' + when : '');
   }
 
@@ -107,6 +107,13 @@ const SCRIPT = String.raw`
     el('open').hidden = false;
   });
 
+  // The get tool renders eleven entity types through this one document, and only a task may be
+  // edited here. Whether it is a task is decided by the payload saying so: sniffing for a dueDate
+  // field would hand a project's id to an update call that names the task entity.
+  function isTask() {
+    return Boolean(entity) && Array.isArray(entity.stateOptions);
+  }
+
   function renderEdits() {
     const options = (entity && entity.stateOptions) || [];
 
@@ -137,7 +144,7 @@ const SCRIPT = String.raw`
 
     const due = el('due');
     due.value = entity.dueDate ? String(entity.dueDate).slice(0, 10) : '';
-    el('edits').hidden = options.length === 0 && !('dueDate' in entity);
+    el('edits').hidden = !isTask();
   }
 
   /**
@@ -145,7 +152,12 @@ const SCRIPT = String.raw`
    * refuses. A control that waits for a round trip before moving reads as broken on a slow link,
    * and one that moves and stays moved after a failure is worse than either.
    */
-  async function edit(control, field, value, previous, describe) {
+  async function edit(control, field, value, previous, describe, after) {
+    // Hiding the controls is presentation; this is the guard. The call below names the task
+    // entity, so nothing that is not a task may reach it.
+    if (!isTask()) {
+      return;
+    }
     control.disabled = true;
     try {
       await window.docket.call('update', {
@@ -155,6 +167,9 @@ const SCRIPT = String.raw`
         set: { [field]: value },
       });
       entity[field] = value;
+      if (after) {
+        after();
+      }
       window.docket.notice('');
       // Without this the agent goes on answering from the state the card was rendered with.
       await window.docket.tell(describe);
@@ -179,6 +194,13 @@ const SCRIPT = String.raw`
       entity.state,
       'The user moved "' + (entity.title || entity.id) + '" to ' +
         ((chosen && chosen.name) || select.value) + ' from the card.',
+      () => {
+        // The glyph is keyed off the canonical type, so it goes stale the moment the key moves.
+        // Without this a task moved to a completed state keeps its in-progress ring — the exact
+        // contradiction the glyph was added to make impossible.
+        entity.stateType = chosen ? chosen.type : undefined;
+        renderEdits();
+      },
     );
   });
 

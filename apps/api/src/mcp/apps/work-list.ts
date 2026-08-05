@@ -87,31 +87,54 @@ const SCRIPT = String.raw`
     }
   }
 
+  function group(rows, heading, items) {
+    const node = document.createElement('div');
+    node.className = 'group-label';
+    node.textContent = heading + ' — ' + String(items.length);
+    rows.appendChild(node);
+    for (const item of items) {
+      rows.appendChild(row(item));
+    }
+  }
+
   function renderGrouped(rows, items) {
     // Grouping is the whole reason to go fullscreen: forty rows in query order is not more useful
-    // than four, it is just longer.
-    const seen = GROUP_ORDER.filter((type) => items.some((item) => item.stateType === type));
-    const ungrouped = items.filter((item) => GROUP_ORDER.indexOf(item.stateType) === -1);
-    for (const type of seen) {
-      const heading = document.createElement('div');
-      heading.className = 'group-label';
-      const inGroup = items.filter((item) => item.stateType === type);
-      heading.textContent = GROUP_NAME[type] + ' — ' + String(inGroup.length);
-      rows.appendChild(heading);
-      for (const item of inGroup) {
-        rows.appendChild(row(item));
+    // than four, it is just longer. One pass into buckets rather than a scan per group — this is
+    // the code path built for the large result sets.
+    const buckets = new Map();
+    const loose = [];
+    for (const item of items) {
+      if (GROUP_ORDER.indexOf(item.stateType) === -1) {
+        loose.push(item);
+        continue;
+      }
+      const bucket = buckets.get(item.stateType);
+      if (bucket) {
+        bucket.push(item);
+      } else {
+        buckets.set(item.stateType, [item]);
       }
     }
-    if (ungrouped.length > 0) {
-      const heading = document.createElement('div');
-      heading.className = 'group-label';
-      // Not "Other": these are rows whose team no longer lists their state key, and saying so is
-      // more useful than a bucket name that explains nothing.
-      heading.textContent = 'State not recognised — ' + String(ungrouped.length);
-      rows.appendChild(heading);
-      for (const item of ungrouped) {
-        rows.appendChild(row(item));
+
+    for (const type of GROUP_ORDER) {
+      const inGroup = buckets.get(type);
+      if (inGroup) {
+        group(rows, GROUP_NAME[type], inGroup);
       }
+    }
+
+    if (loose.length === 0) {
+      return;
+    }
+    // Only tasks carry a canonical state type. A container list — projects, programs, initiatives
+    // — has none by design, and heading all of them "State not recognised" would report ordinary
+    // data as damage. That warning is reserved for a task whose team dropped its state key.
+    if ((state && state.entity) === 'task') {
+      group(rows, 'State not recognised', loose);
+      return;
+    }
+    for (const item of loose) {
+      rows.appendChild(row(item));
     }
   }
 

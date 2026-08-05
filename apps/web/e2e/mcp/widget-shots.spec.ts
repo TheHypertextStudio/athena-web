@@ -555,15 +555,18 @@ for (const palette of PALETTES) {
                   .filter((name) => name.startsWith('state-'))
                   .sort(),
               );
-              expect(glyphs).toEqual([
-                'state-backlog',
-                'state-canceled',
-                'state-completed',
-                'state-started',
-                'state-started',
-                'state-unstarted',
-                'state-unstarted',
-              ]);
+              // Derived from the fixture rather than pinned to a literal list, so extending the
+              // fixture does not fail this for a reason that has nothing to do with glyphs, while
+              // a glyph that fails to draw still shows up as a missing entry.
+              const fixtureItems = (
+                testCase.result?.['structuredContent'] as { items: { stateType?: string }[] }
+              ).items;
+              expect(glyphs).toEqual(
+                fixtureItems
+                  .filter((item) => item.stateType)
+                  .map((item) => `state-${String(item.stateType)}`)
+                  .sort(),
+              );
               // The row whose state its team no longer lists draws no glyph at all, because a
               // wrong one is worse than none.
               await expect(body).toContainText('State not recognised');

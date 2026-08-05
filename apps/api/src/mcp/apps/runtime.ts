@@ -115,16 +115,23 @@ export const RUNTIME_JS = String.raw`
     if (!dims) {
       return;
     }
+    // A dimensions object that IS present is a complete statement about both axes, so the mode it
+    // does not name has to be cleared. Leaving a stale max-height behind is how an inline cap
+    // survives into fullscreen and clips the frame from the inside.
     const root = document.documentElement;
     if (typeof dims.height === 'number') {
       root.style.height = '100vh';
+      root.style.removeProperty('max-height');
     } else if (typeof dims.maxHeight === 'number') {
       root.style.maxHeight = dims.maxHeight + 'px';
+      root.style.removeProperty('height');
     }
     if (typeof dims.width === 'number') {
       root.style.width = '100vw';
+      root.style.removeProperty('max-width');
     } else if (typeof dims.maxWidth === 'number') {
       root.style.maxWidth = dims.maxWidth + 'px';
+      root.style.removeProperty('width');
     }
   }
 
@@ -177,14 +184,34 @@ export const RUNTIME_JS = String.raw`
       '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.8" fill="currentColor"/><path d="M5.9 5.9 10.1 10.1M10.1 5.9 5.9 10.1" fill="none" stroke="var(--color-background-primary)" stroke-width="1.7" stroke-linecap="round"/></svg>',
   };
 
+  // Every table in these widgets is keyed by a value the host or the payload chose, so none of
+  // them may use a plain property read: 'constructor', 'toString' and friends all resolve through
+  // the prototype and defeat a truthy guard. One helper, shared, rather than five spellings.
+  function own(table, key) {
+    return Object.prototype.hasOwnProperty.call(table, key) ? table[key] : undefined;
+  }
+
+  // The host tells us both, and neither is the browser's business: a plan rendered for someone in
+  // New York must not shift three hours because the viewer's laptop is in Los Angeles.
+  function locales() {
+    const locale = lastHostContext && lastHostContext.locale;
+    return typeof locale === 'string' && locale ? [locale] : [];
+  }
+
+  function withZone(options) {
+    const zone = lastHostContext && lastHostContext.timeZone;
+    return typeof zone === 'string' && zone ? Object.assign({ timeZone: zone }, options) : options;
+  }
+
   function label(value) {
     const raw = String(value === null || value === undefined ? '' : value);
     if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+      // Parsed as local midnight rather than UTC so the day never slips backwards, and formatted
+      // without a timeZone for the same reason — this is a calendar day, not an instant.
       const when = new Date(raw + 'T00:00:00');
-      // The host told us its locale, so a date reads the way the reader writes dates.
       return isNaN(when.getTime())
         ? raw
-        : when.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+        : when.toLocaleDateString(locales(), { month: 'short', day: 'numeric', year: 'numeric' });
     }
     // Only lower_snake wire enums get rewritten. A title, an id, a sentence, or anything a person
     // typed has to survive untouched, so the test is on the shape rather than on a list of keys.
@@ -196,7 +223,10 @@ export const RUNTIME_JS = String.raw`
   }
 
   function stateGlyph(type) {
-    const markup = STATE_GLYPHS[type];
+    // own(), not STATE_GLYPHS[type]: the key comes off the wire, and a plain property read finds
+    // inherited members — STATE_GLYPHS['constructor'] is a function, which passes a truthy guard
+    // and lands stringified source in the card.
+    const markup = own(STATE_GLYPHS, type);
     if (!markup) {
       // No glyph beats a wrong glyph: an unresolved type means the owning team no longer lists
       // that state key, and guessing one from the key is the mistake the type exists to prevent.
@@ -223,6 +253,12 @@ export const RUNTIME_JS = String.raw`
       // The host can move the view on its own — a fullscreen card dismissed from the host's own
       // chrome arrives here as a context change, not as a reply to anything the view asked for.
       setDisplayMode(hostContext.displayMode);
+    }
+    if (hostContext && hostContext.availableDisplayModes && modeHandler) {
+      // Withdrawing a mode has to reach the widget too. Expand affordances are computed from
+      // canDisplay(), so a host that drops 'fullscreen' would otherwise leave a button on screen
+      // that refuses itself when clicked.
+      modeHandler(displayMode);
     }
     reportSize();
   }
@@ -283,7 +319,15 @@ export const RUNTIME_JS = String.raw`
     }
     setState('ready');
     if (dataHandler) {
-      dataHandler(data, params);
+      try {
+        dataHandler(data, params);
+      } catch {
+        // A render that threw leaves the content block half-built. Staying in 'ready' would show a
+        // blank bordered box claiming success, which is worse than the error state the runtime
+        // already knows how to draw.
+        setState('error', 'Docket sent something this card could not read.', 'error');
+        return;
+      }
     }
     reportSize();
   }
@@ -376,8 +420,12 @@ export const RUNTIME_JS = String.raw`
       notify('ui/notifications/initialized', {});
       return result;
     })
-    .catch(() => null)
-    .finally(watchSize);
+    .catch(() => null);
+
+  // Not chained off the handshake. Measuring has no dependency on it, and a host that answers
+  // ui/initialize slowly — or never — would otherwise leave the card with no observer at all,
+  // which is the clipping failure this whole loop exists to prevent.
+  watchSize();
 
   window.docket = {
     ready,
@@ -413,6 +461,18 @@ export const RUNTIME_JS = String.raw`
     stateGlyph,
     /** A wire value rendered for a person: snake_case enums and ISO dates, everything else as-is. */
     label,
+    /** Read a table keyed by an untrusted value without reaching Object.prototype. */
+    own,
+    /** Format an instant in the host's locale and timezone, never the browser's. */
+    time(iso, options) {
+      const when = new Date(iso);
+      return isNaN(when.getTime()) ? '' : when.toLocaleTimeString(locales(), withZone(options));
+    },
+    /** Format a date in the host's locale and timezone, never the browser's. */
+    date(iso, options) {
+      const when = new Date(iso);
+      return isNaN(when.getTime()) ? '' : when.toLocaleDateString(locales(), withZone(options));
+    },
     /** The mode the view is currently displayed in. */
     get displayMode() {
       return displayMode;

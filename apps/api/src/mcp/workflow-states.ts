@@ -47,9 +47,21 @@ export async function teamWorkflows(
 
   const byTeam = new Map<string, readonly WorkflowState[]>();
   for (const row of rows) {
+    // `position` comes out of a jsonb column, so nothing guarantees it is a number on a row
+    // written before the field existed. Subtracting an undefined yields NaN, and a NaN comparator
+    // leaves the array in engine-defined order — a scrambled state picker and a board that groups
+    // out of sequence. Rows without a usable position keep their stored order, after the rest.
+    const ordered = row.workflowStates.map((state, index) => ({ state, index }));
+    ordered.sort((left, right) => {
+      const a =
+        typeof left.state.position === 'number' ? left.state.position : Number.MAX_SAFE_INTEGER;
+      const b =
+        typeof right.state.position === 'number' ? right.state.position : Number.MAX_SAFE_INTEGER;
+      return a === b ? left.index - right.index : a - b;
+    });
     byTeam.set(
       row.id,
-      [...row.workflowStates].sort((left, right) => left.position - right.position),
+      ordered.map((entry) => entry.state),
     );
   }
   return byTeam;

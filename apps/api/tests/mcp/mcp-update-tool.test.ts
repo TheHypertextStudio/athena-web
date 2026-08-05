@@ -228,6 +228,50 @@ describe('update by scope', () => {
     ]);
   });
 
+  it('sees an edit past the point where a diff line is truncated', async () => {
+    const s = await seedOrg(['contribute']);
+    // The two differ only after character 200, which is where a report line gets shortened. An
+    // earlier revision compared the shortened forms, so this edit was written to the database and
+    // then reported as nothing: `changed: 0`, an empty change set with nothing for undo to
+    // reverse, and no search reindex.
+    const shared = 'a'.repeat(400);
+    await seedTask(s, {
+      title: 'Migrate',
+      projectId: s.projectId,
+      description: shared + ' before',
+    });
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'task',
+        scope: { project: 'Platform Migration' },
+        set: { description: shared + ' after' },
+      },
+    })) as CallToolResult;
+    const out = payload(res) as {
+      changed: number;
+      changeSetId: string;
+      changes: { fields: { field: string; from: string; to: string }[] }[];
+    };
+
+    expect(out.changed).toBe(1);
+    const fields = out.changes[0]?.fields ?? [];
+    expect(fields.map((f) => f.field)).toEqual(['description']);
+    // Still shortened where it is shown — the fix moved the clamp, it did not remove it.
+    expect(fields[0]?.from.length).toBeLessThanOrEqual(200);
+    expect(fields[0]?.from.endsWith('…')).toBe(true);
+
+    // And the change set really holds the row, so undo has something to reverse.
+    const undone = (await client.callTool({
+      name: 'undo',
+      arguments: { orgId: s.orgId, changeSetId: out.changeSetId },
+    })) as CallToolResult;
+    expect((payload(undone) as { reverted: number }).reverted).toBe(1);
+  });
+
   it('resolves a workflow state by display name', async () => {
     const s = await seedOrg(['contribute']);
     const id = await seedTask(s, { state: 'backlog' });

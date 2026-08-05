@@ -27,7 +27,9 @@ const SCRIPT = String.raw`
   let day = null;
 
   function time(iso) {
-    return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    // The host's timezone and locale, not the browser's. A plan built for someone in New York
+    // must not read three hours early because the laptop showing it is in Los Angeles.
+    return window.docket.time(iso, { hour: 'numeric', minute: '2-digit' });
   }
 
   function markDone(check, name) {
@@ -89,7 +91,7 @@ const SCRIPT = String.raw`
     if (!item.startsAt) {
       return 'Unscheduled';
     }
-    return new Date(item.startsAt).toLocaleTimeString([], { hour: 'numeric' });
+    return window.docket.time(item.startsAt, { hour: 'numeric' }) || 'Unscheduled';
   }
 
   function renderRows(rows, items) {

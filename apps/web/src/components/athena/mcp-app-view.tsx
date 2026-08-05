@@ -380,19 +380,27 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
       return;
     }
     const observer = new ResizeObserver((entries) => {
-      const width = entries[0]?.contentRect.width;
-      if (typeof width !== 'number' || width <= 0) {
+      const box = entries[0]?.contentRect;
+      if (!box || box.width <= 0) {
         return;
       }
       hostRef.current?.updateHostContext({
-        containerDimensions: { maxHeight: MAX_HEIGHT, maxWidth: Math.round(width) },
+        containerDimensions:
+          displayMode === 'fullscreen'
+            ? // Fixed on both axes: the frame is the whole viewport and the view should fill it.
+              // Sending maxHeight here would cap the view's own root at 640px inside a frame far
+              // taller than that, which clips the expanded content fullscreen exists to show.
+              { width: Math.round(box.width), height: Math.round(box.height) }
+            : { maxHeight: MAX_HEIGHT, maxWidth: Math.round(box.width) },
       });
     });
     observer.observe(container);
     return () => {
       observer.disconnect();
     };
-  }, []);
+    // Re-attached on a mode change so the first measurement after expanding is already the
+    // fullscreen one, rather than the inline cap arriving from a stale closure.
+  }, [displayMode]);
 
   // Restyle in place on a theme flip: a patch, not a reload.
   useEffect(() => {
@@ -463,11 +471,38 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
           ? 'bg-surface-container-low fixed inset-0 z-50 m-0 flex flex-col overflow-hidden'
           : 'bg-surface-container-low m-0 overflow-hidden rounded-xl'
       }
+      // A fullscreen card covers the app, so it has to say it is a modal and name itself. Without
+      // this a screen reader announces nothing on expand and tab order walks straight out into the
+      // page underneath.
+      {...(displayMode === 'fullscreen'
+        ? {
+            role: 'dialog' as const,
+            'aria-modal': true,
+            'aria-label': `${serverName}: ${tool.name}`,
+          }
+        : {})}
       data-testid="mcp-app-view"
       data-display-mode={displayMode}
       data-resource-uri={resource.uri}
       data-prefers-border={String(resource.meta?.prefersBorder ?? false)}
     >
+      {displayMode === 'fullscreen' ? (
+        // Escape alone is not an exit a person can find. The widget's own "Show less" may also be
+        // hidden if the host withdraws the mode, which would leave no visible way out at all.
+        <div className="flex justify-end p-2">
+          <button
+            type="button"
+            autoFocus
+            className="text-on-surface-variant hover:bg-surface-container rounded-md px-3 py-1.5 text-sm"
+            onClick={() => {
+              setDisplayMode('inline');
+              hostRef.current?.updateHostContext({ displayMode: 'inline' });
+            }}
+          >
+            Close
+          </button>
+        </div>
+      ) : null}
       <iframe
         ref={frameRef}
         src={proxyUrl}

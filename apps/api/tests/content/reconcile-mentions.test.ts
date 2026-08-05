@@ -4,15 +4,20 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { formatMentionLink } from '@docket/types';
 
-import { reconcileMentions } from '../../src/content/reconcile-mentions';
+import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
+import { createMentionReconciler } from '../../src/content/reconcile-mentions';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 let schema: typeof DbModule;
 let db: typeof DbModule.db;
 
+/** Built over the real storage adapter, so these exercise the same wiring production uses. */
+let reconciler: ReturnType<typeof createMentionReconciler>;
+
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
+  reconciler = createMentionReconciler(createDrizzleMentionStorage());
 });
 
 async function seedProject(orgId: string, description: string): Promise<string> {
@@ -39,7 +44,7 @@ async function setDescription(projectId: string, description: string): Promise<v
 describe('reconcileMentions', () => {
   it('does nothing for a source table that carries no prose', async () => {
     const { orgId, teamId } = await seedBaseOrg(db, schema);
-    await expect(reconcileMentions(orgId, 'label', teamId)).resolves.toBeUndefined();
+    await expect(reconciler.reconcile(orgId, 'label', teamId)).resolves.toBeUndefined();
   });
 
   it('creates one external resource and one edge for a mentioned Drive file', async () => {
@@ -50,7 +55,7 @@ describe('reconcileMentions', () => {
       `Depends on ${formatMentionLink('Q3 launch plan', url, { kind: 'external', url })}.`,
     );
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const rows = await mentionsFor(projectId);
     expect(rows).toHaveLength(1);
@@ -86,7 +91,7 @@ describe('reconcileMentions', () => {
       ].join('\n\n'),
     );
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const rows = await mentionsFor(projectId);
     expect(rows).toHaveLength(2);
@@ -97,7 +102,7 @@ describe('reconcileMentions', () => {
     const { orgId } = await seedBaseOrg(db, schema);
     const projectId = await seedProject(orgId, 'Context: https://example.com/handbook');
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const rows = await mentionsFor(projectId);
     expect(rows).toHaveLength(1);
@@ -125,7 +130,7 @@ describe('reconcileMentions', () => {
       `Blocked by ${formatMentionLink('Ship the migration', `/orgs/${orgId}/tasks/${target.id}`, ref)}.`,
     );
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const rows = await mentionsFor(projectId);
     expect(rows).toHaveLength(1);
@@ -155,7 +160,7 @@ describe('reconcileMentions', () => {
       `Peeking at ${formatMentionLink('Secret work', `/orgs/${other.orgId}/tasks/${foreignTask.id}`, ref)}.`,
     );
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     expect(await mentionsFor(projectId)).toHaveLength(0);
   });
@@ -169,7 +174,7 @@ describe('reconcileMentions', () => {
     } as const;
     const projectId = await seedProject(orgId, formatMentionLink('Ghost', '/orgs/x/tasks/y', ref));
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     expect(await mentionsFor(projectId)).toHaveLength(0);
   });
@@ -183,7 +188,7 @@ describe('reconcileMentions', () => {
       ),
     );
 
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     expect(await mentionsFor(projectId)).toHaveLength(0);
   });
@@ -196,9 +201,9 @@ describe('reconcileMentions', () => {
       `See ${formatMentionLink('Doc', url, { kind: 'external', url })}.`,
     );
 
-    await reconcileMentions(orgId, 'project', projectId);
-    await reconcileMentions(orgId, 'project', projectId);
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     expect(await mentionsFor(projectId)).toHaveLength(1);
   });
@@ -210,11 +215,11 @@ describe('reconcileMentions', () => {
       orgId,
       formatMentionLink('Doc', url, { kind: 'external', url }),
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
     expect(await mentionsFor(projectId)).toHaveLength(1);
 
     await setDescription(projectId, 'No links here any more.');
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     expect(await mentionsFor(projectId)).toHaveLength(0);
   });
@@ -227,7 +232,7 @@ describe('reconcileMentions', () => {
       orgId,
       formatMentionLink('Second', second, { kind: 'external', url: second }),
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     await setDescription(
       projectId,
@@ -236,7 +241,7 @@ describe('reconcileMentions', () => {
         formatMentionLink('Second', second, { kind: 'external', url: second }),
       ].join('\n\n'),
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const rows = [...(await mentionsFor(projectId))].sort((a, b) => a.position - b.position);
     expect(rows.map((r) => [r.position, r.label])).toEqual([
@@ -252,11 +257,11 @@ describe('reconcileMentions', () => {
       orgId,
       formatMentionLink('Doc', url, { kind: 'external', url }),
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
     expect(await mentionsFor(projectId)).toHaveLength(1);
 
     await db.delete(schema.project).where(eq(schema.project.id, projectId));
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     expect(await mentionsFor(projectId)).toHaveLength(0);
   });

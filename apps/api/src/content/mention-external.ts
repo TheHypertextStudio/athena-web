@@ -25,7 +25,7 @@ import {
 } from '@docket/types';
 import { ConnectorError, type ExternalResource } from '@docket/integrations';
 
-import { connectorFor, resolveConnectorToken } from '../routes/integration-provider';
+import { createConnectorGateway, type ConnectorGateway } from './connector-gateway';
 
 /** How long one source may take before its results stop being worth waiting for. */
 export const PROVIDER_DEADLINE_MS = 1_200;
@@ -45,6 +45,8 @@ export interface MentionExternalResult {
 
 /** What the external picker wave needs to fan out. */
 export interface ExternalMentionQuery {
+  /** How to reach connected sources. Injected, so this is testable without HTTP wiring. */
+  readonly gateway?: ConnectorGateway;
   /** The Actor whose own connections are searched, and whose credentials fund the calls. */
   readonly actorId: string;
   /** The workspace those connections belong to. */
@@ -107,6 +109,7 @@ function toMentionItem(resource: ExternalResource): MentionItem {
 /** Search one connection, returning undefined when its source is not searchable at all. */
 async function searchOneSource(
   input: ExternalMentionQuery,
+  gateway: ConnectorGateway,
   connection: { id: string; provider: string },
   query: string,
 ): Promise<SourceOutcome | undefined> {
@@ -114,25 +117,23 @@ async function searchOneSource(
   const resourceProvider = resourceProviderFor(provider);
   const startedAt = Date.now();
 
-  const token = await resolveConnectorToken(input.actorId, provider);
-  if (!token.ok) {
+  const access = await gateway.openResourceSearch(input.actorId, provider);
+  if (!access.ok) {
+    // An absent capability is not a failure: most connected sources simply are not searchable, and
+    // reporting them would fill the menu's footer with status nobody can act on.
+    if (access.reason === 'not_searchable') return undefined;
     return {
       outcome: {
         provider: resourceProvider,
-        status: token.reason === 'needs_reauth' ? 'reauth_required' : 'not_connected',
+        status: access.reason === 'needs_reauth' ? 'reauth_required' : 'not_connected',
         tookMs: Date.now() - startedAt,
       },
       resources: [],
     };
   }
 
-  const search = connectorFor(provider, token.token).asResourceSearch?.();
-  // An absent capability is not a failure: most connected sources simply are not searchable, and
-  // reporting them would fill the menu's footer with status nobody can act on.
-  if (search === undefined) return undefined;
-
   try {
-    const page = await search.searchResources({
+    const page = await access.search.searchResources({
       connectionId: connection.id,
       query,
       limit: input.limit,
@@ -166,6 +167,7 @@ export async function searchExternalMentions(
   const query = input.query.trim();
   if (query.length === 0) return { items: [], providers: [] };
 
+  const gateway = input.gateway ?? createConnectorGateway();
   const schema = await import('@docket/db');
   const connections = await schema.db
     .select()
@@ -184,7 +186,7 @@ export async function searchExternalMentions(
   // Each source is raced against the deadline independently, so a slow one cannot extend the wait
   // for a fast one; `allSettled` then means a thrown adapter cannot take down the response.
   const settled = await Promise.allSettled(
-    connections.map((connection) => searchOneSource(input, connection, query)),
+    connections.map((connection) => searchOneSource(input, gateway, connection, query)),
   );
 
   const providers: MentionProviderOutcome[] = [];

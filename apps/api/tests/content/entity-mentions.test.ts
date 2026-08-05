@@ -5,15 +5,20 @@ import type * as DbModule from '@docket/db';
 import { formatMentionLink } from '@docket/types';
 
 import { loadEntityMentions } from '../../src/content/entity-mentions';
-import { reconcileMentions } from '../../src/content/reconcile-mentions';
+import { createDrizzleMentionStorage } from '../../src/content/drizzle-mention-storage';
+import { createMentionReconciler } from '../../src/content/reconcile-mentions';
 import { getDb, one, seedBaseOrg, seedUserWithHub, addMember } from '../support/routes-harness';
 
 let schema: typeof DbModule;
 let db: typeof DbModule.db;
 
+/** Built over the real storage adapter, so these exercise the same wiring production uses. */
+let reconciler: ReturnType<typeof createMentionReconciler>;
+
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
+  reconciler = createMentionReconciler(createDrizzleMentionStorage());
 });
 
 async function seedProject(orgId: string, description: string): Promise<string> {
@@ -55,7 +60,7 @@ describe('loadEntityMentions', () => {
     const userId = await seedUserWithHub(db, schema, 'MentionsReaderA');
     await addMember(db, schema, orgId, userId);
     const projectId = await seedProject(orgId, 'Just words.');
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const result = await loadEntityMentions({
       caller: { kind: 'user', userId },
@@ -75,7 +80,7 @@ describe('loadEntityMentions', () => {
       orgId,
       `Depends on ${formatMentionLink('The plan', url, { kind: 'external', url })}.`,
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const result = await loadEntityMentions({
       caller: { kind: 'user', userId },
@@ -99,7 +104,7 @@ describe('loadEntityMentions', () => {
     const url = 'https://example.com/repeated-doc';
     const link = formatMentionLink('Doc', url, { kind: 'external', url });
     const projectId = await seedProject(orgId, `${link} and again ${link}.`);
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const result = await loadEntityMentions({
       caller: { kind: 'user', userId },
@@ -129,7 +134,7 @@ describe('loadEntityMentions', () => {
       orgId,
       `Blocked by ${formatMentionLink('Visible work', `/orgs/${orgId}/tasks/${target.id}`, ref)}.`,
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const result = await loadEntityMentions({
       caller: { kind: 'user', userId },
@@ -164,7 +169,7 @@ describe('loadEntityMentions', () => {
       orgId,
       formatMentionLink('Sirius confidential', `/orgs/${orgId}/tasks/${target.id}`, ref),
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const result = await loadEntityMentions({
       caller: { kind: 'user', userId: reader },
@@ -186,13 +191,13 @@ describe('loadEntityMentions', () => {
       orgId,
       formatMentionLink('Doc', url, { kind: 'external', url }),
     );
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     await db
       .update(schema.project)
       .set({ description: 'No links now.' })
       .where(eq(schema.project.id, projectId));
-    await reconcileMentions(orgId, 'project', projectId);
+    await reconciler.reconcile(orgId, 'project', projectId);
 
     const result = await loadEntityMentions({
       caller: { kind: 'user', userId },

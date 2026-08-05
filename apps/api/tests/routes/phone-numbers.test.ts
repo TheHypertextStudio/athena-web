@@ -51,12 +51,13 @@ async function harness(label: string) {
   const userId = await seedUserWithHub(db, schema, label);
   const sms = new CaptureSmsSender();
   const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
-  const verification = new PhoneVerificationService({
-    sms,
-    now: clock.now,
-    generateCode: () => CODE,
-  });
-  const routes = createPhoneNumberRoutes(verification);
+  const createVerification = () =>
+    new PhoneVerificationService({
+      sms,
+      now: clock.now,
+      generateCode: () => CODE,
+    });
+  const routes = createPhoneNumberRoutes(createVerification);
   const app = appWithSession(routes, fakeSession(userId));
   return { app, userId, sms, clock };
 }
@@ -80,7 +81,7 @@ interface ChallengeWire {
 describe('phone number routes', () => {
   it('requires a signed-in caller for every route', async () => {
     const routes = createPhoneNumberRoutes(
-      new PhoneVerificationService({ sms: new CaptureSmsSender(), generateCode: () => CODE }),
+      () => new PhoneVerificationService({ sms: new CaptureSmsSender(), generateCode: () => CODE }),
     );
     const app = appWithSession(routes, null);
     expect((await app.request('/')).status).toBe(401);

@@ -62,11 +62,14 @@ function toPhoneNumberOut(row: PhoneNumberRow): z.input<typeof PhoneNumberOut> {
 /**
  * Build the caller-owned phone number routes.
  *
- * @param verification - The one-time-code service, constructed from the app container so the SMS
- *   transport is the same real/mock seam every other outbound message uses.
+ * @param createVerification - Builds the one-time-code service from the app container. A factory,
+ *   not a resolved instance: the container's SMS transport is lazy, and no route here runs at
+ *   startup, so resolving it eagerly would force SMS configuration to exist just to boot the API.
+ *   Called fresh inside each handler that needs it, matching {@link PhoneVerificationService}'s own
+ *   per-request contract.
  * @returns the Hono sub-app mounted at `/v1/me/phone-numbers`.
  */
-export function createPhoneNumberRoutes(verification: PhoneVerificationService) {
+export function createPhoneNumberRoutes(createVerification: () => PhoneVerificationService) {
   return new Hono<AppEnv>()
     .get(
       '/',
@@ -138,7 +141,7 @@ export function createPhoneNumberRoutes(verification: PhoneVerificationService) 
           )[0];
         if (!row) throw new Error('phone number insert returned no row');
 
-        return ok(c, PhoneChallengeOut, await issue(verification, row));
+        return ok(c, PhoneChallengeOut, await issue(createVerification(), row));
       },
     )
     .post(
@@ -157,7 +160,7 @@ export function createPhoneNumberRoutes(verification: PhoneVerificationService) 
         if (row.status !== 'pending') {
           throw new ConflictError('This number is not awaiting verification.');
         }
-        return ok(c, PhoneChallengeOut, await issue(verification, row));
+        return ok(c, PhoneChallengeOut, await issue(createVerification(), row));
       },
     )
     .post(
@@ -174,7 +177,7 @@ export function createPhoneNumberRoutes(verification: PhoneVerificationService) 
       async (c) => {
         const userId = requireUserId(c);
         const row = await requireOwned(userId, c.req.valid('param').id);
-        const result = await verification.submit(row, c.req.valid('json').code);
+        const result = await createVerification().submit(row, c.req.valid('json').code);
         if (!result.ok) throw refusalToError(result.refusal, result.attemptsRemaining);
         return ok(c, PhoneNumberOut, toPhoneNumberOut(result.number));
       },

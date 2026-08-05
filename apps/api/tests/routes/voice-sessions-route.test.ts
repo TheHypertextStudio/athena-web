@@ -67,7 +67,7 @@ interface VoiceSessionWire {
 
 describe('browser voice routes', () => {
   it('requires a signed-in caller for every route', async () => {
-    const routes = createVoiceRoutes(new MockRealtimeProvider());
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
     const app = appWithSession(routes, null);
     expect(
       (await app.request('/', { method: 'POST', headers: J, body: JSON.stringify({}) })).status,
@@ -78,7 +78,7 @@ describe('browser voice routes', () => {
 
   it('starts a session on the caller’s canonical conversation with a mock credential', async () => {
     const { userId, orgId } = await seedPerson('VoiceStart');
-    const routes = createVoiceRoutes(new MockRealtimeProvider());
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
     const app = appWithSession(routes, fakeSession(userId));
 
     const res = await app.request('/', {
@@ -101,7 +101,7 @@ describe('browser voice routes', () => {
 
   it('reads back recent transcript lines from the caller’s conversation', async () => {
     const { userId, orgId } = await seedPerson('VoiceTranscript');
-    const routes = createVoiceRoutes(new MockRealtimeProvider());
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
     const app = appWithSession(routes, fakeSession(userId));
 
     const started = await body<VoiceSessionWire>(
@@ -124,7 +124,7 @@ describe('browser voice routes', () => {
 
   it('relays a spoken turn into the session engine and returns its trace', async () => {
     const { userId, orgId } = await seedPerson('VoiceEvents');
-    const routes = createVoiceRoutes(new MockRealtimeProvider());
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
     const app = appWithSession(routes, fakeSession(userId));
     const started = await body<VoiceSessionWire>(
       await app.request('/', {
@@ -149,7 +149,7 @@ describe('browser voice routes', () => {
   it('hides another caller’s voice session behind 404', async () => {
     const me = await seedPerson('VoiceOwnerMe');
     const them = await seedPerson('VoiceOwnerThem');
-    const routes = createVoiceRoutes(new MockRealtimeProvider());
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
     const theirApp = appWithSession(routes, fakeSession(them.userId));
     const theirs = await body<VoiceSessionWire>(
       await theirApp.request('/', {
@@ -174,7 +174,7 @@ describe('browser voice routes', () => {
 
   it('closes a live session on request', async () => {
     const { userId, orgId } = await seedPerson('VoiceClose');
-    const routes = createVoiceRoutes(new MockRealtimeProvider());
+    const routes = createVoiceRoutes(() => new MockRealtimeProvider());
     const app = appWithSession(routes, fakeSession(userId));
     const started = await body<VoiceSessionWire>(
       await app.request('/', {

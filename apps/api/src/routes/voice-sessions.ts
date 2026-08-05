@@ -55,10 +55,13 @@ const idParam = z.object({ id: z.string() });
 /**
  * Build the browser voice routes.
  *
- * @param provider - The realtime speech provider (real or fixture-backed), from the app container.
+ * @param createProvider - Builds the realtime speech provider (real or fixture-backed) from the
+ *   app container. A factory, not a resolved instance: the container's voice provider is lazy so
+ *   a deploy that never opens a voice session isn't blocked at boot by credentials it doesn't
+ *   have, and this route tree is built at module load, well before any request could need it.
  * @returns the Hono sub-app mounted at `/v1/me/athena/voice`.
  */
-export function createVoiceRoutes(provider: VoiceRealtimeProvider) {
+export function createVoiceRoutes(createProvider: () => VoiceRealtimeProvider) {
   return new Hono<AppEnv>()
     .post(
       '/',
@@ -73,6 +76,7 @@ export function createVoiceRoutes(provider: VoiceRealtimeProvider) {
       async (c) => {
         const userId = requireUserId(c);
         const body = c.req.valid('json');
+        const provider = createProvider();
         const opened = await openVoiceSession({
           userId,
           channel: 'web',

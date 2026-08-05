@@ -74,7 +74,10 @@ const notificationPreferences = new NotificationPreferenceService(db);
 const notificationContactPoints = new NotificationContactPointService(db);
 // Phone verification and voice both resolve their boundary adapters from the one container, so
 // local runs use the capturing SMS double and the fixture realtime provider with no accounts.
-const phoneVerification = new PhoneVerificationService({ sms: getContainer().sms });
+// A factory, not a resolved instance: `sms` is a lazy container value specifically so a deploy
+// that never sends SMS isn't blocked at boot by credentials it doesn't have, and this route tree
+// is built at module load, well before any request could need it.
+const createPhoneVerification = () => new PhoneVerificationService({ sms: getContainer().sms });
 
 /** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -97,9 +100,12 @@ const routes = app
     createNotificationPreferenceRoutes(notificationPreferences),
   )
   .route('/me/contact-points', createContactPointRoutes(notificationContactPoints))
-  .route('/me/phone-numbers', createPhoneNumberRoutes(phoneVerification))
+  .route('/me/phone-numbers', createPhoneNumberRoutes(createPhoneVerification))
   // Registered before `/me/athena` so the more specific voice prefix is matched first.
-  .route('/me/athena/voice', createVoiceRoutes(getContainer().voice))
+  .route(
+    '/me/athena/voice',
+    createVoiceRoutes(() => getContainer().voice),
+  )
   .route('/me/account', meAccount)
   .route('/me/athena', meAthena)
   .route('/me/elicitations', elicitations)

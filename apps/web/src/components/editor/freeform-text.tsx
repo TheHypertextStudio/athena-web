@@ -266,7 +266,7 @@ export function FreeformTextEditor({
           onSelect={mentions.selectItem}
           onRows={mentions.reportRows}
           onOpenChange={(next) => {
-            if (!next) mentions.close();
+            if (!next) mentions.dismiss();
           }}
         />
       ) : null}

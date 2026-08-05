@@ -31,11 +31,13 @@ import {
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
+import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
 import { api } from '@/lib/api';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
+import MentionTextarea from '@/components/mentions/mention-textarea';
 
 /** Props for {@link AthenaConversation}. */
 export interface AthenaConversationProps {
@@ -51,6 +53,7 @@ export default function AthenaConversation({
   className,
 }: AthenaConversationProps): JSX.Element {
   const [thread, setThread] = useState<AgentSessionDetailOut | null>(null);
+  const mentionOrgId = useMentionOrgId(orgId);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -171,15 +174,15 @@ export default function AthenaConversation({
           void send();
         }}
       >
-        <textarea
+        <MentionTextarea
           aria-label="Message Athena"
           placeholder="Ask Athena anything…"
           rows={2}
           value={draft}
           disabled={sending}
-          onChange={(event) => {
-            setDraft(event.target.value);
-          }}
+          onChange={setDraft}
+          {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+          insertMode="context"
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault();

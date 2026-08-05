@@ -128,7 +128,7 @@ describe('AthenaWorkbench', () => {
       />,
     );
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Answer Athena' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: 'Answer Athena' }), {
       target: { value: 'Update the launch checklist.' },
     });
     fireEvent.submit(screen.getByRole('form', { name: 'Answer Athena' }));

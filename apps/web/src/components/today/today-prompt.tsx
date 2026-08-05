@@ -28,10 +28,12 @@ import Link from 'next/link';
 import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
+import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { api } from '@/lib/api';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { STALE, apiQueryOptions, useApiQuery } from '@/lib/query';
 import { queryKeys } from '@/lib/query-keys';
+import MentionTextarea from '@/components/mentions/mention-textarea';
 
 /** A successful capture: enough to confirm AND point at the created task. */
 interface CaptureNotice {
@@ -55,6 +57,7 @@ export interface TodayPromptProps {
 export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): JSX.Element {
   const { openAthena } = useAthenaPanel();
   const [text, setText] = useState('');
+  const mentionOrgId = useMentionOrgId(orgId);
   const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -142,12 +145,14 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
         </div>
       ) : null}
       <div className="border-outline-variant bg-surface-container-low focus-within:ring-ring focus-within:border-ring flex flex-col gap-3 rounded-2xl border p-4 shadow-sm transition-[box-shadow,border-color] duration-(--dur-base) ease-(--ease-out) focus-within:shadow-md focus-within:ring-1 @2xl:p-5">
-        <textarea
+        <MentionTextarea
           value={text}
-          onChange={(event) => {
-            setText(event.target.value);
+          onChange={(next) => {
+            setText(next);
             if (notice) setNotice(null);
           }}
+          {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+          insertMode="context"
           onKeyDown={onKeyDown}
           rows={text.includes('\n') || text.length > 90 ? 3 : 2}
           placeholder={

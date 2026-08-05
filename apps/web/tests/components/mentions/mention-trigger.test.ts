@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { findMentionTrigger } from '@/components/mentions/mention-trigger';
+import { decideTrigger, findMentionTrigger } from '@/components/mentions/mention-trigger';
 
 describe('findMentionTrigger', () => {
   it('opens at the start of a block', () => {
@@ -46,5 +46,37 @@ describe('findMentionTrigger', () => {
 
   it('reports nothing when there is no @ at all', () => {
     expect(findMentionTrigger('just some prose')).toBeUndefined();
+  });
+});
+
+describe('decideTrigger', () => {
+  it('offsets the trigger by the origin, so a surface can scan one line of many', () => {
+    expect(
+      decideTrigger({ textBeforeCaret: 'Blocked by @dri', origin: 40, dismissedStart: undefined }),
+    ).toEqual({ kind: 'open', trigger: { start: 51, query: 'dri' } });
+  });
+
+  it('keeps a dismissed attempt shut, so Escape survives the keyup that follows it', () => {
+    expect(
+      decideTrigger({ textBeforeCaret: 'Blocked by @dri', origin: 0, dismissedStart: 11 }),
+    ).toEqual({ kind: 'suppressed' });
+  });
+
+  it('keeps it shut as more of the same word is typed', () => {
+    expect(
+      decideTrigger({ textBeforeCaret: 'Blocked by @drive', origin: 0, dismissedStart: 11 }),
+    ).toEqual({ kind: 'suppressed' });
+  });
+
+  it('opens for a new attempt elsewhere, so one Escape does not disable the feature', () => {
+    expect(
+      decideTrigger({ textBeforeCaret: '@dri and @pla', origin: 0, dismissedStart: 0 }),
+    ).toEqual({ kind: 'open', trigger: { start: 9, query: 'pla' } });
+  });
+
+  it('reports nothing once the caret leaves the attempt, which expires the dismissal', () => {
+    expect(
+      decideTrigger({ textBeforeCaret: 'Blocked by nobody', origin: 0, dismissedStart: 11 }),
+    ).toEqual({ kind: 'none' });
   });
 });

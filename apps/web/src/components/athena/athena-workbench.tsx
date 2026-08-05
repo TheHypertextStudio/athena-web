@@ -6,6 +6,8 @@ import { type JSX, type SyntheticEvent, useMemo, useState } from 'react';
 
 import { presentAthenaSession, type PersonalAthenaSessionDetail } from '@/lib/athena/presentation';
 import type { PersonalAthenaLifecycle } from '@/lib/athena/query-defs';
+import MentionTextarea from '@/components/mentions/mention-textarea';
+import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 
 /** Events emitted by the shared personal Athena workbench. */
 export interface AthenaWorkbenchProps {
@@ -44,6 +46,7 @@ export function AthenaWorkbench({
   const freeformQuestion = decision?.kind === 'question' && decision.options.length === 0;
   const commandLabel = freeformQuestion ? 'Answer Athena' : view.commandLabel;
   const [draft, setDraft] = useState('');
+  const mentionOrgId = useMentionOrgId(session.workspace?.id);
 
   function submit(event: SyntheticEvent<HTMLFormElement>): void {
     event.preventDefault();
@@ -246,15 +249,15 @@ export function AthenaWorkbench({
         >
           <label className="min-w-0 flex-1">
             <span className="sr-only">{commandLabel}</span>
-            <textarea
+            <MentionTextarea
               aria-label={commandLabel}
               value={draft}
               disabled={pending}
               rows={2}
               placeholder={`${commandLabel}…`}
-              onChange={(event) => {
-                setDraft(event.target.value);
-              }}
+              onChange={setDraft}
+              {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+              insertMode="context"
               className="border-outline-variant bg-surface-container-low text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-12 w-full resize-none rounded-lg border px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 disabled:opacity-60"
             />
           </label>

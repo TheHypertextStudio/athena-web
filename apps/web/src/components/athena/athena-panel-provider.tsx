@@ -32,6 +32,8 @@ import {
 } from '@/lib/athena/query-defs';
 import type { PersonalAthenaContext, PersonalAthenaSessionDetail } from '@/lib/athena/presentation';
 import { queryKeys, useLiveApiQuery } from '@/lib/query';
+import MentionTextarea from '@/components/mentions/mention-textarea';
+import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 
 import { AthenaWorkbench } from './athena-workbench';
 import { useAthenaActions } from './use-athena-actions';
@@ -87,6 +89,7 @@ export function AthenaPanelProvider({
 }: AthenaPanelProviderProps): JSX.Element {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const mentionOrgId = useMentionOrgId(initialContext?.workspaceId);
   const [context, setContext] = useState<PersonalAthenaContext | null>(initialContext);
   const [selectedId, setSelectedId] = useState('');
   const [launchDraft, setLaunchDraft] = useState<string | null>(null);
@@ -292,14 +295,14 @@ export function AthenaPanelProvider({
                   Athena will keep moving in the background. You can return here to steer it.
                 </p>
               </div>
-              <textarea
+              <MentionTextarea
                 aria-label="Athena objective"
                 rows={5}
                 value={launchDraft}
                 disabled={actions.createPending}
-                onChange={(event) => {
-                  setLaunchDraft(event.target.value);
-                }}
+                onChange={setLaunchDraft}
+                {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+                insertMode="context"
                 className="border-outline-variant bg-surface-container-low text-on-surface focus-visible:ring-ring w-full resize-none rounded-lg border p-3 text-sm leading-6 outline-none focus-visible:ring-2"
               />
               <div className="flex justify-end gap-2">

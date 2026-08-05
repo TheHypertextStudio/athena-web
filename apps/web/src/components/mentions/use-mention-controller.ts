@@ -19,7 +19,7 @@ import type { MentionItem, MentionRef } from '@docket/types';
 import { mentionRefKey } from '@docket/types';
 
 import { MENTION_NODE, attributesFromRef } from './mention-extension';
-import { findMentionTrigger, type MentionTrigger } from './mention-trigger';
+import { decideTrigger, type MentionTrigger } from './mention-trigger';
 import { stepActiveKey } from './mention-merge';
 
 /**
@@ -54,6 +54,8 @@ export interface MentionController {
   readonly syncFromEditor: (editor: Editor) => void;
   readonly selectItem: (item: MentionItem) => void;
   readonly close: () => void;
+  /** Close because the reader asked to, which keeps this `@` shut until the caret leaves it. */
+  readonly dismiss: () => void;
   /** True while the menu is open, so the editor suppresses content reconciliation. */
   readonly suppressReconcile: React.RefObject<boolean>;
 }
@@ -80,8 +82,18 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
   const anchorRef = useRef<CaretAnchor | null>(null);
   const itemsRef = useRef<readonly MentionItem[]>([]);
   const resolvedKeyRef = useRef<string | undefined>(undefined);
+  const dismissedStartRef = useRef<number | undefined>(undefined);
+  // The keyboard handler reads the trigger from here rather than from the render it closed over.
+  // ProseMirror dispatches a keystroke synchronously, so a handler that trusted its captured state
+  // would act on whatever the last committed render happened to hold.
+  const triggerRef = useRef<MentionTrigger | undefined>(undefined);
+  // Set for exactly one keystroke, so the Escape that dismissed the menu is swallowed and the one
+  // after it reaches the editor.
+  const justDismissedRef = useRef(false);
   const suppressReconcile = useRef(false);
   const listboxId = useMemo(() => `mention-menu-${Math.random().toString(36).slice(2, 9)}`, []);
+
+  triggerRef.current = trigger;
 
   const open = input.enabled && input.orgId !== undefined && trigger !== undefined;
   suppressReconcile.current = open;
@@ -99,6 +111,20 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
     setHasArrowed(false);
   }, []);
 
+  /**
+   * Close the menu and keep it closed for this `@`.
+   *
+   * @remarks
+   * Radix answers Escape from a capture-phase listener on the document, so the popover is already
+   * gone by the time ProseMirror hands the key to us. Recording the dismissal here rather than in
+   * the key handler is what makes it stick no matter which of the two closed the menu.
+   */
+  const dismiss = useCallback(() => {
+    dismissedStartRef.current = triggerRef.current?.start;
+    justDismissedRef.current = true;
+    close();
+  }, [close]);
+
   const syncFromEditor = useCallback(
     (editor: Editor) => {
       editorRef.current = editor;
@@ -112,14 +138,22 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
       }
 
       const blockStart = editorState.selection.$from.start();
-      const textBefore = editorState.doc.textBetween(blockStart, from, '\n', '￼');
-      const found = findMentionTrigger(textBefore);
-      if (found === undefined) {
-        if (trigger !== undefined) close();
+      const decision = decideTrigger({
+        textBeforeCaret: editorState.doc.textBetween(blockStart, from, '\n', '￼'),
+        origin: blockStart,
+        dismissedStart: dismissedStartRef.current,
+      });
+
+      if (decision.kind === 'suppressed') return;
+      justDismissedRef.current = false;
+      if (decision.kind === 'none') {
+        dismissedStartRef.current = undefined;
+        if (triggerRef.current !== undefined) close();
         return;
       }
 
-      const start = blockStart + found.start;
+      dismissedStartRef.current = undefined;
+      const { start } = decision.trigger;
       // Anchor to the whole `@query` range rather than to a caret point, so the menu stays glued
       // to the growing token instead of drifting as characters are added.
       const rect = () => {
@@ -133,20 +167,21 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
         );
       };
       anchorRef.current = { getBoundingClientRect: rect };
-      setTrigger({ start, query: found.query });
+      setTrigger(decision.trigger);
     },
-    [close, input.enabled, trigger],
+    [close, input.enabled],
   );
 
   const selectItem = useCallback(
     (item: MentionItem) => {
       const editor = editorRef.current;
-      if (editor === null || trigger === undefined) return;
+      const active = triggerRef.current;
+      if (editor === null || active === undefined) return;
 
       const ref: MentionRef = item.ref;
       const href = item.origin === 'local' ? item.href : item.url;
-      const from = trigger.start;
-      const to = from + 1 + trigger.query.length;
+      const from = active.start;
+      const to = from + 1 + active.query.length;
 
       editor
         .chain()
@@ -162,12 +197,22 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
       rememberMention(ref);
       close();
     },
-    [close, trigger],
+    [close],
   );
 
   const handleKeyDown = useCallback(
     (_view: EditorView, event: KeyboardEvent): boolean => {
-      if (!open) return false;
+      if (event.key === 'Escape' && justDismissedRef.current) {
+        // Returning true stops the editor's own Escape handler, so dismissing the menu does not
+        // discard the draft.
+        justDismissedRef.current = false;
+        event.preventDefault();
+        return true;
+      }
+
+      if (triggerRef.current === undefined || !input.enabled || input.orgId === undefined) {
+        return false;
+      }
 
       // Not intercepted: ⌘Enter means send. Leaving a half-typed `@dri` as literal text is
       // recoverable; inserting an unconfirmed mention is not.
@@ -210,17 +255,15 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
           return true;
         }
         case 'Escape': {
-          // Returning true stops the editor's own Escape handler, so dismissing the menu does
-          // not discard the draft.
           event.preventDefault();
-          close();
+          dismiss();
           return true;
         }
         default:
           return false;
       }
     },
-    [close, open, selectItem],
+    [dismiss, input.enabled, input.orgId, selectItem],
   );
 
   return {
@@ -235,6 +278,7 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
     syncFromEditor,
     selectItem,
     close,
+    dismiss,
     suppressReconcile,
   };
 }

@@ -59,3 +59,49 @@ export function findMentionTrigger(textBeforeCaret: string): MentionTrigger | un
 
   return { start: at, query };
 }
+
+/** A caret scan, in whatever coordinate space the surface counts positions in. */
+export interface TriggerScan {
+  /** Everything from the start of the block or line up to the caret. */
+  readonly textBeforeCaret: string;
+  /** The position {@link textBeforeCaret} starts at, added to every offset in the result. */
+  readonly origin: number;
+  /** Position of an `@` the reader dismissed with Escape, if one is still dismissed. */
+  readonly dismissedStart: number | undefined;
+}
+
+/** What a surface should do with the trigger a scan found. */
+export type TriggerDecision =
+  | { readonly kind: 'open'; readonly trigger: MentionTrigger }
+  /** A trigger is there, but the reader already dismissed this one. Stay shut. */
+  | { readonly kind: 'suppressed' }
+  /** No trigger at the caret, so any dismissal has served its purpose and expires. */
+  | { readonly kind: 'none' };
+
+/**
+ * Resolve a caret scan into an open/stay-shut decision.
+ *
+ * @remarks
+ * Escape has to survive the events that follow it. A textarea fires `keyup` for the Escape press
+ * itself and a ProseMirror surface re-scans on the next caret move, so a controller that only
+ * cleared its state would re-derive the same trigger and reopen the menu it was just told to
+ * dismiss. Keying the dismissal to the `@`'s position rather than to the query means typing more
+ * of the same word keeps it shut, while starting a new `@` anywhere gets a menu again.
+ *
+ * @param scan - The text before the caret, its origin, and the dismissed position.
+ * @returns What the caller should do.
+ *
+ * @example
+ * ```typescript
+ * decideTrigger({ textBeforeCaret: 'Blocked by @dri', origin: 0, dismissedStart: 11 });
+ * // { kind: 'suppressed' }
+ * ```
+ */
+export function decideTrigger(scan: TriggerScan): TriggerDecision {
+  const found = findMentionTrigger(scan.textBeforeCaret);
+  if (found === undefined) return { kind: 'none' };
+
+  const start = scan.origin + found.start;
+  if (start === scan.dismissedStart) return { kind: 'suppressed' };
+  return { kind: 'open', trigger: { start, query: found.query } };
+}

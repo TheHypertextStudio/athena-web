@@ -93,7 +93,11 @@ export function toMentionItem(result: SearchOut['items'][number]): MentionItem |
     ref,
     entityKind,
     title: result.title,
-    subtitle: result.subject?.title ?? result.summary,
+    // The parent's title and nothing else. The index's summary is the entity's description in
+    // Markdown, which reads as source code in a one-line row and takes the space the title needs
+    // to stay legible. What the row owes the reader is which of two similarly named things this
+    // is; the rest belongs to the hovercard.
+    subtitle: result.subject?.title ?? null,
     href: route.href,
     score: result.score,
   };

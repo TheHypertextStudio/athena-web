@@ -67,9 +67,11 @@ export default function MentionRow({
       )}
     >
       <Icon className="text-on-surface-variant size-4! shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{item.title}</span>
+      <span className="min-w-0 flex-[3] truncate">{item.title}</span>
       {item.subtitle ? (
-        <span className="text-on-surface-variant hidden max-w-[12rem] truncate text-xs sm:inline">
+        // Given a third of the leftover space at most, so a long parent name can never squeeze the
+        // title down to an ellipsis — the title is what the reader is aiming at.
+        <span className="text-on-surface-variant hidden min-w-0 flex-1 truncate text-xs sm:inline">
           {item.subtitle}
         </span>
       ) : null}

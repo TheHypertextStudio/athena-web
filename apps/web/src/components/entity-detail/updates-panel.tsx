@@ -32,6 +32,9 @@ import {
 import type { JSX } from 'react';
 import { useState } from 'react';
 
+import { useActiveOrgIdOptional } from '@/components/active-org';
+import MentionTextarea from '@/components/mentions/mention-textarea';
+
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '../programs/health';
 import { relativeTime } from '../programs/format-time';
 
@@ -104,6 +107,7 @@ export function UpdatesPanel({
   showHealthComposer = true,
 }: UpdatesPanelProps): JSX.Element {
   const [body, setBody] = useState('');
+  const activeOrgId = useActiveOrgIdOptional();
   const [health, setHealth] = useState<HealthChoice>('');
 
   /**
@@ -143,12 +147,11 @@ export function UpdatesPanel({
         >
           Post an update
         </label>
-        <textarea
+        <MentionTextarea
           id="program-update-body"
           value={body}
-          onChange={(event) => {
-            setBody(event.target.value);
-          }}
+          onChange={setBody}
+          {...(activeOrgId === null ? {} : { orgId: activeOrgId })}
           rows={3}
           placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
           className="border-outline-variant bg-surface-container placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium min-h-20 w-full resize-y rounded-md border px-3 py-2 shadow-sm outline-none focus-visible:ring-1"

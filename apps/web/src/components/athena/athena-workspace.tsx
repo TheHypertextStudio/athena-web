@@ -19,6 +19,8 @@ import {
   type PersonalAthenaSessionSummary,
 } from '@/lib/athena/presentation';
 import { queryKeys, useLiveApiQuery } from '@/lib/query';
+import MentionTextarea from '@/components/mentions/mention-textarea';
+import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 
 import { AthenaConversationBrowser } from './athena-conversation-browser';
 import { ElicitationQueue } from './elicitation-queue';
@@ -83,6 +85,7 @@ export function AthenaWorkspace({
 }: AthenaWorkspaceProps): JSX.Element {
   const queryClient = useQueryClient();
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport), 5_000);
+  const mentionOrgId = useMentionOrgId(workspaceFilter);
   const [olderSessions, setOlderSessions] = useState<
     Partial<Readonly<Record<AthenaQueueState, AthenaQueueContinuation>>>
   >({});
@@ -470,15 +473,15 @@ export function AthenaWorkspace({
                   </p>
                   <label className="mt-5 block">
                     <span className="text-on-surface text-sm font-medium">Objective</span>
-                    <textarea
+                    <MentionTextarea
                       aria-label="Athena objective"
                       rows={4}
                       value={newObjective}
                       disabled={actions.createPending}
                       placeholder="Prepare tomorrow morning…"
-                      onChange={(event) => {
-                        setNewObjective(event.target.value);
-                      }}
+                      onChange={setNewObjective}
+                      {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+                      insertMode="context"
                       className="border-outline-variant bg-surface-container-low text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring mt-2 w-full resize-none rounded-lg border p-3 text-sm leading-6 outline-none focus-visible:ring-2"
                     />
                   </label>

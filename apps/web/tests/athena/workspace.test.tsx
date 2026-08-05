@@ -395,7 +395,7 @@ describe('AthenaWorkspace', () => {
       </QueryClientProvider>,
     );
 
-    fireEvent.change(await screen.findByRole('textbox', { name: 'Answer Athena' }), {
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Answer Athena' }), {
       target: { value: 'The launch checklist' },
     });
     fireEvent.submit(screen.getByRole('form', { name: 'Answer Athena' }));

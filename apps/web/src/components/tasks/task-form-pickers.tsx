@@ -26,9 +26,12 @@ interface TaskComposerPickersProps {
   projectId: string | null;
   projectOptions: readonly PickerOption[];
   projectNoun: string;
+  milestoneId: string | null;
+  milestoneOptionsForProject: readonly { value: string; label: string }[];
   cycleId: string | null;
   cycleOptionsForTeam: readonly { value: string; label: string }[];
   cycleNoun: string;
+  startDate: string | null;
   dueDate: string | null;
   labelIds: readonly string[];
   labelOptions: readonly PickerOption[];
@@ -38,7 +41,9 @@ interface TaskComposerPickersProps {
   onPriorityChange: (priority: Priority) => void;
   onAssigneeChange: (id: string | null) => void;
   onProjectChange: (id: string | null) => void;
+  onMilestoneChange: (id: string | null) => void;
   onCycleChange: (id: string | null) => void;
+  onStartDateChange: (d: string | null) => void;
   onDueDateChange: (d: string | null) => void;
   onLabelToggle: (id: string) => void;
 }
@@ -59,9 +64,12 @@ export function TaskComposerPickers({
   projectId,
   projectOptions,
   projectNoun,
+  milestoneId,
+  milestoneOptionsForProject,
   cycleId,
   cycleOptionsForTeam,
   cycleNoun,
+  startDate,
   dueDate,
   labelIds,
   labelOptions,
@@ -71,7 +79,9 @@ export function TaskComposerPickers({
   onPriorityChange,
   onAssigneeChange,
   onProjectChange,
+  onMilestoneChange,
   onCycleChange,
+  onStartDateChange,
   onDueDateChange,
   onLabelToggle,
 }: TaskComposerPickersProps): JSX.Element {
@@ -122,6 +132,17 @@ export function TaskComposerPickers({
         ariaLabel={projectNoun}
         disabled={creating}
       />
+      <EntityPicker
+        options={milestoneOptionsForProject}
+        value={milestoneId}
+        onChange={onMilestoneChange}
+        placeholder={projectId ? 'Set milestone' : `Set a ${projectNounLower} first`}
+        clearLabel="No milestone"
+        searchPlaceholder="Search milestones…"
+        emptyText={projectId ? 'No milestones' : `Set a ${projectNounLower} to choose a milestone`}
+        ariaLabel="Milestone"
+        disabled={creating || !projectId}
+      />
       {cycleOptionsForTeam.length > 0 ? (
         <EntityPicker
           options={cycleOptionsForTeam}
@@ -134,6 +155,14 @@ export function TaskComposerPickers({
           disabled={creating}
         />
       ) : null}
+      <DatePicker
+        value={startDate}
+        onChange={onStartDateChange}
+        placeholder="Anticipated start"
+        formatLabel={triggerDate}
+        ariaLabel="Anticipated start"
+        disabled={creating}
+      />
       <DatePicker
         value={dueDate}
         onChange={onDueDateChange}

@@ -6,11 +6,17 @@
  * @remarks
  * A Linear-grade task composer: an autofocused title, a description body, and an inline strip of
  * compact property pickers — workflow status, priority, assignee, {@link useVocabulary | project},
- * cycle, and due date — so a task can be fully shaped at creation without a follow-up trip to its
- * detail screen. Sensible defaults keep it fast: the status defaults to the team's first workflow
- * state, the priority to "No priority", and the team to the org's default; everything else is
- * optional. The composer reuses the shared {@link ComposerShell} for its chrome and the
- * `@docket/ui` compact pickers for its properties.
+ * milestone, cycle, anticipated start, and due date — so a task can be fully shaped at creation
+ * without a follow-up trip to its detail screen. Sensible defaults keep it fast: the status
+ * defaults to the team's first workflow state, the priority to "No priority", and the team to the
+ * org's default; everything else is optional. The composer reuses the shared {@link ComposerShell}
+ * for its chrome and the `@docket/ui` compact pickers for its properties.
+ *
+ * Milestone mirrors the task detail rail: it's scoped to the chosen project (disabled with a
+ * prompt until one is picked) since a milestone always belongs to exactly one project. A parent
+ * task is deliberately NOT offered here — that relationship is created the other direction, via
+ * "Add subtask" on the parent's own detail screen, so a redundant picker here would just be a
+ * second, disconnected way to do the same thing.
  *
  * Creating a task is *team-scoped* (each team owns its workflow), so the composer offers a
  * {@link TeamPicker} when the org has more than one team and reloads the status options whenever
@@ -25,6 +31,7 @@ import {
   ActorId,
   CycleId,
   LabelId,
+  MilestoneId,
   type Priority,
   ProjectId,
   type TaskOut,
@@ -46,7 +53,7 @@ import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { TaskComposerPickers } from './task-form-pickers';
 
 /** The lists this composer's pickers draw from. */
-const COMPOSER_INCLUDE = ['actors', 'projects', 'cycles', 'labels'] as const;
+const COMPOSER_INCLUDE = ['actors', 'projects', 'cycles', 'labels', 'milestones'] as const;
 
 /** Props for {@link CreateTaskDialog}. */
 export interface CreateTaskDialogProps {
@@ -99,7 +106,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [priority, setPriority] = useState<Priority>('none');
   const [assigneeId, setAssigneeId] = useState<string | null>(defaultAssigneeId);
   const [projectId, setProjectId] = useState<string | null>(defaultProjectId);
+  const [milestoneId, setMilestoneId] = useState<string | null>(null);
   const [cycleId, setCycleId] = useState<string | null>(null);
+  const [startDate, setStartDate] = useState<string | null>(null);
   const [dueDate, setDueDate] = useState<string | null>(null);
   const [labelIds, setLabelIds] = useState<readonly string[]>([]);
   const [workflowStates, setWorkflowStates] = useState<readonly WorkflowState[]>([]);
@@ -135,6 +144,20 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       .map((cycle) => ({ value: cycle.id, label: cycle.displayName }));
   }, [options.cycles, teamId]);
 
+  // A milestone always belongs to exactly one project, so the picker is scoped to whichever
+  // project is currently chosen — same rule the task detail rail applies post-creation.
+  const milestoneOptionsForProject = useMemo(() => {
+    return options.milestones
+      .filter((milestone) => milestone.projectId === projectId)
+      .map((milestone) => ({ value: milestone.id, label: milestone.name }));
+  }, [options.milestones, projectId]);
+
+  /** Changing the project invalidates any milestone chosen under the previous one. */
+  const changeProject = useCallback((id: string | null): void => {
+    setProjectId(id);
+    setMilestoneId(null);
+  }, []);
+
   const statusOptions = useMemo(() => workflowStateOptions(workflowStates), [workflowStates]);
 
   /** Toggle a label id in/out of the selected set. */
@@ -164,7 +187,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
           ...(state ? { state } : {}),
           ...(assigneeId ? { assigneeId: ActorId.parse(assigneeId) } : {}),
           ...(projectId ? { projectId: ProjectId.parse(projectId) } : {}),
+          ...(milestoneId ? { milestoneId: MilestoneId.parse(milestoneId) } : {}),
           ...(cycleId ? { cycleId: CycleId.parse(cycleId) } : {}),
+          ...(startDate ? { startDate } : {}),
           ...(dueDate ? { dueDate } : {}),
           ...(labelIds.length > 0 ? { labels: labelIds.map((id) => LabelId.parse(id)) } : {}),
         },
@@ -194,7 +219,9 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
     state,
     assigneeId,
     projectId,
+    milestoneId,
     cycleId,
+    startDate,
     dueDate,
     labelIds,
     orgId,
@@ -232,9 +259,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         projectId={projectId}
         projectOptions={options.projectOptions}
         projectNoun={projectNoun}
+        milestoneId={milestoneId}
+        milestoneOptionsForProject={milestoneOptionsForProject}
         cycleId={cycleId}
         cycleOptionsForTeam={cycleOptionsForTeam}
         cycleNoun={cycleNoun}
+        startDate={startDate}
         dueDate={dueDate}
         labelIds={labelIds}
         labelOptions={options.labelOptions}
@@ -243,8 +273,10 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
         onStateChange={setState}
         onPriorityChange={setPriority}
         onAssigneeChange={setAssigneeId}
-        onProjectChange={setProjectId}
+        onProjectChange={changeProject}
+        onMilestoneChange={setMilestoneId}
         onCycleChange={setCycleId}
+        onStartDateChange={setStartDate}
         onDueDateChange={setDueDate}
         onLabelToggle={toggleLabel}
       />

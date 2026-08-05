@@ -104,6 +104,75 @@ describe('normalizeSunsamaTask', () => {
     expect(normalizeSunsamaTask({ id: 'no-title' })).toBeNull();
     expect(normalizeSunsamaTask({ title: 'no id' })).toBeNull();
   });
+
+  it('reads a `streams` array of bare ids, full objects, and partial objects', () => {
+    // Distinct from `streamIds`/`channelIds`: this is the richer `streams` shape some Sunsama
+    // payloads use instead, mixing a bare id string with objects that carry an id, a name, both,
+    // or neither — every combination readStreams has to reconcile into ids[]/names[].
+    const task = normalizeSunsamaTask({
+      id: 'streams-shape',
+      title: 'Task with a streams[] payload',
+      streams: [
+        'str-bare-id',
+        { id: 'str-both', name: 'Both Id And Name' },
+        { name: 'Name Only Stream' },
+        { id: 'str-id-only' },
+        { unrelated: 'field' },
+        42,
+      ],
+    });
+    expect([...(task?.streamIds ?? [])].sort()).toEqual(
+      ['str-bare-id', 'str-both', 'str-id-only'].sort(),
+    );
+    expect([...(task?.streamNames ?? [])].sort()).toEqual(
+      ['Both Id And Name', 'Name Only Stream'].sort(),
+    );
+  });
+
+  it('accepts subtasks given as bare title strings, not just objects', () => {
+    const task = normalizeSunsamaTask({
+      id: 'sub-strings',
+      title: 'Task with string subtasks',
+      subtasks: ['Water the plants', { title: 'Feed the cat', completed: true }],
+    });
+    expect(task?.subtasks).toEqual([
+      { id: null, title: 'Water the plants', completed: false },
+      { id: null, title: 'Feed the cat', completed: true },
+    ]);
+  });
+
+  it('skips a subtask entry that carries neither a string nor a recognisable title', () => {
+    const task = normalizeSunsamaTask({
+      id: 'sub-junk',
+      title: 'Task with unusable subtask entries',
+      subtasks: [42, null, {}, { unrelated: 'field' }],
+    });
+    expect(task?.subtasks).toEqual([]);
+  });
+
+  it('defaults a subtask with no completion flag at all to not completed', () => {
+    const task = normalizeSunsamaTask({
+      id: 'sub-no-flag',
+      title: 'Task with an unflagged subtask',
+      subtasks: [{ title: 'No completed or complete key here' }],
+    });
+    expect(task?.subtasks).toEqual([
+      { id: null, title: 'No completed or complete key here', completed: false },
+    ]);
+  });
+
+  it('coerces a numeric-string time estimate and actual time the same as a native number', () => {
+    // Sunsama’s own payloads use native numbers; this proves the string-coercion fallback that
+    // exists for servers that stringify minutes still resolves to the right value.
+    const task = normalizeSunsamaTask({
+      id: 'num-strings',
+      title: 'Task with stringified minutes',
+      timeEstimate: '45',
+      actualTime: '20.5',
+    });
+    expect(task?.timeEstimateMinutes).toBe(45);
+    expect(task?.actualTimeMinutes).toBe(20.5);
+  });
 });
 
 describe('readSunsamaTaskArray', () => {
@@ -188,5 +257,43 @@ describe('readSunsamaAccount — MCP-only', () => {
 
   it('points at Sunsama’s real remote endpoint for a live run', () => {
     expect(SUNSAMA_MCP_URL).toBe('https://api.sunsama.com/mcp');
+  });
+
+  it('reads a bare-array listStreams payload, keeping only entries with both an id and a name', async () => {
+    const session = await fixtureConnector().open({ url: SUNSAMA_FIXTURE_URL });
+    const patched: typeof session = {
+      ...session,
+      callTool: async (name, input) => {
+        if (name === 'get_streams') {
+          return {
+            content: JSON.stringify([
+              { id: 'str-full', name: 'Fully Named Stream' },
+              { id: 'str-no-name' },
+              { name: 'No Id Stream' },
+              42,
+            ]),
+            isError: false,
+          };
+        }
+        return session.callTool(name, input);
+      },
+    };
+    const result = await readSunsamaAccount(patched);
+    expect(result.streams).toEqual([{ id: 'str-full', name: 'Fully Named Stream' }]);
+  });
+
+  it('tolerates a listStreams payload that carries no usable streams array', async () => {
+    const session = await fixtureConnector().open({ url: SUNSAMA_FIXTURE_URL });
+    const patched: typeof session = {
+      ...session,
+      callTool: async (name, input) => {
+        if (name === 'get_streams') {
+          return { content: JSON.stringify({ ok: true }), isError: false };
+        }
+        return session.callTool(name, input);
+      },
+    };
+    const result = await readSunsamaAccount(patched);
+    expect(result.streams).toEqual([]);
   });
 });

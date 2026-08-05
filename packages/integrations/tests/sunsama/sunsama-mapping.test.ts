@@ -79,6 +79,21 @@ describe('workspace routing', () => {
     ).toContainEqual({ code: 'duplicate-route', subject: 'str-transit' });
   });
 
+  it('rejects a declaration whose fallback workspace is not one of the eight', () => {
+    expect(
+      validateSunsamaRouting({ ...ROUTING, fallbackWorkspace: 'Made Up Workspace' as never }),
+    ).toContainEqual({ code: 'unknown-workspace', subject: 'Made Up Workspace' });
+  });
+
+  it('rejects a route that names neither a stream id nor a stream name', () => {
+    expect(
+      validateSunsamaRouting({
+        ...ROUTING,
+        routes: [...ROUTING.routes, { workspace: 'Project Oasis' }],
+      }),
+    ).toContainEqual({ code: 'empty-route', subject: '(no stream id or name)' });
+  });
+
   it('routes by stream id, and by name when the id is unknown', () => {
     const byName: SunsamaWorkspaceRouting = {
       ...ROUTING,
@@ -92,6 +107,18 @@ describe('workspace routing', () => {
     expect(routeSunsamaTask(task, byName)).toEqual({
       workspace: 'The Willie Diaries',
       usedFallback: false,
+    });
+  });
+
+  it('falls back to the declared workspace when neither a stream id nor a stream name matches', () => {
+    const task: SunsamaTask = {
+      ...TASKS[0]!,
+      streamIds: ['completely-unknown-id'],
+      streamNames: ['Not A Real Stream Name'],
+    };
+    expect(routeSunsamaTask(task, ROUTING)).toEqual({
+      workspace: ROUTING.fallbackWorkspace,
+      usedFallback: true,
     });
   });
 

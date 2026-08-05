@@ -10,9 +10,10 @@
 import Link from '@tiptap/extension-link';
 import { Markdown } from '@tiptap/markdown';
 import { EditorContent, useEditor } from '@tiptap/react';
+import type { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import type { JSX } from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ReactNodeViewRenderer } from '@tiptap/react';
 
@@ -22,7 +23,15 @@ import { useActiveOrgIdOptional } from '@/components/active-org';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
 import MentionMenu from '@/components/mentions/mention-menu';
 import MentionNodeView from '@/components/mentions/mention-node-view';
-import { createMentionExtension } from '@/components/mentions/mention-extension';
+import {
+  createMentionExtension,
+  MENTION_NODE,
+  attributesFromRef,
+} from '@/components/mentions/mention-extension';
+import {
+  createLinkUpgradeExtension,
+  type PendingLinkUpgrade,
+} from '@/components/mentions/link-upgrade';
 import { useMentionController } from '@/components/mentions/use-mention-controller';
 
 import { useSlashCommands } from './use-slash-commands';
@@ -95,6 +104,40 @@ export function FreeformTextEditor({
   const mentionsRef = useRef(mentions);
   mentionsRef.current = mentions;
 
+  // Announced politely rather than rendered as text, so a screen-reader user learns that Tab is
+  // temporarily bound without a stray fragment appearing mid-sentence.
+  const [linkOffer, setLinkOffer] = useState<PendingLinkUpgrade | undefined>(undefined);
+  const editorRef = useRef<Editor | null>(null);
+
+  const upgradeLink = useCallback((pending: PendingLinkUpgrade): boolean => {
+    const instance = editorRef.current;
+    if (instance === null) return false;
+    const label = instance.state.doc.textBetween(pending.from, pending.to, ' ');
+    instance
+      .chain()
+      .focus()
+      .insertContentAt({ from: pending.from, to: pending.to }, [
+        {
+          type: MENTION_NODE,
+          attrs: attributesFromRef(
+            { kind: 'external', url: pending.href },
+            // The pasted URL until hydration resolves a real title; a chip that renders blank
+            // while waiting would be worse than one that renders the link.
+            label === '' ? pending.href : label,
+            pending.href,
+          ),
+        },
+        { type: 'text', text: ' ' },
+      ])
+      .run();
+    return true;
+  }, []);
+
+  const upgradeLinkRef = useRef(upgradeLink);
+  upgradeLinkRef.current = upgradeLink;
+  const setLinkOfferRef = useRef(setLinkOffer);
+  setLinkOfferRef.current = setLinkOffer;
+
   const extensions = useMemo(
     () => [
       StarterKit.configure({ heading: { levels: [1, 2, 3] }, link: false }),
@@ -108,6 +151,12 @@ export function FreeformTextEditor({
         validate: (href) => /^(https?:|mailto:|\/)/i.test(href),
       }),
       createMentionExtension(() => ReactNodeViewRenderer(MentionNodeView)),
+      createLinkUpgradeExtension({
+        onUpgrade: (pending) => upgradeLinkRef.current(pending),
+        onPendingChange: (pending) => {
+          setLinkOfferRef.current(pending);
+        },
+      }),
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
       ...slashExtensions,
     ],
@@ -154,6 +203,9 @@ export function FreeformTextEditor({
     onSelectionUpdate: ({ editor: instance }) => {
       mentionsRef.current.syncFromEditor(instance);
     },
+    onCreate: ({ editor: instance }) => {
+      editorRef.current = instance;
+    },
   });
 
   attachSlash(editor);
@@ -199,6 +251,9 @@ export function FreeformTextEditor({
         aria-controls={mentions.open ? mentions.listboxId : undefined}
         aria-activedescendant={mentions.open ? mentions.activeKey : undefined}
       />
+      <p aria-live="polite" aria-atomic="true" className="sr-only">
+        {linkOffer === undefined ? '' : 'Link pasted. Press Tab to turn it into a chip.'}
+      </p>
       {mentions.open ? (
         <MentionMenu
           open={mentions.open}

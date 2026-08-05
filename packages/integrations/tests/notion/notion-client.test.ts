@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
+import type { ConnectorProviderClient } from '../../src/provider-client';
 import { ConnectorError } from '../../src/connector-error';
 import { NOTION_API_VERSION } from '../../src/notion-mapping';
-import { NotionProviderClient } from '../../src/notion';
+import { NotionProviderClient, isNotionProviderClient } from '../../src/notion';
 import type { ProviderHttp } from '../../src/provider-http';
 import {
   TASKS_TRACKER_DATA_SOURCE,
@@ -105,6 +106,28 @@ describe('NotionProviderClient.resolveAccount', () => {
     http.get = () => null;
     expect(await notion(http).resolveAccount()).toBeUndefined();
   });
+
+  it('falls back to the owner’s email when the bot owner user has no name', async () => {
+    const http = new RecordingHttp();
+    http.get = () => ({
+      bot: {
+        owner: { type: 'user', user: { person: { email: 'anon@lasvegasfortransit.org' } } },
+      },
+    });
+    expect(await notion(http).resolveAccount()).toEqual({ label: 'anon@lasvegasfortransit.org' });
+  });
+
+  it('falls back to the bot’s own display name when neither an owner name nor email is present', async () => {
+    const http = new RecordingHttp();
+    http.get = () => ({ name: 'Docket Bot', bot: {} });
+    expect(await notion(http).resolveAccount()).toEqual({ label: 'Docket Bot' });
+  });
+
+  it('omits every field the payload carries none of, rather than reporting blanks', async () => {
+    const http = new RecordingHttp();
+    http.get = () => ({});
+    expect(await notion(http).resolveAccount()).toEqual({});
+  });
 });
 
 describe('NotionProviderClient.listContainers', () => {
@@ -146,6 +169,67 @@ describe('NotionProviderClient.listContainers', () => {
     expect(await notion(http).listContainers()).toEqual([
       { id: 'ds-x', title: 'Untitled database' },
     ]);
+  });
+
+  it('skips a search result with no id rather than emitting a malformed container', async () => {
+    const http = new RecordingHttp();
+    http.post = () => ({
+      results: [
+        { title: [{ plain_text: 'No id' }] },
+        { id: 'ds-ok', title: [{ plain_text: 'OK' }] },
+      ],
+      has_more: false,
+    });
+    expect(await notion(http).listContainers()).toEqual([{ id: 'ds-ok', title: 'OK' }]);
+  });
+
+  it('treats a page with no `results` array as empty rather than throwing', async () => {
+    const http = new RecordingHttp();
+    http.post = () => ({ has_more: false }); // no `results` key at all
+    expect(await notion(http).listContainers()).toEqual([]);
+  });
+
+  it('stops paging — without a truncation warning — when Notion claims more but hands back no usable cursor', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const http = new RecordingHttp();
+      http.post = () => ({
+        results: [{ id: 'ds-1', title: [{ plain_text: 'Only page' }] }],
+        has_more: true,
+        next_cursor: null, // has_more says yes, but there's nothing to resume from
+      });
+      expect(await notion(http).listContainers()).toEqual([{ id: 'ds-1', title: 'Only page' }]);
+      // This is a "no usable cursor" stop, not a page-count truncation — no warning either way.
+      expect(warn).not.toHaveBeenCalled();
+      expect(http.calls).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('stops at the page-count safety bound and logs a truncation warning, never a silent partial pull', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      const http = new RecordingHttp();
+      let call = 0;
+      // Every page reports has_more, so the loop only ever stops at MAX_IMPORT_PAGES.
+      http.post = () => {
+        call += 1;
+        return {
+          results: [{ id: `ds-${call}`, title: [{ plain_text: `DB ${call}` }] }],
+          has_more: true,
+          next_cursor: `cursor-${call}`,
+        };
+      };
+      const refs = await notion(http).listContainers();
+      expect(refs).toHaveLength(100);
+      expect(warn).toHaveBeenCalledTimes(1);
+      const [line] = warn.mock.calls[0] as [string];
+      expect(line).toContain('import_truncated');
+      expect(line).toContain('data_sources');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
@@ -253,6 +337,68 @@ describe('NotionProviderClient.importWork', () => {
       notion(http).importWork({ connectionId: 'c', provider: 'notion', listIds: ['ds'] }, 'now'),
     ).rejects.toBeInstanceOf(ConnectorError);
   });
+
+  it('caches the schema per data source, so a second sync run on the same client reuses it', async () => {
+    const http = new RecordingHttp();
+    http.get = () => trackerSchemaPayload;
+    http.post = (path) =>
+      path.endsWith('/query')
+        ? { results: [tasksTrackerPage({ id: 'p1' })], has_more: false }
+        : { results: [], has_more: false };
+
+    const client = notion(http);
+    await client.importWork(
+      { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
+      '2026-08-02T00:00:00.000Z',
+    );
+    await client.importWork(
+      { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
+      '2026-08-02T00:00:00.000Z',
+    );
+    // One `GET /data_sources/{id}` total — the second run's schema lookup hit the cache.
+    expect(http.calls.filter((c) => c.method === 'get')).toHaveLength(1);
+  });
+
+  it('paginates a data source query across multiple pages, in both the live and archived partitions', async () => {
+    const http = new RecordingHttp();
+    http.get = () => trackerSchemaPayload;
+    let livePage = 0;
+    let archivedPage = 0;
+    http.post = (path, body) => {
+      if (!path.endsWith('/query')) return { results: [], has_more: false };
+      if ((body as Record<string, unknown>)['is_archived'] === true) {
+        archivedPage += 1;
+        return archivedPage === 1
+          ? {
+              results: [tasksTrackerPage({ id: 'a1', title: 'Archived one', inTrash: true })],
+              has_more: true,
+              next_cursor: 'archived-cursor',
+            }
+          : {
+              results: [tasksTrackerPage({ id: 'a2', title: 'Archived two', inTrash: true })],
+              has_more: false,
+            };
+      }
+      livePage += 1;
+      return livePage === 1
+        ? {
+            results: [tasksTrackerPage({ id: 'l1', title: 'Live one' })],
+            has_more: true,
+            next_cursor: 'live-cursor',
+          }
+        : { results: [tasksTrackerPage({ id: 'l2', title: 'Live two' })], has_more: false };
+    };
+
+    const items = await notion(http).importWork(
+      { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
+      '2026-08-02T00:00:00.000Z',
+    );
+    expect(items.map((i) => i.id)).toEqual(['l1', 'l2', 'a1', 'a2']);
+    // Each second page resumed from the cursor its first page returned.
+    const queryCalls = http.calls.filter((c) => c.path.endsWith('/query'));
+    expect(queryCalls[1]?.body).toMatchObject({ start_cursor: 'live-cursor' });
+    expect(queryCalls[3]?.body).toMatchObject({ start_cursor: 'archived-cursor' });
+  });
 });
 
 describe('NotionProviderClient.pushTask — the write half', () => {
@@ -345,5 +491,41 @@ describe('NotionProviderClient.mirrorStatus', () => {
       status: 'idle',
       itemCount: 2,
     });
+  });
+});
+
+describe('NotionProviderClient.resolveExternalUrl', () => {
+  it('derives the canonical notion.so URL from the external page id alone', async () => {
+    const http = new RecordingHttp();
+    await expect(
+      notion(http).resolveExternalUrl({
+        connectionId: 'c',
+        provider: 'notion',
+        resourceId: 'task-1',
+        externalId: '386c7791-208f-80e6-a74e-da40db98177e',
+      }),
+    ).resolves.toBe('https://www.notion.so/386c7791208f80e6a74eda40db98177e');
+    // Link resolution is pure — it never spends a request on it.
+    expect(http.calls).toHaveLength(0);
+  });
+});
+
+describe('isNotionProviderClient', () => {
+  it('narrows a Notion client and rejects a structurally different one', () => {
+    const client = notion(new RecordingHttp());
+    expect(isNotionProviderClient(client)).toBe(true);
+
+    const other: ConnectorProviderClient = {
+      resolveAccount: async () => undefined,
+      listContainers: async () => [],
+      importWork: async () => [],
+      mirrorStatus: async (input) => ({
+        connectionId: input.connectionId,
+        status: 'idle',
+        itemCount: 0,
+      }),
+      resolveExternalUrl: async () => undefined,
+    };
+    expect(isNotionProviderClient(other)).toBe(false);
   });
 });

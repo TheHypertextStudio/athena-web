@@ -91,6 +91,85 @@ describe('readNotionSchema', () => {
     expect(completionProperty(schema)).toEqual({ kind: 'none' });
   });
 
+  it('ignores a status group whose display name matches none of the three known groups', () => {
+    // "Blocked" normalizes to neither to_do/in_progress/complete, so its option must not leak
+    // into any of the three buckets readNotionSchema derives.
+    const schema = readNotionSchema('ds', 'Custom', {
+      Name: { type: 'title', title: {} },
+      Status: {
+        type: 'status',
+        status: {
+          options: [
+            { id: 'opt-blocked', name: 'Blocked' },
+            { id: 'opt-todo', name: 'Not started' },
+            { id: 'opt-done', name: 'Done' },
+          ],
+          groups: [
+            { id: 'g0', name: 'Blocked', option_ids: ['opt-blocked'] },
+            { id: 'g1', name: 'To-do', option_ids: ['opt-todo'] },
+            { id: 'g2', name: 'Complete', option_ids: ['opt-done'] },
+          ],
+        },
+      },
+    });
+    expect(schema.statusGroups).toEqual({
+      todo: ['Not started'],
+      inProgress: [],
+      complete: ['Done'],
+    });
+  });
+
+  it('is defensive about malformed status metadata: an option missing an id/name, an unnamed group, and a non-string option id', () => {
+    const schema = readNotionSchema('ds', 'Custom', {
+      Name: { type: 'title', title: {} },
+      Status: {
+        type: 'status',
+        status: {
+          options: [{ id: 'opt-a', name: 'Not started' }, { name: 'Orphaned option (no id)' }],
+          groups: [
+            { option_ids: ['opt-a'] }, // no `name` — normalizes to "other", matches nothing
+            { id: 'g1', name: 'To-do', option_ids: ['opt-a'] },
+            { id: 'g2', name: 'Complete', option_ids: ['opt-a', 42] }, // 42 is not a valid option id
+          ],
+        },
+      },
+    });
+    expect(schema.statusGroups).toEqual({
+      todo: ['Not started'],
+      inProgress: [],
+      complete: ['Not started'],
+    });
+  });
+
+  it('handles an array-shape status definition carrying no options list at all', () => {
+    const schema = readNotionSchema('ds', 'Weird', {
+      Name: { type: 'title', title: {} },
+      Status: {
+        type: 'status',
+        status: {
+          groups: [{ id: 'g1', name: 'To-do', option_ids: ['opt-a'] }],
+          // no `options` key — the id → name lookup has nothing to resolve against
+        },
+      },
+    });
+    expect(schema.statusGroups).toEqual({ todo: [], inProgress: [], complete: [] });
+  });
+
+  it('defaults the title property to "Name" when the data source has no title-typed property', () => {
+    // Notion guarantees exactly one `title` property on a real data source; this defends the
+    // (otherwise API-impossible) case rather than crashing on a malformed payload.
+    const schema = readNotionSchema('ds', 'No Title', { Status: { type: 'status', status: {} } });
+    expect(schema.titleProperty).toBe('Name');
+  });
+
+  it('labels an unmapped property "unknown" when its definition carries no type', () => {
+    const schema = readNotionSchema('ds', 'X', {
+      Name: { type: 'title', title: {} },
+      Mystery: {},
+    });
+    expect(schema.unmappedProperties).toEqual([{ name: 'Mystery', type: 'unknown' }]);
+  });
+
   it('supports the keyed group shape the Notion MCP surface returns', () => {
     const schema = readNotionSchema('ds', 'Keyed', {
       Name: { type: 'title', title: {} },
@@ -146,10 +225,62 @@ describe('reading a Notion page', () => {
     expect(readNotionCompleted(tasksTrackerPage(), schema)).toBeUndefined();
   });
 
+  it('reads a checkbox-driven completion straight off the boolean property', () => {
+    const schema = readNotionSchema('ds', 'Simple', {
+      Name: { type: 'title', title: {} },
+      Done: { type: 'checkbox', checkbox: {} },
+    });
+    const checked = { id: 'p1', properties: { Done: { type: 'checkbox', checkbox: true } } };
+    const unchecked = { id: 'p2', properties: { Done: { type: 'checkbox', checkbox: false } } };
+    const missing = { id: 'p3', properties: {} };
+    expect(readNotionCompleted(checked, schema)).toBe(true);
+    expect(readNotionCompleted(unchecked, schema)).toBe(false);
+    // No `checkbox` value at all (property absent from the page) — unknown, not "not done".
+    expect(readNotionCompleted(missing, schema)).toBeUndefined();
+  });
+
   it('distinguishes a cleared due date (null) from an absent property (undefined)', () => {
     expect(readNotionDueDate(tasksTrackerPage({ due: null }), trackerSchema)).toBeNull();
     const schema = readNotionSchema('ds', 'Undated', { Name: { type: 'title', title: {} } });
     expect(readNotionDueDate(tasksTrackerPage(), schema)).toBeUndefined();
+  });
+
+  it('reports the due date as absent when the schema has the property but the page has no value for it', () => {
+    // Different from the schema-has-no-date-property case above: here the property is mapped,
+    // it's just missing off this particular page's `properties` object.
+    const page = { id: 'p1', properties: {} };
+    expect(readNotionDueDate(page, trackerSchema)).toBeUndefined();
+  });
+
+  it('treats a due date with no `start` value as cleared rather than crashing', () => {
+    const page = { id: 'p1', properties: { 'Due date': { type: 'date', date: {} } } };
+    expect(readNotionDueDate(page, trackerSchema)).toBeNull();
+  });
+
+  it('treats a rich-text segment with no plain_text as empty rather than crashing', () => {
+    const page = {
+      id: 'p1',
+      properties: {
+        'Task name': {
+          type: 'title',
+          title: [{ type: 'mention' }, { type: 'text', plain_text: 'Kept' }],
+        },
+      },
+    };
+    expect(readNotionTitle(page, trackerSchema)).toBe('Kept');
+  });
+
+  it('returns undefined/empty for description, priority and assignees when the schema has none of them', () => {
+    const schema = readNotionSchema('ds', 'Bare', { Name: { type: 'title', title: {} } });
+    const page = tasksTrackerPage();
+    expect(readNotionDescription(page, schema)).toBeUndefined();
+    expect(readNotionPriority(page, schema)).toBeUndefined();
+    expect(readNotionAssignees(page, schema)).toEqual([]);
+  });
+
+  it('returns an empty array for assignees when the page’s people value is not an array', () => {
+    const page = { id: 'p1', properties: { Assignee: { type: 'people', people: null } } };
+    expect(readNotionAssignees(page, trackerSchema)).toEqual([]);
   });
 });
 
@@ -201,6 +332,28 @@ describe('mapNotionPage', () => {
     expect(notionPageUrl('386c7791-208f-80e6-a74e-da40db98177e')).toBe(
       'https://www.notion.so/386c7791208f80e6a74eda40db98177e',
     );
+  });
+
+  it('omits completed/dueDate and derives externalUrl/skips externalUpdatedAt when the page and schema carry none of them', () => {
+    const schema = readNotionSchema('ds', 'Bare', { Name: { type: 'title', title: {} } });
+    const page = {
+      id: 'p1',
+      properties: { Name: { type: 'title', title: [{ type: 'text', plain_text: 'Bare page' }] } },
+      // no `url`, no `last_edited_time`
+    };
+    expect(mapNotionPage(page, schema, IMPORTED_AT)).toEqual({
+      id: 'p1',
+      kind: 'issue',
+      title: 'Bare page',
+      provenance: {
+        provider: 'notion',
+        externalId: 'p1',
+        // Derived from the id — Notion's own `url` field was absent.
+        externalUrl: 'https://www.notion.so/p1',
+        importedAt: IMPORTED_AT,
+        externalListId: 'ds',
+      },
+    });
   });
 });
 
@@ -291,6 +444,50 @@ describe('notionPushProperties — the outbound half of two-way sync', () => {
         schema,
       ),
     ).toEqual({ Name: { title: [{ type: 'text', text: { content: 'Kept' } }] } });
+  });
+
+  it('falls back to the workspace’s in-progress option when reopening a database with no to-do group', () => {
+    const schema = readNotionSchema('ds', 'Custom', {
+      Name: { type: 'title', title: {} },
+      Stage: {
+        type: 'status',
+        status: {
+          options: [
+            { id: 'a', name: 'Doing' },
+            { id: 'b', name: 'Done' },
+          ],
+          groups: [
+            { id: 'g1', name: 'In progress', option_ids: ['a'] },
+            { id: 'g2', name: 'Complete', option_ids: ['b'] },
+          ],
+        },
+      },
+    });
+    expect(
+      notionPushProperties(
+        { kind: 'update', listId: 'ds', externalId: 'p', completed: false },
+        schema,
+      ),
+    ).toEqual({ Stage: { status: { name: 'Doing' } } });
+  });
+
+  it('writes no completion property when reopening a database with neither a to-do nor an in-progress option', () => {
+    const schema = readNotionSchema('ds', 'DoneOnly', {
+      Name: { type: 'title', title: {} },
+      Stage: {
+        type: 'status',
+        status: {
+          options: [{ id: 'b', name: 'Done' }],
+          groups: [{ id: 'g2', name: 'Complete', option_ids: ['b'] }],
+        },
+      },
+    });
+    expect(
+      notionPushProperties(
+        { kind: 'update', listId: 'ds', externalId: 'p', completed: false },
+        schema,
+      ),
+    ).toEqual({});
   });
 
   it('writes a checkbox database’s completion as a checkbox', () => {

@@ -22,7 +22,14 @@
  * The pending Files group reserves its heading and two rows at the real row height, so results
  * replace skeletons in place and the popover never re-flips position mid-typing.
  */
-import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
+import {
+  menuLabel,
+  menuSeparator,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  Skeleton,
+} from '@docket/ui/primitives';
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { MentionItem } from '@docket/types';
@@ -47,11 +54,14 @@ export interface MentionMenuProps {
   readonly onRows: (items: readonly MentionItem[], resolvedActiveKey: string | undefined) => void;
 }
 
-/** Shared heading treatment for every section of the menu. */
-const HEADING_CLASS = 'text-on-surface-variant px-2 pt-2 pb-1 text-xs font-medium';
+/** Shared heading treatment for every section of the menu — the menu section label, verbatim. */
+const HEADING_CLASS = menuLabel('standard');
 
-/** The rule between sections; never applied above the first, whose heading already opens the list. */
-const GROUP_DIVIDER = 'border-outline-variant mt-1 border-t pt-1';
+/**
+ * The rule between sections; never applied above the first, whose heading already opens the list.
+ * The menu separator rather than a `border-t`, so it is the same 1px rule at the same spacing.
+ */
+const GROUP_DIVIDER = cn(menuSeparator('standard'), 'mb-2');
 
 /** Row id for a given item, so `aria-activedescendant` can point at it. */
 export function mentionRowId(listboxId: string, item: MentionItem): string {
@@ -108,7 +118,7 @@ export default function MentionMenu({
           event.preventDefault();
         }}
         className={cn(
-          'w-[min(24rem,calc(100vw-2rem))] p-1.5',
+          'w-[min(24rem,calc(100vw-2rem))]',
           'max-h-[min(22rem,var(--radix-popover-content-available-height))] overflow-y-auto',
           'duration-(--dur-fast)',
         )}
@@ -190,7 +200,7 @@ export default function MentionMenu({
           {localFailed ? (
             <li
               role="alert"
-              className="text-destructive bg-destructive/5 border-destructive/30 text-body-medium m-1 rounded-md border px-3 py-2"
+              className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
             >
               Could not search this workspace.
             </li>

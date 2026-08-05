@@ -181,7 +181,7 @@ export function ProjectMilestonesPanel({
       ) : null}
 
       {mutationError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {mutationError}
         </p>
       ) : null}

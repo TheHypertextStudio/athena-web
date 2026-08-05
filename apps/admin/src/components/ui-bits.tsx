@@ -76,7 +76,7 @@ export function ErrorBanner({ message, action }: ErrorBannerProps): JSX.Element 
   return (
     <div
       role="alert"
-      className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
+      className="border-error/40 bg-error/5 text-error text-body-medium flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3"
     >
       <p>{message}</p>
       {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}

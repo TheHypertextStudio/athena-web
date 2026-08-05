@@ -16,6 +16,7 @@ import * as React from 'react';
 
 import { cn } from '../lib/utils';
 import { focusRing } from './focus';
+import { menuContentClass } from './menu-styles';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 
 /** Root controller for an open/closed popover (Radix passthrough). */
@@ -55,10 +56,16 @@ PopoverAnchor.displayName = PopoverPrimitive.Anchor.displayName;
  * Floating panel that holds the popover body; rendered through a portal.
  *
  * @remarks
- * Mirrors {@link DropdownMenuContent}'s token surface and enter/exit animations, but as a
- * plain region (no `menu` semantics) so it can host arbitrary interactive content. Defaults
- * to `align="start"` so a property picker's panel left-edge lines up with its compact
- * trigger rather than centering under it.
+ * Renders {@link DropdownMenuContent}'s exact surface — same `menuContentClass`, so the same
+ * 16dp corner, 4dp padding, `level2` elevation, motion, and submenu shape morphing — as a plain
+ * region with no `menu` semantics, so it can host arbitrary interactive content. Defaults to
+ * `align="start"` so a property picker's panel left-edge lines up with its compact trigger
+ * rather than centering under it.
+ *
+ * It used to carry its own copy of that surface, and the copy had drifted: `surface-container-high`
+ * against the menu's `surface-container-low`, an 8px corner against 10px, and `shadow-md` against
+ * `shadow-lg`. Every searchable picker in the product is a menu wearing a popover, so it now
+ * shares one string with the menus and overrides only what is genuinely popover-specific.
  *
  * Layering: transient overlays (this, dropdown/context menus, tooltips, hover cards) sit at
  * `z-[120]` — above the modal layer (sheets `z-[100]`, dialogs `z-[110]`) — so a picker opened
@@ -78,7 +85,8 @@ export function PopoverContent({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[120] max-h-[var(--radix-popover-content-available-height)] w-72 origin-[var(--radix-popover-content-transform-origin)] rounded-md border p-0 shadow-md duration-(--dur-base) ease-(--ease-out) outline-none',
+          menuContentClass('standard'),
+          'max-h-[var(--radix-popover-content-available-height)] w-72 origin-[var(--radix-popover-content-transform-origin)] outline-none',
           focusRing,
           className,
         )}

@@ -60,11 +60,11 @@ export function FeatureLedger(): JSX.Element {
           Built for everyone who runs more than one thing
         </h2>
       </div>
-      <dl className="border-border mt-12 border-t">
+      <dl className="border-outline-variant mt-12 border-t">
         {FEATURES.map((feature) => (
           <div
             key={feature.number}
-            className="border-border grid gap-2 border-b py-7 sm:grid-cols-[5rem_minmax(0,2fr)_minmax(0,3fr)] sm:gap-6"
+            className="border-outline-variant grid gap-2 border-b py-7 sm:grid-cols-[5rem_minmax(0,2fr)_minmax(0,3fr)] sm:gap-6"
           >
             <span aria-hidden className="text-sienna pt-1 font-mono text-sm">
               {feature.number}
@@ -75,7 +75,7 @@ export function FeatureLedger(): JSX.Element {
             <dd className="flex flex-col gap-3">
               <p className="text-ink-muted text-base">{feature.body}</p>
               {feature.detail ? (
-                <p className="border-border text-ink-muted self-start rounded-full border px-3 py-1 font-mono text-xs">
+                <p className="border-outline-variant text-ink-muted self-start rounded-full border px-3 py-1 font-mono text-xs">
                   {feature.detail}
                 </p>
               ) : null}

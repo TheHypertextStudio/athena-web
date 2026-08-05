@@ -14,7 +14,7 @@ import { HeroActions } from './marketing-cta';
 export function Hero(): JSX.Element {
   return (
     <section className="mx-auto w-full max-w-6xl px-6">
-      <div className="border-border flex flex-col gap-8 border-b pt-20 pb-14 sm:pt-28 sm:pb-16">
+      <div className="border-outline-variant flex flex-col gap-8 border-b pt-20 pb-14 sm:pt-28 sm:pb-16">
         <p className="text-ink-muted text-sm font-medium">For people who run more than one thing</p>
         <h1 className="font-display text-display-large text-ink wonk max-w-4xl tracking-tight text-balance">
           Run every organization from one calm place.

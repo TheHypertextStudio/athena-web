@@ -343,7 +343,7 @@ export function IntegrationConfigPanel({
              only the provider can enumerate. The field's own label and help text are static. */
           <Skeleton className="h-16 w-full rounded-lg" />
         ) : listsQ.isError ? (
-          <p className="text-destructive text-xs">
+          <p className="text-error text-xs">
             {userErrorMessage(listsQ.error, 'Could not update integration settings.')}
           </p>
         ) : lists.length === 0 ? (
@@ -428,7 +428,7 @@ export function IntegrationConfigPanel({
       ) : null}
 
       {error && !reauthNeeded ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {error}
         </p>
       ) : null}
@@ -438,7 +438,7 @@ export function IntegrationConfigPanel({
           role="alert"
           className="border-outline-variant bg-surface-container-low flex flex-col items-start gap-2 rounded-lg border p-3"
         >
-          <p className="text-destructive text-body-medium">
+          <p className="text-error text-body-medium">
             {error ?? 'Linear needs to grant Docket write access.'}
           </p>
           <p className="text-on-surface-variant text-xs">

@@ -84,7 +84,12 @@ async function warmUpAuth(page: Page): Promise<void> {
  * created the account, so on retry the "Use a different email" reset returns to a clean step 1.
  */
 export async function signUp(page: Page, { name, email }: TestUser): Promise<void> {
-  await page.goto('/sign-up', { waitUntil: 'domcontentloaded' });
+  // `pageReady`, not Playwright's 30s default: this is the first request to `/sign-up` in a run,
+  // so `next dev` compiles the route's client bundle before it can answer. A cold compile measured
+  // ~40s here, which the default silently turns into "page.goto: Timeout 30000ms exceeded" — a
+  // failure that reads like the app is down rather than like it is still building. Every other
+  // wait in this helper already budgets for that; this one was the gap.
+  await page.goto('/sign-up', { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
   await warmUpAuth(page);
 
   const continueButton = page.getByRole('button', { name: 'Continue with email' });

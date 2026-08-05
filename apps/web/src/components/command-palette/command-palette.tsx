@@ -1,7 +1,8 @@
 'use client';
 
 import { Command, Search } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { menuContentClass, menuLabel, Skeleton } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -150,7 +151,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center p-4 pt-[12vh]"
+      className="fixed inset-0 z-[120] flex items-start justify-center p-4 pt-[12vh]"
       role="presentation"
     >
       {/* Backdrop — `bg-black/40` (no blur) to match the Dialog/Sheet overlay treatment. */}
@@ -174,11 +175,17 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         onAnimationEnd={() => {
           if (!open) setClosing(false);
         }}
-        className="bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:zoom-in-95 data-[state=closed]:zoom-out-95 relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border shadow-2xl duration-150"
+        className={cn(
+          // The palette is a menu: same surface, corner, elevation, and motion as every other one.
+          // It used to be its own panel — surface-container-high, a 14px corner, shadow-2xl, and a
+          // hardcoded 150ms — sitting at z-50, below the z-[120] overlay layer it belongs to.
+          menuContentClass('standard'),
+          'relative flex max-h-[70vh] w-full max-w-xl flex-col p-0',
+        )}
       >
         {/* Search input + scope toggle */}
-        <div className="border-outline-variant flex items-center gap-2 border-b px-3">
-          <Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+        <div className="border-outline-variant flex items-center gap-3 border-b px-4">
+          <Search aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
           <input
             ref={inputRef}
             type="text"
@@ -197,7 +204,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             placeholder={
               scope === 'org' ? `Search ${orgLocalLabel}…` : 'Search everything, or jump to…'
             }
-            className="text-on-surface placeholder:text-on-surface-variant text-body-medium h-12 flex-1 bg-transparent outline-none"
+            className="text-on-surface placeholder:text-on-surface-variant text-label-large h-12 flex-1 bg-transparent outline-none"
           />
           <ScopeToggle
             scope={scope}
@@ -211,11 +218,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         </div>
 
         {/* Results list */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        <div className="min-h-0 flex-1 overflow-y-auto p-1">
           {error ? (
             <div
               role="alert"
-              className="text-destructive bg-destructive/5 border-destructive/30 text-body-medium m-1 rounded-md border px-3 py-2"
+              className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
             >
               {error}
             </div>
@@ -247,7 +254,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             <ul ref={listRef} role="listbox" id={listboxId} aria-label="Commands">
               {grouped.map((group) => (
                 <li key={group.section} role="presentation">
-                  <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium">
+                  <p className={menuLabel('standard')}>
                     {group.label}
                     {group.section === 'results' && loading ? ' · searching…' : ''}
                   </p>
@@ -275,9 +282,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
         </div>
 
         {/* Footer hint bar */}
-        <div className="border-outline-variant text-on-surface-variant flex items-center justify-between gap-3 border-t px-3 py-2 text-[11px]">
+        <div className="border-outline-variant text-on-surface-variant text-label-small flex items-center justify-between gap-3 border-t px-4 py-2">
           <span className="flex items-center gap-1.5">
-            <Command aria-hidden="true" className="size-4" />K to toggle
+            <Command aria-hidden="true" className="size-5" />K to toggle
           </span>
           <span className="flex items-center gap-3">
             <span>↑↓ navigate</span>

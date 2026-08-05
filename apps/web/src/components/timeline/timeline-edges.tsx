@@ -178,7 +178,7 @@ export default function TimelineEdges({
           <path
             key={key}
             d={d}
-            className={cn('fill-none', violated ? 'stroke-destructive/70' : 'stroke-outline')}
+            className={cn('fill-none', violated ? 'stroke-error/70' : 'stroke-outline')}
             strokeWidth={violated ? 1.75 : 1.25}
             strokeLinecap="round"
           />

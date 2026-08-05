@@ -266,7 +266,7 @@ function ObjectContextMenuSurface({ menu, onClose }: ObjectContextMenuSurfacePro
         align="start"
         side="bottom"
         sideOffset={0}
-        className="min-w-[14rem]"
+        width="md"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           menu.origin?.focus();
@@ -306,7 +306,7 @@ function renderSections(actions: readonly ResolvedAction[], onClose: () => void)
         key={action.id}
         disabled={action.disabledReason !== null}
         {...(action.disabledReason === null ? {} : { supporting: action.disabledReason })}
-        className={cn(action.destructive && 'text-destructive focus:text-destructive')}
+        className={cn(action.destructive && 'text-error focus:text-error')}
         onSelect={() => {
           onClose();
           void action.invoke();

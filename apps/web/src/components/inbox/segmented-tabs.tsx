@@ -89,7 +89,7 @@ export function SegmentedTabs<TId extends string>({
                     className={cn(
                       'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
                       segment.emphasis
-                        ? 'bg-destructive/10 text-destructive'
+                        ? 'bg-error/10 text-error'
                         : selected
                           ? 'bg-surface-container text-on-surface'
                           : 'bg-surface-container-high text-on-surface-variant',

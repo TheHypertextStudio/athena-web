@@ -125,7 +125,7 @@ export function AgendaTimeboxForm({ entry, date, onDone }: AgendaTimeboxFormProp
         </div>
       </Row>
       {error ? (
-        <p id={errorId} role="alert" className="text-destructive text-xs">
+        <p id={errorId} role="alert" className="text-error text-xs">
           {error}
         </p>
       ) : null}

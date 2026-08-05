@@ -45,7 +45,7 @@ const STATUS_TREATMENT: Record<SessionStatus, StatusTreatment> = {
     label: 'Needs approval',
     hint: 'Awaiting your approval',
     Glyph: CircleDot,
-    tone: 'border-destructive/40 bg-destructive/10 text-destructive',
+    tone: 'border-error/40 bg-error/10 text-error',
     pulse: true,
   },
   awaiting_input: {
@@ -73,7 +73,7 @@ const STATUS_TREATMENT: Record<SessionStatus, StatusTreatment> = {
     label: 'Errored',
     hint: 'Agent run errored',
     Glyph: XCircle,
-    tone: 'border-destructive/40 bg-destructive/10 text-destructive',
+    tone: 'border-error/40 bg-error/10 text-error',
     pulse: false,
   },
   canceled: {

@@ -62,25 +62,25 @@ function AttachmentCard({
       <CardContent className="flex items-start justify-between gap-3 p-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground text-xs font-medium">{kindLabel}</span>
+            <span className="text-on-surface-variant text-xs font-medium">{kindLabel}</span>
             <span className="truncate text-sm font-medium">{attachment.title}</span>
           </div>
           {isEmail && sender ? (
-            <span className="text-muted-foreground truncate text-xs">From {sender}</span>
+            <span className="text-on-surface-variant truncate text-xs">From {sender}</span>
           ) : null}
           {isEmail && snippet ? (
-            <span className="text-muted-foreground line-clamp-2 text-xs">{snippet}</span>
+            <span className="text-on-surface-variant line-clamp-2 text-xs">{snippet}</span>
           ) : null}
           {isCalendarEvent && calendarTitle ? (
-            <span className="text-muted-foreground truncate text-xs">{calendarTitle}</span>
+            <span className="text-on-surface-variant truncate text-xs">{calendarTitle}</span>
           ) : null}
           {isCalendarEvent && startsAt ? (
-            <span className="text-muted-foreground truncate text-xs">
+            <span className="text-on-surface-variant truncate text-xs">
               {new Date(startsAt).toLocaleString()}
             </span>
           ) : null}
           {isFile && fileMeta ? (
-            <span className="text-muted-foreground truncate text-xs">{fileMeta}</span>
+            <span className="text-on-surface-variant truncate text-xs">{fileMeta}</span>
           ) : null}
           {isFile ? (
             downloadHref ? (
@@ -157,7 +157,7 @@ export default function TaskAttachments({
       </h2>
 
       {cards.length === 0 ? (
-        <p className="text-muted-foreground text-sm">No attachments yet.</p>
+        <p className="text-on-surface-variant text-sm">No attachments yet.</p>
       ) : (
         <div className="flex flex-col gap-2">
           {cards.map((a) => (
@@ -225,7 +225,7 @@ export default function TaskAttachments({
         </div>
       ) : null}
 
-      {actionError ? <p className="text-destructive text-xs">{actionError}</p> : null}
+      {actionError ? <p className="text-error text-xs">{actionError}</p> : null}
     </section>
   );
 }

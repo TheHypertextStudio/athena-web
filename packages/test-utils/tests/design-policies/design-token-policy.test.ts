@@ -90,6 +90,7 @@ describe('design token policy', () => {
       const literalColor = '#7a5cff';
       const literalRgb = 'rgba(0, 0, 0, 0.1)';
       const templated = \`gap-2 \${spacing} text-sm\`;
+      const legacyRoles = 'bg-card text-muted-foreground border-border bg-destructive';
 
       // Legal: token colours, token type, an explicit no-shadow, a token reference in brackets,
       // a movement (not a resize) on hover, and a static size that no interaction changes.
@@ -102,7 +103,25 @@ describe('design token policy', () => {
       resolve(WORKSPACE_ROOT, 'apps/web/src/fixture.ts'),
       fixture,
     );
-    const values = violations.map((violation) => violation.value);
+
+    // `raw-shadow-on-overlay` is the mirror of `shadow-outside-overlay`, so it only fires for a
+    // path inside SHADOW_ALLOWED_FILES. Scanning the same fixture as an overlay module exercises
+    // it, and confirms that `shadow-level*` and `shadow-none` are the two spellings that pass.
+    const overlayFixture = `
+      const raised = 'shadow-md hover:shadow-lg shadow-2xl';
+      const legal = 'shadow-level2 shadow-level0 shadow-none';
+    `;
+    const overlayViolations = scanDesignTokens(
+      resolve(WORKSPACE_ROOT, 'packages/ui/src/primitives/dialog.tsx'),
+      overlayFixture,
+    );
+    expect(overlayViolations.map((violation) => violation.value).sort()).toEqual([
+      'shadow-2xl',
+      'shadow-lg',
+      'shadow-md',
+    ]);
+
+    const values = [...violations, ...overlayViolations].map((violation) => violation.value);
 
     for (const expected of [
       'text-xs',
@@ -123,6 +142,10 @@ describe('design token policy', () => {
       '#7a5cff',
       'rgba(',
       'text-sm',
+      'bg-card',
+      'text-muted-foreground',
+      'border-border',
+      'bg-destructive',
     ]) {
       expect(values, `expected the scanner to flag ${expected}`).toContain(expected);
     }
@@ -130,7 +153,7 @@ describe('design token policy', () => {
     // Every rule must be exercised by the fixture, so none can rot into a dead regex.
     for (const rule of DESIGN_TOKEN_RULES) {
       expect(
-        violations.some((violation) => violation.rule === rule),
+        [...violations, ...overlayViolations].some((violation) => violation.rule === rule),
         `expected the fixture to exercise the ${rule} rule`,
       ).toBe(true);
     }

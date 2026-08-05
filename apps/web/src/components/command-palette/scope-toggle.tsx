@@ -36,7 +36,7 @@ export function ScopeToggle({
         className={cn(
           'focus-visible:ring-ring flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none',
           scope === 'hub'
-            ? 'bg-secondary text-secondary-foreground'
+            ? 'bg-secondary-container text-on-secondary-container'
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >
@@ -55,7 +55,7 @@ export function ScopeToggle({
         className={cn(
           'focus-visible:ring-ring flex max-w-[8rem] items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors focus-visible:ring-1 focus-visible:outline-none disabled:opacity-40',
           scope === 'org'
-            ? 'bg-secondary text-secondary-foreground'
+            ? 'bg-secondary-container text-on-secondary-container'
             : 'text-on-surface-variant hover:text-on-surface',
         )}
       >

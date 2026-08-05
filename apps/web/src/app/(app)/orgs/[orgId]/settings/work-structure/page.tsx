@@ -110,7 +110,7 @@ export default function WorkStructureSettingsPage({
             {save.isPending ? (
               <span className="text-on-surface-variant">Saving…</span>
             ) : save.error ? (
-              <span role="alert" className="text-destructive">
+              <span role="alert" className="text-error">
                 {userErrorMessage(save.error, 'Could not save work structure settings.')}
               </span>
             ) : save.isSuccess ? (

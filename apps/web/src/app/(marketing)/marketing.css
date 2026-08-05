@@ -36,25 +36,31 @@ html:has(.marketing) {
   --mk-line: oklch(0.85 0.02 75); /* warm hairline rule */
   --mk-shadow-plate: 0.375rem 0.375rem 0 oklch(0.245 0.02 60 / 0.1); /* offset plate, no blur */
 
-  /* Re-skin the app's semantic tokens within this subtree. */
-  --background: var(--mk-paper);
-  --foreground: var(--mk-ink);
-  --card: var(--mk-paper);
-  --card-foreground: var(--mk-ink);
-  --popover: var(--mk-paper);
-  --popover-foreground: var(--mk-ink);
-  --primary: var(--mk-ink);
-  --primary-foreground: var(--mk-paper);
-  --secondary: var(--mk-paper-deep);
-  --secondary-foreground: var(--mk-ink);
-  --muted: var(--mk-paper-deep);
-  --muted-foreground: var(--mk-ink-muted);
-  --accent: var(--mk-paper-deep);
-  --accent-foreground: var(--mk-ink);
-  --border: var(--mk-line);
-  --input: var(--mk-line);
-  --ring: var(--mk-accent);
+  /*
+   * Re-skin the app's semantic tokens within this subtree. These are the MD3 role names,
+   * which is where every utility now resolves; the shadcn-era names (`--background`, `--card`,
+   * `--muted`, `--border`, …) are aliases onto these in `:root`, so overriding the MD3 name
+   * re-skins both spellings at once and there is nothing to keep in sync here.
+   */
+  --surface: var(--mk-paper);
+  --surface-dim: var(--mk-paper-deep);
+  --surface-bright: var(--mk-paper);
+  --surface-container-lowest: var(--mk-paper);
+  --surface-container-low: var(--mk-paper);
+  --surface-container: var(--mk-paper);
+  --surface-container-high: var(--mk-paper-deep);
+  --surface-container-highest: var(--mk-paper-deep);
+  --surface-variant: var(--mk-paper-deep);
+  --on-surface: var(--mk-ink);
+  --on-surface-variant: var(--mk-ink-muted);
   --outline: var(--mk-line);
+  --outline-variant: var(--mk-line);
+  --primary: var(--mk-ink);
+  --on-primary: var(--mk-paper);
+  --secondary: var(--mk-accent);
+  --on-secondary: var(--mk-paper);
+  --secondary-container: var(--mk-paper-deep);
+  --on-secondary-container: var(--mk-ink);
 
   /* Sharper, print-like corners (radius-sm/md/lg/xl all derive from this). */
   --radius: 0.25rem;
@@ -67,27 +73,33 @@ html:has(.marketing) {
  * preview shows Docket truthfully — Plex on MD3 surfaces with the app's own radius —
  * matted on the warm paper around it.
  *
- * These ~12 values intentionally duplicate `:root` in packages/ui/src/styles/globals.css
+ * These values intentionally duplicate the light `:root` in packages/ui/src/styles/globals.css
  * (the source of truth); duplication is the price of keeping the design-system package
  * free of marketing concerns. If the app tokens change, refresh these.
+ *
+ * Only MD3 role names appear here. The shadcn-era aliases follow automatically, which is why
+ * this block lost the `--background` / `--card` / `--muted` / `--border` lines it used to
+ * carry — they had also drifted, pinning a grayscale `--primary` and hue-250 surfaces that
+ * `:root` had already moved to hue 264.
  */
 .marketing .app-seam {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --border: oklch(0.922 0 0);
-  --surface: oklch(0.995 0.003 250);
-  --surface-container: oklch(0.97 0.004 250);
-  --on-surface: oklch(0.205 0.004 250);
-  --on-surface-variant: oklch(0.44 0.006 250);
-  --outline-variant: oklch(0.9 0.005 250);
+  --surface: oklch(0.995 0.004 264);
+  --surface-container-lowest: oklch(0.99 0.005 264);
+  --surface-container-low: oklch(0.98 0.007 264);
+  --surface-container: oklch(0.97 0.009 264);
+  --surface-container-high: oklch(0.95 0.013 264);
+  --surface-container-highest: oklch(0.93 0.017 264);
+  --surface-variant: oklch(0.93 0.017 264);
+  --on-surface: oklch(0.205 0.006 264);
+  --on-surface-variant: oklch(0.44 0.008 264);
+  --outline: oklch(0.6 0.01 264);
+  --outline-variant: oklch(0.9 0.008 264);
+  --primary: oklch(0.52 0.21 264);
+  --on-primary: oklch(0.985 0 0);
+  --secondary: oklch(0.52 0.07 264);
+  --on-secondary: oklch(0.985 0 0);
+  --secondary-container: oklch(0.9 0.045 264);
+  --on-secondary-container: oklch(0.3 0.07 264);
   --radius: 0.625rem;
   font-family: var(--font-sans);
   color-scheme: light;

@@ -104,7 +104,7 @@ export function TaskActivitySection({ orgId, taskId }: TaskActivitySectionProps)
           </div>
         </div>
       ) : query.isError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(query.error, LOAD_FAILURE)}
         </p>
       ) : entries.length === 0 ? (

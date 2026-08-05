@@ -115,7 +115,7 @@ export function ProposalGroupCard({
             variant="ghost"
             size="sm"
             disabled={pending}
-            className="text-destructive"
+            className="text-error"
             onClick={() => {
               onDecide(group.proposalGroupId, 'reject');
             }}

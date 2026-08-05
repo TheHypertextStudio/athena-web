@@ -58,7 +58,7 @@ export interface ProgramRow {
 const HEALTH_TEXT_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed',
   at_risk: 'text-state-canceled',
-  off_track: 'text-destructive',
+  off_track: 'text-error',
 };
 
 /** A compact dot + colored label for a Program's health verdict, or an em dash when unset. */

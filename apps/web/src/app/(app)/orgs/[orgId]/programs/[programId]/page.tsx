@@ -175,7 +175,7 @@ export default function ProgramDetailPage(): JSX.Element {
   if (detailQ.isError) {
     return (
       <PageContainer>
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {userErrorMessage(detailQ.error, 'Could not load this program.')}
         </p>
       </PageContainer>
@@ -250,7 +250,7 @@ export default function ProgramDetailPage(): JSX.Element {
             />
           </EntityMetadataRow>
           {propsError ? (
-            <p role="alert" className="text-destructive text-body-medium px-1">
+            <p role="alert" className="text-error text-body-medium px-1">
               {propsError}
             </p>
           ) : null}
@@ -276,9 +276,9 @@ export default function ProgramDetailPage(): JSX.Element {
                   <Ellipsis />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[12rem]">
+              <DropdownMenuContent align="end" width="sm">
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="text-error focus:text-error"
                   onSelect={() => {
                     setConfirmDeleteOpen(true);
                   }}

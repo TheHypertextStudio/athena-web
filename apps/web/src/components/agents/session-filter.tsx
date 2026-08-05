@@ -102,7 +102,7 @@ export function SessionFilterMenu({
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[12rem]">
+      <DropdownMenuContent align="start" width="sm">
         <DropdownMenuLabel>Filter by status</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup

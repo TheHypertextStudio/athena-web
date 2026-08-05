@@ -35,7 +35,7 @@ export const BADGE_VARIANTS = ['default', 'secondary', 'destructive', 'outline']
 export type BadgeVariant = (typeof BADGE_VARIANTS)[number];
 
 const BADGE_COLOR: Readonly<Record<BadgeVariant, string>> = {
-  default: 'bg-primary text-primary-foreground',
+  default: 'bg-primary text-on-primary',
   secondary: 'bg-surface-container-high text-on-surface-variant',
   destructive: 'bg-error-container text-on-error-container',
   // The one badge that keeps a hairline: it has no fill, so without an outline it is only text.

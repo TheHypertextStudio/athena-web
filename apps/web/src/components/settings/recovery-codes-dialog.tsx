@@ -168,7 +168,7 @@ export function RecoveryCodesDialog({
         ) : null}
 
         {error ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {error}
           </p>
         ) : null}

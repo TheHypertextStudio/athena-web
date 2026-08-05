@@ -206,7 +206,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
       {actionError ? (
         <p
           role="alert"
-          className="border-destructive/40 text-destructive bg-destructive/5 text-body-medium rounded-lg border p-3"
+          className="border-error/40 text-error bg-error/5 text-body-medium rounded-lg border p-3"
         >
           {actionError}
         </p>

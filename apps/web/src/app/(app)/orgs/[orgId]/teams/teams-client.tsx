@@ -176,7 +176,7 @@ export default function TeamsListClient(): JSX.Element {
       ) : loadError ? (
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
+          className="border-outline-variant text-error text-body-medium rounded-xl border p-4"
         >
           {loadError}
         </p>

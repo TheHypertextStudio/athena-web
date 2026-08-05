@@ -90,7 +90,7 @@ export function PasskeysSection(): JSX.Element {
   }
   if (listQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body-medium">
+      <p role="alert" className="text-error text-body-medium">
         {userErrorMessage(listQ.error, 'Could not update your passkeys.')}
       </p>
     );
@@ -226,7 +226,7 @@ function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps
           />
         </div>
         {add.isError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {userErrorMessage(add.error, 'Could not update your passkeys.')}
           </p>
         ) : null}
@@ -318,7 +318,7 @@ function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Eleme
             className="text-on-surface text-body-medium min-w-0 truncate font-medium"
           />
           {rename.isError ? (
-            <span role="alert" className="text-destructive shrink-0 text-xs">
+            <span role="alert" className="text-error shrink-0 text-xs">
               {userErrorMessage(rename.error, 'Could not update your passkeys.')}
             </span>
           ) : showSaved ? (
@@ -390,7 +390,7 @@ function RemovePasskeyDialog({
           </DialogDescription>
         </DialogHeader>
         {remove.isError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {userErrorMessage(remove.error, 'Could not update your passkeys.')}
           </p>
         ) : null}

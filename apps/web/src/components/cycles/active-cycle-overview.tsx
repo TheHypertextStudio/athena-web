@@ -236,7 +236,7 @@ export function ActiveCycleOverview({
           <Skeleton className="h-8 w-full rounded-lg" />
         </div>
       ) : detailQ.isError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(detailQ.error, `Could not load this ${cycleNounLower}'s work.`)}
         </p>
       ) : preview.length === 0 ? (

@@ -89,7 +89,7 @@ function AssociationGroup({
                 {busy ? 'Linking…' : 'Link'}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto">
+            <DropdownMenuContent align="end" width="lg" className="max-h-72 overflow-y-auto">
               <DropdownMenuLabel>Link a {noun}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {candidates.length === 0 ? (
@@ -131,7 +131,7 @@ function AssociationGroup({
                   }}
                   disabled={busy}
                   aria-label={`Unlink ${item.name}`}
-                  className="text-on-surface-variant hover:text-destructive focus-visible:ring-ring rounded p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+                  className="text-on-surface-variant hover:text-error focus-visible:ring-ring rounded p-0.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
                 >
                   <X aria-hidden="true" className="size-4" />
                 </button>
@@ -142,7 +142,7 @@ function AssociationGroup({
       )}
 
       {error ? (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-error text-xs">
           {error}
         </p>
       ) : null}

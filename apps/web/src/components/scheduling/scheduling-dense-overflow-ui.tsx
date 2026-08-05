@@ -1,6 +1,14 @@
 'use client';
 
-import { Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import {
+  menuFocusRing,
+  menuItemClass,
+  menuLabel,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@docket/ui/primitives';
 import { type JSX, useRef, useState } from 'react';
 
 import type { DenseScheduleOverflowGroup } from './scheduling-dense-overflow';
@@ -63,13 +71,13 @@ export function SchedulingDenseOverflow({
           role="dialog"
           aria-label={label}
           align="end"
-          className="z-[90] w-80 max-w-[calc(100vw-2rem)] p-2"
+          className="w-80 max-w-[calc(100vw-2rem)]"
           onCloseAutoFocus={(event) => {
             if (revealingRef.current) event.preventDefault();
             revealingRef.current = false;
           }}
         >
-          <p className="text-on-surface text-title-small px-2 py-1">{label}</p>
+          <p className={menuLabel('standard')}>{label}</p>
           <div className="flex max-h-72 flex-col overflow-y-auto" role="list">
             {group.items.map(({ item }) => {
               const timeRange =
@@ -77,8 +85,13 @@ export function SchedulingDenseOverflow({
                 'Unavailable time';
               const content =
                 renderItem?.({ item, lane, allDay: false, density: 'compact' }) ?? item.title;
-              const sharedClassName =
-                'focus-visible:ring-ring hover:bg-surface-container-highest flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded px-2 py-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
+              // A row in a popover-hosted overflow list is a menu row. It used to be its own
+              // recipe: a 4px corner, a surface-swap hover, and a 2px focus ring.
+              const sharedClassName = cn(
+                menuItemClass('standard'),
+                menuFocusRing,
+                'w-full text-left',
+              );
               const children = (
                 <>
                   <span

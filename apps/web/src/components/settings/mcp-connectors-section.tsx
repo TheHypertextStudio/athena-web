@@ -97,7 +97,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           Tool connected.
         </p>
       ) : mcpReturn === 'error' ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           Connection was not approved.
         </p>
       ) : null}
@@ -268,7 +268,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           </span>
         ) : null}
         {mcp.status === 'error' ? (
-          <span role="alert" className="text-destructive text-xs">
+          <span role="alert" className="text-error text-xs">
             This server could not be reached.
           </span>
         ) : null}
@@ -302,7 +302,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
                     <span className="font-mono">__*</span>
                   </span>
                   {aliasError ? (
-                    <span role="alert" className="text-destructive mt-1 block text-xs">
+                    <span role="alert" className="text-error mt-1 block text-xs">
                       {aliasError}
                     </span>
                   ) : null}
@@ -352,7 +352,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
           <Button
             variant="ghost"
             size="sm"
-            className="text-destructive"
+            className="text-error"
             disabled={busy}
             onClick={() => {
               disconnect.mutate(undefined);
@@ -363,7 +363,7 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
         </div>
       ) : null}
       {edit.error ? (
-        <p role="alert" className="text-destructive text-xs">
+        <p role="alert" className="text-error text-xs">
           {userErrorMessage(edit.error, 'Could not save this connector.')}
         </p>
       ) : null}
@@ -596,7 +596,7 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
       </div>
 
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {error}
         </p>
       ) : null}

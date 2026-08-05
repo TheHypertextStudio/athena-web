@@ -20,7 +20,19 @@ import {
 } from '../../src/primitives/control';
 import { FIELD_VARIANTS, Field, Input, Select, Textarea } from '../../src/primitives/field';
 import { Toolbar } from '../../src/primitives/layout';
-import { MENU_METRICS, menuItemClass } from '../../src/primitives/menu-styles';
+import {
+  MENU_INDICATOR_GUTTER,
+  MENU_METRICS,
+  type MenuVariant,
+  menuCheckedItemClass,
+  menuContentClass,
+  menuFocusRing,
+  menuGroup,
+  menuItemClass,
+  menuLabel,
+  menuSupporting,
+  menuTrailingText,
+} from '../../src/primitives/menu-styles';
 import { TYPE_TOKENS, Text, typeClass } from '../../src/primitives/text';
 
 const GLOBALS_CSS = readFileSync(
@@ -441,18 +453,211 @@ describe('type scale', () => {
   });
 });
 
-describe('menu metrics', () => {
-  it('sizes menu rows from the control scale rather than a private number', () => {
-    // The class strings in menu-styles must stay literal for Tailwind's extractor, so the only way
-    // to keep them tied to the scale is to assert it.
-    expect(MENU_METRICS.minHeight).toBe('min-h-9');
-    expect(menuItemClass('standard')).toContain(MENU_METRICS.minHeight);
-    expect(menuItemClass('standard')).toContain(MENU_METRICS.iconApply);
+/*
+ * The MD3 Expressive vertical-menu contract.
+ *
+ * The class strings in `menu-styles.ts` have to stay literal for Tailwind's static extractor,
+ * so a number written there answers to nothing unless something checks it. These assertions are
+ * that check, and each one names the `md.comp.menus.*` token it enforces. The values are
+ * transcribed in `docs/design/references/md3-menus.md`; change that file first, then these.
+ *
+ * This block used to be two assertions — row height and icon size, both pointed at `CONTROL.lg`
+ * rather than at the spec — which is how the primitive came to sit 8px short on row height, 2px
+ * short on icons, one type role off on the label, and on the wrong colour role entirely for
+ * selection, without a single test going red. `CORE-08` in launch-compliance.md is that gap.
+ */
+describe('MD3 menu spec — layout and shape', () => {
+  it('sizes the row from the spec rather than from the control scale', () => {
+    // menu-item.height 44dp; leading/trailing-space 16dp; top/bottom-space 8dp;
+    // between-space 12dp; leading/trailing-icon.size 20dp.
+    expect(MENU_METRICS.minHeightPx).toBe(44);
+    expect(MENU_METRICS.paddingXPx).toBe(16);
+    expect(MENU_METRICS.paddingYPx).toBe(8);
+    expect(MENU_METRICS.gapPx).toBe(12);
+    expect(MENU_METRICS.iconPx).toBe(20);
+
+    const row = menuItemClass('standard');
+    expect(row).toContain(MENU_METRICS.minHeight);
+    expect(row).toContain(MENU_METRICS.paddingX);
+    expect(row).toContain(MENU_METRICS.paddingY);
+    expect(row).toContain(MENU_METRICS.gap);
+    expect(row).toContain(MENU_METRICS.iconApply);
   });
 
-  it('reserves the leading icon column for menus that mix icon-ed and bare rows', () => {
-    // The reservation is structural CSS keyed off the ARIA roles Radix emits, so no menu has to
-    // opt in and no row has to know what its siblings render.
-    expect(GLOBALS_CSS).toContain("[role='menu']:has(> [role='menuitem'] > svg:first-child)");
+  it('gives the container corner.large and the 4dp padding that produces the edge-row corner', () => {
+    // container.shape corner.large 16dp, and 16 - 4 = the 12dp first/last-child outer corner.
+    expect(menuContentClass('standard')).toContain('rounded-corner-lg');
+    expect(menuContentClass('standard')).toContain(MENU_METRICS.containerPadding);
+    expect(MENU_METRICS.containerPaddingPx).toBe(4);
+  });
+
+  it('morphs the container to corner.small while one of its submenus is open', () => {
+    // active.container.shape corner.large / inactive.container.shape corner.small. Radix portals
+    // SubContent out, so an open SubTrigger with data-state="open" stays inside this element.
+    expect(menuContentClass('standard')).toContain('has-data-[state=open]:rounded-corner-sm');
+  });
+
+  it('shapes rows corner.extra-small, edge rows corner.medium, and selected rows corner.medium', () => {
+    // menu-item.shape 4dp; first/last-child.shape 12dp with a 4dp inner corner;
+    // menu-item.selected.shape 12dp.
+    const row = menuItemClass('standard');
+    expect(row).toContain('rounded-corner-xs');
+    expect(row).toContain('first:rounded-t-corner-md');
+    expect(row).toContain('last:rounded-b-corner-md');
+    expect(menuItemClass('standard', { selected: true })).toContain('rounded-corner-md');
+  });
+
+  it('groups rows into a corner.small block with 2dp padding and a 2dp gap', () => {
+    // group.shape corner.small 8dp, group.padding space25 2dp, gap space25 2dp.
+    expect(menuGroup('standard')).toContain('rounded-corner-sm');
+    expect(menuGroup('standard')).toContain('p-0.5');
+    expect(menuGroup('standard')).toContain('not-first:mt-0.5');
+  });
+
+  it('takes container.elevation from the MD3 level scale, not a Tailwind shadow', () => {
+    expect(menuContentClass('standard')).toContain('shadow-level2');
+    expect(menuContentClass('standard')).not.toMatch(/shadow-(sm|md|lg|xl|2xl)\b/);
+    expect(GLOBALS_CSS).toContain('--shadow-level2:');
+  });
+
+  it('labels rows label-large and trailing text label-large, not a smaller role', () => {
+    // menu-item.label-text and .trailing-supporting-text are both label-large;
+    // .supporting-text is body-small.
+    expect(MENU_METRICS.labelToken).toBe('label-large');
+    expect(menuItemClass('standard')).toContain('text-label-large');
+    expect(menuTrailingText('standard')).toContain('text-label-large');
+    expect(menuSupporting('standard')).toContain('text-body-small');
+  });
+
+  it('reserves one leading column across icon rows, bare rows, and checkable rows', () => {
+    // 16dp leading space + 20dp icon + 12dp between-space = 48px, and the indicator gutter a
+    // checkbox or radio row reserves has to be the same figure or the labels stair-step.
+    expect(MENU_INDICATOR_GUTTER).toBe('pl-12');
+    expect(GLOBALS_CSS).toContain("[role='menu']:has([role='menuitem'] > svg:first-child)");
+    expect(GLOBALS_CSS).toContain('padding-inline-start: calc(1rem + 1.25rem + 0.75rem)');
+  });
+
+  it('draws the 3dp inset focus indicator the spec calls for, not the 1px row ring', () => {
+    // focus.indicator.thickness 3dp, .outline.offset -3dp, .color secondary (--ring).
+    expect(menuFocusRing).toContain('focus-visible:ring-[3px]');
+    expect(menuFocusRing).toContain('focus-visible:ring-inset');
+    expect(menuFocusRing).toContain('focus-visible:ring-ring');
+    expect(GLOBALS_CSS).toContain('--ring: var(--secondary)');
+  });
+});
+
+describe('MD3 menu spec — standard colour mapping', () => {
+  it('maps the container and default content to the surface roles', () => {
+    const content = menuContentClass('standard');
+    expect(content).toContain('bg-surface-container-low');
+    expect(content).toContain('text-on-surface');
+  });
+
+  it('quiets both icons to on-surface-variant, a step below the label', () => {
+    // menu-item.leading-icon.color and .trailing-icon.color are both on-surface-variant.
+    expect(menuItemClass('standard')).toContain('[&_svg]:text-on-surface-variant');
+  });
+
+  it('selects into tertiary-container, which is the expressive role and not the baseline one', () => {
+    // menu-item.selected.container.color tertiary-container. The baseline menu says
+    // secondary-container; that is the legacy spec and is the value this drifted onto.
+    const selected = menuItemClass('standard', { selected: true });
+    expect(selected).toContain('bg-tertiary-container');
+    expect(selected).toContain('text-on-tertiary-container');
+    expect(selected).not.toContain('bg-secondary-container');
+  });
+
+  it('separates hover, focus, and pressed into three distinct state layers', () => {
+    // hover 0.08, focus 0.10, pressed 0.10 — and focus is scoped away from hover because Radix
+    // drives roving focus on pointer move, so an unguarded focus layer swallows every hover.
+    const row = menuItemClass('standard');
+    expect(row).toContain('hover:bg-on-surface/8');
+    expect(row).toContain('focus:not-hover:bg-on-surface/10');
+    expect(row).toContain('active:bg-on-surface/10');
+  });
+
+  it('disables at 0.38, the opacity every MD3 disabled token carries', () => {
+    expect(menuItemClass('standard')).toContain('data-[disabled]:opacity-38');
+    expect(menuItemClass('standard')).not.toContain('opacity-50');
+  });
+
+  it('tones section labels and supporting content to on-surface-variant', () => {
+    expect(menuLabel('standard')).toContain('text-on-surface-variant');
+    expect(menuSupporting('standard')).toContain('text-on-surface-variant');
+    expect(menuTrailingText('standard')).toContain('text-on-surface-variant');
+  });
+});
+
+describe('MD3 menu spec — vibrant colour mapping', () => {
+  it('builds the whole surface out of the tertiary container roles', () => {
+    const content = menuContentClass('vibrant');
+    expect(content).toContain('bg-tertiary-container');
+    expect(content).toContain('text-on-tertiary-container');
+  });
+
+  it('escalates selection to solid tertiary', () => {
+    const selected = menuItemClass('vibrant', { selected: true });
+    expect(selected).toContain('bg-tertiary');
+    expect(selected).toContain('text-on-tertiary');
+  });
+
+  it('shifts icons to tertiary on interaction while the label holds still', () => {
+    // The one mapping where the icon colour moves: on-tertiary-container enabled, tertiary on
+    // hover, focus, and press.
+    const row = menuItemClass('vibrant');
+    expect(row).toContain('[&_svg]:text-on-tertiary-container');
+    expect(row).toContain('hover:[&_svg]:text-tertiary');
+    expect(row).toContain('focus:[&_svg]:text-tertiary');
+    expect(row).toContain('active:[&_svg]:text-tertiary');
+    expect(row).toContain('text-on-tertiary-container');
+  });
+
+  it('runs the same 8/10/10 state layers, in the tertiary on-role', () => {
+    const row = menuItemClass('vibrant');
+    expect(row).toContain('hover:bg-on-tertiary-container/8');
+    expect(row).toContain('focus:not-hover:bg-on-tertiary-container/10');
+    expect(row).toContain('active:bg-on-tertiary-container/10');
+  });
+
+  it('mixes a selected row state layer into its own container, not into the menu behind it', () => {
+    // A state layer is the on-role over the component's container. An alpha fill would let the
+    // menu surface show through the selection, which is a different colour than the spec names.
+    const selected = menuItemClass('vibrant', { selected: true });
+    expect(selected).toContain('color-mix(in_oklab,var(--on-tertiary)_8%,var(--tertiary))');
+    expect(selected).toContain('color-mix(in_oklab,var(--on-tertiary)_10%,var(--tertiary))');
+  });
+});
+
+describe('MD3 menu spec — both mappings render from one source', () => {
+  it.each<MenuVariant>(['standard', 'vibrant'])(
+    'gives the %s mapping the same geometry',
+    (variant) => {
+      // Deduplication is the point: the two mappings differ in colour and in nothing else.
+      const row = menuItemClass(variant);
+      expect(row).toContain(MENU_METRICS.minHeight);
+      expect(row).toContain(MENU_METRICS.paddingX);
+      expect(row).toContain(MENU_METRICS.paddingY);
+      expect(row).toContain(MENU_METRICS.gap);
+      expect(row).toContain(MENU_METRICS.iconApply);
+      expect(row).toContain('rounded-corner-xs');
+      expect(menuContentClass(variant)).toContain('rounded-corner-lg');
+      expect(menuContentClass(variant)).toContain('shadow-level2');
+    },
+  );
+
+  it('gives the checked-row escalation the same roles the selected-row builder does', () => {
+    // A radio row cannot supply `selected` as a boolean — Radix publishes it only as an
+    // attribute — so the two builders have to agree or checkbox and radio rows diverge.
+    expect(menuCheckedItemClass('standard')).toContain(
+      'data-[state=checked]:bg-tertiary-container',
+    );
+    expect(menuCheckedItemClass('standard')).toContain('data-[state=checked]:rounded-corner-md');
+    expect(menuCheckedItemClass('vibrant')).toContain('data-[state=checked]:bg-tertiary');
+  });
+
+  it('draws no border on the container — MD3 separates a menu with elevation and tone', () => {
+    // The spec's colour list for menus has 11 elements and no outline role among them.
+    expect(menuContentClass('standard')).not.toMatch(/(?:^|\s)border(?:\s|$)/);
+    expect(menuContentClass('vibrant')).not.toMatch(/(?:^|\s)border(?:\s|$)/);
   });
 });

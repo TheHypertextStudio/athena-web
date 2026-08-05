@@ -62,7 +62,7 @@ export function PricingTiers(): JSX.Element {
           <div
             key={tier.name}
             className={`bg-paper flex flex-col gap-6 rounded-md border p-6 ${
-              tier.featured ? 'border-ink shadow-plate' : 'border-border'
+              tier.featured ? 'border-ink shadow-plate' : 'border-outline-variant'
             }`}
           >
             <div className="flex flex-col gap-2">
@@ -73,7 +73,7 @@ export function PricingTiers(): JSX.Element {
               </div>
               <p className="text-ink-muted text-body-medium">{tier.description}</p>
             </div>
-            <ul className="border-border flex flex-col gap-2.5 border-t pt-5">
+            <ul className="border-outline-variant flex flex-col gap-2.5 border-t pt-5">
               {tier.features.map((feature) => (
                 <li key={feature} className="text-body-medium text-ink flex items-start gap-2">
                   <Check className="text-sienna mt-0.5 size-4 shrink-0" aria-hidden />

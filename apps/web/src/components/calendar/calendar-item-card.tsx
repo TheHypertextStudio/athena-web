@@ -185,7 +185,7 @@ export default function CalendarItemCard({
         DRAGGABLE,
         'border-outline-variant bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
         block ? 'py-2' : 'py-1.5',
-        item.hasConflict && 'border-destructive',
+        item.hasConflict && 'border-error',
       )}
     >
       <span
@@ -258,7 +258,7 @@ export default function CalendarItemCard({
             className={cn(
               'text-body-small flex items-center gap-1',
               item.hasConflict || item.syncState === 'provider_error'
-                ? 'text-destructive'
+                ? 'text-error'
                 : 'text-on-surface-variant',
             )}
           >

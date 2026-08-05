@@ -122,7 +122,7 @@ function DayTaskRow({
       )}
       {task.dueDate ? (
         <span
-          className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-destructive' : 'text-on-surface-variant'}`}
+          className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-error' : 'text-on-surface-variant'}`}
         >
           {formatDue(task.dueDate)}
         </span>
@@ -176,7 +176,7 @@ export default function DayTasksPanel(): JSX.Element {
             ))}
           </div>
         ) : error ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {error}
           </p>
         ) : plan.length === 0 ? (

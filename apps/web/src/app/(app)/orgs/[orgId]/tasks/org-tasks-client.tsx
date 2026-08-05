@@ -221,7 +221,7 @@ export default function OrgTasksClient(): JSX.Element {
           ))}
         </div>
       ) : tasksQ.isError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(tasksQ.error, 'Could not load tasks.')}
         </p>
       ) : tasks.length === 0 ? (

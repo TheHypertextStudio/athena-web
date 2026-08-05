@@ -54,7 +54,7 @@ export type { CalendarRegionSelection } from './calendar-time-draft';
  * The app's MD3 `<select>` recipe, matching `settings/team-mapping-picker.tsx`.
  *
  * @remarks
- * Replaces the legacy `border-input` / `bg-background` pair this control used to carry, which put
+ * Replaces the legacy `border-outline` / `bg-surface` pair this control used to carry, which put
  * two token systems inside one popover. Every property is now the {@link Input} recipe verbatim —
  * `h-9`, `rounded-md`, one `outline-variant` hairline, a transparent fill, no elevation — so a text
  * field, a `<select>`, and a `datetime-local` stacked in this form are indistinguishable except for
@@ -331,7 +331,7 @@ export default function CreateBlockForm({
             ) : null}
           </div>
           {create.isError ? (
-            <p role="alert" className="text-destructive text-body-small">
+            <p role="alert" className="text-error text-body-small">
               Could not create this calendar item. Try again.
             </p>
           ) : null}

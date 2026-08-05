@@ -78,7 +78,7 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
         </PopoverAnchor>
         <DropdownMenuContent
           align="end"
-          className="w-44"
+          width="sm"
           onCloseAutoFocus={(event) => {
             if (!openingEditor.current) return;
             openingEditor.current = false;
@@ -118,7 +118,7 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
+            className="text-error focus:text-error"
             onSelect={() => {
               removeFromPlan(entry);
             }}

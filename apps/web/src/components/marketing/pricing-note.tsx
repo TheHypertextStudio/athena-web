@@ -7,7 +7,7 @@ import type { JSX } from 'react';
  */
 export function PricingNote(): JSX.Element {
   return (
-    <section className="border-border border-t">
+    <section className="border-outline-variant border-t">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-6 py-20">
         <p className="text-ink-muted text-sm font-medium">Pricing</p>
         <p className="font-display text-display-large-small text-ink max-w-3xl tracking-tight text-balance">
@@ -16,7 +16,7 @@ export function PricingNote(): JSX.Element {
         <p className="text-ink-muted text-base">
           <Link
             href="/pricing"
-            className="hover:text-sienna text-ink decoration-border font-medium underline underline-offset-4 transition-colors"
+            className="hover:text-sienna text-ink decoration-outline-variant font-medium underline underline-offset-4 transition-colors"
           >
             See what each plan includes →
           </Link>

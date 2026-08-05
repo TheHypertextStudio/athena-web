@@ -131,7 +131,7 @@ export function ResourcesTab({
           }}
         >
           <input
-            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
+            className="border-outline bg-surface h-10 rounded-md border px-3 text-sm"
             aria-label="Resource title"
             placeholder="Resource title"
             value={title}
@@ -140,7 +140,7 @@ export function ResourcesTab({
             }}
           />
           <input
-            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
+            className="border-outline bg-surface h-10 rounded-md border px-3 text-sm"
             aria-label="Resource URL"
             placeholder="https://"
             type="url"
@@ -222,7 +222,7 @@ export function ResourcesTab({
         hasProse={hasProse}
       />
       {error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {error}
         </p>
       ) : null}

@@ -192,17 +192,22 @@ describe('AppShell', () => {
     );
     // Root = the tinted canvas tone (surface-container). The uniform gutter that floats the
     // panels is a DESKTOP affordance (`lg:p-2`) so mobile content can go full-bleed; the canvas
-    // is never the old flat bg-background, and never bg-card/bg-background again.
+    // is never the old flat bg-surface, and never bg-surface-container-low/bg-surface again.
     const root = container.firstElementChild as HTMLElement;
     expect(root).toHaveClass('bg-surface-container', 'text-on-surface', 'lg:p-2');
-    expect(root).not.toHaveClass('bg-background', 'bg-card');
+    expect(root).not.toHaveClass('bg-surface', 'bg-surface-container-low');
     // The main content is the single distinct surface panel: it carries the panel surface tone
     // always and rounds at the desktop breakpoint, going full-bleed below `lg`. Separation is the
     // tonal step from the canvas onto `surface` and nothing else — no border and no drop shadow,
     // which together drew a second box around content that already read as a panel.
     const main = screen.getByRole('main');
     expect(main).toHaveClass('bg-surface', 'lg:rounded-xl');
-    expect(main).not.toHaveClass('bg-background', 'bg-card', 'lg:border', 'lg:shadow-sm');
+    expect(main).not.toHaveClass(
+      'bg-surface',
+      'bg-surface-container-low',
+      'lg:border',
+      'lg:shadow-sm',
+    );
   });
 
   it('renders a mobile menu trigger and the static desktop sidebar (the same nav node)', () => {
@@ -508,8 +513,8 @@ describe('Sidebar', () => {
     expect(aside).toHaveClass('text-on-surface');
     expect(aside).not.toHaveClass(
       'bg-surface',
-      'bg-card',
-      'bg-background',
+      'bg-surface-container-low',
+      'bg-surface',
       'border',
       'border-r',
       'border-outline-variant',
@@ -980,7 +985,7 @@ describe('TabBar', () => {
     // The bar reads as its own chrome on the canvas tone — not a panel surface, no divider border.
     const bar = container.firstElementChild as HTMLElement;
     expect(bar).toHaveClass('bg-surface-container');
-    expect(bar).not.toHaveClass('bg-card', 'border-b');
+    expect(bar).not.toHaveClass('bg-surface-container-low', 'border-b');
     // Every tab is a fully-rounded floating pill, NOT welded to the panel below: no top-only
     // rounding, no self-stretch, no panel surface fill.
     const activeTab = screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]')!;

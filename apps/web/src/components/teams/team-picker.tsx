@@ -80,7 +80,7 @@ export function TeamPicker({
           <ChevronDown className="size-4 opacity-70" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-48">
+      <DropdownMenuContent align="start" width="sm">
         <DropdownMenuLabel>Create in team</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup

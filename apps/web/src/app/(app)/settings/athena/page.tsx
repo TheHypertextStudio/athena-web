@@ -135,7 +135,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
             </select>
           </label>
           {save.isError ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-error text-sm">
               {userErrorMessage(save.error, 'Could not save Athena preferences.')}
             </p>
           ) : (

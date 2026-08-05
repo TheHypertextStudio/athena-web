@@ -128,7 +128,7 @@ export function CarryoverRow({
             <ChevronDown className="h-4 w-4 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-48">
+        <DropdownMenuContent align="end" width="sm">
           <DropdownMenuRadioGroup
             value={item.action}
             onValueChange={(next) => {
@@ -162,7 +162,7 @@ export function CarryoverRow({
               <ChevronDown className="h-4 w-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-56">
+          <DropdownMenuContent align="end" width="md">
             <DropdownMenuRadioGroup value={item.targetCycleId ?? ''} onValueChange={onTargetChange}>
               {targets.map((target) => (
                 <DropdownMenuRadioItem key={target.id} value={target.id}>

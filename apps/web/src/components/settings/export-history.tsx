@@ -41,7 +41,7 @@ function ExportHistoryRow({ exportJob }: { exportJob: AccountExportOut }): JSX.E
         </p>
       ) : null}
       {exportJob.status === 'failed' ? (
-        <p className="text-destructive text-body-medium">
+        <p className="text-error text-body-medium">
           Create a new export above with the data you need.
         </p>
       ) : null}

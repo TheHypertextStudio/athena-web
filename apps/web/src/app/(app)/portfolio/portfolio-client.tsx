@@ -142,7 +142,7 @@ export default function PortfolioClient(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button
@@ -182,7 +182,7 @@ export default function PortfolioClient(): JSX.Element {
                   <ChevronDown className="size-3.5 opacity-60" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[14rem]">
+              <DropdownMenuContent align="end" width="md">
                 <TimelineDisplaySections
                   display={display}
                   onDisplayChange={setDisplay}

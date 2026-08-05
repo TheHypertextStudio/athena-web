@@ -173,7 +173,7 @@ export function UpdatesPanel({
                     <ChevronDown className="h-4 w-4 opacity-60" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-[12rem]">
+                <DropdownMenuContent align="start" width="sm">
                   <DropdownMenuRadioGroup
                     value={health}
                     onValueChange={(next) => {
@@ -208,7 +208,7 @@ export function UpdatesPanel({
           </Button>
         </div>
         {postError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {postError}
           </p>
         ) : null}
@@ -232,7 +232,7 @@ export function UpdatesPanel({
       ) : error ? (
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-xl border p-4"
+          className="border-outline-variant text-error text-body-medium rounded-xl border p-4"
         >
           {error}
         </p>

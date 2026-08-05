@@ -95,7 +95,7 @@ export function SecureExportDownloadButton({
         {busy ? 'Verifying…' : 'Download your data'}
       </Button>
       {error ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {error}
         </p>
       ) : null}

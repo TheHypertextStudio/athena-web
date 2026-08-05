@@ -249,9 +249,6 @@
   "apps/web/src/components/command-palette/command-palette.tsx": {
     "raw-type-utility": 4
   },
-  "apps/web/src/components/command-palette/palette-row.tsx": {
-    "raw-type-utility": 6
-  },
   "apps/web/src/components/command-palette/scope-toggle.tsx": {
     "raw-type-utility": 4
   },
@@ -350,9 +347,6 @@
   },
   "apps/web/src/components/mentions/mention-menu.tsx": {
     "raw-type-utility": 3
-  },
-  "apps/web/src/components/mentions/mention-row.tsx": {
-    "raw-type-utility": 2
   },
   "apps/web/src/components/my-work/live-session-pill.tsx": {
     "raw-type-utility": 2

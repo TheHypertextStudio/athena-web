@@ -162,7 +162,7 @@ describe('AthenaWorkbench', () => {
       screen.getByRole('button', { name: 'Keep current time' }),
       screen.getByRole('button', { name: 'Cancel work' }),
     ];
-    expect(actions[0]).toHaveClass('text-primary-foreground');
+    expect(actions[0]).toHaveClass('text-on-primary');
     expect(actions[1]).toHaveClass('text-on-surface');
     expect(actions[2]).toHaveClass('text-on-surface');
     for (const action of actions) {

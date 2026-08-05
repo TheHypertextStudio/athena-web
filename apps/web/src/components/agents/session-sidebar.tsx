@@ -183,7 +183,7 @@ export function SessionSidebar({
                 size="sm"
                 disabled={controlPending}
                 onClick={onCancel}
-                className="text-destructive hover:text-destructive justify-start"
+                className="text-error hover:text-error justify-start"
               >
                 Cancel session
               </Button>

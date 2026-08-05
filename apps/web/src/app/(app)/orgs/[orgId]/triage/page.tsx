@@ -60,7 +60,7 @@ export default function TriagePage(): JSX.Element {
       ) : null}
 
       {actionError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {actionError}
         </p>
       ) : null}
@@ -79,7 +79,7 @@ export default function TriagePage(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-body-medium p-4">
+          <p role="alert" className="text-error text-body-medium p-4">
             {loadError}
           </p>
         ) : queue.length === 0 ? (

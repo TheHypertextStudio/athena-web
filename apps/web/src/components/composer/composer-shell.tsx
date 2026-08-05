@@ -231,7 +231,7 @@ export function ComposerShell({
         <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
           <PropertyStrip>{children}</PropertyStrip>
           {error ? (
-            <p role="alert" className="text-destructive text-body-medium">
+            <p role="alert" className="text-error text-body-medium">
               {error}
             </p>
           ) : null}

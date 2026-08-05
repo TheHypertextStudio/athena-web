@@ -245,7 +245,7 @@ export function CalendarViewSettings({
           <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[15rem]">
+      <DropdownMenuContent align="end" width="lg">
         <DropdownMenuLabel>View</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={axis}

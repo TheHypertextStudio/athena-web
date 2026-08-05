@@ -30,7 +30,10 @@ const STEPS: readonly Step[] = [
  */
 export function HowItWorks(): JSX.Element {
   return (
-    <section id="how-it-works" className="border-border bg-paper-deep scroll-mt-20 border-y">
+    <section
+      id="how-it-works"
+      className="border-outline-variant bg-paper-deep scroll-mt-20 border-y"
+    >
       <div className="mx-auto w-full max-w-6xl px-6 py-20">
         <div className="flex max-w-2xl flex-col gap-3">
           <p className="text-ink-muted text-sm font-medium">From zero to in control</p>
@@ -38,7 +41,7 @@ export function HowItWorks(): JSX.Element {
             Up and running in minutes
           </h2>
         </div>
-        <ol className="divide-border border-border mt-12 grid divide-y border-t md:grid-cols-3 md:divide-x md:divide-y-0">
+        <ol className="divide-outline-variant border-outline-variant mt-12 grid divide-y border-t md:grid-cols-3 md:divide-x md:divide-y-0">
           {STEPS.map((step, index) => (
             <li
               key={step.number}

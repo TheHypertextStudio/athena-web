@@ -197,7 +197,7 @@ export function CoreFieldsForm({
           }}
         />
         {titleError ? (
-          <span id={titleErrorId} role="alert" className="text-destructive text-xs font-normal">
+          <span id={titleErrorId} role="alert" className="text-error text-xs font-normal">
             {titleError}
           </span>
         ) : null}
@@ -306,14 +306,14 @@ export function CoreFieldsForm({
         )}
       </div>
       {timeError ? (
-        <p id={timeErrorId} role="alert" className="text-destructive text-xs">
+        <p id={timeErrorId} role="alert" className="text-error text-xs">
           {timeError}
         </p>
       ) : null}
       {canEdit ? (
         <div className="min-h-4">
           {update.isError ? (
-            <p role="alert" className="text-destructive text-xs">
+            <p role="alert" className="text-error text-xs">
               We couldn&apos;t save these changes. Please try again.
             </p>
           ) : (

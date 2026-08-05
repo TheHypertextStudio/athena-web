@@ -7,6 +7,64 @@
 
 ## Active Tasks
 
+### [MENUS-001] One menu, built to the MD3 Expressive vertical-menu spec
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-05
+- **Completed**: 2026-08-05
+- **Priority**: P1
+- **Description**: The product rendered menus seven different ways. `DropdownMenu`/`ContextMenu`
+  shared one style source; the command palette, `PickerList`, the mention `@` menu, the editor `/`
+  suggestion menu, several Popover-as-menu surfaces and 15+ raw `<select>` elements each invented
+  their own. They disagreed on background, radius, padding, row height, icon size, active colour,
+  shadow, motion duration and z-index — the palette even sat at `z-50`, below the `z-[120]` overlay
+  layer. Separately, the one shared source was measured against the wrong spec.
+- **Approach**: The spec came first. `menu-styles.ts` and `design-system.md` §6 both cited
+  `tokens/_md-comp-menu.scss` and `v0_192/_md-comp-list.scss` — the **baseline** menu, which M3 now
+  documents as legacy — so nobody could re-check a path that is not in this repo and the
+  implementation had drifted on container shape, row height, icon size, typography and the selection
+  colour role. The current `md.comp.menus.*` token set was read out of the live spec feed behind
+  m3.material.io (`TOKEN_TABLE`, system revision 7989) rather than off the rendered page, and
+  transcribed with that provenance into `docs/design/references/md3-menus.md`.
+
+  The token layer came second: an MD3 corner scale (`--radius-corner-*`) kept deliberately separate
+  from the product `--radius-*` scale, `md.sys.elevation.level0`–`level5` as `--shadow-level*`, the
+  state-layer opacities, and the focus-indicator metrics. Then `menu-styles.ts` was rewritten against
+  the spec and every other menu-shaped surface was collapsed onto it.
+
+  Colour was pulled into scope mid-task: the app ran two live palettes, MD3 roles alongside the
+  shadcn-era names. The MD3 roles are now canonical and the shadcn names are aliases onto them in
+  `globals.css`, so `bg-card` and `bg-surface-container-low` are the same pixel. `--secondary` became
+  a real tonal role (it held shadcn's near-white), `--destructive` became an alias of `--error`, and
+  `--ring` resolves to `secondary` because that is MD3's focus-indicator role.
+
+- **Files Changed**: `docs/design/references/md3-menus.md` (new),
+  `packages/ui/src/styles/globals.css`, `packages/ui/src/primitives/menu-styles.ts`,
+  `dropdown-menu.tsx`, `context-menu.tsx`, `popover.tsx`, `button.tsx`, `dialog.tsx`, `sheet.tsx`,
+  `tooltip.tsx`, `hover-card.tsx`, `components/pickers/PickerList.tsx`,
+  `components/shell/{WorkspaceSwitcher,tab-overflow-menu}.tsx`,
+  `apps/web/src/components/command-palette/*`, `mentions/*`, `editor/suggestion-menu.tsx`,
+  `scheduling/scheduling-dense-overflow-ui.tsx`, `apps/web/src/app/(marketing)/marketing.css`,
+  `packages/test-utils/tests/design-policies/design-token-scan.ts`, `design-token-policy.test.ts`,
+  `packages/ui/tests/primitives/design-contract.test.tsx`, `docs/design/design-system.md`,
+  `docs/engineering/launch-compliance.{md,json}`, plus a 123-file colour-token codemod.
+- **Learnings**:
+  - A spec citation that points outside the repo is not a citation. Both the code and the design doc
+    named `.scss` files nobody could open, and the implementation drifted from the real spec for
+    months without a test going red. Transcribing the token table into the repo, with its source
+    revision, is what makes the next drift visible.
+  - Making the style source private to `primitives/` is what forced six surfaces to hand-roll their
+    own menu — they could not import it. Exporting it made the shared path the cheapest one.
+  - Radix drives roving focus on pointer move, so a hovered row is also a focused row. An unguarded
+    focus state layer therefore swallows every hover and the spec's 8%/10% distinction disappears;
+    `focus:not-hover:` is what keeps them separate.
+  - Portless prefixes hostnames with the branch name, so every worktree ran with an `.env.local`
+    describing a stack that was not running. Fixed structurally in `scripts/portless-env.ts` rather
+    than worked around again. The trap inside the fix: the auth cookie domain must stay unprefixed,
+    because portless makes the web and API hosts siblings rather than parent and child.
+
+---
+
 ### [MENTIONS-001] Reference any resource from inside prose with `@`
 
 - **Status**: COMPLETED

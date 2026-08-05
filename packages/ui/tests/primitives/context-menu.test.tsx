@@ -67,14 +67,14 @@ describe('ContextMenu family', () => {
     await waitFor(() => {
       expect(screen.getByText('Section')).toBeInTheDocument();
     });
-    expect(screen.getByText('Inset Section')).toHaveClass('pl-8');
+    expect(screen.getByText('Inset Section')).toHaveClass('pl-12');
     expect(screen.getByText('Rename')).toBeInTheDocument();
-    expect(screen.getByText('Inset item')).toHaveClass('pl-8');
+    expect(screen.getByText('Inset item')).toHaveClass('pl-12');
     expect(screen.getByText('⌘R')).toHaveClass('ml-auto');
     expect(screen.getByText('Pinned')).toBeInTheDocument();
     expect(screen.getByText('Priority one')).toBeInTheDocument();
     expect(screen.getByText('Move to')).toBeInTheDocument();
-    expect(screen.getByText('Sub inset')).toHaveClass('pl-8');
+    expect(screen.getByText('Sub inset')).toHaveClass('pl-12');
   });
 
   it('applies the shared inset focus ring to interactive items', async () => {
@@ -88,9 +88,10 @@ describe('ContextMenu family', () => {
     );
     openContextMenu(screen.getByText('Region'));
     const item = await screen.findByText('Delete');
-    // The one focus convention: a 1px inset ring on dense rows.
+    // md.sys.state.focus-indicator: 3dp thick, drawn inside the row at a -3dp offset, in the
+    // secondary role that --ring resolves to. Menu rows do not use the shared 1px focusRingInset.
     expect(item).toHaveClass(
-      'focus-visible:ring-1',
+      'focus-visible:ring-[3px]',
       'focus-visible:ring-ring',
       'focus-visible:ring-inset',
     );
@@ -149,12 +150,10 @@ describe('ContextMenu family', () => {
     const label = await screen.findByText('Section');
     expect(label).toHaveClass('text-on-tertiary-container');
     expect(screen.getByText('Rename')).toHaveClass('text-on-tertiary-container');
-    expect(screen.getByText('Pinned')).toHaveClass('py-1.5');
+    expect(screen.getByText('Pinned')).toHaveClass('py-2');
     expect(screen.getByText('Priority one')).toBeInTheDocument();
     expect(screen.getByText('⌘R')).toHaveClass('text-on-tertiary-container');
-    expect(screen.getByText('Move to')).toHaveClass(
-      '[&_svg:first-child]:text-on-tertiary-container',
-    );
+    expect(screen.getByText('Move to')).toHaveClass('[&_svg]:text-on-tertiary-container');
   });
 
   it('renders the full rich item anatomy: supporting text, badge, and trailing text', async () => {

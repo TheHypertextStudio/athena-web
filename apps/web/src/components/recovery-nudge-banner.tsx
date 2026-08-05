@@ -85,7 +85,7 @@ export function RecoveryNudgeBanner({
       <div className="flex items-start gap-2">
         <Shield
           aria-hidden="true"
-          className={`mt-0.5 size-4 shrink-0 ${noCodes ? 'text-destructive' : 'text-primary'}`}
+          className={`mt-0.5 size-4 shrink-0 ${noCodes ? 'text-error' : 'text-primary'}`}
         />
         <p className="text-on-surface-variant min-w-0 flex-1 text-xs leading-snug">{message}</p>
         <button

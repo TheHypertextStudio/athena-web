@@ -44,7 +44,7 @@ export function PriorityPicker({ current, onSelect, pending }: PriorityPickerPro
           {PRIORITY_LABEL[current]}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
+      <DropdownMenuContent align="start" width="md">
         <DropdownMenuLabel>Set priority</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {PRIORITY_ORDER.map((priority) => (

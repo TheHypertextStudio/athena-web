@@ -78,7 +78,7 @@ export function ProviderRow<Provider extends string = string>({
         {connected ? (
           <span className="text-primary text-body-medium leading-snug">{mirroredLabel}</span>
         ) : phase === 'error' ? (
-          <span role="alert" className="text-destructive text-body-medium leading-snug">
+          <span role="alert" className="text-error text-body-medium leading-snug">
             {state.error}
           </span>
         ) : (

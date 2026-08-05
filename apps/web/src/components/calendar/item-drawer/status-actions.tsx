@@ -36,9 +36,9 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
     return (
       <div
         role="alert"
-        className="border-destructive/40 bg-destructive/10 flex flex-col gap-2 rounded-lg border p-3"
+        className="border-error/40 bg-error/10 flex flex-col gap-2 rounded-lg border p-3"
       >
-        <p className="text-destructive text-title-small">Sync conflict</p>
+        <p className="text-error text-title-small">Sync conflict</p>
         <p className="text-on-surface-variant text-body-small">
           Local changes and the provider diverged. Open the item in the provider to review, or retry
           pushing your local changes.
@@ -62,7 +62,7 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
           </Button>
         </div>
         {retry.isError ? (
-          <p className="text-destructive text-body-small">
+          <p className="text-error text-body-small">
             We couldn&apos;t retry this calendar update. Please try again.
           </p>
         ) : null}
@@ -77,7 +77,7 @@ export function SyncStatusSection({ item }: SyncStatusSectionProps): JSX.Element
         <span
           className={cn(
             'flex items-center gap-1.5',
-            item.syncState === 'provider_error' ? 'text-destructive' : 'text-on-surface-variant',
+            item.syncState === 'provider_error' ? 'text-error' : 'text-on-surface-variant',
           )}
         >
           <meta.icon
@@ -132,7 +132,7 @@ export function DeleteCalendarItemAction({
       <Button
         size="sm"
         variant="ghost"
-        className="text-destructive hover:text-destructive"
+        className="text-error hover:text-error"
         onClick={() => {
           setConfirming(true);
         }}

@@ -132,7 +132,7 @@ export default function TimelineBar({
           'bg-surface-container-high',
           schedulable && CURSOR_DRAGGABLE,
           TINT_ANCHOR_BORDER_CLASS[tint],
-          violated && 'border-destructive',
+          violated && 'border-error',
           dragging && 'opacity-40',
         )}
         style={{
@@ -160,7 +160,7 @@ export default function TimelineBar({
           'focus-visible:ring-ring text-label-medium group relative flex h-full w-full min-w-0 items-center overflow-hidden rounded-md pr-2 pl-2.5 text-left transition-opacity focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none',
           BAR_SURFACE_CLASS,
           schedulable && CURSOR_DRAGGABLE,
-          violated && 'ring-destructive ring-1',
+          violated && 'ring-error ring-1',
           dragging && 'opacity-40',
         )}
       >

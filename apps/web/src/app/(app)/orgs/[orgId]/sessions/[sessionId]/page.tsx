@@ -69,7 +69,7 @@ export default function SessionViewPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
+          className="border-outline-variant text-error text-body-medium rounded-lg border p-4"
         >
           {loadError}
         </p>
@@ -115,7 +115,7 @@ export default function SessionViewPage(): JSX.Element {
         </div>
 
         {actionError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {actionError}
           </p>
         ) : null}

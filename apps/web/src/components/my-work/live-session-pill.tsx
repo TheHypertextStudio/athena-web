@@ -53,7 +53,7 @@ const PILL_TREATMENT: Record<PillStatus, PillTreatment> = {
     label: 'Needs approval',
     hint: 'Awaiting your approval',
     Glyph: CircleDot,
-    tone: 'border-destructive/40 bg-destructive/10 text-destructive',
+    tone: 'border-error/40 bg-error/10 text-error',
     pulse: true,
   },
   awaiting_input: {
@@ -74,7 +74,7 @@ const PILL_TREATMENT: Record<PillStatus, PillTreatment> = {
     label: 'Errored',
     hint: 'Agent run errored',
     Glyph: XCircle,
-    tone: 'border-destructive/40 bg-destructive/10 text-destructive',
+    tone: 'border-error/40 bg-error/10 text-error',
     pulse: false,
   },
 };

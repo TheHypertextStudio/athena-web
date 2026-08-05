@@ -162,7 +162,7 @@ export default function AthenaConversation({
       </div>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body-medium pb-2">
+        <p role="alert" className="text-error text-body-medium pb-2">
           {error}
         </p>
       ) : null}
@@ -264,7 +264,7 @@ function ChatEntry({ activity }: ChatEntryProps): JSX.Element | null {
   }
   if (activity.type === 'error') {
     return (
-      <p role="alert" className="text-destructive text-body-medium mr-auto">
+      <p role="alert" className="text-error text-body-medium mr-auto">
         {text || 'Athena hit an error.'}
       </p>
     );

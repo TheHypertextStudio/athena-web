@@ -30,16 +30,16 @@ export function ProductFrame(): JSX.Element {
   return (
     <section className="mx-auto w-full max-w-6xl px-6 py-16 sm:py-20">
       <figure className="mx-auto flex max-w-3xl flex-col gap-4">
-        <div className="border-border bg-paper-deep shadow-plate rounded-md border p-2 sm:p-3">
+        <div className="border-outline-variant bg-paper-deep shadow-plate rounded-md border p-2 sm:p-3">
           <div className="app-seam bg-surface-container overflow-hidden rounded-lg font-sans">
-            <div className="border-border bg-surface m-1.5 rounded-md border shadow-sm">
-              <div className="border-border flex items-baseline justify-between border-b px-4 py-3">
+            <div className="border-outline-variant bg-surface m-1.5 rounded-md border shadow-sm">
+              <div className="border-outline-variant flex items-baseline justify-between border-b px-4 py-3">
                 <p className="text-on-surface text-body-medium font-semibold">Today</p>
                 <span className="text-on-surface-variant font-mono text-xs">
                   3 tasks · 3 organizations
                 </span>
               </div>
-              <ul className="divide-border divide-y">
+              <ul className="divide-outline-variant divide-y">
                 {PREVIEW_TASKS.map((task) => (
                   <li key={task.title} className="flex items-center gap-3 px-4 py-2.5">
                     <span
@@ -61,7 +61,7 @@ export function ProductFrame(): JSX.Element {
                       {task.meta}
                     </span>
                     <span className="border-outline-variant text-on-surface-variant flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs">
-                      <span className="bg-secondary text-secondary-foreground grid size-4 place-items-center rounded-[4px] text-[10px] font-semibold">
+                      <span className="bg-secondary-container text-on-secondary-container grid size-4 place-items-center rounded-[4px] text-[10px] font-semibold">
                         {task.glyph}
                       </span>
                       {task.org}

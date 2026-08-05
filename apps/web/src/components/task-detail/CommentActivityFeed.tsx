@@ -157,7 +157,7 @@ function ActivityEntry({ activity }: { activity: SessionActivityOut }): JSX.Elem
         {text ? (
           <p
             className={`text-body-medium mt-0.5 whitespace-pre-wrap ${
-              isError ? 'text-destructive' : 'text-on-surface-variant'
+              isError ? 'text-error' : 'text-on-surface-variant'
             }`}
           >
             {text}

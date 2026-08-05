@@ -1,90 +1,139 @@
 /**
- * `@docket/ui` — INTERNAL menu color-role helper (MD3 expressive).
+ * `@docket/ui` — the menu style source (MD3 Expressive vertical menu).
  *
  * @remarks
- * This module is deliberately **not** re-exported from `./index`. It exists only so the
- * {@link DropdownMenu} and {@link ContextMenu} primitive families — a dropdown and its
- * right-click sibling — render byte-identically from a single source of truth. Both menu
- * files import these builders and use them verbatim; nothing outside `packages/ui/src/primitives`
- * should depend on this file.
+ * This is the single place any menu-shaped surface in the product gets its geometry and colour
+ * from. The {@link DropdownMenu} and {@link ContextMenu} primitive families, the pickers, the
+ * command palette, the mention menu, and the editor's suggestion menu all import these builders
+ * and use them verbatim. A surface that renders a list of choices on a temporary surface is a
+ * menu, wherever it happens to live, and it gets its numbers here.
  *
- * ## Two variants
+ * The module used to be private to `primitives/`, which is exactly why six surfaces outside that
+ * directory ended up hand-rolling their own: they could not reach it. Reaching it is now the
+ * cheapest option, and `design-token-scan.ts` fails the build on the alternative.
  *
- * MD3-expressive menus come in two tonal families, both fully theme-aware (the class strings
- * are semantic Tailwind utilities that resolve in light and dark automatically):
+ * ## The spec these values come from
  *
- * - **`standard`** — the default, surface-based menu. Neutral `surface-container-low`
- *   container with `on-surface` text; selected rows lift into the `secondary-container`
- *   accent. This is what almost every menu should use.
- * - **`vibrant`** — a high-emphasis, tertiary-based menu (use sparingly). The whole
- *   container is `tertiary-container`; selected rows escalate to solid `tertiary`.
+ * Every number and colour role below is `md.comp.menus.*` from the M3 Expressive vertical menu,
+ * transcribed in **`docs/design/references/md3-menus.md`** with the source revision. Read that
+ * file before changing anything here. It exists because this module used to cite
+ * `tokens/_md-comp-menu.scss` — the *baseline* menu, which M3 documents as legacy — and the
+ * implementation silently drifted from the current spec on container shape, row height, icon
+ * size, typography, and the selection colour role.
  *
- * ## Selection colour
+ * ## Two colour mappings
  *
- * A checked row uses **`secondary-container`**, the MD3 selection role — the same role the spec
- * gives a navigation drawer's active indicator and a selected list item. It was `tertiary-container`
- * (hue 330), which rendered a checked "Dates" or "Default" row as a magenta block: a decorative
- * accent on a control whose whole job is to be quiet. `secondary-container` sits on the same hue as
- * the surface ramp, so a checked row reads as *selected* rather than as *coloured*.
+ * The spec gives menus exactly two, and {@link MenuVariant} is that choice:
  *
- * ## Menu anatomy → color role
+ * - **`standard`** — surface-based. `surface-container-low` container, `on-surface` label,
+ *   `on-surface-variant` icons, selection in `tertiary-container`. Almost every menu.
+ * - **`vibrant`** — tertiary-based, higher emphasis, "used sparingly" per the spec. The whole
+ *   container is `tertiary-container` and selection escalates to solid `tertiary`. It is also
+ *   the only mapping where icons change colour on interaction, shifting to `tertiary` while the
+ *   label holds still.
  *
- * | # | Part                | standard                        | vibrant                       |
- * |---|---------------------|---------------------------------|-------------------------------|
- * | 1 | leading icon        | `on-surface-variant`            | `on-tertiary-container`       |
- * | 2 | item text           | `on-surface`                    | `on-tertiary-container`       |
- * | 3 | item state layer    | `on-surface` overlay            | `on-tertiary-container` overlay |
- * | 4 | container           | `surface-container-low`         | `tertiary-container`          |
- * | 5 | badge               | `on-surface-variant`            | `on-tertiary-container`       |
- * | 6 | trailing text       | `on-surface-variant`            | `on-tertiary-container`       |
- * | 7 | selected item bg    | `secondary-container`           | `tertiary`                    |
- * | 8 | selected content    | `on-secondary-container`        | `on-tertiary`                 |
- * | 9 | label text          | `on-surface-variant`            | `on-tertiary-container`       |
- * | 10| supporting text     | `on-surface-variant`            | `on-tertiary-container`       |
- * | 11| selected divider    | `on-secondary-container`        | `on-tertiary`                 |
+ * ## Why the class strings are literal
+ *
+ * Tailwind's extractor is static, so none of these can be composed from a variable. That makes
+ * the strings the only place a number lives, which is why
+ * `packages/ui/tests/primitives/design-contract.test.tsx` asserts each one against the spec
+ * table rather than against another string.
  */
 import { cn } from '../lib/utils';
-import { CONTROL } from './control';
 
 /**
- * The menu row's metrics: the `lg` step of the shared control scale.
- *
- * Exported so the primitive tests can assert that the literal class strings below and the control
- * scale have not drifted apart — the strings must stay literal for Tailwind's static extractor,
- * which means the only way to keep them honest is to check them.
+ * The vertical menu's measurements, straight from `Menus - Common`.
  *
  * @remarks
- * Verified against the Material Web token source rather than recalled:
- * `tokens/_md-comp-menu.scss` gives `container-elevation: level2` (a 3dp shadow — menus are the
- * one surface where a shadow is correct, because they float over arbitrary content),
- * `container-shape: corner-extra-small`, and `top-space`/`bottom-space` of `8px`.
- * `tokens/versions/v0_192/_md-comp-list.scss` gives the row anatomy: `list-item-leading-space`
- * and `list-item-trailing-space` of `16px`, `list-item-leading-icon-size` of `24px`, and
- * `list-item-one-line-container-height` of `56px`.
+ * Exported so the primitive tests can check the literal class strings below against the spec
+ * without re-deriving it. This is **not** a step on the shared `CONTROL` scale — it used to be
+ * (`CONTROL.lg`, 36px rows and 18px icons), which is how the row drifted 8px short of the 44dp
+ * the spec gives. A menu row is a spec'd component, not a control, so it carries its own metrics.
  *
- * Docket keeps MD3's *total* 16px leading inset — 8px of menu padding plus 8px of row padding —
- * but takes the row height and icon size from the `lg` control step (36px rows, 18px icons)
- * rather than MD3's phone-scale 56px rows and 24px icons. A 56px menu row in a desktop command
- * surface is not a faithful implementation of the spec, it is a spec applied to the wrong device.
- * The container radius steps up to the container radius (10px) rather than MD3's 4px so the menu
- * reads as a container holding 8px-radius controls, not as another control.
+ * @see {@link https://m3.material.io/components/menus/specs} and
+ * `docs/design/references/md3-menus.md`.
  */
-export const MENU_METRICS = CONTROL.lg;
+export const MENU_METRICS = {
+  /** `menu-item.height` — 44dp. */
+  minHeight: 'min-h-11',
+  minHeightPx: 44,
+  /** `menu-item.leading-space` / `.trailing-space` — 16dp. */
+  paddingX: 'px-4',
+  paddingXPx: 16,
+  /** `menu-item.top-space` / `.bottom-space` — 8dp. */
+  paddingY: 'py-2',
+  paddingYPx: 8,
+  /** `menu-item.between-space` — 12dp. */
+  gap: 'gap-3',
+  gapPx: 12,
+  /** `menu-item.leading-icon.size` / `.trailing-icon.size` — 20dp, applied to a row's `<svg>`s. */
+  iconApply: '[&_svg]:size-5',
+  /**
+   * The same 20dp as a box for a leading slot that is not an `<svg>` — a picker option's avatar,
+   * colour swatch, or multi-bar glyph, none of which `iconApply` can reach.
+   */
+  iconBox: 'size-5',
+  iconPx: 20,
+  /** Container padding. 16dp container corner less 4dp leaves the 12dp edge-row corner. */
+  containerPadding: 'p-1',
+  containerPaddingPx: 4,
+  /** `menu-item.label-text` — `label-large`. */
+  labelToken: 'label-large',
+} as const;
 
-/** Which MD3 tonal family a menu surface renders in. See the module remarks. */
+/** Which of the spec's two colour mappings a menu surface renders in. See the module remarks. */
 export type MenuVariant = 'standard' | 'vibrant';
 
+/** How wide a menu container is. See {@link MENU_WIDTH}. */
+export type MenuWidth = 'sm' | 'md' | 'lg' | 'xl';
+
 /**
- * Shared, variant-independent structural classes for the floating menu surface.
+ * The four menu widths.
  *
  * @remarks
- * Preserves the radius, padding, `min-w`, shadow, `overflow`, `z-[120]` stacking, and the
- * `tw-animate-css` open/close motion that both menu contents already carried. Color roles are
- * layered on top by {@link menuContentClass}; primitive-specific bits (a `max-h-[…]` clamp or a
- * `origin-[…]` transform) are appended by each menu file after this base.
+ * The expressive spec publishes no width at all, and the baseline's 112dp–280dp range is phone
+ * scale, so this is Docket's. It is a closed set because the open one produced 176, 192, 224,
+ * 240, 288, 352, and 384px across 26 call-site files, each written as its own `min-w-[14rem]` or
+ * `w-56` — seven widths for what are, in practice, four jobs: a short action list, an ordinary
+ * action list, a list with descriptions, and a list with paths or timestamps in it.
+ *
+ * Every one clamps to the viewport, so the widest menu still fits a 320px phone.
+ */
+export const MENU_WIDTH: Readonly<Record<MenuWidth, string>> = {
+  /** 192px — a handful of one-word actions. */
+  sm: 'min-w-48',
+  /** 224px — the default: an action list with icons and labels. */
+  md: 'min-w-56',
+  /** 288px — rows carrying supporting text or a trailing value. */
+  lg: 'min-w-72',
+  /** 352px — rows carrying a path, a timestamp, or a workspace name. */
+  xl: 'min-w-88',
+};
+
+/** The default width when a menu does not ask for one. */
+export const DEFAULT_MENU_WIDTH: MenuWidth = 'md';
+
+/**
+ * Structural classes for the floating menu surface, shared by both mappings.
+ *
+ * @remarks
+ * Carries `container.shape` (`corner.large`, 16dp), the 4dp container padding,
+ * `container.elevation` (`level2`), and the open/close motion.
+ *
+ * **Shape morphing.** The spec gives a menu two container shapes: `active.container.shape`
+ * (16dp) while it holds focus, and `inactive.container.shape` (8dp) once it has revealed a
+ * submenu. Radix portals `SubContent` out of its parent, so the open `SubTrigger` stays inside
+ * this element with `data-state="open"` — `has-data-[state=open]` is therefore exactly "a
+ * submenu of mine is open". Checkbox and radio rows use `data-state="checked"`, so they do not
+ * trip it. The `transition-[border-radius]` is collapsed to 0.01ms by the reduced-motion rule
+ * in `globals.css`.
+ *
+ * There is no border. MD3 separates a menu from what it floats over with elevation and a tonal
+ * step, and the spec's colour list for menus has no outline role in it.
  */
 const menuContentBase =
-  'z-[120] min-w-[8rem] overflow-hidden rounded-lg border p-2 shadow-md ' +
+  'z-[120] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-corner-lg p-1 shadow-level2 ' +
+  'has-data-[state=open]:rounded-corner-sm transition-[border-radius] ' +
   'data-[state=open]:animate-in data-[state=closed]:animate-out ' +
   'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ' +
   'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 ' +
@@ -93,117 +142,272 @@ const menuContentBase =
   'duration-(--dur-base) ease-(--ease-out)';
 
 /**
- * Full class string for the menu container surface (anatomy #4 + #7 wrapper).
+ * Full class string for the menu container surface.
  *
- * @param variant - `'standard'` (surface-based) or `'vibrant'` (tertiary-based).
- * @returns The structural base plus this variant's container/border/text roles.
+ * @param variant - Which colour mapping to render in.
+ * @param width - One of the four {@link MENU_WIDTH} steps. Defaults to `md`.
+ * @returns The structural base plus this mapping's container and default content roles.
  *
  * @example
  * ```tsx
- * <DropdownMenuPrimitive.Content
- *   className={cn(menuContentClass('standard'), 'max-h-[var(--radix-dropdown-menu-content-available-height)]')}
- * />
+ * <DropdownMenuPrimitive.Content className={cn(menuContentClass('standard'), MENU_OVERFLOW)} />
  * ```
  */
-export function menuContentClass(variant: MenuVariant): string {
+export function menuContentClass(
+  variant: MenuVariant,
+  width: MenuWidth = DEFAULT_MENU_WIDTH,
+): string {
   return cn(
     menuContentBase,
+    MENU_WIDTH[width],
     variant === 'vibrant'
-      ? 'bg-tertiary-container text-on-tertiary-container border-on-tertiary-container/20'
-      : 'bg-surface-container-low text-on-surface border-outline-variant',
+      ? 'bg-tertiary-container text-on-tertiary-container'
+      : 'bg-surface-container-low text-on-surface',
   );
 }
 
-/** Shared, variant-independent structural classes for an interactive menu row. */
+/**
+ * Structural classes for an interactive menu row, shared by both mappings.
+ *
+ * @remarks
+ * `menu-item.shape` is `corner.extra-small` (4dp). The first and last rows take
+ * `corner.medium` (12dp) on the edge facing the container and keep 4dp on the edge facing
+ * their neighbour — that is what the spec's `inner-corner.corner-size` means, and it is what
+ * makes a menu read as one shape rather than a stack of pills.
+ *
+ * Disabled is `opacity-38`, not `opacity-50`: 0.38 is the literal every MD3 disabled token
+ * carries.
+ */
 const menuItemBase =
-  'relative flex min-h-9 cursor-default items-center gap-2 rounded-md px-2 py-1.5 ' +
-  'text-body-medium transition-colors outline-none select-none ' +
-  'data-[disabled]:pointer-events-none data-[disabled]:opacity-50 ' +
-  '[&_svg]:pointer-events-none [&_svg]:size-4.5! [&_svg]:shrink-0';
+  'relative flex min-h-11 cursor-default items-center gap-3 px-4 py-2 ' +
+  'rounded-corner-xs first:rounded-t-corner-md last:rounded-b-corner-md ' +
+  'text-label-large transition-colors outline-none select-none ' +
+  'data-[disabled]:pointer-events-none data-[disabled]:opacity-38 ' +
+  '[&_svg]:pointer-events-none [&_svg]:size-5 [&_svg]:shrink-0';
+
+/**
+ * State-layer classes for an unselected row.
+ *
+ * @remarks
+ * Three distinct steps, which is the part the previous implementation collapsed: hover 8%,
+ * focus 10%, pressed 10%. Radix drives roving focus on pointer move, so a hovered row is also a
+ * focused row — `focus:not-hover:` scopes the 10% focus layer to keyboard focus so a mouse
+ * hover really does render at the spec's 8%. Without that guard the two states are
+ * indistinguishable and every hover reads as a focus.
+ */
+const STATE_LAYER: Readonly<Record<MenuVariant, string>> = {
+  standard: 'hover:bg-on-surface/8 focus:not-hover:bg-on-surface/10 active:bg-on-surface/10',
+  vibrant:
+    'hover:bg-on-tertiary-container/8 focus:not-hover:bg-on-tertiary-container/10 ' +
+    'active:bg-on-tertiary-container/10',
+};
+
+/**
+ * State-layer classes for a selected row, mixed over the row's own container colour.
+ *
+ * @remarks
+ * A state layer is the "on" role laid over the component's container, so on a selected row it
+ * has to mix into `tertiary-container` (standard) or `tertiary` (vibrant) rather than into the
+ * menu surface underneath. An alpha fill would let the menu background show through the
+ * selection instead, which is a different colour from the one the spec names.
+ */
+const SELECTED_STATE_LAYER: Readonly<Record<MenuVariant, string>> = {
+  standard:
+    'hover:bg-[color-mix(in_oklab,var(--on-tertiary-container)_8%,var(--tertiary-container))] ' +
+    'focus:not-hover:bg-[color-mix(in_oklab,var(--on-tertiary-container)_10%,var(--tertiary-container))] ' +
+    'active:bg-[color-mix(in_oklab,var(--on-tertiary-container)_10%,var(--tertiary-container))]',
+  vibrant:
+    'hover:bg-[color-mix(in_oklab,var(--on-tertiary)_8%,var(--tertiary))] ' +
+    'focus:not-hover:bg-[color-mix(in_oklab,var(--on-tertiary)_10%,var(--tertiary))] ' +
+    'active:bg-[color-mix(in_oklab,var(--on-tertiary)_10%,var(--tertiary))]',
+};
+
+/**
+ * Icon colour roles for an unselected row.
+ *
+ * @remarks
+ * Both the leading and the trailing icon take `on-surface-variant` in the standard mapping, a
+ * step quieter than the label. Vibrant is the only mapping where icons move on interaction:
+ * they shift from `on-tertiary-container` to `tertiary` on hover, focus, and press while the
+ * label holds still.
+ */
+const ICON_ROLE: Readonly<Record<MenuVariant, string>> = {
+  standard: '[&_svg]:text-on-surface-variant',
+  vibrant:
+    '[&_svg]:text-on-tertiary-container hover:[&_svg]:text-tertiary ' +
+    'focus:[&_svg]:text-tertiary active:[&_svg]:text-tertiary',
+};
 
 /** Options accepted by {@link menuItemClass}. */
 export interface MenuItemClassOptions {
-  /** Render the row in its selected state (anatomy #7 background + #8 content color). */
+  /** Render the row in its selected state — the spec's `menu-item.selected.*` tokens. */
   selected?: boolean;
 }
 
 /**
- * Full class string for an interactive menu row (anatomy #1 icon + #2 text + #3 state layer,
- * and, when `selected`, #7 background + #8 content).
+ * Full class string for an interactive menu row.
  *
- * @param variant - `'standard'` (surface-based) or `'vibrant'` (tertiary-based).
- * @param options - Pass `{ selected: true }` for the selected/active row.
- * @returns The row's complete color + state-layer class string (structural base included).
+ * @param variant - Which colour mapping to render in.
+ * @param options - Pass `{ selected: true }` for the selected row.
+ * @returns The row's complete geometry, colour, icon, and state-layer class string.
  *
  * @remarks
- * The `focus:` state layer doubles as the hover affordance because Radix drives roving focus on
- * pointer move — a focused row IS the hovered row. Standard rows use a subtle `on-surface`
- * tint; vibrant rows tint with `on-tertiary-container`. `focusRingInset` (the keyboard ring) is
- * still applied separately by each menu file, unchanged.
+ * A selected row also changes shape: `menu-item.selected.shape` is `corner.medium` (12dp),
+ * against `corner.extra-small` (4dp) for an unselected one. The size of the box does not move —
+ * only its corners and its colour — so this stays inside the design system's rule that
+ * interaction never changes geometry.
  *
  * @example
  * ```tsx
- * <DropdownMenuPrimitive.Item className={cn(menuItemClass('standard', { selected }), focusRingInset)} />
+ * <DropdownMenuPrimitive.Item className={cn(menuItemClass('standard', { selected }), menuFocusRing)} />
  * ```
  */
 export function menuItemClass(variant: MenuVariant, options?: MenuItemClassOptions): string {
   const selected = options?.selected ?? false;
 
-  if (variant === 'vibrant') {
+  if (!selected) {
     return cn(
       menuItemBase,
-      selected
-        ? 'bg-tertiary text-on-tertiary focus:bg-tertiary focus:text-on-tertiary'
-        : 'text-on-tertiary-container hover:bg-on-tertiary-container/10 focus:bg-on-tertiary-container/10',
+      ICON_ROLE[variant],
+      STATE_LAYER[variant],
+      {
+        standard: 'text-on-surface',
+        vibrant: 'text-on-tertiary-container',
+      }[variant],
     );
   }
 
   return cn(
     menuItemBase,
-    selected
-      ? 'bg-secondary-container text-on-secondary-container focus:bg-secondary-container focus:text-on-secondary-container'
-      : 'text-on-surface hover:bg-on-surface/8 focus:bg-on-surface/8',
+    'rounded-corner-md',
+    SELECTED_STATE_LAYER[variant],
+    variant === 'vibrant'
+      ? 'bg-tertiary text-on-tertiary [&_svg]:text-on-tertiary'
+      : 'bg-tertiary-container text-on-tertiary-container [&_svg]:text-on-tertiary-container',
   );
 }
 
 /**
- * Class string for a section label / group heading (anatomy #9).
+ * Selected-state classes keyed off Radix's `data-state="checked"`.
  *
- * @param variant - Menu tonal family.
- * @returns Label typography + color, matching the menu's padding rhythm.
+ * @param variant - Which colour mapping to render in.
+ * @returns The checked row's shape, container, content, and state-layer escalation.
+ *
+ * @remarks
+ * {@link menuItemClass} takes selection as a boolean, which a checkbox row can supply but a
+ * radio row cannot — Radix derives a radio item's checked state from its group's value and
+ * publishes it only as an attribute. This builder is that same escalation expressed as
+ * `data-[state=checked]:` variants so both row types resolve to one set of roles.
+ *
+ * The indicator gutter is deliberately not here: a checkable row still owes the spec its 16dp
+ * leading space, and the indicator sits inside that.
+ */
+export function menuCheckedItemClass(variant: MenuVariant): string {
+  if (variant === 'vibrant') {
+    return cn(
+      'data-[state=checked]:rounded-corner-md',
+      'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary',
+      'data-[state=checked]:[&_svg]:text-on-tertiary',
+      'data-[state=checked]:hover:bg-[color-mix(in_oklab,var(--on-tertiary)_8%,var(--tertiary))]',
+      'data-[state=checked]:focus:not-hover:bg-[color-mix(in_oklab,var(--on-tertiary)_10%,var(--tertiary))]',
+    );
+  }
+
+  return cn(
+    'data-[state=checked]:rounded-corner-md',
+    'data-[state=checked]:bg-tertiary-container data-[state=checked]:text-on-tertiary-container',
+    'data-[state=checked]:[&_svg]:text-on-tertiary-container',
+    'data-[state=checked]:hover:bg-[color-mix(in_oklab,var(--on-tertiary-container)_8%,var(--tertiary-container))]',
+    'data-[state=checked]:focus:not-hover:bg-[color-mix(in_oklab,var(--on-tertiary-container)_10%,var(--tertiary-container))]',
+  );
+}
+
+/**
+ * The leading gutter a checkable row reserves for its indicator, and the matching offset for a
+ * plain row or label that has to share the same text axis.
+ *
+ * @remarks
+ * 16dp leading space + 20dp icon + 12dp between-space = 48dp, so a checkbox row's label lands
+ * on exactly the axis an icon row's label lands on. The old value was 32px against an 18px
+ * icon, which is why `CORE-08` measured Display radio rows at 32px of leading padding and
+ * Filter rows at 8px and called the column "not fixed".
+ */
+export const MENU_INDICATOR_GUTTER = 'pl-12' as const;
+
+/**
+ * The menu row's keyboard-focus indicator.
+ *
+ * @remarks
+ * `md.sys.state.focus-indicator`: 3dp thick at a -3dp offset, drawn inside the row so it cannot
+ * collide with the neighbour above. The colour is `md.sys.color.secondary`, which `--ring`
+ * resolves to. This is why menu rows do not use the shared `focusRingInset` — that ring is 1px
+ * and the spec's is 3dp.
+ */
+export const menuFocusRing =
+  'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-inset' as const;
+
+/**
+ * Class string for a section label / group heading.
+ *
+ * @param variant - Which colour mapping to render in.
+ * @returns Label colour on the row's own horizontal rhythm.
+ *
+ * @remarks
+ * The spec gives `section-label-text.color` and no typography token for it, so the type role is
+ * Docket's choice: `label-medium`, one step below the row label.
  */
 export function menuLabel(variant: MenuVariant): string {
   return cn(
-    'text-label-medium px-2 py-1.5',
+    'text-label-medium px-4 py-2',
     variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface-variant',
   );
 }
 
 /**
- * Class string for a divider rule between groups (anatomy #11).
+ * Class string for a group wrapper — the spec's "Grouped" layout configuration.
  *
- * @param variant - Menu tonal family. The divider is tinted with the variant's
- *   selected-content role so it reads as part of the tonal family rather than a hard line.
- * @returns The separator's geometry + tinted background.
+ * @param variant - Which colour mapping to render in.
+ * @returns The group's shape and padding.
  *
  * @remarks
- * Inset within the container's own padding, not bled edge-to-edge. The 2025 MD3 "expressive"
- * menu redesign explicitly calls this out: dividers (and the current selection) no longer span
- * the container's full width — both now respect the same inset every row does, so a divider
- * reads as a rule *between* rows rather than a seam in the container itself. A selected row is
- * already inset this way (`menuItemClass`'s `rounded-md` sits inside the content's `p-2`); this
- * function used to fight that with a `-mx-2` bleed that canceled the container padding on
- * purpose. Dropping the bleed is the whole fix — the surrounding `p-2` does the rest.
+ * `group.shape` is `corner.small` (8dp) and `group.padding` is 2dp, with a 2dp `gap` between
+ * groups. A group is a shape, not a colour: it collects rows into one rounded block so a long
+ * menu reads as sections without needing a rule between them. The rows inside keep their own
+ * 4dp corners and the group's first and last rows still take the 12dp edge corner.
  */
-export function menuSeparator(variant: MenuVariant): string {
-  return cn('my-1 h-px', variant === 'vibrant' ? 'bg-on-tertiary/25' : 'bg-outline-variant');
+export function menuGroup(_variant: MenuVariant): string {
+  return 'rounded-corner-sm p-0.5 not-first:mt-0.5';
 }
 
 /**
- * Class string for an optional badge (anatomy #5) — a compact trailing pill.
+ * Class string for a divider between groups.
  *
- * @param variant - Menu tonal family.
- * @returns Badge chrome + the variant's badge color role.
+ * @param variant - Which colour mapping to render in.
+ * @returns The separator's geometry and colour.
+ *
+ * @remarks
+ * Neither expressive colour set defines a divider token — the anatomy names one and the colour
+ * tables stop at 11 elements without it. `outline-variant` is the role the rest of the design
+ * system uses for a hairline, and it is what the baseline menu's `divider.color`
+ * (`surface-variant`) maps onto here. The 8dp of vertical space is the baseline spec's
+ * `divider top/bottom padding`, which expressive does not restate.
+ *
+ * Inset within the container's own padding rather than bled edge to edge, so it reads as a rule
+ * *between* rows rather than a seam across the container.
+ */
+export function menuSeparator(_variant: MenuVariant): string {
+  return 'bg-outline-variant my-2 h-px';
+}
+
+/**
+ * Class string for an optional badge — a compact trailing pill.
+ *
+ * @param variant - Which colour mapping to render in.
+ * @returns Badge chrome plus this mapping's supporting-content role.
+ *
+ * @remarks
+ * The anatomy names a badge; no expressive token set gives it a colour or a shape, so it
+ * borrows the mapping's supporting-text role.
  */
 export function menuBadge(variant: MenuVariant): string {
   return cn(
@@ -213,24 +417,27 @@ export function menuBadge(variant: MenuVariant): string {
 }
 
 /**
- * Class string for optional trailing text (anatomy #6) — e.g. a shortcut hint or meta value.
+ * Class string for optional trailing text — a shortcut hint or a meta value.
  *
- * @param variant - Menu tonal family.
- * @returns Trailing-text typography + the variant's trailing color role.
+ * @param variant - Which colour mapping to render in.
+ * @returns Trailing-text typography and colour.
+ *
+ * @remarks
+ * `menu-item.trailing-supporting-text` is `label-large`, the same role as the row's own label —
+ * not a smaller one. It is separated from the label by colour, not by size.
  */
 export function menuTrailingText(variant: MenuVariant): string {
   return cn(
-    'ml-auto text-label-small',
+    'ml-auto text-label-large',
     variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface-variant',
   );
 }
 
 /**
- * Class string for optional supporting text (anatomy #10) — a quieter second line under the
- * item text.
+ * Class string for optional supporting text — a quieter second line under the row label.
  *
- * @param variant - Menu tonal family.
- * @returns Supporting-line typography + the variant's supporting color role.
+ * @param variant - Which colour mapping to render in.
+ * @returns Supporting-line typography and colour.
  */
 export function menuSupporting(variant: MenuVariant): string {
   return cn(

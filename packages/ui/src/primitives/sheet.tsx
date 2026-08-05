@@ -152,7 +152,7 @@ export function SheetContent({
       <SheetOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out fixed z-[100] flex w-72 max-w-[85vw] flex-col shadow-lg ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
+          'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex w-72 max-w-[85vw] flex-col ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
           focusRing,
           SIDE_CLASS[side],
           className,

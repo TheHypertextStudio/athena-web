@@ -52,53 +52,60 @@
   color-scheme: light;
   --radius: 0.625rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
   /*
-   * Brand accent — the restrained indigo from design-system.md, finally wired in (the token
-   * had silently regressed to grayscale). Hue 264 throughout; MD3 container roles are low-chroma
-   * tonal fills for selection / emphasis. Color stays "earned": primary is for actions, focus,
-   * active/selected state, and links — never broad surfaces.
+   * MD3 accent tonal families (light). Hue 264 indigo is the source; secondary is the same hue
+   * at roughly a third of primary's chroma, and tertiary sits ~+60° away at hue 330. Container
+   * roles are the low-chroma tonal fills used for selection and emphasis. Color stays "earned":
+   * accents are for actions, focus, selection, and links — never broad surfaces.
    */
   --primary: oklch(0.52 0.21 264);
-  --primary-foreground: oklch(0.985 0 0);
+  --on-primary: oklch(0.985 0 0);
   --primary-container: oklch(0.92 0.05 264);
   --on-primary-container: oklch(0.32 0.13 264);
-  --secondary: oklch(0.97 0.01 264);
-  --secondary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.52 0.07 264);
+  --on-secondary: oklch(0.985 0 0);
   --secondary-container: oklch(0.9 0.045 264);
   --on-secondary-container: oklch(0.3 0.07 264);
-  /*
-   * MD3 tertiary tonal role (light). Seeded as a rose accent (hue 330) — the canonical
-   * ~+60° offset from the indigo primary (hue 264) — so tertiary reads as a distinct,
-   * higher-emphasis accent rather than a second shade of primary. Used by the expressive
-   * "vibrant" menu variant and by selected-item states in the standard menu variant.
-   */
   --tertiary: oklch(0.55 0.15 330);
   --on-tertiary: oklch(0.99 0.005 330);
   --tertiary-container: oklch(0.92 0.06 330);
   --on-tertiary-container: oklch(0.37 0.13 330);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.45 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.45 0.2 27);
-  --destructive-foreground: oklch(0.985 0 0);
-  --error: var(--destructive);
-  --on-error: var(--destructive-foreground);
+  --error: oklch(0.45 0.2 27);
+  --on-error: oklch(0.985 0 0);
   --error-container: oklch(0.93 0.06 27);
   --on-error-container: oklch(0.35 0.14 27);
+
   --inverse-surface: oklch(0.27 0.005 264);
   --inverse-on-surface: oklch(0.97 0.004 264);
   --inverse-primary: oklch(0.8 0.1 264);
   --scrim: oklch(0 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.52 0.21 264);
+  --shadow: oklch(0 0 0);
+
+  /*
+   * shadcn-era role names, kept only as aliases onto the MD3 roles above so the utilities they
+   * back (`bg-card`, `text-muted-foreground`, `border-border`, …) resolve to MD3 values rather
+   * than to a second, parallel palette. New code uses the MD3 name; `design-token-scan.ts`
+   * fails on a new shadcn-name utility and holds the existing ones in a ratchet ledger.
+   *
+   * `--ring` is MD3's focus-indicator role, which every component spec gives as `secondary`.
+   */
+  --background: var(--surface);
+  --foreground: var(--on-surface);
+  --card: var(--surface-container-low);
+  --card-foreground: var(--on-surface);
+  --popover: var(--surface-container-low);
+  --popover-foreground: var(--on-surface);
+  --primary-foreground: var(--on-primary);
+  --secondary-foreground: var(--on-secondary);
+  --muted: var(--surface-container-high);
+  --muted-foreground: var(--on-surface-variant);
+  --accent: var(--surface-container-high);
+  --accent-foreground: var(--on-surface);
+  --destructive: var(--error);
+  --destructive-foreground: var(--on-error);
+  --border: var(--outline-variant);
+  --input: var(--outline);
+  --ring: var(--secondary);
 
   --state-backlog: oklch(0.5 0 0);
   --state-unstarted: oklch(0.5 0.06 250);
@@ -118,6 +125,8 @@
    * unchanged from the prior neutral ramp, so the contrast + elevation tests still hold.
    */
   --surface: oklch(0.995 0.004 264);
+  --surface-dim: oklch(0.89 0.012 264);
+  --surface-bright: oklch(0.995 0.004 264);
   --surface-container-lowest: oklch(0.99 0.005 264);
   --surface-container-low: oklch(0.98 0.007 264);
   --surface-container: oklch(0.97 0.009 264);
@@ -126,6 +135,7 @@
   --surface-variant: oklch(0.93 0.017 264);
   --on-surface: oklch(0.205 0.006 264);
   --on-surface-variant: oklch(0.44 0.008 264);
+  --surface-tint: var(--primary);
   --outline: oklch(0.6 0.01 264);
   --outline-variant: oklch(0.9 0.008 264);
 
@@ -156,52 +166,76 @@
   --control-h-md: 2rem;
   --control-h-lg: 2.25rem;
   --control-h-xl: 2.5rem;
+
+  /*
+   * MD3 state-layer opacities (`md.sys.state.*.state-layer-opacity`) and the disabled opacity
+   * every MD3 component token carries as a literal. A state layer is the component's "on" role
+   * laid over its own container at one of these three opacities — hover and pressed are NOT the
+   * same value, and pressed is not optional.
+   *
+   * Tailwind class strings have to stay literal for the static extractor, so the utilities read
+   * `/8`, `/10`, and `opacity-38` directly. These properties are the written source those
+   * literals answer to, and `design-contract.test.tsx` asserts the two agree.
+   */
+  --state-hover-opacity: 0.08;
+  --state-focus-opacity: 0.1;
+  --state-pressed-opacity: 0.1;
+  --state-disabled-opacity: 0.38;
+
+  /* MD3 focus indicator (`md.sys.state.focus-indicator.*`). Colour is `--ring`, i.e. secondary. */
+  --focus-indicator-thickness: 3px;
+  --focus-indicator-inner-offset: -3px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    /* Dark indigo: MD3 dark primary is a lighter, less-saturated tone with dark on-primary. */
+    /*
+     * MD3 accent tonal families (dark). Every accent lightens and its container darkens, which
+     * is what inverts an MD3 scheme between themes. Hues are unchanged from light so the
+     * standard and vibrant menu mappings stay recognisably the same colour in both themes.
+     */
     --primary: oklch(0.8 0.11 264);
-    --primary-foreground: oklch(0.25 0.07 264);
+    --on-primary: oklch(0.25 0.07 264);
     --primary-container: oklch(0.34 0.07 264);
     --on-primary-container: oklch(0.9 0.05 264);
-    --secondary: oklch(0.27 0.012 264);
-    --secondary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.8 0.04 264);
+    --on-secondary: oklch(0.28 0.03 264);
     --secondary-container: oklch(0.33 0.05 264);
     --on-secondary-container: oklch(0.9 0.04 264);
-    /*
-     * MD3 tertiary tonal role (dark). Following the dark-scheme pattern, the accent
-     * lightens (tertiary) while the container darkens, keeping the same rose hue (330)
-     * as light mode so the "vibrant" menu variant is theme-consistent.
-     */
     --tertiary: oklch(0.82 0.11 330);
     --on-tertiary: oklch(0.28 0.08 330);
     --tertiary-container: oklch(0.38 0.09 330);
     --on-tertiary-container: oklch(0.91 0.06 330);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.75 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.7 0.19 22);
-    --destructive-foreground: oklch(0.145 0 0);
-    --error: var(--destructive);
-    --on-error: var(--destructive-foreground);
+    --error: oklch(0.7 0.19 22);
+    --on-error: oklch(0.145 0 0);
     --error-container: oklch(0.33 0.08 27);
     --on-error-container: oklch(0.92 0.05 27);
+
     --inverse-surface: oklch(0.92 0.004 264);
     --inverse-on-surface: oklch(0.25 0.005 264);
     --inverse-primary: oklch(0.5 0.21 264);
     --scrim: oklch(0 0 0);
-    --border: oklch(0.32 0 0);
-    --input: oklch(0.32 0 0);
-    --ring: oklch(0.8 0.11 264);
+    --shadow: oklch(0 0 0);
+
+    /* shadcn-era aliases. See the light block for why these exist and where they are going. */
+    --background: var(--surface);
+    --foreground: var(--on-surface);
+    --card: var(--surface-container-low);
+    --card-foreground: var(--on-surface);
+    --popover: var(--surface-container-low);
+    --popover-foreground: var(--on-surface);
+    --primary-foreground: var(--on-primary);
+    --secondary-foreground: var(--on-secondary);
+    --muted: var(--surface-container-high);
+    --muted-foreground: var(--on-surface-variant);
+    --accent: var(--surface-container-high);
+    --accent-foreground: var(--on-surface);
+    --destructive: var(--error);
+    --destructive-foreground: var(--on-error);
+    --border: var(--outline-variant);
+    --input: var(--outline);
+    --ring: var(--secondary);
 
     --state-backlog: oklch(0.72 0 0);
     --state-unstarted: oklch(0.75 0.06 250);
@@ -223,6 +257,8 @@
      * unchanged so the monotonic-ramp + elevation tests still hold.
      */
     --surface: oklch(0.265 0.012 264);
+    --surface-dim: oklch(0.155 0.008 264);
+    --surface-bright: oklch(0.35 0.016 264);
     --surface-container-lowest: oklch(0.175 0.008 264);
     --surface-container-low: oklch(0.205 0.01 264);
     --surface-container: oklch(0.23 0.012 264);
@@ -231,6 +267,7 @@
     --surface-variant: oklch(0.36 0.024 264);
     --on-surface: oklch(0.945 0.006 264);
     --on-surface-variant: oklch(0.78 0.01 264);
+    --surface-tint: var(--primary);
     --outline: oklch(0.6 0.012 264);
     --outline-variant: oklch(0.36 0.014 264);
   }
@@ -258,14 +295,14 @@
   --color-ring: var(--ring);
 
   /*
-   * MD3 tonal roles seeded from the indigo primary. `--color-on-primary` aliases the existing
-   * `--primary-foreground` so both `text-on-primary` (MD3) and the 38 existing
-   * `text-primary-foreground` callsites resolve to the same value (zero rename churn).
+   * MD3 tonal roles. These are the canonical names — the shadcn-era utilities above resolve
+   * through `:root` aliases onto exactly these values, so `bg-card` and `bg-surface-container-low`
+   * are the same pixel and there is only one palette in the product.
    */
-  --color-on-primary: var(--primary-foreground);
+  --color-on-primary: var(--on-primary);
   --color-primary-container: var(--primary-container);
   --color-on-primary-container: var(--on-primary-container);
-  --color-on-secondary: var(--secondary-foreground);
+  --color-on-secondary: var(--on-secondary);
   --color-secondary-container: var(--secondary-container);
   --color-on-secondary-container: var(--on-secondary-container);
   --color-tertiary: var(--tertiary);
@@ -280,6 +317,7 @@
   --color-inverse-on-surface: var(--inverse-on-surface);
   --color-inverse-primary: var(--inverse-primary);
   --color-scrim: var(--scrim);
+  --color-shadow: var(--shadow);
 
   --color-state-backlog: var(--state-backlog);
   --color-state-unstarted: var(--state-unstarted);
@@ -294,6 +332,8 @@
    * `border-outline-variant` for the floating-panel-on-tinted-canvas composition.
    */
   --color-surface: var(--surface);
+  --color-surface-dim: var(--surface-dim);
+  --color-surface-bright: var(--surface-bright);
   --color-surface-container-lowest: var(--surface-container-lowest);
   --color-surface-container-low: var(--surface-container-low);
   --color-surface-container: var(--surface-container);
@@ -302,13 +342,59 @@
   --color-surface-variant: var(--surface-variant);
   --color-on-surface: var(--on-surface);
   --color-on-surface-variant: var(--on-surface-variant);
+  --color-surface-tint: var(--surface-tint);
   --color-outline: var(--outline);
   --color-outline-variant: var(--outline-variant);
 
+  /*
+   * Docket's product radius scale. Controls, cards, and panels step from `--radius` (10px).
+   * This is NOT the MD3 corner scale — see `--radius-corner-*` below — and the two are kept
+   * apart on purpose: MD3 publishes exact corner sizes per component, and forcing the whole
+   * product onto them would restyle every card and dialog to satisfy a menu spec.
+   */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  /*
+   * MD3 shape scale (`md.sys.shape.corner.*`), exact values, for components whose spec names a
+   * corner token. Backs `rounded-corner-xs` through `rounded-corner-full`. Menus are the first
+   * consumer: container `corner-large`, rows `corner-xs`, selected and edge rows `corner-md`.
+   * See docs/design/references/md3-menus.md.
+   */
+  --radius-corner-xs: 4px;
+  --radius-corner-sm: 8px;
+  --radius-corner-md: 12px;
+  --radius-corner-lg: 16px;
+  --radius-corner-xl: 28px;
+  --radius-corner-full: 9999px;
+
+  /*
+   * MD3 elevation (`md.sys.elevation.level*`). Six levels, each a dp height expressed as the
+   * MD3 two-part shadow (a tight key shadow plus a wider ambient one) tinted with `--shadow`.
+   * Backs `shadow-level0` through `shadow-level5`.
+   *
+   * Overlay surfaces take these instead of Tailwind's `shadow-sm/md/lg/xl/2xl`, which have no
+   * relationship to any spec and had drifted to four different values across five menu-shaped
+   * surfaces. `design-token-scan.ts` fails a raw `shadow-*` on an overlay file.
+   */
+  --shadow-level0: none;
+  --shadow-level1:
+    0 1px 2px 0 color-mix(in oklab, var(--shadow) 30%, transparent),
+    0 1px 3px 1px color-mix(in oklab, var(--shadow) 15%, transparent);
+  --shadow-level2:
+    0 1px 2px 0 color-mix(in oklab, var(--shadow) 30%, transparent),
+    0 2px 6px 2px color-mix(in oklab, var(--shadow) 15%, transparent);
+  --shadow-level3:
+    0 4px 8px 3px color-mix(in oklab, var(--shadow) 15%, transparent),
+    0 1px 3px 0 color-mix(in oklab, var(--shadow) 30%, transparent);
+  --shadow-level4:
+    0 6px 10px 4px color-mix(in oklab, var(--shadow) 15%, transparent),
+    0 2px 3px 0 color-mix(in oklab, var(--shadow) 30%, transparent);
+  --shadow-level5:
+    0 8px 12px 6px color-mix(in oklab, var(--shadow) 15%, transparent),
+    0 4px 4px 0 color-mix(in oklab, var(--shadow) 30%, transparent);
 
   /*
    * Typography: IBM Plex is Docket's sole brand typeface. Each consuming app loads it via
@@ -520,12 +606,17 @@
    * to opt in.
    *
    * Checkbox and radio rows are excluded on purpose — they carry their own leading indicator and
-   * are already on the axis. The width is the `lg` control step's icon (18px) plus the row gap
-   * (8px), matching `menuItemBase` in `primitives/menu-styles.ts`.
+   * are already on the axis. The width is the spec's leading space (16dp) plus the leading icon
+   * (20dp) plus the between-space (12dp) — 48px, the same figure `MENU_INDICATOR_GUTTER` in
+   * `primitives/menu-styles.ts` reserves for a checkbox or radio indicator, so a menu mixing
+   * icon rows, bare rows, and checkable rows puts all three labels on one axis.
+   *
+   * The selectors are descendant rather than direct-child because a `DropdownMenuGroup` sits
+   * between the menu and its rows in the spec's grouped layout.
    */
-  [role='menu']:has(> [role='menuitem'] > svg:first-child)
-    > [role='menuitem']:not(:has(> svg:first-child)) {
-    padding-inline-start: calc(0.5rem + 1.125rem + 0.5rem);
+  [role='menu']:has([role='menuitem'] > svg:first-child)
+    [role='menuitem']:not(:has(> svg:first-child)) {
+    padding-inline-start: calc(1rem + 1.25rem + 0.75rem);
   }
 
   * {

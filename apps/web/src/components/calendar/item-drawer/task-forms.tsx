@@ -89,7 +89,7 @@ export function CreateTaskForm({
         pendingLabel="Creating…"
       />
       {create.isError ? (
-        <p role="alert" className="text-destructive text-body-small">
+        <p role="alert" className="text-error text-body-small">
           We couldn&apos;t create and link this task. Please try again.
         </p>
       ) : null}
@@ -137,7 +137,7 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
           placeholder="01ARZ3NDEKTSV4RRFFQ69G5FAV"
         />
         {taskIdInput.length > 0 && !parsedTaskId.success ? (
-          <span className="text-destructive text-body-small">Enter a valid task id.</span>
+          <span className="text-error text-body-small">Enter a valid task id.</span>
         ) : null}
       </label>
       <TaskFormActions
@@ -148,7 +148,7 @@ export function LinkTaskForm({ itemId, onDone }: LinkTaskFormProps): JSX.Element
         pendingLabel="Linking…"
       />
       {link.isError ? (
-        <p role="alert" className="text-destructive text-body-small">
+        <p role="alert" className="text-error text-body-small">
           We couldn&apos;t link this task. Please try again.
         </p>
       ) : null}

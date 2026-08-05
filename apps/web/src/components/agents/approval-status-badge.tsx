@@ -51,7 +51,7 @@ const APPROVAL_TREATMENT: Record<
   rejected: {
     label: 'Rejected',
     Glyph: XCircle,
-    tone: 'text-destructive border-destructive/40',
+    tone: 'text-error border-error/40',
   },
 };
 

@@ -89,7 +89,7 @@ export default function ViewsPage(): JSX.Element {
           <Skeleton className="h-16 w-full rounded-lg" />
         </div>
       ) : loadError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {loadError}
         </p>
       ) : (

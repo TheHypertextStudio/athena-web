@@ -64,7 +64,7 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
       {picker.open ? <GtasksIdentityPicker picker={picker} orgId={orgId} /> : null}
 
       {addError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {addError}
         </p>
       ) : null}

@@ -73,7 +73,7 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
           Default rules seeded — see the rules below.
         </p>
       ) : null}
-      {row.error !== null ? <p className="text-destructive text-xs">{row.error}</p> : null}
+      {row.error !== null ? <p className="text-error text-xs">{row.error}</p> : null}
     </div>
   );
 }

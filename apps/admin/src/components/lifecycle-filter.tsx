@@ -62,7 +62,7 @@ export function LifecycleFilter({ value, onChange }: LifecycleFilterProps): JSX.
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[12rem]">
+      <DropdownMenuContent align="end" width="sm">
         <DropdownMenuLabel>Filter by lifecycle state</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup
@@ -115,7 +115,7 @@ export function LifecycleStateMenu({ value, onChange, id }: LifecycleStateMenuPr
           <ChevronDown className="h-4 w-4 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[11rem]">
+      <DropdownMenuContent align="start" width="sm">
         <DropdownMenuRadioGroup
           value={value}
           onValueChange={(next) => {

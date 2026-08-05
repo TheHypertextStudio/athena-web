@@ -47,7 +47,7 @@ interface EmailPreviewProps {
 /** The source-email preview line(s) on a suggestion card. */
 function EmailPreview({ meta }: EmailPreviewProps): JSX.Element {
   return (
-    <div className="border-outline-variant text-muted-foreground rounded-md border border-dashed px-2 py-1 text-xs">
+    <div className="border-outline-variant text-on-surface-variant rounded-md border border-dashed px-2 py-1 text-xs">
       {meta.sender ? <span className="font-medium">{meta.sender}</span> : null}
       {meta.subject ? <span> — {meta.subject}</span> : null}
       {meta.snippet ? <p className="line-clamp-2 opacity-80">{meta.snippet}</p> : null}
@@ -68,10 +68,10 @@ function ThreadPreview({ orgId, suggestionId, expanded }: ThreadPreviewProps): J
   const { thread, isPending, error } = useEmailSuggestionThread(orgId, suggestionId, expanded);
   if (!expanded) return null;
   if (isPending) {
-    return <p className="text-muted-foreground text-xs">Loading thread…</p>;
+    return <p className="text-on-surface-variant text-xs">Loading thread…</p>;
   }
   if (error !== null) {
-    return <p className="text-destructive text-xs">{error}</p>;
+    return <p className="text-error text-xs">{error}</p>;
   }
   if (!thread) return null;
   return (
@@ -79,7 +79,7 @@ function ThreadPreview({ orgId, suggestionId, expanded }: ThreadPreviewProps): J
       {thread.messages.map((m) => (
         <div key={m.id} className="flex flex-col gap-0.5 text-xs">
           <span className="font-medium">{m.from}</span>
-          <span className="text-muted-foreground">{m.snippet}</span>
+          <span className="text-on-surface-variant">{m.snippet}</span>
         </div>
       ))}
       <a
@@ -191,12 +191,12 @@ function SuggestionCard({
               <ConfidenceBadge confidence={suggestion.confidence} />
             </div>
             {suggestion.description ? (
-              <span className="text-muted-foreground line-clamp-2 text-xs">
+              <span className="text-on-surface-variant line-clamp-2 text-xs">
                 {suggestion.description}
               </span>
             ) : null}
             {suggestion.dueDate ? (
-              <span className="text-muted-foreground text-xs">
+              <span className="text-on-surface-variant text-xs">
                 Due {suggestion.dueDate.slice(0, 10)}
               </span>
             ) : null}
@@ -282,7 +282,7 @@ export default function SuggestionsLane({
         <h2 id="suggestions-heading" className="text-sm font-semibold">
           Suggested by Athena
         </h2>
-        <span className="text-muted-foreground text-xs tabular-nums">{suggestions.length}</span>
+        <span className="text-on-surface-variant text-xs tabular-nums">{suggestions.length}</span>
       </div>
       <div className="flex flex-col gap-2">
         {suggestions.map((s) => (
@@ -296,7 +296,7 @@ export default function SuggestionsLane({
           />
         ))}
       </div>
-      {actionError ? <p className="text-destructive text-xs">{actionError}</p> : null}
+      {actionError ? <p className="text-error text-xs">{actionError}</p> : null}
     </section>
   );
 }

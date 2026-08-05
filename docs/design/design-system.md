@@ -112,14 +112,55 @@ they cannot drift.
 
 ### Radius
 
-| Radius                            | Value | Used by                                          |
-| --------------------------------- | ----- | ------------------------------------------------ |
-| `rounded-md` (`CONTROL_RADIUS`)   | 8px   | buttons, chips, inputs, selects, menu rows, tabs |
-| `rounded-lg` (`CONTAINER_RADIUS`) | 10px  | menus, popovers, tooltips, dialogs               |
-| `rounded-xl`                      | 14px  | cards, panels                                    |
-| `rounded-full`                    | —     | **avatars and `Badge` only**                     |
+| Radius                            | Value | Used by                                   |
+| --------------------------------- | ----- | ----------------------------------------- |
+| `rounded-md` (`CONTROL_RADIUS`)   | 8px   | buttons, chips, inputs, selects, tabs     |
+| `rounded-lg` (`CONTAINER_RADIUS`) | 10px  | popovers-as-panels, tooltips, hover cards |
+| `rounded-xl`                      | 14px  | cards, panels, dialogs                    |
+| `rounded-full`                    | —     | **avatars and `Badge` only**              |
 
 If a `rounded-full` thing responds to a click, it is a chip wearing the wrong shape.
+
+There is a second, separate scale for components whose MD3 spec names an exact corner token:
+
+| Radius                | Value | Token                             |
+| --------------------- | ----- | --------------------------------- |
+| `rounded-corner-xs`   | 4px   | `md.sys.shape.corner.extra-small` |
+| `rounded-corner-sm`   | 8px   | `md.sys.shape.corner.small`       |
+| `rounded-corner-md`   | 12px  | `md.sys.shape.corner.medium`      |
+| `rounded-corner-lg`   | 16px  | `md.sys.shape.corner.large`       |
+| `rounded-corner-xl`   | 28px  | `md.sys.shape.corner.extra-large` |
+| `rounded-corner-full` | —     | `md.sys.shape.corner.full`        |
+
+The two scales are kept apart on purpose. Menus are the first consumer of the MD3 one, and their
+spec asks for a 16dp container and 4dp rows; forcing `--radius` to satisfy that would have moved
+every card, dialog, and popover in the product to satisfy a menu. Use the product scale unless the
+component you are building has a published corner token, and then use that.
+
+### Elevation
+
+`shadow-level0` … `shadow-level5`, the MD3 `md.sys.elevation.level*` scale, defined in
+`globals.css` as the two-part MD3 shadow tinted with `--shadow`. Tailwind's `shadow-sm/md/lg/xl/2xl`
+are banned on overlay surfaces (`raw-shadow-on-overlay`) because they answer to nothing: five
+menu-shaped surfaces had drifted onto four different values of that scale.
+
+| Level | Used by                                |
+| ----- | -------------------------------------- |
+| 1     | `Sheet`                                |
+| 2     | menus, popovers, tooltips, hover cards |
+| 3     | `Dialog`                               |
+
+### Colour
+
+One palette. The MD3 role names are canonical — `surface`, `surface-container-*`, `on-surface`,
+`on-surface-variant`, `outline`, `outline-variant`, `primary`/`on-primary`, `secondary`,
+`tertiary`, `error`, and the `*-container` pairs. The shadcn-era names (`background`, `card`,
+`popover`, `muted`, `accent`, `destructive`, `border`, `input`, `*-foreground`) survive only as
+aliases onto those roles in `globals.css`, so `bg-card` and `bg-surface-container-low` are the
+same pixel. Writing the alias is a build failure (`legacy-color-role`): two names for one colour
+is how the product ran two palettes for a year.
+
+`--ring` is MD3's focus-indicator role and resolves to `secondary`.
 
 ---
 
@@ -492,29 +533,72 @@ There is no second menu component; both render byte-identically from one style s
 
 ### MD3 reference
 
-`tokens/_md-comp-menu.scss`: `container-elevation: level2` (a 3dp shadow — menus are the one
-surface where a shadow is correct, because they float over arbitrary content),
-`container-shape: corner-extra-small`, `top-space`/`bottom-space` `8px`.
-`tokens/versions/v0_192/_md-comp-list.scss`: `list-item-leading-space` and `-trailing-space` `16px`,
-`list-item-leading-icon-size` `24px`, `list-item-one-line-container-height` `56px`, label
-`body-large`.
+**`docs/design/references/md3-menus.md`** — the whole `md.comp.menus.*` token set, transcribed
+from the live spec feed with its source revision. Read it before changing a number here.
 
-Docket keeps MD3's **total 16px leading inset** (8px of menu padding + 8px of row padding) and takes
-row height and icon size from the `lg` control step (36px rows, 18px icons) instead of MD3's
-phone-scale 56px rows and 24px icons. A 56px menu row in a desktop command surface is not a faithful
-implementation of the spec — it is a spec applied to the wrong device. The container radius steps up
-to `rounded-lg` so the menu reads as a container holding 8px-radius rows.
+That file exists because this section used to cite `tokens/_md-comp-menu.scss` and
+`v0_192/_md-comp-list.scss` — the **baseline** menu, which M3 now documents as legacy. Nobody could
+re-check a path that is not in this repo, and the implementation drifted from the current
+Expressive vertical-menu spec on container shape, row height, icon size, typography, and the
+selection colour role without a test going red. `CORE-08` in `launch-compliance.md` is that gap.
+
+The headline values: container `corner.large` (16dp) at `level2` with 4dp padding; rows 44dp tall
+with 16dp leading and trailing space, 8dp top and bottom, a 12dp gap between elements, 20dp icons,
+`label-large` text, and `corner.extra-small` (4dp) corners. The first and last rows take
+`corner.medium` (12dp) on the edge facing the container — 16dp container less 4dp padding — so the
+menu reads as one shape rather than a stack of pills.
+
+Docket applies these at face value. There is no density deviation: the previous 36px rows and 18px
+icons came from the `lg` control step, and a menu row is a spec'd component rather than a control.
 
 ### Anatomy
 
-`DropdownMenuContent` accepts `variant`: `'standard'` (neutral `surface-container-low`, the default)
-or `'vibrant'` (high-emphasis `tertiary-container`, used sparingly). The choice is published to
-every descendant row, label, and separator through context, so one prop retones the whole menu.
+`DropdownMenuContent` accepts `variant`: `'standard'` (surface-based, the default) or `'vibrant'`
+(tertiary-based, high emphasis, used sparingly). Those are the spec's two colour mappings and there
+is no third. The choice is published to every descendant row, label, and separator through context,
+so one prop retones the whole menu.
 
-`DropdownMenuItem` supports the full MD3 list-item anatomy through optional props: a leading icon
-(the first child), `supporting` (a quieter second line), `badge` (a trailing pill), `trailingText`
-(a shortcut or meta hint), plus `DropdownMenuShortcut`. Selected rows use `secondary-container` —
-MD3's selection role, the same one a navigation drawer's active indicator uses.
+It also accepts `width`: `sm` (192px), `md` (224px, the default), `lg` (288px), or `xl` (352px).
+Pass a step, never a `min-w-*` class — the open set produced seven different widths across 26 call
+sites.
+
+`DropdownMenuItem` supports the full anatomy through optional props: a leading icon (the first
+child), `supporting` (a quieter second line), `badge` (a trailing pill), `trailingText` (a shortcut
+or meta hint), plus `DropdownMenuShortcut`. `selected` renders the spec's selection state for rows
+whose selection the menu does not own — the active workspace, the open tab. A call site that tints
+its own row instead is how a menu ends up with two selection colours.
+
+Selected rows use **`tertiary-container`**, which is the Expressive spec's selection role. The
+baseline menu says `secondary-container`; that is the legacy spec and is the value this drifted
+onto. Vibrant escalates selection to solid `tertiary`.
+
+`DropdownMenuGroup` renders the spec's grouped layout: an 8dp-radius block, 2dp of padding, 2dp
+between groups.
+
+### States
+
+Three distinct state layers, not two: hover 8%, focus 10%, pressed 10%. Radix drives roving focus
+on pointer move, so a hovered row is also a focused row — the focus layer is scoped with
+`focus:not-hover:` so a mouse hover really does render at 8%. Disabled is `opacity-38`, the value
+every MD3 disabled token carries.
+
+The focus indicator is 3dp inside the row in the `secondary` role, not the shared 1px
+`focusRingInset`. Menu rows are the one place that ring does not apply.
+
+A menu whose submenu is open morphs from `corner.large` to `corner.small`. That shape change is the
+spec's active state, and it is driven off the open `SubTrigger` Radix leaves inside the parent.
+
+### One menu, everywhere
+
+`menu-styles.ts` is exported from `@docket/ui`, and every menu-shaped surface in the product renders
+from it: both menu primitives, `PopoverContent`, `PickerList`, the command palette, the mention `@`
+menu, the editor's `/` suggestion menu, and the scheduling overflow list. Before this they were
+seven independent implementations disagreeing on background, radius, padding, row height, icon size,
+active colour, shadow, motion duration, and z-index — the palette even sat at `z-50`, below the
+`z-[120]` overlay layer it belongs to.
+
+If you are building a surface that shows a list of choices on a temporary surface, it is a menu. Use
+these builders. Do not write its row geometry by hand.
 
 ### The leading-icon column
 
@@ -523,14 +607,21 @@ one left axis instead of stair-stepping. Docket does this in CSS, keyed off the 
 already emits:
 
 ```css
-[role='menu']:has(> [role='menuitem'] > svg:first-child)
-  > [role='menuitem']:not(:has(> svg:first-child)) {
-  padding-inline-start: calc(0.5rem + 1.125rem + 0.5rem);
+[role='menu']:has([role='menuitem'] > svg:first-child)
+  [role='menuitem']:not(:has(> svg:first-child)) {
+  padding-inline-start: calc(1rem + 1.25rem + 0.75rem);
 }
 ```
 
-No menu opts in, and no row needs to know what its siblings render. Checkbox and radio rows are
-excluded because they carry their own leading indicator and are already on the axis.
+48px: the spec's 16dp leading space, plus the 20dp icon, plus the 12dp between-space. Checkbox and
+radio rows reserve exactly the same figure for their indicator (`MENU_INDICATOR_GUTTER`), so a menu
+mixing icon rows, bare rows, and checkable rows puts all three labels on one axis. It did not
+before — `CORE-08` measured Display radio rows at 32px of leading padding against Filter rows at
+8px, and called the column "not a fixed-width column".
+
+No menu opts in, and no row needs to know what its siblings render. The selectors are descendant
+rather than direct-child because a `DropdownMenuGroup` sits between the menu and its rows in the
+grouped layout.
 
 ---
 
@@ -603,6 +694,9 @@ Only overlay surfaces — things that float over content the user can still see:
 
 That list is the enforced allow-set in `design-token-scan.ts`. A `shadow-*` utility anywhere else
 fails the build. `shadow-none` is always legal — it is the assertion that there is no shadow.
+
+Inside that set the shadow must name an MD3 elevation level (`shadow-level0`–`shadow-level5`).
+Tailwind's `shadow-sm/md/lg/xl/2xl` fail there too, under `raw-shadow-on-overlay`.
 
 ### Interaction never changes size
 

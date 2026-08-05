@@ -5,8 +5,8 @@
  *
  * @remarks
  * These controls used to render inline in the page's flex column, above the grid: a bordered
- * `<section>` holding a bordered `<select>` (styled from the *legacy* `border-input` /
- * `bg-background` pair, one row away from MD3-tokenized neighbours) and one bordered chip per
+ * `<section>` holding a bordered `<select>` (styled from the *legacy* `border-outline` /
+ * `bg-surface` pair, one row away from MD3-tokenized neighbours) and one bordered chip per
  * person carrying a bare checkbox and a name. It cost roughly 90px of vertical budget whenever the
  * People axis was active and was a material contributor to the calendar collapsing to 5.55% of the
  * viewport.
@@ -42,7 +42,7 @@ import type { ComparisonMember } from './use-calendar-people-axis';
  *
  * @remarks
  * Written out here so this control resolves to the same token family as its neighbours. The old
- * markup mixed `border-input` / `bg-background` (legacy) into a view whose every other control used
+ * markup mixed `border-outline` / `bg-surface` (legacy) into a view whose every other control used
  * `border-outline-variant` — two token systems one row apart. No shadow: separation comes from the
  * tonal step off the popover surface.
  */

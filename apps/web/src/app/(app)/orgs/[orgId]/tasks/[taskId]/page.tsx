@@ -180,7 +180,7 @@ export default function TaskDetailPage(): JSX.Element {
       <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
         <p
           role="alert"
-          className="border-outline-variant text-destructive text-body-medium rounded-lg border p-4"
+          className="border-outline-variant text-error text-body-medium rounded-lg border p-4"
         >
           {error}
         </p>
@@ -273,9 +273,9 @@ export default function TaskDetailPage(): JSX.Element {
                     <Ellipsis className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[12rem]">
+                <DropdownMenuContent align="end" width="sm">
                   <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
+                    className="text-error focus:text-error"
                     onSelect={() => {
                       changeConfirmDeleteOpen(true);
                     }}
@@ -290,7 +290,7 @@ export default function TaskDetailPage(): JSX.Element {
         </div>
 
         {actionError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {actionError}
           </p>
         ) : null}

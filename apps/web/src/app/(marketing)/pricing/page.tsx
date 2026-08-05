@@ -43,12 +43,12 @@ export default function PricingPage(): JSX.Element {
   return (
     <>
       <PricingTiers />
-      <section className="border-border border-t">
+      <section className="border-outline-variant border-t">
         <div className="mx-auto w-full max-w-3xl px-6 py-16">
           <h2 className="font-display text-ink text-3xl tracking-tight text-balance">
             Questions, answered
           </h2>
-          <dl className="divide-border mt-8 flex flex-col divide-y">
+          <dl className="divide-outline-variant mt-8 flex flex-col divide-y">
             {FAQS.map((faq) => (
               <div key={faq.question} className="flex flex-col gap-2 py-6">
                 <dt className="font-display text-ink text-xl tracking-tight">{faq.question}</dt>

@@ -227,7 +227,7 @@ export default function InitiativeDetailPage(): JSX.Element {
     );
   if (detailQ.isError || !detail)
     return (
-      <p role="alert" className="text-destructive mx-auto max-w-7xl p-6">
+      <p role="alert" className="text-error mx-auto max-w-7xl p-6">
         {detailQ.isError
           ? userErrorMessage(detailQ.error, 'Could not load this initiative.')
           : 'Initiative not found.'}
@@ -355,12 +355,12 @@ export default function InitiativeDetailPage(): JSX.Element {
             />
           </EntityMetadataRow>
           {mutations.propsError ? (
-            <p role="alert" className="text-destructive mt-2 text-sm">
+            <p role="alert" className="text-error mt-2 text-sm">
               {mutations.propsError}
             </p>
           ) : null}
           {displayMutation.error ? (
-            <p role="alert" className="text-destructive mt-2 text-sm">
+            <p role="alert" className="text-error mt-2 text-sm">
               {userErrorMessage(
                 displayMutation.error,
                 `Could not customize this ${initiativeNoun.toLowerCase()}.`,
@@ -399,7 +399,7 @@ export default function InitiativeDetailPage(): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="text-error focus:text-error"
                   onSelect={() => {
                     deleteInitiative.reset();
                     setConfirmDeleteOpen(true);

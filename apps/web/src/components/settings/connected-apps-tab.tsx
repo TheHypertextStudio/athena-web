@@ -199,7 +199,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
         )}
 
         {revoke.isError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {userErrorMessage(revoke.error, 'Could not update connected apps.')}
           </p>
         ) : null}

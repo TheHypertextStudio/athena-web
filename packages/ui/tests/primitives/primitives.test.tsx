@@ -44,7 +44,7 @@ describe('Button', () => {
     const button = screen.getByRole('button', { name: 'Click me' });
     expect(button).toBeInTheDocument();
     expect(button).toHaveClass('bg-primary');
-    expect(button).toHaveClass('text-primary-foreground');
+    expect(button).toHaveClass('text-on-primary');
     // The context-free default step is `md` (32px) — the same height a Chip, Input, and Select
     // fall back to, so a bare row of mixed controls still lines up.
     expect(button).toHaveClass('h-8');
@@ -63,9 +63,9 @@ describe('Button', () => {
 
   it.each<[NonNullable<ButtonProps['variant']>, string]>([
     ['default', 'bg-primary'],
-    ['destructive', 'bg-destructive'],
+    ['destructive', 'bg-error'],
     ['outline', 'border-outline-variant'],
-    ['secondary', 'bg-secondary'],
+    ['secondary', 'bg-secondary-container'],
     ['ghost', 'hover:bg-surface-container-high'],
     ['link', 'underline-offset-4'],
   ])('applies the %s variant class', (variant, cls) => {
@@ -329,14 +329,14 @@ describe('DropdownMenu family', () => {
     await waitFor(() => {
       expect(screen.getByText('Section')).toBeInTheDocument();
     });
-    expect(screen.getByText('Inset Section')).toHaveClass('pl-8');
+    expect(screen.getByText('Inset Section')).toHaveClass('pl-12');
     expect(screen.getByText('Plain item')).toBeInTheDocument();
-    expect(screen.getByText('Inset item')).toHaveClass('pl-8');
+    expect(screen.getByText('Inset item')).toHaveClass('pl-12');
     expect(screen.getByText('⌘P')).toHaveClass('ml-auto');
     expect(screen.getByText('Checked box')).toBeInTheDocument();
     expect(screen.getByText('Radio one')).toBeInTheDocument();
     expect(screen.getByText('Sub plain')).toBeInTheDocument();
-    expect(screen.getByText('Sub inset')).toHaveClass('pl-8');
+    expect(screen.getByText('Sub inset')).toHaveClass('pl-12');
   });
 
   it('opens the submenu content via the sub-trigger to render SubContent', async () => {
@@ -384,12 +384,10 @@ describe('DropdownMenu family', () => {
     const label = await screen.findByText('Section');
     expect(label).toHaveClass('text-on-tertiary-container');
     expect(screen.getByText('Rename')).toHaveClass('text-on-tertiary-container');
-    expect(screen.getByText('Pinned')).toHaveClass('py-1.5');
+    expect(screen.getByText('Pinned')).toHaveClass('py-2');
     expect(screen.getByText('Priority one')).toBeInTheDocument();
     expect(screen.getByText('⌘R')).toHaveClass('text-on-tertiary-container');
-    expect(screen.getByText('Move to')).toHaveClass(
-      '[&_svg:first-child]:text-on-tertiary-container',
-    );
+    expect(screen.getByText('Move to')).toHaveClass('[&_svg]:text-on-tertiary-container');
   });
 
   it('renders the full rich item anatomy: supporting text, badge, and trailing text', async () => {

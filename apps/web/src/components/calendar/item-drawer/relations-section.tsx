@@ -36,7 +36,7 @@ export function CalendarItemRelationsSection({
           <Skeleton className="h-8 w-full rounded-md" />
         </div>
       ) : relationsQuery.isError ? (
-        <p role="alert" className="text-destructive text-body-small">
+        <p role="alert" className="text-error text-body-small">
           We couldn&apos;t load related calendar items. Please try again.
         </p>
       ) : (contained?.length ?? 0) === 0 && (related?.length ?? 0) === 0 ? (
@@ -130,7 +130,7 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
         </Button>
       </div>
       {detach.isError ? (
-        <p role="alert" className="text-destructive text-body-small">
+        <p role="alert" className="text-error text-body-small">
           We couldn&apos;t remove this relationship. Please try again.
         </p>
       ) : null}

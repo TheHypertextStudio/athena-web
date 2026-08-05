@@ -48,7 +48,7 @@ export default async function ProblemPage({ params }: ProblemPageProps): Promise
         <p className="text-ink-muted mt-4 max-w-2xl text-lg leading-relaxed">{problem.summary}</p>
       </header>
 
-      <section className="border-border flex flex-col gap-4 border-t pt-7">
+      <section className="border-outline-variant flex flex-col gap-4 border-t pt-7">
         <h2 className="font-display text-ink text-2xl tracking-tight">What you can do</h2>
         <p className="text-ink-muted leading-relaxed">{action.instruction}</p>
         <div>

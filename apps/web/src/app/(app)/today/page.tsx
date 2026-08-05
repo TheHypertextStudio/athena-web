@@ -73,7 +73,7 @@ export default function TodayPage(): JSX.Element {
       {error ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={refetch}>

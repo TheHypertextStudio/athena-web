@@ -157,7 +157,7 @@ export default function CalendarSettingsPage({
       {loading ? (
         <p className="text-on-surface-variant text-sm">Loading calendar settings…</p>
       ) : loadFailed ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           Calendar settings are temporarily unavailable.
         </p>
       ) : (
@@ -181,7 +181,7 @@ export default function CalendarSettingsPage({
                   defaultCreateIntent: event.target.value as CalendarItemCreateIntent,
                 }));
               }}
-              className="border-input bg-background h-9 rounded-md border px-2"
+              className="border-outline bg-surface h-9 rounded-md border px-2"
             >
               <option value="event">Event</option>
               <option value="timebox">Timebox</option>
@@ -196,7 +196,7 @@ export default function CalendarSettingsPage({
                 const layer = destinations.find((candidate) => candidate.id === event.target.value);
                 setDraft((current) => ({ ...current, defaultLayerId: layer?.id ?? null }));
               }}
-              className="border-input bg-background h-9 rounded-md border px-2"
+              className="border-outline bg-surface h-9 rounded-md border px-2"
             >
               <option value="">Docket calendar</option>
               {destinations.map((layer) => (
@@ -246,7 +246,7 @@ export default function CalendarSettingsPage({
           </label>
 
           {savePreferences.isError ? (
-            <p role="alert" className="text-destructive text-xs">
+            <p role="alert" className="text-error text-xs">
               Could not save these preferences.
             </p>
           ) : (
@@ -280,7 +280,7 @@ export default function CalendarSettingsPage({
                 onChange={(event) => {
                   setWorkspaceId(event.target.value);
                 }}
-                className="border-input bg-background h-9 rounded-md border px-2"
+                className="border-outline bg-surface h-9 rounded-md border px-2"
               >
                 {sharedWorkspaces.map((org) => (
                   <option key={org.id} value={org.id}>
@@ -322,7 +322,7 @@ export default function CalendarSettingsPage({
                             [layer.id]: event.target.value as CalendarLayerShareAccess,
                           }));
                         }}
-                        className="border-input bg-background h-8 rounded-md border px-2 text-xs"
+                        className="border-outline bg-surface h-8 rounded-md border px-2 text-xs"
                       >
                         <option value="details">Details</option>
                         <option value="busy">Busy only</option>
@@ -334,7 +334,7 @@ export default function CalendarSettingsPage({
             </div>
 
             {sharesQ.isError || replaceShares.isError ? (
-              <p role="alert" className="text-destructive text-xs">
+              <p role="alert" className="text-error text-xs">
                 Calendar sharing is temporarily unavailable.
               </p>
             ) : (

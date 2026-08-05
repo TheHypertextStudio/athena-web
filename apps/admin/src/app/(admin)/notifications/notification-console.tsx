@@ -255,7 +255,7 @@ function ComposeCard({
               onChange={(event) => {
                 onDraftChange('bodyText', event.target.value);
               }}
-              className="border-input bg-background text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-24 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+              className="border-outline bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-24 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
               placeholder="Docket will be briefly unavailable tonight."
             />
           </Field>
@@ -269,7 +269,7 @@ function ComposeCard({
                     event.target.value as NotificationAnnouncementDraft['audienceType'],
                   );
                 }}
-                className="border-input bg-background text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
               >
                 <option value="user">One user</option>
                 <option value="users">Specific users</option>
@@ -284,7 +284,7 @@ function ComposeCard({
                   onChange={(event) => {
                     onDraftChange('audienceValue', event.target.value);
                   }}
-                  className="border-input bg-background text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                  className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
                 >
                   {notificationAudienceSegments.map((segment) => (
                     <option key={segment} value={segment}>
@@ -314,7 +314,7 @@ function ComposeCard({
                     event.target.value as NotificationAnnouncementDraft['priority'],
                   );
                 }}
-                className="border-input bg-background text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
               >
                 {['low', 'normal', 'high', 'urgent'].map((priority) => (
                   <option key={priority} value={priority}>
@@ -332,7 +332,7 @@ function ComposeCard({
                     event.target.value as NotificationAnnouncementDraft['replyPolicy'],
                   );
                 }}
-                className="border-input bg-background text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
               >
                 {['none', 'staff_inbox', 'org_admins', 'automation'].map((policy) => (
                   <option key={policy} value={policy}>

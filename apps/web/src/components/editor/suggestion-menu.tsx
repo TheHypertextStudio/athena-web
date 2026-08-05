@@ -19,7 +19,13 @@
  * It is fixed-positioned and clamped to the viewport with the same inset every other overlay in
  * the product keeps, so it can never be sliced by a window edge.
  */
-import { OVERLAY_COLLISION_PADDING, Text } from '@docket/ui/primitives';
+import {
+  MENU_METRICS,
+  menuContentClass,
+  menuItemClass,
+  OVERLAY_COLLISION_PADDING,
+  Text,
+} from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { LucideIcon } from '@docket/ui/icons';
 import { type JSX, useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -57,7 +63,12 @@ export interface SuggestionMenuProps {
   readonly listboxId: string;
 }
 
-/** Menu geometry, matched to the MD3 metrics the DropdownMenu primitive uses. */
+/**
+ * Menu geometry. Width and max height are this menu's own — it positions itself against a caret
+ * rather than an element, so Radix cannot measure them — but the row height comes from
+ * {@link MENU_METRICS} so the height estimate below cannot drift from what actually renders. It
+ * had: the estimate assumed 40px rows while the rows were 36px.
+ */
 const MENU_WIDTH = 288;
 const MAX_HEIGHT = 288;
 
@@ -96,7 +107,10 @@ export function SuggestionMenu({
 
   // Prefer below the caret; flip above when there is not room, and never cross an edge.
   const spaceBelow = window.innerHeight - anchor.bottom - OVERLAY_COLLISION_PADDING;
-  const height = Math.min(MAX_HEIGHT, Math.max(items.length, 1) * 40 + 16);
+  const height = Math.min(
+    MAX_HEIGHT,
+    Math.max(items.length, 1) * MENU_METRICS.minHeightPx + MENU_METRICS.containerPaddingPx * 2,
+  );
   const placeAbove = spaceBelow < height && anchor.top > height + OVERLAY_COLLISION_PADDING;
   const top = placeAbove ? anchor.top - height - 4 : anchor.bottom + 4;
   const left = Math.min(
@@ -108,11 +122,16 @@ export function SuggestionMenu({
     <div
       data-suggestion-menu=""
       style={{ position: 'fixed', top, left, width: MENU_WIDTH, maxHeight: MAX_HEIGHT }}
-      className="bg-surface-container-high text-on-surface border-outline-variant z-[120] overflow-y-auto rounded-lg border p-2 shadow-md"
+      className={cn(
+        // The same surface every other menu renders. This was a private panel —
+        // surface-container-high, a 10px corner, shadow-md, and no enter or exit animation at all.
+        menuContentClass('standard'),
+        'overflow-y-auto',
+      )}
     >
       <ul ref={listRef} id={listboxId} role="listbox" aria-label={ariaLabel} className="contents">
         {items.length === 0 ? (
-          <li role="presentation" className="px-2 py-1.5">
+          <li role="presentation" className="px-4 py-2">
             <Text token="body-small" tone="muted">
               {emptyText}
             </Text>
@@ -137,14 +156,11 @@ export function SuggestionMenu({
                   event.preventDefault();
                   onSelect(index);
                 }}
-                className={cn(
-                  'flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5',
-                  active ? 'bg-secondary-container text-on-secondary-container' : '',
-                )}
+                className={cn(menuItemClass('standard', { selected: active }), 'cursor-pointer')}
               >
-                <Icon aria-hidden className="size-4.5! shrink-0" />
+                <Icon aria-hidden className="shrink-0" />
                 <span className="flex min-w-0 flex-col">
-                  <Text token="body-medium" truncate>
+                  <Text token="label-large" truncate>
                     {item.label}
                   </Text>
                   {item.hint ? (

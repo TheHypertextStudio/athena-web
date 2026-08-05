@@ -14,15 +14,14 @@
  *
  * ## One row family, not two
  *
- * This is the "select" member of the menu-like primitive family — {@link DropdownMenuItem} and
- * {@link ContextMenuItem} are the other two. Its rows resolve height and corner radius from the
- * same {@link CONTROL}.`lg` step and {@link CONTROL_RADIUS} that
- * `packages/ui/src/primitives/menu-styles.ts`'s `menuItemClass` does, and use the same two color
- * roles: `on-surface/8` for a hovered/keyboard-highlighted row, `secondary-container` for the
- * chosen one. It cannot literally import `menuItemClass` — that module is written for
- * `role="menuitem"` and, more importantly, its `[&_svg]:size-4.5!` bundles an `!important` icon
- * sizing rule that would race the one {@link StatusIcon} (a common option icon here) already
- * carries on its own inner `<svg>` — so the shared numbers are reproduced as literals instead.
+ * This is the "select" member of the menu family — {@link DropdownMenuItem} and
+ * {@link ContextMenuItem} are the other two — and it renders from the same `menuItemClass` they
+ * do. It used to reproduce the numbers as literals instead, on the grounds that `menuItemClass`
+ * bundled an `!important` icon-sizing rule (`[&_svg]:size-4.5!`) that would race the one
+ * {@link StatusIcon} carries on its own inner `<svg>`. The MD3 rewrite dropped that `!` — a
+ * descendant selector already outranks a class on the element — so the reason is gone, and with
+ * it the drift: the copy had fallen to 16px icons and `items-start` against the menu's 20px and
+ * `items-center`.
  *
  * Rows also reserve a fixed leading-icon column whenever *any* option in the list carries one, so
  * an icon-less row still lines up under an icon-bearing sibling instead of starting flush left.
@@ -35,20 +34,21 @@ import * as React from 'react';
 
 import { Check, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { CONTROL, CONTROL_RADIUS, focusRingInset } from '../../primitives';
+import { MENU_METRICS, menuFocusRing, menuItemClass, menuSupporting } from '../../primitives';
 
 import { type PickerOption, optionMatches } from './types';
 
 /**
- * Row metrics shared by the "clear" row and every option row: height and corner radius, kept in
- * step with `menuItemClass`'s `lg` {@link CONTROL} step so a picker's listbox row and a
- * dropdown/context menu's row read as one family. See the module remarks for why icon sizing is
- * deliberately left out of this shared string.
+ * Row metrics for the "clear" row and every option row.
+ *
+ * @remarks
+ * `menuItemClass` verbatim, plus the two things a `<button role="option">` needs that a Radix
+ * `role="menuitem"` does not: full width, and `disabled:` rather than `data-[disabled]:` for the
+ * state layer, because this row is a real disabled button.
  */
 const PICKER_ROW_METRICS = cn(
-  CONTROL.lg.minHeight,
-  CONTROL_RADIUS,
-  'flex w-full items-start gap-2 px-2 py-1.5 text-left text-body-medium transition-colors outline-none select-none disabled:pointer-events-none disabled:opacity-50',
+  menuItemClass('standard'),
+  'w-full text-left disabled:pointer-events-none disabled:opacity-38',
 );
 
 /** Props for {@link PickerList}. */
@@ -180,8 +180,8 @@ export function PickerList<TValue extends string = string>({
   return (
     <div className="flex flex-col">
       {searchable ? (
-        <div className="border-outline-variant flex items-center gap-2 border-b px-2 py-1.5">
-          <Search aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+        <div className="border-outline-variant flex items-center gap-3 border-b px-4 py-2">
+          <Search aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
           <input
             // A bare input (not the boxed Input primitive) so the search field reads as part
             // of the popover chrome, like Linear's command-style pickers.
@@ -196,7 +196,7 @@ export function PickerList<TValue extends string = string>({
             aria-label={ariaLabel ? `Search ${ariaLabel}` : 'Search'}
             aria-controls={listId}
             placeholder={searchPlaceholder}
-            className="placeholder:text-on-surface-variant text-on-surface text-body-medium h-6 w-full bg-transparent outline-none"
+            className="placeholder:text-on-surface-variant text-on-surface text-label-large h-7 w-full bg-transparent outline-none"
           />
         </div>
       ) : null}
@@ -209,12 +209,12 @@ export function PickerList<TValue extends string = string>({
         // When the search input is hidden the list itself must catch the arrow keys.
         tabIndex={searchable ? -1 : 0}
         onKeyDown={searchable ? undefined : onKeyDown}
-        className="max-h-64 overflow-y-auto p-1"
+        className="max-h-64 overflow-y-auto"
       >
         {rows.length === 0 ? (
-          <li className="flex flex-col items-center gap-1.5 px-2 py-6 text-center">
+          <li className="flex flex-col items-center gap-1.5 px-4 py-6 text-center">
             <Search aria-hidden="true" className="text-on-surface-variant size-5 opacity-40" />
-            <span className="text-on-surface-variant text-body-medium">{emptyText}</span>
+            <span className="text-on-surface-variant text-label-large">{emptyText}</span>
           </li>
         ) : (
           rows.map((row, index) => {
@@ -233,11 +233,13 @@ export function PickerList<TValue extends string = string>({
                     className={cn(
                       PICKER_ROW_METRICS,
                       'text-on-surface-variant',
-                      focusRingInset,
-                      active && 'bg-on-surface/8',
+                      menuFocusRing,
+                      // The keyboard-highlighted row is the focus state, so it takes the 10%
+                      // layer. Pointer hover comes from menuItemClass at the spec's 8%.
+                      { 'bg-on-surface/10': active },
                     )}
                   >
-                    <X aria-hidden="true" className="size-4 shrink-0 opacity-70" />
+                    <X aria-hidden="true" className="shrink-0 opacity-70" />
                     <span className="truncate">{clear?.label}</span>
                   </button>
                 </li>
@@ -262,23 +264,23 @@ export function PickerList<TValue extends string = string>({
                     setActiveIndex(index);
                   }}
                   className={cn(
-                    PICKER_ROW_METRICS,
-                    // The chosen row escalates into MD3's selection role — the same
-                    // `secondary-container` background `menuItemClass({ selected: true })` gives a
-                    // checked DropdownMenu/ContextMenu row — rather than relying on the trailing
-                    // check alone. A merely hovered/keyboard-highlighted row (never simultaneously
-                    // chosen and active in a way that should mask the selection) gets the plain
-                    // `on-surface/8` overlay every other menu-family row uses.
-                    chosen
-                      ? 'bg-secondary-container text-on-secondary-container'
-                      : cn('text-on-surface', active && 'bg-on-surface/8'),
-                    focusRingInset,
+                    // The chosen row escalates into the spec's selection roles — the same
+                    // `tertiary-container` a checked DropdownMenu/ContextMenu row takes — rather
+                    // than relying on the trailing check alone. `menuItemClass` carries both
+                    // cases, so a picker row and a menu row are the same element in two places.
+                    chosen ? menuItemClass('standard', { selected: true }) : PICKER_ROW_METRICS,
+                    { 'w-full text-left': chosen },
+                    { 'bg-on-surface/10': active && !chosen },
+                    menuFocusRing,
                   )}
                 >
                   {hasAnyIcon ? (
                     <span
                       aria-hidden="true"
-                      className="flex size-4 shrink-0 items-center justify-center pt-0.5"
+                      className={cn(
+                        'flex shrink-0 items-center justify-center',
+                        MENU_METRICS.iconBox,
+                      )}
                     >
                       {option.icon}
                     </span>
@@ -287,10 +289,9 @@ export function PickerList<TValue extends string = string>({
                     <span className="truncate">{option.label}</span>
                     {option.supporting ? (
                       <span
-                        className={cn(
-                          'text-body-small',
-                          chosen ? 'text-on-secondary-container' : 'text-on-surface-variant',
-                        )}
+                        className={cn(menuSupporting('standard'), {
+                          'text-on-tertiary-container': chosen,
+                        })}
                       >
                         {option.supporting}
                       </span>
@@ -299,14 +300,14 @@ export function PickerList<TValue extends string = string>({
                   {option.hint ? (
                     <span
                       className={cn(
-                        'text-label-small shrink-0 tabular-nums',
-                        chosen ? 'text-on-secondary-container' : 'text-on-surface-variant',
+                        'text-label-large shrink-0 tabular-nums',
+                        chosen ? 'text-on-tertiary-container' : 'text-on-surface-variant',
                       )}
                     >
                       {option.hint}
                     </span>
                   ) : null}
-                  {chosen ? <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
+                  {chosen ? <Check aria-hidden="true" className="shrink-0" /> : null}
                 </button>
               </li>
             );

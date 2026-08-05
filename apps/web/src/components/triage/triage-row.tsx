@@ -249,7 +249,7 @@ export function TriageRow({
         </ListRow>
       </ContextMenuTrigger>
 
-      <ContextMenuContent className="min-w-[14rem]">
+      <ContextMenuContent width="md">
         <ContextMenuLabel>Sort this item</ContextMenuLabel>
         <ContextMenuSeparator />
 
@@ -305,7 +305,7 @@ export function TriageRow({
 
         <ContextMenuSeparator />
         <ContextMenuItem
-          className="text-destructive focus:text-destructive"
+          className="text-error focus:text-error"
           onSelect={() => {
             onDismiss();
           }}

@@ -66,7 +66,7 @@ export function SelectableCard({
         className={cn(
           'absolute top-4 right-4 flex size-5 items-center justify-center rounded-full border transition-all duration-200',
           selected
-            ? 'border-primary bg-primary text-primary-foreground scale-100 opacity-100'
+            ? 'border-primary bg-primary text-on-primary scale-100 opacity-100'
             : 'border-outline-variant scale-90 opacity-0 group-hover:opacity-40',
         )}
       >

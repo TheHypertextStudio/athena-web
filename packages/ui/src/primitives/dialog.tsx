@@ -21,7 +21,7 @@
  * and the `aria-labelledby`/`aria-describedby` wiring between {@link DialogContent} and its
  * {@link DialogTitle}/{@link DialogDescription}. This module only adds the Docket look: an
  * MD3 tonal surface panel (`bg-surface-container-high`, `border-outline-variant`,
- * `rounded-xl`, `shadow-lg`), a dimmed {@link DialogOverlay} scrim, and a built-in close
+ * `rounded-xl`, `shadow-level3`), a dimmed {@link DialogOverlay} scrim, and a built-in close
  * affordance. All colors come from the semantic design tokens in
  * `@docket/ui/styles/globals.css`; open/close motion reuses the `tw-animate-css`
  * `data-[state=…]` conventions already used by the dropdown menu.
@@ -172,7 +172,7 @@ export function DialogContent({
           // `w-[calc(100%-2rem)]` keeps a 1rem gutter on each side at small viewports so the
           // panel never bleeds to the window edge; `max-w-lg` caps it once the screen is wide
           // enough that the calc would exceed it (the narrower per-dialog `max-w-md` still wins).
-          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] fixed top-1/2 left-1/2 z-[110] flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl border p-6 shadow-lg duration-(--dur-slow) ease-(--ease-out) outline-none',
+          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 fixed top-1/2 left-1/2 z-[110] flex max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 flex-col gap-4 overflow-y-auto rounded-xl border p-6 duration-(--dur-slow) ease-(--ease-out) outline-none',
           className,
         )}
         onOpenAutoFocus={handleOpenAutoFocus}

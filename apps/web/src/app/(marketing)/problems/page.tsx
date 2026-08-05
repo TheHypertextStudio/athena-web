@@ -24,11 +24,11 @@ export default function ProblemsPage(): JSX.Element {
         </p>
       </header>
 
-      <ul className="border-border flex flex-col border-t">
+      <ul className="border-outline-variant flex flex-col border-t">
         {PROBLEM_CODES.map((code) => {
           const problem = PROBLEM_CATALOG[code];
           return (
-            <li key={code} className="border-border py-5">
+            <li key={code} className="border-outline-variant py-5">
               <Link href={`/problems/${code}`} className="group block">
                 <p className="text-ink font-medium group-hover:underline">{problem.title}</p>
                 <p className="text-ink-muted mt-1 leading-relaxed">{problem.summary}</p>

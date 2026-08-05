@@ -41,7 +41,7 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
           <span className="hidden @2xl:inline">Add filter</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="min-w-[14rem]">
+      <DropdownMenuContent align="start" width="md">
         <DropdownMenuLabel>Filter where</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {fields.map((field) => (

@@ -265,7 +265,7 @@ export default function ProjectDetailPage(): JSX.Element {
   }
   if (detailQ.isError || !project) {
     return (
-      <p role="alert" className="text-destructive mx-auto max-w-7xl p-6">
+      <p role="alert" className="text-error mx-auto max-w-7xl p-6">
         {detailQ.isError
           ? userErrorMessage(detailQ.error, 'Could not load this project.')
           : `${projectNoun} not found.`}
@@ -353,7 +353,7 @@ export default function ProjectDetailPage(): JSX.Element {
             />
           </EntityMetadataRow>
           {propsError ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-error text-sm">
               {propsError}
             </p>
           ) : null}
@@ -389,7 +389,7 @@ export default function ProjectDetailPage(): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="text-error focus:text-error"
                   onSelect={() => {
                     deleteProject.reset();
                     setConfirmDeleteOpen(true);
@@ -582,7 +582,7 @@ export default function ProjectDetailPage(): JSX.Element {
         }}
       />
       {displayMutation.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {userErrorMessage(displayMutation.error, 'Could not customize this project.')}
         </p>
       ) : null}

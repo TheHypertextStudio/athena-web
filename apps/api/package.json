@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "portless run --force",
-    "dev:app": "tsx watch --include .env.local --import ./src/dev-env.ts src/server.ts",
+    "dev:app": "tsx ../../scripts/portless-env.ts tsx watch --include .env.local --import ./src/dev-env.ts src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

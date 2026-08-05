@@ -83,7 +83,7 @@ export function SchedulingRegionPreview({
           ? selected
             ? 'border-primary/70 bg-primary/20 ring-primary/25 pointer-events-none absolute inset-x-1 z-10 rounded-md border ring-1'
             : 'border-primary/50 bg-primary/15 pointer-events-none absolute inset-x-1 z-10 rounded-md border'
-          : 'border-destructive/60 bg-destructive-container/60 pointer-events-none absolute inset-x-1 z-10 rounded-md border border-dashed'
+          : 'border-error/60 bg-error-container/60 pointer-events-none absolute inset-x-1 z-10 rounded-md border border-dashed'
       }
       data-schedule-region-preview={selected ? undefined : laneId}
       data-schedule-region-selection={selected ? laneId : undefined}

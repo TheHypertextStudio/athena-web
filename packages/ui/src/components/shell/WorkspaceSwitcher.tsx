@@ -16,7 +16,6 @@
 import * as React from 'react';
 
 import { ChevronDown, Plus } from '../../icons';
-import { cn } from '../../lib/utils';
 import { getOrgAccent } from '../../lib/org-accent';
 import {
   Avatar,
@@ -85,7 +84,7 @@ function AttentionBadge({
   return (
     <span
       aria-label={`${count} ${label}`}
-      className="bg-primary text-primary-foreground ring-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2"
+      className="bg-primary text-on-primary ring-surface flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-none font-semibold tabular-nums ring-2"
     >
       {badgeText(count)}
     </span>
@@ -121,7 +120,9 @@ function WorkspaceMenuRow({
     <DropdownMenuItem
       onSelect={onSelect}
       aria-current={active ? 'true' : undefined}
-      className={cn('gap-2', active && 'bg-surface-container-highest text-on-surface')}
+      // The active workspace is a selected row, so it takes the menu's own selection roles
+      // rather than a private surface tone that bypasses them.
+      selected={active}
     >
       <WorkspaceAvatar workspace={workspace} />
       {/* A real workspace name can be longer than any menu: "Willie Enterprises (dba Vibe Code
@@ -212,7 +213,7 @@ export function WorkspaceSwitcher({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[15rem]">
+      <DropdownMenuContent align="start" width="lg">
         {/* A calm, real section heading at the menu's default `text-body-medium font-semibold` — not a
             shrunken `text-xs` eyebrow. */}
         <DropdownMenuLabel>Workspaces</DropdownMenuLabel>

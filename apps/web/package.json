@@ -12,7 +12,7 @@
   "scripts": {
     "build": "next build && tsx scripts/build-service-worker.ts --production",
     "dev": "portless run --force",
-    "dev:app": "tsx scripts/build-service-worker.ts && next dev",
+    "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx scripts/build-service-worker.ts && next dev'",
     "start": "next start",
     "typecheck": "tsc --noEmit && tsc --noEmit -p service-worker/tsconfig.json",
     "lint": "eslint .",

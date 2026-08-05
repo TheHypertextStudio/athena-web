@@ -51,7 +51,7 @@ export function OverflowMenu({
         </TooltipTrigger>
         <TooltipContent>All open documents</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="end" width="lg">
         <DropdownMenuLabel className="text-on-surface-variant text-xs">
           Open documents
         </DropdownMenuLabel>
@@ -63,16 +63,18 @@ export function OverflowMenu({
               key={tab.key}
               asChild
               aria-current={active ? 'true' : undefined}
-              className={cn('gap-0 p-0', active && 'bg-surface-container-highest')}
+              // The row keeps the menu's own padding, gap, and selection roles; the close button
+              // is the only thing this call site adds.
+              selected={active}
             >
               <div className="flex items-center">
                 {renderLink(
                   tab.href,
                   <>
-                    <Icon aria-hidden="true" className="size-4 shrink-0 opacity-70" />
+                    <Icon aria-hidden="true" className="shrink-0 opacity-70" />
                     <span className="min-w-0 flex-1 truncate">{tab.title}</span>
                   </>,
-                  'flex min-w-0 flex-1 items-center gap-2 rounded-sm py-1.5 pr-1 pl-2 outline-none',
+                  'flex min-w-0 flex-1 items-center gap-3 outline-none',
                 )}
                 <button
                   type="button"

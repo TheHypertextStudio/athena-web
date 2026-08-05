@@ -208,9 +208,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 }}
               />
               {nameInvalid ? (
-                <span className="text-destructive text-xs font-normal">
-                  Workspace name is required.
-                </span>
+                <span className="text-error text-xs font-normal">Workspace name is required.</span>
               ) : null}
             </label>
 
@@ -254,7 +252,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
                 {draft.slug || 'workspace'}
               </span>
               {slugInvalid ? (
-                <span className="text-destructive text-xs font-normal">
+                <span className="text-error text-xs font-normal">
                   Use lowercase letters and numbers, separated by hyphens.
                 </span>
               ) : null}
@@ -290,7 +288,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
           </div>
 
           {save.error ? (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-error text-sm">
               {userErrorMessage(save.error, 'Could not save workspace settings.')}
             </p>
           ) : (

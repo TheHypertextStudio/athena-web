@@ -151,7 +151,7 @@ export function FilterToolbar<T>({
                 <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-[14rem]">
+            <DropdownMenuContent align="start" width="md">
               {groupable.length > 0 ? (
                 <>
                   <DropdownMenuLabel>Grouping</DropdownMenuLabel>

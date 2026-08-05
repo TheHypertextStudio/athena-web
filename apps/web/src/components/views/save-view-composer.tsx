@@ -132,7 +132,7 @@ export function SaveViewComposer({
                   <ChevronDown className="size-4 opacity-60" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[14rem]">
+              <DropdownMenuContent align="start" width="md">
                 <DropdownMenuRadioGroup
                   value={scope}
                   onValueChange={(next) => {
@@ -157,7 +157,7 @@ export function SaveViewComposer({
           </p>
 
           {error ? (
-            <p role="alert" className="text-destructive text-body-medium">
+            <p role="alert" className="text-error text-body-medium">
               {error}
             </p>
           ) : null}

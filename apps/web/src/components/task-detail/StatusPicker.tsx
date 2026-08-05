@@ -71,7 +71,7 @@ export function StatusPicker({
           <ChevronDown className="text-on-surface-variant" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56">
+      <DropdownMenuContent align="start" width="md">
         <DropdownMenuLabel>Set status</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {states.map((state) => (

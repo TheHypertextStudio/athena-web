@@ -118,7 +118,7 @@ export function SettingsImagePicker({
       </div>
       <p className="text-on-surface-variant text-xs">JPG, PNG, WebP, or GIF. Up to 1 MB.</p>
       {error ? (
-        <p className="text-destructive text-xs" role="alert">
+        <p className="text-error text-xs" role="alert">
           {error}
         </p>
       ) : null}

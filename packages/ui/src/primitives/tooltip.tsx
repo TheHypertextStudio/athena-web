@@ -14,7 +14,7 @@
  * via `aria-describedby`. This module only adds the Docket look — the same MD3 tonal surface,
  * `border-outline-variant` hairline, `rounded-lg`, and `tw-animate-css` `data-[state=…]` motion
  * the {@link PopoverContent}/{@link DropdownMenuContent} surfaces use — plus a darker, denser
- * scale appropriate to a transient label (smaller `text-xs`, tighter padding, `shadow-md`).
+ * scale appropriate to a transient label (smaller `text-xs`, tighter padding, `shadow-level2`).
  *
  * The unstyled passthrough roots ({@link TooltipProvider}, {@link Tooltip},
  * {@link TooltipTrigger}) are re-exported verbatim; {@link TooltipContent} is the token-styled
@@ -75,7 +75,7 @@ export function TooltipContent({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          'bg-surface-container-highest text-on-surface border-outline-variant data-[state=delayed-open]:animate-in data-[state=instant-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=instant-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95 data-[state=instant-open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 text-body-small z-[120] w-fit max-w-xs origin-[var(--radix-tooltip-content-transform-origin)] rounded-lg border px-2.5 py-1.5 shadow-md',
+          'bg-surface-container-highest text-on-surface border-outline-variant data-[state=delayed-open]:animate-in data-[state=instant-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=instant-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95 data-[state=instant-open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 text-body-small shadow-level2 z-[120] w-fit max-w-xs origin-[var(--radix-tooltip-content-transform-origin)] rounded-lg border px-2.5 py-1.5',
           className,
         )}
         {...props}

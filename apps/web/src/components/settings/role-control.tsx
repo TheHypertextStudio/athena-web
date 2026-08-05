@@ -99,7 +99,7 @@ export function RoleControl({
           <ChevronDown aria-hidden="true" className="size-4 opacity-60" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="end" width="lg">
         <DropdownMenuLabel>Choose a role</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup

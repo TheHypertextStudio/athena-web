@@ -10,7 +10,7 @@
  * the Docket look onto the visible surfaces through the shared, file-internal `menu-styles`
  * helper — the same source of truth the right-click {@link ContextMenu} family draws from, so the
  * two render identically: MD3 tonal surface, `tw-animate-css` motion, and the
- * {@link focusRingInset} keyboard ring on every row.
+ * {@link menuFocusRing} keyboard ring on every row.
  *
  * ## Variants
  *
@@ -49,12 +49,16 @@ import * as React from 'react';
 import { Check, ChevronRight, Circle } from '../icons';
 
 import { cn } from '../lib/utils';
-import { focusRingInset } from './focus';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 import {
+  MENU_INDICATOR_GUTTER,
   type MenuVariant,
+  type MenuWidth,
   menuBadge,
+  menuCheckedItemClass,
   menuContentClass,
+  menuFocusRing,
+  menuGroup,
   menuItemClass,
   menuLabel,
   menuSeparator,
@@ -74,25 +78,27 @@ function useDropdownMenuVariant(): MenuVariant {
   return React.useContext(DropdownMenuVariantContext);
 }
 
-/**
- * Scoped color utility for the leading glyph (anatomy #1), written as a literal per variant so
- * Tailwind's static extractor picks it up. Targets the first `<svg>` in the row — the icon a
- * caller places at the start of `children` — leaving the trailing chevron/indicator untouched.
- */
-function leadingIconClass(variant: MenuVariant): string {
-  return variant === 'vibrant'
-    ? '[&_svg:first-child]:text-on-tertiary-container'
-    : '[&_svg:first-child]:text-on-surface-variant';
-}
-
 /** Root controller for an open/closed dropdown menu (Radix passthrough). */
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 
 /** Element that toggles the menu open (Radix passthrough). */
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
-/** Logical grouping of menu items (Radix passthrough). */
-export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
+/**
+ * A block of related rows — the spec's "Grouped" layout configuration.
+ *
+ * @remarks
+ * Collects its rows into an 8dp-radius block with 2dp of padding and 2dp between groups, so a
+ * long menu reads as sections without needing a rule between them. Rows keep their own 4dp
+ * corners, and the group's first and last rows take the 12dp edge corner.
+ */
+export function DropdownMenuGroup({
+  className,
+  ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Group>): React.JSX.Element {
+  const variant = useDropdownMenuVariant();
+  return <DropdownMenuPrimitive.Group className={cn(menuGroup(variant), className)} {...props} />;
+}
 
 /** Portal that renders menu content into the document body (Radix passthrough). */
 export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
@@ -118,13 +124,12 @@ export function DropdownMenuSubTrigger({
     <DropdownMenuPrimitive.SubTrigger
       className={cn(
         menuItemClass(variant),
-        leadingIconClass(variant),
         // Keep the open submenu lit with the same low-emphasis tonal overlay as a focused row.
         variant === 'vibrant'
           ? 'data-[state=open]:bg-on-tertiary-container/10'
           : 'data-[state=open]:bg-on-surface/8',
-        focusRingInset,
-        inset && 'pl-8',
+        menuFocusRing,
+        { [MENU_INDICATOR_GUTTER]: inset },
         className,
       )}
       {...props}
@@ -145,12 +150,7 @@ export function DropdownMenuSubContent({
   return (
     <DropdownMenuPrimitive.SubContent
       collisionPadding={collisionPadding}
-      className={cn(
-        menuContentClass(variant),
-        // Submenus float above their parent surface, so they carry a slightly deeper shadow.
-        'shadow-lg',
-        className,
-      )}
+      className={cn(menuContentClass(variant), className)}
       {...props}
     />
   );
@@ -167,11 +167,17 @@ export function DropdownMenuContent({
   className,
   sideOffset = 4,
   collisionPadding = OVERLAY_COLLISION_PADDING,
+  width = 'md',
   variant = 'standard',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   /** Tonal family for this menu and all its rows. Defaults to the surface-based `'standard'`. */
   variant?: MenuVariant;
+  /**
+   * One of the four {@link MENU_WIDTH} steps. Defaults to `md` (224px). Pass a step rather than
+   * a `min-w-*`/`w-*` class: the open set produced seven different widths across the product.
+   */
+  width?: MenuWidth;
 }): React.JSX.Element {
   return (
     <DropdownMenuVariantContext.Provider value={variant}>
@@ -180,7 +186,7 @@ export function DropdownMenuContent({
           sideOffset={sideOffset}
           collisionPadding={collisionPadding}
           className={cn(
-            menuContentClass(variant),
+            menuContentClass(variant, width),
             // Scrollable within the available viewport height Radix measures for us.
             'max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-x-hidden overflow-y-auto',
             className,
@@ -204,6 +210,7 @@ export function DropdownMenuContent({
 export function DropdownMenuItem({
   className,
   inset,
+  selected = false,
   children,
   supporting,
   badge,
@@ -218,6 +225,13 @@ export function DropdownMenuItem({
   badge?: React.ReactNode;
   /** Optional trailing meta/shortcut hint (anatomy #6). */
   trailingText?: React.ReactNode;
+  /**
+   * Render the row in its selected state — the spec's `menu-item.selected.*` roles and its 12dp
+   * corner. For rows whose selection the menu does not own itself: the active workspace, the
+   * open tab, the current view. A call site that tints its own row instead is how a menu ends up
+   * with two different selection colours.
+   */
+  selected?: boolean;
 }): React.JSX.Element {
   const variant = useDropdownMenuVariant();
   const hasRichAnatomy = supporting != null || badge != null || trailingText != null;
@@ -225,10 +239,9 @@ export function DropdownMenuItem({
   return (
     <DropdownMenuPrimitive.Item
       className={cn(
-        menuItemClass(variant),
-        leadingIconClass(variant),
-        focusRingInset,
-        inset && 'pl-8',
+        menuItemClass(variant, { selected }),
+        menuFocusRing,
+        { [MENU_INDICATOR_GUTTER]: inset },
         className,
       )}
       {...props}
@@ -265,22 +278,17 @@ export function DropdownMenuCheckboxItem({
     <DropdownMenuPrimitive.CheckboxItem
       className={cn(
         menuItemClass(variant),
-        // Radix drives the checked state; escalate the checked row into the variant's selected
-        // background + content role (anatomy #7 + #8).
-        variant === 'vibrant'
-          ? 'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary'
-          : 'data-[state=checked]:bg-secondary-container data-[state=checked]:text-on-secondary-container',
-        // Reserve the leading indicator gutter.
-        'py-1.5 pr-2 pl-8',
-        focusRingInset,
+        menuCheckedItemClass(variant),
+        MENU_INDICATOR_GUTTER,
+        menuFocusRing,
         className,
       )}
       checked={checked}
       {...props}
     >
-      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <span className="absolute left-4 flex size-5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Check className="h-4 w-4" />
+          <Check className="size-5" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -299,19 +307,16 @@ export function DropdownMenuRadioItem({
     <DropdownMenuPrimitive.RadioItem
       className={cn(
         menuItemClass(variant),
-        // The selected radio row lifts into the variant's selected background + content role.
-        variant === 'vibrant'
-          ? 'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary'
-          : 'data-[state=checked]:bg-secondary-container data-[state=checked]:text-on-secondary-container',
-        'py-1.5 pr-2 pl-8',
-        focusRingInset,
+        menuCheckedItemClass(variant),
+        MENU_INDICATOR_GUTTER,
+        menuFocusRing,
         className,
       )}
       {...props}
     >
-      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <span className="absolute left-4 flex size-5 items-center justify-center">
         <DropdownMenuPrimitive.ItemIndicator>
-          <Circle className="h-2 w-2 fill-current" />
+          <Circle className="size-2.5 fill-current" />
         </DropdownMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -331,7 +336,7 @@ export function DropdownMenuLabel({
   const variant = useDropdownMenuVariant();
   return (
     <DropdownMenuPrimitive.Label
-      className={cn(menuLabel(variant), inset && 'pl-8', className)}
+      className={cn(menuLabel(variant), { [MENU_INDICATOR_GUTTER]: inset }, className)}
       {...props}
     />
   );

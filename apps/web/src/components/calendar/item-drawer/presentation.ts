@@ -34,7 +34,7 @@ export const TASK_ROLE_LABEL: Record<CalendarItemTaskRole, string> = {
  * for the same reason: a button inside a dialog is not an overlay, and only overlays may cast one.
  */
 export const DESTRUCTIVE_CONFIRM_CLASS =
-  'focus-visible:ring-ring bg-destructive text-destructive-foreground hover:bg-destructive/90 text-label-large rounded-md px-3 py-1.5 transition-colors outline-none focus-visible:ring-1';
+  'focus-visible:ring-ring bg-error text-on-error hover:bg-error/90 text-label-large rounded-md px-3 py-1.5 transition-colors outline-none focus-visible:ring-1';
 
 /** Shared classes for the cancel action inside a confirmation dialog. */
 export const CANCEL_CLASS =

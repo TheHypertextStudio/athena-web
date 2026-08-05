@@ -1,6 +1,7 @@
 'use client';
 
 import { CornerDownLeft } from '@docket/ui/icons';
+import { menuBadge, menuItemClass, menuTrailingText } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 
@@ -49,34 +50,37 @@ export function PaletteRow({
       onClick={onSelect}
       onMouseMove={onHover}
       className={cn(
-        'text-body-medium flex cursor-pointer items-center gap-3 rounded-md px-3 py-2',
-        active ? 'bg-surface-container-highest text-on-surface' : 'text-on-surface',
+        // A palette row is a menu row. It used to be its own recipe — 12px padding against the
+        // menu's 16dp, 16px icons against 20dp, and `surface-container-highest` for the active
+        // row instead of a state layer — which is the drift this collapses.
+        menuItemClass('standard'),
+        'cursor-pointer',
+        // The palette drives its own highlight from `aria-activedescendant`, not from focus, so
+        // the active row applies the spec's focus layer directly.
+        { 'bg-on-surface/10': active },
       )}
     >
-      <Icon
-        aria-hidden="true"
-        className={cn('size-4 shrink-0', active ? 'text-on-surface' : 'text-on-surface-variant')}
-      />
-      <span className="min-w-0 flex-1 truncate font-medium">{item.label}</span>
+      <Icon aria-hidden="true" className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
 
       {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
 
       {item.source ? (
-        <span className="text-on-surface-variant bg-surface-container shrink-0 rounded px-1.5 py-0.5 text-xs font-medium">
+        <span className={cn(menuBadge('standard'), 'bg-surface-container ml-0')}>
           {item.source}
         </span>
       ) : null}
 
       {item.hitType ? (
-        <span className="text-on-surface-variant border-outline-variant shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium">
+        <span className={cn(menuBadge('standard'), 'border-outline-variant ml-0 border')}>
           {SEARCH_KIND_LABEL[item.hitType]}
         </span>
       ) : item.hint ? (
-        <span className="text-on-surface-variant shrink-0 text-xs">{item.hint}</span>
+        <span className={cn(menuTrailingText('standard'), 'ml-0 shrink-0')}>{item.hint}</span>
       ) : null}
 
       {active ? (
-        <CornerDownLeft aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
+        <CornerDownLeft aria-hidden="true" className="text-on-surface-variant shrink-0" />
       ) : null}
     </li>
   );

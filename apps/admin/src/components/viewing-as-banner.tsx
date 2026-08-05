@@ -55,7 +55,7 @@ export function ViewingAsBanner(): JSX.Element | null {
           {' '}
           · expires {formatTimestamp(active.expiresAt)}
         </span>
-        {error ? <span className="text-destructive ml-2">{error}</span> : null}
+        {error ? <span className="text-error ml-2">{error}</span> : null}
       </p>
       <Button variant="outline" size="sm" disabled={pending} onClick={() => void end()}>
         {pending ? 'Ending…' : 'End session'}

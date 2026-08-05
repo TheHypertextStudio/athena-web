@@ -45,7 +45,7 @@ export const metadata: Metadata = {
 export default function MarketingLayout({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`marketing ${display.variable} bg-background text-foreground min-h-dvh antialiased`}
+      className={`marketing ${display.variable} bg-surface text-on-surface min-h-dvh antialiased`}
     >
       <div aria-hidden className="bg-paper fixed inset-0 -z-10" />
       <SiteHeader />

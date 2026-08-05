@@ -76,7 +76,7 @@ export function DangerZoneTab(): JSX.Element {
   }
   if (statusQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body-medium">
+      <p role="alert" className="text-error text-body-medium">
         {userErrorMessage(statusQ.error, 'Could not update account settings.')}
       </p>
     );
@@ -90,7 +90,7 @@ export function DangerZoneTab(): JSX.Element {
     <section className="flex flex-col gap-6" aria-label="Danger zone">
       {/* Pending-deletion banner */}
       {pending && status.deleteAfterAt ? (
-        <div className="border-destructive/40 bg-destructive/5 flex flex-col gap-3 rounded-lg border p-4">
+        <div className="border-error/40 bg-error/5 flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-1">
             <h3 className="text-on-surface text-body-medium font-medium">
               Your account is scheduled for deletion
@@ -105,7 +105,7 @@ export function DangerZoneTab(): JSX.Element {
             </p>
           </div>
           {cancelDeletion.isError ? (
-            <p role="alert" className="text-destructive text-body-medium">
+            <p role="alert" className="text-error text-body-medium">
               {userErrorMessage(cancelDeletion.error, 'Could not update account settings.')}
             </p>
           ) : null}
@@ -162,7 +162,7 @@ export function DangerZoneTab(): JSX.Element {
 
       {/* Delete account card */}
       {!pending ? (
-        <div className="border-destructive/40 flex flex-col gap-3 rounded-lg border p-4">
+        <div className="border-error/40 flex flex-col gap-3 rounded-lg border p-4">
           <div className="flex flex-col gap-1">
             <h3 className="text-on-surface text-body-medium font-medium">Delete account</h3>
             <p className="text-on-surface-variant text-body-medium max-w-prose">

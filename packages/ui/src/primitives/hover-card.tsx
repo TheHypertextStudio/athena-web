@@ -12,7 +12,7 @@
  * Radix supplies the behaviour for free: hover/focus open + leave close with `openDelay`/
  * `closeDelay`, collision-aware positioning, and the pointer-bridge that lets the cursor travel
  * from trigger to card without dismissing it. This module only adds the Docket look — the MD3
- * tonal `surface` panel, `border-outline-variant` hairline, `rounded-lg`, `shadow-md`, and the
+ * tonal `surface` panel, `border-outline-variant` hairline, `rounded-lg`, `shadow-level2`, and the
  * `tw-animate-css` `data-[state=…]` motion shared with {@link PopoverContent}.
  *
  * The unstyled passthrough roots ({@link HoverCard}, {@link HoverCardTrigger}) are re-exported
@@ -71,7 +71,7 @@ export function HoverCardContent({
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
         className={cn(
-          'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[120] w-64 origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border p-4 shadow-md outline-none',
+          'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] w-64 origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border p-4 outline-none',
           className,
         )}
         {...props}

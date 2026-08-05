@@ -16,7 +16,7 @@ export interface CardNoteProps {
  * themselves to assistive tech; `muted` notes don't.
  */
 export function CardNote({ tone, children }: CardNoteProps): JSX.Element {
-  const color = tone === 'error' ? 'text-destructive' : 'text-on-surface-variant';
+  const color = tone === 'error' ? 'text-error' : 'text-on-surface-variant';
   return (
     <p
       {...(tone === 'error' ? { role: 'alert' } : {})}
@@ -45,7 +45,7 @@ export interface CardAlertProps {
 export function CardAlert({ message, detail }: CardAlertProps): JSX.Element {
   return (
     <div role="alert" className="bg-surface-container px-4 py-2 text-xs">
-      <p className="text-destructive">{message}</p>
+      <p className="text-error">{message}</p>
       <p className="text-on-surface-variant mt-1">{detail}</p>
     </div>
   );

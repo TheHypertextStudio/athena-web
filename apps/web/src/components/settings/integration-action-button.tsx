@@ -18,7 +18,7 @@ export type ActionTone = 'primary' | 'muted' | 'danger';
 const TONE: Record<ActionTone, string> = {
   primary: 'text-primary hover:bg-surface-container-high',
   muted: 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high',
-  danger: 'text-destructive hover:bg-destructive/10',
+  danger: 'text-error hover:bg-error/10',
 };
 
 /** Props for {@link IntegrationActionButton}: native button props plus the `tone`. */

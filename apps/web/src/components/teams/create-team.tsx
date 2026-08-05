@@ -190,7 +190,7 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
             className={cn(
               'flex size-4 items-center justify-center rounded border',
               triageEnabled
-                ? 'border-primary bg-primary text-primary-foreground'
+                ? 'border-primary bg-primary text-on-primary'
                 : 'border-outline-variant',
             )}
           >

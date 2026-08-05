@@ -61,7 +61,7 @@ export const UNSCHEDULED_LANE_CLASS = 'bg-surface-container/40';
 export const TINT_ACCENT_CLASS: Record<TimelineTint, string> = {
   positive: 'bg-state-completed',
   caution: 'bg-state-canceled',
-  critical: 'bg-destructive',
+  critical: 'bg-error',
   neutral: 'bg-outline',
 };
 
@@ -75,7 +75,7 @@ export const TINT_ACCENT_CLASS: Record<TimelineTint, string> = {
 export const TINT_ANCHOR_BORDER_CLASS: Record<TimelineTint, string> = {
   positive: 'border-state-completed',
   caution: 'border-state-canceled',
-  critical: 'border-destructive',
+  critical: 'border-error',
   neutral: 'border-outline',
 };
 
@@ -83,7 +83,7 @@ export const TINT_ANCHOR_BORDER_CLASS: Record<TimelineTint, string> = {
 export const TINT_DOT_CLASS: Record<TimelineTint, string> = {
   positive: 'bg-state-completed',
   caution: 'bg-state-canceled',
-  critical: 'bg-destructive',
+  critical: 'bg-error',
   neutral: 'bg-on-surface-variant',
 };
 

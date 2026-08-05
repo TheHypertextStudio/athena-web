@@ -134,7 +134,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
       </p>
 
       {error ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {error}
         </p>
       ) : null}
@@ -158,7 +158,7 @@ export function ConnectedAccountsTab({ orgId }: ConnectedAccountsTabProps): JSX.
           ))}
         </ul>
       ) : loadError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {loadError}
         </p>
       ) : (

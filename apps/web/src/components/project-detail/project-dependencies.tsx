@@ -50,7 +50,7 @@ export function ProjectDependenciesPanel({
           <Skeleton className="h-24 w-full rounded-xl" />
         </div>
       ) : error ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {error}
         </p>
       ) : (
@@ -86,7 +86,7 @@ export function ProjectDependenciesPanel({
         </div>
       )}
       {mutationError ? (
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {mutationError}
         </p>
       ) : null}

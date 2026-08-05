@@ -110,7 +110,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
               }}
             />
             {nameError ? (
-              <span className="text-destructive text-xs font-normal" role="alert">
+              <span className="text-error text-xs font-normal" role="alert">
                 {nameError}
               </span>
             ) : null}
@@ -126,7 +126,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
             }}
           />
           {save.error ? (
-            <p className="text-destructive text-sm" role="alert">
+            <p className="text-error text-sm" role="alert">
               {userErrorMessage(save.error, 'Could not save your profile.')}
             </p>
           ) : null}

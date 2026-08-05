@@ -186,7 +186,7 @@ export function Roadmap({
               {/* The Initiative's own target date, drawn as a milestone marker when in range. */}
               {targetMarkerLeft !== null ? (
                 <div
-                  className="bg-destructive/70 absolute top-0 h-full w-px"
+                  className="bg-error/70 absolute top-0 h-full w-px"
                   style={{ left: `${targetMarkerLeft}%` }}
                   title={`Target — ${formatDate(targetDate) ?? ''}`}
                   aria-hidden="true"

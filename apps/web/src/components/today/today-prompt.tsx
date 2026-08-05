@@ -199,7 +199,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       </div>
       <div aria-live="polite" className="min-h-4 px-1">
         {error ? (
-          <p className="text-destructive text-sm">{error}</p>
+          <p className="text-error text-sm">{error}</p>
         ) : notice ? (
           <p className="text-on-surface-variant text-sm">
             Added <span className="text-on-surface font-medium">“{notice.title}”</span> to{' '}

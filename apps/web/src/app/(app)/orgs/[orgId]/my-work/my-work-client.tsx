@@ -134,7 +134,7 @@ export default function MyWorkClient(): JSX.Element {
             <Skeleton className="h-8 w-full" />
           </div>
         ) : loadError ? (
-          <p role="alert" className="text-destructive text-body-medium p-4">
+          <p role="alert" className="text-error text-body-medium p-4">
             {loadError}
           </p>
         ) : visible.length === 0 ? (

@@ -49,7 +49,7 @@ const STATUS_CLASS: Record<SessionStatus, string> = {
   awaiting_input: 'text-state-canceled bg-state-canceled/10 ring-state-canceled/30',
   awaiting_approval: 'text-state-canceled bg-state-canceled/10 ring-state-canceled/30',
   completed: 'text-state-completed bg-state-completed/10 ring-state-completed/30',
-  failed: 'text-destructive bg-destructive/10 ring-destructive/30',
+  failed: 'text-error bg-error/10 ring-error/30',
   canceled: 'text-on-surface-variant bg-surface-container ring-outline-variant',
 };
 

@@ -162,7 +162,7 @@ export function BurnupChart({ burnup, window, className }: BurnupChartProps): JS
           y1={VIEW_H - PAD_BOTTOM}
           x2={VIEW_W - PAD_X}
           y2={VIEW_H - PAD_BOTTOM}
-          className="text-border"
+          className="text-outline-variant"
           stroke="currentColor"
           strokeWidth={1}
           vectorEffect="non-scaling-stroke"

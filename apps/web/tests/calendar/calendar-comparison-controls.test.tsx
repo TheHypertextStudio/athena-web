@@ -85,9 +85,9 @@ describe('CalendarComparisonControls', () => {
 
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     expect(workspace).toHaveAttribute('name', 'comparison-workspace');
-    // The legacy `border-input` / `bg-background` pair is what put two token systems in one view.
+    // The legacy `border-outline` / `bg-surface` pair is what put two token systems in one view.
     expect(workspace).toHaveClass('border-outline-variant', 'bg-surface-container-low');
-    expect(workspace.className).not.toContain('border-input');
+    expect(workspace.className).not.toContain('border-outline');
     expect(workspace.className).not.toContain('shadow');
 
     fireEvent.change(workspace, { target: { value: WORKSPACES[0]!.id } });

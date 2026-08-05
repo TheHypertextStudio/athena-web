@@ -115,20 +115,22 @@ function RuleRow({
               className="truncate text-sm font-medium"
             />
             {rule.isSeed ? (
-              <span className="text-muted-foreground bg-muted rounded px-1 text-[10px]">
+              <span className="text-on-surface-variant bg-surface-container-high rounded px-1 text-[10px]">
                 default
               </span>
             ) : null}
-            {!rule.enabled ? <span className="text-muted-foreground text-[10px]">off</span> : null}
+            {!rule.enabled ? (
+              <span className="text-on-surface-variant text-[10px]">off</span>
+            ) : null}
             {status === 'saved' ? (
               <span className="text-on-surface-variant text-xs">Saved</span>
             ) : status === 'error' ? (
-              <span className="text-destructive text-xs" role="alert">
+              <span className="text-error text-xs" role="alert">
                 Couldn’t save
               </span>
             ) : null}
           </div>
-          <span className="text-muted-foreground truncate text-xs">{ruleSummary(rule)}</span>
+          <span className="text-on-surface-variant truncate text-xs">{ruleSummary(rule)}</span>
         </div>
         {canManage ? (
           <div className="flex shrink-0 gap-1.5">
@@ -181,7 +183,7 @@ export default function AutomationsTab({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-muted-foreground text-sm">
+        <p className="text-on-surface-variant text-sm">
           Rules run when something happens anywhere in Docket — a task completes, an issue arrives
           from a connected tool, an email suggestion appears — and take actions like setting a
           status, assigning, notifying, archiving the source email, or dismissing a suggestion.
@@ -244,11 +246,11 @@ export default function AutomationsTab({
       ) : null}
 
       {isPending ? (
-        <p className="text-muted-foreground text-sm">Loading rules…</p>
+        <p className="text-on-surface-variant text-sm">Loading rules…</p>
       ) : rules.length === 0 ? (
         <div className="border-outline-variant bg-surface-container-low flex flex-col gap-1 rounded-lg border p-4">
           <p className="text-on-surface text-sm font-medium">No automation rules yet.</p>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-on-surface-variant text-sm">
             Create a rule for a recurring workflow, or connect a mailbox from Connections to bring
             email suggestions into Docket.
           </p>
@@ -269,7 +271,7 @@ export default function AutomationsTab({
       )}
 
       {actionError ? (
-        <p className="text-destructive text-xs" role="alert">
+        <p className="text-error text-xs" role="alert">
           {actionError}
         </p>
       ) : null}

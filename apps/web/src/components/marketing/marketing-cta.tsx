@@ -111,7 +111,7 @@ export function HeroActions(): JSX.Element {
       </Button>
       <Link
         href={signInUrl}
-        className="text-ink hover:text-sienna decoration-border text-body-medium font-medium underline underline-offset-4 transition-colors"
+        className="text-ink hover:text-sienna decoration-outline-variant text-body-medium font-medium underline underline-offset-4 transition-colors"
       >
         Sign in
       </Link>

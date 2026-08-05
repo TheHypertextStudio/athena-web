@@ -191,7 +191,7 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
 
   if (tasksQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body-medium">
+      <p role="alert" className="text-error text-body-medium">
         {userErrorMessage(tasksQ.error, "Could not load this program's work.")}
       </p>
     );

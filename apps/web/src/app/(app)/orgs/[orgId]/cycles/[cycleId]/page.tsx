@@ -261,7 +261,7 @@ export default function CycleDetailPage(): JSX.Element {
   if (detailQ.isError) {
     return (
       <PageContainer>
-        <p role="alert" className="text-destructive text-body-medium">
+        <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(detailQ.error, `Could not load this ${cycleNounLower}.`)}
         </p>
       </PageContainer>
@@ -326,7 +326,7 @@ export default function CycleDetailPage(): JSX.Element {
             />
           </EntityMetadataRow>
           {propsError ? (
-            <p role="alert" className="text-destructive text-body-medium">
+            <p role="alert" className="text-error text-body-medium">
               {propsError}
             </p>
           ) : null}

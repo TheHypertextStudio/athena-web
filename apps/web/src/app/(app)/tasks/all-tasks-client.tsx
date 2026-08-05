@@ -145,7 +145,7 @@ export default function AllTasksClient(): JSX.Element {
       {partial ? (
         <div
           role="alert"
-          className="border-destructive/40 bg-destructive/5 text-destructive text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
         >
           <span>Some workspaces did not answer, so this list may be incomplete.</span>
           <Button variant="outline" size="sm" onClick={refetchAll}>
@@ -165,9 +165,9 @@ export default function AllTasksClient(): JSX.Element {
           align="center"
           gap={2}
           role="alert"
-          className="border-destructive/40 bg-destructive/5 justify-center rounded-2xl border p-12 text-center"
+          className="border-error/40 bg-error/5 justify-center rounded-2xl border p-12 text-center"
         >
-          <p className="text-destructive text-body-medium font-medium">{loadError}</p>
+          <p className="text-error text-body-medium font-medium">{loadError}</p>
           <p className="text-on-surface-variant text-body-small max-w-sm">
             Your tasks are still there — we could not reach them just now.
           </p>
@@ -282,7 +282,7 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
         <span
           className={
             overdue
-              ? 'text-destructive shrink-0 text-xs tabular-nums'
+              ? 'text-error shrink-0 text-xs tabular-nums'
               : 'text-on-surface-variant shrink-0 text-xs tabular-nums'
           }
         >

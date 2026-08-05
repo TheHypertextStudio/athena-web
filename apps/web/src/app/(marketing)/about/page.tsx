@@ -66,14 +66,14 @@ export default function AboutPage(): JSX.Element {
           </p>
         </div>
       </section>
-      <section className="border-border border-t">
+      <section className="border-outline-variant border-t">
         <div className="mx-auto w-full max-w-6xl px-6 py-16">
           <p className="text-ink-muted text-sm font-medium">What we hold to</p>
           <dl className="mt-8 grid gap-x-12 gap-y-12 sm:grid-cols-2">
             {PRINCIPLES.map((principle) => (
               <div
                 key={principle.number}
-                className="border-border flex flex-col gap-3 border-t pt-5"
+                className="border-outline-variant flex flex-col gap-3 border-t pt-5"
               >
                 <span aria-hidden className="text-sienna font-mono text-sm">
                   {principle.number}

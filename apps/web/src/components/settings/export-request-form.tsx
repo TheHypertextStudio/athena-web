@@ -147,7 +147,7 @@ export function ExportRequestForm({
             })}
           </div>
           {workspaceIds.length === 0 ? (
-            <p role="alert" className="text-destructive text-body-medium">
+            <p role="alert" className="text-error text-body-medium">
               Select at least one workspace or remove Workspace data from this export.
             </p>
           ) : null}
@@ -171,7 +171,7 @@ export function ExportRequestForm({
           </span>
         </p>
         {error ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {error}
           </p>
         ) : null}

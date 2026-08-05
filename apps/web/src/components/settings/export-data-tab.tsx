@@ -89,7 +89,7 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
   }
   if (optionsQ.isError || exportsQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body-medium">
+      <p role="alert" className="text-error text-body-medium">
         {optionsQ.isError
           ? userErrorMessage(optionsQ.error, 'Could not load export options.')
           : userErrorMessage(exportsQ.error, 'Could not load your export history.')}
@@ -112,7 +112,7 @@ export function ExportDataTab({ focusedExportId }: ExportDataTabProps): JSX.Elem
           anything. Docket captures the selected data when it prepares your export.
         </p>
         {focusedExportQ.isError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             This export is no longer available. You can create a new export below.
           </p>
         ) : null}

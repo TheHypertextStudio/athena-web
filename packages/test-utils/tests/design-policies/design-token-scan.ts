@@ -23,6 +23,8 @@
  * | `raw-type-utility` | `text-xs`, `text-2xl`, `text-[13px]`, `leading-tight`, `leading-[1.1]`, `tracking-tight`, `font-semibold` | Tailwind's stock type scale is a second, unnamed type system running alongside the MD3 one. Size, line-height, weight, and tracking are set *together* by one `text-<role>` token; setting any of them separately forks the scale. |
  * | `size-changing-interaction` | `hover:scale-105`, `active:scale-95`, `hover:p-3`, `group-hover:h-10`, `hover:text-lg` | An interactive element must never change its own size when hovered, focused, or pressed. Feedback is colour and the focus ring. |
  * | `shadow-outside-overlay` | any `shadow-*` outside the enumerated overlay modules | A shadow means "this surface floats above the page". Only overlays do. On a 32px control it is noise. |
+ * | `raw-shadow-on-overlay` | `shadow-md`, `shadow-lg`, `shadow-2xl` *inside* an overlay module | An overlay does float, but at a named MD3 elevation. Tailwind's scale answers to nothing, and five menu-shaped surfaces had drifted onto four different values of it. Use `shadow-level0`–`shadow-level5`. |
+ * | `legacy-color-role` | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground` | shadcn's role names are aliases onto the MD3 roles now, so these resolve to the right pixel — but two names for one colour is how the product ended up with two palettes. Use the MD3 name: `surface-container-low`, `on-surface-variant`, `outline-variant`, `error`, `on-primary`. |
  * | `hardcoded-color` | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)` | A literal colour cannot follow the light/dark theme and is invisible to every downstream token change. |
  *
  * @see `packages/ui/src/primitives/text.tsx` for the token set `raw-type-utility` is defined against.
@@ -39,6 +41,8 @@ export type DesignTokenRule =
   | 'raw-type-utility'
   | 'size-changing-interaction'
   | 'shadow-outside-overlay'
+  | 'raw-shadow-on-overlay'
+  | 'legacy-color-role'
   | 'hardcoded-color';
 
 /** Every rule the scanner implements, for exhaustive reporting and ledger validation. */
@@ -46,6 +50,8 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
   'raw-type-utility',
   'size-changing-interaction',
   'shadow-outside-overlay',
+  'raw-shadow-on-overlay',
+  'legacy-color-role',
   'hardcoded-color',
 ];
 
@@ -124,6 +130,42 @@ const GEOMETRY_PREFIXES =
 const INTERACTION_VARIANTS =
   'hover|active|focus|focus-visible|focus-within|group-hover|group-active|group-focus|peer-hover|peer-focus';
 
+/** Tailwind colour-utility prefixes, for the rule that bans the shadcn-era role names. */
+const UTILITY_COLOR_PREFIXES =
+  'bg|text|border|ring|fill|stroke|divide|placeholder|outline|decoration|caret|from|to|via';
+
+/**
+ * The shadcn-era colour role names, longest-first so the alternation matches `card-foreground`
+ * before `card`.
+ *
+ * @remarks
+ * Each of these is an alias onto an MD3 role in `globals.css`, so a `bg-card` renders the same
+ * pixel as a `bg-surface-container-low`. The reason to ban it anyway is that the product spent a
+ * year with two live palettes, and a reader could not tell from a class name which system a
+ * surface belonged to. One name per colour.
+ *
+ * `--secondary` is absent on purpose: it is a real MD3 tonal role now, and `bg-secondary` is the
+ * correct way to spell it. `secondary-foreground` is the alias and is listed.
+ */
+const LEGACY_COLOR_ROLES = [
+  'card-foreground',
+  'popover-foreground',
+  'muted-foreground',
+  'accent-foreground',
+  'primary-foreground',
+  'secondary-foreground',
+  'destructive-foreground',
+  'background',
+  'foreground',
+  'destructive',
+  'popover',
+  'muted',
+  'accent',
+  'card',
+  'input',
+  'border',
+].join('|');
+
 const RULE_PATTERNS: readonly {
   readonly rule: DesignTokenRule;
   readonly pattern: RegExp;
@@ -161,6 +203,21 @@ const RULE_PATTERNS: readonly {
     rule: 'shadow-outside-overlay',
     // `shadow-none` is the assertion that there is no shadow — always legal.
     pattern: /(?<![\w-])shadow(?:-(?!none)[\w.[\]/-]+)?(?![\w-])/g,
+  },
+  {
+    rule: 'raw-shadow-on-overlay',
+    // Fires only inside SHADOW_ALLOWED_FILES, where a shadow is correct but must name an MD3
+    // elevation level. `shadow-none` and `shadow-level*` pass; everything else is Tailwind's
+    // unnamed scale. `shadow-plate` is the marketing offset plate, which is a graphic, not
+    // elevation, and it lives outside the overlay set anyway.
+    pattern: /(?<![\w-])shadow-(?!none|level[0-5](?![\w-]))[\w.[\]/-]+(?![\w-])/g,
+  },
+  {
+    rule: 'legacy-color-role',
+    pattern: new RegExp(
+      String.raw`(?<![\w-])(?:${UTILITY_COLOR_PREFIXES})-(?:${LEGACY_COLOR_ROLES})(?:/\d+)?(?![\w-])`,
+      'g',
+    ),
   },
   {
     rule: 'hardcoded-color',
@@ -202,6 +259,9 @@ export function scanDesignTokens(filePath: string, sourceText: string): DesignTo
   function inspect(text: string, node: ts.Node): void {
     for (const { rule, pattern } of RULE_PATTERNS) {
       if (rule === 'shadow-outside-overlay' && shadowAllowed) continue;
+      // The mirror of the rule above: inside an overlay a shadow is correct, so what is checked
+      // there is whether it names an MD3 elevation level instead of Tailwind's unnamed scale.
+      if (rule === 'raw-shadow-on-overlay' && !shadowAllowed) continue;
       pattern.lastIndex = 0;
       for (const match of text.matchAll(pattern)) {
         const location = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));

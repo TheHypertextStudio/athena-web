@@ -202,7 +202,7 @@ export function SchedulingTimeGrid({
             >
               {currentPosition?.date === lane.date ? (
                 <span
-                  className="bg-destructive absolute inset-x-0 h-0.5"
+                  className="bg-error absolute inset-x-0 h-0.5"
                   data-current-time-line={lane.id}
                   style={{ top: tickTop(currentPosition.wallMinutes, pixelsPerHour) }}
                 />

@@ -19,7 +19,8 @@ interface FooterColumn {
 }
 
 /** The shared link treatment, passed to {@link FooterEntryLink} so styling stays owned here. */
-const LINK_CLASS = 'text-muted-foreground hover:text-foreground text-body-medium transition-colors';
+const LINK_CLASS =
+  'text-on-surface-variant hover:text-on-surface text-body-medium transition-colors';
 
 const COLUMNS: readonly FooterColumn[] = [
   {
@@ -48,13 +49,13 @@ const COLUMNS: readonly FooterColumn[] = [
  */
 export function SiteFooter(): JSX.Element {
   return (
-    <footer className="border-border bg-paper-deep border-t">
+    <footer className="border-outline-variant bg-paper-deep border-t">
       <div className="mx-auto grid w-full max-w-6xl gap-10 px-6 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-3 lg:col-span-2">
           <span className="font-display text-ink wonk text-2xl leading-none font-semibold tracking-tight">
             Docket
           </span>
-          <p className="text-muted-foreground text-body-medium max-w-sm">{TAGLINE}</p>
+          <p className="text-on-surface-variant text-body-medium max-w-sm">{TAGLINE}</p>
         </div>
         {COLUMNS.map((column) => (
           <div key={column.title} className="flex flex-col gap-3">
@@ -76,7 +77,7 @@ export function SiteFooter(): JSX.Element {
           </div>
         ))}
       </div>
-      <div className="border-border border-t">
+      <div className="border-outline-variant border-t">
         <div className="text-ink-muted mx-auto flex w-full max-w-6xl flex-col gap-1 px-6 py-6 font-mono text-xs sm:flex-row sm:items-center sm:justify-between">
           <p>© Docket. All rights reserved.</p>
           <p>Set in Fraunces &amp; IBM Plex.</p>

@@ -14,6 +14,7 @@
  * makes a menu feel fast. Extra context goes in the trailing hint; completeness belongs to the
  * hovercard.
  */
+import { menuBadge, menuItemClass, menuSupporting } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { MentionItem } from '@docket/types';
 import { CornerDownLeft } from '@docket/ui/icons';
@@ -62,25 +63,30 @@ export default function MentionRow({
         onSelect(item);
       }}
       className={cn(
-        'text-body-medium flex h-9 cursor-pointer items-center gap-3 rounded-md px-3',
-        active ? 'bg-surface-container-highest text-on-surface' : 'text-on-surface',
+        // Same row as every other menu in the product. This was a private recipe — 36px fixed
+        // height, 16px icons, `surface-container-highest` for the active row — until it was not.
+        menuItemClass('standard'),
+        'cursor-pointer',
+        // The list is driven by `aria-activedescendant`, not focus, so the active row applies the
+        // spec's focus state layer directly.
+        { 'bg-on-surface/10': active },
       )}
     >
-      <Icon className="text-on-surface-variant size-4! shrink-0" />
+      <Icon className="shrink-0" />
       <span className="min-w-0 flex-[3] truncate">{item.title}</span>
       {item.subtitle ? (
         // Given a third of the leftover space at most, so a long parent name can never squeeze the
         // title down to an ellipsis — the title is what the reader is aiming at.
-        <span className="text-on-surface-variant hidden min-w-0 flex-1 truncate text-xs sm:inline">
+        <span
+          className={cn(menuSupporting('standard'), 'hidden min-w-0 flex-1 truncate sm:inline')}
+        >
           {item.subtitle}
         </span>
       ) : null}
-      <span className="text-on-surface-variant bg-surface-container shrink-0 rounded px-1.5 py-0.5 text-xs">
+      <span className={cn(menuBadge('standard'), 'bg-surface-container ml-0')}>
         {item.origin === 'external' ? MENTION_PROVIDER_LABEL[item.provider] : kindLabel}
       </span>
-      {active ? (
-        <CornerDownLeft className="text-on-surface-variant size-3.5! shrink-0" aria-hidden />
-      ) : null}
+      {active ? <CornerDownLeft className="text-on-surface-variant shrink-0" aria-hidden /> : null}
     </li>
   );
 }

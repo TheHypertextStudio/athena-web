@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 /** One policy section in the public legal-page register. */
 function PolicySection({ title, children }: { title: string; children: ReactNode }): JSX.Element {
   return (
-    <section className="border-border flex flex-col gap-3 border-t pt-7">
+    <section className="border-outline-variant flex flex-col gap-3 border-t pt-7">
       <h2 className="font-display text-ink text-2xl tracking-tight">{title}</h2>
       <div className="text-ink-muted flex flex-col gap-3 leading-relaxed">{children}</div>
     </section>

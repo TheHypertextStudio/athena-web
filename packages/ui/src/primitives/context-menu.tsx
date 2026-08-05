@@ -14,7 +14,7 @@
  * roving focus, `menu`/`menuitem` roles, submenu nesting, and `Escape`/outside-click dismiss.
  * The Docket look is layered on through the shared, file-internal `menu-styles` helper so this
  * family renders identically to {@link DropdownMenuContent} from one source of truth — MD3 tonal
- * surface, `tw-animate-css` motion, and the {@link focusRingInset} keyboard ring on every row.
+ * surface, `tw-animate-css` motion, and the {@link menuFocusRing} keyboard ring on every row.
  *
  * ## Variants
  *
@@ -53,12 +53,16 @@ import * as React from 'react';
 import { Check, ChevronRight, Circle } from '../icons';
 
 import { cn } from '../lib/utils';
-import { focusRingInset } from './focus';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 import {
+  MENU_INDICATOR_GUTTER,
   type MenuVariant,
+  type MenuWidth,
   menuBadge,
+  menuCheckedItemClass,
   menuContentClass,
+  menuFocusRing,
+  menuGroup,
   menuItemClass,
   menuLabel,
   menuSeparator,
@@ -78,25 +82,26 @@ function useContextMenuVariant(): MenuVariant {
   return React.useContext(ContextMenuVariantContext);
 }
 
-/**
- * Scoped color utility for the leading glyph (anatomy #1), written as a literal per variant so
- * Tailwind's static extractor picks it up. Targets the first `<svg>` in the row — the icon a
- * caller places at the start of `children` — leaving the trailing chevron/indicator untouched.
- */
-function leadingIconClass(variant: MenuVariant): string {
-  return variant === 'vibrant'
-    ? '[&_svg:first-child]:text-on-tertiary-container'
-    : '[&_svg:first-child]:text-on-surface-variant';
-}
-
 /** Root controller for an open/closed context menu (Radix passthrough). */
 export const ContextMenu = ContextMenuPrimitive.Root;
 
 /** The region whose right-click / long-press opens the menu at the cursor (Radix passthrough). */
 export const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
 
-/** Logical grouping of menu items (Radix passthrough). */
-export const ContextMenuGroup = ContextMenuPrimitive.Group;
+/**
+ * A block of related rows — the spec's "Grouped" layout configuration.
+ *
+ * @remarks
+ * Collects its rows into an 8dp-radius block with 2dp of padding and 2dp between groups. Same
+ * builder the {@link DropdownMenuGroup} uses, so the two render identically.
+ */
+export function ContextMenuGroup({
+  className,
+  ...props
+}: React.ComponentProps<typeof ContextMenuPrimitive.Group>): React.JSX.Element {
+  const variant = useContextMenuVariant();
+  return <ContextMenuPrimitive.Group className={cn(menuGroup(variant), className)} {...props} />;
+}
 
 /** Portal that renders menu content into the document body (Radix passthrough). */
 export const ContextMenuPortal = ContextMenuPrimitive.Portal;
@@ -122,13 +127,12 @@ export function ContextMenuSubTrigger({
     <ContextMenuPrimitive.SubTrigger
       className={cn(
         menuItemClass(variant),
-        leadingIconClass(variant),
         // Keep the open submenu lit with the same low-emphasis tonal overlay as a focused row.
         variant === 'vibrant'
           ? 'data-[state=open]:bg-on-tertiary-container/10'
           : 'data-[state=open]:bg-on-surface/8',
-        focusRingInset,
-        inset && 'pl-8',
+        menuFocusRing,
+        { [MENU_INDICATOR_GUTTER]: inset },
         className,
       )}
       {...props}
@@ -151,9 +155,8 @@ export function ContextMenuSubContent({
       collisionPadding={collisionPadding}
       className={cn(
         menuContentClass(variant),
-        // Submenus float above their parent surface, so they carry a slightly deeper shadow and
-        // grow from the Radix-provided transform origin.
-        'origin-[var(--radix-context-menu-content-transform-origin)] shadow-lg',
+        // Grow from the Radix-provided transform origin rather than from the panel's centre.
+        'origin-[var(--radix-context-menu-content-transform-origin)]',
         className,
       )}
       {...props}
@@ -171,11 +174,17 @@ export function ContextMenuSubContent({
 export function ContextMenuContent({
   className,
   collisionPadding = OVERLAY_COLLISION_PADDING,
+  width = 'md',
   variant = 'standard',
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   /** Tonal family for this menu and all its rows. Defaults to the surface-based `'standard'`. */
   variant?: MenuVariant;
+  /**
+   * One of the four {@link MENU_WIDTH} steps. Defaults to `md` (224px). Pass a step rather than
+   * a `min-w-*`/`w-*` class: the open set produced seven different widths across the product.
+   */
+  width?: MenuWidth;
 }): React.JSX.Element {
   return (
     <ContextMenuVariantContext.Provider value={variant}>
@@ -183,7 +192,7 @@ export function ContextMenuContent({
         <ContextMenuPrimitive.Content
           collisionPadding={collisionPadding}
           className={cn(
-            menuContentClass(variant),
+            menuContentClass(variant, width),
             // Scrollable within the viewport, growing from the Radix transform origin.
             'max-h-[var(--radix-context-menu-content-available-height)] origin-[var(--radix-context-menu-content-transform-origin)] overflow-x-hidden overflow-y-auto',
             className,
@@ -207,6 +216,7 @@ export function ContextMenuContent({
 export function ContextMenuItem({
   className,
   inset,
+  selected = false,
   children,
   supporting,
   badge,
@@ -221,6 +231,13 @@ export function ContextMenuItem({
   badge?: React.ReactNode;
   /** Optional trailing meta/shortcut hint (anatomy #6). */
   trailingText?: React.ReactNode;
+  /**
+   * Render the row in its selected state — the spec's `menu-item.selected.*` roles and its 12dp
+   * corner. For rows whose selection the menu does not own itself: the active workspace, the
+   * open tab, the current view. A call site that tints its own row instead is how a menu ends up
+   * with two different selection colours.
+   */
+  selected?: boolean;
 }): React.JSX.Element {
   const variant = useContextMenuVariant();
   const hasRichAnatomy = supporting != null || badge != null || trailingText != null;
@@ -228,10 +245,9 @@ export function ContextMenuItem({
   return (
     <ContextMenuPrimitive.Item
       className={cn(
-        menuItemClass(variant),
-        leadingIconClass(variant),
-        focusRingInset,
-        inset && 'pl-8',
+        menuItemClass(variant, { selected }),
+        menuFocusRing,
+        { [MENU_INDICATOR_GUTTER]: inset },
         className,
       )}
       {...props}
@@ -268,22 +284,17 @@ export function ContextMenuCheckboxItem({
     <ContextMenuPrimitive.CheckboxItem
       className={cn(
         menuItemClass(variant),
-        // Radix drives the checked state; escalate the checked row into the variant's selected
-        // background + content role (anatomy #7 + #8).
-        variant === 'vibrant'
-          ? 'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary'
-          : 'data-[state=checked]:bg-secondary-container data-[state=checked]:text-on-secondary-container',
-        // Reserve the leading indicator gutter.
-        'py-1.5 pr-2 pl-8',
-        focusRingInset,
+        menuCheckedItemClass(variant),
+        MENU_INDICATOR_GUTTER,
+        menuFocusRing,
         className,
       )}
       checked={checked}
       {...props}
     >
-      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <span className="absolute left-4 flex size-5 items-center justify-center">
         <ContextMenuPrimitive.ItemIndicator>
-          <Check className="h-4 w-4" />
+          <Check className="size-5" />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -302,19 +313,16 @@ export function ContextMenuRadioItem({
     <ContextMenuPrimitive.RadioItem
       className={cn(
         menuItemClass(variant),
-        // The selected radio row lifts into the variant's selected background + content role.
-        variant === 'vibrant'
-          ? 'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary'
-          : 'data-[state=checked]:bg-secondary-container data-[state=checked]:text-on-secondary-container',
-        'py-1.5 pr-2 pl-8',
-        focusRingInset,
+        menuCheckedItemClass(variant),
+        MENU_INDICATOR_GUTTER,
+        menuFocusRing,
         className,
       )}
       {...props}
     >
-      <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+      <span className="absolute left-4 flex size-5 items-center justify-center">
         <ContextMenuPrimitive.ItemIndicator>
-          <Circle className="h-2 w-2 fill-current" />
+          <Circle className="size-2.5 fill-current" />
         </ContextMenuPrimitive.ItemIndicator>
       </span>
       {children}
@@ -334,7 +342,7 @@ export function ContextMenuLabel({
   const variant = useContextMenuVariant();
   return (
     <ContextMenuPrimitive.Label
-      className={cn(menuLabel(variant), inset && 'pl-8', className)}
+      className={cn(menuLabel(variant), { [MENU_INDICATOR_GUTTER]: inset }, className)}
       {...props}
     />
   );

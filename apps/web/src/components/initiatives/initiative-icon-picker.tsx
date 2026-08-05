@@ -48,9 +48,9 @@ const COLOR_OPTIONS: readonly {
   {
     key: 'danger',
     label: 'Danger',
-    iconClass: 'text-destructive',
-    circleClass: 'bg-destructive/15',
-    swatchClass: 'bg-destructive',
+    iconClass: 'text-error',
+    circleClass: 'bg-error/15',
+    swatchClass: 'bg-error',
   },
   {
     key: 'blue',
@@ -254,7 +254,7 @@ export function InitiativeIconPicker({
               setSearch(event.target.value);
             }}
             placeholder="Search icons"
-            className="border-input bg-surface focus-visible:ring-ring h-10 w-full rounded-md border pr-3 pl-8 text-sm outline-none focus-visible:ring-2"
+            className="border-outline bg-surface focus-visible:ring-ring h-10 w-full rounded-md border pr-3 pl-8 text-sm outline-none focus-visible:ring-2"
           />
         </label>
         <div

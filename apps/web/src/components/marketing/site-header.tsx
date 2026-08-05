@@ -25,7 +25,7 @@ const NAV: readonly NavLink[] = [
  */
 export function SiteHeader(): JSX.Element {
   return (
-    <header className="border-border bg-background/85 sticky top-0 z-40 border-b backdrop-blur">
+    <header className="border-outline-variant bg-surface/85 sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-6 px-6">
         <Link
           href="/"
@@ -38,7 +38,7 @@ export function SiteHeader(): JSX.Element {
             <Link
               key={item.href}
               href={item.href}
-              className="text-muted-foreground hover:text-foreground text-body-medium transition-colors"
+              className="text-on-surface-variant hover:text-on-surface text-body-medium transition-colors"
             >
               {item.label}
             </Link>

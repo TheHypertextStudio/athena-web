@@ -52,7 +52,7 @@ export default function TeamMappingPicker({
     return <Skeleton className="h-16 w-full rounded-lg" />;
   }
   if (error) {
-    return <p className="text-destructive text-xs">{error}</p>;
+    return <p className="text-error text-xs">{error}</p>;
   }
   if (externalTeams.length === 0) {
     return (

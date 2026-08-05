@@ -121,7 +121,7 @@ export function TriageActions({
       </Tooltip>
       <DropdownMenuContent
         align="end"
-        className="min-w-[14rem]"
+        width="md"
         onClick={(event) => {
           event.stopPropagation();
         }}
@@ -181,7 +181,7 @@ export function TriageActions({
 
         <DropdownMenuSeparator />
         <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
+          className="text-error focus:text-error"
           onSelect={() => {
             onDismiss();
           }}

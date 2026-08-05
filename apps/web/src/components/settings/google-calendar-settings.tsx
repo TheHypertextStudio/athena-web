@@ -182,7 +182,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
   if (query.isError) {
     return (
       <div role="alert" className="border-outline-variant rounded-lg border p-4">
-        <p className="text-destructive text-sm">
+        <p className="text-error text-sm">
           {userErrorMessage(query.error, 'Could not load Google Calendar settings.')}
         </p>
       </div>
@@ -202,7 +202,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
               <p
                 className={`text-xs ${
                   sync.data && sync.data.errors.length > 0
-                    ? 'text-destructive'
+                    ? 'text-error'
                     : 'text-on-surface-variant'
                 }`}
               >
@@ -248,7 +248,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
       </div>
 
       {oauthError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {oauthError}
         </p>
       ) : null}
@@ -286,7 +286,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
             {connection.status === 'error' ? (
               <p
                 role="alert"
-                className="text-destructive border-outline-variant border-b px-4 py-2 text-xs"
+                className="text-error border-outline-variant border-b px-4 py-2 text-xs"
               >
                 Google Calendar could not be synced. Reconnect it to restore syncing.
               </p>

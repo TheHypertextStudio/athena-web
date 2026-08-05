@@ -59,7 +59,7 @@ import { useOrgCapability } from '@/lib/use-org-capability';
 const HEALTH_TEXT_CLASS = {
   on_track: 'text-state-completed',
   at_risk: 'text-state-canceled',
-  off_track: 'text-destructive',
+  off_track: 'text-error',
 } as const;
 
 const ROSTER_ROW_HEIGHT = 72;
@@ -627,7 +627,7 @@ export default function InitiativesListClient(): JSX.Element {
           ))}
         </div>
       ) : overview.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {userErrorMessage(overview.error, 'Could not load initiatives.')}
         </p>
       ) : data && data.items.length > 0 ? (
@@ -895,12 +895,12 @@ export default function InitiativesListClient(): JSX.Element {
         />
       )}
       {displayMutation.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {userErrorMessage(displayMutation.error, 'Could not customize this initiative.')}
         </p>
       ) : null}
       {reparentError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {reparentError}
         </p>
       ) : null}

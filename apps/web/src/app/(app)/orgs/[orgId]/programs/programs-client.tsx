@@ -289,7 +289,7 @@ export default function ProgramsListClient(): JSX.Element {
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {loadError}
         </p>
       ) : programs.length === 0 ? (

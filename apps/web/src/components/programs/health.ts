@@ -30,12 +30,12 @@ export const HEALTH_LABEL: Record<Health, string> = {
 export const HEALTH_PILL_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed bg-state-completed/10 ring-1 ring-inset ring-state-completed/30',
   at_risk: 'text-state-canceled bg-state-canceled/10 ring-1 ring-inset ring-state-canceled/30',
-  off_track: 'text-destructive bg-destructive/10 ring-1 ring-inset ring-destructive/30',
+  off_track: 'text-error bg-error/10 ring-1 ring-inset ring-error/30',
 };
 
 /** A small solid health dot color (for the flow snapshot and per-update markers). */
 export const HEALTH_DOT_CLASS: Record<Health, string> = {
   on_track: 'bg-state-completed',
   at_risk: 'bg-state-canceled',
-  off_track: 'bg-destructive',
+  off_track: 'bg-error',
 };

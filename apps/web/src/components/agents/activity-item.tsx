@@ -108,7 +108,7 @@ export function ActivityItem({
 
         {/* Body. */}
         {activity.type === 'error' ? (
-          <p role="alert" className="text-destructive text-body-medium leading-relaxed">
+          <p role="alert" className="text-error text-body-medium leading-relaxed">
             {text}
           </p>
         ) : activity.type === 'thought' ? (

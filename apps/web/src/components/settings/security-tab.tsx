@@ -59,7 +59,7 @@ function RecoveryCodesSection(): JSX.Element {
   }
   if (statusQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body-medium">
+      <p role="alert" className="text-error text-body-medium">
         {userErrorMessage(statusQ.error, 'Could not load security settings.')}
       </p>
     );
@@ -87,7 +87,7 @@ function RecoveryCodesSection(): JSX.Element {
             <p
               className={
                 lowOnCodes
-                  ? 'text-destructive text-body-medium'
+                  ? 'text-error text-body-medium'
                   : 'text-on-surface-variant text-body-medium'
               }
             >
@@ -100,7 +100,7 @@ function RecoveryCodesSection(): JSX.Element {
             ) : null}
           </div>
         ) : (
-          <p className="text-destructive text-body-medium">
+          <p className="text-error text-body-medium">
             You haven&apos;t set up recovery codes. Without them, losing your passkey means losing
             access to your account for good.
           </p>

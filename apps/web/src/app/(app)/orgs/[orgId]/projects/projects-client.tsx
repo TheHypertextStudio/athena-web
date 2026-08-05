@@ -96,7 +96,7 @@ const HEALTH_LABEL = {
 const HEALTH_CLASS = {
   on_track: 'text-state-completed',
   at_risk: 'text-state-canceled',
-  off_track: 'text-destructive',
+  off_track: 'text-error',
 } as const;
 const DATE_FORMAT = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 
@@ -701,7 +701,7 @@ export default function ProjectsListClient(): JSX.Element {
           ))}
         </div>
       ) : overviewQ.isError ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {userErrorMessage(overviewQ.error, 'Could not load projects.')}
         </p>
       ) : projects.length === 0 ? (
@@ -774,7 +774,7 @@ export default function ProjectsListClient(): JSX.Element {
         </section>
       )}
       {displayMutation.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-sm">
           {userErrorMessage(displayMutation.error, 'Could not customize this project.')}
         </p>
       ) : null}

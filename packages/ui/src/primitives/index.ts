@@ -116,6 +116,32 @@ export {
 } from './field';
 export { focusRing, focusRingInset } from './focus';
 
+/*
+ * The MD3 menu style source. Exported because "one menu" has to mean one across the product,
+ * not one inside `packages/ui`: the command palette, the mention menu, and the editor's
+ * suggestion menu are all menus that live in `apps/web`, and each of them had invented its own
+ * row height, icon size, active colour, and shadow before this was reachable.
+ *
+ * A surface that renders a list of choices on a temporary surface uses these. It does not write
+ * its own `min-h-*`/`rounded-*`/`px-*` set — `design-token-scan.ts` fails the build if it does.
+ */
+export {
+  MENU_INDICATOR_GUTTER,
+  MENU_METRICS,
+  type MenuItemClassOptions,
+  type MenuVariant,
+  menuBadge,
+  menuCheckedItemClass,
+  menuContentClass,
+  menuFocusRing,
+  menuGroup,
+  menuItemClass,
+  menuLabel,
+  menuSeparator,
+  menuSupporting,
+  menuTrailingText,
+} from './menu-styles';
+
 export { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 export { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card';
 export { Row, type RowProps, Stack, type StackProps, Toolbar, type ToolbarProps } from './layout';

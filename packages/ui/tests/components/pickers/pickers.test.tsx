@@ -217,12 +217,12 @@ describe('PickerList', () => {
     expect(screen.getByText('Owned by Platform')).toBeInTheDocument();
   });
 
-  it('gives the chosen row the same secondary-container selection role a checked menu item uses', () => {
+  it('gives the chosen row the same tertiary-container selection role a checked menu item uses', () => {
     render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
     const chosen = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
-    expect(chosen).toHaveClass('bg-secondary-container', 'text-on-secondary-container');
+    expect(chosen).toHaveClass('bg-tertiary-container', 'text-on-tertiary-container');
     const unchosen = within(screen.getByRole('option', { name: /Onboarding/ })).getByRole('button');
-    expect(unchosen).not.toHaveClass('bg-secondary-container');
+    expect(unchosen).not.toHaveClass('bg-tertiary-container');
   });
 
   it('reserves the leading-icon column for every row once any option in the list has one', () => {
@@ -304,13 +304,14 @@ describe('PickerList', () => {
         ariaLabel="Project"
       />,
     );
-    // Onboarding (p2) is not the selected value, so hovering it applies the plain overlay.
+    // Onboarding (p2) is not the selected value. The keyboard-highlighted row is the focus
+    // state, so it takes the spec's 10% layer; pointer hover alone is the 8% one.
     const onboardingOption = screen.getByRole('option', { name: /Onboarding/ });
     fireEvent.mouseEnter(within(onboardingOption).getByRole('button'));
-    expect(within(onboardingOption).getByRole('button')).toHaveClass('bg-on-surface/8');
+    expect(within(onboardingOption).getByRole('button')).toHaveClass('bg-on-surface/10');
 
     fireEvent.mouseEnter(screen.getByText('No project'));
-    expect(screen.getByText('No project').closest('button')).toHaveClass('bg-on-surface/8');
+    expect(screen.getByText('No project').closest('button')).toHaveClass('bg-on-surface/10');
   });
 
   it('keeps the chosen row on its selection color instead of the hover overlay while highlighted', () => {
@@ -318,8 +319,8 @@ describe('PickerList', () => {
     const migrationOption = screen.getByRole('option', { name: /Migration/ });
     const button = within(migrationOption).getByRole('button');
     fireEvent.mouseEnter(button);
-    expect(button).toHaveClass('bg-secondary-container');
-    expect(button).not.toHaveClass('bg-on-surface/8');
+    expect(button).toHaveClass('bg-tertiary-container');
+    expect(button).not.toHaveClass('bg-on-surface/10');
   });
 
   it('hides the search input when not searchable and navigates on the listbox', () => {

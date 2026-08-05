@@ -100,7 +100,7 @@ export function ConfirmDeleteDialog({
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {error ? (
-          <p role="alert" className="text-body-medium text-destructive">
+          <p role="alert" className="text-body-medium text-error">
             {error}
           </p>
         ) : null}

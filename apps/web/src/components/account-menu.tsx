@@ -68,7 +68,7 @@ export default function AccountMenu({
           </span>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-56">
+      <DropdownMenuContent align="start" side="top" width="md">
         <DropdownMenuLabel className="truncate font-normal">
           Signed in as <span className="font-medium">{email}</span>
         </DropdownMenuLabel>

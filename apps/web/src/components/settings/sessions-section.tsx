@@ -95,7 +95,7 @@ export function SessionsSection(): JSX.Element {
   }
   if (listQ.isError) {
     return (
-      <p role="alert" className="text-destructive text-body-medium">
+      <p role="alert" className="text-error text-body-medium">
         {userErrorMessage(listQ.error, 'Could not update your sessions.')}
       </p>
     );
@@ -131,12 +131,12 @@ export function SessionsSection(): JSX.Element {
         </div>
 
         {revokeOne.isError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {userErrorMessage(revokeOne.error, 'Could not update your sessions.')}
           </p>
         ) : null}
         {revokeOthers.isError ? (
-          <p role="alert" className="text-destructive text-body-medium">
+          <p role="alert" className="text-error text-body-medium">
             {userErrorMessage(revokeOthers.error, 'Could not update your sessions.')}
           </p>
         ) : null}

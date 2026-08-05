@@ -9,6 +9,7 @@ import {
   Sidebar,
   TabBar,
   useContextState,
+  useShellSidebar,
   type Workspace,
   type WorkspaceNavKey,
 } from '@docket/ui/components';
@@ -386,6 +387,30 @@ function AppShellAgendaSkeleton(): JSX.Element {
 }
 
 /**
+ * The recovery nudge, withheld while the sidebar is an icon rail.
+ *
+ * @remarks
+ * The banner is prose, and prose has no collapsed form — truncating it would leave something nobody
+ * can act on, and a 56px column cannot hold it. It is a nudge rather than a blocker, so deferring it
+ * until the nav is expanded costs only time.
+ *
+ * Split into its own component because the shell's collapse state lives in a context that
+ * {@link AppShell} provides *around* the sidebar node — a caller assembling that node cannot read it,
+ * but anything rendered inside it can.
+ */
+function SidebarRecoveryNudge({
+  personalOrgId,
+  userId,
+}: {
+  readonly personalOrgId: string | null;
+  readonly userId: string | null;
+}): JSX.Element | null {
+  const { collapsed } = useShellSidebar();
+  if (collapsed) return null;
+  return <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />;
+}
+
+/**
  * The curated, Docket-native rail panels for a surface. Internal-only by design — the Tasks
  * day-plan and the Agenda — never an integration add-on gallery.
  *
@@ -634,7 +659,7 @@ function AppShellInner({
           <AppShellAccountSkeleton />
         ) : (
           <>
-            <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
+            <SidebarRecoveryNudge personalOrgId={personalOrgId} userId={userId} />
             <AccountMenu onCreateWorkspace={onCreateWorkspace} />
           </>
         )

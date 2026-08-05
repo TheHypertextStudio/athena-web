@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import {
   act,
+  cleanup as cleanupRender,
   fireEvent,
   render,
   renderHook,
@@ -20,6 +21,7 @@ import {
   type ActiveContext,
 } from '../../../src/components/shell/ContextProvider';
 import { ShellDrawerProvider } from '../../../src/components/shell/ShellDrawerContext';
+import { ShellSidebarProvider } from '../../../src/components/shell/ShellSidebarContext';
 import { Sidebar } from '../../../src/components/shell/Sidebar';
 import { SidebarNavItem } from '../../../src/components/shell/SidebarNavItem';
 import { TabBar, type OpenTab } from '../../../src/components/shell/TabBar';
@@ -504,6 +506,75 @@ describe('AppShell rail', () => {
     // A panel with nothing ongoing stays a plain glyph; a dot that never changes teaches people
     // to stop looking at it.
     expect(screen.queryByTestId('rail-status-tasks')).not.toBeInTheDocument();
+  });
+});
+
+describe('Sidebar collapse', () => {
+  /** Render the sidebar inside a shell-collapse provider at the given state. */
+  function renderSidebar(collapsed: boolean, onToggle = () => undefined): void {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <ShellSidebarProvider value={{ collapsed, onToggle }}>
+          <Sidebar
+            workspaces={WORKSPACES}
+            {...sidebarHrefs()}
+            onSelectWorkspace={() => undefined}
+            onOpenSearch={() => undefined}
+          />
+        </ShellSidebarProvider>
+      </ContextProvider>,
+    );
+  }
+
+  // Collapsing must cost reachability nothing. The words leave the screen; they do not leave the
+  // accessibility tree, so every destination is still findable by the name it always had.
+  it('keeps every destination reachable by name once the labels are gone', () => {
+    renderSidebar(true);
+    expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
+    expect(screen.getByRole('link', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
+  });
+
+  it('narrows to the icon rail, and back', () => {
+    renderSidebar(true);
+    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-14');
+    cleanupRender();
+    renderSidebar(false);
+    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-60');
+  });
+
+  it('offers a toggle that names the state it will move to', () => {
+    const onToggle = vi.fn();
+    renderSidebar(true, onToggle);
+    const expand = screen.getByRole('button', { name: 'Expand navigation' });
+    expect(expand).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(expand);
+    expect(onToggle).toHaveBeenCalledTimes(1);
+
+    cleanupRender();
+    renderSidebar(false);
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
+  });
+
+  // The drawer IS the surface someone opened to navigate. Shrinking it to glyphs would leave a
+  // 56px sheet floating over an empty screen, so the collapse is a desktop-only affordance.
+  it('ignores the collapse inside the mobile drawer', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <ShellSidebarProvider value={{ collapsed: true, onToggle: () => undefined }}>
+          <ShellDrawerProvider dismiss={() => undefined}>
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          </ShellDrawerProvider>
+        </ShellSidebarProvider>
+      </ContextProvider>,
+    );
+    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-60');
+    expect(screen.queryByRole('button', { name: /navigation$/ })).toBeNull();
   });
 });
 

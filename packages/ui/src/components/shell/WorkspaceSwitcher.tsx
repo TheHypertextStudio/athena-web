@@ -49,6 +49,15 @@ export interface WorkspaceSwitcherProps {
   readonly onCreate: () => void;
   /** Show a stable, disabled trigger while workspace context resolves. */
   readonly loading?: boolean;
+  /**
+   * Render the trigger as the workspace avatar alone.
+   *
+   * @remarks
+   * The avatar is already the workspace's identity — it is accent-tinted and carries its initials —
+   * so a collapsed sidebar loses the name but not the ability to tell which workspace it is in. The
+   * name stays in the trigger's accessible name and in the menu the trigger opens.
+   */
+  readonly collapsed?: boolean;
 }
 
 /** Compute up-to-two-letter initials from a workspace name for the avatar fallback. */
@@ -150,6 +159,7 @@ export function WorkspaceSwitcher({
   onSelect,
   onCreate,
   loading = false,
+  collapsed = false,
 }: WorkspaceSwitcherProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const [open, setOpen] = React.useState(false);
@@ -186,7 +196,11 @@ export function WorkspaceSwitcher({
             loading ? 'Loading workspaces' : `Workspace: ${triggerLabel}. Switch workspace`
           }
           disabled={loading}
-          className="h-auto w-full justify-start gap-2 px-2 py-1.5"
+          className={
+            collapsed
+              ? 'size-10 shrink-0 justify-center px-0 py-0'
+              : 'h-auto w-full justify-start gap-2 px-2 py-1.5'
+          }
         >
           {loading ? (
             <Skeleton className="size-6 shrink-0 rounded-md" aria-hidden="true" />
@@ -198,7 +212,7 @@ export function WorkspaceSwitcher({
               aria-hidden="true"
             />
           )}
-          {loading ? (
+          {collapsed ? null : loading ? (
             <Skeleton className="h-4 w-24" aria-hidden="true" />
           ) : (
             <span
@@ -208,7 +222,7 @@ export function WorkspaceSwitcher({
               {triggerLabel}
             </span>
           )}
-          {loading ? null : (
+          {loading || collapsed ? null : (
             <ChevronDown aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
           )}
         </Button>

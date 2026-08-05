@@ -125,6 +125,11 @@ beforeEach(() => {
   sessionState.error = null;
   sessionState.refetch.mockReset();
   window.localStorage.clear();
+  // These tests are about what a *fetch* may withhold, and the answer is "no nav label, ever".
+  // The sidebar also collapses its labels into tooltips below 1440px, and jsdom reports a 1024px
+  // window — so without pinning it expanded the assertions below would be measuring the width
+  // default rather than the loading behaviour they exist to protect.
+  window.localStorage.setItem('docket.sidebar.collapsed', '0');
   pathnameState.value = '/today';
   orgsGet.mockReset().mockImplementation(() => new Promise(() => undefined));
   requireAuthentication.mockReset();

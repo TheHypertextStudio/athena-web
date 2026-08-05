@@ -92,10 +92,14 @@ import {
   type AppShellAside,
 } from './ShellAside';
 import { ShellDrawerProvider } from './ShellDrawerContext';
+import { ShellSidebarProvider } from './ShellSidebarContext';
 
 /** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
 const RAIL_ACTIVE_KEY = 'docket.rail.active';
 const RAIL_COLLAPSED_KEY = 'docket.rail.collapsed';
+
+/** localStorage key for the viewer's own sidebar choice, which always outranks the width default. */
+const SIDEBAR_COLLAPSED_KEY = 'docket.sidebar.collapsed';
 
 /**
  * The one breakpoint in the shell: at and above it the navigation and the rail are persistent
@@ -119,17 +123,40 @@ export const SHELL_DESKTOP_QUERY = '(min-width: 64rem)';
 export const SHELL_DESKTOP_MIN_PX = 1024;
 
 /**
- * The fixed chrome, in px, that the desktop shell takes out of the viewport before the rail:
- * the 240px sidebar, the 48px activity bar, and 40px of gutters (16px of shell padding + three
- * 8px column gaps).
+ * The fixed chrome, in px, that the desktop shell takes out of the viewport before the rail with
+ * the sidebar **expanded**: the 240px sidebar, the 48px activity bar, and 40px of gutters (16px of
+ * shell padding + three 8px column gaps).
  *
  * @remarks
  * Exported because it is half of the shell's layout contract: `<main>` = viewport − this − rail.
- * It is a *constant*, which is what makes `<main>`'s share of the viewport strictly increase with
- * viewport width. Documented and asserted rather than merely true today — see
- * `tests/components/shell/shell-layout-contract.test.tsx`.
+ * It is a constant *within a sidebar state*, which is what makes `<main>`'s share of the viewport
+ * strictly increase with viewport width. Documented and asserted rather than merely true today —
+ * see `tests/components/shell/shell-layout-contract.test.tsx`.
  */
 export const SHELL_DESKTOP_CHROME_PX = 328;
+
+/**
+ * The same chrome with the sidebar collapsed to its icon rail: 56px of sidebar in place of 240px.
+ *
+ * @remarks
+ * The column *count* is unchanged, so the 40px of gutters and the 48px activity bar are identical —
+ * only the sidebar's own width moves, and it moves by a constant. Collapsing therefore hands
+ * `<main>` a flat 184px at every width rather than a share, which is why it can be offered at all
+ * widths without putting a slope anywhere in the contract.
+ */
+export const SHELL_DESKTOP_CHROME_COLLAPSED_PX = 144;
+
+/**
+ * The viewport width at or above which the sidebar starts out expanded.
+ *
+ * @remarks
+ * Below this the shell has to spend its width on the content and the rail, and a 240px column of
+ * labels is the least valuable of the three — the same destinations are all still one click away as
+ * glyphs. Sampled **once, at mount**, and only when the viewer has expressed no preference: making
+ * it track the window live would mean dragging a window across 1440px silently took 184px away from
+ * `<main>`, which is the exact discontinuity the rest of this contract exists to prevent.
+ */
+export const SHELL_SIDEBAR_EXPAND_MIN_PX = 1440;
 
 /**
  * The share of the viewport `<main>` is guaranteed at **every** width, in **every** rail state,
@@ -163,14 +190,20 @@ export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.4;
  *
  * @param viewportWidth - The viewport's inline size in CSS px.
  * @param railExpanded - Whether the viewer has the rail's panel host expanded.
+ * @param sidebarCollapsed - Whether the sidebar is showing its icon rail rather than labels.
  * @returns `<main>`'s inline size in CSS px.
  *
  * @example
  * ```ts
  * shellMainInlineSize(1440, true); // 832 — a majority of the viewport
+ * shellMainInlineSize(1024, true, true); // 600 — the same window, sidebar collapsed
  * ```
  */
-export function shellMainInlineSize(viewportWidth: number, railExpanded: boolean): number {
+export function shellMainInlineSize(
+  viewportWidth: number,
+  railExpanded: boolean,
+  sidebarCollapsed = false,
+): number {
   // Below the one breakpoint the nav is a drawer and the rail is modal, so `<main>` is the viewport.
   if (viewportWidth < SHELL_DESKTOP_MIN_PX) return viewportWidth;
   const rail = railExpanded
@@ -179,7 +212,8 @@ export function shellMainInlineSize(viewportWidth: number, railExpanded: boolean
         RAIL_MAX_INLINE_SIZE_PX,
       )
     : 0;
-  return viewportWidth - SHELL_DESKTOP_CHROME_PX - rail;
+  const chrome = sidebarCollapsed ? SHELL_DESKTOP_CHROME_COLLAPSED_PX : SHELL_DESKTOP_CHROME_PX;
+  return viewportWidth - chrome - rail;
 }
 
 /** The shell-owned, persisted rail state: which panel is active, and whether its host is collapsed. */
@@ -226,6 +260,30 @@ function readRailState(): RailState {
   } catch {
     return INITIAL_RAIL_STATE;
   }
+}
+
+/**
+ * Whether the sidebar starts collapsed: the viewer's own saved choice, else the window's width.
+ *
+ * @remarks
+ * Read once, in the same mount effect as the rail, for the same hydration reason. The width is only
+ * consulted when nothing is stored — once someone has expressed a preference it is theirs at every
+ * width, because a shell that re-decided on every load would keep overriding them.
+ *
+ * Deliberately **not** re-evaluated on resize. The width test is a first-run default, not a
+ * responsive rule: recomputing it live would make dragging a window across
+ * {@link SHELL_SIDEBAR_EXPAND_MIN_PX} hand `<main>` 184px less than it had a pixel earlier, which is
+ * precisely the discontinuity the layout contract forbids.
+ */
+function readSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (stored !== null) return stored === '1';
+  } catch {
+    /* fall through to the width default */
+  }
+  return window.innerWidth < SHELL_SIDEBAR_EXPAND_MIN_PX;
 }
 
 /** Persist a rail-state value, ignoring storage failures (private mode, quota). */
@@ -332,10 +390,30 @@ export function AppShell({
   // the Tasks default on the calendar.
   const panels = aside?.panels ?? [];
   const [rail, setRail] = React.useState<RailState>(INITIAL_RAIL_STATE);
+  // Expanded on the server and on the first client paint, so the markup matches; the mount effect
+  // below applies the viewer's choice (or the width default) once hydration is safe.
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const railCollapsed = rail.collapsed;
 
   // Adopt the persisted choice once the DOM the server produced is safely hydrated. See
   // {@link readRailState} for why this cannot be `useState`'s initializer.
+  React.useEffect(() => {
+    setSidebarCollapsed(readSidebarCollapsed());
+  }, []);
+
+  const toggleSidebar = React.useCallback((): void => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      writeRailState(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+      return next;
+    });
+  }, []);
+
+  const sidebarState = React.useMemo(
+    () => ({ collapsed: sidebarCollapsed, onToggle: toggleSidebar }),
+    [sidebarCollapsed, toggleSidebar],
+  );
+
   React.useEffect(() => {
     setRail(readRailState());
   }, []);
@@ -470,13 +548,17 @@ export function AppShell({
           className="lg:hidden"
         >
           <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <ShellDrawerProvider dismiss={closeDrawer}>{sidebar}</ShellDrawerProvider>
+          <ShellSidebarProvider value={sidebarState}>
+            <ShellDrawerProvider dismiss={closeDrawer}>{sidebar}</ShellDrawerProvider>
+          </ShellSidebarProvider>
         </SheetContent>
       </Sheet>
 
       {/* Static desktop rail — the canvas-blended sidebar, shown at `lg` and up. */}
       <div className="hidden lg:block">
-        <ShellDrawerProvider dismiss={null}>{sidebar}</ShellDrawerProvider>
+        <ShellSidebarProvider value={sidebarState}>
+          <ShellDrawerProvider dismiss={null}>{sidebar}</ShellDrawerProvider>
+        </ShellSidebarProvider>
       </div>
 
       {/*

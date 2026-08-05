@@ -119,8 +119,10 @@ export {
   type AppShellProps,
   SHELL_DESKTOP_CHROME_PX,
   SHELL_DESKTOP_MIN_PX,
+  SHELL_DESKTOP_CHROME_COLLAPSED_PX,
   SHELL_DESKTOP_QUERY,
   SHELL_MAIN_MIN_VIEWPORT_SHARE,
+  SHELL_SIDEBAR_EXPAND_MIN_PX,
   shellMainInlineSize,
 } from './shell/AppShell';
 export {
@@ -132,6 +134,11 @@ export {
   type RailPanel,
   type RailPanelStatus,
 } from './shell/ShellAside';
+export {
+  ShellSidebarProvider,
+  type ShellSidebarState,
+  useShellSidebar,
+} from './shell/ShellSidebarContext';
 export {
   ContextProvider,
   type ContextProviderProps,

@@ -30,6 +30,7 @@ import { describe, expect, it } from 'vitest';
 import { Home } from '../../../src/icons';
 import {
   AppShell,
+  SHELL_DESKTOP_CHROME_COLLAPSED_PX,
   SHELL_DESKTOP_CHROME_PX,
   SHELL_DESKTOP_MIN_PX,
   SHELL_MAIN_MIN_VIEWPORT_SHARE,
@@ -86,10 +87,19 @@ function parseRailWidthLaw(className: string): {
 
 const PANEL = { id: 'tasks', label: 'Tasks', icon: <Home />, node: <div>Task list</div> };
 
-/** The two rail states every guarantee is checked in. */
-const RAIL_STATES = [
-  { label: 'collapsed', expanded: false },
-  { label: 'expanded', expanded: true },
+/**
+ * Every shell state each guarantee is checked in.
+ *
+ * @remarks
+ * Both columns are independently collapsible, so the contract has four arrangements to hold in, not
+ * two. The binding one for the floor is "everything open" — that is the arrangement an untouched
+ * shell produces on a wide window, so the floor proven below is the one people actually get.
+ */
+const SHELL_STATES = [
+  { label: 'rail collapsed, sidebar expanded', expanded: false, sidebarCollapsed: false },
+  { label: 'rail expanded, sidebar expanded', expanded: true, sidebarCollapsed: false },
+  { label: 'rail collapsed, sidebar collapsed', expanded: false, sidebarCollapsed: true },
+  { label: 'rail expanded, sidebar collapsed', expanded: true, sidebarCollapsed: true },
 ] as const;
 
 /**
@@ -100,9 +110,15 @@ const RAIL_STATES = [
  * proven below is therefore unconditional, not contingent on the viewer closing the panel. The flag
  * is written explicitly (the same `'0'` the shell persists on expand) so the test states the state
  * it depends on rather than inheriting it.
+ *
+ * The sidebar is pinned expanded for the same reason, and one more: it auto-collapses below
+ * {@link SHELL_SIDEBAR_EXPAND_MIN_PX}, and jsdom reports a 1024px window — so without this the
+ * geometry read below would measure the *collapsed* column and every arithmetic check would be
+ * against a chrome width the contract does not advertise.
  */
 function renderShell(): void {
   window.localStorage.setItem('docket.rail.collapsed', '0');
+  window.localStorage.setItem('docket.sidebar.collapsed', '0');
   render(
     <ContextProvider initialContext={ACME.id}>
       <AppShell
@@ -174,12 +190,22 @@ function readGeometry(): ShellGeometry {
 }
 
 /** `<main>`'s width at a viewport, from the geometry the components actually rendered. */
-function mainWidth(geometry: ShellGeometry, viewport: number, railExpanded: boolean): number {
+function mainWidth(
+  geometry: ShellGeometry,
+  viewport: number,
+  railExpanded: boolean,
+  sidebarCollapsed = false,
+): number {
   if (viewport < SHELL_DESKTOP_MIN_PX) return viewport;
   const rail = railExpanded
     ? Math.min(Math.max(geometry.railShare * viewport, geometry.railFloorPx), geometry.railCapPx)
     : 0;
-  return viewport - geometry.chromePx - rail;
+  // Collapsing the sidebar swaps one column's width for another; it adds no column and removes
+  // none, so the gutters and the activity bar in `chromePx` are unchanged.
+  const chrome = sidebarCollapsed
+    ? geometry.chromePx - (SHELL_DESKTOP_CHROME_PX - SHELL_DESKTOP_CHROME_COLLAPSED_PX)
+    : geometry.chromePx;
+  return viewport - chrome - rail;
 }
 
 /** Every integer width in the desktop regime, plus the compact regime, up to a 4K window. */
@@ -206,14 +232,14 @@ describe('AppShell layout contract — geometry read from the rendered shell', (
     expect(geometry.chromePx).toBe(SHELL_DESKTOP_CHROME_PX);
   });
 
-  it('agrees with the exported contract at every width, in both rail states', () => {
+  it('agrees with the exported contract at every width, in every shell state', () => {
     renderShell();
     const geometry = readGeometry();
 
     for (const viewport of [...COMPACT_WIDTHS, ...DESKTOP_WIDTHS]) {
-      for (const expanded of [false, true]) {
-        expect(shellMainInlineSize(viewport, expanded)).toBeCloseTo(
-          mainWidth(geometry, viewport, expanded),
+      for (const { expanded, sidebarCollapsed } of SHELL_STATES) {
+        expect(shellMainInlineSize(viewport, expanded, sidebarCollapsed)).toBeCloseTo(
+          mainWidth(geometry, viewport, expanded, sidebarCollapsed),
           6,
         );
       }
@@ -222,14 +248,14 @@ describe('AppShell layout contract — geometry read from the rendered shell', (
 });
 
 describe('AppShell layout contract — <main> keeps its floor, and widening never costs it', () => {
-  for (const { label, expanded } of RAIL_STATES) {
-    it(`never drops <main> below its guaranteed share with the rail ${label}`, () => {
+  for (const { label, expanded, sidebarCollapsed } of SHELL_STATES) {
+    it(`never drops <main> below its guaranteed share with the ${label}`, () => {
       renderShell();
       const geometry = readGeometry();
 
       let worst = { viewport: 0, share: Number.POSITIVE_INFINITY };
       for (const viewport of [...COMPACT_WIDTHS, ...DESKTOP_WIDTHS]) {
-        const share = mainWidth(geometry, viewport, expanded) / viewport;
+        const share = mainWidth(geometry, viewport, expanded, sidebarCollapsed) / viewport;
         if (share < worst.share) worst = { viewport, share };
       }
       expect(
@@ -238,7 +264,7 @@ describe('AppShell layout contract — <main> keeps its floor, and widening neve
       ).toBeGreaterThanOrEqual(SHELL_MAIN_MIN_VIEWPORT_SHARE);
     });
 
-    it(`never narrows <main> as the window widens, with the rail ${label}`, () => {
+    it(`never narrows <main> as the window widens, with the ${label}`, () => {
       renderShell();
       const geometry = readGeometry();
 
@@ -250,8 +276,8 @@ describe('AppShell layout contract — <main> keeps its floor, and widening neve
         for (let i = 1; i < widths.length; i += 1) {
           const previous = widths[i - 1]!;
           const current = widths[i]!;
-          const before = mainWidth(geometry, previous, expanded);
-          const after = mainWidth(geometry, current, expanded);
+          const before = mainWidth(geometry, previous, expanded, sidebarCollapsed);
+          const after = mainWidth(geometry, current, expanded, sidebarCollapsed);
           expect(
             after,
             `<main> shrank from ${String(previous)}px to ${String(current)}px`,

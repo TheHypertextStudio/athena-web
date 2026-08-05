@@ -2,7 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { useShellDrawer } from '@docket/ui/components';
+import { useShellDrawer, useShellSidebar } from '@docket/ui/components';
 import { LogOut, Plus, Settings } from '@docket/ui/icons';
 import {
   Avatar,
@@ -42,6 +42,9 @@ export default function AccountMenu({
   // and close the drawer — otherwise the destination renders behind the still-open drawer. `null`
   // on the static desktop rail (no drawer to close), so every call is a safe no-op there.
   const dismissDrawer = useShellDrawer();
+  // Inside the drawer the sidebar is always expanded, so this row is too.
+  const { collapsed: sidebarCollapsed } = useShellSidebar();
+  const collapsed = sidebarCollapsed && dismissDrawer === null;
   const { data: session } = authClient.useSession();
   if (!session) return null;
 
@@ -55,17 +58,25 @@ export default function AccountMenu({
         <button
           type="button"
           aria-label="Account menu"
-          className="text-on-surface hover:bg-surface-container-high focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className={
+            // The avatar is the identity; the name and address are what the menu itself opens with,
+            // so a collapsed sidebar loses nothing but the duplication.
+            collapsed
+              ? 'text-on-surface hover:bg-surface-container-high focus-visible:ring-ring mx-auto flex size-10 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none'
+              : 'text-on-surface hover:bg-surface-container-high focus-visible:ring-ring flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none'
+          }
         >
           <Avatar className="size-7 shrink-0">
             <AvatarFallback className="text-xs">{initial}</AvatarFallback>
           </Avatar>
-          <span className="min-w-0 flex-1">
-            <span className="text-body-medium block truncate font-medium">{label}</span>
-            {name ? (
-              <span className="text-on-surface-variant block truncate text-xs">{email}</span>
-            ) : null}
-          </span>
+          {collapsed ? null : (
+            <span className="min-w-0 flex-1">
+              <span className="text-body-medium block truncate font-medium">{label}</span>
+              {name ? (
+                <span className="text-on-surface-variant block truncate text-xs">{email}</span>
+              ) : null}
+            </span>
+          )}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" width="md">

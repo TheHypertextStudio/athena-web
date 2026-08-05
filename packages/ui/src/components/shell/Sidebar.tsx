@@ -45,6 +45,8 @@ import {
   Activity,
   Building,
   Calendar,
+  ChevronLeft,
+  ChevronRight,
   FolderKanban,
   GanttChart,
   Home,
@@ -62,9 +64,12 @@ import {
   Users,
   Workflow,
 } from '../../icons';
+import { cn } from '../../lib/utils';
+import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../primitives';
 import { useVocabulary } from '../../hooks/useVocabulary';
 import { useContextState } from './ContextProvider';
 import { useShellDrawer } from './ShellDrawerContext';
+import { useShellSidebar } from './ShellSidebarContext';
 import { SidebarNavItem } from './SidebarNavItem';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
@@ -140,7 +145,19 @@ interface NavRow<K extends string> {
  * is separated from the group above it by `mt-4`, and the heading sits `mb-1` above its first row
  * (rows then start flush beneath it), matching the section-spacing rhythm.
  */
-function GroupLabel({ children }: { readonly children: React.ReactNode }): React.JSX.Element {
+function GroupLabel({
+  children,
+  collapsed,
+}: {
+  readonly children: React.ReactNode;
+  readonly collapsed: boolean;
+}): React.JSX.Element {
+  // Collapsed there is no room for the word, and a truncated heading is worse than none. The
+  // grouping itself still has to survive, so it becomes a rule — the section boundary is the
+  // information, and the word was only ever naming it.
+  if (collapsed) {
+    return <hr aria-hidden="true" className="border-outline-variant mx-2 mt-4 mb-1 border-t" />;
+  }
   return (
     <p className="text-on-surface-variant text-body-medium mt-4 mb-1 px-3 font-medium">
       {children}
@@ -174,6 +191,10 @@ export function Sidebar({
 }: SidebarProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const dismissDrawer = useShellDrawer();
+  const { collapsed: shellCollapsed, onToggle } = useShellSidebar();
+  // Never collapsed inside the off-canvas drawer. There the sidebar IS the surface the viewer
+  // opened; shrinking it to glyphs would leave a 56px sheet over an empty screen.
+  const collapsed = shellCollapsed && dismissDrawer === null;
 
   // When rendered inside the mobile off-canvas drawer, a nav selection should close the drawer
   // so the chosen destination is visible. Every nav row is a link or button, so a bubbled click
@@ -244,85 +265,152 @@ export function Sidebar({
   ];
 
   return (
-    <aside
-      aria-label="Navigation"
-      className="text-on-surface flex h-full w-full shrink-0 flex-col overflow-y-auto p-2 lg:w-60"
-    >
-      <WorkspaceSwitcher
-        workspaces={workspaces}
-        onSelect={onSelectWorkspace}
-        onCreate={onCreateWorkspace}
-        loading={loading}
-      />
+    // Its own provider, because collapsing moves every row's label into a tooltip — a component
+    // that cannot render its own labels without one has no business requiring the host to remember.
+    // Radix allows nesting, so the app's root provider is unaffected.
+    <TooltipProvider>
+      <aside
+        aria-label="Navigation"
+        className={cn(
+          'text-on-surface flex h-full w-full shrink-0 flex-col overflow-y-auto p-2',
+          collapsed ? 'lg:w-14 lg:items-center' : 'lg:w-60',
+        )}
+      >
+        {/* The switcher and the collapse control share the header row. The toggle lives here
+            rather than at the foot because the foot is `mt-auto`'d to the bottom edge — a control
+            placed after it sits below the fold on a short window, which is exactly where somebody
+            looking for "how do I get the labels back" cannot find it. */}
+        <div
+          className={cn(
+            'flex shrink-0 gap-1',
+            collapsed ? 'flex-col items-center' : 'flex-row items-center',
+          )}
+        >
+          <div className={collapsed ? undefined : 'min-w-0 flex-1'}>
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              onSelect={onSelectWorkspace}
+              onCreate={onCreateWorkspace}
+              loading={loading}
+              collapsed={collapsed}
+            />
+          </div>
+          {dismissDrawer === null ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  iconOnly
+                  controlSize="sm"
+                  aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+                  aria-pressed={collapsed}
+                  onClick={onToggle}
+                  className="text-on-surface-variant hover:text-on-surface hidden shrink-0 lg:inline-flex"
+                >
+                  {collapsed ? (
+                    <ChevronRight aria-hidden="true" />
+                  ) : (
+                    <ChevronLeft aria-hidden="true" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                {collapsed ? 'Expand navigation' : 'Collapse navigation'}
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
 
-      <nav aria-label="Home" className="flex flex-col space-y-0.5 pt-2" onClick={handleNavActivate}>
-        {homeRows.map((row) => {
-          const href = hrefForHome(row.key);
-          const active = activeHomeKey === row.key;
-          return (
-            <SidebarNavItem
-              key={row.key}
-              label={row.label}
-              icon={row.icon}
-              active={active}
-              badge={row.key === 'inbox' ? unreadCount : undefined}
-              badgeLabel="unread"
-              asChild
-            >
-              {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
-            </SidebarNavItem>
-          );
-        })}
-        <SidebarNavItem label="Search" icon={Search} onSelect={onOpenSearch} disabled={loading} />
-      </nav>
-
-      <GroupLabel>Workspace</GroupLabel>
-      {/* Every label in `workspaceRows` is a compile-time constant, so there is nothing here to
-          wait for: the rows paint immediately and only their `href` depends on the resolved
-          workspace. A grey bar in place of the word "Projects" is strictly less information than
-          the word "Projects" — it hides a label we already know in order to reserve the space that
-          label would have occupied. While `activeOrgId` is unresolved the same rows render
-          non-navigable (same text, same icons, same heights), so the section's rhythm is held by
-          real content rather than by a placeholder standing in for it. */}
-      {activeOrgId ? (
         <nav
-          aria-label="Workspace"
-          className="flex flex-col space-y-0.5"
+          aria-label="Home"
+          className="flex flex-col space-y-0.5 pt-2"
           onClick={handleNavActivate}
         >
-          {workspaceRows.map((row) => {
-            const href = hrefForWorkspace(activeOrgId, row.key);
-            const active = activeWorkspaceKey === row.key;
+          {homeRows.map((row) => {
+            const href = hrefForHome(row.key);
+            const active = activeHomeKey === row.key;
             return (
               <SidebarNavItem
                 key={row.key}
                 label={row.label}
                 icon={row.icon}
                 active={active}
+                badge={row.key === 'inbox' ? unreadCount : undefined}
+                badgeLabel="unread"
+                collapsed={collapsed}
                 asChild
               >
                 {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
               </SidebarNavItem>
             );
           })}
+          <SidebarNavItem
+            label="Search"
+            icon={Search}
+            onSelect={onOpenSearch}
+            disabled={loading}
+            collapsed={collapsed}
+          />
         </nav>
-      ) : loading || workspaces.length > 0 ? (
-        // `workspaces.length > 0` with no `activeOrgId` is the one-frame gap between the list
-        // arriving and the host binding an active workspace to it. Falling through to
-        // `WorkspaceEmpty` there would flash "No workspace yet" at someone who plainly has one —
-        // the false empty state the old skeleton existed to avoid, which is avoided here by
-        // showing the real rows instead of a placeholder.
-        <nav aria-label="Workspace" className="flex flex-col space-y-0.5">
-          {workspaceRows.map((row) => (
-            <SidebarNavItem key={row.key} label={row.label} icon={row.icon} disabled />
-          ))}
-        </nav>
-      ) : (
-        <WorkspaceEmpty />
-      )}
 
-      {footer ? <div className="mt-auto pt-2">{footer}</div> : null}
-    </aside>
+        <GroupLabel collapsed={collapsed}>Workspace</GroupLabel>
+        {/* Every label in `workspaceRows` is a compile-time constant, so there is nothing here to
+          wait for: the rows paint immediately and only their `href` depends on the resolved
+          workspace. A grey bar in place of the word "Projects" is strictly less information than
+          the word "Projects" — it hides a label we already know in order to reserve the space that
+          label would have occupied. While `activeOrgId` is unresolved the same rows render
+          non-navigable (same text, same icons, same heights), so the section's rhythm is held by
+          real content rather than by a placeholder standing in for it. */}
+        {activeOrgId ? (
+          <nav
+            aria-label="Workspace"
+            className="flex flex-col space-y-0.5"
+            onClick={handleNavActivate}
+          >
+            {workspaceRows.map((row) => {
+              const href = hrefForWorkspace(activeOrgId, row.key);
+              const active = activeWorkspaceKey === row.key;
+              return (
+                <SidebarNavItem
+                  key={row.key}
+                  label={row.label}
+                  icon={row.icon}
+                  active={active}
+                  collapsed={collapsed}
+                  asChild
+                >
+                  {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
+                </SidebarNavItem>
+              );
+            })}
+          </nav>
+        ) : loading || workspaces.length > 0 ? (
+          // `workspaces.length > 0` with no `activeOrgId` is the one-frame gap between the list
+          // arriving and the host binding an active workspace to it. Falling through to
+          // `WorkspaceEmpty` there would flash "No workspace yet" at someone who plainly has one —
+          // the false empty state the old skeleton existed to avoid, which is avoided here by
+          // showing the real rows instead of a placeholder.
+          <nav aria-label="Workspace" className="flex flex-col space-y-0.5">
+            {workspaceRows.map((row) => (
+              <SidebarNavItem
+                key={row.key}
+                label={row.label}
+                icon={row.icon}
+                collapsed={collapsed}
+                disabled
+              />
+            ))}
+          </nav>
+        ) : collapsed ? null : (
+          <WorkspaceEmpty />
+        )}
+
+        {footer ? (
+          <div className={cn('mt-auto pt-2', collapsed ? 'w-full' : null)}>{footer}</div>
+        ) : null}
+      </aside>
+    </TooltipProvider>
   );
 }
 
@@ -360,6 +448,9 @@ function RowBody({
   readonly icon: LucideIcon;
   readonly label: string;
 }): React.JSX.Element {
+  // The label element is always rendered; `SidebarNavItem` hides it with a descendant selector when
+  // collapsed. Dropping it here instead would mean every caller of `renderLink` — which is the host
+  // app's router link, not ours — had to be told about the collapse.
   return (
     <>
       <Icon aria-hidden="true" className="size-4 shrink-0" />

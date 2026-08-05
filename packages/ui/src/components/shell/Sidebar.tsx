@@ -250,7 +250,7 @@ export function Sidebar({
         loading={loading}
       />
 
-      <nav aria-label="Home" className="flex flex-col space-y-1 pt-2" onClick={handleNavActivate}>
+      <nav aria-label="Home" className="flex flex-col space-y-0.5 pt-2" onClick={handleNavActivate}>
         {homeRows.map((row) => {
           const href = hrefForHome(row.key);
           const active = activeHomeKey === row.key;
@@ -280,7 +280,11 @@ export function Sidebar({
           non-navigable (same text, same icons, same heights), so the section's rhythm is held by
           real content rather than by a placeholder standing in for it. */}
       {activeOrgId ? (
-        <nav aria-label="Workspace" className="flex flex-col space-y-1" onClick={handleNavActivate}>
+        <nav
+          aria-label="Workspace"
+          className="flex flex-col space-y-0.5"
+          onClick={handleNavActivate}
+        >
           {workspaceRows.map((row) => {
             const href = hrefForWorkspace(activeOrgId, row.key);
             const active = activeWorkspaceKey === row.key;
@@ -303,7 +307,7 @@ export function Sidebar({
         // `WorkspaceEmpty` there would flash "No workspace yet" at someone who plainly has one —
         // the false empty state the old skeleton existed to avoid, which is avoided here by
         // showing the real rows instead of a placeholder.
-        <nav aria-label="Workspace" className="flex flex-col space-y-1">
+        <nav aria-label="Workspace" className="flex flex-col space-y-0.5">
           {workspaceRows.map((row) => (
             <SidebarNavItem key={row.key} label={row.label} icon={row.icon} disabled />
           ))}

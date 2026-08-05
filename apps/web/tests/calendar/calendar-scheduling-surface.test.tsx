@@ -480,6 +480,7 @@ describe('CalendarSchedulingSurface persistence', () => {
         jsonResponse({
           record: null,
           serverNow: new Date().toISOString(),
+          suggestion: null,
           activeAgentExecutions: [],
         }),
       );

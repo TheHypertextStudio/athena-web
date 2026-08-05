@@ -28,7 +28,8 @@ export const TIMER_JOIN_WINDOW_MS = 60_000;
 /** The minimum a segment must know about itself for the join rule to apply. */
 export interface JoinCandidate {
   readonly id: string;
-  readonly taskId: string;
+  /** Null while the segment's record is still unanchored. */
+  readonly taskId: string | null;
   readonly endedAt: Date | null;
 }
 
@@ -38,10 +39,12 @@ export interface JoinCandidate {
  * @remarks
  * Three conditions, all required, none of them incidental:
  *
- * 1. **Same task.** A join across a task change would move time from one subject to another,
- *    which is the one thing a time ledger may never do. The check is on the segment's own
- *    `taskId`, not its record's, so it holds even for a record whose anchor was resolved
- *    elsewhere.
+ * 1. **Same task, and both sides know which task that is.** A join across a task change would move
+ *    time from one subject to another, which is the one thing a time ledger may never do. The
+ *    check is on the segment's own `taskId`, not its record's, so it holds even for a record whose
+ *    anchor was resolved elsewhere. A null anchor means "no answer yet", never "the same answer":
+ *    two unrelated nameless sessions started thirty seconds apart are two pieces of work, and
+ *    letting `null === null` merge them would fabricate a continuity nobody claimed.
  * 2. **Actually closed.** An open segment (`endedAt === null`) is already accruing; "joining" it
  *    would be a no-op dressed up as a decision.
  * 3. **Gap strictly under {@link TIMER_JOIN_WINDOW_MS}.** A negative gap — a clock that moved
@@ -49,16 +52,17 @@ export interface JoinCandidate {
  *    swallow time nobody worked.
  *
  * @param candidate - The most recent segment for this user, or null when there is none.
- * @param taskId - The task tracking is resuming on.
+ * @param taskId - The task tracking is resuming on; null when the session is unanchored.
  * @param now - The server clock at resume.
  * @returns whether `candidate` should be reopened rather than a new segment written.
  */
 export function shouldJoinSegment(
   candidate: JoinCandidate | null | undefined,
-  taskId: string,
+  taskId: string | null,
   now: Date,
 ): boolean {
   if (!candidate?.endedAt) return false;
+  if (candidate.taskId === null || taskId === null) return false;
   if (candidate.taskId !== taskId) return false;
   const gapMs = now.getTime() - candidate.endedAt.getTime();
   return gapMs >= 0 && gapMs < TIMER_JOIN_WINDOW_MS;

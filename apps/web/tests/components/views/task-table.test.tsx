@@ -87,6 +87,7 @@ beforeEach(() => {
       Promise.resolve({
         record: null,
         serverNow: new Date().toISOString(),
+        suggestion: null,
         activeAgentExecutions: [],
       }),
   });

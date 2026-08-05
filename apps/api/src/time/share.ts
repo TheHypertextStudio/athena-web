@@ -156,11 +156,16 @@ export async function readSharedTimerStatus(rawToken: string): Promise<PublicTim
 
   // The newest record that is still open or paused IS the current session. A closed record is
   // finished work, not "what I'm doing", so it never answers this question.
+  //
+  // Left-joined because a running session may not be anchored to a task yet. An inner join dropped
+  // those rows entirely, so a shared status page reported "idle" while its owner was demonstrably
+  // tracking — the one thing the page exists to get right. An unanchored session reports its state
+  // with a null title, which is also what a viewer without `includeTitle` already sees.
   const sessions = await db
     .select({ record: timeRecord, taskTitle: task.title, workspaceName: organization.name })
     .from(timeRecord)
-    .innerJoin(task, eq(task.id, timeRecord.taskId))
-    .innerJoin(organization, eq(organization.id, task.organizationId))
+    .leftJoin(task, eq(task.id, timeRecord.taskId))
+    .leftJoin(organization, eq(organization.id, task.organizationId))
     .where(and(eq(timeRecord.hubId, grant.hubId), eq(timeRecord.createdByUserId, grant.userId)))
     .orderBy(desc(timeRecord.startedAt))
     .limit(20);
@@ -186,8 +191,8 @@ export async function readSharedTimerStatus(rawToken: string): Promise<PublicTim
   const measures = measureIntervals(intervals, now);
   return {
     state: current.record.status === 'open' ? 'running' : 'paused',
-    taskTitle: grant.includeTitle ? current.taskTitle : null,
-    workspaceName: grant.includeWorkspace ? current.workspaceName : null,
+    taskTitle: grant.includeTitle ? (current.taskTitle ?? null) : null,
+    workspaceName: grant.includeWorkspace ? (current.workspaceName ?? null) : null,
     startedAt: current.record.startedAt?.toISOString() ?? null,
     elapsedMs: measures.humanEffortMs,
     serverNow: now.toISOString(),

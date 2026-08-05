@@ -115,6 +115,7 @@ export { default as Tag } from '@mui/icons-material/LocalOfferRounded';
 export { default as TuneRounded } from '@mui/icons-material/TuneRounded';
 export { default as Target } from '@mui/icons-material/TrackChanges';
 export { default as TaskAlt } from '@mui/icons-material/TaskAlt';
+export { default as Timer } from '@mui/icons-material/TimerOutlined';
 export { default as Translate } from '@mui/icons-material/Translate';
 export { default as Trash2 } from '@mui/icons-material/DeleteOutlined';
 export { default as Undo } from '@mui/icons-material/Undo';

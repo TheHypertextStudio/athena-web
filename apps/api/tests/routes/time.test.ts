@@ -59,6 +59,19 @@ describe('Time Ledger routes', () => {
     return json<TimeRecordOut>(response);
   }
 
+  /**
+   * Read the anchor off a record that is supposed to have one.
+   *
+   * @remarks
+   * `taskId` is nullable now, because a session may run before anyone names it. A test that
+   * started from a label is not such a session, so failing loudly here keeps that distinction
+   * visible rather than letting a silently-unanchored record pass as an anchored one.
+   */
+  function anchorOf(record: TimeRecordOut): string {
+    if (record.taskId === null) throw new Error('expected the record to be anchored to a task');
+    return record.taskId;
+  }
+
   /** Seed an ordinary Docket task the timer can be pointed at. */
   async function seedTask(title: string, overrides: Record<string, unknown> = {}): Promise<string> {
     const schema = await getDb();
@@ -134,7 +147,7 @@ describe('Time Ledger routes', () => {
           source: schema.task.source,
         })
         .from(schema.task)
-        .where(eq(schema.task.id, record.taskId)),
+        .where(eq(schema.task.id, anchorOf(record))),
     );
     // The same row shape every other task has: real workspace, real team, real workflow state,
     // native provenance — nothing that marks it as belonging to the timer.
@@ -297,7 +310,10 @@ describe('Time Ledger routes', () => {
     // from raw SQL, which is a stronger guarantee than the requirement asks for. The record's own
     // label has no such constraint, so that is the hole the stop guard has to close.
     await expect(
-      schema.db.update(schema.task).set({ title: '   ' }).where(eq(schema.task.id, record.taskId)),
+      schema.db
+        .update(schema.task)
+        .set({ title: '   ' })
+        .where(eq(schema.task.id, anchorOf(record))),
     ).rejects.toThrow();
     // Bypass every client and every validator, exactly as the acceptance requires.
     await schema.db
@@ -344,6 +360,120 @@ describe('Time Ledger routes', () => {
       body: JSON.stringify({ title: '  ' }),
     });
     expect(blankRename.status).toBe(422);
+  });
+
+  // The one-click start. An omitted label is a person beginning work before naming it, which is
+  // a different thing from the blank label above — that one is a client sending nonsense.
+  it('starts a session with no label and no task at all', async () => {
+    const record = await startTracking({ context: {} });
+    expect(record.status).toBe('open');
+    expect(record.taskId).toBeNull();
+    expect(record.title).toBe('');
+    expect(record.intervals).toHaveLength(1);
+    expect(record.intervals[0]?.taskId).toBeNull();
+    // Nothing is reportable until there is a subject to credit.
+    expect(record.allocations).toEqual([]);
+
+    // Scoped to this test's own workspace: the suite shares one database, so a global count would
+    // be measuring every other test's fixtures rather than this one's restraint.
+    const schema = await getDb();
+    const tasks = await schema.db
+      .select({ id: schema.task.id })
+      .from(schema.task)
+      .where(eq(schema.task.organizationId, organizationId));
+    expect(tasks).toHaveLength(0);
+  });
+
+  it('refuses to finish an unnamed session, and leaves it running', async () => {
+    const record = await startTracking({ context: {} });
+    const refused = await app.request(`/records/${record.id}/stop`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({}),
+    });
+    expect(refused.status).toBe(422);
+    expect((await json<{ code: string }>(refused)).code).toBe('validation_error');
+
+    const schema = await getDb();
+    const stillOpen = one(
+      await schema.db
+        .select({ status: schema.timeRecord.status })
+        .from(schema.timeRecord)
+        .where(eq(schema.timeRecord.id, record.id)),
+    );
+    expect(stillOpen.status).toBe('open');
+  });
+
+  it('anchors the record, its segments and its allocation when the stop carries a name', async () => {
+    const record = await startTracking({ context: {} });
+    const stopped = await app.request(`/records/${record.id}/stop`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: 'Fixing the drag handles' }),
+    });
+    expect(stopped.status).toBe(200);
+    const closed = await json<TimeRecordOut>(stopped);
+    expect(closed.status).toBe('closed');
+    expect(closed.title).toBe('Fixing the drag handles');
+    const taskId = anchorOf(closed);
+
+    // The denormalized segment anchor is what a breakdown sums, so a record whose segments kept a
+    // null id would report zero against the very task it names.
+    expect(closed.intervals.every((interval) => interval.taskId === taskId)).toBe(true);
+    expect(closed.allocations).toEqual([
+      expect.objectContaining({ targetKind: 'task', targetId: taskId, basisPoints: 10_000 }),
+    ]);
+
+    const schema = await getDb();
+    const created = one(
+      await schema.db
+        .select({ title: schema.task.title, source: schema.task.source })
+        .from(schema.task)
+        .where(eq(schema.task.id, taskId)),
+    );
+    expect(created).toEqual({ title: 'Fixing the drag handles', source: 'native' });
+  });
+
+  it('anchors on an inline rename, without stopping the timer', async () => {
+    const record = await startTracking({ context: {} });
+    const renamed = await app.request(`/records/${record.id}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: 'Naming it while I work' }),
+    });
+    expect(renamed.status).toBe(200);
+    const body = await json<TimeRecordOut>(renamed);
+    expect(body.status).toBe('open');
+    const taskId = anchorOf(body);
+    expect(body.intervals.every((interval) => interval.taskId === taskId)).toBe(true);
+  });
+
+  // Two nameless sessions are two pieces of work. Treating `null === null` as "the same task"
+  // would silently weld them into one continuous stretch nobody worked.
+  it('never joins two unnamed sessions, however brief the gap', async () => {
+    const first = await startTracking({ context: {} });
+    await app.request(`/records/${first.id}/stop`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title: 'First thing' }),
+    });
+    await rewindLastSegment(first.id, 1_000);
+    const second = await startTracking({ context: {} });
+    expect(second.id).not.toBe(first.id);
+    expect(await segmentCount(second.id)).toBe(1);
+  });
+
+  // The guarantee that keeps every terminal-record reader safe. Enforced by the database, not by
+  // whichever write path happened to remember to check.
+  it('makes a closed record without an anchor unrepresentable, even from raw SQL', async () => {
+    const record = await startTracking({ context: {} });
+    const schema = await getDb();
+    await expect(
+      schema.db
+        .update(schema.timeRecord)
+        .set({ status: 'closed' })
+        .where(eq(schema.timeRecord.id, record.id)),
+    ).rejects.toThrow();
   });
 
   // CORE-44: every transition is announced, once, in order, with the task on it.

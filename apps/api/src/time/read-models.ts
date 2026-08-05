@@ -32,6 +32,7 @@ import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-or
 import type { z } from 'zod';
 
 import { canReadTimeContext, resolveTimeHubId } from './access';
+import { resolveAnchorSuggestion } from './anchor-suggestion';
 
 type TimeRecordRow = typeof timeRecord.$inferSelect;
 type TimeIntervalRow = typeof timeInterval.$inferSelect;
@@ -208,11 +209,13 @@ export async function hydrateTimeRecords(
   // The anchor's workspace is read once for the whole page rather than per record: it is what
   // every timer surface labels the session with, so making it an N+1 would put a query per row
   // behind the shell's own always-on tracker read.
-  const taskIds = [...new Set(records.map((record) => record.taskId))];
-  const anchorRows = await db
-    .select({ id: task.id, organizationId: task.organizationId })
-    .from(task)
-    .where(inArray(task.id, taskIds));
+  const taskIds = [...new Set(records.map((record) => record.taskId).filter(isPresent))];
+  const anchorRows = taskIds.length
+    ? await db
+        .select({ id: task.id, organizationId: task.organizationId })
+        .from(task)
+        .where(inArray(task.id, taskIds))
+    : [];
   const organizationByTask = new Map(anchorRows.map((row) => [row.id, row.organizationId]));
   return records.map((record) => {
     const recordIntervals = intervalsByRecord.get(record.id) ?? [];
@@ -222,7 +225,7 @@ export async function hydrateTimeRecords(
       id: record.id,
       hubId: record.hubId,
       taskId: record.taskId,
-      organizationId: organizationByTask.get(record.taskId) ?? null,
+      organizationId: record.taskId ? (organizationByTask.get(record.taskId) ?? null) : null,
       title: record.title,
       outcomeNote: record.outcomeNote,
       status: record.status,
@@ -273,6 +276,11 @@ export async function hydrateTimeRecords(
   });
 }
 
+/** Narrowing predicate for `.filter()`, which cannot narrow a nullable element type on its own. */
+function isPresent<T>(value: T | null): value is T {
+  return value !== null;
+}
+
 /** Group a relation list by its Time Record id. */
 function groupByRecord<T extends { timeRecordId: string }>(rows: readonly T[]): Map<string, T[]> {
   const grouped = new Map<string, T[]>();
@@ -316,6 +324,10 @@ export async function getActiveTime(userId: string) {
     )
     .limit(1);
   const [record] = await hydrateTimeRecords(active, userId, now);
+  // Only worth resolving when there is nothing anchored to show. A running, named session already
+  // answers "what am I on", and the shell polls this read continuously — spending four queries per
+  // poll to suggest work the caller is demonstrably already doing is pure waste.
+  const suggestion = record?.taskId ? null : await resolveAnchorSuggestion(userId, hubId, now);
   const activeAgentExecutions = await db
     .select({
       id: agentExecution.id,
@@ -334,6 +346,7 @@ export async function getActiveTime(userId: string) {
     .orderBy(asc(agentExecution.queuedAt));
   return {
     record: record ?? null,
+    suggestion,
     serverNow: now.toISOString(),
     activeAgentExecutions: activeAgentExecutions.map((execution) => ({
       ...execution,
@@ -635,7 +648,11 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
       .select({ id: timeCategory.id, name: timeCategory.name })
       .from(timeCategory)
       .where(eq(timeCategory.hubId, hubId)),
-    resolveTaskPlacements([...new Set(records.map((record) => record.taskId))]),
+    // A breakdown reads terminal records, and the closed-requires-anchor constraint means those
+    // always carry a task. The filter is what makes that guarantee visible to the type system
+    // rather than an assertion, and it also keeps a still-running unanchored session — which a
+    // range query can legitimately overlap — from being looked up as if it had one.
+    resolveTaskPlacements([...new Set(records.map((record) => record.taskId).filter(isPresent))]),
   ]);
   const categoryName = new Map(categories.map((category) => [category.id, category.name]));
   const buckets = new Map<string, { key: string; label: string; measures: TimeMeasuresInput }>();
@@ -687,7 +704,7 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
       }
       continue;
     }
-    const placement = placements.get(record.taskId);
+    const placement = record.taskId ? placements.get(record.taskId) : undefined;
     // `placements` is resolved (above) for exactly `[...new Set(records.map(r => r.taskId))]`,
     // and `time_record.task_id` cascade-deletes with its task, so every record's task always
     // exists and is always in `placements` — every `TaskPlacement` field is always populated

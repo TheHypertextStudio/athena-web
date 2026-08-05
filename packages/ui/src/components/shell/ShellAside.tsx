@@ -71,6 +71,26 @@ const RAIL_WIDTH_CLASS = 'w-[min(17vw,22rem)]';
 /** How long the collapse/expand motion is armed for — matches the `--dur-slow` token (240ms). */
 const RAIL_TOGGLE_DURATION_MS = 240;
 
+/**
+ * Live state a panel contributes to its own activity-bar icon.
+ *
+ * @remarks
+ * The rail collapses to zero width, so a panel showing something ongoing — a running timer, work
+ * waiting on the person — would otherwise vanish the moment they collapsed it. The icon is the one
+ * part of the rail that is always on screen, which makes it the only honest place to say "this is
+ * still happening" without a second, competing surface elsewhere in the shell.
+ *
+ * Kept to a tone and a sentence rather than an arbitrary node so the bar's fixed `w-12` cannot be
+ * disturbed by whatever a panel decides to render, and so the state reaches a screen reader rather
+ * than being a coloured dot only sighted people can act on.
+ */
+export interface RailPanelStatus {
+  /** `active` is happening now, `muted` is held, `attention` is waiting on the person. */
+  readonly tone: 'active' | 'muted' | 'attention';
+  /** Appended to the icon's accessible name, e.g. `Tracking Deep work`. */
+  readonly label: string;
+}
+
 /** One supplemental panel the rail can show: its content plus the activity-bar switcher metadata. */
 export interface RailPanel {
   /** Stable id (also the persisted "active panel" key). */
@@ -81,6 +101,8 @@ export interface RailPanel {
   readonly icon: React.ReactNode;
   /** The panel body (owns its own header). */
   readonly node: React.ReactNode;
+  /** Live state shown on the icon; absent when the panel has nothing ongoing to report. */
+  readonly status?: RailPanelStatus;
 }
 
 /** The right rail: the ordered set of native panels plus the one shown by default. */

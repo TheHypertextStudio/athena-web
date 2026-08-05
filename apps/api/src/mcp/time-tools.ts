@@ -39,7 +39,8 @@ const TRACK_ACTIONS = ['start', 'pause', 'resume', 'switch', 'stop', 'status', '
 
 /** One segment as an assistant sees it. */
 const SEGMENT_SHAPE = z.object({
-  taskId: z.string(),
+  /** Null for a still-running session that has not been named yet. */
+  taskId: z.string().nullable(),
   taskTitle: z.string(),
   startedAt: z.string(),
   endedAt: z.string().nullable(),
@@ -56,6 +57,29 @@ const TRACKING_SHAPE = z.object({
   startedAt: z.string().nullable(),
   trackedMs: z.number(),
 });
+
+/**
+ * What Docket thinks the person should be tracking, and why.
+ *
+ * @remarks
+ * Flattened into one object with a plain-language `reason` rather than mirroring the REST DTO's
+ * enum plus timestamps. An assistant does not branch on `source: 'calendar_timebox'`; it says the
+ * sentence out loud. Giving it the sentence directly is what keeps every surface saying the same
+ * thing about the same suggestion.
+ */
+const SUGGESTION_SHAPE = z.object({
+  taskId: z.string(),
+  taskTitle: z.string(),
+  reason: z.string(),
+});
+
+/** The one sentence each suggestion source justifies itself with. */
+const SUGGESTION_REASON = {
+  calendar_timebox: 'a calendar block covering right now is linked to it',
+  daily_plan_timebox: 'today’s plan has it timeboxed for right now',
+  day_directive: 'the day plan recommends it next',
+  recent: 'it was being tracked within the last couple of hours and is still in progress',
+} as const;
 
 /** Project a hydrated record onto the assistant-facing tracking shape. */
 function toTracking(
@@ -99,7 +123,7 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Track time',
       description:
-        'The universal timer. Start tracking a task (by `taskId`, or by `label` alone — which creates an ordinary Docket task with that name), pause and resume it, switch to different work, stop it, read what is running, or list the segments recorded in a period. Restarting the same task within a minute continues the previous segment instead of recording a break. A session can never be finished without a named task.',
+        'The universal timer. Start tracking a task (by `taskId`, by `label` alone — which creates an ordinary Docket task with that name — or with neither, which starts the clock on work that gets named later), pause and resume it, switch to different work, stop it, read what is running, or list the segments recorded in a period. Restarting the same task within a minute continues the previous segment instead of recording a break. A session can never be *finished* without a named task: pass `label` to `stop` to name an unnamed one. `status` also reports what Docket thinks the person should be tracking, drawn from their own calendar and day plan — a suggestion to offer, never something to act on unasked.',
       inputSchema: {
         action: z
           .enum(TRACK_ACTIONS)
@@ -114,7 +138,7 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
           .string()
           .optional()
           .describe(
-            'What is being worked on, in the person’s words. Required when starting without a `taskId` — it becomes the new task’s title.',
+            'What is being worked on, in the person’s words; it becomes the new task’s title. Optional on `start` — omit both this and `taskId` to begin an unnamed session. Required on `stop` when the session being finished is still unnamed.',
           ),
         orgId: z
           .string()
@@ -129,6 +153,11 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
       },
       outputSchema: {
         tracking: TRACKING_SHAPE.describe('The tracker after the action (or as it stands).'),
+        suggestion: SUGGESTION_SHAPE.nullable()
+          .optional()
+          .describe(
+            'Only for `status`: what the person’s own schedule says they should be on. Offer it; never start it for them.',
+          ),
         segments: z
           .array(SEGMENT_SHAPE)
           .optional()
@@ -164,7 +193,16 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
 
         if (args.action === 'status') {
           const active = await getActiveTime(userId);
-          return jsonResult({ tracking: toTracking(active.record) });
+          return jsonResult({
+            tracking: toTracking(active.record),
+            suggestion: active.suggestion
+              ? {
+                  taskId: active.suggestion.taskId,
+                  taskTitle: active.suggestion.title,
+                  reason: SUGGESTION_REASON[active.suggestion.source],
+                }
+              : null,
+          });
         }
 
         if (args.action === 'segments') {
@@ -172,7 +210,11 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
             return errorResult('Listing segments needs both `start` and `end`.');
           }
           const records = await getTimeTimeline(userId, { start: args.start, end: args.end });
-          const taskIds = [...new Set(records.map((record) => record.taskId))];
+          // A still-running session in the period may not be anchored yet, so its id is absent
+          // rather than pointing at a task that does not exist.
+          const taskIds = [...new Set(records.map((record) => record.taskId))].filter(
+            (id): id is string => id !== null,
+          );
           const titles = new Map(
             taskIds.length > 0
               ? (
@@ -189,7 +231,7 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
                 .filter((interval) => interval.supersededById === null)
                 .map((interval) => ({
                   taskId: interval.taskId,
-                  taskTitle: titles.get(interval.taskId) ?? record.title,
+                  taskTitle: (interval.taskId ? titles.get(interval.taskId) : null) ?? record.title,
                   startedAt: interval.startedAt,
                   endedAt: interval.endedAt,
                   durationMs:
@@ -207,11 +249,12 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
           if (args.action === 'switch' && !args.taskId && !args.label) {
             return errorResult('Switching needs the task to switch to — pass `taskId` or `label`.');
           }
+          // A bare `start` with nothing named is deliberate, not an omission: it is the clock
+          // beginning before the person has decided what to call the work.
           const label = args.label ?? (await taskTitle(args.taskId));
-          if (!label) return errorResult('Say what is being worked on — pass `label` or `taskId`.');
           const record = await createTimeRecord(userId, {
             context: {
-              label,
+              ...(label ? { label } : {}),
               ...(args.taskId ? { taskId: args.taskId } : {}),
               ...(args.orgId ? { organizationId: args.orgId } : {}),
               contextualRefs: [],
@@ -228,7 +271,7 @@ export function registerTimeTools(server: McpRegistrar, ctx: McpContext): void {
             ? await pauseTimeRecord(userId, recordId)
             : args.action === 'resume'
               ? await startTimeRecord(userId, recordId)
-              : await stopTimeRecord(userId, recordId);
+              : await stopTimeRecord(userId, recordId, args.label ? { title: args.label } : {});
         return jsonResult({ tracking: toTracking(record) });
       }),
   );

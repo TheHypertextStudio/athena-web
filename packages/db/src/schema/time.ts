@@ -9,6 +9,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   foreignKey,
   index,
   integer,
@@ -70,11 +71,20 @@ export const timeCategory = pgTable(
  * One user-visible semantic unit of tracked work, anchored to the Docket Task it tracks.
  *
  * @remarks
- * `taskId` is `NOT NULL` on purpose: the universal timer's whole premise is that a stretch of
- * tracked time answers "what was I working on?", and a nullable anchor makes an unanswerable
- * record representable. There is deliberately no timer-only task entity — the anchor points at
- * the ordinary `task` table, so a task named while tracking is assignable, schedulable,
- * commentable and completable exactly like every other task in its workspace.
+ * `taskId` is nullable, but only for a session that is still running. The premise still holds —
+ * a *finished* stretch of tracked time must answer "what was I working on?" — and
+ * `time_record_closed_requires_anchor` is what enforces it: a record may sit unanchored while
+ * `open` or `paused`, and cannot reach any terminal status without a task. That is what lets the
+ * timer start on one click and ask what the work was afterwards, the way a person actually works,
+ * while keeping an unnamed-but-finished session unrepresentable rather than merely discouraged.
+ *
+ * Every query that reads terminal records — every report, breakdown, timeline, allocation and
+ * submission — is therefore safe against a null anchor by construction, and only the live-tracker
+ * reads have to handle the unanchored case at all.
+ *
+ * There is deliberately no timer-only task entity — the anchor points at the ordinary `task`
+ * table, so a task named while tracking is assignable, schedulable, commentable and completable
+ * exactly like every other task in its workspace.
  *
  * `title` is kept alongside it rather than always read through the join: it is the *person's own
  * words at the moment they tracked*, so renaming the task later does not silently rewrite
@@ -96,9 +106,7 @@ export const timeRecord = pgTable(
     createdByUserId: text('created_by_user_id')
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
-    taskId: text('task_id')
-      .notNull()
-      .references(() => task.id, { onDelete: 'cascade' }),
+    taskId: text('task_id').references(() => task.id, { onDelete: 'cascade' }),
     title: text('title').notNull(),
     outcomeNote: text('outcome_note'),
     status: timeRecordStatus('status').notNull().default('open'),
@@ -119,6 +127,13 @@ export const timeRecord = pgTable(
     index('time_record_user_started_idx').on(t.createdByUserId, t.startedAt),
     index('time_record_hub_status_idx').on(t.hubId, t.status),
     index('time_record_task_idx').on(t.taskId),
+    // The whole of "a running session may be nameless, a finished one may not". Enforced here
+    // rather than in the stop command because every terminal-status reader depends on it, and a
+    // guard that lives in one code path is a guard that a second write path can forget.
+    check(
+      'time_record_closed_requires_anchor',
+      sql`${t.status} IN ('open','paused') OR ${t.taskId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -134,10 +149,12 @@ export const timeRecord = pgTable(
  *    never has to trust a join to have preserved attribution.
  * 2. It makes the sub-minute join rule checkable without widening the query: a resume may extend
  *    the previous segment only when that segment is on the *same* task, and the segment itself
- *    is what says so.
+ *    is what says so. Two null anchors are not the same task — the rule treats a null as "no
+ *    answer", so two unrelated nameless sessions a minute apart never merge into one.
  *
- * The two can never disagree — every write path sets both from one resolved task, and a record's
- * anchor is immutable once created.
+ * The two can never disagree. A record's anchor is assigned at most once — either when tracking
+ * starts or when it stops — and the write that assigns it sets the record and every one of its
+ * segments from the same resolved task inside one transaction. It is never reassigned.
  */
 export const timeInterval = pgTable(
   'time_interval',
@@ -149,9 +166,7 @@ export const timeInterval = pgTable(
     hubId: text('hub_id')
       .notNull()
       .references(() => hub.id, { onDelete: 'cascade' }),
-    taskId: text('task_id')
-      .notNull()
-      .references(() => task.id, { onDelete: 'cascade' }),
+    taskId: text('task_id').references(() => task.id, { onDelete: 'cascade' }),
     actorKind: timeIntervalActorKind('actor_kind').notNull(),
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
     agentExecutionId: text('agent_execution_id'),

@@ -458,6 +458,47 @@ describe('AppShell rail', () => {
       expect(screen.queryByRole('dialog', { name: 'Agenda' })).not.toBeInTheDocument();
     });
   });
+
+  // A panel's live state has to survive the rail being collapsed — that is the moment it matters,
+  // because the panel body is gone and the icon is all that is left. The dot alone would only
+  // reach people who can see it, so the state belongs in the accessible name too.
+  it('carries a panel’s live status on its icon, in the name as well as the dot', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+          aside={{
+            panels: [
+              TASKS_PANEL,
+              {
+                id: 'focus',
+                label: 'Focus',
+                icon: <Home />,
+                node: <div>Focus body</div>,
+                status: { tone: 'active' as const, label: 'tracking Deep work' },
+              },
+            ],
+            defaultPanelId: 'tasks',
+          }}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Focus, tracking Deep work' })).toBeInTheDocument();
+    expect(screen.getByTestId('rail-status-focus')).toHaveAttribute('data-tone', 'active');
+    // A panel with nothing ongoing stays a plain glyph; a dot that never changes teaches people
+    // to stop looking at it.
+    expect(screen.queryByTestId('rail-status-tasks')).not.toBeInTheDocument();
+  });
 });
 
 describe('Sidebar', () => {

@@ -22,12 +22,13 @@ import type {
   TimeIntervalCreate,
   TimeRecordCreate,
   TimeRecordOut,
+  TimeRecordStop,
   TimeRecordUpdate,
 } from '@docket/types';
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError, ValidationError } from '../error';
 import { emitTimerEvent } from '../routes/event-emit';
 import {
   assertOwnedTimeCategory,
@@ -36,8 +37,15 @@ import {
   validateTimeAllocationTarget,
   validateTimeContext,
 } from './access';
+import { resolveAnchorSuggestion } from './anchor-suggestion';
 import { hydrateTimeRecords, toTimeCategoryOut } from './read-models';
-import { readTaskAnchor, requireTrackingName, resolveTaskAnchor } from './task-anchor';
+import {
+  anchorExistingRecord,
+  readTaskAnchor,
+  requireTrackingName,
+  resolveTargetOrganization,
+  resolveTaskAnchor,
+} from './task-anchor';
 import { type JoinCandidate, shouldJoinSegment } from './timer-join';
 
 type TimeRecordRow = typeof timeRecord.$inferSelect;
@@ -57,31 +65,48 @@ type TimeCategoryInput = ReturnType<typeof toTimeCategoryOut>;
  *
  * Emission is deliberately after the write and outside its transaction: the ledger is the source
  * of truth, and a bus hiccup must never roll back a person's tracked time.
+ *
+ * `tracked` is null while the session has no subject yet. A consumer — Athena included — has to be
+ * told "they started something" rather than be handed a fabricated subject, because the whole
+ * point of a nameless start is that nobody has decided what it is.
  */
 async function announceTimer(
   kind: 'timer_started' | 'timer_paused' | 'timer_resumed' | 'timer_switched' | 'timer_stopped',
   record: TimeRecordInput,
   options: {
     readonly userId: string;
-    readonly organizationId: string;
+    /** Defaults to the record's own workspace, or the caller's personal one when unanchored. */
+    readonly organizationId?: string;
     readonly actorId: string | null;
     readonly occurredAt: Date;
     readonly previousTimeRecordId?: string | null;
   },
 ): Promise<void> {
+  const label = record.title.trim() || UNNAMED_SESSION_LABEL;
+  const organizationId =
+    options.organizationId ??
+    record.organizationId ??
+    (await resolveTargetOrganization(db, options.userId, undefined));
   await emitTimerEvent({
-    organizationId: options.organizationId,
+    organizationId,
     kind,
     userId: options.userId,
     actorId: options.actorId,
     occurredAt: options.occurredAt,
-    tracked: { type: 'task', id: record.taskId, title: record.title },
+    // No subject means no `tracked`; `emitTimerEvent` then makes the record itself the subject
+    // rather than the task, which is exactly what an unnamed session is about.
+    ...(record.taskId
+      ? { tracked: { type: 'task' as const, id: record.taskId, title: label } }
+      : {}),
     timeRecordId: record.id,
     previousTimeRecordId: options.previousTimeRecordId ?? null,
     elapsedMs: record.measures.humanEffortMs,
-    trackedLabel: record.title,
+    trackedLabel: label,
   });
 }
+
+/** What a session with no subject is called in an event feed, until the person names it. */
+const UNNAMED_SESSION_LABEL = 'Untitled session';
 
 /** The caller's most recent human segment, whatever task it was on. */
 async function latestHumanSegment(hubId: string, userId: string): Promise<JoinCandidate | null> {
@@ -125,6 +150,31 @@ async function latestSegmentForRecord(recordId: string): Promise<JoinCandidate |
   // place. A record reachable here (past `getOwnedRecord`) therefore always has at least one row.
   /* v8 ignore next -- @preserve defensive: every owned record has at least one human_active interval */
   return rows[0] ?? null;
+}
+
+/**
+ * Link a starting session back to the calendar block that planned it, when there is one.
+ *
+ * @remarks
+ * Resolved on the server from the schedule rather than taken from the client, because the client
+ * can only report what it was *shown* — a suggestion it rendered thirty seconds ago, possibly for
+ * a block that has since ended. What the link has to record is that the schedule, right now, put
+ * this task in this minute.
+ *
+ * The row is non-counting by construction: `time_context` never contributes to a rollup, so
+ * writing it cannot make planned time masquerade as tracked time. It exists so that comparing
+ * plan against reality is later a join rather than a reconstruction.
+ */
+async function resolvePlanningContext(
+  userId: string,
+  anchor: { readonly taskId: string },
+  now: Date,
+): Promise<{ readonly calendarItemId: string } | null> {
+  const hubId = await resolveTimeHubId(userId);
+  const suggestion = await resolveAnchorSuggestion(userId, hubId, now);
+  if (suggestion?.taskId !== anchor.taskId) return null;
+  if (!suggestion.calendarItemId) return null;
+  return { calendarItemId: suggestion.calendarItemId };
 }
 
 /** Read a Docket task id out of a typed primary context, when the caller supplied one that way. */
@@ -185,8 +235,15 @@ async function insertContext(
 }
 
 /** Refresh a record's envelope from its non-superseded exact intervals. */
-async function refreshRecordEnvelope(recordId: string, now: Date): Promise<void> {
-  const intervals = await db
+async function refreshRecordEnvelope(
+  recordId: string,
+  now: Date,
+  // Defaults to the pool, but a caller already inside a transaction MUST pass its handle: an outer
+  // read cannot see that transaction's own interval writes, so the envelope would be computed from
+  // the pre-transaction rows.
+  executor: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0] = db,
+): Promise<void> {
+  const intervals = await executor
     .select()
     .from(timeInterval)
     .where(and(eq(timeInterval.timeRecordId, recordId), isNull(timeInterval.supersededById)));
@@ -196,7 +253,7 @@ async function refreshRecordEnvelope(recordId: string, now: Date): Promise<void>
   if (intervals.length === 0) return;
   const starts = intervals.map((interval) => interval.startedAt.getTime());
   const ends = intervals.map((interval) => (interval.endedAt ?? now).getTime());
-  await db
+  await executor
     .update(timeRecord)
     .set({ startedAt: new Date(Math.min(...starts)), endedAt: new Date(Math.max(...ends)) })
     .where(eq(timeRecord.id, recordId));
@@ -252,10 +309,12 @@ async function closeOpenHumanSegments(
  * Live creation is the universal timer's entry point, and it does three things a plain insert
  * would not:
  *
- * - **It anchors to a real Task.** `context.taskId` (or a `work_item` primary ref) tracks
- *   existing work; a bare label creates an ordinary task from those words. Either way the
+ * - **It anchors to a real Task, when it can.** `context.taskId` (or a `work_item` primary ref)
+ *   tracks existing work; a bare label creates an ordinary task from those words. Either way the
  *   session has a first-class subject, which is what lets a segment carry a task and a breakdown
- *   roll up through project → program → initiative → workspace.
+ *   roll up through project → program → initiative → workspace. Supplying neither starts the clock
+ *   with no subject at all — the one-click start — and the session stays unanchored, and out of
+ *   every rollup, until {@link stopTimeRecord} or {@link updateTimeRecord} is given a name.
  * - **It applies the sub-minute continuation rule.** Starting the same task again within
  *   {@link ./timer-join.TIMER_JOIN_WINDOW_MS} of the last segment ending REOPENS that segment
  *   and returns its record, rather than minting a second record with a gap between them. The
@@ -287,19 +346,17 @@ export async function createTimeRecord(
     organizationId: input.context.organizationId,
     label: input.context.label,
   });
+  if (!anchor && !live) {
+    throw new ValidationError([
+      { message: 'Historical time must name the work it records', path: ['context', 'label'] },
+    ]);
+  }
   const contexts = await prepareInitialTimeContexts(userId, input.context);
-  // The anchor IS the subject, so it is also the reportable credit. Deriving the allocation from
-  // context instead would let a record's contexts and its rollup disagree about what was worked
-  // on — the exact ambiguity a NOT NULL anchor exists to remove.
-  const defaultAllocation = {
-    targetKind: 'task' as const,
-    targetId: anchor.taskId,
-    organizationId: anchor.organizationId,
-  };
+  const planningContext = live && anchor ? await resolvePlanningContext(userId, anchor, now) : null;
 
   if (live) {
     const candidate = await latestHumanSegment(hubId, userId);
-    if (candidate && shouldJoinSegment(candidate, anchor.taskId, now)) {
+    if (candidate && shouldJoinSegment(candidate, anchor?.taskId ?? null, now)) {
       const joined = await resumeJoinedSegment(userId, hubId, candidate, now);
       if (joined) return joined;
     }
@@ -312,8 +369,10 @@ export async function createTimeRecord(
       .values({
         hubId,
         createdByUserId: userId,
-        taskId: anchor.taskId,
-        title: input.context.label.trim(),
+        taskId: anchor?.taskId ?? null,
+        // The person's own words win over the task's title: `time_record.title` is what they said
+        // at the moment they tracked, so renaming the task later must not rewrite that history.
+        title: input.context.label?.trim() ?? anchor?.title ?? '',
         status: live ? 'open' : 'closed',
         categoryId: input.context.suggestedCategoryId ?? null,
         captureSource,
@@ -340,17 +399,35 @@ export async function createTimeRecord(
         })),
       );
     }
-    await tx.insert(timeAllocation).values({
-      timeRecordId: inserted.id,
-      targetKind: defaultAllocation.targetKind,
-      targetId: defaultAllocation.targetId,
-      organizationId: defaultAllocation.organizationId,
-      basisPoints: 10_000,
-    });
+    if (planningContext) {
+      await tx.insert(timeContext).values({
+        timeRecordId: inserted.id,
+        role: 'planning_context',
+        entityKind: 'calendar_event',
+        sourceSystem: 'docket',
+        externalId: planningContext.calendarItemId,
+        docketEntityId: planningContext.calendarItemId,
+        organizationId: anchor?.organizationId ?? null,
+        createdByUserId: userId,
+      });
+    }
+    // The anchor IS the subject, so it is also the reportable credit. Deriving the allocation from
+    // context instead would let a record's contexts and its rollup disagree about what was worked
+    // on. An unanchored session has no subject to credit yet and therefore no allocation — it
+    // gains one when it is named, which is also when it first becomes reportable.
+    if (anchor) {
+      await tx.insert(timeAllocation).values({
+        timeRecordId: inserted.id,
+        targetKind: 'task',
+        targetId: anchor.taskId,
+        organizationId: anchor.organizationId,
+        basisPoints: 10_000,
+      });
+    }
     await tx.insert(timeInterval).values({
       timeRecordId: inserted.id,
       hubId,
-      taskId: anchor.taskId,
+      taskId: anchor?.taskId ?? null,
       actorKind: 'human',
       userId,
       mode: 'human_active',
@@ -370,10 +447,15 @@ export async function createTimeRecord(
   const hydrated = await toTimeRecordOut(outcome.record, userId, now);
   if (live) {
     const previous = outcome.switchedFrom[0] ?? null;
+    // An unanchored session has no task to read a workspace from, so the event is attributed to
+    // the workspace its task will land in once it is named. Athena must see the start either way.
+    const organizationId =
+      anchor?.organizationId ??
+      (await resolveTargetOrganization(db, userId, input.context.organizationId));
     await announceTimer(previous ? 'timer_switched' : 'timer_started', hydrated, {
       userId,
-      organizationId: anchor.organizationId,
-      actorId: anchor.actorId,
+      organizationId,
+      actorId: anchor?.actorId ?? null,
       occurredAt: now,
       previousTimeRecordId: previous,
     });
@@ -415,17 +497,13 @@ async function resumeJoinedSegment(
   });
   if (!outcome) return null;
   const hydrated = await toTimeRecordOut(outcome.record, userId, now);
-  const anchor = await readTaskAnchor(hydrated.taskId);
-  if (anchor) {
-    const previous = outcome.switchedFrom.find((id) => id !== hydrated.id) ?? null;
-    await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
-      userId,
-      organizationId: anchor.organizationId,
-      actorId: null,
-      occurredAt: now,
-      previousTimeRecordId: previous,
-    });
-  }
+  const previous = outcome.switchedFrom.find((id) => id !== hydrated.id) ?? null;
+  await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
+    userId,
+    actorId: null,
+    occurredAt: now,
+    previousTimeRecordId: previous,
+  });
   return hydrated;
 }
 
@@ -502,17 +580,13 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
     return { record: resumed, switchedFrom };
   });
   const hydrated = await toTimeRecordOut(outcome.record, userId, now);
-  const anchor = await readTaskAnchor(hydrated.taskId);
-  if (anchor) {
-    const previous = outcome.switchedFrom.find((entry) => entry !== id) ?? null;
-    await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
-      userId,
-      organizationId: anchor.organizationId,
-      actorId: null,
-      occurredAt: now,
-      previousTimeRecordId: previous,
-    });
-  }
+  const previous = outcome.switchedFrom.find((entry) => entry !== id) ?? null;
+  await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
+    userId,
+    actorId: null,
+    occurredAt: now,
+    previousTimeRecordId: previous,
+  });
   return hydrated;
 }
 
@@ -543,15 +617,7 @@ export async function pauseTimeRecord(userId: string, id: string): Promise<TimeR
   if (!updated) throw new NotFoundError('Time record not found');
   await refreshRecordEnvelope(id, now);
   const hydrated = await toTimeRecordOut(updated, userId, now);
-  const anchor = await readTaskAnchor(hydrated.taskId);
-  if (anchor) {
-    await announceTimer('timer_paused', hydrated, {
-      userId,
-      organizationId: anchor.organizationId,
-      actorId: null,
-      occurredAt: now,
-    });
-  }
+  await announceTimer('timer_paused', hydrated, { userId, actorId: null, occurredAt: now });
   return hydrated;
 }
 
@@ -559,73 +625,100 @@ export async function pauseTimeRecord(userId: string, id: string): Promise<TimeR
  * Stop the caller's record and close its human tracker.
  *
  * @remarks
- * Stopping re-checks that the tracked task is named, and refuses with a `validation_error`
- * Problem — leaving the session open and still accruing — when it is not. Creation already makes
- * an unnamed session unrepresentable, so this guard is redundant *by design*: the requirement is
- * that finishing without documenting the work be impossible, and an invariant that holds only
- * because one write path happens to validate is an invariant one refactor away from being lost.
- * Checking it where the session would become permanent is the check that cannot be bypassed —
- * not by the REST route, not by MCP, not by a future importer.
+ * This is where naming is enforced. A session may run without a subject — that is the whole of the
+ * one-click start — but finishing turns it into a permanent ledger entry, and a permanent entry
+ * that cannot answer "what was worked on" is worthless to the person who will read it later.
+ *
+ * An unanchored record therefore needs `input.title`, and is refused with a `validation_error`
+ * Problem — left open and still accruing, never silently discarded — without one. The naming and
+ * the close happen in the same transaction: splitting them left a named-but-still-running session
+ * behind whenever the second write failed.
+ *
+ * An already-anchored record ignores `input.title`. A session's subject is assigned at most once,
+ * and stopping is not the place to reassign it.
  */
-export async function stopTimeRecord(userId: string, id: string): Promise<TimeRecordInput> {
+export async function stopTimeRecord(
+  userId: string,
+  id: string,
+  input: TimeRecordStop = {},
+): Promise<TimeRecordInput> {
   const hubId = await resolveTimeHubId(userId);
   const record = await getOwnedRecord(id, hubId);
   if (record.status === 'submitted' || record.status === 'superseded') {
     throw new ConflictError('This time record can no longer be changed');
   }
-  const anchor = await readTaskAnchor(record.taskId);
-  requireTrackingName(record.title, 'title');
-  requireTrackingName(anchor?.title, 'title');
+  if (record.taskId) {
+    const existing = await readTaskAnchor(record.taskId);
+    requireTrackingName(record.title, 'title');
+    requireTrackingName(existing?.title, 'title');
+  } else {
+    requireTrackingName(input.title, 'title');
+  }
   const now = new Date();
-  await db
-    .update(timeInterval)
-    .set({ endedAt: now, closedAt: now })
-    .where(
-      and(
-        eq(timeInterval.timeRecordId, id),
-        eq(timeInterval.userId, userId),
-        eq(timeInterval.mode, 'human_active'),
-        isNull(timeInterval.endedAt),
-      ),
-    );
-  await refreshRecordEnvelope(id, now);
-  const [updated] = await db
-    .update(timeRecord)
-    .set({ status: 'closed', closedAt: now, endedAt: now })
-    .where(eq(timeRecord.id, id))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    if (!record.taskId) {
+      await anchorExistingRecord(tx, userId, id, input.title ?? '', undefined);
+    }
+    await tx
+      .update(timeInterval)
+      .set({ endedAt: now, closedAt: now })
+      .where(
+        and(
+          eq(timeInterval.timeRecordId, id),
+          eq(timeInterval.userId, userId),
+          eq(timeInterval.mode, 'human_active'),
+          isNull(timeInterval.endedAt),
+        ),
+      );
+    await refreshRecordEnvelope(id, now, tx);
+    const [closed] = await tx
+      .update(timeRecord)
+      .set({ status: 'closed', closedAt: now, endedAt: now })
+      .where(eq(timeRecord.id, id))
+      .returning();
+    return closed;
+  });
   /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!updated) throw new NotFoundError('Time record not found');
   const hydrated = await toTimeRecordOut(updated, userId, now);
-  if (anchor) {
-    await announceTimer('timer_stopped', hydrated, {
-      userId,
-      organizationId: anchor.organizationId,
-      actorId: null,
-      occurredAt: now,
-    });
-  }
+  await announceTimer('timer_stopped', hydrated, { userId, actorId: null, occurredAt: now });
   return hydrated;
 }
 
-/** Edit only the semantic, user-controlled fields of a record. */
+/**
+ * Edit only the semantic, user-controlled fields of a record.
+ *
+ * @remarks
+ * Naming a record that has no subject yet **anchors** it rather than renaming it: there is no task
+ * to rename, and writing the title alone would leave a session that looks named in the interface
+ * while still contributing nothing to any rollup. This is the inline-rename path — a person typing
+ * into the running timer names the work without stopping it, and that act creates the ordinary
+ * task the rest of Docket can then schedule, assign and complete.
+ */
 export async function updateTimeRecord(
   userId: string,
   id: string,
   input: TimeRecordUpdate,
 ): Promise<TimeRecordInput> {
   const hubId = await resolveTimeHubId(userId);
-  await getOwnedRecord(id, hubId);
+  const record = await getOwnedRecord(id, hubId);
   if (input.categoryId !== undefined) await assertOwnedTimeCategory(input.categoryId, hubId);
-  const [updated] = await db
-    .update(timeRecord)
-    .set({
-      ...(input.title !== undefined ? { title: input.title } : {}),
-      ...(input.outcomeNote !== undefined ? { outcomeNote: input.outcomeNote } : {}),
-      ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
-    })
-    .where(and(eq(timeRecord.id, id), eq(timeRecord.hubId, hubId)))
-    .returning();
+  const anchoring = !record.taskId && input.title !== undefined;
+  const updated = await db.transaction(async (tx) => {
+    if (anchoring) {
+      await anchorExistingRecord(tx, userId, id, input.title ?? '', undefined);
+    }
+    const [row] = await tx
+      .update(timeRecord)
+      .set({
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.outcomeNote !== undefined ? { outcomeNote: input.outcomeNote } : {}),
+        ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
+      })
+      .where(and(eq(timeRecord.id, id), eq(timeRecord.hubId, hubId)))
+      .returning();
+    return row;
+  });
   /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
   if (!updated) throw new NotFoundError('Time record not found');
   return toTimeRecordOut(updated, userId);

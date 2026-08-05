@@ -213,11 +213,22 @@ describe('track', () => {
     expect(rows[0]).toEqual({ title: 'Untangle the deploy', organizationId: s.orgId });
   });
 
-  it('refuses to start without saying what is being worked on', async () => {
+  // A bare `start` is the one-click start, not an omission: the person began before deciding what
+  // to call it. Refusing here used to force an assistant to invent a name on their behalf, which
+  // put words in the ledger that nobody said.
+  it('starts an unnamed session when neither a task nor a label is given', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);
-    const refused = await track(client, { action: 'start' });
+    const started = payload(await track(client, { action: 'start' }));
+    expect(started.tracking.state).toBe('running');
+    expect(started.tracking.taskId).toBeNull();
+
+    // It still cannot be *finished* nameless — that guard did not move.
+    const refused = await track(client, { action: 'stop' });
     expect(refused.isError).toBe(true);
+
+    const stopped = payload(await track(client, { action: 'stop', label: 'Untangle the deploy' }));
+    expect(stopped.tracking.taskId).toEqual(expect.any(String));
   });
 
   it('lists the segments recorded in a period', async () => {

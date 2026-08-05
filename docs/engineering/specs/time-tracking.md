@@ -102,7 +102,12 @@ Required fields:
 
 - `id`
 - `hubId` — the personal, cross-workspace ownership boundary
-- `title` — required, editable human label; generated from a starting context when possible
+- `title` — editable human label; generated from a starting context when possible, and empty while
+  a live session is still unnamed
+- `taskId` — the ordinary Docket task this session is about. Null **only** while `status` is `open`
+  or `paused`; `time_record_closed_requires_anchor` makes a terminal record without one
+  unrepresentable. Every reader of terminal records is therefore safe against a null anchor by
+  construction, and only the live-tracker reads handle the unanchored case.
 - `status`: `open | paused | closed | submitted | superseded`
 - `categoryId` nullable — one optional Hub-owned primary category
 - `startedAt` / `endedAt` — derived or transactionally maintained envelope of its intervals;
@@ -316,15 +321,42 @@ visible at the date-boundary layer rather than corrupting raw timing facts.
 
 ### 6.1 Universal tracker
 
-The authenticated shell renders one small `TimeTracker` backed by `GET /v1/time/active`. It shows
-the current human record, elapsed time, and relevant active agents. It offers Pause, Switch, and
-Stop without navigating away from the current surface.
+The tracker is the **Focus panel** in the shell's right-hand rail, registered on every surface
+alongside the Agenda and the day plan. It is backed by `GET /v1/time/active` and shows the current
+human record, elapsed time, and relevant active agents. It offers Pause, Switch and Stop without
+navigating away from the current surface. When the rail is collapsed, the panel's activity-bar icon
+carries a status dot and an accessible label, so a running timer is never off screen.
+
+**Starting takes no input.** Pressing Start starts the clock. It does not open a dialog, and it
+never requires a name first: `context.label` is optional on `POST /v1/time/records`, and a session
+with neither a label nor a `taskId` runs unanchored. Naming happens inline in the panel, and is
+required only at stop — see §6.2. This is the difference between a timer somebody uses and a form
+somebody avoids.
+
+**The tracker proposes what to track.** `GET /v1/time/active` also returns a `suggestion`: the task
+the caller's own schedule puts in the present minute, resolved in commitment order from a calendar
+block covering now, a daily-plan timebox covering now, the day directive's recommendation, and
+finally a session tracked within the last two hours whose task is still `started`. The suggestion
+carries its provenance, and the panel shows it — an unexplained guess cannot be told apart from a
+stale one. It is offered and never taken: Docket does not auto-start a timer when a block begins,
+because the ledger records what a person did rather than what was planned for them.
 
 On a Task, the default action is **Start tracking**. On a Calendar Item it is **Track time for
 this**; opening a meeting does not start a clock. The command palette supports **Start
 tracking…** for freeform work. All entry points call the same Time service.
 
-### 6.2 Record detail and repair
+### 6.2 Naming, and record detail and repair
+
+A running session may have no name. A finished one may not. `stopTimeRecord` refuses an unanchored
+record without a `title` — with the same `validation_error` Problem the client already branches on
+— and the naming and the close happen in one transaction, so a failed write can never leave a named
+session still running. The constraint `time_record_closed_requires_anchor` is what actually holds
+the guarantee, so no future write path can lose it by forgetting to check.
+
+Naming an unanchored record **anchors** it: it creates the ordinary Docket task, stamps it onto the
+record and all of its segments, and writes the allocation that first makes the session reportable.
+`PATCH /v1/time/records/:id` does the same, which is the inline-rename path — a person names the
+work without stopping it, and that act is what creates the task.
 
 Stopping a record opens an optional, compact close-out:
 
@@ -445,6 +477,13 @@ The following are prohibited:
 - deriving agent effort from an entire long-lived `agent_session`
 - displaying summed parallel agent effort as elapsed wall-clock duration
 - rolling up related context links as if they were allocations
+- starting, stopping or switching a timer because a planned block began or ended
+
+The anchor suggestion is not an exception to the last rule. It reads the plan to _offer_ a task and
+writes nothing; only a person's own gesture starts a timer. When a session is started from a
+suggestion that came from a calendar block, a `time_context` row with role `planning_context` links
+the record to that block. It is a non-counting link by construction, so plan and actual can later be
+compared by a join rather than a reconstruction — and neither can be derived from the other.
 
 ---
 

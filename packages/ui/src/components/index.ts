@@ -129,6 +129,7 @@ export {
   RAIL_MAX_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
   type RailPanel,
+  type RailPanelStatus,
 } from './shell/ShellAside';
 export {
   ContextProvider,

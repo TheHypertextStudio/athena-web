@@ -58,6 +58,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 const NOTHING_TRACKED = {
   record: null,
   serverNow: new Date().toISOString(),
+  suggestion: null,
   activeAgentExecutions: [],
 };
 
@@ -184,6 +185,7 @@ describe('TaskTimerButton', () => {
           },
         },
         serverNow: new Date().toISOString(),
+        suggestion: null,
         activeAgentExecutions: [],
       }),
     );

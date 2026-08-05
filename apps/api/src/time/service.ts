@@ -38,6 +38,7 @@ export {
   revokeTimeShareToken,
   SHARE_TOKEN_HEADER,
 } from './share';
-export { resolveTaskAnchor } from './task-anchor';
+export { anchorExistingRecord, resolveTaskAnchor } from './task-anchor';
+export { resolveAnchorSuggestion } from './anchor-suggestion';
 export { TIMER_JOIN_WINDOW_MS, shouldJoinSegment } from './timer-join';
 export { resolveTimeHubId } from './access';

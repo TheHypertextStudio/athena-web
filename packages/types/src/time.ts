@@ -91,18 +91,21 @@ export type AgentExecutionStatus = z.infer<typeof AgentExecutionStatus>;
  * A typed input supplied by any surface that can start tracking.
  *
  * @remarks
- * `label` is required and trimmed to at least one character because a tracking session must
- * always be able to answer "what was worked on". Naming is therefore enforced at the moment the
- * session is *created* rather than only at the moment it is stopped, which is what makes an
- * unnamed-but-finished session unrepresentable rather than merely rejected.
+ * `label` is optional, and omitting it is how a surface starts tracking on one click with nothing
+ * to say yet. A *finished* session must still answer "what was worked on" — that has not been
+ * relaxed — but the answer is now required at stop rather than at start, and it is the
+ * `time_record_closed_requires_anchor` constraint in the database, not this schema, that makes an
+ * unnamed-but-finished session unrepresentable. Enforcing it here instead only ever meant the
+ * person had to name the work before they had done it.
  *
- * `taskId` names an existing Docket task to track. Omit it and the label becomes the title of a
- * newly created, entirely ordinary task in {@link TrackableContext.organizationId} (or the
- * caller's personal workspace) — never a tracking-only entity.
+ * `taskId` names an existing Docket task to track. Omit both and the session runs unanchored until
+ * it is named. Supply `label` alone and it becomes the title of a newly created, entirely ordinary
+ * task in {@link TrackableContext.organizationId} (or the caller's personal workspace) — never a
+ * tracking-only entity.
  */
 export const TrackableContext = z
   .object({
-    label: z.string().trim().min(1).max(500),
+    label: z.string().trim().min(1).max(500).optional(),
     /** An existing Docket task to track. When absent, one is created from `label`. */
     taskId: z.string().min(1).optional(),
     /** Where to create the task when `taskId` is absent; defaults to the personal workspace. */
@@ -121,8 +124,8 @@ export const TimeIntervalOut = z
   .object({
     id: TimeIntervalId,
     timeRecordId: TimeRecordId,
-    /** The Docket task this exact segment was worked on. Never null. */
-    taskId: z.string(),
+    /** The Docket task this segment was worked on; null while its record is still unanchored. */
+    taskId: z.string().nullable(),
     actorKind: TimeIntervalActorKind,
     userId: z.string().nullable(),
     agentExecutionId: AgentExecutionId.nullable(),
@@ -186,10 +189,16 @@ export const TimeRecordOut = z
   .object({
     id: TimeRecordId,
     hubId: HubId,
-    /** The ordinary Docket task this session tracked. Never null; never a timer-only entity. */
-    taskId: z.string(),
+    /**
+     * The ordinary Docket task this session tracked; never a timer-only entity.
+     *
+     * Null only while the session is still `open` or `paused` and has not been named yet. A
+     * client branches on this field rather than on an empty {@link TimeRecordOut.title}.
+     */
+    taskId: z.string().nullable(),
     /** The workspace that task belongs to, resolved for display and for breakdowns. */
     organizationId: OrganizationId.nullable(),
+    /** The person's own words at the moment they tracked; `''` while unanchored. */
     title: z.string(),
     outcomeNote: z.string().nullable(),
     status: TimeRecordStatus,
@@ -209,10 +218,55 @@ export const TimeRecordOut = z
 /** Time-record-out value. */
 export type TimeRecordOut = z.infer<typeof TimeRecordOut>;
 
+/** Where a suggested tracking anchor came from, in the order the resolver prefers them. */
+export const TimeAnchorSource = z.enum([
+  'calendar_timebox',
+  'daily_plan_timebox',
+  'day_directive',
+  'recent',
+]);
+/** Time-anchor-source value. */
+export type TimeAnchorSource = z.infer<typeof TimeAnchorSource>;
+
+/**
+ * The task Docket believes the caller is meant to be working on right now.
+ *
+ * @remarks
+ * A suggestion, never an instruction: nothing starts tracking without the person's own gesture,
+ * because the ledger has to record what they did rather than what was planned for them. It
+ * carries its own provenance so the interface can say *why* it picked this task — an unexplained
+ * guess is worse than no guess, since the person cannot tell a good one from a stale one.
+ */
+export const TimeAnchorSuggestion = z
+  .object({
+    taskId: z.string(),
+    organizationId: OrganizationId,
+    title: z.string(),
+    source: TimeAnchorSource,
+    /** The calendar item that produced it; null for the non-calendar sources. */
+    calendarItemId: z.string().nullable(),
+    /** The block's bounds, so the interface can name it. Null for the non-timebox sources. */
+    startsAt: z.string().nullable(),
+    endsAt: z.string().nullable(),
+  })
+  .meta({
+    id: 'TimeAnchorSuggestion',
+    description: 'A suggested tracking anchor with provenance.',
+  });
+/** Time-anchor-suggestion value. */
+export type TimeAnchorSuggestion = z.infer<typeof TimeAnchorSuggestion>;
+
 /** Response for the shell's active tracker. */
 export const TimeActiveOut = z
   .object({
     record: TimeRecordOut.nullable(),
+    /**
+     * What to track next, resolved from the caller's own schedule.
+     *
+     * Null whenever an anchored session is already running — there is nothing to suggest — and
+     * whenever nothing in the day identifies a task.
+     */
+    suggestion: TimeAnchorSuggestion.nullable(),
     serverNow: z.string(),
     activeAgentExecutions: z.array(
       z.object({
@@ -262,6 +316,28 @@ export const TimeRecordUpdate = z
   .meta({ id: 'TimeRecordUpdate', description: 'Edit a Time Record’s semantic fields.' });
 /** Time-record-update value. */
 export type TimeRecordUpdate = z.infer<typeof TimeRecordUpdate>;
+
+/**
+ * Body for finishing a Time Record.
+ *
+ * @remarks
+ * `title` names an unanchored session in the same request that closes it. Splitting the two into a
+ * rename followed by a stop left a renamed-but-still-running session behind whenever the second
+ * call failed, so the anchor and the close happen in one transaction or neither happens.
+ *
+ * An already-anchored record ignores `title` — a session's subject is assigned at most once, and
+ * stopping is not the place to reassign it.
+ */
+export const TimeRecordStop = z
+  .object({
+    title: z.string().trim().min(1).max(500).optional(),
+  })
+  .meta({
+    id: 'TimeRecordStop',
+    description: 'Finish a Time Record, naming it if it is unanchored.',
+  });
+/** Time-record-stop value. */
+export type TimeRecordStop = z.infer<typeof TimeRecordStop>;
 
 /** Body for a deliberate historical/reconstructed interval. */
 export const TimeIntervalCreate = z

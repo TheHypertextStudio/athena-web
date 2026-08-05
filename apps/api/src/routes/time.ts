@@ -20,6 +20,7 @@ import {
   TimeIntervalCreate,
   TimeMeasuresOut,
   TimeRecordCreate,
+  TimeRecordStop,
   TimeRecordOut,
   TimeRecordUpdate,
   TimeShareTokenCreate,
@@ -269,12 +270,17 @@ const time = new Hono<AppEnv>()
       summary: 'Stop a Time Record',
       response: TimeRecordOut,
       description:
-        'Close the caller’s human interval and record. Stopping time never changes a linked Task, Daily Plan Item, or Calendar Item state.',
+        'Close the caller’s human interval and record. An unanchored session must supply `title`, which creates the task it is finally credited to. Stopping time never changes a linked Task, Daily Plan Item, or Calendar Item state.',
     }),
     zParam(recordParam),
+    zJson(TimeRecordStop),
     async (c) => {
       const { user } = requireSession(c);
-      return ok(c, TimeRecordOut, await stopTimeRecord(user.id, c.req.valid('param').id));
+      return ok(
+        c,
+        TimeRecordOut,
+        await stopTimeRecord(user.id, c.req.valid('param').id, c.req.valid('json')),
+      );
     },
   )
   .post(

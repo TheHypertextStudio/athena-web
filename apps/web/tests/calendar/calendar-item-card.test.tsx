@@ -254,6 +254,7 @@ describe('CalendarItemCard', () => {
         jsonResponse({
           record: null,
           serverNow: new Date().toISOString(),
+          suggestion: null,
           activeAgentExecutions: [],
         }),
       );

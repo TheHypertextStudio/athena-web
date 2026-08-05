@@ -13,7 +13,7 @@ import {
   type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { Calendar, ListChecks, Search } from '@docket/ui/icons';
+import { Calendar, ListChecks, Search, Timer } from '@docket/ui/icons';
 import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -34,7 +34,12 @@ import { ReachabilityProvider } from '@/components/reachability';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
-import { GlobalTimer } from '@/components/time-tracking';
+import {
+  FocusPanel,
+  focusRailStatus,
+  type TimerStatus,
+  useTimerStatus,
+} from '@/components/time-tracking';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
@@ -393,15 +398,37 @@ function AppShellAgendaSkeleton(): JSX.Element {
  * surface therefore offers the Tasks day-plan alone, which is also the drag source for dropping a
  * task into a timebox. Everywhere else the Agenda is the sole panel.
  *
- * Both panels are per-person reads, so they are swapped for a placeholder on `identityUnknown`
- * alone. The workspace list is irrelevant to either — gating them on it would have held an empty
- * rail open for an org fetch neither panel consumes.
+ * Focus, by contrast, is registered on **every** surface including the calendar. The reason Agenda
+ * is excluded there does not apply to it: Focus mounts no scheduling canvas and no date navigator,
+ * so it cannot become the second time grid on a screen that already has one. It is also the panel
+ * that most needs to be reachable from wherever the person happens to be, since the work it
+ * measures is being done on those other surfaces rather than in the rail.
+ *
+ * The default panel is unchanged on both surfaces, so nobody's rail moves under them; Focus is an
+ * addition to the switcher, not a new landing place.
+ *
+ * Every panel here is a per-person read, so they are swapped for a placeholder on
+ * `identityUnknown` alone. The workspace list is irrelevant to all of them — gating them on it
+ * would have held an empty rail open for an org fetch no panel consumes.
  *
  * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
  * @param calendarSurface - Whether the active route is the full calendar view.
+ * @param timerStatus - The live tracker, which lends the Focus icon its status dot.
  * @returns The rail panel set and the panel shown until the viewer picks another.
  */
-function railAsideFor(identityUnknown: boolean, calendarSurface: boolean): AppShellAside {
+function railAsideFor(
+  identityUnknown: boolean,
+  calendarSurface: boolean,
+  timerStatus: TimerStatus,
+): AppShellAside {
+  const status = identityUnknown ? null : focusRailStatus(timerStatus);
+  const focus: RailPanel = {
+    id: 'focus',
+    label: 'Focus',
+    icon: <Timer aria-hidden="true" />,
+    node: identityUnknown ? <AppShellAgendaSkeleton /> : <FocusPanel />,
+    ...(status ? { status } : {}),
+  };
   if (calendarSurface) {
     const tasks: RailPanel = {
       id: 'tasks',
@@ -409,7 +436,7 @@ function railAsideFor(identityUnknown: boolean, calendarSurface: boolean): AppSh
       icon: <ListChecks aria-hidden="true" />,
       node: identityUnknown ? <AppShellAgendaSkeleton /> : <DayTasksPanel />,
     };
-    return { panels: [tasks], defaultPanelId: 'tasks' };
+    return { panels: [tasks, focus], defaultPanelId: 'tasks' };
   }
   const agenda: RailPanel = {
     id: 'agenda',
@@ -417,7 +444,7 @@ function railAsideFor(identityUnknown: boolean, calendarSurface: boolean): AppSh
     icon: <Calendar aria-hidden="true" />,
     node: identityUnknown ? <AppShellAgendaSkeleton /> : <Agenda />,
   };
-  return { panels: [agenda], defaultPanelId: 'agenda' };
+  return { panels: [agenda, focus], defaultPanelId: 'agenda' };
 }
 
 interface AppShellInnerProps {
@@ -492,6 +519,11 @@ function AppShellInner({
   // Registration itself lives at the root so it happens on every route; the shell only consumes
   // the result, so the update prompt can share the one banner slot with the offline notice.
   const { applyUpdate } = useServiceWorkerUpdate();
+
+  // The tickless read, never `useTimerState`. The Focus panel owns the once-a-second clock; a
+  // shell that subscribed to it would re-render the entire application every second a timer ran.
+  // This one changes only when the timer actually starts, pauses, resumes or stops.
+  const timerStatus = useTimerStatus();
 
   // Queued offline writes are a standing fact about this session, not a property of any route, so
   // the shell owns the disclosure the same way it owns the offline and update notices.
@@ -602,13 +634,6 @@ function AppShellInner({
           <AppShellAccountSkeleton />
         ) : (
           <>
-            {/* The universal timer lives in the chrome, not on a page, so it survives every
-                navigation and every reload. This is its desktop home; the mobile top bar carries
-                the same control below `lg`, where the sidebar is a drawer. Both read one query,
-                so they are one timer rather than two. */}
-            <div className="px-2 pb-2">
-              <GlobalTimer organizationId={resolvedOrgId} />
-            </div>
             <RecoveryNudgeBanner personalOrgId={personalOrgId} userId={userId} />
             <AccountMenu onCreateWorkspace={onCreateWorkspace} />
           </>
@@ -638,12 +663,11 @@ function AppShellInner({
   // The search control needs no data at all — `openPalette` is a local handler — so it is rendered
   // outright rather than stood in for by a grey square of the same size.
   //
-  // The timer sits beside it in its compact form: below `lg` the sidebar is a drawer, so the top
-  // bar is the only chrome that is always on screen, and "present on every surface" has to mean
-  // present without opening anything.
+  // The timer is NOT duplicated here. Below `lg` the rail's panels are reached from this bar's own
+  // panel trigger, so the Focus panel is one tap away by the same route as every other panel — a
+  // second timer control beside it would be a second thing to keep in sync with the first.
   const mobileActions = (
     <>
-      {identityUnknown ? null : <GlobalTimer organizationId={resolvedOrgId} variant="compact" />}
       <button
         type="button"
         aria-label="Search"
@@ -690,7 +714,11 @@ function AppShellInner({
               </Stack>
             ) : undefined
           }
-          aside={settingsSurface ? undefined : railAsideFor(identityUnknown, calendarSurface)}
+          aside={
+            settingsSurface
+              ? undefined
+              : railAsideFor(identityUnknown, calendarSurface, timerStatus)
+          }
         >
           {/* The page renders unconditionally while the session and workspace list resolve. Each
               surface already paints its own heading and toolbar from static copy and owns an

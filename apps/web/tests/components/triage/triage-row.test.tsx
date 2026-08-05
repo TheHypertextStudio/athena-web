@@ -77,7 +77,12 @@ beforeEach(() => {
   activeGet.mockReset();
   recordsPost.mockReset();
   activeGet.mockResolvedValue(
-    jsonResponse({ record: null, serverNow: new Date().toISOString(), activeAgentExecutions: [] }),
+    jsonResponse({
+      record: null,
+      suggestion: null,
+      serverNow: new Date().toISOString(),
+      activeAgentExecutions: [],
+    }),
   );
 });
 

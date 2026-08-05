@@ -1,20 +1,25 @@
 'use client';
 
 /**
- * The universal timer's client state: what is running, and the five things you can do to it.
+ * The universal timer's client state: what is running, what to run next, and how to change it.
  *
  * @remarks
  * There is exactly one tracker per person, so there is exactly one query key for it
  * (`queryKeys.timeActive()`) and every surface that shows or changes the timer reads through
- * this module. That is what makes the control in the sidebar, the control in the mobile bar, the
- * button on a task row and the analytics page agree without any of them knowing about each other.
+ * this module. That is what makes the Focus panel, the rail icon, the button on a task row and
+ * the analytics page agree without any of them knowing about each other.
  *
  * Elapsed time is **derived, never stored in React state**. The server sends the tracked total
  * and its own clock; this module adds the wall-clock time since that read only while a segment is
  * open. A reload therefore resumes the same number rather than restarting from zero, and a tab
  * left open overnight cannot drift from the ledger — the next poll corrects it.
+ *
+ * The read is split in two on purpose. {@link useTimerStatus} answers "is anything running" and
+ * changes only at real transitions; {@link useTimerState} adds the once-a-second tick. The app
+ * shell consumes the former, because a shell that re-rendered every second while a timer ran would
+ * re-render the entire application every second while a timer ran.
  */
-import type { TimeRecordOut } from '@docket/types';
+import type { TimeActiveOut, TimeAnchorSuggestion, TimeRecordOut } from '@docket/types';
 import { useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -23,23 +28,53 @@ import { STALE, apiQueryOptions, queryKeys, useApiMutation, useLiveApiQuery } fr
 /** How often the shell re-reads the tracker. Focus-gated by {@link useLiveApiQuery}. */
 const TIMER_POLL_MS = 30_000;
 
-/** The tracker as the interface needs it. */
-export interface TimerState {
-  /** The live record, or null when nothing is being tracked. */
-  readonly record: TimeRecordOut | null;
-  /** Whether a segment is currently open (as opposed to paused). */
-  readonly running: boolean;
-  /** Tracked milliseconds in the current session, ticking while running. */
-  readonly elapsedMs: number;
+/**
+ * How long after a planned block begins the suggestion still reads as "you should be on this".
+ *
+ * @remarks
+ * Past this the block is simply something on the calendar rather than something just started, and
+ * an indicator that kept pulsing for the whole hour would be nagging rather than informing.
+ */
+const NUDGE_WINDOW_MS = 15 * 60_000;
+
+/** Whether anything is being tracked, and if so how. */
+export type TimerPhase = 'idle' | 'running' | 'paused';
+
+/** The tracker as the shell needs it: coarse, and unchanged between transitions. */
+export interface TimerStatus {
+  readonly phase: TimerPhase;
+  /** The person's own words for the running session; `''` while it has none. */
+  readonly title: string;
+  /** True while a session is running with no task attached yet. */
+  readonly unanchored: boolean;
+  /** What the caller's own schedule says they should be on, when anything does. */
+  readonly suggestion: TimeAnchorSuggestion | null;
+  /** True when nothing is tracking and a planned block began within the last few minutes. */
+  readonly nudging: boolean;
   /** Whether the first read has not landed yet. */
   readonly loading: boolean;
 }
 
+/** The tracker as the Focus panel needs it: everything in {@link TimerStatus}, plus the clock. */
+export interface TimerState extends TimerStatus {
+  /** The live record, or null when nothing is being tracked. */
+  readonly record: TimeRecordOut | null;
+  /** Tracked milliseconds in the current session, ticking while running. */
+  readonly elapsedMs: number;
+}
+
 /** What a surface may ask the timer to do. */
 export interface TimerControls {
-  /** Begin tracking. `taskId` tracks existing work; a bare `label` creates an ordinary task. */
-  readonly start: (input: {
-    label: string;
+  /**
+   * Begin tracking.
+   *
+   * @remarks
+   * Every argument is optional, and that is the point: a bare `start()` puts the clock on work
+   * whose name nobody has decided yet. `taskId` tracks existing work; a bare `label` creates an
+   * ordinary task from those words.
+   */
+  readonly start: (input?: {
+    label?: string;
     taskId?: string;
     organizationId?: string;
   }) => Promise<void>;
@@ -47,12 +82,16 @@ export interface TimerControls {
   readonly pause: () => Promise<void>;
   /** Open a new segment on the paused session (or continue the last one, under a minute). */
   readonly resume: () => Promise<void>;
-  /** Finish the session. Refused by the server when the tracked task has no name. */
-  readonly stop: () => Promise<void>;
-  /** Rename the tracked session before finishing it. */
+  /** Finish the session, naming it in the same request when it has no task yet. */
+  readonly stop: (title?: string) => Promise<void>;
+  /** Name the tracked session without stopping it; anchors an unanchored one. */
   readonly rename: (title: string) => Promise<void>;
-  /** Whether a transition is in flight, so a control can disable itself rather than double-fire. */
-  readonly busy: boolean;
+  /** True while a start is in flight. */
+  readonly starting: boolean;
+  /** True while a pause, resume or stop is in flight. */
+  readonly transitioning: boolean;
+  /** True while a rename is in flight. */
+  readonly renaming: boolean;
 }
 
 /** Sum the open and closed segments of one record as of `now`. */
@@ -69,8 +108,56 @@ function trackedMs(record: TimeRecordOut | null, now: number): number {
   return total;
 }
 
+/** Derive the coarse status from one tracker read. */
+function statusOf(active: TimeActiveOut | undefined, loading: boolean): TimerStatus {
+  const record = active?.record ?? null;
+  const running = record?.intervals.some((interval) => interval.endedAt === null) ?? false;
+  const suggestion = active?.suggestion ?? null;
+  const startedAt = suggestion?.startsAt ? Date.parse(suggestion.startsAt) : null;
+  // Recomputed on each poll rather than on a timer of its own: a nudge that appears up to thirty
+  // seconds late costs nothing, and a second interval running app-wide to make it prompt costs a
+  // render of the whole shell every second.
+  const serverNow = active?.serverNow ? Date.parse(active.serverNow) : Date.now();
+  return {
+    phase: record ? (running ? 'running' : 'paused') : 'idle',
+    title: record?.title ?? '',
+    unanchored: record !== null && record.taskId === null,
+    suggestion,
+    nudging: record === null && startedAt !== null && serverNow - startedAt < NUDGE_WINDOW_MS,
+    loading,
+  };
+}
+
+/** The one shared tracker query, so every consumer reads the same cache entry. */
+function useActiveTimeQuery() {
+  return useLiveApiQuery(
+    apiQueryOptions(
+      queryKeys.timeActive(),
+      () => api.v1.time.active.$get(),
+      'Could not load your timer.',
+      { staleTime: STALE.volatile },
+    ),
+    TIMER_POLL_MS,
+  );
+}
+
 /**
- * Read the caller's one tracker.
+ * Read the tracker without subscribing to its clock.
+ *
+ * @remarks
+ * This is what the app shell uses. It re-renders only when the timer genuinely changes state —
+ * start, pause, resume, stop, a new suggestion — so keeping a live indicator in the shell's
+ * always-visible chrome costs nothing between transitions.
+ *
+ * @returns the coarse {@link TimerStatus}.
+ */
+export function useTimerStatus(): TimerStatus {
+  const query = useActiveTimeQuery();
+  return statusOf(query.data, query.isPending);
+}
+
+/**
+ * Read the caller's one tracker, with the elapsed clock.
  *
  * @remarks
  * Ticks once a second **only while a segment is open**, so an idle or paused timer costs no
@@ -81,18 +168,10 @@ function trackedMs(record: TimeRecordOut | null, now: number): number {
  * @returns the current {@link TimerState}.
  */
 export function useTimerState(): TimerState {
-  const query = useLiveApiQuery(
-    apiQueryOptions(
-      queryKeys.timeActive(),
-      () => api.v1.time.active.$get(),
-      'Could not load your timer.',
-      { staleTime: STALE.volatile },
-    ),
-    TIMER_POLL_MS,
-  );
-  const active = query.data;
-  const record = active?.record ?? null;
-  const running = record?.intervals.some((interval) => interval.endedAt === null) ?? false;
+  const query = useActiveTimeQuery();
+  const record = query.data?.record ?? null;
+  const status = statusOf(query.data, query.isPending);
+  const running = status.phase === 'running';
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -106,10 +185,9 @@ export function useTimerState(): TimerState {
   }, [running]);
 
   return {
+    ...status,
     record,
-    running,
     elapsedMs: trackedMs(record, running ? now : Date.now()),
-    loading: query.isPending,
   };
 }
 
@@ -123,6 +201,10 @@ export function useTimerState(): TimerState {
  * than a brief pending state, because the thing being guessed at is a durable record of a
  * person's day.
  *
+ * The pending flags are reported **separately** rather than as one `busy`. A single flag meant
+ * pausing greyed out the stop control and vice versa, so a person who changed their mind mid-click
+ * found every control dead for the duration of a request they did not want.
+ *
  * @param recordId - The session to act on; transitions other than `start` no-op without one.
  * @returns the {@link TimerControls}.
  */
@@ -130,11 +212,11 @@ export function useTimerControls(recordId: string | null): TimerControls {
   const invalidateKeys = [queryKeys.timeActive(), ['me', 'time']] as const;
 
   const startMutation = useApiMutation({
-    mutationFn: async (input: { label: string; taskId?: string; organizationId?: string }) => {
+    mutationFn: async (input: { label?: string; taskId?: string; organizationId?: string }) => {
       const response = await api.v1.time.records.$post({
         json: {
           context: {
-            label: input.label,
+            ...(input.label ? { label: input.label } : {}),
             ...(input.taskId ? { taskId: input.taskId } : {}),
             ...(input.organizationId ? { organizationId: input.organizationId } : {}),
           },
@@ -147,10 +229,20 @@ export function useTimerControls(recordId: string | null): TimerControls {
   });
 
   const transition = useApiMutation({
-    mutationFn: async (input: { id: string; action: 'pause' | 'start' | 'stop' }) => {
-      const response = await api.v1.time.records[':id'][input.action].$post({
-        param: { id: input.id },
-      });
+    mutationFn: async (input: {
+      id: string;
+      action: 'pause' | 'start' | 'stop';
+      title?: string;
+    }) => {
+      // Only `stop` carries a body, and only to name a session that has none. The other two are
+      // pure state changes with nothing to say.
+      const response =
+        input.action === 'stop'
+          ? await api.v1.time.records[':id'].stop.$post({
+              param: { id: input.id },
+              json: input.title ? { title: input.title } : {},
+            })
+          : await api.v1.time.records[':id'][input.action].$post({ param: { id: input.id } });
       if (!response.ok) throw await toUserError(response, 'Could not update the timer.');
       return await response.json();
     },
@@ -169,23 +261,25 @@ export function useTimerControls(recordId: string | null): TimerControls {
     invalidateKeys: [...invalidateKeys],
   });
 
-  const act = async (action: 'pause' | 'start' | 'stop'): Promise<void> => {
+  const act = async (action: 'pause' | 'start' | 'stop', title?: string): Promise<void> => {
     if (!recordId) return;
-    await transition.mutateAsync({ id: recordId, action });
+    await transition.mutateAsync({ id: recordId, action, ...(title ? { title } : {}) });
   };
 
   return {
-    start: async (input) => {
+    start: async (input = {}) => {
       await startMutation.mutateAsync(input);
     },
     pause: () => act('pause'),
     resume: () => act('start'),
-    stop: () => act('stop'),
+    stop: (title) => act('stop', title),
     rename: async (title) => {
       if (!recordId) return;
       await renameMutation.mutateAsync({ id: recordId, title });
     },
-    busy: startMutation.isPending || transition.isPending || renameMutation.isPending,
+    starting: startMutation.isPending,
+    transitioning: transition.isPending,
+    renaming: renameMutation.isPending,
   };
 }
 
@@ -195,7 +289,7 @@ export function useTimerControls(recordId: string | null): TimerControls {
  * @remarks
  * The server's Problem `title`/`detail` are never rendered — only its stable `code` is read, and
  * only to choose between sentences this file owns. That is the whole of the branch: an unnamed
- * task is the one condition a person can act on, and everything else is "it did not work".
+ * session is the one condition a person can act on, and everything else is "it did not work".
  *
  * @param response - The failed RPC response.
  * @param fallback - The sentence to show when no specific condition applies.
@@ -210,7 +304,7 @@ async function toUserError(response: Response, fallback: string): Promise<Error>
     code = null;
   }
   if (code === 'validation_error') {
-    return new Error('Give the task a name before finishing.');
+    return new Error('Name this before finishing.');
   }
   if (response.status === 409) {
     return new Error('That timer has already moved on. Refresh to see where it stands.');

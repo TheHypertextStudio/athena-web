@@ -206,6 +206,7 @@ vi.mock('../../src/lib/api', () => ({
               Promise.resolve({
                 record: null,
                 serverNow: new Date().toISOString(),
+                suggestion: null,
                 activeAgentExecutions: [],
               }),
           }),

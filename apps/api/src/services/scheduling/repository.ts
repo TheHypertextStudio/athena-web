@@ -333,6 +333,11 @@ export async function loadActuals(db: Database, hubId: string, since: Date): Pro
   for (const row of rows) {
     /* v8 ignore next -- @preserve defensive: the query above filters isNotNull(timeInterval.endedAt) */
     if (row.endedAt === null) continue;
+    // The query is already restricted to terminal records, and `time_record_closed_requires_anchor`
+    // makes a terminal record without a task impossible. This states that invariant to the type
+    // system rather than asserting past it.
+    /* v8 ignore next -- @preserve defensive: a closed record always carries an anchor */
+    if (row.taskId === null) continue;
     const minutes = Math.round((row.endedAt.getTime() - row.startedAt.getTime()) / 60_000);
     if (minutes <= 0) continue;
     const existing = perRecord.get(row.recordId);

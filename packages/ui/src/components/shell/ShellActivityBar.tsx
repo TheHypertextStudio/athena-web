@@ -53,25 +53,45 @@ export function ShellActivityBar({
         // Filled highlight only when this panel is both selected AND visible; while collapsed every
         // icon reads as "click to open" rather than one looking active over a hidden panel.
         const showsActive = isActive && !collapsed;
+        const name = showsActive ? `Collapse ${panel.label}` : panel.label;
         return (
           <button
             key={panel.id}
             type="button"
-            aria-label={showsActive ? `Collapse ${panel.label}` : panel.label}
+            // The status rides in the accessible name rather than in a live region inside the
+            // button: `aria-label` wins over a button's contents, so anything rendered in there
+            // would be announced to nobody.
+            aria-label={panel.status ? `${name}, ${panel.status.label}` : name}
             aria-pressed={isActive}
             aria-controls={SHELL_ASIDE_ID}
-            title={panel.label}
+            title={panel.status ? `${panel.label} — ${panel.status.label}` : panel.label}
             onClick={() => {
               onIconClick(panel.id);
             }}
             className={cn(
-              'focus-visible:ring-ring flex size-10 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-6',
+              'focus-visible:ring-ring relative flex size-10 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-6',
               showsActive
                 ? 'bg-surface-container-highest text-on-surface'
                 : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
             )}
           >
             {panel.icon}
+            {/* Positioned absolutely inside the existing size-10 box so the bar stays exactly
+                w-12 whatever a panel reports — the shell's fixed chrome width is a layout
+                invariant, not a coincidence. The name above carries this for a screen reader. */}
+            {panel.status ? (
+              <span
+                aria-hidden="true"
+                data-testid={`rail-status-${panel.id}`}
+                data-tone={panel.status.tone}
+                className={cn(
+                  'ring-surface absolute top-1 right-1 size-2 rounded-full ring-2',
+                  panel.status.tone === 'active' && 'bg-state-started',
+                  panel.status.tone === 'muted' && 'bg-on-surface-variant',
+                  panel.status.tone === 'attention' && 'bg-primary motion-safe:animate-pulse',
+                )}
+              />
+            ) : null}
           </button>
         );
       })}

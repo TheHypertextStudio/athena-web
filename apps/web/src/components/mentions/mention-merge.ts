@@ -1,26 +1,55 @@
 /**
- * Merge the picker's two result waves without the highlighted row moving under the user's fingers.
+ * Group and order the picker's rows, and keep the highlight still while results stream in.
  *
  * @remarks
- * The local wave lands in tens of milliseconds and the external wave hundreds later, so rows
- * appear *while* someone is already arrowing through the menu. Every rule here exists to make that
- * safe:
+ * Rows are grouped by what they *are* — Tasks, Projects, People, Files — rather than pooled into
+ * one list. A single flat list makes the reader scan every row to find the kind they meant, and it
+ * lets whichever kind matched most flood the menu. Grouping by kind means someone looking for a
+ * project reads one short section instead of filtering twenty rows in their head.
  *
- * - Selection is tracked by a stable key, never by index. An index is correct for a modal whose
- *   list is fixed when it opens, and actively wrong for a list that grows underneath you.
- * - External groups always sort below local ones, so a late arrival can only ever append *below*
- *   the selection rather than pushing it down.
- * - Once the user has arrowed, the selection is pinned. Before they have, it tracks the best match,
- *   which is what makes typing feel responsive.
+ * Each group is capped, so a query matching thirty tasks still leaves room for the one project and
+ * the two people that also matched.
  *
- * Pure, so all of that is testable rather than aspirational.
+ * The highlight rules exist because the local wave lands in tens of milliseconds and the external
+ * wave hundreds later, so rows appear while someone is already arrowing. Selection is tracked by a
+ * stable key rather than an index, external groups always sort last, and once the user has arrowed
+ * their choice is pinned.
  */
-import type { MentionItem } from '@docket/types';
+import type { MentionEntityKind, MentionItem } from '@docket/types';
 
-/** The order groups always render in. Local families first; external last. */
-export const MENTION_GROUP_ORDER = ['recent', 'work', 'people', 'files'] as const;
+/** How many rows one group may contribute before it starts crowding out the others. */
+const PER_GROUP_CAP = 5;
 
-/** One rendered group of the menu. */
+/** The bare-`@` group, which mixes kinds because recency is the only ordering that matters there. */
+const RECENT_GROUP = 'recent';
+
+/** The external group, always last. */
+const FILES_GROUP = 'files';
+
+/**
+ * The order groups render in.
+ *
+ * @remarks
+ * Roughly by how often each is the thing someone means mid-sentence. Tasks and projects dominate
+ * in practice; cycles and milestones are real referents but rarer, so they sit below.
+ */
+export const MENTION_GROUP_ORDER = [
+  RECENT_GROUP,
+  'task',
+  'project',
+  'initiative',
+  'program',
+  'milestone',
+  'cycle',
+  'actor',
+  'team',
+  'agent_session',
+  'comment',
+  'update',
+  FILES_GROUP,
+] as const;
+
+/** Which section a row renders under. */
 export type MentionGroupKey = (typeof MENTION_GROUP_ORDER)[number];
 
 /** A group of rows with its heading. */
@@ -28,21 +57,34 @@ export interface MentionGroup {
   readonly key: MentionGroupKey;
   readonly label: string;
   readonly items: readonly MentionItem[];
+  /** How many rows the cap hid, so the menu can say so rather than silently truncating. */
+  readonly hidden: number;
 }
 
-/** Human headings, application-owned. */
+/** Section headings, application-owned and plural. */
 const GROUP_LABEL: Record<MentionGroupKey, string> = {
   recent: 'Recent',
-  work: 'Work',
-  people: 'People',
+  task: 'Tasks',
+  project: 'Projects',
+  initiative: 'Initiatives',
+  program: 'Programs',
+  milestone: 'Milestones',
+  cycle: 'Cycles',
+  actor: 'People',
+  team: 'Teams',
+  agent_session: 'Sessions',
+  comment: 'Comments',
+  update: 'Updates',
   files: 'Files',
 };
 
 /** Which group a row belongs in. */
 function groupFor(item: MentionItem, hasQuery: boolean): MentionGroupKey {
-  if (item.origin === 'external') return 'files';
-  if (item.entityKind === 'actor' || item.entityKind === 'team') return 'people';
-  return hasQuery ? 'work' : 'recent';
+  if (item.origin === 'external') return FILES_GROUP;
+  // Before anything is typed there is no matching to explain, so recency is the whole ordering and
+  // splitting it by kind would just make one list into six of length one.
+  if (!hasQuery) return RECENT_GROUP;
+  return item.entityKind satisfies MentionEntityKind;
 }
 
 /** The two waves, plus whether anything has been typed. */
@@ -51,12 +93,12 @@ export interface MentionGroupInput {
   readonly local: readonly MentionItem[];
   /** Rows from the provider fan-out. */
   readonly external: readonly MentionItem[];
-  /** False before the first character, which is what turns the first group into Recent. */
+  /** False before the first character, which is what turns the whole list into Recent. */
   readonly hasQuery: boolean;
 }
 
 /**
- * Combine both waves into rendered groups, deduped and ordered.
+ * Combine both waves into rendered groups, deduped, capped, and ordered.
  *
  * @remarks
  * Local rows are inserted first so that when the same resource arrives from both waves — a Drive
@@ -80,9 +122,15 @@ export function buildMentionGroups(input: MentionGroupInput): MentionGroup[] {
 
   return MENTION_GROUP_ORDER.flatMap((key) => {
     const items = buckets.get(key);
-    return items === undefined || items.length === 0
-      ? []
-      : [{ key, label: GROUP_LABEL[key], items }];
+    if (items === undefined || items.length === 0) return [];
+    return [
+      {
+        key,
+        label: GROUP_LABEL[key],
+        items: items.slice(0, PER_GROUP_CAP),
+        hidden: Math.max(0, items.length - PER_GROUP_CAP),
+      },
+    ];
   });
 }
 
@@ -107,13 +155,10 @@ export interface ActiveKeyInput {
  * Choose which row is highlighted after a render.
  *
  * @remarks
- * The whole anti-jump contract lives in these few lines.
- *
  * Before the user has arrowed, the highlight re-derives to the first row, so it follows the best
  * match as they type. After they have arrowed, their choice is honoured even as rows arrive around
- * it. If their chosen row disappears entirely — a narrowing query removed it — the highlight falls
- * back to the same ordinal position rather than snapping to the top, because that is where their
- * attention already is.
+ * it. If their chosen row disappears — a narrowing query removed it — the highlight falls back to
+ * the same ordinal position rather than snapping to the top.
  *
  * @param input - The current rows, the previously active key, and whether the user has arrowed.
  * @returns The key to highlight, or undefined when there is nothing to highlight.

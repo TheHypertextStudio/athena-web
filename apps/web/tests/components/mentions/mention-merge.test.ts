@@ -1,4 +1,4 @@
-import type { MentionItem } from '@docket/types';
+import type { MentionEntityKind, MentionItem } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,10 +8,7 @@ import {
   stepActiveKey,
 } from '@/components/mentions/mention-merge';
 
-function local(
-  id: string,
-  entityKind: MentionItem extends never ? never : 'task' | 'actor' = 'task',
-): MentionItem {
+function local(id: string, entityKind: MentionEntityKind = 'task'): MentionItem {
   return {
     origin: 'local',
     id,
@@ -47,22 +44,45 @@ describe('buildMentionGroups', () => {
       external: [external('f1')],
       hasQuery: true,
     });
-    expect(groups.map((g) => g.key)).toEqual(['work', 'files']);
+    expect(groups.map((g) => g.key)).toEqual(['task', 'files']);
   });
 
-  it('separates people from work', () => {
+  it('gives each entity kind its own section rather than pooling them', () => {
     const groups = buildMentionGroups({
-      local: [local('t1'), local('a1', 'actor')],
+      local: [local('t1'), local('a1', 'actor'), local('p1', 'project')],
       external: [],
       hasQuery: true,
     });
-    expect(groups.map((g) => g.key)).toEqual(['work', 'people']);
+    expect(groups.map((g) => [g.key, g.label])).toEqual([
+      ['task', 'Tasks'],
+      ['project', 'Projects'],
+      ['actor', 'People'],
+    ]);
   });
 
-  it('calls the local group Recent when nothing has been typed', () => {
-    const groups = buildMentionGroups({ local: [local('t1')], external: [], hasQuery: false });
+  it('collapses every kind into Recent when nothing has been typed', () => {
+    const groups = buildMentionGroups({
+      local: [local('t1'), local('p1', 'project')],
+      external: [],
+      hasQuery: false,
+    });
+    expect(groups).toHaveLength(1);
     expect(groups[0]?.key).toBe('recent');
     expect(groups[0]?.label).toBe('Recent');
+  });
+
+  it('caps a group so one flooding kind cannot crowd out the others', () => {
+    const many = Array.from({ length: 9 }, (_, i) => local(`t${i}`));
+    const groups = buildMentionGroups({
+      local: [...many, local('p1', 'project')],
+      external: [],
+      hasQuery: true,
+    });
+    const tasks = groups.find((g) => g.key === 'task');
+    expect(tasks?.items).toHaveLength(5);
+    expect(tasks?.hidden).toBe(4);
+    // The one project still gets a section, which is the whole point of the cap.
+    expect(groups.map((g) => g.key)).toContain('project');
   });
 
   it('drops the external duplicate when both waves return the same resource', () => {

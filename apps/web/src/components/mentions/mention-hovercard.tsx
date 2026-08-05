@@ -27,6 +27,8 @@ import {
 import { OpenInNew } from '@docket/ui/icons';
 import type { MentionCard, MentionRef } from '@docket/types';
 
+import { SEARCH_KIND_ICON, SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
+
 import { MENTION_PROVIDER_LABEL, RESOURCE_TYPE_ICON, RESOURCE_TYPE_LABEL } from './mention-glyphs';
 
 /** Props for {@link MentionHoverCard}. */
@@ -63,7 +65,12 @@ export default function MentionHoverCard({
 }: MentionHoverCardProps): React.JSX.Element {
   const external = card?.kind === 'external' ? card.resource : undefined;
   const entity = card?.kind === 'entity' ? card : undefined;
-  const Glyph = RESOURCE_TYPE_ICON[external?.resourceType ?? 'unknown'];
+  // A Docket entity gets the same mark it wears in the palette and the search page; only an
+  // external resource is typed by its file kind.
+  const Glyph =
+    entity === undefined
+      ? RESOURCE_TYPE_ICON[external?.resourceType ?? 'unknown']
+      : SEARCH_KIND_ICON[entity.entityKind === 'actor' ? 'member' : entity.entityKind];
 
   const title = entity?.title ?? external?.title ?? fallbackLabel;
   const meta = external
@@ -74,7 +81,15 @@ export default function MentionHoverCard({
       ]
         .filter((part): part is string => part !== null)
         .join(' · ')
-    : [entity?.entityKind, entity?.ownerLabel].filter(Boolean).join(' · ');
+    : [
+        entity === undefined
+          ? undefined
+          : SEARCH_KIND_LABEL[entity.entityKind === 'actor' ? 'member' : entity.entityKind],
+        entity?.state,
+        entity?.ownerLabel,
+      ]
+        .filter((part): part is string => typeof part === 'string' && part !== '')
+        .join(' · ');
   const modified = shortDate(external?.externalUpdatedAt ?? entity?.updatedAt ?? null);
   const href = entity?.href ?? external?.canonicalUrl ?? '';
   const isExternal = refValue.kind === 'external';

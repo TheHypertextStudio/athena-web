@@ -11,6 +11,9 @@
  * Opens at `--dur-fast` rather than the palette's `--dur-base`, since an inline autocomplete that
  * takes 180ms to appear reads as lag.
  *
+ * Groups are separated by a tonal rule as well as a heading, so the eye can skip a whole kind at
+ * once instead of reading every row to find where one section ends.
+ *
  * The pending Files group reserves its heading and two rows at the real row height, so results
  * replace skeletons in place and the popover never re-flips position mid-typing.
  */
@@ -38,6 +41,12 @@ export interface MentionMenuProps {
   readonly onOpenChange: (open: boolean) => void;
   readonly onRows: (items: readonly MentionItem[], resolvedActiveKey: string | undefined) => void;
 }
+
+/** Shared heading treatment for every section of the menu. */
+const HEADING_CLASS = 'text-on-surface-variant px-2 pt-2 pb-1 text-xs font-medium';
+
+/** The rule between sections; never applied above the first, whose heading already opens the list. */
+const GROUP_DIVIDER = 'border-outline-variant mt-1 border-t pt-1';
 
 /** Row id for a given item, so `aria-activedescendant` can point at it. */
 export function mentionRowId(listboxId: string, item: MentionItem): string {
@@ -94,17 +103,15 @@ export default function MentionMenu({
           event.preventDefault();
         }}
         className={cn(
-          'w-[min(22rem,calc(100vw-2rem))] p-1.5',
-          'max-h-[min(20rem,var(--radix-popover-content-available-height))] overflow-y-auto',
+          'w-[min(24rem,calc(100vw-2rem))] p-1.5',
+          'max-h-[min(22rem,var(--radix-popover-content-available-height))] overflow-y-auto',
           'duration-(--dur-fast)',
         )}
       >
         <ul role="listbox" id={listboxId} aria-label="Mention a resource" className="space-y-0.5">
-          {groups.map((group) => (
-            <li key={group.key}>
-              <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium">
-                {group.label}
-              </p>
+          {groups.map((group, index) => (
+            <li key={group.key} className={index > 0 ? GROUP_DIVIDER : undefined}>
+              <p className={HEADING_CLASS}>{group.label}</p>
               <ul className="space-y-0.5">
                 {group.items.map((item) => (
                   <MentionRow
@@ -116,16 +123,21 @@ export default function MentionMenu({
                   />
                 ))}
               </ul>
+              {group.hidden > 0 ? (
+                <p className="text-on-surface-variant px-2 pt-1 pb-0.5 text-xs">
+                  {`+${group.hidden} more — keep typing to narrow`}
+                </p>
+              ) : null}
             </li>
           ))}
 
           {externalPending ? (
-            <li aria-hidden>
-              <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium">
+            <li aria-hidden className={groups.length > 0 ? GROUP_DIVIDER : undefined}>
+              <p className={HEADING_CLASS}>
                 Files
                 <span className="ml-1 opacity-70">searching…</span>
               </p>
-              <div className="space-y-0.5 px-3">
+              <div className="space-y-0.5 px-2">
                 <Skeleton className="h-9 rounded-md" />
                 <Skeleton className="h-9 rounded-md" />
               </div>
@@ -133,8 +145,8 @@ export default function MentionMenu({
           ) : null}
 
           {externalFailed && !externalPending ? (
-            <li>
-              <p className="text-on-surface-variant px-3 pt-2 pb-1 text-xs font-medium">
+            <li className={groups.length > 0 ? GROUP_DIVIDER : undefined}>
+              <p className={HEADING_CLASS}>
                 Files <span className="opacity-70">· unavailable</span>
               </p>
             </li>

@@ -127,7 +127,7 @@ export function FreeformTextEditor({
         'data-placeholder': placeholder,
         role: 'textbox',
         class:
-          'text-on-surface text-body-large min-h-10 w-full cursor-text font-normal outline-none [&_a]:text-primary [&_a]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_code]:bg-surface-container-high [&_code]:rounded [&_code]:px-1 [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-medium [&_h2]:mt-5 [&_h2]:font-medium [&_h3]:text-title-small [&_h3]:mt-4 [&_h3]:font-medium [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:bg-surface-container-high [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5',
+          'text-on-surface text-body-large min-h-10 w-full cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_code]:bg-surface-container-high [&_code]:rounded [&_code]:px-1 [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-medium [&_h2]:mt-5 [&_h2]:font-medium [&_h3]:text-title-small [&_h3]:mt-4 [&_h3]:font-medium [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:bg-surface-container-high [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5',
       },
       handleKeyDown: (view, event) => {
         // First, because ProseMirror consults `editorProps.handleKeyDown` before any plugin

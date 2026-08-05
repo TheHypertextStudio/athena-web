@@ -13,7 +13,10 @@
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { useEffect, useState } from 'react';
 
+import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
+
 import MentionChip from './mention-chip';
+import { RESOURCE_TYPE_ICON } from './mention-glyphs';
 import MentionHoverCard from './mention-hovercard';
 import { readMentionAttributes, refFromAttributes } from './mention-extension';
 import { useMentionCard, useRegisterMention } from './mention-hydration';
@@ -42,6 +45,13 @@ export default function MentionNodeView({ node, selected }: NodeViewProps): Reac
     card?.kind === 'entity' ? (card.title ?? attrs.label) : (card?.resource.title ?? attrs.label);
   const unresolved = card?.kind === 'entity' && !card.accessible;
 
+  // The same mark the row wore in the picker, so a chip is recognizable as the thing that was
+  // chosen rather than as generic link text.
+  const Glyph =
+    ref.kind === 'entity'
+      ? SEARCH_KIND_ICON[ref.entityKind === 'actor' ? 'member' : ref.entityKind]
+      : RESOURCE_TYPE_ICON[card?.kind === 'external' ? card.resource.resourceType : 'unknown'];
+
   return (
     <NodeViewWrapper as="span" className="inline">
       <MentionHoverCard
@@ -67,6 +77,7 @@ export default function MentionNodeView({ node, selected }: NodeViewProps): Reac
             selected={selected}
             unresolved={unresolved}
             external={ref.kind === 'external'}
+            icon={<Glyph className="size-[0.9em]!" />}
           />
         </span>
       </MentionHoverCard>

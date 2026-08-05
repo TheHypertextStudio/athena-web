@@ -27,6 +27,7 @@ import {
   type Visibility,
 } from '@docket/types';
 import { ActorPicker, EnumPicker } from '@docket/ui/components';
+import { Activity } from '@docket/ui/icons';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -191,6 +192,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
         value={health}
         onChange={setHealth}
         placeholder="Set health"
+        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
         clearLabel="No health"
         ariaLabel="Health"
         disabled={creating}

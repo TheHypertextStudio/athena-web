@@ -141,7 +141,7 @@ export function DatePicker({
 
   const trigger = (
     <PropertyTrigger
-      icon={label ? <Calendar className="text-on-surface-variant size-4" /> : undefined}
+      icon={<Calendar className="text-on-surface-variant size-4" />}
       label={label}
       placeholder={placeholder}
       ariaLabel={`${ariaLabel} — ${label ?? 'not set'}`}
@@ -276,7 +276,7 @@ export function DateRangePicker({
 
   const trigger = (
     <PropertyTrigger
-      icon={summary ? <Calendar className="text-on-surface-variant size-4" /> : undefined}
+      icon={<Calendar className="text-on-surface-variant size-4" />}
       label={summary}
       placeholder={placeholder}
       ariaLabel={`${ariaLabel} — ${summary ?? 'not set'}`}

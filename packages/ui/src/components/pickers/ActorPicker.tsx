@@ -12,6 +12,7 @@
  */
 import * as React from 'react';
 
+import { User } from '../../icons';
 import { OptionPicker } from './OptionPicker';
 import type { PickerOption } from './types';
 
@@ -25,6 +26,8 @@ export interface ActorPickerProps<TValue extends string = string> {
   onChange: (value: TValue | null) => void;
   /** The calm empty prompt shown when unset (e.g. "Assign", "Set lead"). */
   placeholder?: string;
+  /** The empty-prompt icon; defaults to a generic person glyph (every actor picker is a "who"). */
+  triggerIcon?: React.ReactNode;
   /** The "clear" row label (e.g. "Unassigned", "No lead"). */
   clearLabel?: string;
   /** Placeholder for the search input. */
@@ -54,6 +57,7 @@ export function ActorPicker<TValue extends string = string>({
   value,
   onChange,
   placeholder = 'Assign',
+  triggerIcon = <User className="text-on-surface-variant size-4" />,
   clearLabel = 'Unassigned',
   searchPlaceholder = 'Search people…',
   emptyText = 'No matches',
@@ -69,6 +73,7 @@ export function ActorPicker<TValue extends string = string>({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      triggerIcon={triggerIcon}
       clearLabel={clearLabel}
       searchPlaceholder={searchPlaceholder}
       emptyText={emptyText}

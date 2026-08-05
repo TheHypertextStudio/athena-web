@@ -31,16 +31,18 @@ import {
 
 /** Props for {@link PropertyTrigger}. */
 export interface PropertyTriggerProps {
-  /** Optional leading glyph or avatar shown before the label (the value's icon). */
+  /**
+   * Leading glyph shown before the label, in EITHER state: the value's own icon once set (an
+   * avatar, a colored swatch, an entity glyph), or the field's semantic icon while still empty
+   * (e.g. a calendar for a date, a person for an assignee) so a row communicates *what it sets*
+   * before it has a value. Falls back to a bare {@link Plus} when empty and no icon is given.
+   */
   icon?: React.ReactNode;
   /** The current value's label, or `null`/`undefined` when the property is unset. */
   label?: React.ReactNode;
-  /**
-   * The calm empty prompt shown when `label` is absent (e.g. "Set lead", "Add project").
-   * A leading {@link Plus} glyph is shown with it unless {@link hidePlaceholderIcon} is set.
-   */
+  /** The calm empty prompt shown when `label` is absent (e.g. "Set lead", "Add project"). */
   placeholder: string;
-  /** Hide the leading {@link Plus} on the empty prompt (e.g. when a field icon is supplied). */
+  /** Hide the leading icon on the empty prompt entirely, including the {@link Plus} fallback. */
   hidePlaceholderIcon?: boolean;
   /** Accessible label for the trigger (e.g. "Lead — currently Ada Lovelace"). */
   ariaLabel?: string;
@@ -186,7 +188,11 @@ export const PropertyTrigger = React.forwardRef<HTMLButtonElement, PropertyTrigg
           </>
         ) : (
           <>
-            {hidePlaceholderIcon ? null : (
+            {hidePlaceholderIcon ? null : icon ? (
+              <span aria-hidden="true" className="flex shrink-0 items-center">
+                {icon}
+              </span>
+            ) : (
               <Plus aria-hidden="true" className="size-4 shrink-0 opacity-70" />
             )}
             <span className="truncate">{placeholder}</span>

@@ -41,6 +41,7 @@ import {
   LabelsPicker,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
+import { Activity, Layers, Target } from '@docket/ui/icons';
 import { type JSX, useCallback, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -229,6 +230,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
         value={health}
         onChange={setHealth}
         placeholder="Set health"
+        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
         clearLabel="No health"
         ariaLabel="Health"
         disabled={creating}
@@ -248,6 +250,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
         value={programId}
         onChange={setProgramId}
         placeholder={`Set ${programLabel.toLowerCase()}`}
+        triggerIcon={<Layers className="text-on-surface-variant size-4" />}
         clearLabel={`No ${programLabel.toLowerCase()}`}
         searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
         ariaLabel={programLabel}
@@ -271,6 +274,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
         value={initiativeIds}
         onToggle={toggleInitiative}
         placeholder={`Link ${initiativeNoun.toLowerCase()}s`}
+        triggerIcon={<Target className="text-on-surface-variant size-4" />}
         searchPlaceholder={`Search ${initiativeNoun.toLowerCase()}s…`}
         emptyText={`No ${initiativeNoun.toLowerCase()}s`}
         ariaLabel={`${initiativeNoun}s`}

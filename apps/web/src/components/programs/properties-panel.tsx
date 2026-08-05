@@ -19,6 +19,7 @@
  */
 import { type Health, type ProgramStatus, type Visibility } from '@docket/types';
 import { ActorPicker, EnumPicker, type PickerOption } from '@docket/ui/components';
+import { Activity } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { ENTITY_METADATA_CHIP_CLASS } from '@/components/views/entity-detail-layout';
@@ -92,6 +93,7 @@ export function ProgramPropertiesPanel({
         value={health}
         onChange={onHealthChange}
         placeholder="Set health"
+        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
         clearLabel="No health"
         ariaLabel="Health"
         readOnly={readOnly}

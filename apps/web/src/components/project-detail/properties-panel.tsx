@@ -11,6 +11,7 @@ import {
   type PickerOption,
 } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
+import { Activity, Layers, Target } from '@docket/ui/icons';
 import { type JSX, useMemo } from 'react';
 
 import { HEALTH_OPTIONS } from '@/components/pickers/options';
@@ -112,6 +113,7 @@ export function PropertiesPanel({
         value={health}
         onChange={onHealthChange}
         placeholder="Set health"
+        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
         clearLabel="No health"
         ariaLabel="Health"
         readOnly={readOnly}
@@ -133,6 +135,7 @@ export function PropertiesPanel({
         value={programId}
         onChange={onProgramChange}
         placeholder={`Set ${programLabel.toLowerCase()}`}
+        triggerIcon={<Layers className="text-on-surface-variant size-4" />}
         clearLabel={`No ${programLabel.toLowerCase()}`}
         searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
         ariaLabel={programLabel}
@@ -149,6 +152,7 @@ export function PropertiesPanel({
           onInitiativesChange(next);
         }}
         placeholder={`Add ${initiativeLabel.toLowerCase()}s`}
+        triggerIcon={<Target className="text-on-surface-variant size-4" />}
         singularLabel={initiativeLabel.toLowerCase()}
         pluralLabel={`${initiativeLabel.toLowerCase()}s`}
         searchPlaceholder={`Search ${initiativeLabel.toLowerCase()}s…`}

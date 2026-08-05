@@ -17,10 +17,12 @@
  * title or description) asks for confirmation first, so an accidental Esc / backdrop / close never
  * silently discards typed work.
  *
- * The dialog deliberately carries no big "New task" heading or descriptive sentence: the title
- * field is the focus, and a muted breadcrumb is the only label. The panel is a single flat surface
- * (`surface-container-high`); structure comes from the borderless tonal property pills, not from
- * extra surfaces or outlines.
+ * The dialog carries no visible "New task" heading at all: the title field is the focus, and
+ * `heading` exists to name the dialog for assistive tech (it renders `sr-only`), not to take up
+ * space a reader has to scan past. When the composer also supplies `icon`/`context` (e.g. a team
+ * breadcrumb), that row still renders — it carries information the title field doesn't. The panel
+ * is a single flat surface (`surface-container-high`); structure comes from the borderless tonal
+ * property pills, not from extra surfaces or outlines.
  */
 import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
@@ -34,13 +36,14 @@ export interface ComposerShellProps {
   /** Notify the parent that the open state changed (Esc, backdrop, X, discard, or success). */
   onOpenChange: (open: boolean) => void;
   /**
-   * The dialog heading (e.g. "New task"). Rendered as a small muted breadcrumb label — never a big
-   * self-referential heading — and doubles as the dialog's accessible title.
+   * The dialog's accessible name (e.g. "New task"), read by assistive tech but never shown — the
+   * title field is the only visible heading.
    */
   heading: ReactNode;
   /** Optional leading badge glyph for the breadcrumb (e.g. the entity-type icon). */
   icon?: ReactNode;
-  /** Optional context shown before the heading (e.g. the team name): `{context} › {heading}`. */
+  /** Optional context shown next to `icon` (e.g. the team name). Purely visual — `heading` alone
+   *  names the dialog for assistive tech. */
   context?: ReactNode;
   /** The current title text. */
   title: string;
@@ -143,26 +146,24 @@ export function ComposerShell({
         requestClose();
       }}
     >
-      <DialogContent className="max-w-2xl gap-0 p-0" aria-describedby={undefined}>
-        {/* Breadcrumb: a muted contextual label, not a heading. Reserve right room for the close X. */}
-        <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
-          {icon ? (
-            <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
-              {icon}
-            </span>
-          ) : null}
-          {context ? (
-            <>
-              <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
-              <span className="text-on-surface-variant shrink-0" aria-hidden="true">
-                ›
+      <DialogContent className="max-w-3xl gap-0 p-0" aria-describedby={undefined}>
+        {/* The dialog's accessible name — never shown; the title field is the only visible heading. */}
+        <DialogTitle className="sr-only">{heading}</DialogTitle>
+
+        {/* Breadcrumb: only rendered when there's real context to show (e.g. a team), so a composer
+            with neither an icon nor a context starts flush at the title field below. */}
+        {icon || context ? (
+          <div className="flex items-center gap-2 px-6 pt-5 pr-16 text-sm">
+            {icon ? (
+              <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
+                {icon}
               </span>
-            </>
-          ) : null}
-          <DialogTitle className="text-on-surface truncate text-sm font-medium">
-            {heading}
-          </DialogTitle>
-        </div>
+            ) : null}
+            {context ? (
+              <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Content: the title + description own the bulk of the dialog. */}
         <form
@@ -171,7 +172,7 @@ export function ComposerShell({
             event.preventDefault();
             if (canSubmit && !creating) onSubmit();
           }}
-          className="flex flex-col px-6 pt-3"
+          className={cn('flex flex-col px-6', icon || context ? 'pt-3' : 'pt-5')}
         >
           {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
           <div className="flex flex-col gap-1 pb-3">

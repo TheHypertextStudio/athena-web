@@ -33,6 +33,7 @@
  */
 import type { TaskDetail } from '@docket/types';
 import { DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
+import { Flag, FolderKanban, Layers, RefreshCw } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
@@ -156,6 +157,7 @@ export function TaskPropertiesRail({
               onPatch({ projectId });
             }}
             placeholder={`Set ${projectLabel.toLowerCase()}`}
+            triggerIcon={<FolderKanban className="text-on-surface-variant size-4" />}
             clearLabel={`No ${projectLabel.toLowerCase()}`}
             searchPlaceholder={`Search ${projectLabel.toLowerCase()}s…`}
             ariaLabel={projectLabel}
@@ -172,6 +174,7 @@ export function TaskPropertiesRail({
               onPatch({ programId });
             }}
             placeholder={`Set ${programLabel.toLowerCase()}`}
+            triggerIcon={<Layers className="text-on-surface-variant size-4" />}
             clearLabel={`No ${programLabel.toLowerCase()}`}
             searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
             ariaLabel={programLabel}
@@ -190,6 +193,7 @@ export function TaskPropertiesRail({
             placeholder={
               task.projectId ? 'Set milestone' : `Set a ${projectLabel.toLowerCase()} first`
             }
+            triggerIcon={<Flag className="text-on-surface-variant size-4" />}
             clearLabel="No milestone"
             searchPlaceholder="Search milestones…"
             emptyText={
@@ -211,6 +215,7 @@ export function TaskPropertiesRail({
               onPatch({ cycleId });
             }}
             placeholder={`Set ${cycleLabel.toLowerCase()}`}
+            triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
             clearLabel={`No ${cycleLabel.toLowerCase()}`}
             searchPlaceholder={`Search ${cycleLabel.toLowerCase()}s…`}
             ariaLabel={cycleLabel}

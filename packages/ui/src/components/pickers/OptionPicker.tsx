@@ -33,7 +33,11 @@ export interface OptionPickerProps<TValue extends string = string> {
   onChange: (value: TValue | null) => void;
   /** The calm empty prompt shown on the trigger when unset (e.g. "Set lead"). */
   placeholder: string;
-  /** Optional leading glyph shown on the trigger's empty prompt (replaces the default `+`). */
+  /**
+   * The field's semantic icon, shown on the trigger's empty prompt in place of the default `+`
+   * (e.g. a calendar for a date field). Ignored once a value is selected — the selected option's
+   * own `icon` takes over then.
+   */
   triggerIcon?: React.ReactNode;
   /** Whether the search input is shown. Defaults to `true`; pass `false` for short lists. */
   searchable?: boolean;
@@ -95,10 +99,9 @@ export function OptionPicker<TValue extends string = string>({
   // A read-only or disabled picker never opens; render the trigger affordance only.
   const trigger = (
     <PropertyTrigger
-      icon={active?.icon}
+      icon={active?.icon ?? triggerIcon}
       label={active?.label}
       placeholder={placeholder}
-      hidePlaceholderIcon={triggerIcon !== undefined}
       ariaLabel={ariaLabel ? `${ariaLabel} — ${active ? active.label : 'not set'}` : undefined}
       disabled={disabled}
       readOnly={readOnly}

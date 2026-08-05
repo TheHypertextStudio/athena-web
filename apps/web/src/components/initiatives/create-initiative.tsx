@@ -29,6 +29,7 @@ import {
   type InitiativeUpdateCadence,
 } from '@docket/types';
 import { ActorPicker, DatePicker, EnumPicker } from '@docket/ui/components';
+import { Activity } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
@@ -266,6 +267,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
         value={health}
         onChange={setHealth}
         placeholder="Set health"
+        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
         clearLabel="No health"
         ariaLabel="Health"
         disabled={creating}

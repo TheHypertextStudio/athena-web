@@ -30,6 +30,11 @@ export interface LabelsPickerProps<TValue extends string = string> {
   onToggle: (value: TValue) => void;
   /** The calm empty prompt shown on the trigger when no labels are set. */
   placeholder?: string;
+  /**
+   * The trigger's icon; defaults to a {@link Tag} glyph. Override when this picker is reused for
+   * a non-label relation (e.g. initiatives), so the chip reads as what it actually sets.
+   */
+  triggerIcon?: React.ReactNode;
   /** Placeholder for the search input. */
   searchPlaceholder?: string;
   /** Text shown when no label matches the query. */
@@ -75,6 +80,7 @@ export function LabelsPicker<TValue extends string = string>({
   value,
   onToggle,
   placeholder = 'Add labels',
+  triggerIcon = <Tag className="text-on-surface-variant size-4" />,
   searchPlaceholder = 'Filter labels…',
   emptyText = 'No labels',
   ariaLabel = 'Labels',
@@ -88,7 +94,7 @@ export function LabelsPicker<TValue extends string = string>({
 
   const trigger = (
     <PropertyTrigger
-      icon={summary ? <Tag className="text-on-surface-variant size-4" /> : undefined}
+      icon={triggerIcon}
       label={summary}
       placeholder={placeholder}
       ariaLabel={`${ariaLabel} — ${summary ?? 'none'}`}

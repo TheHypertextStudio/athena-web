@@ -28,6 +28,8 @@ export interface EnumPickerProps<TValue extends string = string> {
   onChange: (value: TValue | null) => void;
   /** The calm empty prompt shown when unset (only reachable for nullable enums). */
   placeholder: string;
+  /** The field's semantic icon shown on the empty prompt in place of the default `+`. */
+  triggerIcon?: React.ReactNode;
   /** When set, render a top "clear" row (for nullable enums like health). */
   clearLabel?: string;
   /** Accessible label prefix (e.g. "Status", "Priority", "Health"). */
@@ -66,6 +68,7 @@ export function EnumPicker<TValue extends string = string>({
   value,
   onChange,
   placeholder,
+  triggerIcon,
   clearLabel,
   ariaLabel,
   searchable = false,
@@ -80,6 +83,7 @@ export function EnumPicker<TValue extends string = string>({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      triggerIcon={triggerIcon}
       clearLabel={clearLabel}
       ariaLabel={ariaLabel}
       searchable={searchable}

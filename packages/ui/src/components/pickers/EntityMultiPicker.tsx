@@ -14,6 +14,8 @@ export interface EntityMultiPickerProps<TValue extends string = string> {
   value: readonly TValue[];
   onToggle: (value: TValue) => void;
   placeholder: string;
+  /** The field's semantic icon shown on the empty prompt in place of the default `+`. */
+  triggerIcon?: React.ReactNode;
   singularLabel: string;
   pluralLabel: string;
   searchPlaceholder?: string;
@@ -38,6 +40,7 @@ export function EntityMultiPicker<TValue extends string = string>({
   value,
   onToggle,
   placeholder,
+  triggerIcon,
   singularLabel,
   pluralLabel,
   searchPlaceholder,
@@ -57,6 +60,7 @@ export function EntityMultiPicker<TValue extends string = string>({
         : `${String(value.length)} ${pluralLabel}`;
   const trigger = (
     <PropertyTrigger
+      icon={triggerIcon}
       label={summary}
       placeholder={placeholder}
       ariaLabel={`${ariaLabel} — ${summary ?? 'none'}`}

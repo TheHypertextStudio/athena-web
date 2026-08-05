@@ -25,6 +25,8 @@ export interface EntityPickerProps<TValue extends string = string> {
   onChange: (value: TValue | null) => void;
   /** The calm empty prompt shown when unset (e.g. "Set project", "Add to program"). */
   placeholder: string;
+  /** The field's semantic icon shown on the empty prompt in place of the default `+`. */
+  triggerIcon?: React.ReactNode;
   /** The "clear" row label (e.g. "No project", "No cycle"). Omit to forbid clearing. */
   clearLabel?: string;
   /** Placeholder for the search input. */
@@ -54,6 +56,7 @@ export function EntityPicker<TValue extends string = string>({
   value,
   onChange,
   placeholder,
+  triggerIcon,
   clearLabel,
   searchPlaceholder = 'Search…',
   emptyText = 'No matches',
@@ -69,6 +72,7 @@ export function EntityPicker<TValue extends string = string>({
       value={value}
       onChange={onChange}
       placeholder={placeholder}
+      triggerIcon={triggerIcon}
       clearLabel={clearLabel}
       searchPlaceholder={searchPlaceholder}
       emptyText={emptyText}

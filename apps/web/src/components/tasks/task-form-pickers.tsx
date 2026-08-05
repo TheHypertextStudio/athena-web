@@ -9,6 +9,7 @@ import {
   LabelsPicker,
   type PickerOption,
 } from '@docket/ui/components';
+import { Flag, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
@@ -127,6 +128,7 @@ export function TaskComposerPickers({
         value={projectId}
         onChange={onProjectChange}
         placeholder={`Set ${projectNounLower}`}
+        triggerIcon={<FolderKanban className="text-on-surface-variant size-4" />}
         clearLabel={`No ${projectNounLower}`}
         searchPlaceholder={`Search ${projectNounLower}s…`}
         ariaLabel={projectNoun}
@@ -137,6 +139,7 @@ export function TaskComposerPickers({
         value={milestoneId}
         onChange={onMilestoneChange}
         placeholder={projectId ? 'Set milestone' : `Set a ${projectNounLower} first`}
+        triggerIcon={<Flag className="text-on-surface-variant size-4" />}
         clearLabel="No milestone"
         searchPlaceholder="Search milestones…"
         emptyText={projectId ? 'No milestones' : `Set a ${projectNounLower} to choose a milestone`}
@@ -149,6 +152,7 @@ export function TaskComposerPickers({
           value={cycleId}
           onChange={onCycleChange}
           placeholder={`Set ${cycleNounLower}`}
+          triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
           clearLabel={`No ${cycleNounLower}`}
           searchPlaceholder={`Search ${cycleNounLower}s…`}
           ariaLabel={cycleNoun}

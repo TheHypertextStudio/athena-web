@@ -58,10 +58,37 @@ export interface McpAppViewProps {
 }
 
 /** How tall a card starts out before the widget reports its own size. */
-const INITIAL_HEIGHT = 180;
+const INITIAL_HEIGHT = 96;
 
 /** The widest a card may grow before it gets its own scroll region. */
 const MAX_HEIGHT = 640;
+
+/**
+ * Docket token → the style variable the extension standardizes.
+ *
+ * @remarks
+ * Every key here is a member of the spec's `McpUiStyleVariableKey` union. A key outside it is not
+ * a customization, it is a value the widget will never receive, so the vocabulary is the contract.
+ * `--font-sans` is deliberately absent: it is resolved from a real element rather than read as a
+ * token, for the reason spelled out in {@link hostStyleVariables}.
+ */
+const STYLE_VARIABLE_MAP: Readonly<Record<string, string>> = {
+  '--color-background-primary': '--color-surface-container-low',
+  '--color-background-secondary': '--color-surface-container',
+  '--color-background-tertiary': '--color-surface-container-high',
+  '--color-background-danger': '--color-error-container',
+  '--color-text-primary': '--color-on-surface',
+  '--color-text-secondary': '--color-on-surface-variant',
+  '--color-text-tertiary': '--color-outline',
+  '--color-text-info': '--color-primary',
+  '--color-text-danger': '--color-error',
+  '--color-border-primary': '--color-outline-variant',
+  '--color-border-secondary': '--color-outline',
+  '--color-ring-primary': '--color-primary',
+  '--border-radius-md': '--radius-md',
+  '--border-radius-lg': '--radius-lg',
+  '--border-radius-xl': '--radius-xl',
+};
 
 /**
  * The API origin the sandbox proxy is served from.
@@ -78,9 +105,13 @@ function sandboxProxyUrl(override?: string): string {
 
 /** Read the colour scheme the app is currently rendering under. */
 function currentTheme(): McpUiTheme {
-  if (typeof window === 'undefined') return 'light';
+  if (typeof window === 'undefined') {
+    return 'light';
+  }
   const attribute = document.documentElement.dataset['theme'];
-  if (attribute === 'dark' || attribute === 'light') return attribute;
+  if (attribute === 'dark' || attribute === 'light') {
+    return attribute;
+  }
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -97,35 +128,55 @@ function currentTheme(): McpUiTheme {
  * app's real palette in both themes and after any future token change.
  */
 function hostStyleVariables(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  const computed = window.getComputedStyle(document.documentElement);
+  if (typeof window === 'undefined') {
+    return {};
+  }
+  // Read off `body`, not `documentElement`. `next/font` declares its family variable on a class
+  // further down the tree, so a token that references it is unresolved at the root — which is how
+  // `--font-sans` used to reach widgets as the literal text `var(--font-ibm-plex-sans), …` and take
+  // the whole `font-family` declaration down with it. Body inherits everything the root defines and
+  // sees the font variable as well.
+  const computed = window.getComputedStyle(document.body);
   const read = (token: string): string => computed.getPropertyValue(token).trim();
-  const map: Readonly<Record<string, string>> = {
-    '--color-background-primary': '--color-surface-container-low',
-    '--color-background-secondary': '--color-surface-container',
-    '--color-background-tertiary': '--color-surface-container-high',
-    '--color-text-primary': '--color-on-surface',
-    '--color-text-secondary': '--color-on-surface-variant',
-    '--color-text-info': '--color-primary',
-    '--color-text-danger': '--color-error',
-    '--color-border-primary': '--color-outline-variant',
-    '--font-sans': '--font-sans',
-  };
+
   const variables: Record<string, string> = {};
-  for (const [specKey, docketToken] of Object.entries(map)) {
+  for (const [specKey, docketToken] of Object.entries(STYLE_VARIABLE_MAP)) {
     const value = read(docketToken);
-    if (value) variables[specKey] = value;
+    if (value) {
+      variables[specKey] = value;
+    }
+  }
+
+  // The resolved stack, not the token. It still names the generated `@font-face` family first, and
+  // the widget cannot load that font under `font-src 'self'` in an opaque origin — but the rest of
+  // the stack is real, so the card lands on the same system sans the app falls back to rather than
+  // on the browser's default serif.
+  const fontFamily = computed.fontFamily.trim();
+  if (fontFamily) {
+    variables['--font-sans'] = fontFamily;
   }
   return variables;
 }
 
-/** Build the host context handed to a view. */
-function buildHostContext(): McpUiHostContext {
+/**
+ * Build the host context handed to a view.
+ *
+ * @param maxWidth - The measured width of the frame's container, when it is known.
+ * @returns the context to send on `ui/initialize` and to patch on any later change.
+ */
+function buildHostContext(maxWidth?: number): McpUiHostContext {
   return {
     theme: currentTheme(),
     styles: { variables: hostStyleVariables() },
     displayMode: 'inline',
     availableDisplayModes: ['inline', 'fullscreen'],
+    // Flexible on both axes, never fixed. A card in a transcript should be exactly as tall as what
+    // it has to say, which means the view measures and the frame follows — the alternative is a
+    // guessed height that either clips the content or leaves dead space under it.
+    containerDimensions: {
+      maxHeight: MAX_HEIGHT,
+      ...(typeof maxWidth === 'number' && maxWidth > 0 ? { maxWidth: Math.round(maxWidth) } : {}),
+    },
     platform: 'web',
     userAgent: 'docket-athena',
     ...(typeof Intl === 'undefined'
@@ -153,6 +204,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     sandboxOrigin,
   } = props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const containerRef = useRef<HTMLElement | null>(null);
   const hostRef = useRef<McpAppHost | null>(null);
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [failure, setFailure] = useState<string | null>(null);
@@ -173,7 +225,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
 
   useEffect(() => {
     const frame = frameRef.current;
-    if (!frame) return;
+    if (!frame) {
+      return;
+    }
 
     const post = (message: JsonRpcMessage): void => {
       frame.contentWindow?.postMessage(message, proxyOrigin || '*');
@@ -183,7 +237,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
       hostInfo: { name: 'docket-athena', version: '1.0.0' },
       resource,
       tool: { name: tool.name, ...(tool.arguments ? { arguments: tool.arguments } : {}) },
-      hostContext: buildHostContext(),
+      hostContext: buildHostContext(containerRef.current?.clientWidth),
       post,
       callTool,
       // Scope: the API decides. The browser holds no credential for the connected server, so an
@@ -200,7 +254,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
         } catch {
           return false;
         }
-        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          return false;
+        }
         if (parsed.origin === window.location.origin) {
           window.location.assign(parsed.href);
           return true;
@@ -215,7 +271,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
                 .map((block) => (typeof block.text === 'string' ? block.text : ''))
                 .filter(Boolean)
                 .join('\n');
-              if (!text) return false;
+              if (!text) {
+                return false;
+              }
               return await onMessage(text);
             },
           }
@@ -227,7 +285,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
                 .map((block) => (typeof block.text === 'string' ? block.text : ''))
                 .filter(Boolean)
                 .join('\n');
-              if (text) onModelContext(text);
+              if (text) {
+                onModelContext(text);
+              }
             },
           }
         : {}),
@@ -240,10 +300,16 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     hostRef.current = host;
 
     const onWindowMessage = (event: MessageEvent): void => {
-      if (event.source !== frame.contentWindow) return;
-      if (proxyOrigin && event.origin !== proxyOrigin) return;
+      if (event.source !== frame.contentWindow) {
+        return;
+      }
+      if (proxyOrigin && event.origin !== proxyOrigin) {
+        return;
+      }
       const data: unknown = event.data;
-      if (typeof data !== 'object' || data === null) return;
+      if (typeof data !== 'object' || data === null) {
+        return;
+      }
       const method: unknown = Reflect.get(data, 'method');
       if (method === MCP_UI_METHODS.sandboxProxyReady) {
         // The proxy is up. Hand it the document plus the policy computed from what the resource
@@ -270,14 +336,41 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
   // so this does not need to know anything about the handshake.
   useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    if (!host) {
+      return;
+    }
     host.deliverToolInput(tool.arguments ?? {});
     host.deliverToolResult(result);
   }, [result, tool.arguments]);
 
+  // Tell the view how much room it has whenever the panel is resized. Without this the view sizes
+  // itself against whatever width it was first given and reports a height for a layout that no
+  // longer exists, which shows up as a card with a strip of dead space under it.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !('ResizeObserver' in window)) {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (typeof width !== 'number' || width <= 0) {
+        return;
+      }
+      hostRef.current?.updateHostContext({
+        containerDimensions: { maxHeight: MAX_HEIGHT, maxWidth: Math.round(width) },
+      });
+    });
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   // Restyle in place on a theme flip: a patch, not a reload.
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined') {
+      return;
+    }
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const push = (): void => {
       hostRef.current?.updateHostContext({
@@ -317,6 +410,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
 
   return (
     <figure
+      ref={containerRef}
       className="bg-surface-container-low m-0 overflow-hidden rounded-xl"
       data-testid="mcp-app-view"
       data-resource-uri={resource.uri}
@@ -330,7 +424,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
         // one. Both facts matter, and they live on different frames for exactly that reason.
         sandbox="allow-scripts allow-same-origin allow-popups"
         referrerPolicy="no-referrer"
-        className="block w-full border-0 bg-transparent"
+        // A card grows into its measured height rather than snapping. The global reduced-motion
+        // rule in `globals.css` collapses this to nothing for anyone who asked for that.
+        className="block w-full border-0 bg-transparent transition-[height]"
         style={{ height: `${String(height)}px` }}
       />
       <figcaption className="px-4 pb-2">

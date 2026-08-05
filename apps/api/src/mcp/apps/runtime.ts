@@ -31,6 +31,11 @@ export const UI_MIME_TYPE = 'text/html;profile=mcp-app';
  * `ui/update-model-context` matters more than it looks: without it the agent goes on describing a
  * change the user has already undone from the card, which is the single most confusing thing a
  * widget can do.
+ *
+ * Sizing is not optional and not the host's problem to guess. A host running flexible container
+ * dimensions is required by the spec to size the frame from `ui/notifications/size-changed`, so a
+ * widget that never measures itself gets whatever height the host defaulted to and clips its own
+ * content. `watchSize` reports on every layout change for the life of the document.
  */
 export const RUNTIME_JS = String.raw`
 (() => {
@@ -39,6 +44,7 @@ export const RUNTIME_JS = String.raw`
   let resultHandler = null;
   let lastResult = null;
   let toolInput = null;
+  let lastHostContext = null;
 
   function post(msg) {
     window.parent.postMessage(msg, '*');
@@ -57,13 +63,30 @@ export const RUNTIME_JS = String.raw`
   }
 
   function applyTheme(hostContext) {
-    const styles = hostContext && hostContext.styles;
-    if (!styles) return;
+    if (!hostContext) {
+      return;
+    }
     const root = document.documentElement;
+
+    // Pin color-scheme to what the host declares. This is what makes the stylesheet's light-dark()
+    // fallbacks resolve to the host's theme rather than the viewer's OS setting — which matters
+    // precisely because a host may supply some variables and not others, leaving our fallbacks to
+    // fill the gaps. It also decides how native form controls render inside the frame.
+    if (hostContext.theme === 'dark' || hostContext.theme === 'light') {
+      root.style.colorScheme = 'only ' + hostContext.theme;
+    }
+
+    const styles = hostContext.styles;
+    if (!styles) {
+      return;
+    }
     for (const [key, value] of Object.entries(styles.variables || {})) {
       // The host owns the palette; a widget that hardcodes colour reads as a foreign object
-      // inside someone else's theme.
-      if (key.startsWith('--')) root.style.setProperty(key, String(value));
+      // inside someone else's theme. An inline declaration outranks the stylesheet's :root
+      // fallback, so supplying a variable is all a host has to do.
+      if (key.startsWith('--')) {
+        root.style.setProperty(key, String(value));
+      }
     }
     const fonts = styles.css && styles.css.fonts;
     if (fonts) {
@@ -73,16 +96,93 @@ export const RUNTIME_JS = String.raw`
     }
   }
 
+  function applyLocale(hostContext) {
+    const locale = hostContext && hostContext.locale;
+    // Without a lang a screen reader picks the wrong voice for every word on the card.
+    document.documentElement.lang = typeof locale === 'string' && locale ? locale : 'en';
+  }
+
+  function applyContainerDimensions(hostContext) {
+    // host-context-changed carries a PARTIAL context, so an absent key means "unchanged", never
+    // "reset". Only act on dimensions the host actually sent.
+    const dims = hostContext && hostContext.containerDimensions;
+    if (!dims) {
+      return;
+    }
+    const root = document.documentElement;
+    if (typeof dims.height === 'number') {
+      root.style.height = '100vh';
+    } else if (typeof dims.maxHeight === 'number') {
+      root.style.maxHeight = dims.maxHeight + 'px';
+    }
+    if (typeof dims.width === 'number') {
+      root.style.width = '100vw';
+    } else if (typeof dims.maxWidth === 'number') {
+      root.style.maxWidth = dims.maxWidth + 'px';
+    }
+  }
+
+  let reportedHeight = 0;
+  let pendingFrame = 0;
+
+  function reportSize() {
+    if (pendingFrame) {
+      return;
+    }
+    pendingFrame = requestAnimationFrame(() => {
+      pendingFrame = 0;
+      const height = Math.ceil(document.body.scrollHeight);
+      if (height === 0 || height === reportedHeight) {
+        return;
+      }
+      reportedHeight = height;
+      notify('ui/notifications/size-changed', {
+        width: Math.ceil(document.body.scrollWidth),
+        height,
+      });
+    });
+  }
+
+  function watchSize() {
+    // A host running flexible dimensions sizes the frame from these notifications and from nothing
+    // else. Without them the card keeps whatever height the host guessed and its content clips.
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(reportSize).observe(document.body);
+    } else {
+      window.addEventListener('load', reportSize);
+    }
+    reportSize();
+  }
+
+  function applyHostContext(hostContext) {
+    // Merged, not replaced: host-context-changed sends only what moved, and a widget that reads
+    // availableDisplayModes or toolInfo off the last notification would lose them on a theme flip.
+    if (hostContext) {
+      lastHostContext = Object.assign({}, lastHostContext, hostContext);
+    }
+    applyTheme(hostContext);
+    applyLocale(hostContext);
+    applyContainerDimensions(hostContext);
+    reportSize();
+  }
+
   window.addEventListener('message', (event) => {
     const msg = event.data;
-    if (!msg || msg.jsonrpc !== '2.0') return;
+    if (!msg || msg.jsonrpc !== '2.0') {
+      return;
+    }
 
     if (msg.id !== undefined && (msg.result !== undefined || msg.error !== undefined)) {
       const waiter = pending.get(msg.id);
-      if (!waiter) return;
+      if (!waiter) {
+        return;
+      }
       pending.delete(msg.id);
-      if (msg.error) waiter.reject(new Error(msg.error.message || 'Host call failed'));
-      else waiter.resolve(msg.result);
+      if (msg.error) {
+        waiter.reject(new Error(msg.error.message || 'Host call failed'));
+      } else {
+        waiter.resolve(msg.result);
+      }
       return;
     }
 
@@ -94,17 +194,21 @@ export const RUNTIME_JS = String.raw`
     }
     if (msg.method === 'ui/notifications/tool-result') {
       lastResult = msg.params;
-      if (resultHandler) resultHandler(msg.params);
+      if (resultHandler) {
+        resultHandler(msg.params);
+      }
       return;
     }
     if (msg.method === 'ui/notifications/tool-cancelled') {
       // No result is coming. A card that keeps its spinner forever is worse than one that says so.
-      if (resultHandler) resultHandler({ content: [], isError: true, cancelled: true });
+      if (resultHandler) {
+        resultHandler({ content: [], isError: true, cancelled: true });
+      }
       return;
     }
     if (msg.method === 'ui/notifications/host-context-changed') {
       // The spec's params ARE the partial host context, not a wrapper around one.
-      applyTheme(msg.params);
+      applyHostContext(msg.params);
       return;
     }
     if (msg.method === 'ui/resource-teardown' && msg.id !== undefined) {
@@ -119,17 +223,20 @@ export const RUNTIME_JS = String.raw`
     appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
   })
     .then((result) => {
-      applyTheme(result && result.hostContext);
+      applyHostContext(result && result.hostContext);
       notify('ui/notifications/initialized', {});
       return result;
     })
-    .catch(() => null);
+    .catch(() => null)
+    .finally(watchSize);
 
   window.docket = {
     ready,
     onResult(fn) {
       resultHandler = fn;
-      if (lastResult) fn(lastResult);
+      if (lastResult) {
+        fn(lastResult);
+      }
     },
     get input() {
       return toolInput || {};
@@ -147,54 +254,90 @@ export const RUNTIME_JS = String.raw`
       // The spec requires a role, and only 'user' is permitted.
       return request('ui/message', { role: 'user', content: [{ type: 'text', text }] });
     },
-    resize() {
-      notify('ui/notifications/size-changed', {
-        width: document.body.scrollWidth,
-        height: document.body.scrollHeight,
-      });
+    resize: reportSize,
+    get hostContext() {
+      return lastHostContext || {};
     },
   };
 })();
 `;
 
 /**
- * The shared stylesheet, written entirely against host-supplied custom properties.
+ * The shared stylesheet, written entirely against the extension's standardized custom properties.
  *
  * @remarks
- * Every colour falls back to a neutral so a host that supplies no variables still renders
- * something legible rather than black-on-black. Inline widgets must not scroll or open popovers —
- * they sit inside someone else's transcript, and a nested scroll region there is a trap.
+ * Every name used here is a member of the spec's `McpUiStyleVariableKey` union, which is what a
+ * host actually supplies — asking for a name outside it means the declaration silently never
+ * arrives. `runtime-tokens.test.ts` parses the vendored spec and fails the build if that drifts.
+ *
+ * The `:root` values are literals, never `var(--x, …)` self-references. A custom property that
+ * references itself is a dependency cycle, and CSS resolves cycles to guaranteed-invalid *before*
+ * it would reach the fallback — so a self-referencing declaration is not a default, it is a
+ * deleted property. A host-supplied value arrives as an inline style on the root element and
+ * outranks these regardless.
+ *
+ * The fallbacks are `light-dark()` pairs and both halves clear AA against the surface they sit on,
+ * because the spec explicitly permits a host to supply some colours and not others. `color-scheme`
+ * decides which half applies, and {@link RUNTIME_JS} pins it to the host's declared theme.
+ *
+ * Inline widgets must not scroll or open popovers — they sit inside someone else's transcript, and
+ * a nested scroll region there is a trap.
  */
 export const RUNTIME_CSS = String.raw`
 :root {
-  --color-text-primary: var(--color-text-primary, #1a1a1a);
-  --color-text-secondary: var(--color-text-secondary, #6b6b6b);
-  --color-surface-primary: var(--color-surface-primary, #ffffff);
-  --color-surface-secondary: var(--color-surface-secondary, #f4f4f5);
-  --color-border-primary: var(--color-border-primary, #e4e4e7);
-  --color-accent-primary: var(--color-accent-primary, #2563eb);
-  --color-danger-primary: var(--color-danger-primary, #b91c1c);
-  --font-family-sans: var(--font-family-sans, ui-sans-serif, system-ui, sans-serif);
+  color-scheme: light dark;
+
+  --color-background-primary: light-dark(#ffffff, #1c1c20);
+  --color-background-secondary: light-dark(#f4f4f6, #26262c);
+  --color-background-tertiary: light-dark(#e8e8ec, #303038);
+  --color-text-primary: light-dark(#18181b, #f2f2f4);
+  --color-text-secondary: light-dark(#52525b, #b1b1bd);
+  --color-text-tertiary: light-dark(#6b6b76, #9595a1);
+  --color-text-info: light-dark(#1d4ed8, #8ab0f8);
+  --color-text-danger: light-dark(#b42318, #f9a8a0);
+  --color-text-success: light-dark(#15803d, #7fd6a0);
+  --color-border-primary: light-dark(#e4e4e7, #3a3a44);
+  --color-ring-primary: light-dark(#2563eb, #8ab0f8);
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-text-sm-size: 0.8125rem;
+  --font-text-md-size: 0.875rem;
+  --font-text-sm-line-height: 1.4;
+  --font-text-md-line-height: 1.45;
+  --font-heading-xs-size: 0.9375rem;
+  --font-heading-xs-line-height: 1.35;
+
+  --border-radius-md: 6px;
+  --border-radius-lg: 10px;
+  --border-radius-full: 999px;
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: var(--font-family-sans);
+  font-family: var(--font-sans);
   color: var(--color-text-primary);
   background: transparent;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--font-text-md-size);
+  line-height: var(--font-text-md-line-height);
 }
 .card {
   border: 1px solid var(--color-border-primary);
-  border-radius: 10px;
-  background: var(--color-surface-primary);
+  border-radius: var(--border-radius-lg);
+  background: var(--color-background-primary);
   padding: 12px 14px;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.headline { font-weight: 600; }
+.headline {
+  font-size: var(--font-heading-xs-size);
+  line-height: var(--font-heading-xs-line-height);
+  font-weight: var(--font-weight-semibold);
+}
 .muted { color: var(--color-text-secondary); }
 .rows { display: flex; flex-direction: column; gap: 6px; }
 .row {
@@ -202,27 +345,28 @@ body {
   align-items: baseline;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
-  background: var(--color-surface-secondary);
+  border-radius: var(--border-radius-md);
+  background: var(--color-background-secondary);
 }
-.row .name { font-weight: 500; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .name { font-weight: var(--font-weight-medium); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .diff { font-variant-numeric: tabular-nums; }
 .diff .from { color: var(--color-text-secondary); text-decoration: line-through; }
-.diff .to { color: var(--color-text-primary); font-weight: 500; }
+.diff .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .skipped .name { color: var(--color-text-secondary); }
-.reason { color: var(--color-danger-primary); font-size: 12px; }
+.reason { color: var(--color-text-danger); font-size: var(--font-text-sm-size); }
 .actions { display: flex; gap: 8px; }
 button {
   font: inherit;
   padding: 5px 11px;
-  border-radius: 6px;
+  border-radius: var(--border-radius-md);
   border: 1px solid var(--color-border-primary);
-  background: var(--color-surface-primary);
+  background: var(--color-background-primary);
   color: var(--color-text-primary);
   cursor: pointer;
 }
-button:hover { background: var(--color-surface-secondary); }
+button:hover { background: var(--color-background-secondary); }
 button:disabled { opacity: 0.5; cursor: default; }
+button:focus-visible { outline: 2px solid var(--color-ring-primary); outline-offset: 2px; }
 .empty { color: var(--color-text-secondary); }
 `;
 
@@ -236,10 +380,11 @@ button:disabled { opacity: 0.5; cursor: default; }
  */
 export function appDocument(title: string, body: string, script: string): string {
   return `<!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>${title}</title>
 <style>${RUNTIME_CSS}</style>
 </head>

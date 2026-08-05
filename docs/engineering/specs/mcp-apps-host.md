@@ -128,13 +128,52 @@ place in the system.
 
 ## 6. Theming and sizing
 
-The host maps Docket's MD3 tokens onto the spec's standardized `--color-*` / `--font-*` vocabulary
-(`hostStyleVariables`), reading them from the live computed style so a widget tracks the real
-palette in both themes and after any future token change. A colour-scheme flip sends a **partial**
-`ui/notifications/host-context-changed`; the frame is never re-pointed, so nothing the user did
-inside the widget is lost. A widget reports its own size with
-`ui/notifications/size-changed` and the frame follows it, capped, so a card never sits in a fixed
-box with its own scrollbar and a runaway widget cannot take over the transcript.
+### The vocabulary is the contract
+
+The extension standardizes a closed set of custom-property names (`McpUiStyleVariableKey`). A
+widget that asks for a name outside that set does not fail — it renders wrong, in someone else's
+product, and the first report is a screenshot. Docket shipped exactly that: the widget stylesheet
+asked for `--color-surface-primary`, `--color-accent-primary`, `--color-danger-primary`, and
+`--font-family-sans`, none of which any host supplies.
+
+`apps/api/tests/mcp/mcp-apps-tokens.test.ts` now parses the union out of `specs/vendor/` and fails
+if a widget declares a name outside it. `STYLE_VARIABLE_MAP` in `mcp-app-view.tsx` is the other
+half: Docket's MD3 token → the spec name, and every key in it is a union member.
+
+### Fallbacks are literals, never self-references
+
+The stylesheet's `:root` declarations are literal `light-dark()` pairs. They must never be written
+`--x: var(--x, fallback)`: a custom property that references itself is a dependency cycle, and CSS
+resolves cycles to guaranteed-invalid _before_ substituting the fallback. That spelling reads like
+a default and behaves like a deletion — it is what removed the card background and left the font on
+browser-default serif. A host-supplied value arrives as an inline style on the root element and
+outranks the stylesheet anyway, so nothing is gained by the indirection.
+
+Both halves of every fallback clear AA against the surface they sit on, because the spec explicitly
+permits a host to supply some colours and not others. `color-scheme` picks the half, and the view
+pins it from `hostContext.theme` — which is also what decides how native form controls render
+inside the frame.
+
+Fonts are the one thing that cannot cross: the widget frame runs in an opaque origin under
+`font-src 'self'`, so the app's IBM Plex `@font-face` is unreachable. The host sends the _resolved_
+`font-family` stack (read off `document.body`, not the root — `next/font` declares its family
+variable further down the tree, and reading the token at the root yields the literal text
+`var(--font-ibm-plex-sans), …`, which takes the whole declaration down with it). The widget lands
+on the same system sans the app falls back to.
+
+### Sizing is a loop, and both ends must run
+
+Docket advertises **flexible** `containerDimensions` — `maxHeight`, plus `maxWidth` measured from
+the frame's container and re-sent on container resize. Under flexible dimensions the spec requires
+the host to size the frame from `ui/notifications/size-changed`, so a widget that never measures
+itself gets whatever height the host guessed. `watchSize` in `runtime.ts` reports on every layout
+change through a `ResizeObserver` for the life of the document; the frame follows it, capped, so a
+card never sits in a fixed box with its own scrollbar and a runaway widget cannot take over the
+transcript.
+
+A colour-scheme flip sends a **partial** `ui/notifications/host-context-changed`. The view merges
+rather than replaces, and treats an absent key as unchanged rather than as a reset; the frame is
+never re-pointed, so nothing the user did inside the widget is lost.
 
 ---
 
@@ -168,4 +207,10 @@ the same rows the Settings surface manages, so a connection made in either place
   surface coverage, and a check that every test the matrix cites exists by name.
 - `apps/web/tests/athena/mcp-app-view.test.tsx` — 15 tests of the browser adapter.
 - `apps/api/tests/mcp/mcp-apps-sandbox.test.ts` — the proxy endpoint's headers and origin.
-- Live screenshots: `apps/web/.data/design-review/mcp-apps/`.
+- `apps/api/tests/mcp/mcp-apps-tokens.test.ts` — the widget stylesheet's vocabulary, against the
+  vendored spec.
+- `apps/web/e2e/mcp/widget-shots.spec.ts` — every widget, every state, at 720px and 320px, in light
+  and dark, with and without a host palette. Drives the real handshake against a fake host and
+  writes to `docs/design/audits/screenshots/mcp-apps/`, which is where the craft review reads from.
+  The suite asserts each widget reports its own height and that nothing overflows horizontally, so
+  a broken resize loop hangs the spec rather than passing it.

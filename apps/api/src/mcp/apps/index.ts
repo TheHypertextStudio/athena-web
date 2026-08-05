@@ -18,7 +18,7 @@
  */
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 
-import { MCP_UI_META_KEY } from '@docket/types';
+import { MCP_UI_META_KEY, type McpUiResourceMeta } from '@docket/types';
 
 import type { McpRegistrar } from '../catalog';
 import { CHANGE_REPORT_HTML } from './change-report';
@@ -84,6 +84,19 @@ const DOCUMENTS: Readonly<Record<string, { title: string; description: string; h
   },
 };
 
+/**
+ * What every widget document declares about the frame it wants.
+ *
+ * @remarks
+ * Emitted under both spellings for the same reason {@link widgetMeta} is.
+ *
+ * `prefersBorder: false` is the whole payload today, and it is not cosmetic: the document draws its
+ * own card, so a host that also draws one nests two borders around the same content. Declaring the
+ * preference is how a host knows to stay out of the way. Nothing here asks for a CSP relaxation or
+ * a browser permission — a widget that needed either would be doing something these four do not.
+ */
+const RESOURCE_META: McpUiResourceMeta = { prefersBorder: false };
+
 /** Register every `ui://` widget resource on `server`. */
 export function registerApps(server: McpRegistrar): void {
   for (const [uri, doc] of Object.entries(DOCUMENTS)) {
@@ -92,7 +105,14 @@ export function registerApps(server: McpRegistrar): void {
       uri,
       { title: doc.title, description: doc.description, mimeType: UI_MIME_TYPE },
       (readUri): ReadResourceResult => ({
-        contents: [{ uri: readUri.href, mimeType: UI_MIME_TYPE, text: doc.html }],
+        contents: [
+          {
+            uri: readUri.href,
+            mimeType: UI_MIME_TYPE,
+            text: doc.html,
+            _meta: { [MCP_UI_META_KEY]: RESOURCE_META, [UI_EXTENSION]: RESOURCE_META },
+          },
+        ],
       }),
     );
   }

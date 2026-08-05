@@ -176,7 +176,9 @@ export function isAppCallableTool(tool: RemoteToolDescriptor): boolean {
 function toResourceOut(
   resource: RemoteUiResource | null,
 ): z.input<typeof McpAppRenderOut>['resource'] {
-  if (!resource || !isRenderableUiResource(resource)) return null;
+  if (!resource || !isRenderableUiResource(resource)) {
+    return null;
+  }
   const csp = resource.meta?.csp;
   return {
     uri: resource.uri,

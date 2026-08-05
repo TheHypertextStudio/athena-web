@@ -45,8 +45,9 @@ const LEAKY_REJECTION = 'ECONNRESET while writing initiative_hierarchy_links (pg
 
 vi.mock('next/navigation', () => ({
   useParams: () => ({ orgId: ORG_ID }),
-  useRouter: () => ({ push: routerPush }),
+  useRouter: () => ({ push: routerPush, replace: vi.fn() }),
   usePathname: () => `/orgs/${ORG_ID}/initiatives`,
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({

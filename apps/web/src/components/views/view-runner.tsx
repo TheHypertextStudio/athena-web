@@ -111,6 +111,13 @@ export function ViewRunner({
 
   return (
     <ListView
+      // `ListView`'s expand/collapse state is keyed by bucket id, and the synthesized "no value"
+      // bucket (`EMPTY_GROUP_ID`) is the same literal id for every field. Without a remount,
+      // collapsing e.g. "No project" and then re-grouping by Assignee would render "No assignee"
+      // pre-collapsed even though the viewer never touched it — a new grouping is a new partition
+      // of the data, so its collapse state must start fresh rather than inherit the previous
+      // grouping's. Keying on the active field forces exactly that reset.
+      key={state.groupBy?.field ?? '__ungrouped__'}
       items={applied.rows}
       label={label}
       getItemKey={(task) => task.id}

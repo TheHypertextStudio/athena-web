@@ -31,7 +31,15 @@ import {
   readInitiativeDragObject,
   selfOrDescendantPredicate,
 } from '@/components/initiatives/hierarchy-dnd';
+import {
+  buildInitiativeCatalog,
+  HEALTH_LABEL,
+  STATUS_LABEL,
+} from '@/components/initiatives/initiative-catalog';
+import { filterRows, sortRows } from '@/components/views/apply-view';
+import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { ListPageLayout } from '@/components/views/page-layout';
+import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
 import {
@@ -48,17 +56,6 @@ import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { userErrorMessage } from '@/lib/problem';
 import { useOrgCapability } from '@/lib/use-org-capability';
 
-const STATUS_LABEL = {
-  proposed: 'Proposed',
-  active: 'Active',
-  completed: 'Completed',
-  canceled: 'Canceled',
-} as const;
-const HEALTH_LABEL = {
-  on_track: 'On track',
-  at_risk: 'At risk',
-  off_track: 'Off track',
-} as const;
 const HEALTH_TEXT_CLASS = {
   on_track: 'text-state-completed',
   at_risk: 'text-state-canceled',
@@ -262,9 +259,8 @@ export default function InitiativesListClient(): JSX.Element {
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const [createOpen, setCreateOpen] = useState(false);
   const [attentionIndex, setAttentionIndex] = useState(0);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | keyof typeof STATUS_LABEL>('all');
-  const [sort, setSort] = useState<'title' | 'target' | 'status'>('title');
+  const { state, setFilters, setGroupBy, setSort } = useViewState();
+  const catalog = useMemo(() => buildInitiativeCatalog(), []);
   // The initiative currently being dragged, and the row it is hovering as a drop (nest) target.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
@@ -381,27 +377,24 @@ export default function InitiativesListClient(): JSX.Element {
       const siblings = childrenByParent.get(item.parentInitiativeId) ?? [];
       childrenByParent.set(item.parentInitiativeId, [...siblings, item]);
     }
-    const compare = (a: (typeof items)[number], b: (typeof items)[number]): number => {
-      if (sort === 'target') return (a.targetDate ?? '9999').localeCompare(b.targetDate ?? '9999');
-      if (sort === 'status')
-        return a.status.localeCompare(b.status) || a.name.localeCompare(b.name);
-      return a.name.localeCompare(b.name);
-    };
+    // Pre-order traversal, siblings ordered by the shared engine's active sort term (an empty
+    // `state.sort` — "Default order" — leaves the API's own alphabetical-per-level order intact).
     const ordered: typeof items = [];
     const visit = (parentId: string | null): void => {
-      for (const item of [...(childrenByParent.get(parentId) ?? [])].sort(compare)) {
+      const siblings = sortRows(childrenByParent.get(parentId) ?? [], state.sort, catalog);
+      for (const item of siblings) {
         ordered.push(item);
         visit(item.id);
       }
     };
     visit(null);
-    const needle = search.trim().toLowerCase();
+    // A row matches when the shared engine's active filters (AND-composed) accept it; a matching
+    // descendant keeps its whole ancestor chain visible even when an ancestor itself does not
+    // match, so filtering never severs a result from its place in the tree.
+    const matching = new Set(filterRows(ordered, state.filters, catalog).map((item) => item.id));
     const keep = new Set<string>();
     for (const item of ordered) {
-      const matchesText =
-        !needle || `${item.name} ${item.summary ?? ''}`.toLowerCase().includes(needle);
-      const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
-      if (!matchesText || !matchesStatus) continue;
+      if (!matching.has(item.id)) continue;
       let current: (typeof items)[number] | undefined = item;
       while (current) {
         keep.add(current.id);
@@ -409,7 +402,7 @@ export default function InitiativesListClient(): JSX.Element {
       }
     }
     return ordered.filter((item) => keep.has(item.id));
-  }, [data?.items, search, sort, statusFilter]);
+  }, [data?.items, state.filters, state.sort, catalog]);
   const rosterRows = useMemo(() => decorateHierarchy(visibleItems), [visibleItems]);
 
   // Reparenting reads the whole context tree (not just the filtered rows) so a cycle check and the
@@ -611,44 +604,16 @@ export default function InitiativesListClient(): JSX.Element {
       ) : null}
 
       {data && data.items.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-            }}
-            placeholder={`Filter ${initiativePlural.toLowerCase()}…`}
-            aria-label={`Filter ${initiativePlural.toLowerCase()}`}
-            className="border-input bg-background h-10 min-w-52 flex-1 rounded-md border px-3 text-sm"
-          />
-          <select
-            value={statusFilter}
-            onChange={(event) => {
-              setStatusFilter(event.target.value as typeof statusFilter);
-            }}
-            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
-            aria-label="Filter by status"
-          >
-            <option value="all">All statuses</option>
-            {Object.entries(STATUS_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={sort}
-            onChange={(event) => {
-              setSort(event.target.value as typeof sort);
-            }}
-            className="border-input bg-background h-10 rounded-md border px-3 text-sm"
-            aria-label="Sort initiatives"
-          >
-            <option value="title">Sort by title</option>
-            <option value="status">Sort by status</option>
-            <option value="target">Sort by target</option>
-          </select>
-        </div>
+        // The same Filter + Display bar every entity roster renders (see filter-toolbar.tsx).
+        // Grouping is deliberately absent here: this roster is a tree, and flattening it into
+        // grouped buckets would discard the hierarchy — see initiative-catalog.ts.
+        <FilterToolbar
+          catalog={catalog}
+          state={state}
+          onFiltersChange={setFilters}
+          onGroupByChange={setGroupBy}
+          onSortChange={setSort}
+        />
       ) : null}
 
       {/* placeholder: the initiative rows — how many the workspace has and each one's name,

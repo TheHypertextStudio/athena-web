@@ -198,6 +198,75 @@
 
 ---
 
+### [LAUNCH-VIEWS-001] Audit and close the last bespoke filter/sort control, and fix a grouping-switch stale-state bug
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-05
+- **Completed**: 2026-08-05
+- **Priority**: P1
+- **Description**: Requested an aggressive standardization pass over every table-based view's
+  filter/sort/group controls (mirroring Linear), plus a targeted check of the edge case where a
+  viewer switches an active "Group by" selection to a different field (e.g. deadline → milestone).
+- **Findings**: Tasks, Projects, Programs, Cycles, Teams, and the Saved Views/Stream screens
+  already render the _same_ shared primitives (`views/filter-toolbar.tsx` `FilterToolbar` +
+  `views/field-catalog.ts` `FieldCatalog` + `views/apply-view.ts` `applyView` + `views/use-view-state.ts`
+  URL-persisted state), and their control heights/slot structure were already unified by prior
+  work on this branch (`c6b56569`/`1a4047e9` "one height, type and shape vocabulary",
+  `068cc317`/`98662ef3` "converge mismatched control heights"). **Initiatives was the one
+  exception**: `initiatives-client.tsx` rendered three bespoke raw `<input>`/`<select>` elements
+  (a free-text search box, a status `<select>`, a sort `<select>`) instead of `FilterToolbar` —
+  and had no grouping affordance at all. A matching `initiative-catalog.ts` (+ `initiative-row.tsx`
+  - `initiative-fetcher.ts`) already existed, declaring the exact catalog this page needed, but was
+    wired to nothing — orphaned by the later `c485d55b` "strategic Initiative hierarchy experience"
+    rewrite, which replaced the old flat list with a parent/child tree (`role="treegrid"`,
+    drag-to-reparent) and reverted to bespoke controls without anyone reconnecting the catalog. Zero
+    tests referenced the orphaned trio. Separately, tracing the named edge case through the engine
+    (`use-view-state.ts` → `view-state-url.ts` → `apply-view.ts`) found the _state_ layer already
+    robust — switching `groupBy.field` fully replaces the URL param and recomputes buckets from
+    scratch every time, falling back to a flat list rather than crashing on an unrecognized field.
+    But `apply-view.ts`'s synthesized "no value" bucket uses one literal, unscoped sentinel
+    (`EMPTY_GROUP_ID`) for _every_ groupable field, and `@docket/ui`'s `ListView` (rendered by
+    `views/view-runner.tsx` for Saved Views / My Work-style grouped surfaces) keys its expand/collapse
+    state by bucket id in an uncontrolled `useState` that never resets on its own. Collapsing one
+    field's empty bucket (e.g. "No project") and then re-grouping by a different field that also has
+    one (e.g. "No program") silently rendered the new field's bucket pre-collapsed — the exact failure
+    mode named in the request, reproduced live in a regression test before being fixed.
+- **Fix**: Rewrote `initiative-catalog.ts` against the tree page's real row shape
+  (`InitiativeOverviewItem`, not the orphaned trio's stale shape), declaring status/health
+  (filterable + sortable, ranked by lifecycle/severity) and name/target date (sortable) — with
+  **no groupable field**, documented as a deliberate exception: flattening a live drag-to-reparent
+  tree into grouped buckets would discard the hierarchy the surface exists to show. Wired
+  `initiatives-client.tsx` onto `FilterToolbar` + `useViewState`, replacing the bespoke controls
+  while preserving the page's ancestor-preserving filter behavior (a matching descendant keeps its
+  non-matching ancestors visible) and its per-level sibling sort, both now built directly on the
+  shared engine's `filterRows`/`sortRows`. Deleted the two now-fully-superseded orphaned files
+  (`initiative-row.tsx`, `initiative-fetcher.ts`) rather than leave them as dead weight. Fixed the
+  stale-collapse bug in `view-runner.tsx` by keying its `ListView` on the active grouping field, so
+  React remounts (and therefore resets collapse state) exactly when the grouping itself changes —
+  not on every unrelated re-render, and not by touching the shared engine's tested `EMPTY_GROUP_ID`
+  contract or the four other pages that read it directly.
+- **Files Changed**: `apps/web/src/components/initiatives/initiative-catalog.ts` (rewritten),
+  `apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx`,
+  `apps/web/src/components/views/view-runner.tsx`; deleted
+  `apps/web/src/components/initiatives/initiative-row.tsx` and `initiative-fetcher.ts`; new
+  `apps/web/tests/components/views/view-runner.test.tsx` (verified red-then-green against the fix —
+  reverting the `key` prop reproduces the exact bug the test pins); updated
+  `apps/web/tests/lib/optimistic-reparent.test.tsx`'s `next/navigation` mock for the page's new
+  `useSearchParams`/`router.replace` dependency (`useViewState`).
+- **Validation**: `tsc --noEmit` clean; `eslint .` clean; full `apps/web` suite — 215 files / 1724
+  tests — passes. Did not touch the coverage-gated `apply-view.ts`/`field-catalog.ts`/
+  `view-state-url.ts` (still gated at 90% and unaffected).
+- **Learnings**: An orphaned-but-plausible-looking module (a `FieldCatalog` builder whose docblock
+  describes exactly the page it should be wired to) is easy to mistake for "already done" — it only
+  reads as dead code once you grep for its actual consumers and find none. Separately, a shared
+  list primitive's uncontrolled internal state is a state-machine correctness question, not just a
+  render detail: `ListView`'s collapse-by-id `Set` was correct for "the same grouping, re-rendered"
+  and silently wrong for "a different grouping, coincidentally sharing an id" — the two cases look
+  identical from inside the component and only diverge once you know a global sentinel is shared
+  across every field.
+
+---
+
 ### [LAUNCH-TIME-003] Finish the CORE-40 timer rollout and re-gate Time Tracking / Weekly auto-scheduling
 
 - **Status**: COMPLETED

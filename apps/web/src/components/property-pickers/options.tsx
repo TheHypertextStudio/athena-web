@@ -29,12 +29,15 @@ import {
   type ProjectStatus,
   type Visibility,
 } from '@docket/types';
-import { ActorAvatar } from '@docket/ui/components';
+import { ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { Globe, Shield } from '@docket/ui/icons';
 import type { PickerOption } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import type { JSX, ReactNode } from 'react';
 
+import { statusGlyphType as cycleStatusGlyphType } from '@/components/cycles/cycle-status';
+import { statusGlyphType as programStatusGlyphType } from '@/components/programs/program-status';
+import { statusGlyphType as projectStatusGlyphType } from '@/components/projects/project-status';
 import { PRIORITY_LABEL, PRIORITY_ORDER } from '@/components/task-detail/priority';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 
@@ -90,11 +93,17 @@ const PROJECT_STATUS_ORDER: readonly ProjectStatus[] = [
   'canceled',
 ];
 
-/** Build the {@link ProjectStatus} enum options (lifecycle order). */
+/**
+ * Build the {@link ProjectStatus} enum options (lifecycle order), each carrying the exact
+ * {@link StatusIcon} glyph the Projects list row already shows for that status (via
+ * {@link projectStatusGlyphType} from `components/projects/project-status.tsx`) — no new icon,
+ * the same one reused so the picker and the row agree.
+ */
 export function projectStatusOptions(): readonly PickerOption<ProjectStatus>[] {
   return PROJECT_STATUS_ORDER.map((status) => ({
     value: status,
     label: PROJECT_STATUS_LABEL[status],
+    icon: <StatusIcon type={projectStatusGlyphType(status)} />,
   }));
 }
 
@@ -108,11 +117,16 @@ const PROGRAM_STATUS_LABEL: Record<ProgramStatus, string> = {
 /** The canonical program-status ordering for the picker menu. */
 const PROGRAM_STATUS_ORDER: readonly ProgramStatus[] = ['active', 'paused', 'archived'];
 
-/** Build the {@link ProgramStatus} enum options. */
+/**
+ * Build the {@link ProgramStatus} enum options, each carrying the exact {@link StatusIcon} glyph
+ * the Programs list row already shows for that status (via {@link programStatusGlyphType} from
+ * `components/programs/program-status.tsx`).
+ */
 export function programStatusOptions(): readonly PickerOption<ProgramStatus>[] {
   return PROGRAM_STATUS_ORDER.map((status) => ({
     value: status,
     label: PROGRAM_STATUS_LABEL[status],
+    icon: <StatusIcon type={programStatusGlyphType(status)} />,
   }));
 }
 
@@ -132,7 +146,15 @@ const INITIATIVE_STATUS_ORDER: readonly InitiativeStatus[] = [
   'canceled',
 ];
 
-/** Build the {@link InitiativeStatus} enum options. */
+/**
+ * Build the {@link InitiativeStatus} enum options.
+ *
+ * @remarks
+ * Deliberately icon-less, unlike its project/program/cycle siblings above: no other surface in
+ * the product renders an initiative-status glyph today (no `components/initiatives/*-status.tsx`
+ * analogous to the project/program/cycle ones exists), so there is no existing icon to reuse
+ * here without inventing a new one.
+ */
 export function initiativeStatusOptions(): readonly PickerOption<InitiativeStatus>[] {
   return INITIATIVE_STATUS_ORDER.map((status) => ({
     value: status,
@@ -150,11 +172,16 @@ const CYCLE_STATUS_LABEL: Record<CycleStatus, string> = {
 /** The canonical cycle-status ordering for the picker menu. */
 const CYCLE_STATUS_ORDER: readonly CycleStatus[] = ['upcoming', 'active', 'completed'];
 
-/** Build the {@link CycleStatus} enum options. */
+/**
+ * Build the {@link CycleStatus} enum options, each carrying the exact {@link StatusIcon} glyph a
+ * cycle row already shows for that status (via {@link cycleStatusGlyphType} from
+ * `components/cycles/cycle-status.ts`).
+ */
 export function cycleStatusOptions(): readonly PickerOption<CycleStatus>[] {
   return CYCLE_STATUS_ORDER.map((status) => ({
     value: status,
     label: CYCLE_STATUS_LABEL[status],
+    icon: <StatusIcon type={cycleStatusGlyphType(status)} />,
   }));
 }
 

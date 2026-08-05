@@ -185,9 +185,18 @@ export function menuLabel(variant: MenuVariant): string {
  * @param variant - Menu tonal family. The divider is tinted with the variant's
  *   selected-content role so it reads as part of the tonal family rather than a hard line.
  * @returns The separator's geometry + tinted background.
+ *
+ * @remarks
+ * Inset within the container's own padding, not bled edge-to-edge. The 2025 MD3 "expressive"
+ * menu redesign explicitly calls this out: dividers (and the current selection) no longer span
+ * the container's full width — both now respect the same inset every row does, so a divider
+ * reads as a rule *between* rows rather than a seam in the container itself. A selected row is
+ * already inset this way (`menuItemClass`'s `rounded-md` sits inside the content's `p-2`); this
+ * function used to fight that with a `-mx-2` bleed that canceled the container padding on
+ * purpose. Dropping the bleed is the whole fix — the surrounding `p-2` does the rest.
  */
 export function menuSeparator(variant: MenuVariant): string {
-  return cn('-mx-2 my-1 h-px', variant === 'vibrant' ? 'bg-on-tertiary/25' : 'bg-outline-variant');
+  return cn('my-1 h-px', variant === 'vibrant' ? 'bg-on-tertiary/25' : 'bg-outline-variant');
 }
 
 /**

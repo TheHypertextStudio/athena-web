@@ -11,14 +11,45 @@
  * it open and reflect the `selected` set with a trailing check. The list is plain DOM (no
  * Radix menu), so it composes inside {@link PopoverContent} without fighting the menu
  * typeahead. Empty states and a "Clear" affordance keep it Linear-calm.
+ *
+ * ## One row family, not two
+ *
+ * This is the "select" member of the menu-like primitive family — {@link DropdownMenuItem} and
+ * {@link ContextMenuItem} are the other two. Its rows resolve height and corner radius from the
+ * same {@link CONTROL}.`lg` step and {@link CONTROL_RADIUS} that
+ * `packages/ui/src/primitives/menu-styles.ts`'s `menuItemClass` does, and use the same two color
+ * roles: `on-surface/8` for a hovered/keyboard-highlighted row, `secondary-container` for the
+ * chosen one. It cannot literally import `menuItemClass` — that module is written for
+ * `role="menuitem"` and, more importantly, its `[&_svg]:size-4.5!` bundles an `!important` icon
+ * sizing rule that would race the one {@link StatusIcon} (a common option icon here) already
+ * carries on its own inner `<svg>` — so the shared numbers are reproduced as literals instead.
+ *
+ * Rows also reserve a fixed leading-icon column whenever *any* option in the list carries one, so
+ * an icon-less row still lines up under an icon-bearing sibling instead of starting flush left.
+ * `DropdownMenuContent`/`ContextMenuContent` get the equivalent for free from a `:has()` rule in
+ * `globals.css` keyed off `role="menu"`/`role="menuitem"`; this list uses plain `listbox`/`option`
+ * roles and heterogeneous icon content (an avatar image, a color swatch, a multi-bar glyph — not
+ * reliably a bare `<svg>`), so the same reservation is computed here instead.
  */
 import * as React from 'react';
 
 import { Check, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { focusRingInset } from '../../primitives';
+import { CONTROL, CONTROL_RADIUS, focusRingInset } from '../../primitives';
 
 import { type PickerOption, optionMatches } from './types';
+
+/**
+ * Row metrics shared by the "clear" row and every option row: height and corner radius, kept in
+ * step with `menuItemClass`'s `lg` {@link CONTROL} step so a picker's listbox row and a
+ * dropdown/context menu's row read as one family. See the module remarks for why icon sizing is
+ * deliberately left out of this shared string.
+ */
+const PICKER_ROW_METRICS = cn(
+  CONTROL.lg.minHeight,
+  CONTROL_RADIUS,
+  'flex w-full items-start gap-2 px-2 py-1.5 text-left text-body-medium transition-colors outline-none select-none disabled:pointer-events-none disabled:opacity-50',
+);
 
 /** Props for {@link PickerList}. */
 export interface PickerListProps<TValue extends string = string> {
@@ -80,6 +111,12 @@ export function PickerList<TValue extends string = string>({
     const normalized = query.trim().toLowerCase();
     return options.filter((option) => optionMatches(option, normalized));
   }, [options, query]);
+
+  // MD3's leading-icon column: reserved on every row once *any* row in the (unfiltered) list
+  // carries an icon, so a bare label still lines up under an icon-bearing sibling instead of
+  // stair-stepping around whichever options happen to have a glyph. Keyed off the full `options`
+  // set, not `filtered` — narrowing the query shouldn't make the column pop in and out.
+  const hasAnyIcon = React.useMemo(() => options.some((option) => option.icon != null), [options]);
 
   // Build the flat row model: an optional clear row, then the filtered options. Keeping a
   // single flat array makes arrow-key navigation and Enter activation uniform across rows.
@@ -194,9 +231,10 @@ export function PickerList<TValue extends string = string>({
                       setActiveIndex(index);
                     }}
                     className={cn(
-                      'text-on-surface-variant text-body-medium flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left',
+                      PICKER_ROW_METRICS,
+                      'text-on-surface-variant',
                       focusRingInset,
-                      active && 'bg-surface-container-highest',
+                      active && 'bg-on-surface/8',
                     )}
                   >
                     <X aria-hidden="true" className="size-4 shrink-0 opacity-70" />
@@ -224,13 +262,20 @@ export function PickerList<TValue extends string = string>({
                     setActiveIndex(index);
                   }}
                   className={cn(
-                    'text-on-surface text-body-medium flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left',
-                    'disabled:pointer-events-none disabled:opacity-50',
+                    PICKER_ROW_METRICS,
+                    // The chosen row escalates into MD3's selection role — the same
+                    // `secondary-container` background `menuItemClass({ selected: true })` gives a
+                    // checked DropdownMenu/ContextMenu row — rather than relying on the trailing
+                    // check alone. A merely hovered/keyboard-highlighted row (never simultaneously
+                    // chosen and active in a way that should mask the selection) gets the plain
+                    // `on-surface/8` overlay every other menu-family row uses.
+                    chosen
+                      ? 'bg-secondary-container text-on-secondary-container'
+                      : cn('text-on-surface', active && 'bg-on-surface/8'),
                     focusRingInset,
-                    active && 'bg-surface-container-highest',
                   )}
                 >
-                  {option.icon ? (
+                  {hasAnyIcon ? (
                     <span
                       aria-hidden="true"
                       className="flex size-4 shrink-0 items-center justify-center pt-0.5"
@@ -241,22 +286,27 @@ export function PickerList<TValue extends string = string>({
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate">{option.label}</span>
                     {option.supporting ? (
-                      <span className="text-on-surface-variant text-body-small">
+                      <span
+                        className={cn(
+                          'text-body-small',
+                          chosen ? 'text-on-secondary-container' : 'text-on-surface-variant',
+                        )}
+                      >
                         {option.supporting}
                       </span>
                     ) : null}
                   </span>
                   {option.hint ? (
-                    <span className="text-on-surface-variant text-label-small shrink-0 tabular-nums">
+                    <span
+                      className={cn(
+                        'text-label-small shrink-0 tabular-nums',
+                        chosen ? 'text-on-secondary-container' : 'text-on-surface-variant',
+                      )}
+                    >
                       {option.hint}
                     </span>
                   ) : null}
-                  {chosen ? (
-                    <Check
-                      aria-hidden="true"
-                      className="text-on-surface-variant mt-0.5 size-4 shrink-0"
-                    />
-                  ) : null}
+                  {chosen ? <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
                 </button>
               </li>
             );

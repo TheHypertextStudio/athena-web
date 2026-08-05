@@ -217,6 +217,36 @@ describe('PickerList', () => {
     expect(screen.getByText('Owned by Platform')).toBeInTheDocument();
   });
 
+  it('gives the chosen row the same secondary-container selection role a checked menu item uses', () => {
+    render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
+    const chosen = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
+    expect(chosen).toHaveClass('bg-secondary-container', 'text-on-secondary-container');
+    const unchosen = within(screen.getByRole('option', { name: /Onboarding/ })).getByRole('button');
+    expect(unchosen).not.toHaveClass('bg-secondary-container');
+  });
+
+  it('reserves the leading-icon column for every row once any option in the list has one', () => {
+    const options: PickerOption[] = [
+      { value: 'p1', label: 'Migration', icon: <span data-testid="opt-icon" /> },
+      { value: 'p2', label: 'Onboarding' },
+    ];
+    render(<PickerList options={options} selected={null} onSelect={vi.fn()} ariaLabel="Project" />);
+    // The icon-bearing row renders its glyph…
+    expect(screen.getByTestId('opt-icon')).toBeInTheDocument();
+    // …and the icon-less sibling still gets the reserved gutter span, so both labels share one
+    // left axis instead of the bare row starting flush with the container edge.
+    const bareRow = within(screen.getByRole('option', { name: /Onboarding/ })).getByRole('button');
+    expect(bareRow.querySelector('span[aria-hidden="true"]')).toBeInTheDocument();
+  });
+
+  it('omits the leading-icon gutter entirely when no option in the list has an icon', () => {
+    render(
+      <PickerList options={PROJECTS} selected={null} onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const row = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
+    expect(row.querySelector('span[aria-hidden="true"]')).not.toBeInTheDocument();
+  });
+
   it('moves the highlight up with ArrowUp, clamped at the first row', () => {
     const onSelect = vi.fn();
     render(
@@ -264,7 +294,7 @@ describe('PickerList', () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
-  it('highlights a row and the clear row on mouse hover', () => {
+  it('highlights an unchosen row and the clear row on mouse hover', () => {
     render(
       <PickerList
         options={PROJECTS}
@@ -274,14 +304,22 @@ describe('PickerList', () => {
         ariaLabel="Project"
       />,
     );
-    const migrationOption = screen.getByRole('option', { name: /Migration/ });
-    fireEvent.mouseEnter(within(migrationOption).getByRole('button'));
-    expect(within(migrationOption).getByRole('button')).toHaveClass('bg-surface-container-highest');
+    // Onboarding (p2) is not the selected value, so hovering it applies the plain overlay.
+    const onboardingOption = screen.getByRole('option', { name: /Onboarding/ });
+    fireEvent.mouseEnter(within(onboardingOption).getByRole('button'));
+    expect(within(onboardingOption).getByRole('button')).toHaveClass('bg-on-surface/8');
 
     fireEvent.mouseEnter(screen.getByText('No project'));
-    expect(screen.getByText('No project').closest('button')).toHaveClass(
-      'bg-surface-container-highest',
-    );
+    expect(screen.getByText('No project').closest('button')).toHaveClass('bg-on-surface/8');
+  });
+
+  it('keeps the chosen row on its selection color instead of the hover overlay while highlighted', () => {
+    render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
+    const migrationOption = screen.getByRole('option', { name: /Migration/ });
+    const button = within(migrationOption).getByRole('button');
+    fireEvent.mouseEnter(button);
+    expect(button).toHaveClass('bg-secondary-container');
+    expect(button).not.toHaveClass('bg-on-surface/8');
   });
 
   it('hides the search input when not searchable and navigates on the listbox', () => {

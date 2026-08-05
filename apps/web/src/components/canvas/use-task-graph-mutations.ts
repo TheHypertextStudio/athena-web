@@ -67,8 +67,6 @@ export interface TaskGraphMutations {
   clearError: () => void;
   /** The most recent reversible edit, or null once taken back or lapsed. */
   undo: GraphUndo | null;
-  /** Dismiss the undo offer without acting on it. */
-  clearUndo: () => void;
 }
 
 /** Coarse key that invalidates every scope variant of the graph at once. */
@@ -335,6 +333,5 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     error,
     clearError,
     undo,
-    clearUndo,
   };
 }

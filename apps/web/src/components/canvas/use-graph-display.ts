@@ -22,9 +22,14 @@ import { type GraphDisplayState, parseGraphDisplay, serializeGraphDisplay } from
 export interface GraphDisplayBinding {
   /** The current presentation options, decoded from the URL. */
   display: GraphDisplayState;
-  /** Replace the presentation options, preserving filters and unrelated params. */
-  setDisplay: (display: GraphDisplayState) => void;
-  /** Patch a single presentation option. */
+  /**
+   * Patch one or more presentation options, preserving filters and unrelated params.
+   *
+   * @remarks
+   * A patch rather than a whole-state setter: every caller changes one option at a time, and a
+   * setter that takes the full state invites a stale read being written back over a concurrent
+   * change.
+   */
   patchDisplay: (patch: Partial<GraphDisplayState>) => void;
 }
 
@@ -55,5 +60,5 @@ export function useGraphDisplay(): GraphDisplayBinding {
     [setDisplay, display],
   );
 
-  return { display, setDisplay, patchDisplay };
+  return { display, patchDisplay };
 }

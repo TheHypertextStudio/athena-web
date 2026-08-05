@@ -17,6 +17,15 @@ vi.mock('@/lib/query', () => ({
   }),
 }));
 
+// The stack registers the app's action domains, and a task action navigates, so the tree now
+// reaches for the router. There is no app router under a bare `render`, so stub it the same way
+// every other routing-dependent test here does.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => '/',
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 import { Providers } from '../../src/components/providers';
 
 afterEach(cleanup);

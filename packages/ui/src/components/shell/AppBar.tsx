@@ -10,7 +10,7 @@
  * 1. **One tonal band, no rules.** The header and the toolbar used to be separate blocks divided
  *    from each other — and from the content below — by `outline-variant` hairlines, which drew
  *    three horizontal lines across the top of every page. `AppBar` is a single {@link Surface} at
- *    the `chrome` step, so the band separates itself from the content by tone. Callers name slots;
+ *    the `card` step, so the band separates itself from the content by tone. Callers name slots;
  *    they never reach for a background utility.
  * 2. **It cannot wrap.** Persistent UI holds one row at every width. Both rows here are
  *    `flex-nowrap`, the title truncates, and the `controls` slot is expected to collapse its own

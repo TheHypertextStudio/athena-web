@@ -6,6 +6,7 @@ import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import ActionDomainsProvider from '@/components/actions/action-domains-provider';
 import { ObjectContextMenuProvider } from '@/components/context-menu';
 import { InteractionProvider } from '@/lib/actions';
 import { probeSession } from '@/lib/auth-client';
@@ -79,13 +80,15 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
               <InteractionProvider>
                 {/*
                   The object menu was built and left unplugged: with no domain ever registered,
-                  every right-click fell through to the browser. Mounting it here, and registering
-                  the task domain from the shell, is what makes the app's one contextmenu handler
-                  live.
+                  every right-click fell through to the browser. These two providers are what make
+                  the app's one contextmenu handler live — one introduces the domains to the
+                  registry, the other renders what the registry resolves.
                 */}
-                <ObjectContextMenuProvider>
-                  <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
-                </ObjectContextMenuProvider>
+                <ActionDomainsProvider>
+                  <ObjectContextMenuProvider>
+                    <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                  </ObjectContextMenuProvider>
+                </ActionDomainsProvider>
               </InteractionProvider>
             </QueryClientProvider>
           </AuthenticationInterlockProvider>

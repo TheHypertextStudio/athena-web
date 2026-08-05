@@ -61,9 +61,6 @@ const SURFACE_TONE = {
 /** A surface's tonal step. */
 export type SurfaceTone = keyof typeof SURFACE_TONE;
 
-/** Every tone name, for tests and docs that enumerate the ramp. */
-export const SURFACE_TONES = Object.keys(SURFACE_TONE) as readonly SurfaceTone[];
-
 const surfaceVariants = cva('min-w-0', {
   variants: {
     tone: SURFACE_TONE,

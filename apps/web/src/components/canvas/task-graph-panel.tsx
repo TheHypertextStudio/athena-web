@@ -8,9 +8,10 @@
  * task-specific: resolving assignee avatars + project names (from the org's members/agents/
  * projects), the `contribute` edit gate, the live-edit mutations (drag to add a `blocks` edge,
  * click an edge's remove control or press Delete to drop one, quick state change), the selection
- * peek, and — when `showToolbar` — the shared view bar. Loading / empty / error states are handled
- * here so hosts stay declarative. Embeds use the compact density (click navigates); the focused
- * view passes `showToolbar` + full density (click peeks, double-click navigates).
+ * peek, and — when the host supplies `renderChrome` — the shared view bar. Loading / empty / error
+ * states are handled here so hosts stay declarative. Embeds use the compact density (click
+ * navigates); the focused view passes `renderChrome` + full density (click peeks, double-click
+ * navigates).
  *
  * Filtering and grouping run through the app's shared view engine
  * ({@link import('./graph-catalog').buildGraphCatalog} + `filterRows`) rather than the bespoke

@@ -25,7 +25,7 @@
 import type { LayoutDirection } from './use-dagre-layout';
 
 /** The search-param keys this codec owns (so a write replaces only these). */
-export const GRAPH_DISPLAY_PARAM_KEYS = ['q', 'dir', 'crit', 'ready', 'map', 'depth'] as const;
+const GRAPH_DISPLAY_PARAM_KEYS = ['q', 'dir', 'crit', 'ready', 'map', 'depth'] as const;
 
 /** The smallest and largest neighbourhood radius the depth control offers. */
 export const MIN_DEPTH = 1;

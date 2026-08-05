@@ -17,8 +17,8 @@
  */
 import type { MilestoneOut } from '@docket/types';
 import { DatePicker } from '@docket/ui/components';
-import { Flag, X } from '@docket/ui/icons';
-import { Button, DecorativeIcon } from '@docket/ui/primitives';
+import { Flag, Plus, X } from '@docket/ui/icons';
+import { Button, DecorativeIcon, Textarea } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -173,8 +173,8 @@ export function ProjectMilestonesPanel({
 
       {canEdit ? (
         <QuickAddMilestoneRow
-          onAdd={(name) => {
-            create({ name, sort: ordered.length });
+          onAdd={(input) => {
+            create({ ...input, sort: ordered.length });
           }}
           disabled={pending}
         />
@@ -189,46 +189,104 @@ export function ProjectMilestonesPanel({
   );
 }
 
+/** The fields a quick-add submits in one create call. */
+export interface QuickAddMilestoneInput {
+  name: string;
+  description?: string;
+  targetDate?: string;
+}
+
 /** Props for the private {@link QuickAddMilestoneRow}. */
 interface QuickAddMilestoneRowProps {
-  onAdd: (name: string) => void;
+  onAdd: (input: QuickAddMilestoneInput) => void;
   disabled: boolean;
 }
 
-/** Inline "type a name, press Enter" milestone composer — no modal, matches `QuickAddTaskRow`. */
+/**
+ * Inline milestone composer — still "type a name, press Enter" for speed, but typing a name
+ * progressively reveals a description field and a target date so all three can go in with the
+ * same create call instead of a name-only row edited again immediately after.
+ */
 function QuickAddMilestoneRow({ onAdd, disabled }: QuickAddMilestoneRowProps): JSX.Element {
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [targetDate, setTargetDate] = useState<string | null>(null);
+  const expanded = name.trim().length > 0;
 
   const add = (): void => {
     const trimmed = name.trim();
     if (trimmed.length === 0) return;
-    onAdd(trimmed);
+    onAdd({
+      name: trimmed,
+      ...(description.trim().length > 0 ? { description: description.trim() } : {}),
+      ...(targetDate ? { targetDate } : {}),
+    });
     setName('');
+    setDescription('');
+    setTargetDate(null);
   };
 
   return (
     <form
+      className="border-outline-variant focus-within:border-primary flex flex-col gap-2 rounded-lg border border-dashed px-3 py-2 transition-colors"
       onSubmit={(event) => {
         event.preventDefault();
         add();
       }}
     >
-      <input
-        value={name}
-        disabled={disabled}
-        aria-label="New milestone name"
-        placeholder="Add a milestone…"
-        onChange={(event) => {
-          setName(event.target.value);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            add();
-          }
-        }}
-        className="border-outline-variant focus:border-primary text-body-medium text-on-surface placeholder:text-on-surface-variant h-10 w-full rounded-lg border bg-transparent px-3 outline-none"
-      />
+      <div className="flex items-center gap-2">
+        <Plus aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+        <input
+          value={name}
+          disabled={disabled}
+          aria-label="New milestone name"
+          placeholder="Add a milestone…"
+          onChange={(event) => {
+            setName(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              add();
+            }
+          }}
+          className="text-body-medium text-on-surface placeholder:text-on-surface-variant h-9 flex-1 bg-transparent outline-none"
+        />
+        {expanded ? (
+          <DatePicker
+            value={targetDate}
+            onChange={setTargetDate}
+            placeholder="Target date"
+            formatLabel={(value) => formatCalendarDate(value) ?? undefined}
+            ariaLabel="Milestone target date"
+            disabled={disabled}
+            triggerVariant="ghost"
+          />
+        ) : null}
+      </div>
+      {expanded ? (
+        <>
+          <Textarea
+            value={description}
+            disabled={disabled}
+            aria-label="New milestone description"
+            placeholder="Add a note…"
+            rows={2}
+            onChange={(event) => {
+              setDescription(event.target.value);
+            }}
+          />
+          <Button
+            type="submit"
+            variant="secondary"
+            size="sm"
+            disabled={disabled}
+            className="self-end"
+          >
+            Add milestone
+          </Button>
+        </>
+      ) : null}
     </form>
   );
 }

@@ -88,6 +88,9 @@ export const queryKeys = {
     ['org', orgId, 'mentions', 'hydrate', batchKey] as const,
   entityMentions: (orgId: string, subjectType: string, subjectId: string) =>
     ['org', orgId, 'mentions', 'subject', subjectType, subjectId] as const,
+  /** The inbound direction: what points *at* one entity or external resource. */
+  references: (orgId: string, targetKind: string, targetId: string) =>
+    ['org', orgId, 'references', targetKind, targetId] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
   today: (date: string) => ['me', 'today', date] as const,
   agenda: (date: string) => ['me', 'agenda', date] as const,

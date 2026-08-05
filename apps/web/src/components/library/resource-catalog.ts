@@ -66,9 +66,39 @@ function facetString(row: SearchResult, key: string): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
+/**
+ * The provider URL behind a row, when it has one.
+ *
+ * @remarks
+ * Read from the row's `open_external` action rather than from `source.externalUrl`, because
+ * `source` is only emitted when the row carries a `sourceSystem` — and most resource providers
+ * deliberately map to none, since `source_system` is the *event source* taxonomy and Docket
+ * ingests no Figma or Dropbox events. The action is populated straight from the document's
+ * `externalUrl`, so it is the one place every provider's link actually shows up.
+ */
+export function externalUrlOf(row: SearchResult): string | null {
+  const action = row.actions.find((candidate) => candidate.kind === 'open_external');
+  return action?.href ?? row.source?.externalUrl ?? null;
+}
+
 /** The provider a row came from, or `null` for first-party rows that have none. */
 export function providerOf(row: SearchResult): string | null {
   return facetString(row, 'provider');
+}
+
+/**
+ * The source entity id behind a search row.
+ *
+ * @remarks
+ * `SearchResult.id` is the projection's composite id (`kind:org:entityId`), but `entityHref` and
+ * the `mention` table both key off the source row's own id. The Library's `?resourceId=` therefore
+ * carries *this* value, so a link from the command palette and a click on a row land on the same
+ * URL rather than two that differ by a prefix.
+ */
+export function resourceEntityId(row: SearchResult): string {
+  if (row.route.type === 'entity') return row.route.entityId;
+  if (row.route.type === 'content') return row.route.contentId;
+  return row.id;
 }
 
 /** Whether the row's title is the resource's real name or a URL standing in for one. */

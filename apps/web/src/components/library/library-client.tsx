@@ -19,7 +19,10 @@ import { Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 
+import { useRouter, useSearchParams } from 'next/navigation';
+
 import { useActiveOrg } from '@/components/active-org';
+import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
 import { RESOURCE_TYPE_ICON } from '@/components/mentions/mention-glyphs';
 import { applyView } from '@/components/views/apply-view';
@@ -30,7 +33,14 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
-import { buildResourceCatalog, LIBRARY_KINDS, providerOf, titleResolved } from './resource-catalog';
+import {
+  buildResourceCatalog,
+  LIBRARY_KINDS,
+  externalUrlOf,
+  providerOf,
+  resourceEntityId,
+  titleResolved,
+} from './resource-catalog';
 
 /** How many resources one page of the Library loads. */
 const PAGE_SIZE = 100;
@@ -86,6 +96,20 @@ function hostOf(url: string | null): string | null {
 export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Element {
   const { state, setFilters, setGroupBy, setSort } = useViewState();
   const { activeOrg } = useActiveOrg();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // The opened entry lives in the URL, so a detail view is linkable and the back button closes it.
+  // `entityHref` and the command palette both already hand out `?resourceId=`.
+  const openedId = searchParams.get('resourceId');
+
+  /** Open or close the detail panel without disturbing the active filters. */
+  function setOpened(resourceId: string | null): void {
+    const next = new URLSearchParams(searchParams.toString());
+    if (resourceId === null) next.delete('resourceId');
+    else next.set('resourceId', resourceId);
+    const query = next.toString();
+    router.replace(query.length > 0 ? `?${query}` : '?', { scroll: false });
+  }
 
   const resourcesQ = useApiListQuery(
     apiQueryOptions(
@@ -125,7 +149,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
           const Icon = glyphFor(row);
           const resolved = titleResolved(row);
           // When the title is a URL stand-in it already names the host, so repeating it is noise.
-          const host = resolved ? hostOf(row.source?.externalUrl ?? null) : null;
+          const host = resolved ? hostOf(externalUrlOf(row)) : null;
           return (
             <span className="flex min-w-0 items-center gap-3">
               <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
@@ -208,6 +232,9 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   );
 
   const filtered = state.filters.length > 0;
+  // Resolved against the loaded page rather than refetched: the panel is only reachable from a row.
+  const opened =
+    openedId === null ? null : (rows.find((row) => resourceEntityId(row) === openedId) ?? null);
 
   return (
     <ListPageLayout
@@ -248,13 +275,32 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
           />
         )
       ) : (
-        <EntityTable
-          columns={columns}
-          groups={groups}
-          getRowKey={(row) => row.id}
-          rowHref={(row) => row.source?.externalUrl ?? undefined}
-          aria-label="Documents and links"
-        />
+        <div className="grid min-w-0 gap-4 @2xl:grid-cols-[minmax(0,1fr)_19rem]">
+          {/*
+           * On a narrow container the panel takes the whole page and the list stands down: a
+           * drill-down, not a squeeze. Driven by whether an entry is open, never by a device check.
+           */}
+          <div className={opened ? 'hidden min-w-0 @2xl:block' : 'min-w-0'}>
+            <EntityTable
+              columns={columns}
+              groups={groups}
+              getRowKey={(row) => row.id}
+              onRowClick={(row) => {
+                setOpened(resourceEntityId(row));
+              }}
+              aria-label="Documents and links"
+            />
+          </div>
+          {opened ? (
+            <ResourceDetailPanel
+              orgId={orgId}
+              resource={opened}
+              onClose={() => {
+                setOpened(null);
+              }}
+            />
+          ) : null}
+        </div>
       )}
     </ListPageLayout>
   );

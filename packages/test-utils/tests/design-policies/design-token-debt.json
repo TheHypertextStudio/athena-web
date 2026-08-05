@@ -81,9 +81,6 @@
   "apps/web/src/app/(app)/orgs/[orgId]/settings/connections/error.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/settings/work-structure/page.tsx": {
-    "raw-type-utility": 16
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx": {
     "raw-type-utility": 4
   },

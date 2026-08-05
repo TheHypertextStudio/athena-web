@@ -50,7 +50,7 @@ function AutosaveStatus({
   idleLabel,
 }: AutosaveStatusProps): JSX.Element {
   return (
-    <div className="flex min-h-5 items-center gap-2 text-xs" aria-live="polite">
+    <div className="flex min-h-5 items-center gap-2 text-label-medium" aria-live="polite">
       {pending ? (
         <span className="text-on-surface-variant">Saving…</span>
       ) : error ? (
@@ -130,21 +130,21 @@ export default function WorkStructureSettingsPage(): JSX.Element {
       {settingsQ.isPending ? (
         <Skeleton className="h-96 max-w-2xl rounded-lg" />
       ) : settingsQ.isError ? (
-        <p role="status" className="text-on-surface-variant text-sm">
+        <p role="status" className="text-on-surface-variant text-body-medium">
           Work structure is temporarily unavailable. We&apos;ll keep checking automatically.
         </p>
       ) : (
         <section aria-labelledby="initiative-depth" className="flex max-w-2xl flex-col gap-5">
           {!permissionLoading && !canManage ? (
-            <p className="bg-surface-container text-on-surface-variant rounded-md px-3 py-2 text-sm">
+            <p className="bg-surface-container text-on-surface-variant rounded-md px-3 py-2 text-body-medium">
               Only workspace owners and admins can change this limit.
             </p>
           ) : null}
           <div>
-            <h3 id="initiative-depth" className="text-on-surface text-sm font-semibold">
+            <h3 id="initiative-depth" className="text-on-surface text-title-small">
               Initiative hierarchy depth
             </h3>
-            <p className="text-on-surface-variant mt-1 text-sm leading-relaxed">
+            <p className="text-on-surface-variant text-body-medium mt-1">
               Depth counts every level. Two levels means one top-level initiative and one level of
               sub-initiatives.
             </p>
@@ -165,7 +165,7 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                     saveDepth.mutate(value);
                   }
                 }}
-                className={`focus-visible:ring-ring size-10 rounded-md border text-sm font-medium focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`focus-visible:ring-ring size-10 rounded-md border text-label-large focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
                   depth === value
                     ? 'border-primary bg-primary text-on-primary'
                     : 'border-outline-variant text-on-surface hover:bg-surface-container'
@@ -185,10 +185,10 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           />
 
           <div>
-            <h3 id="estimation-scale" className="text-on-surface text-sm font-semibold">
+            <h3 id="estimation-scale" className="text-on-surface text-title-small">
               Estimation scale
             </h3>
-            <p className="text-on-surface-variant mt-1 text-sm leading-relaxed">
+            <p className="text-on-surface-variant text-body-medium mt-1">
               The set of point values shown when estimating a task&apos;s size.
             </p>
           </div>
@@ -218,10 +218,10 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                       : 'border-outline-variant text-on-surface hover:bg-surface-container'
                   }`}
                 >
-                  <span className="text-sm font-medium">{ESTIMATION_SCALE_LABEL[value]}</span>
+                  <span className="text-label-large">{ESTIMATION_SCALE_LABEL[value]}</span>
                   {valuesCopy ? (
                     <span
-                      className={`text-xs ${scale === value ? 'text-on-primary/80' : 'text-on-surface-variant'}`}
+                      className={`text-label-medium ${scale === value ? 'text-on-primary/80' : 'text-on-surface-variant'}`}
                     >
                       {valuesCopy}
                     </span>

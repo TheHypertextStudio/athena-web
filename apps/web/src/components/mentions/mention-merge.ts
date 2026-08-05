@@ -45,6 +45,16 @@ function groupFor(item: MentionItem, hasQuery: boolean): MentionGroupKey {
   return hasQuery ? 'work' : 'recent';
 }
 
+/** The two waves, plus whether anything has been typed. */
+export interface MentionGroupInput {
+  /** Rows from the local index. */
+  readonly local: readonly MentionItem[];
+  /** Rows from the provider fan-out. */
+  readonly external: readonly MentionItem[];
+  /** False before the first character, which is what turns the first group into Recent. */
+  readonly hasQuery: boolean;
+}
+
 /**
  * Combine both waves into rendered groups, deduped and ordered.
  *
@@ -55,11 +65,7 @@ function groupFor(item: MentionItem, hasQuery: boolean): MentionGroupKey {
  * @param input - The two waves and whether anything has been typed.
  * @returns Groups in render order; empty groups are omitted.
  */
-export function buildMentionGroups(input: {
-  local: readonly MentionItem[];
-  external: readonly MentionItem[];
-  hasQuery: boolean;
-}): MentionGroup[] {
+export function buildMentionGroups(input: MentionGroupInput): MentionGroup[] {
   const seen = new Set<string>();
   const buckets = new Map<MentionGroupKey, MentionItem[]>();
 
@@ -85,6 +91,18 @@ export function flattenMentionGroups(groups: readonly MentionGroup[]): MentionIt
   return groups.flatMap((group) => [...group.items]);
 }
 
+/** Everything the highlight decision depends on. */
+export interface ActiveKeyInput {
+  /** The rows as they exist now. */
+  readonly items: readonly MentionItem[];
+  /** The row the user last arrowed to, if any. */
+  readonly activeKey: string | undefined;
+  /** Whether the user has taken control of the highlight. */
+  readonly hasArrowed: boolean;
+  /** The rows from the previous render, used to hold position when one disappears. */
+  readonly previousItems: readonly MentionItem[];
+}
+
 /**
  * Choose which row is highlighted after a render.
  *
@@ -100,12 +118,7 @@ export function flattenMentionGroups(groups: readonly MentionGroup[]): MentionIt
  * @param input - The current rows, the previously active key, and whether the user has arrowed.
  * @returns The key to highlight, or undefined when there is nothing to highlight.
  */
-export function resolveActiveKey(input: {
-  items: readonly MentionItem[];
-  activeKey: string | undefined;
-  hasArrowed: boolean;
-  previousItems: readonly MentionItem[];
-}): string | undefined {
+export function resolveActiveKey(input: ActiveKeyInput): string | undefined {
   const first = input.items[0]?.id;
   if (input.items.length === 0) return undefined;
   if (!input.hasArrowed || input.activeKey === undefined) return first;

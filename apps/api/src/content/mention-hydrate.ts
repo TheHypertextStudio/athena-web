@@ -25,7 +25,7 @@ import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 import { toExternalResourceOut, type ExternalResourceRow } from './resource-view';
 
 /** Route an entity ref to its in-app href. */
-function hrefFor(orgId: string, ref: Extract<MentionRef, { kind: 'entity' }>): string {
+function hrefFor(orgId: string, ref: EntityRef): string {
   const base = `/orgs/${orgId}`;
   switch (ref.entityKind) {
     case 'task':
@@ -53,7 +53,7 @@ function hrefFor(orgId: string, ref: Extract<MentionRef, { kind: 'entity' }>): s
 }
 
 /** A card for an entity the caller may not see: the id, and nothing that describes it. */
-function inaccessibleCard(ref: Extract<MentionRef, { kind: 'entity' }>): MentionCard {
+function inaccessibleCard(ref: EntityRef): MentionCard {
   return {
     kind: 'entity',
     entityKind: ref.entityKind,
@@ -70,12 +70,25 @@ function inaccessibleCard(ref: Extract<MentionRef, { kind: 'entity' }>): Mention
   };
 }
 
+/** A reference to a Docket entity, narrowed from the union. */
+type EntityRef = Extract<MentionRef, { kind: 'entity' }>;
+
+/** A reference to something outside Docket, narrowed from the union. */
+type ExternalRef = Extract<MentionRef, { kind: 'external' }>;
+
+/** The index fields a visible entity contributes to its card. */
+interface VisibleEntitySummary {
+  readonly title: string;
+  readonly summary: string | null;
+  readonly updatedAt: Date | null;
+}
+
 /** Load the visible index rows for a batch of entity refs, keyed by entity id. */
 async function loadVisibleEntities(
   caller: SearchCaller,
   orgId: string,
-  refs: readonly Extract<MentionRef, { kind: 'entity' }>[],
-): Promise<Map<string, { title: string; summary: string | null; updatedAt: Date | null }>> {
+  refs: readonly EntityRef[],
+): Promise<Map<string, VisibleEntitySummary>> {
   if (refs.length === 0) return new Map();
   const rows = await loadVisibleDocuments({
     caller,
@@ -93,7 +106,7 @@ async function loadVisibleEntities(
 /** Load the shared resource rows behind a batch of external refs. */
 async function loadResources(
   orgId: string,
-  refs: readonly Extract<MentionRef, { kind: 'external' }>[],
+  refs: readonly ExternalRef[],
 ): Promise<Map<string, ExternalResourceRow>> {
   if (refs.length === 0) return new Map();
   const schema = await import('@docket/db');
@@ -123,23 +136,25 @@ async function loadResources(
   return out;
 }
 
+/** One surface's worth of references to resolve. */
+export interface MentionHydrateRequest {
+  /** Whose access decides what each card may say. */
+  readonly caller: SearchCaller;
+  /** The workspace the references were authored in. */
+  readonly orgId: string;
+  /** The references, already deduped by the caller. */
+  readonly refs: readonly MentionRef[];
+}
+
 /**
  * Resolve a batch of references into preview cards.
  *
  * @param input - The caller, the org, and the refs a rendered surface needs cards for.
  * @returns One card per resolvable ref, in request order. Refs we cannot resolve are omitted.
  */
-export async function hydrateMentions(input: {
-  caller: SearchCaller;
-  orgId: string;
-  refs: readonly MentionRef[];
-}): Promise<MentionCard[]> {
-  const entityRefs = input.refs.filter(
-    (ref): ref is Extract<MentionRef, { kind: 'entity' }> => ref.kind === 'entity',
-  );
-  const externalRefs = input.refs.filter(
-    (ref): ref is Extract<MentionRef, { kind: 'external' }> => ref.kind === 'external',
-  );
+export async function hydrateMentions(input: MentionHydrateRequest): Promise<MentionCard[]> {
+  const entityRefs = input.refs.filter((ref): ref is EntityRef => ref.kind === 'entity');
+  const externalRefs = input.refs.filter((ref): ref is ExternalRef => ref.kind === 'external');
 
   const [entities, resources] = await Promise.all([
     loadVisibleEntities(input.caller, input.orgId, entityRefs),

@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 
 import MentionChip from './mention-chip';
 import MentionHoverCard from './mention-hovercard';
-import { refFromAttributes, type MentionAttributes } from './mention-extension';
+import { readMentionAttributes, refFromAttributes } from './mention-extension';
 import { useMentionCard, useRegisterMention } from './mention-hydration';
 
 /**
@@ -24,7 +24,7 @@ import { useMentionCard, useRegisterMention } from './mention-hydration';
  * @returns The chip, wrapped for ProseMirror.
  */
 export default function MentionNodeView({ node, selected }: NodeViewProps): React.JSX.Element {
-  const attrs = node.attrs as unknown as MentionAttributes;
+  const attrs = readMentionAttributes(node.attrs);
   const ref = refFromAttributes(attrs);
   const register = useRegisterMention();
   const { card } = useMentionCard(ref);

@@ -24,27 +24,64 @@ export interface MarkdownLink {
   readonly position: number;
 }
 
+/** A token that may carry inline children, which is most of them. */
+interface TokenWithChildren {
+  readonly tokens?: readonly Token[];
+}
+
+/** A token whose own text contributes to a flattened label. */
+interface TextualToken extends TokenWithChildren {
+  readonly type: string;
+  readonly text?: string;
+}
+
+/**
+ * The container shapes marked uses, gathered into one type.
+ *
+ * @remarks
+ * `marked`'s `Token` union does not expose these uniformly; naming them here avoids a cast at
+ * every access, so a shape change fails to compile rather than silently missing links.
+ */
+interface TokenContainer extends TokenWithChildren {
+  /**
+   * The token kind.
+   *
+   * @remarks
+   * Required so this is not an all-optional interface, which TypeScript's weak-type check would
+   * reject a `Token` from when it carries none of the other fields.
+   */
+  readonly type: string;
+  /** List items. */
+  readonly items?: readonly Token[];
+  /** Table body cells, nested one level deeper than everything else. */
+  readonly rows?: readonly (readonly TokenWithChildren[])[];
+  /** Table header cells. */
+  readonly header?: readonly TokenWithChildren[];
+}
+
+/** Read the inline children of a table cell, which are one indirection further in. */
+function cellTokens(cell: TokenWithChildren): readonly Token[] {
+  return cell.tokens ?? [];
+}
+
+/** Read a token as a container; one carrying no child fields reads as having no children. */
+function asContainer(token: Token): TokenContainer {
+  return token;
+}
+
 /** Token containers whose children can hold inline links. */
 function childTokensOf(token: Token): readonly Token[] {
+  const container = asContainer(token);
   const parts: Token[] = [];
-  const candidate = token as {
-    tokens?: Token[];
-    items?: Token[];
-    rows?: Token[][][];
-    header?: Token[][];
-  };
 
-  if (Array.isArray(candidate.tokens)) parts.push(...candidate.tokens);
-  if (Array.isArray(candidate.items)) parts.push(...candidate.items);
-  // Table cells nest two levels deeper than everything else.
-  if (Array.isArray(candidate.header)) {
-    for (const cell of candidate.header)
-      parts.push(...((cell as unknown as { tokens?: Token[] }).tokens ?? []));
+  if (container.tokens) parts.push(...container.tokens);
+  if (container.items) parts.push(...container.items);
+  if (container.header) {
+    for (const cell of container.header) parts.push(...cellTokens(cell));
   }
-  if (Array.isArray(candidate.rows)) {
-    for (const row of candidate.rows) {
-      for (const cell of row)
-        parts.push(...((cell as unknown as { tokens?: Token[] }).tokens ?? []));
+  if (container.rows) {
+    for (const row of container.rows) {
+      for (const cell of row) parts.push(...cellTokens(cell));
     }
   }
   return parts;
@@ -88,13 +125,10 @@ function flattenText(tokens: readonly Token[], fallback: string): string {
   if (tokens.length === 0) return fallback;
   let text = '';
   for (const token of tokens) {
-    const candidate = token as { type: string; text?: string; tokens?: Token[] };
-    if (
-      Array.isArray(candidate.tokens) &&
-      candidate.tokens.length > 0 &&
-      candidate.type !== 'codespan'
-    ) {
-      text += flattenText(candidate.tokens, candidate.text ?? '');
+    const candidate: TextualToken = token;
+    const children = candidate.tokens;
+    if (children && children.length > 0 && candidate.type !== 'codespan') {
+      text += flattenText(children, candidate.text ?? '');
     } else {
       text += candidate.text ?? '';
     }

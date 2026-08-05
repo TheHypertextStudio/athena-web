@@ -58,16 +58,25 @@ interface ResolvedMention {
   readonly externalResourceId: string | undefined;
 }
 
+/**
+ * The fields that decide whether a stored edge and a derived one are the same reference.
+ *
+ * @remarks
+ * Structural rather than a `mention` row type, because both sides of the diff are compared through
+ * it: rows loaded from the database, and mentions derived from prose that have no row yet.
+ */
+interface MentionIdentityFields {
+  readonly field: string;
+  readonly position: number;
+  readonly targetKind: string;
+  readonly targetEntityKind: string | null;
+  readonly targetEntityId: string | null;
+  readonly externalResourceId: string | null;
+  readonly label: string;
+}
+
 /** The identity a desired mention is matched against an existing row by. */
-function mentionIdentity(row: {
-  field: string;
-  position: number;
-  targetKind: string;
-  targetEntityKind: string | null;
-  targetEntityId: string | null;
-  externalResourceId: string | null;
-  label: string;
-}): string {
+function mentionIdentity(row: MentionIdentityFields): string {
   const target =
     row.targetKind === 'entity'
       ? `entity:${row.targetEntityKind ?? ''}:${row.targetEntityId ?? ''}`
@@ -220,8 +229,8 @@ export async function reconcileMentions(
 
   const desired: ResolvedMention[] = [];
   for (const field of MARKDOWN_FIELDS[subjectType]) {
-    const markdown = row.fields[field];
-    if (typeof markdown !== 'string') continue;
+    const markdown = row.prose[field];
+    if (markdown === undefined) continue;
     for (const link of extractMarkdownLinks(markdown)) {
       const resolved = await resolveLink(
         organizationId,
@@ -286,12 +295,40 @@ export async function reconcileMentions(
   }
 }
 
+/**
+ * One mention subject, reduced to what the reconciler needs from it.
+ *
+ * @remarks
+ * Six different tables feed this, so the loader narrows them to their common shape here rather
+ * than passing whole rows around: the reconciler only ever reads the creator and one or two
+ * Markdown columns, and saying so keeps the six shapes from leaking through the rest of the file.
+ */
+interface MentionSubjectRow {
+  /** The Actor to attribute derived edges to. */
+  readonly createdBy: string | null;
+  /** The subject's Markdown-bearing columns, by name. */
+  readonly prose: Readonly<Record<string, string>>;
+}
+
+/** Collect the named Markdown columns of a loaded row. */
+function readProse(
+  row: Readonly<Record<string, unknown>>,
+  fields: readonly string[],
+): Record<string, string> {
+  const prose: Record<string, string> = {};
+  for (const field of fields) {
+    const value = row[field];
+    if (typeof value === 'string') prose[field] = value;
+  }
+  return prose;
+}
+
 /** Load the prose columns and creator of one mention subject. */
 async function loadSubjectRow(
   subjectType: MentionSubjectType,
   entityId: string,
   organizationId: string,
-): Promise<{ createdBy: string | null; fields: Record<string, unknown> } | undefined> {
+): Promise<MentionSubjectRow | undefined> {
   const schema = await import('@docket/db');
   const tables = {
     task: schema.task,
@@ -309,7 +346,7 @@ async function loadSubjectRow(
     .limit(1);
   const row = rows[0];
   if (!row) return undefined;
-  return { createdBy: row.createdBy, fields: row as unknown as Record<string, unknown> };
+  return { createdBy: row.createdBy, prose: readProse(row, MARKDOWN_FIELDS[subjectType]) };
 }
 
 /** Drop every mention authored inside a subject that no longer exists. */

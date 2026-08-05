@@ -6,10 +6,9 @@
  * web page. Docket holds a metadata snapshot so a reference can render as a real preview instead
  * of a bare link, and dedupes those snapshots per organization by a canonical key.
  *
- * The canonicalization here is the load-bearing part and is deliberately pure, because two
- * independent code paths must agree on it exactly: the reconciler deriving a key from prose, and
- * the unfurler deriving one from a pasted URL. If they disagree, the same document silently
- * becomes two rows with two different titles.
+ * The canonicalization is pure because two independent paths must agree on it exactly: the
+ * reconciler deriving a key from prose, and the unfurler deriving one from a pasted URL. If they
+ * disagree, one document becomes two rows with two different titles.
  */
 import { z } from 'zod';
 

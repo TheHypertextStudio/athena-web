@@ -4,17 +4,15 @@
  * The floating `@` menu.
  *
  * @remarks
- * Anchored to the caret through a virtual popover anchor rather than to a trigger element, and it
- * must never take focus: the caret has to keep blinking in the prose while the user keeps typing
- * into it. `onOpenAutoFocus` being prevented is the single line that makes that true — without it
- * Radix moves focus and the whole interaction dies.
+ * Anchored to the caret through a virtual popover anchor, and never takes focus — the caret keeps
+ * blinking in the prose while the user types. Preventing `onOpenAutoFocus` is what makes that
+ * work; without it Radix moves focus away from the document.
  *
- * Opens at `--dur-fast` rather than the `--dur-base` the palette uses. A modal should feel like it
- * arrived; an inline autocomplete that takes 180ms to appear just feels like lag.
+ * Opens at `--dur-fast` rather than the palette's `--dur-base`, since an inline autocomplete that
+ * takes 180ms to appear reads as lag.
  *
- * The pending Files group reserves its heading and two rows at the real row height from the moment
- * the external query starts. Results then replace skeletons in place, so the menu never grows
- * under the cursor and the popover never re-flips to the other side of the caret mid-typing.
+ * The pending Files group reserves its heading and two rows at the real row height, so results
+ * replace skeletons in place and the popover never re-flips position mid-typing.
  */
 import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
@@ -63,8 +61,8 @@ export default function MentionMenu({
   onOpenChange,
   onRows,
 }: MentionMenuProps): React.JSX.Element {
-  // The search lives here rather than in the controller so that a surface where nobody has typed
-  // `@` mounts no query at all — and so a rich-text field stays usable outside a QueryClient.
+  // Here rather than in the controller so a surface where nobody typed `@` mounts no query, and a
+  // rich-text field stays usable outside a QueryClient.
   const state = useMentionSearch({ orgId, query, enabled: open });
   const { groups, localPending, externalPending, localFailed, externalFailed } = state;
   const nothingYet = groups.length === 0;

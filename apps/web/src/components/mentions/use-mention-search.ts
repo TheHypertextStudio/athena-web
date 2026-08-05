@@ -52,17 +52,23 @@ export interface MentionSearchState {
   readonly externalFailed: boolean;
 }
 
+/** What the picker is searching for, and whether it should search at all. */
+export interface MentionSearchInput {
+  /** The workspace whose entities and connections are in scope. */
+  readonly orgId: string;
+  /** What has been typed after the `@`. */
+  readonly query: string;
+  /** False while the menu is closed, which keeps both queries idle. */
+  readonly enabled: boolean;
+}
+
 /**
  * Search both waves for the current query.
  *
  * @param input - The org, the typed query, and whether the menu is open at all.
  * @returns Grouped rows plus the pending and failure flags the menu renders from.
  */
-export function useMentionSearch(input: {
-  orgId: string;
-  query: string;
-  enabled: boolean;
-}): MentionSearchState {
+export function useMentionSearch(input: MentionSearchInput): MentionSearchState {
   const trimmed = input.query.trim();
   const localTerm = useDebouncedValue(trimmed, LOCAL_DEBOUNCE_MS);
   const externalTerm = useDebouncedValue(trimmed, EXTERNAL_DEBOUNCE_MS);

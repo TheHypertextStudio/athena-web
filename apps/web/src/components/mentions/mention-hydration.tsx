@@ -19,6 +19,12 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, STALE, useApiQuery } from '@/lib/query';
 import { queryKeys } from '@/lib/query-keys';
 
+/** The batched hydrate response, as the RPC returns it. */
+interface MentionHydrateResponse {
+  readonly items: MentionCard[];
+}
+
+/** What the provider exposes to the chips beneath it. */
 interface MentionHydrationValue {
   readonly cards: ReadonlyMap<string, MentionCard>;
   readonly register: (ref: MentionRef) => void;
@@ -57,7 +63,7 @@ export default function MentionHydrationProvider({
   const batchKey = useMemo(() => refs.map(mentionRefKey).sort().join('|'), [refs]);
 
   const hydrateQ = useApiQuery(
-    apiQueryOptions<{ items: MentionCard[] }>(
+    apiQueryOptions<MentionHydrateResponse>(
       queryKeys.mentionHydrate(orgId, batchKey),
       () =>
         api.v1.orgs[':orgId'].mentions.hydrate.$post({
@@ -86,16 +92,21 @@ export default function MentionHydrationProvider({
   );
 }
 
+/** What a chip knows about its own preview. */
+export interface MentionCardState {
+  /** The resolved card, once the batch has answered. */
+  readonly card: MentionCard | undefined;
+  /** True while the surrounding batch is still in flight. */
+  readonly pending: boolean;
+}
+
 /**
  * Read one reference's resolved card, registering it for the next batch if it is new.
  *
  * @param ref - The reference this chip renders.
  * @returns The card once resolved, and whether the batch is still in flight.
  */
-export function useMentionCard(ref: MentionRef): {
-  card: MentionCard | undefined;
-  pending: boolean;
-} {
+export function useMentionCard(ref: MentionRef): MentionCardState {
   const context = useContext(MentionHydrationContext);
   const key = mentionRefKey(ref);
 

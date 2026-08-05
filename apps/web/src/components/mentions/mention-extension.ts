@@ -14,8 +14,7 @@
  * so digests, exports, and agent prompts stay correct.
  *
  * On the way back in, the mention claims its own lexer token rather than contending for `link`.
- * The reasoning is recorded on the tokenizer below, and it is not a preference: sharing the `link`
- * token made ordinary links parse to nothing at all.
+ * Sharing the `link` token made ordinary links parse to nothing; see the tokenizer below.
  */
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { MarkdownParseResult, MarkdownToken } from '@tiptap/core';
@@ -35,11 +34,57 @@ export interface MentionAttributes {
   readonly label: string;
 }
 
-/** Rebuild a ref from stored node attributes. */
+/**
+ * The token this extension's tokenizer produces.
+ *
+ * @remarks
+ * Carries the resolved {@link MentionRef} rather than the raw strings, so the parse step reads a
+ * decision the tokenizer already made.
+ */
+export interface MentionMarkdownToken {
+  readonly type: typeof MENTION_NODE;
+  readonly raw: string;
+  readonly label: string;
+  readonly href: string;
+  readonly ref: MentionRef;
+}
+
+/** ProseMirror hands node attributes through as an index signature; read them explicitly. */
+type NodeAttributeBag = Readonly<Record<string, unknown>>;
+
+/** Read one attribute as a string, defaulting to empty rather than to `undefined`. */
+function readString(bag: NodeAttributeBag, key: string): string {
+  const value = bag[key];
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Read a node's attribute bag into the typed shape this module works in.
+ *
+ * @param bag - `node.attrs`, which ProseMirror types only as an index signature.
+ * @returns The attributes, with anything missing or mistyped read as an empty string.
+ */
+export function readMentionAttributes(bag: NodeAttributeBag): MentionAttributes {
+  return {
+    kind: readString(bag, 'kind'),
+    entityKind: readString(bag, 'entityKind'),
+    entityId: readString(bag, 'entityId'),
+    href: readString(bag, 'href'),
+    label: readString(bag, 'label'),
+  };
+}
+
+/**
+ * Rebuild a ref from stored node attributes.
+ *
+ * @remarks
+ * Re-parses the entity kind rather than asserting it, so an attribute from an older schema
+ * degrades to an external reference instead of a ref whose kind is unchecked.
+ */
 export function refFromAttributes(attrs: MentionAttributes): MentionRef {
-  return attrs.kind === 'entity'
-    ? { kind: 'entity', entityKind: attrs.entityKind as never, entityId: attrs.entityId }
-    : { kind: 'external', url: attrs.href };
+  if (attrs.kind !== 'entity') return { kind: 'external', url: attrs.href };
+  const parsed = parseMentionMarker(attrs.href, `docket:v1:${attrs.entityKind}:${attrs.entityId}`);
+  return parsed ?? { kind: 'external', url: attrs.href };
 }
 
 /** Build node attributes from a ref and its display text. */
@@ -65,6 +110,11 @@ const MENTION_LINK_PATTERN = /^\[((?:\\.|[^\]\\])*)\]\(\s*([^\s)]+)\s+"(docket:v
 /** Reverse the label escaping the serializer applies. */
 function unescapeLabel(label: string): string {
   return label.replace(/\\([[\]\\])/g, '$1');
+}
+
+/** Whether a token is one this extension produced. */
+function isMentionToken(token: MarkdownToken): token is MarkdownToken & MentionMarkdownToken {
+  return token.type === MENTION_NODE && 'ref' in token;
 }
 
 /**
@@ -104,56 +154,54 @@ export function createMentionExtension(addNodeView: () => unknown) {
     },
 
     renderHTML({ HTMLAttributes, node }) {
+      const attrs = readMentionAttributes(node.attrs);
       return [
         'a',
         mergeAttributes(HTMLAttributes, {
-          'data-mention-kind': String(node.attrs['kind']),
-          href: String(node.attrs['href']),
+          'data-mention-kind': attrs.kind,
+          href: attrs.href,
         }),
-        String(node.attrs['label']),
+        attrs.label,
       ];
     },
 
     addNodeView: addNodeView as never,
 
     /**
-     * A token of our own, claimed before marked's link rule ever sees the text.
+     * A token of our own, claimed before marked's link rule sees the text.
      *
      * @remarks
-     * The obvious alternative — registering a handler under the `link` token and declining the
-     * ones without a marker — does not work. `MarkdownManager` documents a declining handler as
-     * falling through to the next one, but in practice registering *any* handler for `link`
-     * diverts the token off the built-in path, and an ordinary link then parses to nothing: its
-     * text disappears from the document entirely. Owning a distinct token keeps ordinary links on
-     * the untouched code path, which is the only way to be sure they still work.
+     * Registering a handler under the `link` token and declining unmarked ones does not work:
+     * `MarkdownManager` documents a declining handler as falling through, but registering any
+     * handler for `link` diverts the token off the built-in path and an ordinary link then parses
+     * to nothing, losing its text from the document.
      */
     markdownTokenizer: {
       name: MENTION_NODE,
       level: 'inline',
       start: (src: string) => src.indexOf('['),
-      tokenize: (src: string) => {
+      tokenize: (src: string): MentionMarkdownToken | undefined => {
         const match = MENTION_LINK_PATTERN.exec(src);
         if (!match) return undefined;
         const [raw, label = '', href = '', title = ''] = match;
-        // Validate before claiming: a marker on a `javascript:` href must fall through to
-        // marked's own rules rather than become a navigable chip.
-        if (parseMentionMarker(href, title) === undefined) return undefined;
-        return { type: MENTION_NODE, raw, label, href, title };
+        // Resolve here so the parse step has no failure branch, and so a marker on a
+        // `javascript:` href falls through to marked's own rules.
+        const ref = parseMentionMarker(href, title);
+        if (ref === undefined) return undefined;
+        return { type: MENTION_NODE, raw, label: unescapeLabel(label), href, ref };
       },
     },
 
     parseMarkdown(token: MarkdownToken): MarkdownParseResult {
-      const claimed = token as unknown as { label: string; href: string; title: string };
-      const ref = parseMentionMarker(claimed.href, claimed.title);
-      if (ref === undefined) return undefined as unknown as MarkdownParseResult;
+      if (!isMentionToken(token)) return [];
       return {
         type: MENTION_NODE,
-        attrs: attributesFromRef(ref, unescapeLabel(claimed.label), claimed.href),
+        attrs: attributesFromRef(token.ref, token.label, token.href),
       };
     },
 
-    renderMarkdown(node: { attrs?: Record<string, unknown> }) {
-      const attrs = (node.attrs ?? {}) as unknown as MentionAttributes;
+    renderMarkdown(node: { attrs?: NodeAttributeBag }) {
+      const attrs = readMentionAttributes(node.attrs ?? {});
       return formatMentionLink(attrs.label, attrs.href, refFromAttributes(attrs));
     },
   });

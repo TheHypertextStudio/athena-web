@@ -99,18 +99,25 @@ export function toMentionItem(result: SearchOut['items'][number]): MentionItem |
   };
 }
 
+/** What the local picker wave needs to answer a keystroke. */
+export interface LocalMentionQuery {
+  /** Whose permissions the results are filtered against. */
+  readonly caller: SearchCaller;
+  /** The workspace to look in. */
+  readonly orgId: string;
+  /** What has been typed after the `@`; empty asks for recents. */
+  readonly query: string;
+  /** How many rows to return. */
+  readonly limit: number;
+}
+
 /**
  * Run the local wave: entity search, or recents when nothing has been typed yet.
  *
  * @param input - The caller, the org, the typed query, and how many rows to return.
  * @returns Picker rows, best first, deduped by ref.
  */
-export async function searchLocalMentions(input: {
-  caller: SearchCaller;
-  orgId: string;
-  query: string;
-  limit: number;
-}): Promise<MentionItem[]> {
+export async function searchLocalMentions(input: LocalMentionQuery): Promise<MentionItem[]> {
   const query = input.query.trim();
   const results =
     query.length === 0

@@ -42,18 +42,27 @@ export interface MentionExternalResult {
  */
 const RESOURCE_SEARCH_PROVIDERS: readonly ConnectorProvider[] = [];
 
+/** What the external picker wave needs to fan out. */
+export interface ExternalMentionQuery {
+  /** The Actor whose own connections are searched, and whose credentials fund the calls. */
+  readonly actorId: string;
+  /** The workspace those connections belong to. */
+  readonly orgId: string;
+  /** What has been typed after the `@`. */
+  readonly query: string;
+  /** How many rows to return. */
+  readonly limit: number;
+}
+
 /**
  * Search the caller's connected apps.
  *
  * @param input - The caller's actor, their org, the typed query, and how many rows to return.
  * @returns Rows and per-provider outcomes.
  */
-export async function searchExternalMentions(input: {
-  actorId: string;
-  orgId: string;
-  query: string;
-  limit: number;
-}): Promise<MentionExternalResult> {
+export async function searchExternalMentions(
+  input: ExternalMentionQuery,
+): Promise<MentionExternalResult> {
   const query = input.query.trim();
   if (query.length === 0 || RESOURCE_SEARCH_PROVIDERS.length === 0) {
     return { items: [], providers: [] };

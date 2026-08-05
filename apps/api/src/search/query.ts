@@ -135,6 +135,28 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
   };
 }
 
+/** What {@link loadRecentDocuments} needs to answer a bare-`@` picker. */
+export interface RecentDocumentsQuery {
+  /** Whose permissions the results are filtered against. */
+  readonly caller: SearchCaller;
+  /** The workspace to look in. */
+  readonly orgId: string;
+  /** Which document kinds are worth offering. */
+  readonly kinds: readonly SearchDocumentKind[];
+  /** How many rows to return after filtering. */
+  readonly limit: number;
+}
+
+/** What {@link loadVisibleDocuments} needs to resolve known ids. */
+export interface VisibleDocumentsQuery {
+  /** Whose permissions decide which of the ids resolve. */
+  readonly caller: SearchCaller;
+  /** The workspace the ids belong to. */
+  readonly orgId: string;
+  /** The entity ids to resolve. */
+  readonly entityIds: readonly string[];
+}
+
 /**
  * Load the caller's most recently touched documents in one org, with no query.
  *
@@ -153,12 +175,9 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
  * @param input - The caller, the org, the kinds worth offering, and how many to return.
  * @returns Visible documents, most recently updated first.
  */
-export async function loadRecentDocuments(input: {
-  caller: SearchCaller;
-  orgId: string;
-  kinds: readonly SearchDocumentKind[];
-  limit: number;
-}): Promise<SearchOut['items']> {
+export async function loadRecentDocuments(
+  input: RecentDocumentsQuery,
+): Promise<SearchOut['items']> {
   const schema = await import('@docket/db');
   const callerAccess = await resolveCallerAccess(input.caller);
   const callerAccessByOrg = new Map(callerAccess.map((access) => [access.organizationId, access]));
@@ -212,11 +231,9 @@ export async function loadRecentDocuments(input: {
  * @param input - The caller, the org to look in, and the entity ids to resolve.
  * @returns The visible documents; ids that are missing or forbidden are simply absent.
  */
-export async function loadVisibleDocuments(input: {
-  caller: SearchCaller;
-  orgId: string;
-  entityIds: readonly string[];
-}): Promise<SearchDocumentRow[]> {
+export async function loadVisibleDocuments(
+  input: VisibleDocumentsQuery,
+): Promise<SearchDocumentRow[]> {
   if (input.entityIds.length === 0) return [];
   const schema = await import('@docket/db');
   const callerAccess = await resolveCallerAccess(input.caller);

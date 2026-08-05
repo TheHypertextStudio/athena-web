@@ -8,10 +8,9 @@
  * keyboard contract. Everything it returns is meant to be handed to `FreeformTextEditor`, which
  * keeps the editor itself unaware of how mentions work.
  *
- * The keyboard handler is returned rather than installed as a plugin keymap for a reason worth
- * stating: ProseMirror consults `editorProps.handleKeyDown` *before* any plugin's keymap, and the
- * editor already handles Escape there to cancel an edit. A plugin keymap would therefore never see
- * Escape, and dismissing the menu would discard the user's draft instead.
+ * The keyboard handler is returned rather than installed as a plugin keymap: ProseMirror consults
+ * `editorProps.handleKeyDown` before any plugin keymap, and the editor already handles Escape
+ * there to cancel an edit, so a plugin keymap would never see it.
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { Editor } from '@tiptap/core';
@@ -22,6 +21,17 @@ import { mentionRefKey } from '@docket/types';
 import { MENTION_NODE, attributesFromRef } from './mention-extension';
 import { findMentionTrigger, type MentionTrigger } from './mention-trigger';
 import { stepActiveKey } from './mention-merge';
+
+/**
+ * The geometry the menu positions against.
+ *
+ * @remarks
+ * Radix accepts any object with this one method as a virtual anchor, which is how the menu
+ * attaches to a caret rather than to an element that does not exist.
+ */
+export interface CaretAnchor {
+  getBoundingClientRect: () => DOMRect;
+}
 
 /** What the editor needs from the controller. */
 export interface MentionController {
@@ -36,7 +46,7 @@ export interface MentionController {
     items: readonly MentionItem[],
     resolvedActiveKey: string | undefined,
   ) => void;
-  readonly anchorRef: React.RefObject<{ getBoundingClientRect: () => DOMRect } | null>;
+  readonly anchorRef: React.RefObject<CaretAnchor | null>;
   readonly listboxId: string;
   /** Install as the first branch of the editor's own `handleKeyDown`. */
   readonly handleKeyDown: (view: EditorView, event: KeyboardEvent) => boolean;
@@ -48,21 +58,26 @@ export interface MentionController {
   readonly suppressReconcile: React.RefObject<boolean>;
 }
 
+/** How mentions are configured for one editor. */
+export interface MentionControllerOptions {
+  /** The workspace whose entities are mentionable; undefined turns mentions off. */
+  readonly orgId: string | undefined;
+  /** False for a read-only or disabled surface, where `@` is just a character. */
+  readonly enabled: boolean;
+}
+
 /**
  * Wire up mention behavior for one editor.
  *
  * @param input - The org whose entities are mentionable, and whether mentions are on at all.
  * @returns The controller.
  */
-export function useMentionController(input: {
-  orgId: string | undefined;
-  enabled: boolean;
-}): MentionController {
+export function useMentionController(input: MentionControllerOptions): MentionController {
   const [trigger, setTrigger] = useState<MentionTrigger | undefined>(undefined);
   const [activeKey, setActiveKey] = useState<string | undefined>(undefined);
   const [hasArrowed, setHasArrowed] = useState(false);
   const editorRef = useRef<Editor | null>(null);
-  const anchorRef = useRef<{ getBoundingClientRect: () => DOMRect } | null>(null);
+  const anchorRef = useRef<CaretAnchor | null>(null);
   const itemsRef = useRef<readonly MentionItem[]>([]);
   const resolvedKeyRef = useRef<string | undefined>(undefined);
   const suppressReconcile = useRef(false);
@@ -71,9 +86,8 @@ export function useMentionController(input: {
   const open = input.enabled && input.orgId !== undefined && trigger !== undefined;
   suppressReconcile.current = open;
 
-  // The rows live in a ref rather than in this hook's state, because the search query itself is
-  // mounted by the menu — which only exists while the menu is open. That keeps a surface with no
-  // mentions free of any query at all, and keeps this hook usable outside a QueryClientProvider.
+  // Rows live in a ref because the search query is mounted by the menu, which only exists while
+  // the menu is open. A surface where nobody typed `@` mounts no query and needs no QueryClient.
   const reportRows = useCallback((next: readonly MentionItem[], resolved: string | undefined) => {
     itemsRef.current = next;
     resolvedKeyRef.current = resolved;
@@ -155,9 +169,8 @@ export function useMentionController(input: {
     (_view: EditorView, event: KeyboardEvent): boolean => {
       if (!open) return false;
 
-      // Deliberately not intercepted: someone pressing ⌘Enter wants to send. Losing a half-typed
-      // `@dri` as literal text is honest and recoverable; silently inserting a mention they never
-      // confirmed is not.
+      // Not intercepted: ⌘Enter means send. Leaving a half-typed `@dri` as literal text is
+      // recoverable; inserting an unconfirmed mention is not.
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') return false;
 
       switch (event.key) {
@@ -197,8 +210,8 @@ export function useMentionController(input: {
           return true;
         }
         case 'Escape': {
-          // Returning true is the whole point: it stops the editor's own Escape handler from
-          // running, so dismissing the menu never throws away the draft.
+          // Returning true stops the editor's own Escape handler, so dismissing the menu does
+          // not discard the draft.
           event.preventDefault();
           close();
           return true;

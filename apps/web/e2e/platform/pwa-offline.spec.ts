@@ -1,4 +1,7 @@
-import { type Page, expect, test } from '@playwright/test';
+import { type Page, expect } from '@playwright/test';
+
+import { signUpAndOnboard } from '../helpers/app';
+import { test } from '../helpers/fixtures';
 
 /**
  * Installability and offline behaviour, end to end against the running dev stack.
@@ -254,5 +257,83 @@ test.describe('offline behaviour', () => {
         return staticEntry ? staticEntry[1].length : 0;
       })
       .toBe(0);
+  });
+});
+
+/**
+ * What an authenticated person sees when the network goes away.
+ *
+ * @remarks
+ * Separate from the specs above because these need an account: the document cache is keyed on the
+ * signed-in user and stores nothing at all until a page has named one, so none of this can be
+ * exercised signed out — which is itself the security property `documents.ts` is built around.
+ *
+ * The claim under test is the one the whole feature exists to make: **the app shell stays on
+ * screen**. Not a waiting room with a retry button, but Docket — its navigation, its workspace, its
+ * tab bar — with the requested route rendered from what was already cached.
+ */
+test.describe('offline with a session', () => {
+  test.slow();
+
+  test('keeps the shell for a route that has no document of its own', async ({ page, context }) => {
+    // The case that matters most and used to fail: most routes are parameterized, so a route nobody
+    // opened online is the normal case rather than the edge one.
+    await signUpAndOnboard(page, 'offline-shell');
+    await loadControlled(page, '/today');
+    await expect(page.getByRole('navigation')).toBeVisible();
+
+    await context.setOffline(true);
+    try {
+      await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
+
+      // The shell, not offline.html. The waiting room has no navigation at all, so this single
+      // assertion separates the two outcomes.
+      await expect(page.getByRole('navigation')).toBeVisible();
+      expect(new URL(page.url()).pathname).toBe('/tasks');
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('stores the document it served as a stand-in shell, keyed on the account', async ({
+    page,
+  }) => {
+    await signUpAndOnboard(page, 'offline-key');
+    await loadControlled(page, '/today');
+
+    await expect
+      .poll(
+        async () =>
+          Object.entries(await cacheContents(page))
+            .filter(([name]) => name.startsWith('docket-documents-'))
+            .flatMap(([, paths]) => paths),
+        { message: 'a served document should also become the stand-in shell' },
+      )
+      .toContain('/__docket-offline-shell');
+  });
+
+  test('never lets an offline click become a document load', async ({ page, context }) => {
+    // A document load offline is what tore the running application down: Next's RSC fetch fails and
+    // the router falls back to a full navigation. Marking the window and finding the mark still
+    // there proves the document survived the click.
+    await signUpAndOnboard(page, 'offline-nav');
+    await loadControlled(page, '/today');
+
+    await context.setOffline(true);
+    try {
+      await page.evaluate(() => {
+        (window as unknown as { __docketDocument?: number }).__docketDocument = 1;
+      });
+
+      await page.getByRole('link', { name: 'Tasks' }).first().click();
+
+      await expect.poll(() => new URL(page.url()).pathname).toBe('/tasks');
+      const survived = await page.evaluate(
+        () => (window as unknown as { __docketDocument?: number }).__docketDocument,
+      );
+      expect(survived, 'the document was replaced, so the shell was torn down').toBe(1);
+    } finally {
+      await context.setOffline(false);
+    }
   });
 });

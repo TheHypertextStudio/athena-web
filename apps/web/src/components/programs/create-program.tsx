@@ -36,6 +36,7 @@ import { withComposerReset } from '@/components/composer/reset-on-open';
 import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { STATUS_LABEL } from '@/components/programs/program-status';
+import { visibilityOptions } from '@/components/property-pickers/options';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The lists this composer's pickers draw from. */
@@ -43,15 +44,6 @@ const COMPOSER_INCLUDE = ['actors'] as const;
 
 /** The Program lifecycle statuses, ordered live → quiet. */
 const PROGRAM_STATUS_ORDER: readonly ProgramStatus[] = ['active', 'paused', 'archived'];
-
-/** Visibility choices for a Program. */
-const VISIBILITY_ORDER: readonly Visibility[] = ['public', 'private'];
-
-/** Human labels for {@link Visibility}. */
-const VISIBILITY_LABEL: Record<Visibility, string> = {
-  public: 'Public',
-  private: 'Private',
-};
 
 /** Props for {@link CreateProgramDialog}. */
 export interface CreateProgramDialogProps {
@@ -198,7 +190,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
         disabled={creating}
       />
       <EnumPicker
-        options={enumOptions(VISIBILITY_ORDER, VISIBILITY_LABEL)}
+        options={visibilityOptions()}
         value={visibility}
         onChange={(next) => {
           if (next) setVisibility(next);

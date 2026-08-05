@@ -1,7 +1,7 @@
 'use client';
 
 /** Per-workspace Stream — the firehose of every event in this org. */
-import { useParams } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useState } from 'react';
 
 import { EventDrawer } from '@/components/stream/event-drawer';
@@ -16,7 +16,7 @@ import { useStreamPage } from '@/components/stream/use-stream-page';
  * @returns the workspace Stream page.
  */
 export default function WorkspaceStreamPage(): JSX.Element {
-  const { orgId } = useParams<{ orgId: string }>();
+  const { orgId } = useAppParams<{ orgId: string }>();
   const data = useStreamPage({ scope: 'org', orgId });
   const [selected, setSelected] = useState<StreamEventRow | null>(null);
   return (

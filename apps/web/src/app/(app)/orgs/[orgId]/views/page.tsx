@@ -33,7 +33,8 @@
  */
 import { LayoutGrid, Plus } from '@docket/ui/icons';
 import { Button, Separator, Skeleton } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX } from 'react';
 
 import { FilterToolbar } from '@/components/views/filter-toolbar';
@@ -45,7 +46,7 @@ import { useViewsPage } from './use-views-page';
 /** ViewsPage renders the authenticated saved views page. */
 export default function ViewsPage(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string }>();
+  const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
   const {
     views,

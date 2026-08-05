@@ -4,7 +4,8 @@ import { ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Inbox } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX } from 'react';
 
 import SuggestionsLane from '@/components/triage/suggestions-lane';
@@ -15,7 +16,7 @@ import { useTriage } from '@/lib/use-triage';
 /** TriagePage renders the authenticated triage page. */
 export default function TriagePage(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string }>();
+  const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
 
   const projectNoun = useVocabulary('project');

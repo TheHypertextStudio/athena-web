@@ -4,7 +4,8 @@ import { ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useState } from 'react';
 
 import { useSession } from '@/lib/auth-client';
@@ -29,7 +30,7 @@ type WorkTab = 'mine' | 'delegated';
  */
 export default function MyWorkClient(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string }>();
+  const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;

@@ -27,7 +27,7 @@
 import type { IntegrationOut } from '@docket/types';
 import { Sparkles } from '@docket/ui/icons';
 import { Badge } from '@docket/ui/primitives';
-import { useSearchParams } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 import { api } from '@/lib/api';
@@ -55,7 +55,7 @@ export function LinearAgentInstallCard({
   orgId,
   canManage,
 }: LinearAgentInstallCardProps): JSX.Element | null {
-  const searchParams = useSearchParams();
+  const searchParams = useAppSearchParams();
   const installReturn = searchParams.get('linear_agent');
 
   const integrationsQ = useApiQuery(

@@ -14,7 +14,7 @@
  * and never a server sentence.
  */
 import { Button, ControlGroup, Skeleton, Stack, Text, Toolbar } from '@docket/ui/primitives';
-import { useSearchParams } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 import { useState } from 'react';
 
@@ -91,7 +91,7 @@ export interface PlanSurfaceProps {
 export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
   // `?date=` and `?lens=` make the surface addressable: a link can open someone straight on the
   // morning walk-through for a specific day, which is exactly what a day-start deep link needs.
-  const search = useSearchParams();
+  const search = useAppSearchParams();
   const now = props.now ?? new Date();
   const date = asDate(search.get('date')) ?? todayString(now);
   const weekStartDate = asDate(search.get('week')) ?? weekStartOf(new Date(`${date}T12:00:00Z`));

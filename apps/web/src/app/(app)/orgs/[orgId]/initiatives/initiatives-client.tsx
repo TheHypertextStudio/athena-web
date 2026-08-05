@@ -17,7 +17,8 @@ import { ChevronLeft, ChevronRight, Plus, Target } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -251,7 +252,7 @@ function AttentionSurface({
 
 /** Executive Initiative hierarchy overview. */
 export default function InitiativesListClient(): JSX.Element {
-  const { orgId } = useParams<{ orgId: string }>();
+  const { orgId } = useAppParams<{ orgId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();

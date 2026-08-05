@@ -17,7 +17,8 @@
  * Data is fetched at runtime, so the production build needs no running server.
  */
 import { type JSX, Suspense, use, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 
 import { useActiveOrg } from '@/components/active-org';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -26,7 +27,7 @@ import { SecurityTab } from '@/components/settings/security-tab';
 
 /** A one-time success banner shown after confirming an email change (`?email-changed=1`). */
 function EmailChangedBanner(): JSX.Element | null {
-  const params = useSearchParams();
+  const params = useAppSearchParams();
   if (params.get('email-changed') !== '1') return null;
   return (
     <p

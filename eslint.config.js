@@ -1,4 +1,4 @@
-import { baseConfig, dataLayerConfig } from './tooling/eslint-config/index.js';
+import { appLocationConfig, baseConfig, dataLayerConfig } from './tooling/eslint-config/index.js';
 
 /**
  * Root flat ESLint config. Kept thin: the shared Docket preset (`@docket/eslint-config`,
@@ -8,4 +8,4 @@ import { baseConfig, dataLayerConfig } from './tooling/eslint-config/index.js';
  *
  * @type {import('typescript-eslint').ConfigArray}
  */
-export default [...baseConfig, ...dataLayerConfig];
+export default [...baseConfig, ...dataLayerConfig, ...appLocationConfig];

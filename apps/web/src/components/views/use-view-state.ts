@@ -19,7 +19,8 @@
  * This hook is intentionally thin (the codec it wraps is pure and separately unit-tested); it
  * exists only to bind that codec to Next's navigation primitives.
  */
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useMemo } from 'react';
 
 import {
@@ -74,8 +75,8 @@ export interface UseViewStateResult {
  */
 export function useViewState(): UseViewStateResult {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useAppPathname();
+  const searchParams = useAppSearchParams();
 
   // `useSearchParams` returns a stable `ReadonlyURLSearchParams`; key the parse on its string form
   // so the memo only recomputes when the query actually changes.

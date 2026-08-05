@@ -1,7 +1,7 @@
 'use client';
 
 /** One message Athena received, read as a context object. */
-import { useParams } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 import { MailMessageView } from '@/components/athena/mail-message-view';
@@ -12,6 +12,6 @@ import { MailMessageView } from '@/components/athena/mail-message-view';
  * @returns the message surface.
  */
 export default function AthenaMailMessagePage(): JSX.Element {
-  const params = useParams<{ id: string }>();
+  const params = useAppParams<{ id: string }>();
   return <MailMessageView messageId={params.id} />;
 }

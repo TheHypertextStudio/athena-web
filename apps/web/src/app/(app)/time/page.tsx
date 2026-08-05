@@ -8,7 +8,7 @@
  */
 import type { JSX } from 'react';
 
-import { TimeAnalytics, TimeSharePanel } from '@/components/time-tracking';
+import TimeClient from './time-client';
 
 /** Static metadata for the time-reports surface. */
 export const metadata = { title: 'Time · Docket' };
@@ -19,10 +19,5 @@ export const metadata = { title: 'Time · Docket' };
  * @returns the analytics surface plus the current-task share controls.
  */
 export default function TimePage(): JSX.Element {
-  return (
-    <div className="flex h-full min-w-0 flex-col">
-      <TimeAnalytics />
-      <TimeSharePanel />
-    </div>
-  );
+  return <TimeClient />;
 }

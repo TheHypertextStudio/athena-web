@@ -3,7 +3,7 @@
 import { cn } from '@docket/ui';
 import { buttonVariants } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 /**
@@ -22,7 +22,7 @@ import type { JSX } from 'react';
  * paths that have no real screen.
  */
 export default function OrgNotFoundPage(): JSX.Element {
-  const params = useParams<{ orgId: string }>();
+  const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
 
   return (

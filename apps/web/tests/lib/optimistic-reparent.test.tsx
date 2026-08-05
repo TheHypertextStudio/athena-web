@@ -44,10 +44,15 @@ const CHILD_LINK_ID = '01BX5ZZKBKACTAV9WEVGEMMV04';
 const LEAKY_REJECTION = 'ECONNRESET while writing initiative_hierarchy_links (pg driver)';
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ orgId: ORG_ID }),
   useRouter: () => ({ push: routerPush, replace: vi.fn() }),
-  usePathname: () => `/orgs/${ORG_ID}/initiatives`,
-  useSearchParams: () => new URLSearchParams(),
+}));
+
+// The URL is read through the app's own location source rather than Next's router, so that is what
+// a test presents. See `src/lib/app-location.tsx`.
+vi.mock('../../src/lib/app-location', () => ({
+  useAppParams: () => ({ orgId: ORG_ID }),
+  useAppPathname: () => `/orgs/${ORG_ID}/initiatives`,
+  useAppSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({

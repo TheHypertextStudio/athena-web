@@ -51,6 +51,18 @@ vi.mock('../../src/components/app-shell-frame', () => ({
   },
 }));
 
+// The layout wraps the shell in the app's location provider, which reads Next's router for its
+// change notification. Nothing here exercises navigation, so it stands in as a passthrough.
+vi.mock('../../src/lib/app-location', () => ({
+  AppLocationProvider: function AppLocationProviderStub({
+    children,
+  }: {
+    children: unknown;
+  }): unknown {
+    return children;
+  },
+}));
+
 vi.mock('../../src/lib/query-server', () => ({
   getServerQueryClient: () => ({ prefetchQuery }),
   getServerApi: async () => ({ v1: { orgs: { $get: orgsGet } } }),
@@ -216,10 +228,27 @@ describe('(app) layout guard', () => {
   });
 });
 
-/** The `AppShellFrame` element's props, dug out of the layout's `HydrationBoundary` wrapper. */
+/**
+ * The `AppShellFrame` element's props, found by descending the layout's wrappers.
+ *
+ * @remarks
+ * Searches rather than indexing a fixed depth. The layout wraps the shell in a hydration boundary
+ * and a location provider today, and an earlier version of this helper asserted that exact nesting
+ * — so adding a provider broke two tests that have nothing to do with providers.
+ */
 function shellProps(tree: unknown): { initialSession: unknown } {
-  const boundary = tree as { props: { children: { props: { initialSession: unknown } } } };
-  return boundary.props.children.props;
+  let node = tree;
+  for (let depth = 0; depth < 10; depth += 1) {
+    const element = node as { props?: Record<string, unknown> } | null;
+    if (element?.props && 'initialSession' in element.props) {
+      return element.props as { initialSession: unknown };
+    }
+    if (!element?.props || !('children' in element.props)) {
+      break;
+    }
+    node = element.props['children'];
+  }
+  throw new Error('The layout rendered no element carrying initialSession.');
 }
 
 describe('/open entry gateway', () => {

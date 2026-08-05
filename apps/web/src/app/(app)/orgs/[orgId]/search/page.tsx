@@ -1,13 +1,8 @@
-import { use, type JSX } from 'react';
+import type { JSX } from 'react';
 
-import { SearchClient } from '@/components/search/search-client';
+import OrgSearchClient from './org-search-client';
 
 /** Workspace-scoped authenticated search. */
-export default function OrgSearchPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
-  return <SearchClient scope="org" orgId={orgId} />;
+export default function OrgSearchPage(): JSX.Element {
+  return <OrgSearchClient />;
 }

@@ -16,7 +16,8 @@ import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, ListChecks, Search } from '@docket/ui/icons';
 import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname } from '@/lib/app-location';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import AccountMenu from '@/components/account-menu';
@@ -125,7 +126,7 @@ export interface AppShellFrameProps {
  * loading treatment for its own data; the shell adds nothing by blocking on top of it.
  */
 export function AppShellFrame({ children, initialSession }: AppShellFrameProps): JSX.Element {
-  const pathname = usePathname();
+  const pathname = useAppPathname();
   const { data: session, isPending, error: sessionError, refetch } = authClient.useSession();
   const { requireAuthentication } = useAuthenticationInterlock();
   const online = useOnlineStatus();

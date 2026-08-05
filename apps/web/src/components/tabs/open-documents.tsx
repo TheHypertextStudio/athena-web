@@ -23,7 +23,8 @@
  */
 import { ULID_REGEX } from '@docket/types';
 import type { OpenTab } from '@docket/ui/components';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname } from '@/lib/app-location';
 import {
   createContext,
   type JSX,
@@ -131,7 +132,7 @@ export function OpenDocumentsProvider({
   children,
 }: OpenDocumentsProviderProps): JSX.Element {
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = useAppPathname();
   const [tabs, setTabs] = useState<readonly OpenTab[]>([]);
 
   // Hydrate from session storage when the user resolves (and reset on sign-out / user change).

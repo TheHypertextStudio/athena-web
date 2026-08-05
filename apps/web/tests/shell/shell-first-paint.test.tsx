@@ -33,8 +33,14 @@ const { orgsGet, pathnameState, requireAuthentication, sessionState } = vi.hoist
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => pathnameState.value,
   useRouter: () => ({ push: vi.fn() }),
+}));
+
+// The URL is read through the app's own location source rather than Next's router, so that is what
+// a test presents. See `src/lib/app-location.tsx`.
+vi.mock('../../src/lib/app-location', () => ({
+  useAppPathname: () => pathnameState.value,
+  useAppSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('next/link', () => ({

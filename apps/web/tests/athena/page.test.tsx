@@ -8,8 +8,10 @@ const mocks = vi.hoisted(() => ({
   workspace: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({
-  useSearchParams: () => mocks.search,
+// The URL is read through the app's own location source rather than Next's router, so that is what
+// a test presents. See `src/lib/app-location.tsx`.
+vi.mock('../../src/lib/app-location', () => ({
+  useAppSearchParams: () => mocks.search,
 }));
 
 vi.mock('../../src/components/athena/athena-workspace', () => ({

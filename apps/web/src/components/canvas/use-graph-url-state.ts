@@ -9,7 +9,8 @@
  * `useSearchParams`, and writes go through `router.replace(..., { scroll: false })` so a filtered/
  * arranged graph is a shareable, reload-sticky link without pushing history entries.
  */
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useMemo } from 'react';
 
 import type { GraphFilter } from './graph-toolbar';
@@ -31,8 +32,8 @@ export interface GraphUrlBinding {
 /** Bind the canvas filter + layout to the URL search params. */
 export function useGraphUrlState(): GraphUrlBinding {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useAppPathname();
+  const searchParams = useAppSearchParams();
 
   const { filter, direction } = useMemo(
     () => parseGraphUrl(new URLSearchParams(searchParams.toString())),

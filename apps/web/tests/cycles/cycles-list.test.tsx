@@ -104,10 +104,15 @@ const fixtures = vi.hoisted(() => {
 });
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ orgId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' }),
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
-  usePathname: () => '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/cycles',
-  useSearchParams: () => new URLSearchParams(),
+}));
+
+// The URL is read through the app's own location source rather than Next's router, so that is what
+// a test presents. See `src/lib/app-location.tsx`.
+vi.mock('../../src/lib/app-location', () => ({
+  useAppParams: () => ({ orgId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' }),
+  useAppPathname: () => '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/cycles',
+  useAppSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('../../src/lib/query', async (importOriginal) => {

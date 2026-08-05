@@ -26,7 +26,7 @@ import {
   Input,
   Skeleton,
 } from '@docket/ui/primitives';
-import { useSearchParams } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useEffect, useId, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -55,7 +55,7 @@ export interface McpConnectorsSectionProps {
 
 /** The MCP connectors settings section: list + add-a-server form. */
 export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionProps): JSX.Element {
-  const searchParams = useSearchParams();
+  const searchParams = useAppSearchParams();
   const mcpReturn = searchParams.get('mcp');
   const [addOpen, setAddOpen] = useState(false);
   const listQ = useApiQuery(

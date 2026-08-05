@@ -143,4 +143,51 @@ export const dataLayerConfig = [
   },
 ];
 
+/**
+ * Location enforcement for the web app (`docs/engineering/specs/offline.md`).
+ *
+ * Inside the authenticated app, the URL is read through `apps/web/src/lib/app-location.tsx`, never
+ * through Next's router. Offline the service worker answers a navigation it has no document for
+ * with a *different* route's cached document, so Next's router reports the route that document was
+ * rendered for while the address bar holds the route the person asked for. Anything reading
+ * `usePathname`, `useParams` or `useSearchParams` directly resolves the wrong route, looks up the
+ * wrong workspace, and fetches the wrong entity — and it does so only offline, which is where
+ * nobody is watching.
+ *
+ * `useRouter` is deliberately **not** restricted here. Navigation is a separate concern with its own
+ * offline path; this rule is about reading the current URL.
+ *
+ * @type {import('typescript-eslint').ConfigArray}
+ */
+// The three trees the location provider covers. Everything else — `(auth)`, `(marketing)`,
+// `(public)`, `onboarding` — renders outside it and correctly keeps Next's own hooks.
+const APP_LOCATION_SURFACES = [
+  'apps/web/src/app/(app)/**/*.{ts,tsx}',
+  'apps/web/src/components/**/*.{ts,tsx}',
+  'apps/web/src/lib/**/*.{ts,tsx}',
+];
+
+export const appLocationConfig = [
+  {
+    files: APP_LOCATION_SURFACES,
+    // The module that implements the replacement is the one place Next's hooks are the right answer.
+    ignores: ['apps/web/src/lib/app-location.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'next/navigation',
+              importNames: ['useParams', 'usePathname', 'useSearchParams'],
+              message:
+                'Read the URL through useAppParams/useAppPathname/useAppSearchParams from @/lib/app-location. Next\'s router reports the route the cached document was rendered for, not the route the person is on. See docs/engineering/specs/offline.md.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+];
+
 export default baseConfig;

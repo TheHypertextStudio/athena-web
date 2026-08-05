@@ -3,7 +3,7 @@
 import type { JSX } from 'react';
 import { cn } from '@docket/ui';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useAppPathname } from '@/lib/app-location';
 
 import {
   GLOBAL_SETTINGS_SECTIONS,
@@ -13,7 +13,7 @@ import {
 
 /** The global Settings navigation. */
 export function GlobalSettingsSectionNav(): JSX.Element {
-  const pathname = usePathname();
+  const pathname = useAppPathname();
 
   function isActive(section: GlobalSettingsSection): boolean {
     const href = globalSettingsSectionHref(section.href);

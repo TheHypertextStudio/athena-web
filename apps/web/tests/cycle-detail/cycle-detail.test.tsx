@@ -72,8 +72,13 @@ vi.mock('@/lib/api', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  useParams: () => ({ orgId: ORG_ID, cycleId: CYCLE_ID }),
   useRouter: () => ({ push: vi.fn(), prefetch: vi.fn(), replace: vi.fn() }),
+}));
+
+// The URL is read through the app's own location source rather than Next's router, so that is what
+// a test presents. See `src/lib/app-location.tsx`.
+vi.mock('../../src/lib/app-location', () => ({
+  useAppParams: () => ({ orgId: ORG_ID, cycleId: CYCLE_ID }),
 }));
 
 const ORG_ID = '01HZZZ00000000000000000RG1';

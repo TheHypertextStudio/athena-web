@@ -19,7 +19,7 @@
  */
 import { CheckCircle2, CircleDashed, CloudOff, RefreshCw, XCircle } from '@docket/ui/icons';
 import { Button, Chip, ControlGroup, Skeleton, Stack, Text, Toolbar } from '@docket/ui/primitives';
-import { useSearchParams } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 import { type JSX, type ReactNode } from 'react';
 
 import { api } from '@/lib/api';
@@ -79,7 +79,7 @@ function ReasonNote({ reason }: { readonly reason: LatticeReason }): JSX.Element
  * @returns The Lattice management section.
  */
 export function LatticeSection(): JSX.Element {
-  const searchParams = useSearchParams();
+  const searchParams = useAppSearchParams();
   const returned = searchParams.get('lattice');
   const statusQ = useApiQuery(
     apiQueryOptions(

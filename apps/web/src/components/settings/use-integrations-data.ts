@@ -26,7 +26,8 @@ import type {
 } from '@docket/types';
 import { googleScopesForConnector } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -115,7 +116,7 @@ export interface IntegrationsData {
 export function useIntegrationsData(orgId: string): IntegrationsData {
   const qc = useQueryClient();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useAppSearchParams();
   const recoverAuthentication = useAuthenticationRecovery();
 
   const [busyProvider, setBusyProvider] = useState<string | null>(null);

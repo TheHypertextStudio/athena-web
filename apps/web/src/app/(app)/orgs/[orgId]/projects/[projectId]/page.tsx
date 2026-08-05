@@ -24,7 +24,8 @@ import {
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
@@ -61,9 +62,9 @@ type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 /** Operational Project detail composed from the shared entity-detail shell. */
 export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const searchParams = useAppSearchParams();
   const queryClient = useQueryClient();
-  const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
+  const { orgId, projectId } = useAppParams<{ orgId: string; projectId: string }>();
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
   const highlightMilestoneId = searchParams.get('milestoneId');
   const projectNoun = useVocabulary('project');

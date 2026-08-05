@@ -22,7 +22,8 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -44,7 +45,7 @@ import { useRenameTask } from '@/lib/use-rename-task';
 /** The workspace's full task roster, filterable and groupable. */
 export default function OrgTasksClient(): JSX.Element {
   const router = useRouter();
-  const { orgId } = useParams<{ orgId: string }>();
+  const { orgId } = useAppParams<{ orgId: string }>();
   const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();

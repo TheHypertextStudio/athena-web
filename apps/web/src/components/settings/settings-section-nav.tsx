@@ -21,7 +21,7 @@
 import type { JSX } from 'react';
 import { cn } from '@docket/ui';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { useAppPathname } from '@/lib/app-location';
 
 import { useActiveOrg } from '@/components/active-org';
 
@@ -45,7 +45,7 @@ const ROW_BASE =
  * @returns the rendered section navigation.
  */
 export function SettingsSectionNav({ orgId }: SettingsSectionNavProps): JSX.Element {
-  const pathname = usePathname();
+  const pathname = useAppPathname();
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
   // Default to the org registry while the active org is still loading (isPersonal unknown).

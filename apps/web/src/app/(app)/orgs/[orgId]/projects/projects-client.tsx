@@ -17,7 +17,8 @@ import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { useQueryClient } from '@tanstack/react-query';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams, useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -347,7 +348,7 @@ function ListLens({
 /** Dense Project portfolio with list, dependency, and timeline lenses. */
 export default function ProjectsListClient(): JSX.Element {
   const router = useRouter();
-  const { orgId } = useParams<{ orgId: string }>();
+  const { orgId } = useAppParams<{ orgId: string }>();
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
   const queryClient = useQueryClient();
   const prefetch = usePrefetchApi();
@@ -355,8 +356,8 @@ export default function ProjectsListClient(): JSX.Element {
   const projectsNoun = useVocabulary('project', { plural: true });
   const teamNoun = useVocabulary('team');
   const [createOpen, setCreateOpen] = useState(false);
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useAppPathname();
+  const searchParams = useAppSearchParams();
   const search = searchParams.toString();
   const lens = useMemo(() => parseLens(new URLSearchParams(search)), [search]);
   const setLens = useCallback(

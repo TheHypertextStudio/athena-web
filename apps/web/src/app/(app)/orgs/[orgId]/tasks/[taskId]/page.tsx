@@ -12,7 +12,8 @@ import {
   DropdownMenuTrigger,
   Skeleton,
 } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
@@ -51,7 +52,7 @@ interface TaskFeedActor {
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string; taskId: string }>();
+  const params = useAppParams<{ orgId: string; taskId: string }>();
   const { orgId, taskId } = params;
 
   const projectLabel = useVocabulary('project');

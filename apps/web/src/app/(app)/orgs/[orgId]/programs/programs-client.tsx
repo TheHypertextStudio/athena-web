@@ -12,7 +12,8 @@ import {
   ProgramCards,
   ProgramRows,
 } from '@/components/programs/program-list-ui';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -67,7 +68,7 @@ const LENS_OPTIONS = [
 /** The workspace's programs, as a list or a card grid, with inline rename and creation. */
 export default function ProgramsListClient(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string }>();
+  const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
   const queryClient = useQueryClient();
   const [lens, setLens] = useState<Lens>('list');

@@ -10,7 +10,8 @@ import { EmptyState } from '@docket/ui/components';
 import { Activity, Search, type LucideIcon } from '@docket/ui/icons';
 import { Button, Input, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -53,8 +54,8 @@ interface SearchClientProps {
 /** Authenticated semantic search surface. */
 export function SearchClient({ scope, orgId }: SearchClientProps): JSX.Element {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useAppPathname();
+  const searchParams = useAppSearchParams();
   const searchParamString = searchParams.toString();
   const urlFilters = useMemo(
     () => parseSearchPageFilters(new URLSearchParams(searchParamString)),

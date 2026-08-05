@@ -24,7 +24,8 @@ import {
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
@@ -57,11 +58,11 @@ type TabId = 'overview' | 'updates' | 'resources';
 
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
-  const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId: string }>();
+  const { orgId, initiativeId } = useAppParams<{ orgId: string; initiativeId: string }>();
   const entityMentions = useEntityMentions(orgId, 'initiative', initiativeId);
   const router = useRouter();
   const queryClient = useQueryClient();
-  const searchParams = useSearchParams();
+  const searchParams = useAppSearchParams();
   const initialTab = searchParams.get('tab');
   const [tab, setTab] = useState<TabId>(
     initialTab === 'updates' || initialTab === 'resources' ? initialTab : 'overview',

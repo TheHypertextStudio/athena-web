@@ -6,7 +6,8 @@ import { EmptyState, type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs, type TabsItem } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import type { ActorDirectory } from '@/components/agents/actor-directory';
@@ -95,7 +96,7 @@ export function cycleSubtitle(
  */
 export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string; cycleId: string }>();
+  const params = useAppParams<{ orgId: string; cycleId: string }>();
   const { orgId, cycleId } = params;
   const prefetch = usePrefetchApi();
 

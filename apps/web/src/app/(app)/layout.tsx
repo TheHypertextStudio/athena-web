@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { type JSX, type ReactNode } from 'react';
 
 import { AppShellFrame } from '@/components/app-shell-frame';
+import { AppLocationProvider } from '@/lib/app-location';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
@@ -60,9 +61,15 @@ export default async function AppGroupLayout({
 
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <AppShellFrame initialSession={session.state === 'authenticated' ? session.user : null}>
-        {children}
-      </AppShellFrame>
+      {/* Outermost inside the group, because everything below reads the URL through it — including
+          the shell itself. It has to be here rather than in `AppShellFrame` so that a cached shell
+          document served for some other route still resolves the *requested* route, not the one the
+          document was rendered for. */}
+      <AppLocationProvider>
+        <AppShellFrame initialSession={session.state === 'authenticated' ? session.user : null}>
+          {children}
+        </AppShellFrame>
+      </AppLocationProvider>
     </HydrationBoundary>
   );
 }

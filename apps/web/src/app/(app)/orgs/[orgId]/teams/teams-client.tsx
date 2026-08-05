@@ -5,7 +5,7 @@ import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Plus, Users } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import { useParams } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -46,7 +46,7 @@ import { userErrorMessage } from '@/lib/problem';
  * so the production build needs no running server.
  */
 export default function TeamsListClient(): JSX.Element {
-  const params = useParams<{ orgId: string }>();
+  const params = useAppParams<{ orgId: string }>();
   const orgId = params.orgId;
   const queryClient = useQueryClient();
 

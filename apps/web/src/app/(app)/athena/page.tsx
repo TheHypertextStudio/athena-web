@@ -1,6 +1,6 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
+import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 import { AthenaWorkspace } from '@/components/athena/athena-workspace';
@@ -28,7 +28,7 @@ function readSource(value: string | null, label: string | null): PersonalAthenaS
 
 /** The full personal, cross-workspace Athena operations route. */
 export default function AthenaPage(): JSX.Element {
-  const search = useSearchParams();
+  const search = useAppSearchParams();
   const workspaceId = search.get('workspace');
   const source = readSource(search.get('context'), search.get('contextLabel'));
   const context: PersonalAthenaContext | null =

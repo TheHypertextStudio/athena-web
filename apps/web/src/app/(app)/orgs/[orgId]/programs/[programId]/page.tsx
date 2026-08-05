@@ -15,7 +15,8 @@ import {
   Tabs,
   type TabsItem,
 } from '@docket/ui/primitives';
-import { useParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
@@ -44,7 +45,7 @@ type TabId = 'overview' | 'projects' | 'work' | 'updates';
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useParams<{ orgId: string; programId: string }>();
+  const params = useAppParams<{ orgId: string; programId: string }>();
   const { orgId, programId } = params;
 
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();

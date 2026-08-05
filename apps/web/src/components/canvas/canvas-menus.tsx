@@ -156,11 +156,10 @@ function EdgeItems({
   return (
     <>
       <DropdownMenuLabel>
-        {source} blocks {target}
+        {source} → {target}
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuItem
-        supporting={`${target} would block ${source}`}
         onSelect={() => {
           actions?.reverseDependency(edge.source, edge.target);
           onDone();
@@ -170,7 +169,6 @@ function EdgeItems({
         Reverse direction
       </DropdownMenuItem>
       <DropdownMenuItem
-        supporting="You can undo this"
         onSelect={() => {
           actions?.removeDependency(edge.source, edge.target);
           onDone();

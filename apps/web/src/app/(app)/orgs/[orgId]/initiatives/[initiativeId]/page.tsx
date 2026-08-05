@@ -33,6 +33,7 @@ import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { InitiativeIconPicker } from '@/components/initiatives/initiative-icon-picker';
 import {
@@ -57,6 +58,7 @@ type TabId = 'overview' | 'updates' | 'resources';
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
   const { orgId, initiativeId } = useParams<{ orgId: string; initiativeId: string }>();
+  const entityMentions = useEntityMentions(orgId, 'initiative', initiativeId);
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
@@ -237,6 +239,8 @@ export default function InitiativeDetailPage(): JSX.Element {
     return { name: member?.displayName ?? 'Unknown', kind: 'human' as const };
   };
   const ownerName = members.find((member) => member.actorId === detail.ownerId)?.displayName ?? '—';
+  const resourceCount =
+    detail.resources.length + entityMentions.external.length + entityMentions.entities.length;
 
   return (
     <EntityDetailLayout
@@ -427,7 +431,8 @@ export default function InitiativeDetailPage(): JSX.Element {
             {
               value: 'resources',
               label: 'Resources',
-              ...(detail.resources.length ? { count: detail.resources.length } : {}),
+              // Derived references included, so the badge matches what the tab lists.
+              ...(resourceCount ? { count: resourceCount } : {}),
             },
           ]}
         />
@@ -556,6 +561,10 @@ export default function InitiativeDetailPage(): JSX.Element {
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
             subject={{ type: 'initiative', id: initiativeId, organizationId: orgId }}
+            mentionedExternal={entityMentions.external}
+            mentionedEntities={entityMentions.entities}
+            mentionsPending={entityMentions.isPending}
+            hasProse={(detail.description ?? '').trim().length > 0}
           />
         </div>
       ) : null}

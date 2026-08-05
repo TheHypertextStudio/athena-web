@@ -237,6 +237,58 @@ export const MentionCard = z.discriminatedUnion('kind', [
 /** Mention-card value. */
 export type MentionCard = z.infer<typeof MentionCard>;
 
+/**
+ * One thing an entity's prose points at, as the Resources tab shows it.
+ *
+ * @remarks
+ * Derived from the entity's own Markdown rather than curated, so it carries where it was written
+ * instead of who added it. A reference written twice in the same body is one row with a count, not
+ * two rows.
+ */
+export const EntityMention = z
+  .object({
+    ref: MentionRef.describe('What the reference points at.'),
+    /** The stable key both waves and the hydrate cache agree on. */
+    key: z
+      .string()
+      .describe('Stable identity, used to dedupe against manually attached resources.'),
+    label: z.string().describe('The link text as authored, shown until a live title resolves.'),
+    href: z.string().describe('Where following the reference goes.'),
+    fields: z
+      .array(z.string())
+      .describe(
+        'Which Markdown columns it appears in, e.g. `description`. Drives the "in Description" provenance line.',
+      ),
+    occurrences: z
+      .number()
+      .int()
+      .positive()
+      .describe('How many times it appears across those fields.'),
+    resource: ExternalResourceOut.nullable().describe(
+      'The shared metadata row for an external reference; null for a reference to a Docket entity.',
+    ),
+  })
+  .meta({ id: 'EntityMention', description: "One reference derived from an entity's prose." });
+/** Entity-mention value. */
+export type EntityMention = z.infer<typeof EntityMention>;
+
+/** Everything an entity's prose points at, split by what kind of thing it is. */
+export const EntityMentionsOut = z
+  .object({
+    external: z
+      .array(EntityMention)
+      .describe('References to things outside Docket, in document order.'),
+    entities: z
+      .array(EntityMention)
+      .describe('References to other Docket entities, in document order.'),
+  })
+  .meta({
+    id: 'EntityMentionsOut',
+    description: "The references derived from one entity's prose.",
+  });
+/** Entity-mentions response value. */
+export type EntityMentionsOut = z.infer<typeof EntityMentionsOut>;
+
 /** Batch hydrate request: the refs a rendered surface needs cards for. */
 export const MentionHydrateIn = z
   .object({

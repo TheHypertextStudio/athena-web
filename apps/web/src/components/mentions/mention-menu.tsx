@@ -14,6 +14,11 @@
  * Groups are separated by a tonal rule as well as a heading, so the eye can skip a whole kind at
  * once instead of reading every row to find where one section ends.
  *
+ * ARIA shape: the listbox's children are `role="group"`, each labelled by its own heading, and only
+ * the rows carry `role="option"`. A listbox whose direct children are neither is malformed, and a
+ * screen reader then reports the wrong option count — which is exactly the number a user relies on
+ * to know how far the list goes.
+ *
  * The pending Files group reserves its heading and two rows at the real row height, so results
  * replace skeletons in place and the popover never re-flips position mid-typing.
  */
@@ -110,9 +115,16 @@ export default function MentionMenu({
       >
         <ul role="listbox" id={listboxId} aria-label="Mention a resource" className="space-y-0.5">
           {groups.map((group, index) => (
-            <li key={group.key} className={index > 0 ? GROUP_DIVIDER : undefined}>
-              <p className={HEADING_CLASS}>{group.label}</p>
-              <ul className="space-y-0.5">
+            <li
+              key={group.key}
+              role="group"
+              aria-labelledby={`${listboxId}-group-${group.key}`}
+              className={index > 0 ? GROUP_DIVIDER : undefined}
+            >
+              <p id={`${listboxId}-group-${group.key}`} className={HEADING_CLASS}>
+                {group.label}
+              </p>
+              <ul className="space-y-0.5" role="presentation">
                 {group.items.map((item) => (
                   <MentionRow
                     key={item.id}
@@ -132,7 +144,11 @@ export default function MentionMenu({
           ))}
 
           {externalPending ? (
-            <li aria-hidden className={groups.length > 0 ? GROUP_DIVIDER : undefined}>
+            <li
+              aria-hidden
+              role="presentation"
+              className={groups.length > 0 ? GROUP_DIVIDER : undefined}
+            >
               <p className={HEADING_CLASS}>
                 Files
                 <span className="ml-1 opacity-70">searching…</span>
@@ -145,7 +161,7 @@ export default function MentionMenu({
           ) : null}
 
           {externalFailed && !externalPending ? (
-            <li className={groups.length > 0 ? GROUP_DIVIDER : undefined}>
+            <li role="presentation" className={groups.length > 0 ? GROUP_DIVIDER : undefined}>
               <p className={HEADING_CLASS}>
                 Files <span className="opacity-70">· unavailable</span>
               </p>
@@ -161,7 +177,10 @@ export default function MentionMenu({
           ) : null}
 
           {nothingYet && !localPending && !localFailed ? (
-            <li className="text-on-surface-variant text-body-medium px-3 py-6 text-center">
+            <li
+              role="presentation"
+              className="text-on-surface-variant text-body-medium px-3 py-6 text-center"
+            >
               {query.trim() === ''
                 ? 'Nothing to reference yet'
                 : `No matches for “${query.trim()}”`}

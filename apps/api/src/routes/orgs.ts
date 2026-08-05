@@ -72,6 +72,7 @@ import projectRollup from './project-rollup';
 import projectResources from './project-resources';
 import roles from './roles';
 import savedViews from './saved-views';
+import { entityMentionRoutes } from './entity-mentions';
 import mentions from './mentions';
 import search from './search';
 import tasks from './tasks';
@@ -450,6 +451,11 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/saved-views', savedViews)
   .route('/:orgId/search', search)
   .route('/:orgId/mentions', mentions)
+  // Derived-reference reads, one mount per subject kind so each keeps its own OpenAPI tag.
+  .route('/:orgId/projects', entityMentionRoutes('project', 'Projects'))
+  .route('/:orgId/tasks', entityMentionRoutes('task', 'Tasks'))
+  .route('/:orgId/initiatives', entityMentionRoutes('initiative', 'Initiatives'))
+  .route('/:orgId/programs', entityMentionRoutes('program', 'Programs'))
   .route('/:orgId/members', members)
   .route('/:orgId/roles', roles)
   .route('/:orgId/grants', grants)

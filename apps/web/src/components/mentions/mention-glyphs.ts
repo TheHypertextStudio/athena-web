@@ -24,7 +24,8 @@ import {
   Target,
   type LucideIcon,
 } from '@docket/ui/icons';
-import type { ExternalResourceType, ResourceProvider } from '@docket/types';
+import { RESOURCE_PROVIDER_LABEL } from '@docket/types';
+import type { ExternalResourceType } from '@docket/types';
 
 /** The mark for each kind of external resource. */
 export const RESOURCE_TYPE_ICON: Record<ExternalResourceType, LucideIcon> = {
@@ -62,8 +63,11 @@ export const RESOURCE_TYPE_LABEL: Record<ExternalResourceType, string> = {
   unknown: 'Link',
 };
 
-/** What each provider is called, in Docket's words. */
-export const MENTION_PROVIDER_LABEL: Record<ResourceProvider, string> = {
-  web: 'Link',
-  google_drive: 'Drive',
-};
+/**
+ * What each source is called, in Docket's words.
+ *
+ * @remarks
+ * Re-exported from the registry rather than restated, so adding a source never leaves a menu row
+ * rendering a raw enum value.
+ */
+export const MENTION_PROVIDER_LABEL = RESOURCE_PROVIDER_LABEL;

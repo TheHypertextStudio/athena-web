@@ -1,11 +1,13 @@
 'use client';
 
 /** Entity resources tab: linked documents and URLs as first-class operating context. */
-import type { AttachmentOut } from '@docket/types';
+import { canonicalizeResourceUrl, type AttachmentOut, type EntityMention } from '@docket/types';
 import { Link as LinkIcon, Plus, Trash2 } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+
+import MentionedResources from './mentioned-resources';
 
 import {
   MailAttachmentsPanel,
@@ -33,6 +35,31 @@ export interface ResourcesTabProps {
     readonly id: string;
     readonly organizationId: string;
   };
+  /** References the entity's own prose points at, derived rather than curated. */
+  readonly mentionedExternal?: readonly EntityMention[];
+  /** Other Docket records this entity's prose points at. */
+  readonly mentionedEntities?: readonly EntityMention[];
+  /** True while the derived read is in flight. */
+  readonly mentionsPending?: boolean;
+  /** Whether the entity has prose at all; false suppresses the derived loading state. */
+  readonly hasProse?: boolean;
+}
+
+/**
+ * The canonical keys already covered by a hand-added resource.
+ *
+ * @remarks
+ * A document that was both attached and mentioned belongs in the curated list only. Showing it
+ * twice reads as a bug, and the curated row is the one carrying a remove control.
+ */
+function attachedKeys(resources: readonly AttachmentOut[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const resource of resources) {
+    if (resource.url === null) continue;
+    const canonical = canonicalizeResourceUrl(resource.url);
+    if (canonical !== undefined) keys.add(`url:${canonical.canonicalUrl}`);
+  }
+  return keys;
 }
 
 /** Render URL resources in a dedicated, dense tab rather than burying them in metadata. */
@@ -44,10 +71,28 @@ export function ResourcesTab({
   onAdd,
   onRemove,
   subject,
+  mentionedExternal = [],
+  mentionedEntities = [],
+  mentionsPending = false,
+  hasProse = false,
 }: ResourcesTabProps): JSX.Element {
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState('');
   const [url, setUrl] = useState('');
+
+  const covered = useMemo(() => attachedKeys(resources), [resources]);
+  const derivedExternal = useMemo(
+    () =>
+      mentionedExternal.filter((mention) => {
+        const canonical =
+          mention.resource === null
+            ? undefined
+            : canonicalizeResourceUrl(mention.resource.canonicalUrl);
+        return canonical === undefined || !covered.has(`url:${canonical.canonicalUrl}`);
+      }),
+    [mentionedExternal, covered],
+  );
+  const hasDerived = derivedExternal.length > 0 || mentionedEntities.length > 0;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
@@ -151,7 +196,7 @@ export function ResourcesTab({
             </li>
           ))}
         </ul>
-      ) : (
+      ) : hasDerived ? null : (
         <p className="text-on-surface-variant bg-surface-container-low rounded-xl px-4 py-8 text-center text-sm">
           No linked resources yet.
         </p>
@@ -163,6 +208,19 @@ export function ResourcesTab({
           organizationId={subject.organizationId}
         />
       ) : null}
+
+      <MentionedResources
+        heading="Mentioned in this record"
+        mentions={derivedExternal}
+        pending={mentionsPending}
+        hasProse={hasProse}
+      />
+      <MentionedResources
+        heading="Related records"
+        mentions={mentionedEntities}
+        pending={mentionsPending}
+        hasProse={hasProse}
+      />
       {error ? (
         <p role="alert" className="text-destructive text-sm">
           {error}

@@ -124,7 +124,16 @@ describe('Projects experience contract', () => {
 
   it('gives Resources a dedicated operating tab', () => {
     const detail = source(detailPath);
-    expect(detail).toContain("{ value: 'resources', label: 'Resources'");
+    // Matched across whatever line breaks formatting chooses: the contract is that the tab exists,
+    // not that its object literal fits on one line.
+    expect(detail).toMatch(/value: 'resources',\s*\n?\s*label: 'Resources'/);
     expect(detail).toContain('<ResourcesTab');
+  });
+
+  it('counts derived references in the Resources tab badge', () => {
+    const detail = source(detailPath);
+    // A badge reading 0 above visible derived rows reads as a bug, so the count must include them.
+    expect(detail).toContain('entityMentions.external.length');
+    expect(detail).toContain('entityMentions.entities.length');
   });
 });

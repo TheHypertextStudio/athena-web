@@ -728,13 +728,25 @@ export const changeSetOp = pgEnum('change_set_op', ['create', 'update', 'archive
  * Which system owns an {@link externalResource}.
  *
  * @remarks
- * Narrower than {@link sourceSystem} on purpose: this names only the systems we can *resolve
- * metadata from*, not every system we observe events from. `web` is the generic case — any URL
- * unfurled over HTTP with no provider credential involved. Provider members mirror the
- * `sourceSystem` spelling (`google_drive`, not the connector's short `drive`) so the two enums
- * never disagree about what to call the same product.
+ * Mirrors `RESOURCE_PROVIDERS` in `@docket/types`, which is the registry every other layer reads;
+ * a test asserts the two agree so adding a source without a migration fails loudly. `web` is the
+ * generic case — any URL no provider claims, unfurled over HTTP with no credential.
+ *
+ * A source appears here as soon as Docket can *recognize* its URLs, which is earlier than it can
+ * search them: recognition alone gives a pasted link the right label, the right dedupe key, and an
+ * honest "needs a connection" state instead of a blind fetch into a sign-in page.
  */
-export const resourceProvider = pgEnum('resource_provider', ['web', 'google_drive']);
+export const resourceProvider = pgEnum('resource_provider', [
+  'web',
+  'google_drive',
+  'onedrive',
+  'sharepoint',
+  'notion',
+  'dropbox',
+  'box',
+  'figma',
+  'confluence',
+]);
 /**
  * The app-owned shape of a referenced resource, used to pick its glyph and label.
  *

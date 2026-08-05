@@ -13,6 +13,7 @@
  */
 import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Unfurler } from '@docket/integrations';
+import { resourceProviderById } from '@docket/types';
 
 /** How many rows one sweep pass claims. Bounded so a backlog drains steadily rather than in bursts. */
 const BATCH = 25;
@@ -83,10 +84,12 @@ export async function sweepResourceUnfurls(
   let failed = 0;
 
   for (const row of claimed) {
-    // A provider-owned URL is resolved through that provider's API with the owner's credential,
-    // never fetched over plain HTTP: an unauthenticated GET of a Drive link returns Google's
-    // sign-in page, which would give every Drive file the title "Sign in - Google Accounts".
-    if (row.provider !== 'web') {
+    // A source that needs a credential is resolved through its own API, never fetched over plain
+    // HTTP: an unauthenticated GET of a Drive, SharePoint, or Notion URL returns that product's
+    // sign-in page, which would title every such file "Sign in". The registry declares which
+    // sources those are, so this stays true as sources are added.
+    const definition = row.provider === 'web' ? undefined : resourceProviderById(row.provider);
+    if (definition?.resolution === 'credentialed') {
       await schema.db
         .update(schema.externalResource)
         .set({

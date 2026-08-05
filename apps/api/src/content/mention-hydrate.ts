@@ -22,35 +22,8 @@ import { canonicalizeResourceUrl, mentionRefKey } from '@docket/types';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 
+import { entityMentionHref, type EntityMentionRef as EntityRef } from './mention-href';
 import { toExternalResourceOut, type ExternalResourceRow } from './resource-view';
-
-/** Route an entity ref to its in-app href. */
-function hrefFor(orgId: string, ref: EntityRef): string {
-  const base = `/orgs/${orgId}`;
-  switch (ref.entityKind) {
-    case 'task':
-      return `${base}/tasks/${ref.entityId}`;
-    case 'project':
-      return `${base}/projects/${ref.entityId}`;
-    case 'program':
-      return `${base}/programs/${ref.entityId}`;
-    case 'initiative':
-      return `${base}/initiatives/${ref.entityId}`;
-    case 'cycle':
-      return `${base}/cycles/${ref.entityId}`;
-    case 'milestone':
-      return `${base}/milestones/${ref.entityId}`;
-    case 'team':
-      return `${base}/teams/${ref.entityId}`;
-    case 'actor':
-      return `${base}/members/${ref.entityId}`;
-    case 'agent_session':
-      return `${base}/sessions/${ref.entityId}`;
-    case 'comment':
-    case 'update':
-      return `${base}/activity/${ref.entityId}`;
-  }
-}
 
 /** A card for an entity the caller may not see: the id, and nothing that describes it. */
 function inaccessibleCard(ref: EntityRef): MentionCard {
@@ -69,9 +42,6 @@ function inaccessibleCard(ref: EntityRef): MentionCard {
     updatedAt: null,
   };
 }
-
-/** A reference to a Docket entity, narrowed from the union. */
-type EntityRef = Extract<MentionRef, { kind: 'entity' }>;
 
 /** A reference to something outside Docket, narrowed from the union. */
 type ExternalRef = Extract<MentionRef, { kind: 'external' }>;
@@ -181,7 +151,7 @@ export async function hydrateMentions(input: MentionHydrateRequest): Promise<Men
         accessible: true,
         title: found.title,
         subtitle: found.summary,
-        href: hrefFor(input.orgId, ref),
+        href: entityMentionHref(input.orgId, ref),
         state: null,
         health: null,
         ownerLabel: null,

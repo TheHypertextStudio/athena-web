@@ -13,30 +13,21 @@
 import { z } from 'zod';
 
 import { ExternalResourceId, OrganizationId } from './primitives';
+import { ExternalResourceType, ResourceProvider, providerForHost } from './resource-provider';
+import type { ResourceProviderId } from './resource-provider';
 
-/** Which system owns a resource — narrower than `SourceSystemKind`, listing only what we resolve metadata from. */
-export const ResourceProvider = z.enum(['web', 'google_drive']);
-/** Resource-provider value. */
-export type ResourceProvider = z.infer<typeof ResourceProvider>;
-
-/** The app-owned shape of a referenced resource, used to pick its glyph and label. */
-export const ExternalResourceType = z.enum([
-  'document',
-  'spreadsheet',
-  'presentation',
-  'folder',
-  'pdf',
-  'image',
-  'video',
-  'file',
-  'issue',
-  'message',
-  'event',
-  'page',
-  'unknown',
-]);
-/** External-resource-type value. */
-export type ExternalResourceType = z.infer<typeof ExternalResourceType>;
+export {
+  ExternalResourceType,
+  RESOURCE_PROVIDER_LABEL,
+  RESOURCE_PROVIDERS,
+  ResourceProvider,
+  providerForHost,
+  resourceProviderById,
+  type ResourceProviderDefinition,
+  type ResourceProviderId,
+  type ResourceResolution,
+  type ResourceUrlPattern,
+} from './resource-provider';
 
 /** How far metadata resolution got for one resource. */
 export const ResourceUnfurlStatus = z.enum([
@@ -200,41 +191,33 @@ export function normalizeResourceUrl(raw: string): string | undefined {
   return url.toString();
 }
 
-/** A URL recognized as belonging to a metadata provider we can resolve through its own API. */
+/** A URL recognized as belonging to a structured source. */
 export interface ProviderResourceMatch {
   /** The provider that owns the resource. */
-  readonly provider: Exclude<ResourceProvider, 'web'>;
+  readonly provider: ResourceProviderId;
   /** The provider's own id for the resource. */
   readonly externalId: string;
   /** The resource shape implied by the URL, before any API call confirms it. */
   readonly resourceType: ExternalResourceType;
 }
 
-/** Google hosts whose `/d/<id>/` URL shape addresses a Drive file. */
-const GOOGLE_EDITOR_PATHS: readonly (readonly [RegExp, ExternalResourceType])[] = [
-  [/^\/document\/d\/([^/?#]+)/, 'document'],
-  [/^\/spreadsheets\/d\/([^/?#]+)/, 'spreadsheet'],
-  [/^\/presentation\/d\/([^/?#]+)/, 'presentation'],
-  [/^\/forms\/d\/([^/?#]+)/, 'page'],
-  [/^\/drawings\/d\/([^/?#]+)/, 'image'],
-  [/^\/file\/d\/([^/?#]+)/, 'file'],
-  [/^\/drive\/folders\/([^/?#]+)/, 'folder'],
-];
-
 /**
- * Recognize a URL that a connected provider can resolve metadata for.
+ * Recognize a URL that belongs to a structured source.
  *
  * @remarks
- * Pure and credential-free, so it runs before any token is resolved and can be table-tested with
- * no network. Matching matters for correctness, not just speed: fetching a Drive URL over plain
- * HTTP returns Google's sign-in page, so without this every Drive link would unfurl with the title
- * "Sign in - Google Accounts".
+ * Pure and credential-free, so it runs before any token is resolved and is table-testable with no
+ * network. It walks {@link RESOURCE_PROVIDERS} rather than naming a provider, so supporting a new
+ * source never touches this function.
  *
- * Host comparison is exact. A lookalike such as `docs.google.com.example.net` must not match, or a
- * hostile link would be handed the viewer's Google token.
+ * Matching matters for correctness, not only for speed: an anonymous fetch of a Drive, SharePoint,
+ * or Notion URL returns that product's sign-in page, so without recognition every such link would
+ * unfurl with a title like "Sign in".
+ *
+ * Host comparison is exact or dot-bounded, so a lookalike like `docs.google.com.attacker.example`
+ * never matches and never gets handed a viewer's credential.
  *
  * @param raw - An absolute URL string.
- * @returns The matched provider and id, or undefined for anything we would unfurl over plain HTTP.
+ * @returns The matched provider and id, or undefined for anything we treat as an ordinary page.
  *
  * @example
  * ```typescript
@@ -249,23 +232,17 @@ export function matchProviderResourceUrl(raw: string): ProviderResourceMatch | u
   } catch {
     return undefined;
   }
+  // https only: a downgraded link must never be treated as belonging to a credentialed source.
   if (url.protocol !== 'https:') return undefined;
 
-  const host = url.hostname.toLowerCase();
-  if (host !== 'docs.google.com' && host !== 'drive.google.com') return undefined;
+  const provider = providerForHost(url.hostname);
+  if (provider === undefined) return undefined;
 
-  for (const [pattern, resourceType] of GOOGLE_EDITOR_PATHS) {
-    const match = pattern.exec(url.pathname);
-    if (match?.[1]) {
-      return { provider: 'google_drive', externalId: match[1], resourceType };
-    }
-  }
-
-  // The legacy `?id=` shapes: drive.google.com/open?id=X and /uc?id=X.
-  if (url.pathname === '/open' || url.pathname === '/uc') {
-    const externalId = url.searchParams.get('id');
-    if (externalId !== null && externalId !== '') {
-      return { provider: 'google_drive', externalId, resourceType: 'unknown' };
+  for (const { pattern, resourceType, includeSearch } of provider.patterns) {
+    const target = includeSearch === true ? `${url.pathname}${url.search}` : url.pathname;
+    const externalId = pattern.exec(target)?.[1];
+    if (externalId !== undefined && externalId !== '') {
+      return { provider: provider.id, externalId, resourceType };
     }
   }
   return undefined;

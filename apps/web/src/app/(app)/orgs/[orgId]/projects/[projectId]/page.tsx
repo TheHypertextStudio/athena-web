@@ -42,6 +42,7 @@ import { ProjectDependenciesPanel } from '@/components/project-detail/project-de
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
+import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { projectStatusOf } from '@/components/project-detail/project-config';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
@@ -70,6 +71,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const [tab, setTab] = useState<TabId>('overview');
   const [taskComposerOpen, setTaskComposerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const entityMentions = useEntityMentions(orgId, 'project', projectId);
 
   const {
     detailKey,
@@ -231,9 +233,21 @@ export default function ProjectDetailPage(): JSX.Element {
       { value: 'overview', label: 'Overview' },
       { value: 'tasks', label: 'Tasks', count: milestoneTasks.length },
       { value: 'updates', label: 'Updates', count: updates.length },
-      { value: 'resources', label: 'Resources', count: resources.length },
+      {
+        value: 'resources',
+        label: 'Resources',
+        // Counts what the tab actually lists, derived references included — a badge reading 0
+        // above four visible rows reads as a bug.
+        count: resources.length + entityMentions.external.length + entityMentions.entities.length,
+      },
     ],
-    [milestoneTasks.length, resources.length, updates.length],
+    [
+      milestoneTasks.length,
+      resources.length,
+      updates.length,
+      entityMentions.external.length,
+      entityMentions.entities.length,
+    ],
   );
 
   if (detailQ.isPending) {
@@ -547,6 +561,10 @@ export default function ProjectDetailPage(): JSX.Element {
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
             subject={{ type: 'project', id: projectId, organizationId: orgId }}
+            mentionedExternal={entityMentions.external}
+            mentionedEntities={entityMentions.entities}
+            mentionsPending={entityMentions.isPending}
+            hasProse={(project.description ?? '').trim().length > 0}
           />
         </div>
       ) : null}

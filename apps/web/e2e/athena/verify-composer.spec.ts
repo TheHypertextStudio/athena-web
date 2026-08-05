@@ -20,17 +20,19 @@ test.describe('new-task composer', () => {
 
     await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible();
-    await page
-      .getByRole('button', { name: 'New task' })
-      .first()
-      .evaluate((button) => {
-        (button as HTMLButtonElement).click();
-      });
 
     const dialog = page.getByRole('dialog');
-    await expect(dialog.getByPlaceholder('Task title')).toBeVisible({
-      timeout: TIMEOUTS.pageReady,
-    });
+    const newTaskButton = page.getByRole('button', { name: 'New task' }).first();
+    // `domcontentloaded` — and the heading check above, which is satisfied by the server-rendered
+    // HTML alone — both resolve before React has necessarily finished hydrating and attached this
+    // button's click handler. A click that lands in that gap is silently dropped: nothing throws,
+    // the dialog just never opens. Retrying the click (not just the wait) recovers once hydration
+    // has genuinely caught up, instead of waiting out the full timeout on a click that already
+    // missed its target.
+    await expect(async () => {
+      await newTaskButton.click();
+      await expect(dialog.getByPlaceholder('Task title')).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: TIMEOUTS.pageReady });
     await page.waitForTimeout(400); // let the open animation settle
     await attachShot(testInfo, dialog, 'composer-light.png');
 

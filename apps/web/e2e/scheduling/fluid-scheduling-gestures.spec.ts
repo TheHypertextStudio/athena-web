@@ -20,7 +20,7 @@ import {
   scheduleViewport,
   waitForSheetCompositorStability,
 } from '../helpers/calendar-ui';
-import { orgHref } from '../helpers/constants';
+import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
 
@@ -41,7 +41,14 @@ const COLLISION_IDS = [
  * menu now, so there is a single place a test — or a person — looks for any of them.
  */
 async function selectCalendarAxis(page: Page, axis: 'Dates' | 'People'): Promise<void> {
-  await page.getByRole('button', { name: 'Display settings' }).click();
+  // A click that lands before React has finished attaching this trigger's handler is silently
+  // dropped — nothing throws, the menu just never opens. Retrying the click itself (not only the
+  // wait) recovers once hydration has caught up, instead of waiting out the full timeout on a
+  // click that already missed its target.
+  await expect(async () => {
+    await page.getByRole('button', { name: 'Display settings' }).click();
+    await expect(page.getByRole('menuitemradio', { name: axis })).toBeVisible({ timeout: 5_000 });
+  }).toPass({ timeout: TIMEOUTS.pageReady });
   await page.getByRole('menuitemradio', { name: axis }).click();
   await expect(page.getByRole('menu')).toHaveCount(0);
 }

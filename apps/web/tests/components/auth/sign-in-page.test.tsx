@@ -237,12 +237,29 @@ describe('SignInClient', () => {
 
     await expectSessionRecoveryError();
     expect(button.hasAttribute('disabled')).toBe(false);
+    // Every read in the first ceremony's org-lookup retry loop (it stays 401 forever, so the
+    // loop runs to its full attempt cap) has landed by now — capture the count so the assertion
+    // below can tell the second ceremony's own retry loop apart from the first's.
+    const callsAfterFirstCeremony = orgsGet.mock.calls.length;
 
     fireEvent.click(button);
 
     await waitFor(() => {
       expect(signInPasskey).toHaveBeenCalledTimes(2);
     });
+    // `signInPasskey` resolving does not mean the retry's own org-lookup loop (same
+    // 401-forever mock, so it also runs to its full attempt cap, ~375ms of real `setTimeout`
+    // delay) has finished — that loop keeps running on the real clock after this `waitFor`
+    // would otherwise let the test return. Wait for it to fully settle here too, or its
+    // still-in-flight continuation calls the shared `orgsGet` mock during whichever later test
+    // happens to be running once its next timer fires, after `afterEach`'s `cleanup()` has
+    // already unmounted this test's component.
+    await waitFor(
+      () => {
+        expect(orgsGet.mock.calls.length).toBe(callsAfterFirstCeremony * 2);
+      },
+      { timeout: 5_000 },
+    );
   });
 
   it('honors a safe ?callbackURL= return path after a successful passkey sign-in', async () => {

@@ -98,8 +98,18 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-/** Load orgs after sign-in, tolerating a short-lived missing-session read. */
-async function loadOrgsAfterSignIn(): Promise<OrgsResponse> {
+/**
+ * Load orgs after sign-in, tolerating a short-lived missing-session read.
+ *
+ * @param isMounted - Checked between retries so an abandoned caller (the component unmounted
+ * mid-loop) stops issuing further reads instead of continuing to poll on a bare `setTimeout`
+ * long after whoever asked for the result is gone. Without this, a retry loop still in flight
+ * when its component unmounts keeps calling `api.v1.orgs.$get()` on its own schedule with no way
+ * for the caller to observe or cancel it — in tests, that is a shared mock a *later* test has
+ * since reset, so the stray call lands as an unexplained invocation against that other test's
+ * fresh mock; in the running app it is simply wasted network traffic for a screen no one can see.
+ */
+async function loadOrgsAfterSignIn(isMounted: () => boolean): Promise<OrgsResponse> {
   let lastResponse: OrgsResponse | null = null;
   for (let attempt = 0; attempt < SESSION_SETTLE_ATTEMPTS; attempt += 1) {
     const response = await api.v1.orgs.$get();
@@ -107,6 +117,7 @@ async function loadOrgsAfterSignIn(): Promise<OrgsResponse> {
     lastResponse = response;
     if (attempt < SESSION_SETTLE_ATTEMPTS - 1) {
       await delay(SESSION_SETTLE_DELAY_MS);
+      if (!isMounted()) return response;
     }
   }
   return lastResponse ?? api.v1.orgs.$get();
@@ -184,7 +195,7 @@ export function SignInClient(): JSX.Element {
     }
     if (!isMounted()) return;
     try {
-      const res = await loadOrgsAfterSignIn();
+      const res = await loadOrgsAfterSignIn(isMounted);
       if (!isMounted()) return;
       if (res.ok) {
         const { items } = await res.json();

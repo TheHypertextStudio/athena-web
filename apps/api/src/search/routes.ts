@@ -38,6 +38,11 @@ export function entityHref(
       return `/orgs/${organizationId}/tasks?labelId=${entityId}`;
     case 'saved_view':
       return `/orgs/${organizationId}/views?viewId=${entityId}`;
+    // The Library row, not the provider URL. The provider URL rides along on the document's
+    // `externalUrl`, which surfaces as the separate "Open source" action, so a click inside Docket
+    // stays inside Docket and leaving is a deliberate second choice.
+    case 'external_resource':
+      return `/orgs/${organizationId}/library?resourceId=${entityId}`;
     case 'comment':
     case 'update':
     case 'attachment':

@@ -6,6 +6,7 @@ import {
   Building,
   Calendar,
   CheckCircle2,
+  FileText,
   FolderKanban,
   GanttChart,
   Layers,
@@ -53,6 +54,9 @@ export const SEARCH_KIND_ICON: Record<SearchDocumentKind, LucideIcon> = {
   attachment: Link,
   calendar_event: Calendar,
   activity: Activity,
+  // A generic glyph only when nothing better is known: a Library row prefers the per-provider
+  // glyph in `mention-glyphs.ts`, keyed off the resource's `provider` facet.
+  external_resource: FileText,
 };
 
 /** Human labels for semantic search kinds. */
@@ -75,6 +79,7 @@ export const SEARCH_KIND_LABEL: Record<SearchDocumentKind, string> = {
   attachment: 'Attachment',
   calendar_event: 'Calendar event',
   activity: 'Activity',
+  external_resource: 'Resource',
 };
 
 interface SearchResultToPaletteItemInput {
@@ -196,18 +201,25 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
         orgFilter
           ? api.v1.orgs[':orgId'].search.$get({
               param: { orgId: orgFilter },
-              query: { q: debounced, limit: '20', surface: 'palette' },
+              // Omitting `q` asks the same endpoint to browse: recently-touched rows instead of
+              // matches. An open palette with an empty box is a jumping-off point, and offering
+              // nothing there wastes the most common keystroke in the app.
+              query: {
+                ...(debouncedHasQuery ? { q: debounced } : {}),
+                limit: '20',
+                surface: 'palette',
+              },
             })
           : api.v1.hub.search.$get({
               query: {
-                q: debounced,
+                ...(debouncedHasQuery ? { q: debounced } : {}),
                 limit: '20',
                 surface: 'palette',
                 ...(rankingOrgId ? { activeOrgId: rankingOrgId } : {}),
               },
             }),
       'Search failed.',
-      { enabled: debouncedHasQuery && (scope === 'hub' || Boolean(orgFilter)) },
+      { enabled: scope === 'hub' || Boolean(orgFilter) },
     ),
   );
 
@@ -223,17 +235,19 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
     [close, orgName, router],
   );
 
-  const results = useMemo<readonly PaletteItem[]>(() => {
-    if (!hasQuery) return [];
-    return (searchQ.data?.items ?? []).map(toResultItem);
-  }, [hasQuery, searchQ.data, toResultItem]);
+  const results = useMemo<readonly PaletteItem[]>(
+    () => (searchQ.data?.items ?? []).map(toResultItem),
+    [searchQ.data, toResultItem],
+  );
 
   // While the user is mid-burst (raw term not yet debounced) or the keyed request is in flight,
   // the result pane shows its loading skeleton; the error mirrors the search request's failure.
-  const loading = hasQuery && (trimmed !== debounced || (debouncedHasQuery && searchQ.isPending));
+  // Neither is gated on there being a query any more: with an empty box the same request is still
+  // in flight, fetching recents, and a silent failure there would read as "you have nothing".
+  const loading = trimmed !== debounced || searchQ.isPending;
   const error = searchQ.isError
     ? userErrorMessage(searchQ.error, 'Could not search your workspace.')
     : null;
 
-  return { results, loading, error: hasQuery ? error : null, hasQuery };
+  return { results, loading, error, hasQuery };
 }

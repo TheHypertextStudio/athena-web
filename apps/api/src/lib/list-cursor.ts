@@ -21,8 +21,18 @@ interface ListCursor {
   readonly id: string;
 }
 
-/** Encode a `(timestamp, id)` position into an opaque cursor token. */
-function encodeListCursor(ts: Date, id: string): string {
+/**
+ * Encode a `(timestamp, id)` position into an opaque cursor token.
+ *
+ * @remarks
+ * Exported for paginators that advance the keyset themselves rather than through
+ * {@link pageResult} — browse search refills a page several times before returning it, so it needs
+ * to build an intermediate position from a row the caller never sees.
+ *
+ * @param ts - The sort timestamp of the row to resume after.
+ * @param id - That row's id, the deterministic tiebreak.
+ */
+export function encodeListCursor(ts: Date, id: string): string {
   return Buffer.from(`${ts.toISOString()}|${id}`, 'utf8').toString('base64url');
 }
 

@@ -316,3 +316,104 @@ describe('describeFilterTerm', () => {
     );
   });
 });
+
+/**
+ * Multi-valued fields — a row holding several values for one field at once.
+ *
+ * @remarks
+ * The Library needs this: a document used by two initiatives belongs under both. The risk the
+ * feature carries is not the fan-out itself but regression — `applyView` is shared by nine list
+ * surfaces, so the first test here pins that a catalog *without* `values` is untouched.
+ */
+describe('multi-valued fields', () => {
+  interface Doc {
+    id: string;
+    name: string;
+    usedIn: readonly string[];
+  }
+
+  const docs: Doc[] = [
+    { id: 'd1', name: 'Launch plan', usedIn: ['launch', 'billing'] },
+    { id: 'd2', name: 'Pricing model', usedIn: ['billing'] },
+    { id: 'd3', name: 'Stray note', usedIn: [] },
+  ];
+
+  const docCatalog: FieldCatalog<Doc> = [
+    {
+      key: 'usedIn',
+      label: 'Used in',
+      type: 'relation',
+      // The primary value, which is what sorting reads.
+      accessor: (d) => d.usedIn[0] ?? null,
+      values: (d) => d.usedIn,
+      options: [
+        { value: 'launch', label: 'Q3 launch' },
+        { value: 'billing', label: 'Billing v2' },
+      ],
+      groupable: true,
+    },
+    { key: 'name', label: 'Name', type: 'text', accessor: (d) => d.name, sortable: true },
+  ];
+
+  it('leaves a catalog without `values` grouping exactly as before', () => {
+    const state: ViewState = { filters: [], groupBy: { field: 'status' }, sort: [] };
+    const applied = applyView(rows, state, catalog);
+    // Every row lands in exactly one bucket, so the buckets still sum to the row count.
+    const total = (applied.groups ?? []).reduce((sum, group) => sum + group.rows.length, 0);
+    expect(total).toBe(applied.rows.length);
+  });
+
+  it('places a row holding two values under both group headers', () => {
+    const state: ViewState = { filters: [], groupBy: { field: 'usedIn' }, sort: [] };
+    const applied = applyView(docs, state, docCatalog);
+    const byId = new Map((applied.groups ?? []).map((group) => [group.id, group]));
+    expect(byId.get('launch')?.rows.map((d) => d.id)).toEqual(['d1']);
+    expect(byId.get('billing')?.rows.map((d) => d.id)).toEqual(['d1', 'd2']);
+  });
+
+  it('drops a row with no values into the trailing empty bucket', () => {
+    const state: ViewState = { filters: [], groupBy: { field: 'usedIn' }, sort: [] };
+    const applied = applyView(docs, state, docCatalog);
+    const groups = applied.groups ?? [];
+    expect(groups[groups.length - 1]?.id).toBe(EMPTY_GROUP_ID);
+    expect(groups[groups.length - 1]?.rows.map((d) => d.id)).toEqual(['d3']);
+  });
+
+  it('resolves group headers through the catalog labels', () => {
+    const state: ViewState = { filters: [], groupBy: { field: 'usedIn' }, sort: [] };
+    const applied = applyView(docs, state, docCatalog);
+    expect((applied.groups ?? []).map((group) => group.label)).toEqual([
+      'Q3 launch',
+      'Billing v2',
+      'No used in',
+    ]);
+  });
+
+  it('matches `eq` when any one of the row’s values matches', () => {
+    const matched = filterRows(docs, [{ field: 'usedIn', op: 'eq', value: 'launch' }], docCatalog);
+    expect(matched.map((d) => d.id)).toEqual(['d1']);
+  });
+
+  it('matches `in` when the row shares any value with the set', () => {
+    const matched = filterRows(
+      docs,
+      [{ field: 'usedIn', op: 'in', value: ['billing'] }],
+      docCatalog,
+    );
+    expect(matched.map((d) => d.id)).toEqual(['d1', 'd2']);
+  });
+
+  it('satisfies `neq` for a row with no values at all', () => {
+    const matched = filterRows(docs, [{ field: 'usedIn', op: 'neq', value: 'launch' }], docCatalog);
+    expect(matched.map((d) => d.id)).toEqual(['d2', 'd3']);
+  });
+
+  it('excludes every row sharing a value with a `nin` set', () => {
+    const matched = filterRows(
+      docs,
+      [{ field: 'usedIn', op: 'nin', value: ['billing'] }],
+      docCatalog,
+    );
+    expect(matched.map((d) => d.id)).toEqual(['d3']);
+  });
+});

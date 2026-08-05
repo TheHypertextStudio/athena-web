@@ -191,6 +191,25 @@ export interface FieldDescriptor<T> {
    * `nin`/`neq`). Used uniformly by filtering, grouping, and sorting.
    */
   accessor: (row: T) => string | number | null;
+  /**
+   * Read *every* value the row holds for this field, for the fields where one row legitimately has
+   * several — a Library resource used by two initiatives, say.
+   *
+   * @remarks
+   * Deliberately separate from {@link FieldDescriptor.accessor} rather than widening its return
+   * type. `accessor` feeds filtering, grouping, **and** sorting; letting it return an array would
+   * ripple into every comparison in the apply engine and into every catalog already written
+   * against it. Declaring `values` instead is additive: a descriptor without it behaves exactly as
+   * before, byte for byte.
+   *
+   * When present, filtering uses set semantics (`eq` matches if *any* value matches) and grouping
+   * fans the row into one bucket per value — so group counts can legitimately sum to more than the
+   * row count. Sorting still reads `accessor`, because ordering a row by a set of values has no
+   * single honest answer; return the primary value there.
+   *
+   * An empty array means unset, and is treated exactly like `accessor` returning `null`.
+   */
+  values?: (row: T) => readonly string[];
   /** Whether this field can group a list. Defaults to `false`. */
   groupable?: boolean;
   /** Whether this field can sort a list. Defaults to `false`. */

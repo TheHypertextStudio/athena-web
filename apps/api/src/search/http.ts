@@ -34,9 +34,21 @@ function csvStringList() {
     );
 }
 
-/** HTTP query params accepted by Hub and org-scoped search endpoints. */
+/**
+ * HTTP query params accepted by Hub and org-scoped search endpoints.
+ *
+ * @remarks
+ * An absent or blank `q` selects browse mode rather than failing validation, so `?q=` from a
+ * cleared search box behaves the same as omitting it entirely.
+ */
 export const SearchHttpQuery = z.object({
-  q: z.string().trim().min(1),
+  q: z
+    .string()
+    .trim()
+    .optional()
+    // A cleared search box sends `?q=`; collapsing that to absent means it browses rather than
+    // searching for the empty string.
+    .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().optional(),
   families: csvEnum(SearchDocumentFamily),

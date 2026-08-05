@@ -99,6 +99,8 @@ function makeResult(overrides: Partial<SearchResult>): SearchResult {
     subject: null,
     source: null,
     facets: {},
+    usedIn: [],
+    updatedAt: '2026-08-01T00:00:00.000Z',
     actions: [],
     score: 1,
     ...overrides,

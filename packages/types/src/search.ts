@@ -36,6 +36,7 @@ export const SearchDocumentKind = z.enum([
   'attachment',
   'calendar_event',
   'activity',
+  'external_resource',
 ]);
 /** Search-document-kind value. */
 export type SearchDocumentKind = z.infer<typeof SearchDocumentKind>;
@@ -134,6 +135,31 @@ export const SearchAction = z
 /** Search-action value. */
 export type SearchAction = z.infer<typeof SearchAction>;
 
+/**
+ * A work container a resource is referenced from.
+ *
+ * @remarks
+ * Answers "what is this for?", which a reference *count* cannot. A resource used by the Q3 launch
+ * is a launch document; one used by nothing is orphaned documentation. Both readings are
+ * actionable, and neither survives being reduced to a number.
+ *
+ * Resolution walks up from whatever mentioned the resource to the shallowest container that
+ * accounts for the most references, so a row reads "Q3 launch" rather than naming one arbitrary
+ * task among eleven.
+ */
+export const SearchUsedIn = z
+  .object({
+    kind: z.enum(['initiative', 'program', 'project', 'team']),
+    id: z.string(),
+    title: z.string(),
+  })
+  .meta({
+    id: 'SearchUsedIn',
+    description: 'A work container a search result is referenced from.',
+  });
+/** Search-used-in value. */
+export type SearchUsedIn = z.infer<typeof SearchUsedIn>;
+
 /** One semantic search result. */
 export const SearchResult = z
   .object({
@@ -152,15 +178,34 @@ export const SearchResult = z
     facets: z.record(z.string(), z.unknown()),
     actions: z.array(SearchAction),
     score: z.number(),
+    /** The work containers referencing this result, most-referencing first; empty when none do. */
+    usedIn: z.array(SearchUsedIn).default([]),
+    /**
+     * When the underlying thing last changed, as an ISO timestamp.
+     *
+     * @remarks
+     * Prefers the source's own updated time over the projection's, so a search reindex does not
+     * make every row look freshly edited. Present here because no `*Out` DTO in the repository
+     * exposes `updatedAt`, and a browsable list has to be able to show and sort by it.
+     */
+    updatedAt: z.iso.datetime(),
   })
   .meta({ id: 'SearchResult', description: 'One typed, permission-filtered search hit.' });
 /** Search-result value. */
 export type SearchResult = z.infer<typeof SearchResult>;
 
-/** Parsed search query parameters used by Hub and org-scoped search routes. */
+/**
+ * Parsed search query parameters used by Hub and org-scoped search routes.
+ *
+ * @remarks
+ * `q` is optional. Omitting it asks for *browse* rather than search: the same
+ * permission-filtered corpus, ordered by recency instead of by relevance. The Library surface
+ * depends on that mode, and it shares this one code path rather than getting its own endpoint so
+ * that no second copy of the visibility filter can ever drift from this one.
+ */
 export const SearchQuery = z
   .object({
-    q: z.string().trim().min(1),
+    q: z.string().trim().optional(),
     limit: z.number().int().min(1).max(100).default(20),
     cursor: z.string().optional(),
     families: z.array(SearchDocumentFamily).default([]),

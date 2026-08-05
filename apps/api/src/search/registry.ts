@@ -4,6 +4,7 @@ import { activitySearchProjectors } from './projectors/activity';
 import { calendarSearchProjectors } from './projectors/calendar';
 import { contentSearchProjectors } from './projectors/content';
 import { peopleSearchProjectors } from './projectors/people';
+import { resourceSearchProjectors } from './projectors/resources';
 import { workSearchProjectors } from './projectors/work';
 import type { SearchDocumentDraft, SearchProjector } from './types';
 
@@ -14,6 +15,7 @@ export const searchProjectors: readonly SearchProjector[] = [
   ...contentSearchProjectors,
   ...calendarSearchProjectors,
   ...activitySearchProjectors,
+  ...resourceSearchProjectors,
 ];
 
 const projectorsBySourceTable = new Map(searchProjectors.map((p) => [p.sourceTable, p]));
@@ -95,6 +97,7 @@ async function resolveSourceTable(sourceTable: string) {
     attachment: schema.attachment,
     calendar_event: schema.calendarEvent,
     event: schema.event,
+    external_resource: schema.externalResource,
   } as const;
   if (!(sourceTable in tables))
     throw new Error(`No search projector registered for ${sourceTable}`);

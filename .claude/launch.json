@@ -6,9 +6,10 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "pnpm exec dotenv -e .env.local -- pnpm exec turbo run dev --filter=@docket/web --filter=@docket/api"
+        "PREFIX=$(git rev-parse --abbrev-ref HEAD | sed 's#.*/##'); if [ \"$PREFIX\" = \"main\" ]; then WEB_HOST=docket.localhost; API_HOST=api.docket.localhost; else WEB_HOST=$PREFIX.docket.localhost; API_HOST=$PREFIX.api.docket.localhost; fi; export API_URL=https://$API_HOST NEXT_PUBLIC_API_URL=https://$API_HOST NEXT_PUBLIC_APP_URL=https://$WEB_HOST BETTER_AUTH_URL=https://$API_HOST BETTER_AUTH_PASSKEY_RP_ID=$WEB_HOST NEXT_PUBLIC_PASSKEY_RP_ID=$WEB_HOST BETTER_AUTH_TRUSTED_ORIGINS=https://$WEB_HOST,https://$API_HOST; echo \"[launch] web=https://$WEB_HOST api=https://$API_HOST\"; pnpm exec dotenv -e .env.local -- pnpm exec turbo run dev --filter=@docket/web --filter=@docket/api"
       ],
-      "port": 4000
+      "port": 4000,
+      "autoPort": true
     }
   ]
 }

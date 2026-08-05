@@ -63,6 +63,10 @@ function hrefForEntity(
       return withQuery(`/orgs/${organizationId}/views`, 'viewId', entityId);
     case 'calendar_event':
       return `/search?kind=calendar_event&id=${encodeURIComponent(entityId)}`;
+    // The Library row rather than the provider URL, so following a palette hit keeps the reader
+    // inside Docket; the row itself carries the "Open source" action for leaving.
+    case 'external_resource':
+      return withQuery(`/orgs/${organizationId}/library`, 'resourceId', entityId);
     case 'milestone':
     case 'comment':
     case 'update':

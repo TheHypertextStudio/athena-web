@@ -68,6 +68,7 @@ export { default as GanttChart } from '@mui/icons-material/ViewTimeline';
 export { default as Github } from '@mui/icons-material/GitHub';
 export { default as Google } from '@mui/icons-material/Google';
 export { default as Heart } from '@mui/icons-material/FavoriteBorder';
+export { default as Library } from '@mui/icons-material/CollectionsBookmarkOutlined';
 export { default as Globe } from '@mui/icons-material/Public';
 export { default as HelpCircle } from '@mui/icons-material/HelpOutlined';
 export { default as ListChecks } from '@mui/icons-material/ChecklistRtl';

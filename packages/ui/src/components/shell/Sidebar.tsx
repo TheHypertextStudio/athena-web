@@ -51,6 +51,7 @@ import {
   Inbox,
   Layers,
   LayoutGrid,
+  Library,
   ListChecks,
   type LucideIcon,
   RefreshCw,
@@ -223,6 +224,10 @@ export function Sidebar({
     { key: 'triage', label: 'Triage', icon: Inbox },
     { key: 'tasks', label: 'Tasks', icon: ListChecks },
     { key: 'stream', label: 'Stream', icon: Activity },
+    // Above the work hierarchy, not inside it. The run below — initiatives through cycles — is
+    // ordered by altitude of work, and slotting the Library into it would read as another rung of
+    // that hierarchy rather than the material the whole hierarchy refers to.
+    { key: 'library', label: 'Library', icon: Library },
     { key: 'initiatives', label: initiatives, icon: Target },
     { key: 'programs', label: programs, icon: Layers },
     { key: 'projects', label: projects, icon: FolderKanban },

@@ -138,11 +138,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
 
   const grouped = SECTION_ORDER.map((s) => ({
     ...s,
+    // With an empty box these rows are recents, not matches, and calling them "Search results"
+    // would misdescribe what the reader is looking at.
+    label: s.section === 'results' && !hasQuery ? 'Recent' : s.label,
     rows: items.filter((it) => it.section === s.section),
   })).filter((g) => g.rows.length > 0);
 
   const orgLocalLabel = activeOrgId ? orgName(activeOrgId) : 'This org';
-  const showResultsSkeleton = hasQuery && loading && results.length === 0;
+  const showResultsSkeleton = loading && results.length === 0;
   const showEmpty = items.length === 0 && !showResultsSkeleton && !error;
 
   // While closing, run the same `tw-animate-css` exit motion the Dialog/Sheet/Dropdown primitives
@@ -248,7 +251,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
               <p className="text-on-surface-variant text-body-medium max-w-xs">
                 {hasQuery
                   ? 'Nothing matched your search. Try a different term or switch scope.'
-                  : 'Start typing to search across your organizations.'}
+                  : 'Nothing here yet. Create some work, or link a document, and it will show up.'}
               </p>
             </div>
           ) : null}

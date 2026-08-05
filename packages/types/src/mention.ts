@@ -35,6 +35,45 @@ export const MentionSubjectType = z.enum([
 /** Mention-subject-type value. */
 export type MentionSubjectType = z.infer<typeof MentionSubjectType>;
 
+/**
+ * One record whose prose points at the thing being asked about.
+ *
+ * @remarks
+ * The inbound direction of {@link MentionItem}: not "what does this record reference" but "what
+ * references this record". `mention_target_entity_idx` makes the question an index scan, which is
+ * why there is no second table maintaining a backlink graph.
+ */
+export const ReferencingRecord = z
+  .object({
+    subjectType: z.string(),
+    subjectId: z.string(),
+    title: z.string(),
+    href: z.string(),
+  })
+  .meta({ id: 'ReferencingRecord', description: 'A record whose prose references the subject.' });
+/** Referencing-record value. */
+export type ReferencingRecord = z.infer<typeof ReferencingRecord>;
+
+/** Everything that references one target, grouped by the kind of record doing the referencing. */
+export const EntityReferencesOut = z
+  .object({
+    /** How many visible records reference the target. */
+    total: z.number().int().nonnegative(),
+    /** The referencing records, grouped by subject kind in a stable order. */
+    groups: z.array(
+      z.object({
+        subjectType: z.string(),
+        items: z.array(ReferencingRecord),
+      }),
+    ),
+  })
+  .meta({
+    id: 'EntityReferencesOut',
+    description: 'The records whose prose references one entity or external resource.',
+  });
+/** Entity-references-out value. */
+export type EntityReferencesOut = z.infer<typeof EntityReferencesOut>;
+
 /** The kind of Docket entity an internal mention points at. */
 export const MentionEntityKind = z.enum([
   'task',

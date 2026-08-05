@@ -5,6 +5,9 @@ const BASE_RANK: Record<SearchDocumentKind, number> = {
   project: 95,
   comment: 90,
   program: 88,
+  // A referenced external document is material someone chose to point at, so it outranks the
+  // incidental content kinds below it while staying under the work objects it serves.
+  external_resource: 86,
   calendar_event: 84,
   activity: 80,
   update: 76,

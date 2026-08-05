@@ -1,7 +1,14 @@
-import { OrganizationId, type SearchDocumentKind, type SearchOut } from '@docket/types';
+import {
+  OrganizationId,
+  type SearchDocumentKind,
+  type SearchOut,
+  type SearchUsedIn,
+} from '@docket/types';
 import type { searchDocument } from '@docket/db';
 import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
+import { encodeListCursor, seekAfter } from '../lib/list-cursor';
+import { resolveUsedIn, type UsedInTarget } from './used-in';
 import {
   resourceAccessKey,
   resolveResourceAccess,
@@ -28,7 +35,8 @@ interface SearchWorkspaceInput {
   orgId?: string;
   activeOrgId?: string | null;
   params: {
-    q: string;
+    /** Absent or blank selects browse mode: the same corpus, ordered by recency. */
+    q?: string;
     limit?: number;
     cursor?: string;
     families?: readonly string[];
@@ -71,12 +79,19 @@ type SearchVisibility =
   | { mode: 'grantable'; subjectKind?: unknown; subjectId?: unknown }
   | { mode: 'event'; subjectKind?: unknown; subjectId?: unknown };
 
-/** Run permission-filtered semantic workspace search. */
+/**
+ * Run permission-filtered semantic workspace search, or browse when no query is given.
+ *
+ * @remarks
+ * Both modes share this one function on purpose. `filterVisibleRows` is the single most
+ * dangerous thing in this module to duplicate — a second copy would be a cross-tenant leak that
+ * nothing type-checks and that reads as correct in review — so browse reuses it as a call rather
+ * than getting its own endpoint.
+ */
 export async function searchWorkspace(input: SearchWorkspaceInput): Promise<SearchOut> {
-  const query = input.params.q.trim();
+  const query = input.params.q?.trim() ?? '';
   const maxLimit = input.params.surface === 'palette' ? 50 : 100;
   const limit = Math.min(Math.max(input.params.limit ?? 20, 1), maxLimit);
-  if (query.length === 0) return { query, items: [], facets: [] };
 
   // An agent owns no documents, so it has no personal scope to widen the search with.
   const ownerUserId = input.caller.kind === 'user' ? input.caller.userId : null;
@@ -91,6 +106,21 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
         : []
       : callerOrgIds.filter((orgId) => requestedOrgIds.size === 0 || requestedOrgIds.has(orgId));
 
+  const fromTime = input.params.from ? new Date(input.params.from).getTime() : null;
+  const toTime = input.params.to ? new Date(input.params.to).getTime() : null;
+
+  if (query.length === 0) {
+    return browseDocuments({
+      params: input.params,
+      limit,
+      ownerUserId,
+      orgIds: accessibleOrgIds,
+      accessByOrg: callerAccessByOrg,
+      fromTime,
+      toTime,
+    });
+  }
+
   const candidateRows = await loadCandidateRows({
     ownerUserId,
     orgIds: accessibleOrgIds,
@@ -102,8 +132,6 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
     accessByOrg: callerAccessByOrg,
   });
 
-  const fromTime = input.params.from ? new Date(input.params.from).getTime() : null;
-  const toTime = input.params.to ? new Date(input.params.to).getTime() : null;
   const cursor = decodeCursor(input.params.cursor);
   const scored = visible.rows
     .filter((row) => filterRow(row, input.params, fromTime, toTime))
@@ -127,12 +155,159 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
       : scored;
   const page = surfaced.slice(0, limit);
   const next = surfaced[limit];
+  const usedIn = await usedInForPage(page);
   return {
     query,
-    items: page.map(toSearchResult),
+    items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
     facets: buildFacetSummaries(scored),
     ...(next ? { nextCursor: encodeCursor(next) } : {}),
   };
+}
+
+/**
+ * How many times {@link browseDocuments} refills before returning a short page.
+ *
+ * @remarks
+ * Visibility filtering runs in application code after the query, so a whole chunk can come back
+ * invisible to this caller. Refilling is what stops a page from looking empty while more rows
+ * exist behind it. The bound keeps a workspace whose rows are nearly all private from turning one
+ * request into an unbounded scan; hitting it returns a short page, never a wrong one.
+ */
+const BROWSE_REFILL_ROUNDS = 6;
+
+interface BrowseInput {
+  params: SearchWorkspaceInput['params'];
+  limit: number;
+  ownerUserId: string | null;
+  orgIds: readonly string[];
+  accessByOrg: ReadonlyMap<string, CallerOrgAccess>;
+  fromTime: number | null;
+  toTime: number | null;
+}
+
+/**
+ * Browse the corpus with no query: the same permission-filtered rows, newest first.
+ *
+ * @remarks
+ * Ordering is the database's `(updatedAt DESC, id DESC)`, reusing {@link seekAfter} so browse
+ * shares the repository's one keyset mechanism instead of deriving a second seek predicate.
+ *
+ * Deliberately *not* re-ranked in application code. Scoring here would reorder rows within a page
+ * without reordering them across pages, which is exactly how a keyset paginator starts dropping
+ * and duplicating rows at its boundaries.
+ *
+ * @param input - The caller's resolved scope, page size, and the active facet filters.
+ * @returns One page of visible rows, plus the cursor for the next one.
+ */
+async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
+  const collected: ScoredRow[] = [];
+  const seen = new Set<string>();
+  let cursor = input.params.cursor;
+  let exhausted = false;
+
+  // Over-fetch against the page size: both the visibility filter and the facet filters below run
+  // in application code, so the database cannot know how many of these rows survive.
+  const chunkSize = Math.min((input.limit + 1) * 4, 400);
+
+  for (let round = 0; round < BROWSE_REFILL_ROUNDS && !exhausted; round += 1) {
+    if (collected.length > input.limit) break;
+    const rows = await loadBrowseRows({
+      ownerUserId: input.ownerUserId,
+      orgIds: input.orgIds,
+      includeArchived: input.params.includeArchived ?? false,
+      cursor,
+      limit: chunkSize,
+    });
+    if (rows.length < chunkSize) exhausted = true;
+    const lastFetched = rows[rows.length - 1];
+    if (!lastFetched) break;
+    cursor = encodeListCursor(lastFetched.updatedAt, lastFetched.id);
+
+    const visible = await filterVisibleRows(rows, {
+      ownerUserId: input.ownerUserId,
+      accessByOrg: input.accessByOrg,
+    });
+    for (const row of visible.rows) {
+      if (seen.has(row.id)) continue;
+      if (!filterRow(row, input.params, input.fromTime, input.toTime)) continue;
+      seen.add(row.id);
+      collected.push(browseRow(row));
+    }
+  }
+
+  const page = collected.slice(0, input.limit);
+  const last = page[page.length - 1];
+  const hasMore = collected.length > input.limit;
+  const usedIn = await usedInForPage(page);
+  return {
+    query: '',
+    // These facets summarize the returned page, not the corpus. The Library's filter options come
+    // from its field catalog, which reads members, teams, and labels directly, so no surface
+    // depends on them being complete.
+    facets: buildFacetSummaries(page),
+    items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
+    ...(hasMore && last ? { nextCursor: encodeListCursor(last.row.updatedAt, last.row.id) } : {}),
+  };
+}
+
+/**
+ * Present one browsed row as a result.
+ *
+ * @remarks
+ * `score` carries the row's static prior and takes no part in ordering — see
+ * {@link browseDocuments} for why browse must not re-rank. `matchedFields` is empty because
+ * nothing was matched against.
+ */
+function browseRow(row: SearchDocumentRow): ScoredRow {
+  return {
+    row,
+    score: row.baseRank,
+    sortTime: rowSortTime(row),
+    matchedFields: [],
+    snippet: row.summary ?? row.body ?? null,
+  };
+}
+
+/**
+ * Fetch one chunk of the browse ordering.
+ *
+ * @remarks
+ * Orders by `search_document.updatedAt` rather than the source's own `sourceUpdatedAt` because
+ * `updatedAt` is NOT NULL and is the trailing key of both composite indexes, which is what lets
+ * {@link seekAfter} page over it without a nullable-ordering special case. The cost is that a full
+ * reindex rewrites every row and therefore reshuffles browse order; display still reads
+ * `sourceUpdatedAt` so the visible "updated" value survives a reindex.
+ */
+async function loadBrowseRows(input: {
+  ownerUserId: string | null;
+  orgIds: readonly string[];
+  includeArchived: boolean;
+  cursor: string | undefined;
+  limit: number;
+}) {
+  const schema = await import('@docket/db');
+  // A caller with no owning user (an agent) reaches org documents only. An empty candidate set is
+  // the correct answer for an agent with no accessible orgs, not a reason to widen.
+  const ownedByCaller = input.ownerUserId
+    ? eq(schema.searchDocument.userId, input.ownerUserId)
+    : undefined;
+  const visibility =
+    input.orgIds.length > 0
+      ? or(inArray(schema.searchDocument.organizationId, [...input.orgIds]), ownedByCaller)
+      : (ownedByCaller ?? sql`false`);
+  const conditions = [
+    visibility,
+    seekAfter(schema.searchDocument.updatedAt, schema.searchDocument.id, input.cursor),
+  ];
+  if (!input.includeArchived) conditions.push(isNull(schema.searchDocument.archivedAt));
+
+  const rows = await schema.db
+    .select({ document: schema.searchDocument })
+    .from(schema.searchDocument)
+    .where(and(...conditions))
+    .orderBy(desc(schema.searchDocument.updatedAt), desc(schema.searchDocument.id))
+    .limit(input.limit);
+  return rows.map((row) => ({ ...row.document, textRank: 0 }));
 }
 
 /** What {@link loadRecentDocuments} needs to answer a bare-`@` picker. */
@@ -646,7 +821,41 @@ function snippetFor(
   return row.summary ?? row.body ?? null;
 }
 
-function toSearchResult(scored: ScoredRow): SearchOut['items'][number] {
+/**
+ * Resolve the work containers for one page of results, batched per workspace.
+ *
+ * @remarks
+ * Grouped by organization because Hub search spans several and `mention` rows never cross one. A
+ * page touching three workspaces costs three batches, not one per row.
+ */
+async function usedInForPage(
+  page: readonly ScoredRow[],
+): Promise<ReadonlyMap<string, readonly SearchUsedIn[]>> {
+  const byOrg = new Map<string, UsedInTarget[]>();
+  for (const scored of page) {
+    const organizationId = scored.row.organizationId;
+    if (!organizationId) continue;
+    const targets = byOrg.get(organizationId) ?? [];
+    targets.push({
+      documentId: scored.row.id,
+      kind: scored.row.kind,
+      entityId: scored.row.entityId,
+    });
+    byOrg.set(organizationId, targets);
+  }
+  const merged = new Map<string, readonly SearchUsedIn[]>();
+  for (const [organizationId, targets] of byOrg) {
+    for (const [documentId, containers] of await resolveUsedIn(organizationId, targets)) {
+      merged.set(documentId, containers);
+    }
+  }
+  return merged;
+}
+
+function toSearchResult(
+  scored: ScoredRow,
+  usedIn: readonly SearchUsedIn[] = [],
+): SearchOut['items'][number] {
   const row = scored.row;
   const organizationId = row.organizationId ? OrganizationId.parse(row.organizationId) : null;
   return {
@@ -679,6 +888,9 @@ function toSearchResult(scored: ScoredRow): SearchOut['items'][number] {
     facets: row.facet,
     actions: actionFor(row),
     score: scored.score,
+    // Copied because the DTO's inferred array type is mutable; the resolver hands back a readonly.
+    usedIn: [...usedIn],
+    updatedAt: (row.sourceUpdatedAt ?? row.updatedAt).toISOString(),
   };
 }
 
@@ -702,6 +914,7 @@ function normalizeSearchKind(kind: string): SearchDocumentKind {
     'attachment',
     'calendar_event',
     'activity',
+    'external_resource',
   ]);
   return (allowed.has(kind) ? kind : 'activity') as SearchDocumentKind;
 }

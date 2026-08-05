@@ -16,6 +16,7 @@ const WORKSPACE_LABELS = [
   'Triage',
   'Tasks',
   'Stream',
+  'Library',
   'Initiatives',
   'Programs',
   'Projects',

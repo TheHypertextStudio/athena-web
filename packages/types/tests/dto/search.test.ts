@@ -46,6 +46,7 @@ describe('search DTOs', () => {
         source: { system: 'docket', externalUrl: null, eventId: null },
         facets: { status: 'todo', priority: 'high' },
         actions: [{ kind: 'open', label: 'Open', href: `/orgs/${ORG_ID}/my-work` }],
+        updatedAt: '2026-08-01T00:00:00.000Z',
         score: 121,
       },
       {
@@ -71,6 +72,7 @@ describe('search DTOs', () => {
         source: { system: 'docket', externalUrl: null, eventId: null },
         facets: { subjectKind: 'task' },
         actions: [],
+        updatedAt: '2026-08-01T00:00:00.000Z',
         score: 95,
       },
       {
@@ -104,6 +106,7 @@ describe('search DTOs', () => {
             href: 'https://slack.example/messages/1',
           },
         ],
+        updatedAt: '2026-08-01T00:00:00.000Z',
         score: 84,
       },
       {
@@ -125,6 +128,7 @@ describe('search DTOs', () => {
         source: { system: 'google_calendar', externalUrl: null, eventId: null },
         facets: { calendarId: 'primary' },
         actions: [],
+        updatedAt: '2026-08-01T00:00:00.000Z',
         score: 76,
       },
     ];
@@ -174,6 +178,7 @@ describe('search DTOs', () => {
       source: null,
       facets: {},
       actions: [],
+      updatedAt: '2026-08-01T00:00:00.000Z',
       score: 1,
     };
 

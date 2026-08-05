@@ -74,6 +74,7 @@ import roles from './roles';
 import savedViews from './saved-views';
 import { entityMentionRoutes } from './entity-mentions';
 import mentions from './mentions';
+import references from './references';
 import search from './search';
 import tasks from './tasks';
 import teams from './teams';
@@ -457,6 +458,8 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/saved-views', savedViews)
   .route('/:orgId/search', search)
   .route('/:orgId/mentions', mentions)
+  // The inbound direction: what points *at* a thing. One mount for every target kind.
+  .route('/:orgId/references', references)
   // Derived-reference reads, one mount per subject kind so each keeps its own OpenAPI tag.
   .route('/:orgId/projects', entityMentionRoutes('project', 'Projects'))
   .route('/:orgId/tasks', entityMentionRoutes('task', 'Tasks'))

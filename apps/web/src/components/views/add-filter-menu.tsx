@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus } from '@docket/ui/icons';
+import { Filter } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
@@ -36,8 +36,13 @@ export function AddFilterMenu<T>({ fields, onAdd }: AddFilterMenuProps<T>): JSX.
           className="min-h-10 gap-1.5 px-2.5 @2xl:min-h-8 @2xl:px-3"
           aria-label="Add filter"
         >
-          <Plus className="size-4" aria-hidden="true" />
-          {/* The label is shed on narrow containers so the whole toolbar stays one row. */}
+          {/*
+           * A funnel rather than a plus. The label is shed on narrow containers so the toolbar
+           * stays one row, and a bare `+` with no label reads as "create a new thing" — which is
+           * the one action this control does not perform. The glyph has to carry the meaning on
+           * its own at the widths where the word is gone.
+           */}
+          <Filter className="size-4" aria-hidden="true" />
           <span className="hidden @2xl:inline">Add filter</span>
         </Button>
       </DropdownMenuTrigger>

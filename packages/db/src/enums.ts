@@ -558,6 +558,10 @@ export const searchDocumentKind = pgEnum('search_document_kind', [
   'attachment',
   'calendar_event',
   'activity',
+  // A resource outside Docket that the workspace has referenced. Indexed so the Library and the
+  // command palette reach it through the same read model and the same visibility filter as
+  // first-party rows, rather than through a second query path beside them.
+  'external_resource',
 ]);
 /** Index outbox operation for a source row. */
 export const searchIndexJobOperation = pgEnum('search_index_job_operation', ['upsert', 'delete']);

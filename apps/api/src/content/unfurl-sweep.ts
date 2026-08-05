@@ -15,6 +15,8 @@ import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import type { Unfurler } from '@docket/integrations';
 import { resourceProviderById } from '@docket/types';
 
+import { enqueueSearchUpsert } from '../search/write-through';
+
 /** How many rows one sweep pass claims. Bounded so a backlog drains steadily rather than in bursts. */
 const BATCH = 25;
 
@@ -141,6 +143,16 @@ export async function sweepResourceUnfurls(
         unfurlLeaseExpiresAt: null,
       })
       .where(eq(schema.externalResource.id, row.id));
+  }
+
+  // Every claimed row was rewritten by one of the branches above — resolved, deferred to a
+  // connection, or failed — so the search index needs all of them, not just the successes. This is
+  // what puts a referenced resource in the Library and the command palette at all: rows are
+  // created here in `pending` by `reconcileMentions`, and this sweep is the first moment they have
+  // settled enough to project. Announcing after the loop rather than inside each branch means a
+  // future branch cannot forget to.
+  for (const row of claimed) {
+    await enqueueSearchUpsert(row.organizationId, 'external_resource', row.id);
   }
 
   return { claimed: claimed.length, resolved, failed };

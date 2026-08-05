@@ -10,6 +10,7 @@ import {
   Home,
   Inbox,
   Layers,
+  Library,
   ListChecks,
   LogOut,
   Plus,
@@ -35,6 +36,12 @@ const ORG_DESTINATIONS = [
   { key: 'programs', label: 'Programs', icon: FolderKanban, keywords: ['streams'] },
   { key: 'projects', label: 'Projects', icon: FolderKanban, keywords: [] },
   { key: 'cycles', label: 'Cycles', icon: GanttChart, keywords: ['sprints'] },
+  {
+    key: 'library',
+    label: 'Library',
+    icon: Library,
+    keywords: ['resources', 'documents', 'docs', 'files', 'links'],
+  },
   { key: 'agents', label: 'Agents', icon: Sparkles, keywords: ['ai', 'sessions'] },
   { key: 'settings', label: 'Settings', icon: Settings, keywords: ['preferences', 'org'] },
 ] as const;

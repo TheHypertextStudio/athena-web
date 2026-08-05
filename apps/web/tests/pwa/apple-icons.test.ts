@@ -4,10 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import {
   APPLE_CANVAS,
-  APPLE_ICONS,
-  ICON_DOCUMENT,
   APPLE_COVERAGE,
+  APPLE_ICONS,
+  BAR_HEIGHTS,
+  BAR_WIDTH,
+  ICON_DOCUMENT,
   markPath,
+  OPTICAL_SHIFT,
   pathBounds,
   REPO_ROOT,
   type Bounds,
@@ -70,9 +73,9 @@ function codeOf(file: string): string {
  */
 function markBounds(): Bounds {
   const layer = readFileSync(join(ICON_DOCUMENT, 'Assets/Bars.svg'), 'utf8');
-  // Every path, not the first one. The layer is two elements — the plain bars and the accented
-  // one — so measuring a single match would silently drop the right-hand bar and understate the
-  // mark's width by a third.
+  // Every path, not just the first. Matching once would silently drop any bar drawn in a second
+  // element, which is what happened while one bar carried an accent colour: the measured width
+  // came out a third short.
   const paths = [...layer.matchAll(/<path[^>]*\sd="([^"]+)"/g)].map((match) => match[1] ?? '');
   expect(paths.length, 'the Icon Composer layer contains paths').toBeGreaterThan(0);
   return pathBounds(paths.join(''));
@@ -272,13 +275,15 @@ describe('use of the Apple icon grid', () => {
     const live = liveAreaSide(image);
     const mark = markBounds();
 
-    // Measured at the time of writing: 869px live area, mark 640x800 → 73.6% x 92.1%. The mark is
-    // taller than it is wide (the glyph's own aspect is 0.8), so the height is what "use the
-    // grid" means here and the width follows from it. Distorting the glyph to fill both axes
-    // would be a worse icon, not a better-covered one. The previous asset used roughly a quarter
-    // of the canvas, which is what "take advantage of space" was asking about.
-    expect(mark.h / live).toBeGreaterThan(0.9);
-    expect(mark.w / live).toBeGreaterThan(0.9);
+    // Measured at the time of writing: 869px live area, mark 720x720 → 82.9% on both axes. An
+    // earlier version used 800 and measured 92%, which put the bars close enough to the mask that
+    // the icon read as cramped — Apple's own icons sit nearer 60–65% of the canvas. The floor is
+    // still what "take advantage of the space" asked for: the asset this all replaced used
+    // roughly a quarter of the canvas.
+    expect(mark.h / live).toBeGreaterThan(0.8);
+    expect(mark.w / live).toBeGreaterThan(0.8);
+    // …and a ceiling, so nobody quietly grows it back into the mask.
+    expect(mark.h / live).toBeLessThan(0.88);
   });
 
   it('keeps the glyph’s own proportions', () => {
@@ -290,10 +295,33 @@ describe('use of the Apple icon grid', () => {
     expect(mark.w / mark.h).toBeCloseTo(web.bbox.w / web.bbox.h, 5);
   });
 
-  it('is centred on both axes', () => {
+  it('is centred horizontally and optically balanced vertically', () => {
     const mark = markBounds();
     expect(Math.abs(mark.x + mark.w / 2 - APPLE_CANVAS / 2)).toBeLessThanOrEqual(1);
-    expect(Math.abs(mark.y + mark.h / 2 - APPLE_CANVAS / 2)).toBeLessThanOrEqual(1);
+
+    // Vertically the bounding box is deliberately NOT centred. The bars are top-aligned with
+    // descending heights, so their ink sits high inside their box; centring the box leaves the
+    // mark's mass above the plate's centre and the icon reads as hanging from the top. The box is
+    // pushed down by OPTICAL_SHIFT to close half that gap.
+    const boxCentre = mark.y + mark.h / 2;
+    expect(boxCentre - APPLE_CANVAS / 2).toBeCloseTo(OPTICAL_SHIFT * mark.h, 0);
+
+    // The check that matters: the shift moves the centre of MASS closer to the plate's centre than
+    // the bounding box alone would. Measured off the layer, not asserted from a constant.
+    const areas = BAR_HEIGHTS.map((height) => height * BAR_WIDTH);
+    const total = areas.reduce((sum, area) => sum + area, 0);
+    const centroid =
+      mark.y +
+      (BAR_HEIGHTS.map((height) => height / 2).reduce(
+        (sum, centre, index) => sum + centre * (areas[index] ?? 0),
+        0,
+      ) /
+        total) *
+        mark.h;
+    const unshifted = centroid - OPTICAL_SHIFT * mark.h;
+    expect(Math.abs(centroid - APPLE_CANVAS / 2)).toBeLessThan(
+      Math.abs(unshifted - APPLE_CANVAS / 2),
+    );
   });
 
   it('never touches the mask edge', async () => {

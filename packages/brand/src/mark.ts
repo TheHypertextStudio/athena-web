@@ -125,6 +125,57 @@ export const BAR_WIDTH = 4 / 15;
  */
 export const BAR_GAP = 1 / 10;
 
+/**
+ * The area centroid of the bars, as a fraction of the mark's side from its top edge.
+ *
+ * @remarks
+ * Each bar is a rectangle of height `h` whose own centre is at `h / 2`, and whose area is
+ * proportional to `h` since every bar is the same width. The stadium caps are ignored: each bar
+ * has one at the top and one at the bottom, and they displace the same area in opposite
+ * directions, so they cancel.
+ *
+ * @returns The centroid's vertical position, `0` at the top of the mark and `1` at the bottom.
+ */
+function centroidY(): number {
+  const total = BAR_HEIGHTS.reduce((sum, height) => sum + height, 0);
+  return BAR_HEIGHTS.reduce((sum, height) => sum + (height / 2) * height, 0) / total;
+}
+
+/**
+ * How much of the centroid offset to actually correct.
+ *
+ * @remarks
+ * Half, and the half is the point. Correcting the full offset puts the centre of mass exactly on
+ * the plate's centre and looks *worse* — the mark reads as sitting on the bottom, because the eye
+ * takes the bars' shared top edge as an anchor and does not want the whole shift. Correcting none
+ * of it leaves the mark hanging from the top, which is the complaint this started from.
+ *
+ * Like the 8:3 bar ratio, this came from comparing real `ictool` renders at 0%, 50% and 100%
+ * against two mark sizes, not from an equation. It is the one number here chosen by looking.
+ */
+export const OPTICAL_CORRECTION = 0.5;
+
+/**
+ * How far down the mark sits from its bounding box's centre, as a fraction of the mark's side.
+ *
+ * @remarks
+ * **Optical centring.** The bars are top-aligned with descending heights, so their ink is not
+ * evenly distributed inside their bounding box: the area centroid sits at 0.4207 of the side
+ * rather than 0.5. Centring the box therefore leaves the mark's visual mass 7.9% of its height
+ * above the plate's centre — 63px on the 1024 grid — and the empty band under the two short bars
+ * is what makes the icon read as hanging from the top. The rendered Apple asset is worse still,
+ * because Icon Composer's specular highlight is top-weighted and its shadow falls downward.
+ *
+ * Computed from {@link BAR_HEIGHTS} rather than typed in, so changing the rhythm re-centres the
+ * mark instead of quietly unbalancing it.
+ *
+ * **This is what trades away vertical concentricity.** With the mark shifted down, the top margin
+ * no longer equals the side margins, and a single plate radius cannot share a centre with the cap
+ * arcs on both axes — see {@link plateRadius}. The two are genuinely exclusive for a glyph whose
+ * mass is not symmetric, and optical balance is the one a viewer perceives.
+ */
+export const OPTICAL_SHIFT = OPTICAL_CORRECTION * (0.5 - centroidY());
+
 /** The smallest favicon the mark has to stay legible at. */
 export const MIN_FAVICON = 16;
 
@@ -155,15 +206,18 @@ export const APPLE_CANVAS = 1024;
  * on a grid whose mask Apple applies, and its usable area is the largest centred square inside
  * that mask — measured at 869px of the 1024px canvas.
  *
- * 800/1024 puts the mark at 800px square, which is 92% of that live area and the height the
- * outgoing asset used, so the redesign stayed about the bars rather than about the size.
+ * 720/1024 puts the mark at 720px square — 83% of that live area, and 70% of the canvas. The
+ * outgoing asset used 800, which measured 92% of the live area and left the bars close enough to
+ * the mask that the icon read as cramped; Apple's own icons sit nearer 60–65% of the canvas. 720
+ * is the compromise: enough air to look like an app icon, still large enough that "take advantage
+ * of the space" holds.
  *
  * **Concentricity is not defined against Apple's mask.** It is a continuous-curvature squircle,
  * not a rounded rectangle with a circular corner arc, so there is no radius to share a centre
  * with. The mark is square and centred, which is as close as the constraint can be carried onto a
  * plate this package does not draw.
  */
-export const APPLE_COVERAGE = 800 / APPLE_CANVAS;
+export const APPLE_COVERAGE = 720 / APPLE_CANVAS;
 
 /**
  * Fraction of a maskable icon's width the artwork may occupy.
@@ -228,12 +282,17 @@ export function pathBounds(d: string): Bounds {
  * of radius `r = barWidth / 2`, centred at `(margin + r, margin + r)` — the bar's left edge sits
  * at `margin`, and the cap's centre is `r` in from both the left and the top.
  *
- * Setting those equal gives `R = margin + r`, which is all this function is. It is also why the
- * mark has to be square: with different horizontal and vertical margins the cap centre is at
- * `(margin_x + r, margin_y + r)`, which no single radius can meet.
+ * Setting those equal gives `R = margin + r`, which is all this function is.
  *
- * This replaces the `rx="7"` the mark carried since it was drawn, which was concentric with
- * nothing.
+ * **It is concentric horizontally, and deliberately not vertically.** {@link OPTICAL_SHIFT} moves
+ * the mark down so its centre of mass meets the plate's, which makes the top margin larger than
+ * the side margins — and one radius cannot share a centre with the cap arcs on both axes. The side
+ * margin is the one used here, because the tall left bar runs the full height of the mark and its
+ * edge is what the eye reads against the plate's edge. Optical balance is what a viewer perceives;
+ * a concentricity violation at the top is not.
+ *
+ * This still replaces the `rx="7"` the mark carried since it was drawn, which was concentric with
+ * nothing on either axis.
  *
  * @param canvas - Canvas edge length.
  * @param coverage - Fraction of the canvas the mark spans. Defaults to {@link COVERAGE}.
@@ -304,15 +363,16 @@ export function markPath(canvas: number, coverage: number = COVERAGE): MarkGeome
   const barWidth = BAR_WIDTH * side;
   const gap = BAR_GAP * side;
   const margin = (canvas - side) / 2;
+  const top = margin + OPTICAL_SHIFT * side;
 
   const bars = BAR_HEIGHTS.map((ratio, index) =>
-    bar(margin + index * (barWidth + gap), margin, barWidth, side * ratio),
+    bar(margin + index * (barWidth + gap), top, barWidth, side * ratio),
   );
 
   return {
     bars,
     d: bars.join(''),
-    bbox: { x: margin, y: margin, w: side, h: side },
+    bbox: { x: margin, y: top, w: side, h: side },
     barWidth,
     gap,
     capRadius: barWidth / 2,

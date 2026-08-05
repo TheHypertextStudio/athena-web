@@ -14,6 +14,8 @@ import {
   INK,
   markPath,
   MIN_FAVICON,
+  OPTICAL_CORRECTION,
+  OPTICAL_SHIFT,
   pathBounds,
   PLATE,
   plateRadius,
@@ -93,11 +95,37 @@ describe('layout', () => {
     }
   });
 
-  it('scales the Apple layer to the height the outgoing asset used', () => {
-    // 800px of the 1024px grid — 92% of the 869px live area Apple's mask leaves.
+  it('leaves the Apple mark room inside the grid', () => {
+    // 720px of the 1024px grid — 83% of the 869px live area Apple's mask leaves, and 70% of the
+    // canvas. The outgoing asset used 800, which put the bars close enough to the mask that the
+    // icon read as cramped.
     const { bbox } = markPath(APPLE_CANVAS, APPLE_COVERAGE);
-    expect(bbox.h).toBeCloseTo(800, 6);
-    expect(bbox.w).toBeCloseTo(800, 6);
+    expect(bbox.h).toBeCloseTo(720, 6);
+    expect(bbox.w).toBeCloseTo(720, 6);
+    expect(bbox.h / APPLE_CANVAS).toBeLessThan(0.75);
+  });
+
+  it('corrects half the optical offset, not all of it', () => {
+    // Full correction puts the centre of mass on the plate's centre and reads as sitting on the
+    // bottom: the eye anchors on the bars' shared top edge. None of it reads as hanging from the
+    // top. The assertion pins the halfway point so neither drift is silent.
+    const areas = BAR_HEIGHTS.map((height) => height * BAR_WIDTH);
+    const total = areas.reduce((sum, area) => sum + area, 0);
+    const centroid =
+      BAR_HEIGHTS.map((height) => height / 2).reduce(
+        (sum, centre, index) => sum + centre * (areas[index] ?? 0),
+        0,
+      ) / total;
+    expect(OPTICAL_SHIFT).toBeCloseTo(OPTICAL_CORRECTION * (0.5 - centroid), 12);
+    expect(OPTICAL_SHIFT).toBeGreaterThan(0);
+  });
+
+  it('sits the mark below its bounding box centre by exactly that shift', () => {
+    const canvas = APPLE_CANVAS;
+    const { bbox, margin } = markPath(canvas, APPLE_COVERAGE);
+    expect(bbox.y - margin).toBeCloseTo(OPTICAL_SHIFT * bbox.h, 6);
+    // Still inside the canvas with room underneath, or the mask would clip the tall bar.
+    expect(canvas - (bbox.y + bbox.h)).toBeGreaterThan(0.08 * canvas);
   });
 });
 

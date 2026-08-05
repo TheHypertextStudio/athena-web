@@ -34,6 +34,8 @@ axes. So three bars plus two gaps must span exactly the tallest bar's height.
 **The plate radius is derived, not fixed.** It was `rx="7"` from the day the mark was drawn, which
 was concentric with nothing. It is now `margin + r` — 8.667 on a 32px canvas.
 
+The vertical half of this is later given up on purpose; see [Optical centring](#optical-centring).
+
 Squareness plus the 8:3 bar-to-gap ratio chosen in review fixes the rest by substitution:
 `3w + 2(3w/8) = 1` gives `w = 4/15` and `g = 1/10`, exactly, and `3(4/15) + 2(1/10)` is exactly 1.
 
@@ -45,7 +47,8 @@ Squareness plus the 8:3 bar-to-gap ratio chosen in review fixes the rest by subs
 | `BAR_GAP`        | 1/10 of the mark   | Same solution                                                                                                               |
 | `BAR_HEIGHTS`    | 1 : 0.625 : 0.8125 | The 16/10/13 of the mark this replaced, which is where its balance came from                                                |
 | `COVERAGE`       | 0.625              | `BAR_GAP × COVERAGE × 16 ≥ 1` at equality — the smallest mark whose gaps still clear one device pixel in a 16px browser tab |
-| `APPLE_COVERAGE` | 800/1024           | The height the outgoing Apple asset used, so the redesign stayed about the bars rather than the size                        |
+| `APPLE_COVERAGE` | 720/1024           | 83% of the live area and 70% of the canvas — enough air to read as an app icon; 800 was cramped against the mask            |
+| `OPTICAL_SHIFT`  | 0.0397 of the mark | Half the gap between the ink's centroid (0.4207) and the box's centre, so the mark's mass sits near the plate's             |
 | `PLATE`          | `#265ADF`          | `--primary`, `oklch(0.52 0.21 264)`, converted through Oklab                                                                |
 
 The 8:3 ratio is the one number that came from looking rather than solving. Five candidate weights
@@ -100,17 +103,43 @@ colour. It is gone. The mark is one fixed image everywhere, which is also what e
 needed: a manifest icon, an `apple-touch-icon` and a maskable PNG are all single images, and none
 of them could have followed the theme anyway.
 
+## Optical centring
+
+The bars are top-aligned with descending heights, so their ink is not evenly distributed inside
+their bounding box. The area centroid sits at **0.4207** of the mark's side rather than 0.5.
+Centring the box therefore leaves the mark's visual mass 7.9% of its height above the plate's
+centre, and the empty band under the two short bars is what makes the icon read as hanging from
+the top. In the Apple render it measures worse still, because Icon Composer's specular highlight is
+top-weighted and its shadow falls downward.
+
+`OPTICAL_CORRECTION` closes **half** that gap, and the half matters. Correcting all of it puts the
+centre of mass exactly on the plate's centre and looks worse — the mark reads as sitting on the
+bottom, because the eye anchors on the bars' shared top edge. Correcting none of it is the original
+complaint. Like the 8:3 bar ratio, the half came from comparing real `ictool` renders at 0%, 50%
+and 100% across two mark sizes.
+
+**This is what trades away vertical concentricity.** With the mark shifted down, the top margin no
+longer equals the side margins, and a single plate radius cannot share a centre with the cap arcs
+on both axes. The two are genuinely exclusive for a glyph whose mass is not symmetric.
+`plateRadius` uses the side margin, because the tall left bar runs the mark's full height and its
+edge is what the eye reads against the plate's. Optical balance is what a viewer perceives; a
+concentricity violation at the top is not.
+
 ## Why the Apple canvas differs
 
 The web mark sits on a plate this package draws and is bounded by the 16px favicon. The Apple mark
 sits on a grid whose mask Apple applies, and its usable area is the largest centred square inside
-that mask — measured at 869px of the 1024px canvas. At `800/1024` the mark is 800px square, 92% of
-that live area on both axes.
+that mask — measured at 869px of the 1024px canvas. At `720/1024` the mark is 720px square: 83% of
+that live area, 70% of the canvas.
+
+It was 800 first, which measured 92% of the live area and put the bars close enough to the mask
+that the icon read as cramped — Apple's own icons sit nearer 60–65% of the canvas. The geometry
+test now carries a ceiling as well as a floor, so nobody grows it back by accident.
 
 **Concentricity is not defined against Apple's mask.** It is a continuous-curvature squircle, not a
 rounded rectangle with a circular corner arc, so there is no radius to share a centre with. The
-mark is square and centred, which is as far as the constraint carries onto a plate this package
-does not draw.
+mark is square, horizontally centred and optically balanced, which is as far as the constraint
+carries onto a plate this package does not draw.
 
 ## Why the bars are four arcs each, not two
 

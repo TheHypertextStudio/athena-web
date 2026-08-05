@@ -26,6 +26,8 @@ export {
   PLATE,
   plateRadius,
   PLATE_TOKEN,
+  OPTICAL_CORRECTION,
+  OPTICAL_SHIFT,
   PROVENANCE,
   type Bounds,
   type MarkGeometry,

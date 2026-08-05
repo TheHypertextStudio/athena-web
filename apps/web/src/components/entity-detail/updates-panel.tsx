@@ -154,7 +154,7 @@ export function UpdatesPanel({
           {...(activeOrgId === null ? {} : { orgId: activeOrgId })}
           rows={3}
           placeholder="Share how this line of work is flowing — wins, risks, or what changed…"
-          className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-20 w-full resize-y rounded-lg border border-transparent px-3 py-2 text-sm leading-6 transition-colors outline-none focus-visible:ring-2 disabled:opacity-60"
+          className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring text-body-medium min-h-20 w-full resize-y rounded-lg border border-transparent px-3 py-2 transition-colors outline-none focus-visible:ring-2 disabled:opacity-60"
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           {showHealthComposer ? (

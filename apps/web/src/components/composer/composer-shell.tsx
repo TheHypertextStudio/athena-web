@@ -204,8 +204,6 @@ export function ComposerShell({
 
           {bodyPlaceholder !== undefined ? (
             <>
-              {/* Divide the header from the body so the title reads as a distinct document heading. */}
-              <Separator />
               {/*
                * The background/padding lives on the editor's own surface, not a wrapping div —
                * that surface is what already turns a click anywhere inside it (including the

@@ -58,7 +58,7 @@
     "raw-type-utility": 15
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx": {
-    "raw-type-utility": 34
+    "raw-type-utility": 31
   },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 3
@@ -167,8 +167,7 @@
   },
   "apps/web/src/components/agenda/agenda-entry-card.tsx": {
     "raw-type-utility": 6,
-    "shadow-outside-overlay": 1,
-    "size-changing-interaction": 2
+    "shadow-outside-overlay": 1
   },
   "apps/web/src/components/agenda/agenda-header.tsx": {
     "raw-type-utility": 2
@@ -178,9 +177,6 @@
   },
   "apps/web/src/components/agenda/agenda-timebox-form.tsx": {
     "raw-type-utility": 1
-  },
-  "apps/web/src/components/agenda/agenda-view-switcher.tsx": {
-    "size-changing-interaction": 1
   },
   "apps/web/src/components/agents/activity-item.tsx": {
     "raw-type-utility": 13
@@ -260,12 +256,15 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/composer/composer-shell.tsx": {
-    "raw-type-utility": 7
+    "raw-type-utility": 5
   },
   "apps/web/src/components/cycles/cycle-row.tsx": {
     "raw-type-utility": 4
   },
   "apps/web/src/components/editor/freeform-text.tsx": {
+    "raw-type-utility": 2
+  },
+  "apps/web/src/components/entity-detail/mentioned-resources.tsx": {
     "raw-type-utility": 4
   },
   "apps/web/src/components/entity-detail/resources-tab.tsx": {
@@ -292,15 +291,9 @@
   "apps/web/src/components/initiatives/health-pill.tsx": {
     "raw-type-utility": 4
   },
-  "apps/web/src/components/initiatives/initiative-catalog.ts": {
-    "raw-type-utility": 5
-  },
   "apps/web/src/components/initiatives/initiative-icon-picker.tsx": {
     "hardcoded-color": 1,
     "raw-type-utility": 6
-  },
-  "apps/web/src/components/initiatives/initiative-row.tsx": {
-    "raw-type-utility": 2
   },
   "apps/web/src/components/initiatives/roadmap.tsx": {
     "raw-type-utility": 16,
@@ -346,6 +339,21 @@
   "apps/web/src/components/marketing/site-header.tsx": {
     "raw-type-utility": 4
   },
+  "apps/web/src/components/mentions/link-upgrade.ts": {
+    "raw-type-utility": 1
+  },
+  "apps/web/src/components/mentions/mention-chip.tsx": {
+    "raw-type-utility": 2
+  },
+  "apps/web/src/components/mentions/mention-hovercard.tsx": {
+    "raw-type-utility": 1
+  },
+  "apps/web/src/components/mentions/mention-menu.tsx": {
+    "raw-type-utility": 3
+  },
+  "apps/web/src/components/mentions/mention-row.tsx": {
+    "raw-type-utility": 2
+  },
   "apps/web/src/components/my-work/live-session-pill.tsx": {
     "raw-type-utility": 2
   },
@@ -385,9 +393,6 @@
   },
   "apps/web/src/components/programs/program-status.tsx": {
     "raw-type-utility": 6
-  },
-  "apps/web/src/components/programs/work-board.tsx": {
-    "raw-type-utility": 7
   },
   "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
     "raw-type-utility": 4
@@ -613,8 +618,7 @@
   },
   "apps/web/src/components/today/next-up.tsx": {
     "raw-type-utility": 8,
-    "shadow-outside-overlay": 1,
-    "size-changing-interaction": 1
+    "shadow-outside-overlay": 1
   },
   "apps/web/src/components/today/today-prompt.tsx": {
     "raw-type-utility": 12

@@ -33,10 +33,9 @@ import { type JSX, useCallback, useState } from 'react';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
-import { enumOptions, HEALTH_OPTIONS } from '@/components/pickers/options';
+import { enumOptions, HEALTH_OPTIONS, VISIBILITY_OPTIONS } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { STATUS_LABEL } from '@/components/programs/program-status';
-import { visibilityOptions } from '@/components/property-pickers/options';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 
 /** The lists this composer's pickers draw from. */
@@ -190,7 +189,7 @@ export const CreateProgramDialog = withComposerReset(function CreateProgramCompo
         disabled={creating}
       />
       <EnumPicker
-        options={visibilityOptions()}
+        options={VISIBILITY_OPTIONS}
         value={visibility}
         onChange={(next) => {
           if (next) setVisibility(next);

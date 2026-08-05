@@ -3,7 +3,7 @@
  *
  * @remarks
  * The properties panel on an existing program already explains what public/private *does*
- * (`@/components/property-pickers/options`'s `visibilityOptions`), but the create composer used to
+ * (`@/components/pickers/options`'s `VISIBILITY_OPTIONS`), but the create composer used to
  * build its own bare `{ value, label }` pair with no supporting copy — the exact "two bare words"
  * gap the launch note named, just reachable from a different screen. These tests pin that the
  * create composer's Visibility picker uses the same explanatory options as the properties panel,

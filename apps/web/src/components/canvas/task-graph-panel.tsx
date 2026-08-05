@@ -327,6 +327,7 @@ export default function TaskGraphPanel({
       setState: mutations.setState,
       createSubtask: mutations.createSubtask,
       removeDependency: mutations.removeDependency,
+      reverseDependency: mutations.reverseDependency,
     }),
     [canEdit, navigate, mutations.setState, mutations.createSubtask, mutations.removeDependency],
   );

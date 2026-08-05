@@ -29,6 +29,7 @@ import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type ReactNode } from 'react';
 
+import { useCanvasMenus } from './canvas-menus';
 import { useControlledFlow, useFitViewOnChange } from './use-controlled-flow';
 import { type CanvasDensity, type LayoutDirection, useDagreLayout } from './use-dagre-layout';
 import { useGraphHighlight } from './use-graph-highlight';
@@ -141,6 +142,9 @@ function CanvasInner({
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
   const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
   useFitViewOnChange(focusOn, fitMaxZoom);
+  // An edge and the empty pane are not core objects, so the app's object-level right-click handler
+  // never claims them; these are the canvas's own menus for the two.
+  const menus = useCanvasMenus();
   const lod = useLodValue();
 
   return (
@@ -156,6 +160,8 @@ function CanvasInner({
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
           onPaneClick={() => onSelectNode?.(null)}
+          onEdgeContextMenu={menus.onEdgeContextMenu}
+          onPaneContextMenu={menus.onPaneContextMenu}
           onNodeMouseEnter={highlight.onNodeMouseEnter}
           onNodeMouseLeave={highlight.onNodeMouseLeave}
           nodesConnectable={interactive}
@@ -201,6 +207,7 @@ function CanvasInner({
           ) : null}
           {children}
         </ReactFlow>
+        {menus.menu}
         {onExpand ? (
           <button
             type="button"

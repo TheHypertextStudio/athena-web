@@ -24,6 +24,8 @@ export interface CanvasActions {
   createSubtask: (parentId: string, title: string) => void;
   /** Remove the dependency between two tasks (`blocking → blocked`). */
   removeDependency: (sourceId: string, targetId: string) => void;
+  /** Flip which of two tasks blocks the other. */
+  reverseDependency: (sourceId: string, targetId: string) => void;
 }
 
 const CanvasActionsContext = createContext<CanvasActions | null>(null);

@@ -24,8 +24,8 @@ import {
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useParams, useRouter } from 'next/navigation';
-import { type JSX, useMemo, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { AthenaContextAction } from '@/components/athena/athena-context-action';
@@ -39,6 +39,7 @@ import { AgentActivityFeed } from '@/components/project-detail/agent-activity-fe
 import { AgentsStrip } from '@/components/project-detail/agents-strip';
 import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
+import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { WeightedProgress } from '@/components/project-detail/progress-bar';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
@@ -60,9 +61,11 @@ type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 /** Operational Project detail composed from the shared entity-detail shell. */
 export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
   const { teams, defaultTeamId, teamsLoading } = useActiveOrg();
+  const highlightMilestoneId = searchParams.get('milestoneId');
   const projectNoun = useVocabulary('project');
   const taskNoun = useVocabulary('task').toLowerCase();
   const [tab, setTab] = useState<TabId>('overview');
@@ -101,6 +104,19 @@ export default function ProjectDetailPage(): JSX.Element {
   // Deleting a project hits `capabilityGuard('manage')` server-side, so the affordance is gated on
   // `manage` — a strictly stronger bar than the `contribute`-level `canEdit` used for field edits.
   const canDelete = useOrgCapability(detail?.members ?? [], detail?.roles ?? [], 'manage');
+
+  // A `?milestoneId=` deep link (e.g. from search results) always resolves on the Overview tab,
+  // where the Milestones panel lives — force it active, then scroll to and highlight the row once
+  // the panel has rendered (re-runs once `milestones` arrives, since the row doesn't exist yet).
+  useEffect(() => {
+    if (highlightMilestoneId) setTab('overview');
+  }, [highlightMilestoneId]);
+  useEffect(() => {
+    if (!highlightMilestoneId || tab !== 'overview') return;
+    document
+      .getElementById(`milestone-${highlightMilestoneId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [highlightMilestoneId, tab, milestones]);
 
   const resourceKey = [...detailKey, 'resources'] as const;
   const displayMutation = useApiMutation<
@@ -429,6 +445,16 @@ export default function ProjectDetailPage(): JSX.Element {
               placeholder="Add the Project brief…"
             />
           </section>
+
+          <ProjectMilestonesPanel
+            orgId={orgId}
+            projectId={projectId}
+            projectDetailKey={detailKey}
+            milestones={milestones}
+            milestoneTasks={milestoneTasks}
+            canEdit={canEdit}
+            highlightId={highlightMilestoneId}
+          />
 
           {progress ? (
             <section className="bg-surface-container-low rounded-xl p-4" aria-label="Progress">

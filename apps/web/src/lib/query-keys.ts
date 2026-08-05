@@ -77,6 +77,17 @@ export const queryKeys = {
   portfolio: () => ['me', 'portfolio'] as const,
   search: (scope: 'hub' | 'org', query: string, orgId?: string | null) =>
     ['search', scope, orgId ?? 'all', query] as const,
+  // All mention keys share one prefix, so connecting an app invalidates the picker's whole cache
+  // with a single coarse key rather than a list someone has to remember to extend.
+  mentions: (orgId: string) => ['org', orgId, 'mentions'] as const,
+  mentionLocal: (orgId: string, query: string) =>
+    ['org', orgId, 'mentions', 'local', query] as const,
+  mentionExternal: (orgId: string, query: string) =>
+    ['org', orgId, 'mentions', 'external', query] as const,
+  mentionHydrate: (orgId: string, batchKey: string) =>
+    ['org', orgId, 'mentions', 'hydrate', batchKey] as const,
+  entityMentions: (orgId: string, subjectType: string, subjectId: string) =>
+    ['org', orgId, 'mentions', 'subject', subjectType, subjectId] as const,
   hubSearch: (query: string) => ['me', 'search', query] as const,
   today: (date: string) => ['me', 'today', date] as const,
   agenda: (date: string) => ['me', 'agenda', date] as const,

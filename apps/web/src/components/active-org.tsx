@@ -153,3 +153,18 @@ export function useActiveOrg(): ActiveOrgValue {
 export function useOptionalActiveOrg(): ActiveOrgValue | null {
   return useContext(ActiveOrgReactContext);
 }
+
+/**
+ * Read just the active org's id, where having one is an enhancement rather than a requirement.
+ *
+ * @remarks
+ * The throwing {@link useActiveOrg} is right for a surface that cannot function without an org.
+ * It is wrong for one that merely does *more* with an org — a rich-text field gains `@` mentions
+ * inside the shell and is a perfectly good editor outside it. Making such a component throw turns
+ * an optional feature into a hard dependency on where it is mounted.
+ *
+ * @returns the current active-org id, or null outside the `(app)` shell.
+ */
+export function useActiveOrgIdOptional(): string | null {
+  return useOptionalActiveOrg()?.activeOrgId ?? null;
+}

@@ -11,11 +11,17 @@
  * Reads only, so org membership via `orgContextMiddleware` is the whole gate — the same bar
  * `/search` sets, since a mention picker shows nothing the search box would not.
  */
-import { MentionHydrateIn, MentionHydrateOut, MentionSearchOut } from '@docket/types';
+import {
+  MentionExternalOut,
+  MentionHydrateIn,
+  MentionHydrateOut,
+  MentionSearchOut,
+} from '@docket/types';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
+import { searchExternalMentions } from '../content/mention-external';
 import { hydrateMentions } from '../content/mention-hydrate';
 import { searchLocalMentions } from '../content/mention-search';
 import { AuthError } from '../error';
@@ -67,6 +73,30 @@ const mentions = new Hono<AppEnv>()
         limit,
       });
       return ok(c, MentionSearchOut, { query: q.trim(), items });
+    },
+  )
+  .get(
+    '/external',
+    apiDoc({
+      tag: 'Mentions',
+      summary: "Search resources in the caller's connected apps",
+      response: MentionExternalOut,
+      description:
+        "Fan out to the apps this caller has connected, under a per-provider deadline. Always returns 200 when the request itself is valid: a provider that is slow, throttled, or needs reauthorization is reported in `providers` as a closed status code, so one degraded app never removes another app's results or empties a menu the user is reading.",
+    }),
+    zQuery(MentionSearchQuery),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { orgId, actorId } = c.get('actorCtx');
+      const { q, limit } = c.req.valid('query');
+
+      const result = await searchExternalMentions({ actorId, orgId, query: q, limit });
+      return ok(c, MentionExternalOut, {
+        query: q.trim(),
+        items: result.items,
+        providers: result.providers,
+      });
     },
   )
   .post(

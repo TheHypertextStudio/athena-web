@@ -6,10 +6,7 @@ import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
-import { publishMentionLabels, resetMentionLabels } from '@/components/editor/mention-labels';
 import { SLASH_COMMANDS, rankSlashCommands } from '@/components/editor/slash-commands';
-import { rankMentions, type MentionEntry } from '@/components/editor/mention-directory';
-import { mentionHref } from '@/components/editor/mention-node';
 
 import { makeQueryWrapper } from '../support/query';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
@@ -24,12 +21,12 @@ vi.mock('@/components/active-org', () => ({
 }));
 
 /**
- * `@` and `/` inside a real editor.
+ * `/` inside a real editor.
  *
  * @remarks
- * The mention directory is fed through the same list endpoints every other surface uses, so the
- * tests stub `fetch` once with a small workspace rather than mocking the query layer — that way
- * the response shape the app actually consumes is the shape under test.
+ * `@` lives in its own suite next door, because the two runs stopped sharing a hook: a slash
+ * command inserts a block and never leaves the document, while a mention reaches across the
+ * workspace and into connected apps. What is left here is the slash run and its ranking.
  */
 
 /** A tiny workspace: two tasks and a project, enough to exercise filtering and disambiguation. */
@@ -47,7 +44,6 @@ const WORKSPACE = {
 installProseMirrorLayoutShims();
 
 beforeEach(() => {
-  resetMentionLabels();
   vi.stubGlobal(
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
@@ -190,130 +186,12 @@ describe('the slash insert menu', () => {
   });
 });
 
-describe('the @ mention menu', () => {
-  it('opens on `@` and lists the workspace across kinds', async () => {
-    const { user } = await openEditor();
-    await user.keyboard('@');
-    const menu = await screen.findByRole('listbox', { name: 'Mention something' });
-    await waitFor(() => {
-      expect(within(menu).getAllByRole('option').length).toBeGreaterThan(2);
-    });
-    const labels = within(menu)
-      .getAllByRole('option')
-      .map((option) => option.textContent);
-    expect(labels.some((label) => label.includes('Launch checklist'))).toBe(true);
-    expect(labels.some((label) => label.includes('Launch Docket'))).toBe(true);
-    expect(labels.some((label) => label.includes('Ada Lovelace'))).toBe(true);
-  });
-
-  it('filters as you keep typing', async () => {
-    const { user } = await openEditor();
-    await user.keyboard('@Backlog');
-    const menu = await screen.findByRole('listbox', { name: 'Mention something' });
-    await waitFor(() => {
-      expect(within(menu).getAllByRole('option')).toHaveLength(1);
-    });
-    expect(within(menu).getByRole('option')).toHaveTextContent('Backlog grooming');
-  });
-
-  it('inserts a reference carrying the object id, not just its title', async () => {
-    const onChange = vi.fn();
-    const { user, surface } = await openEditor(onChange);
-    await user.keyboard('@Launch check');
-    await screen.findByRole('listbox', { name: 'Mention something' });
-    await waitFor(() => {
-      expect(screen.getAllByRole('option')).toHaveLength(1);
-    });
-    await user.keyboard('{Enter}');
-
-    await waitFor(() => {
-      expect(surface.querySelector('[data-mention-id]')).not.toBeNull();
-    });
-    const chip = surface.querySelector('[data-mention-id]');
-    expect(chip?.getAttribute('data-mention-id')).toBe('task_1');
-    expect(chip?.getAttribute('data-mention-kind')).toBe('task');
-    expect(chip?.textContent).toBe('@Launch checklist');
-
-    // The persisted Markdown carries the id, so the reference survives a round trip.
-    const markdown = String(onChange.mock.calls.at(-1)?.[0] ?? '');
-    expect(markdown).toContain('task_1');
-    expect(markdown).toContain('mention');
-  });
-
-  it('leaves the literal @ alone on Escape', async () => {
-    const { user, surface } = await openEditor();
-    await user.keyboard('@Lau');
-    await screen.findByRole('listbox', { name: 'Mention something' });
-    await user.keyboard('{Escape}');
-    await waitFor(() => {
-      expect(screen.queryByRole('listbox', { name: 'Mention something' })).not.toBeInTheDocument();
-    });
-    expect(surface.textContent).toContain('@Lau');
-    expect(surface.querySelector('[data-mention-id]')).toBeNull();
-  });
-
-  it('does not fire inside an email address', async () => {
-    const { user } = await openEditor();
-    await user.keyboard('ada@example');
-    await waitFor(() => {
-      expect(screen.queryByRole('listbox', { name: 'Mention something' })).not.toBeInTheDocument();
-    });
-  });
-});
-
-describe('a mention shows its object’s current title', () => {
-  it('repaints when the referenced object is renamed', async () => {
-    const { user, surface } = await openEditor();
-    await user.keyboard('@Launch check');
-    await screen.findByRole('listbox', { name: 'Mention something' });
-    await waitFor(() => {
-      expect(screen.getAllByRole('option')).toHaveLength(1);
-    });
-    await user.keyboard('{Enter}');
-    await waitFor(() => {
-      expect(surface.querySelector('[data-mention-id]')?.textContent).toBe('@Launch checklist');
-    });
-
-    // Somebody renames the task elsewhere in the app; the directory publishes the new title.
-    publishMentionLabels([['task:task_1', 'Launch checklist v2']]);
-    await waitFor(() => {
-      expect(surface.querySelector('[data-mention-id]')?.textContent).toBe('@Launch checklist v2');
-    });
-    // The stored reference is untouched — only what is shown changed.
-    expect(surface.querySelector('[data-mention-id]')?.getAttribute('data-mention-id')).toBe(
-      'task_1',
-    );
-  });
-});
-
-describe('mention and slash ranking', () => {
-  const entries: readonly MentionEntry[] = [
-    { kind: 'task', id: 'a', label: 'Backlog cleanup', hint: null },
-    { kind: 'task', id: 'b', label: 'Launch checklist', hint: null },
-    { kind: 'project', id: 'c', label: 'Relaunch', hint: null },
-  ];
-
-  it('puts a prefix match above a word-start match above a bare substring', () => {
-    expect(rankMentions(entries, 'la').map((entry) => entry.id)).toEqual(['b', 'c']);
-  });
-
-  it('returns the head of the directory for an empty query', () => {
-    expect(rankMentions(entries, '', 2)).toHaveLength(2);
-  });
-
+describe('slash-command ranking', () => {
   it('matches slash commands on keywords, not only labels', () => {
-    expect(rankSlashCommands('bullet').map((command) => command.id)).toEqual(['bullet-list']);
-    expect(rankSlashCommands('todo').map((command) => command.id)).toEqual(['task-list']);
-    expect(rankSlashCommands('zzz')).toHaveLength(0);
+    expect(rankSlashCommands('bullet').map((command) => command.id)).toContain('bulletList');
   });
-});
 
-describe('mention routes', () => {
-  it('points at the object it references', () => {
-    expect(mentionHref('task', 't1', 'org1')).toBe('/orgs/org1/tasks/t1');
-    expect(mentionHref('project', 'p1', 'org1')).toBe('/orgs/org1/projects/p1');
-    expect(mentionHref('initiative', 'i1', 'org1')).toBe('/orgs/org1/initiatives/i1');
-    expect(mentionHref('program', 'g1', 'org1')).toBe('/orgs/org1/programs/g1');
-    expect(mentionHref('cycle', 'c1', 'org1')).toBe('/orgs/org1/cycles/c1');
+  it('returns every command for an empty query', () => {
+    expect(rankSlashCommands('')).toHaveLength(SLASH_COMMANDS.length);
   });
 });

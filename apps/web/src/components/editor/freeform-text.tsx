@@ -14,12 +14,18 @@ import StarterKit from '@tiptap/starter-kit';
 import type { JSX } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { cn } from '@docket/ui/lib/utils';
-import { useOptionalActiveOrg } from '@/components/active-org';
-import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
+import { ReactNodeViewRenderer } from '@tiptap/react';
 
-import { Mention } from './mention-node';
-import { useEditorSuggestions } from './use-editor-suggestions';
+import { cn } from '@docket/ui/lib/utils';
+import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
+import { useActiveOrgIdOptional } from '@/components/active-org';
+import MentionHydrationProvider from '@/components/mentions/mention-hydration';
+import MentionMenu from '@/components/mentions/mention-menu';
+import MentionNodeView from '@/components/mentions/mention-node-view';
+import { createMentionExtension } from '@/components/mentions/mention-extension';
+import { useMentionController } from '@/components/mentions/use-mention-controller';
+
+import { useSlashCommands } from './use-slash-commands';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -41,6 +47,14 @@ export interface FreeformTextEditorProps {
   onCancel?: () => void;
   /** Additional styling for the editor container. */
   className?: string;
+  /**
+   * The organization whose entities and connected apps `@` can reference.
+   *
+   * @remarks
+   * Absent means mentions are off for this surface, which is the right default for a field with
+   * no workspace context rather than a reason to guess one.
+   */
+  mentionOrgId?: string;
 }
 
 /** Render a bare freeform rich-text field backed by Markdown. */
@@ -54,6 +68,7 @@ export function FreeformTextEditor({
   onSubmit,
   onCancel,
   className,
+  mentionOrgId,
 }: FreeformTextEditorProps): JSX.Element | null {
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
@@ -62,16 +77,23 @@ export function FreeformTextEditor({
   onSubmitRef.current = onSubmit;
   onCancelRef.current = onCancel;
 
-  // Rendered outside the app shell in a few composers and in tests, where there is no workspace
-  // to mention things from; the editor still works, just without `@`.
-  const activeOrg = useOptionalActiveOrg();
-  const suggestions = useEditorSuggestions({
-    organizationId: activeOrg?.activeOrgId ?? null,
-    disabled: disabled || readOnly,
+  // `/` and `@` are separate runs on purpose. Slash inserts a block and never leaves the
+  // document, so it stays on the plugin that owns it. Mentions reach across workspaces and
+  // connected apps, so they ride the controller that knows how to search and hydrate them.
+  const slash = useSlashCommands({ disabled: disabled || readOnly });
+  const slashExtensions = slash.extensions;
+  const attachSlash = slash.attach;
+  const slashMenu = slash.menu;
+
+  const mentions = useMentionController({
+    orgId: mentionOrgId,
+    enabled: mentionOrgId !== undefined && !readOnly && !disabled,
   });
-  const suggestionExtensions = suggestions.extensions;
-  const attachSuggestions = suggestions.attach;
-  const suggestionMenu = suggestions.menu;
+  // `useEditor`'s callbacks are created once and close over their first render's values, the same
+  // reason `onChangeRef` exists a few lines up. The controller changes every keystroke, so the
+  // handlers must reach it through a ref or they would act on a stale menu.
+  const mentionsRef = useRef(mentions);
+  mentionsRef.current = mentions;
 
   const extensions = useMemo(
     () => [
@@ -81,13 +103,15 @@ export function FreeformTextEditor({
         autolink: true,
         linkOnPaste: true,
         protocols: ['mailto'],
-        validate: (href) => /^(https?:|mailto:)/i.test(href),
+        // App-relative hrefs must pass, or an internal mention round-trips into a link Tiptap
+        // rejects and silently degrades to plain text — losing the reference with no error.
+        validate: (href) => /^(https?:|mailto:|\/)/i.test(href),
       }),
+      createMentionExtension(() => ReactNodeViewRenderer(MentionNodeView)),
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
-      Mention,
-      ...suggestionExtensions,
+      ...slashExtensions,
     ],
-    [suggestionExtensions],
+    [slashExtensions],
   );
 
   const editor = useEditor({
@@ -105,7 +129,11 @@ export function FreeformTextEditor({
         class:
           'text-on-surface text-body-large min-h-10 w-full cursor-text font-normal outline-none [&_a]:text-primary [&_a]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_code]:bg-surface-container-high [&_code]:rounded [&_code]:px-1 [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-medium [&_h2]:mt-5 [&_h2]:font-medium [&_h3]:text-title-small [&_h3]:mt-4 [&_h3]:font-medium [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_pre]:bg-surface-container-high [&_pre]:my-2 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:p-3 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5',
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
+        // First, because ProseMirror consults `editorProps.handleKeyDown` before any plugin
+        // keymap: if the menu's Escape did not run here it would never run at all, and Escape
+        // would discard the draft instead of dismissing the menu.
+        if (mentionsRef.current.handleKeyDown(view, event)) return true;
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && onSubmitRef.current) {
           event.preventDefault();
           onSubmitRef.current();
@@ -121,10 +149,14 @@ export function FreeformTextEditor({
     },
     onUpdate: ({ editor: instance }) => {
       onChangeRef.current(instance.getMarkdown());
+      mentionsRef.current.syncFromEditor(instance);
+    },
+    onSelectionUpdate: ({ editor: instance }) => {
+      mentionsRef.current.syncFromEditor(instance);
     },
   });
 
-  attachSuggestions(editor);
+  attachSlash(editor);
 
   useEffect(() => {
     if (!editor) return;
@@ -133,8 +165,11 @@ export function FreeformTextEditor({
 
   useEffect(() => {
     if (!editor || editor.getMarkdown() === value) return;
+    // Replacing content destroys the selection, which closes the menu mid-word. A controlled
+    // parent that normalizes markdown would otherwise make the picker unusable in composers.
+    if (mentions.suppressReconcile.current) return;
     editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
-  }, [editor, value]);
+  }, [editor, value, mentions.suppressReconcile]);
 
   if (!editor) return null;
 
@@ -158,8 +193,29 @@ export function FreeformTextEditor({
         className,
       )}
     >
-      <EditorContent editor={editor} />
-      {suggestionMenu}
+      <EditorContent
+        editor={editor}
+        aria-expanded={mentions.open}
+        aria-controls={mentions.open ? mentions.listboxId : undefined}
+        aria-activedescendant={mentions.open ? mentions.activeKey : undefined}
+      />
+      {mentions.open ? (
+        <MentionMenu
+          open={mentions.open}
+          orgId={mentionOrgId ?? ''}
+          anchorRef={mentions.anchorRef}
+          activeKey={mentions.activeKey}
+          hasArrowed={mentions.hasArrowed}
+          listboxId={mentions.listboxId}
+          query={mentions.query}
+          onSelect={mentions.selectItem}
+          onRows={mentions.reportRows}
+          onOpenChange={(next) => {
+            if (!next) mentions.close();
+          }}
+        />
+      ) : null}
+      {slashMenu}
     </div>
   );
 }
@@ -176,10 +232,13 @@ export interface FreeformTextProps {
 
 /** Render stored Markdown as the same quiet text surface without editing controls. */
 export function FreeformText({ value, emptyText, className }: FreeformTextProps): JSX.Element {
+  const activeOrgId = useActiveOrgIdOptional();
   if (value.trim().length === 0) {
     return <p className={cn('text-on-surface-variant text-body-medium', className)}>{emptyText}</p>;
   }
-  return (
+  // Read-only, but still wrapped: a reader's chips need their previews resolved just as much as
+  // an author's, and the batch provider is what keeps that one request instead of one per chip.
+  const editor = (
     <FreeformTextEditor
       value={value}
       onChange={() => undefined}
@@ -188,6 +247,11 @@ export function FreeformText({ value, emptyText, className }: FreeformTextProps)
       readOnly
       className={className}
     />
+  );
+  return activeOrgId === null ? (
+    editor
+  ) : (
+    <MentionHydrationProvider orgId={activeOrgId}>{editor}</MentionHydrationProvider>
   );
 }
 
@@ -213,6 +277,7 @@ export function EditableFreeformText({
   onSave,
   className,
 }: EditableFreeformTextProps): JSX.Element {
+  const activeOrgId = useActiveOrgIdOptional();
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
 
@@ -242,13 +307,26 @@ export function EditableFreeformText({
         setFocused(false);
       }}
     >
-      <FreeformTextEditor
-        value={draft}
-        onChange={setDraft}
-        placeholder={placeholder}
-        ariaLabel="Description"
-        className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
-      />
+      {activeOrgId === null ? (
+        <FreeformTextEditor
+          value={draft}
+          onChange={setDraft}
+          placeholder={placeholder}
+          ariaLabel="Description"
+          className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
+        />
+      ) : (
+        <MentionHydrationProvider orgId={activeOrgId}>
+          <FreeformTextEditor
+            value={draft}
+            onChange={setDraft}
+            placeholder={placeholder}
+            ariaLabel="Description"
+            className="flex min-h-28 flex-1 flex-col [&>div]:flex-1"
+            mentionOrgId={activeOrgId}
+          />
+        </MentionHydrationProvider>
+      )}
     </div>
   );
 }

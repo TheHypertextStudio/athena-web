@@ -24,6 +24,8 @@ import { sweepConnectorSync } from './integration-sync';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
+import { getContainer } from '../container';
+import { sweepResourceUnfurls } from '../content/unfurl-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
 import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 import { reapIdleSessions } from '../mcp/session-registry';
@@ -95,6 +97,15 @@ const cron = new Hono()
   .post('/search-index', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await processSearchIndexJobs({ limit: 50 });
+    return c.json({ swept: true, ...result });
+  })
+  // Resource-unfurl drain: resolve titles, icons, and previews for URLs someone referenced. Rows
+  // are created `pending` by the mention reconciler so a description save never waits on a
+  // third-party fetch; the lease lives on the row, so a scheduler retry re-claims rather than
+  // duplicating.
+  .post('/unfurl-resources', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepResourceUnfurls(getContainer().unfurler, new Date());
     return c.json({ swept: true, ...result });
   })
   // Daily-digest sweep: generate + email each opted-in user's end-of-day summary once their

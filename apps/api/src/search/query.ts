@@ -136,6 +136,114 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
 }
 
 /**
+ * Load the caller's most recently touched documents in one org, with no query.
+ *
+ * @remarks
+ * Serves the bare-`@` state of the mention picker, where there is nothing to match on yet but a
+ * useful list is still expected instantly. {@link searchWorkspace} cannot answer this because it
+ * short-circuits on an empty query — matching nothing is the right answer for a search box and the
+ * wrong one for a picker.
+ *
+ * It lives in this module, next to the query it complements, specifically so it reuses
+ * `resolveCallerAccess` and `filterVisibleRows` as calls rather than as copies. A second
+ * implementation of the visibility filter is the single most dangerous thing that could be written
+ * against this read model: it would be a cross-tenant leak that no type checks and that looks
+ * correct in review.
+ *
+ * @param input - The caller, the org, the kinds worth offering, and how many to return.
+ * @returns Visible documents, most recently updated first.
+ */
+export async function loadRecentDocuments(input: {
+  caller: SearchCaller;
+  orgId: string;
+  kinds: readonly SearchDocumentKind[];
+  limit: number;
+}): Promise<SearchOut['items']> {
+  const schema = await import('@docket/db');
+  const callerAccess = await resolveCallerAccess(input.caller);
+  const callerAccessByOrg = new Map(callerAccess.map((access) => [access.organizationId, access]));
+  if (!callerAccessByOrg.has(input.orgId)) return [];
+
+  const ownerUserId = input.caller.kind === 'user' ? input.caller.userId : null;
+  // Over-fetch, because visibility filtering happens in app code after the query and can remove
+  // an arbitrary share of the page. Three times the ask is enough for realistic grant density.
+  const rows = await schema.db
+    .select({ document: schema.searchDocument })
+    .from(schema.searchDocument)
+    .where(
+      and(
+        eq(schema.searchDocument.organizationId, input.orgId),
+        inArray(schema.searchDocument.kind, [...input.kinds]),
+        isNull(schema.searchDocument.archivedAt),
+      ),
+    )
+    .orderBy(desc(schema.searchDocument.sourceUpdatedAt), desc(schema.searchDocument.baseRank))
+    .limit(Math.min(input.limit * 3, 150));
+
+  const candidates = rows.map((row) => ({ ...row.document, textRank: 0 }));
+  const visible = await filterVisibleRows(candidates, {
+    ownerUserId,
+    accessByOrg: callerAccessByOrg,
+  });
+  return visible.rows.slice(0, input.limit).map((row) =>
+    toSearchResult({
+      row,
+      score: 0,
+      sortTime: rowSortTime(row),
+      matchedFields: [],
+      snippet: null,
+    }),
+  );
+}
+
+/**
+ * Load specific documents by entity id, keeping only the ones this caller may see.
+ *
+ * @remarks
+ * The read path behind mention hydration, where the ids are already known and there is nothing to
+ * match on. Like {@link loadRecentDocuments} it lives here so it *calls* `filterVisibleRows` rather
+ * than reimplementing it — a mention card is exactly the kind of surface where a second, subtly
+ * different permission check would leak a title to someone who cannot open the thing it names.
+ *
+ * Absence is indistinguishable from denial by design: a caller who may not see a row gets the same
+ * empty result as one asking about an id that does not exist, so this cannot be used to probe for
+ * the existence of ids.
+ *
+ * @param input - The caller, the org to look in, and the entity ids to resolve.
+ * @returns The visible documents; ids that are missing or forbidden are simply absent.
+ */
+export async function loadVisibleDocuments(input: {
+  caller: SearchCaller;
+  orgId: string;
+  entityIds: readonly string[];
+}): Promise<SearchDocumentRow[]> {
+  if (input.entityIds.length === 0) return [];
+  const schema = await import('@docket/db');
+  const callerAccess = await resolveCallerAccess(input.caller);
+  const callerAccessByOrg = new Map(callerAccess.map((access) => [access.organizationId, access]));
+  if (!callerAccessByOrg.has(input.orgId)) return [];
+
+  const rows = await schema.db
+    .select({ document: schema.searchDocument })
+    .from(schema.searchDocument)
+    .where(
+      and(
+        eq(schema.searchDocument.organizationId, input.orgId),
+        inArray(schema.searchDocument.entityId, [...input.entityIds]),
+      ),
+    );
+
+  const visible = await filterVisibleRows(
+    rows.map((row) => ({ ...row.document, textRank: 0 })),
+    {
+      ownerUserId: input.caller.kind === 'user' ? input.caller.userId : null,
+      accessByOrg: callerAccessByOrg,
+    },
+  );
+  return visible.rows;
+}
+
+/**
  * Resolve the caller's per-org Actor rows, which carry the role every grant check reads from.
  *
  * @remarks

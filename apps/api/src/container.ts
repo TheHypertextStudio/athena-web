@@ -27,6 +27,7 @@ import {
   MockMcpConnector,
   MockConnector,
   MockObserver,
+  MockUnfurler,
   RealLinearAgentPort,
   RealMcpConnector,
   RealPushSender,
@@ -34,6 +35,7 @@ import {
   RealGitHubObserver,
   RealLinearObserver,
   RealSmsSender,
+  RealUnfurler,
   pushConfigFromEnv,
   smsConfigFromEnv,
 } from '@docket/integrations';
@@ -46,6 +48,7 @@ import type {
   ObserverProvider,
   PushSender,
   SmsSender,
+  Unfurler,
 } from '@docket/integrations';
 import { buildInboundReceiverFromEnv, buildMailerFromEnv } from '@docket/mail';
 import type { InboundMailReceiver, Mailer } from '@docket/mail';
@@ -110,6 +113,7 @@ export interface AppContainer {
   /** The realtime speech backend behind Athena's browser voice mode. */
   readonly voice: VoiceRealtimeProvider;
   readonly blob: BlobStore;
+  readonly unfurler: Unfurler;
 }
 
 function localMode(runtimeEnv: AppRuntimeEnv): boolean {
@@ -407,6 +411,7 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   // at boot by a credential it does not use.
   const voice = lazyValue(() => resolveVoiceProvider(runtimeEnv));
   const push = lazyValue(() => buildPushSender(runtimeEnv));
+  const unfurler = lazyValue(() => (mock ? new MockUnfurler() : new RealUnfurler()));
   const blob = lazyValue(() =>
     mock
       ? new LocalDiskBlob()
@@ -452,6 +457,9 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     },
     get blob() {
       return blob();
+    },
+    get unfurler() {
+      return unfurler();
     },
   };
 

@@ -238,7 +238,7 @@ describe('reconcileMentions', () => {
     );
     await reconcileMentions(orgId, 'project', projectId);
 
-    const rows = (await mentionsFor(projectId)).toSorted((a, b) => a.position - b.position);
+    const rows = [...(await mentionsFor(projectId))].sort((a, b) => a.position - b.position);
     expect(rows.map((r) => [r.position, r.label])).toEqual([
       [0, 'First'],
       [1, 'Second'],

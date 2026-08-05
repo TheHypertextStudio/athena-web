@@ -20,7 +20,7 @@
  */
 import { z } from 'zod';
 
-import { ExternalResourceOut } from './resource';
+import { ExternalResourceOut, ExternalResourceType, ResourceProvider } from './resource';
 import { ExternalResourceId, MentionId, OrganizationId } from './primitives';
 
 /** The entity whose prose a mention was authored in. */
@@ -73,6 +73,104 @@ export const MentionRef = z.discriminatedUnion('kind', [
 ]);
 /** Mention-ref value. */
 export type MentionRef = z.infer<typeof MentionRef>;
+
+/**
+ * One row in the `@` picker.
+ *
+ * @remarks
+ * A union over the two genuinely different kinds of row, not one shape with half its fields
+ * nulled. A Docket entity has a workflow kind and an in-app route; an external resource has a
+ * provider, a file type, and an owner. Forcing both through one object would mean six nullable
+ * fields that each mean "not applicable here" — which is how a renderer ends up printing an em
+ * dash where a real product prints nothing.
+ *
+ * `id` is the merge key both arms share, so a Drive file that arrives from the local index and
+ * again from the provider fan-out collapses to one row instead of appearing twice.
+ */
+export const MentionItem = z.discriminatedUnion('origin', [
+  z.object({
+    origin: z.literal('local'),
+    id: z.string(),
+    ref: MentionRef,
+    entityKind: MentionEntityKind,
+    title: z.string(),
+    /** Containing project, team, or summary line — whatever orients the reader. Null when none. */
+    subtitle: z.string().nullable(),
+    href: z.string(),
+    score: z.number(),
+  }),
+  z.object({
+    origin: z.literal('external'),
+    id: z.string(),
+    ref: MentionRef,
+    provider: ResourceProvider,
+    resourceType: ExternalResourceType,
+    title: z.string(),
+    /** Owner, containing drive, or site — the one line of context the row has space for. */
+    subtitle: z.string().nullable(),
+    url: z.string(),
+    iconUrl: z.string().nullable(),
+    modifiedAt: z.string().nullable(),
+    score: z.number(),
+  }),
+]);
+/** Mention-item value. */
+export type MentionItem = z.infer<typeof MentionItem>;
+
+/** The local wave of the picker: Docket entities, answered from the index with no provider call. */
+export const MentionSearchOut = z
+  .object({
+    query: z
+      .string()
+      .describe('The query these items answer, echoed so a stale response is detectable.'),
+    items: z.array(MentionItem).describe('Matching rows, best first.'),
+  })
+  .meta({ id: 'MentionSearchOut', description: 'Local mention picker results.' });
+/** Local mention-search response value. */
+export type MentionSearchOut = z.infer<typeof MentionSearchOut>;
+
+/**
+ * How one connected provider fared during a fan-out.
+ *
+ * @remarks
+ * A closed enum, never a message. Provider text must not reach a Docket surface — the UI branches
+ * on these values and supplies its own copy. Every value describes something the user could act
+ * on, which is why `throttled` and `timed_out` are distinct from `unavailable`.
+ */
+export const MentionProviderStatus = z.enum([
+  'ok',
+  'scope_required',
+  'reauth_required',
+  'not_connected',
+  'throttled',
+  'timed_out',
+  'unavailable',
+]);
+/** Mention-provider-status value. */
+export type MentionProviderStatus = z.infer<typeof MentionProviderStatus>;
+
+/** The external wave of the picker: resources from the caller's own connected apps. */
+export const MentionExternalOut = z
+  .object({
+    query: z
+      .string()
+      .describe('The query these items answer, echoed so a stale response is detectable.'),
+    items: z.array(MentionItem).describe('Matching resources, best first.'),
+    providers: z
+      .array(
+        z.object({
+          provider: ResourceProvider,
+          status: MentionProviderStatus,
+          tookMs: z.number().int().nonnegative(),
+        }),
+      )
+      .describe(
+        'Per-provider outcome. A provider failure is reported here inside a 200 rather than failing the request, so one degraded app never removes the rest of the results.',
+      ),
+  })
+  .meta({ id: 'MentionExternalOut', description: 'External mention picker results.' });
+/** External mention-search response value. */
+export type MentionExternalOut = z.infer<typeof MentionExternalOut>;
 
 /** One reference authored inside an entity's prose, as returned by reads. */
 export const MentionOut = z

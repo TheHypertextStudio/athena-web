@@ -484,6 +484,13 @@
       "when": 1785962430133,
       "tag": "0068_happy_makkari",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1785972241957,
+      "tag": "0069_premium_silhouette",
+      "breakpoints": true
     }
   ]
 }

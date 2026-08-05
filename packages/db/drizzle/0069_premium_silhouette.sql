@@ -1,0 +1,1 @@
+ALTER TYPE "public"."search_document_kind" ADD VALUE 'external_resource';

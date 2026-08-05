@@ -7,7 +7,7 @@ import { searchResultToPaletteItem } from '@/components/command-palette/use-hub-
 const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
 
 function result(overrides: Partial<SearchResult> = {}): SearchResult {
-  return {
+  const base: SearchResult = {
     id: 'doc_1',
     organizationId: ORG,
     userId: null,
@@ -27,12 +27,14 @@ function result(overrides: Partial<SearchResult> = {}): SearchResult {
     subject: null,
     source: null,
     facets: {},
+    entityId: 'task_real_id',
+    externalUrl: null,
     usedIn: [],
     updatedAt: '2026-08-01T00:00:00.000Z',
     actions: [],
     score: 10,
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 describe('searchResultToPaletteItem', () => {

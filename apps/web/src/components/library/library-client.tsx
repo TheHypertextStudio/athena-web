@@ -22,6 +22,7 @@ import { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { useActiveOrg } from '@/components/active-org';
+import { relativeTime } from '@/components/project-detail/format-time';
 import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
 import { RESOURCE_TYPE_ICON } from '@/components/mentions/mention-glyphs';
@@ -33,14 +34,7 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
-import {
-  buildResourceCatalog,
-  LIBRARY_KINDS,
-  externalUrlOf,
-  providerOf,
-  resourceEntityId,
-  titleResolved,
-} from './resource-catalog';
+import { buildResourceCatalog, LIBRARY_KINDS, titleResolved } from './resource-catalog';
 
 /** How many resources one page of the Library loads. */
 const PAGE_SIZE = 100;
@@ -49,16 +43,6 @@ const PAGE_SIZE = 100;
 export interface LibraryClientProps {
   /** The workspace whose resources are listed. */
   readonly orgId: string;
-}
-
-/** Format an ISO timestamp the way the rest of the app's list columns do. */
-function formatUpdated(iso: string): string {
-  const then = new Date(iso);
-  const hours = (Date.now() - then.getTime()) / 3_600_000;
-  if (hours < 1) return 'Just now';
-  if (hours < 24) return `${Math.floor(hours)}h ago`;
-  if (hours < 48) return 'Yesterday';
-  return then.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -102,13 +86,22 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   // `entityHref` and the command palette both already hand out `?resourceId=`.
   const openedId = searchParams.get('resourceId');
 
-  /** Open or close the detail panel without disturbing the active filters. */
+  /**
+   * Open or close the detail panel without disturbing the active filters.
+   *
+   * @remarks
+   * `push` on open and `back` on close, because opening a record is navigation — the browser Back
+   * button and a phone's back swipe must close the panel rather than leave the Library. Filters use
+   * `replace` (see `useViewState`) because changing a filter is state, not a destination.
+   */
   function setOpened(resourceId: string | null): void {
+    if (resourceId === null) {
+      router.back();
+      return;
+    }
     const next = new URLSearchParams(searchParams.toString());
-    if (resourceId === null) next.delete('resourceId');
-    else next.set('resourceId', resourceId);
-    const query = next.toString();
-    router.replace(query.length > 0 ? `?${query}` : '?', { scroll: false });
+    next.set('resourceId', resourceId);
+    router.push(`?${next.toString()}`, { scroll: false });
   }
 
   const resourcesQ = useApiListQuery(
@@ -149,12 +142,12 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
           const Icon = glyphFor(row);
           const resolved = titleResolved(row);
           // When the title is a URL stand-in it already names the host, so repeating it is noise.
-          const host = resolved ? hostOf(externalUrlOf(row)) : null;
+          const host = resolved ? hostOf(row.externalUrl) : null;
           return (
-            <span className="flex min-w-0 items-center gap-3">
+            <span className="flex min-w-0 items-center gap-2">
               <Icon aria-hidden className="text-on-surface-variant size-4! shrink-0" />
               <span
-                className={`min-w-0 truncate ${resolved ? 'font-medium' : 'text-on-surface-variant'}`}
+                className={`min-w-0 truncate ${resolved ? 'text-label-large' : 'text-on-surface-variant'}`}
               >
                 {row.title}
               </span>
@@ -162,7 +155,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                   for finding a document and opening it; which initiative it serves is a question
                   asked at a desk, and answering it here would cost the title its room. */}
               {host ? (
-                <span className="text-on-surface-variant hidden shrink-0 text-xs @lg/table:inline">
+                <span className="text-on-surface-variant text-label-small hidden shrink-0 @lg/table:inline">
                   · {host}
                 </span>
               ) : null}
@@ -174,38 +167,25 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         key: 'usedIn',
         header: 'Used in',
         minWidth: '13rem',
-        // Sheds last of the three: what a resource is for outranks where it came from and when it
-        // changed, both of which the provider can already tell you.
+        // Sheds last: what a resource is for outranks when it changed. Provider is deliberately
+        // not a column — the host already sits beside the title, and duplicating it cost ~8rem to
+        // say the same thing twice. It stays a Filter/Display dimension, where controls belong.
         priority: 1,
         render: (row) =>
           row.usedIn.length === 0 ? (
-            <span className="text-on-surface-variant text-xs">Not referenced yet</span>
+            <span className="text-on-surface-variant text-label-small">Not referenced yet</span>
           ) : (
-            <span className="flex min-w-0 items-center gap-1.5">
-              <span className="bg-surface-container-high min-w-0 truncate rounded-md px-2 py-0.5 text-xs">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="bg-surface-container text-label-small min-w-0 truncate rounded-md px-2 py-0.5">
                 {row.usedIn[0]?.title}
               </span>
               {row.usedIn.length > 1 ? (
-                <span className="text-on-surface-variant shrink-0 text-xs">
+                <span className="text-on-surface-variant text-label-small shrink-0">
                   +{row.usedIn.length - 1}
                 </span>
               ) : null}
             </span>
           ),
-      },
-      {
-        key: 'provider',
-        header: 'Source',
-        width: '8rem',
-        priority: 3,
-        render: (row) => {
-          const provider = providerOf(row);
-          return (
-            <span className="text-on-surface-variant truncate text-xs">
-              {provider ? (catalog[3]?.resolveLabel?.(provider) ?? provider) : '—'}
-            </span>
-          );
-        },
       },
       {
         key: 'updated',
@@ -214,7 +194,9 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
         align: 'end',
         priority: 2,
         render: (row) => (
-          <span className="text-on-surface-variant text-xs">{formatUpdated(row.updatedAt)}</span>
+          <span className="text-on-surface-variant text-label-small">
+            {relativeTime(row.updatedAt)}
+          </span>
         ),
       },
     ],
@@ -233,13 +215,11 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
 
   const filtered = state.filters.length > 0;
   // Resolved against the loaded page rather than refetched: the panel is only reachable from a row.
-  const opened =
-    openedId === null ? null : (rows.find((row) => resourceEntityId(row) === openedId) ?? null);
+  const opened = openedId === null ? null : (rows.find((row) => row.entityId === openedId) ?? null);
 
   return (
     <ListPageLayout
       title="Library"
-      subtitle="Everything this workspace writes, links, and refers back to."
       toolbar={
         <FilterToolbar
           catalog={catalog}
@@ -251,13 +231,13 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       }
     >
       {resourcesQ.isPending ? (
-        <div className="flex flex-col gap-1" aria-label="Loading the library">
+        <div className="flex flex-col gap-1" aria-hidden="true">
           {Array.from({ length: 6 }, (_, index) => (
             <Skeleton key={index} className="h-10 w-full" />
           ))}
         </div>
       ) : resourcesQ.error ? (
-        <p role="alert" className="text-destructive text-sm">
+        <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(resourcesQ.error, 'Could not load the library.')}
         </p>
       ) : applied.rows.length === 0 ? (
@@ -265,30 +245,37 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
           <EmptyState
             icon={LinkIcon}
             title="Nothing matches"
-            body="No document or link in this workspace matches the active filters."
+            body="No document or link matches the active filters."
+            cta={{
+              label: 'Clear filters',
+              onClick: () => {
+                setFilters([]);
+              },
+            }}
           />
         ) : (
           <EmptyState
             icon={Library}
             title="Nothing referenced yet"
-            body={`Link a document, a design file, or a page from anywhere in ${activeOrg?.name ?? 'this workspace'} and it appears here with the work it serves.`}
+            body={`Link a document or page from anywhere in ${activeOrg?.name ?? 'this workspace'} and it shows up here.`}
           />
         )
       ) : (
-        <div className="grid min-w-0 gap-4 @2xl:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="grid min-w-0 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           {/*
            * On a narrow container the panel takes the whole page and the list stands down: a
            * drill-down, not a squeeze. Driven by whether an entry is open, never by a device check.
            */}
-          <div className={opened ? 'hidden min-w-0 @2xl:block' : 'min-w-0'}>
+          <div className={opened ? 'hidden min-w-0 @4xl:block' : 'min-w-0'}>
             <EntityTable
               columns={columns}
               groups={groups}
               getRowKey={(row) => row.id}
+              selected={opened ? new Set([opened.id]) : undefined}
               onRowClick={(row) => {
-                setOpened(resourceEntityId(row));
+                setOpened(row.entityId);
               }}
-              aria-label="Documents and links"
+              aria-label="Library"
             />
           </div>
           {opened ? (

@@ -79,7 +79,7 @@ function renderRow(result: SearchResult): void {
 
 /** A minimal, otherwise-valid search result for the given kind + route. */
 function makeResult(overrides: Partial<SearchResult>): SearchResult {
-  return {
+  const base: SearchResult = {
     id: 'task:org_1:task_composite_doc_id',
     organizationId: ORG_ID,
     userId: null,
@@ -99,12 +99,14 @@ function makeResult(overrides: Partial<SearchResult>): SearchResult {
     subject: null,
     source: null,
     facets: {},
+    entityId: 'task_real_id',
+    externalUrl: null,
     usedIn: [],
     updatedAt: '2026-08-01T00:00:00.000Z',
     actions: [],
     score: 1,
-    ...overrides,
   };
+  return Object.assign(base, overrides);
 }
 
 beforeEach(() => {

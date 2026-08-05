@@ -217,6 +217,8 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
       includeArchived: input.params.includeArchived ?? false,
       cursor,
       limit: chunkSize,
+      kinds: input.params.kinds ?? [],
+      families: input.params.families ?? [],
     });
     if (rows.length < chunkSize) exhausted = true;
     const lastFetched = rows[rows.length - 1];
@@ -284,6 +286,8 @@ async function loadBrowseRows(input: {
   includeArchived: boolean;
   cursor: string | undefined;
   limit: number;
+  kinds: readonly string[];
+  families: readonly string[];
 }) {
   const schema = await import('@docket/db');
   // A caller with no owning user (an agent) reaches org documents only. An empty candidate set is
@@ -300,6 +304,16 @@ async function loadBrowseRows(input: {
     seekAfter(schema.searchDocument.updatedAt, schema.searchDocument.id, input.cursor),
   ];
   if (!input.includeArchived) conditions.push(isNull(schema.searchDocument.archivedAt));
+  // Push the kind/family narrowing into SQL rather than leaving it to `filterRow` downstream.
+  // `search_document_org_kind_rank_idx` covers it, and without this a surface asking for two of
+  // the eighteen kinds — the Library — pulls a full chunk of every kind, resolves grants for all
+  // of them, discards nearly all, and refills. That was the whole cost of the page.
+  if (input.kinds.length > 0) {
+    conditions.push(inArray(schema.searchDocument.kind, [...input.kinds] as 'task'[]));
+  }
+  if (input.families.length > 0) {
+    conditions.push(inArray(schema.searchDocument.family, [...input.families] as 'work'[]));
+  }
 
   const rows = await schema.db
     .select({ document: schema.searchDocument })
@@ -337,9 +351,12 @@ export interface VisibleDocumentsQuery {
  *
  * @remarks
  * Serves the bare-`@` state of the mention picker, where there is nothing to match on yet but a
- * useful list is still expected instantly. {@link searchWorkspace} cannot answer this because it
- * short-circuits on an empty query — matching nothing is the right answer for a search box and the
- * wrong one for a picker.
+ * useful list is still expected instantly.
+ *
+ * {@link searchWorkspace} can now answer this too — an absent `q` selects browse mode — so this is
+ * a narrower, cheaper path rather than the only one: it takes an explicit kind list, skips facet
+ * filtering, scoring, and container resolution, and returns in a single query. Prefer
+ * `searchWorkspace` for anything that also needs filters or paging.
  *
  * It lives in this module, next to the query it complements, specifically so it reuses
  * `resolveCallerAccess` and `filterVisibleRows` as calls rather than as copies. A second
@@ -822,11 +839,22 @@ function snippetFor(
 }
 
 /**
+ * The kinds whose "used in" containers anyone actually renders.
+ *
+ * @remarks
+ * Only the Library reads {@link SearchResult.usedIn}, and it lists artifacts. Resolving containers
+ * for a page of tasks and projects would spend up to nine round trips per request — on every
+ * palette keystroke — to produce a field nothing displays.
+ */
+const USED_IN_KINDS = new Set<SearchDocumentKind>(['external_resource', 'attachment']);
+
+/**
  * Resolve the work containers for one page of results, batched per workspace.
  *
  * @remarks
- * Grouped by organization because Hub search spans several and `mention` rows never cross one. A
- * page touching three workspaces costs three batches, not one per row.
+ * Grouped by organization because Hub search spans several and `mention` rows never cross one, and
+ * the groups run concurrently because they share no state — a page touching three workspaces costs
+ * one round of latency, not three.
  */
 async function usedInForPage(
   page: readonly ScoredRow[],
@@ -835,6 +863,7 @@ async function usedInForPage(
   for (const scored of page) {
     const organizationId = scored.row.organizationId;
     if (!organizationId) continue;
+    if (!USED_IN_KINDS.has(scored.row.kind)) continue;
     const targets = byOrg.get(organizationId) ?? [];
     targets.push({
       documentId: scored.row.id,
@@ -843,11 +872,13 @@ async function usedInForPage(
     });
     byOrg.set(organizationId, targets);
   }
+  if (byOrg.size === 0) return new Map();
+  const perOrg = await Promise.all(
+    [...byOrg].map(([organizationId, targets]) => resolveUsedIn(organizationId, targets)),
+  );
   const merged = new Map<string, readonly SearchUsedIn[]>();
-  for (const [organizationId, targets] of byOrg) {
-    for (const [documentId, containers] of await resolveUsedIn(organizationId, targets)) {
-      merged.set(documentId, containers);
-    }
+  for (const resolved of perOrg) {
+    for (const [documentId, containers] of resolved) merged.set(documentId, containers);
   }
   return merged;
 }
@@ -888,6 +919,8 @@ function toSearchResult(
     facets: row.facet,
     actions: actionFor(row),
     score: scored.score,
+    entityId: row.entityId,
+    externalUrl: row.externalUrl,
     // Copied because the DTO's inferred array type is mutable; the resolver hands back a readonly.
     usedIn: [...usedIn],
     updatedAt: (row.sourceUpdatedAt ?? row.updatedAt).toISOString(),

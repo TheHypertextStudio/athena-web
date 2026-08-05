@@ -151,9 +151,11 @@ export async function sweepResourceUnfurls(
   // created here in `pending` by `reconcileMentions`, and this sweep is the first moment they have
   // settled enough to project. Announcing after the loop rather than inside each branch means a
   // future branch cannot forget to.
-  for (const row of claimed) {
-    await enqueueSearchUpsert(row.organizationId, 'external_resource', row.id);
-  }
+  // Concurrently, bounded by BATCH: each publish re-reads its own row through the projector, so
+  // awaiting them one at a time made a 25-row pass 25 sequential round trips for no ordering gain.
+  await Promise.all(
+    claimed.map((row) => enqueueSearchUpsert(row.organizationId, 'external_resource', row.id)),
+  );
 
   return { claimed: claimed.length, resolved, failed };
 }

@@ -22,8 +22,6 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
-import { externalUrlOf, resourceEntityId } from './resource-catalog';
-
 /** How a referencing record's kind is spelled in the panel's group headings. */
 const SUBJECT_LABEL: Record<string, string> = {
   task: 'Tasks',
@@ -56,14 +54,14 @@ export default function ResourceDetailPanel({
   resource,
   onClose,
 }: ResourceDetailPanelProps): JSX.Element {
-  const externalUrl = externalUrlOf(resource);
+  const externalUrl = resource.externalUrl;
 
   const referencesQ = useApiQuery(
     apiQueryOptions(
-      queryKeys.references(orgId, resource.kind, resourceEntityId(resource)),
+      queryKeys.references(orgId, resource.kind, resource.entityId),
       () =>
         api.v1.orgs[':orgId'].references[':targetKind'][':targetId'].$get({
-          param: { orgId, targetKind: resource.kind, targetId: resourceEntityId(resource) },
+          param: { orgId, targetKind: resource.kind, targetId: resource.entityId },
         }),
       'Could not load what references this.',
     ),
@@ -75,14 +73,15 @@ export default function ResourceDetailPanel({
       className="bg-surface-container-low flex min-w-0 flex-col gap-4 rounded-xl p-4"
     >
       <div className="flex items-start gap-2">
-        <h2 className="text-title-small text-on-surface min-w-0 flex-1 font-medium break-words">
+        <h2 className="text-title-small text-on-surface min-w-0 flex-1 break-words">
           {resource.title}
         </h2>
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="min-h-10 min-w-10 shrink-0"
+          iconOnly
+          controlSize="xl"
+          className="shrink-0"
           aria-label="Close details"
           onClick={onClose}
         >
@@ -95,7 +94,7 @@ export default function ResourceDetailPanel({
           href={externalUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-on-surface-variant hover:text-on-surface flex min-h-10 items-center gap-2 text-sm"
+          className="text-on-surface-variant hover:text-on-surface text-body-medium flex min-h-10 items-center gap-2"
         >
           <OpenInNew aria-hidden className="size-4 shrink-0" />
           <span className="min-w-0 truncate">Open source</span>
@@ -103,34 +102,29 @@ export default function ResourceDetailPanel({
       ) : null}
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-on-surface text-sm font-medium">Referenced by</h3>
-        {/* Derived from prose, so there is nothing to curate and no empty-state call to action. */}
-        <p className="text-on-surface-variant text-xs">
-          Every record whose text points at this entry.
-        </p>
-
+        <h3 className="text-on-surface text-title-small">Referenced by</h3>
         {referencesQ.isPending ? (
-          <div className="flex flex-col gap-1" aria-label="Loading references">
+          <div className="flex flex-col gap-1" aria-hidden="true">
             {Array.from({ length: 3 }, (_, index) => (
               <Skeleton key={index} className="h-7 w-full" />
             ))}
           </div>
         ) : referencesQ.error ? (
-          <p role="alert" className="text-destructive text-sm">
+          <p role="alert" className="text-error text-body-medium">
             {userErrorMessage(referencesQ.error, 'Could not load what references this.')}
           </p>
         ) : referencesQ.data.total > 0 ? (
           <div className="flex flex-col gap-3">
             {referencesQ.data.groups.map((group) => (
               <div key={group.subjectType} className="flex flex-col gap-0.5">
-                <p className="text-on-surface-variant text-xs">
+                <p className="text-on-surface-variant text-label-small">
                   {SUBJECT_LABEL[group.subjectType] ?? group.subjectType} · {group.items.length}
                 </p>
                 {group.items.map((item) => (
                   <Link
                     key={`${item.subjectType}:${item.subjectId}`}
                     href={item.href}
-                    className="text-on-surface hover:bg-surface-container-high flex min-h-10 items-center rounded-md px-2 text-sm"
+                    className="text-on-surface hover:bg-surface-container-high text-body-medium flex min-h-10 items-center rounded-md px-2"
                   >
                     <span className="min-w-0 truncate">{item.title}</span>
                   </Link>
@@ -139,9 +133,7 @@ export default function ResourceDetailPanel({
             ))}
           </div>
         ) : (
-          <p className="text-on-surface-variant text-sm">
-            Nothing references this yet. It stays here because someone linked it once.
-          </p>
+          <p className="text-on-surface-variant text-body-medium">Nothing references this yet.</p>
         )}
       </div>
     </aside>

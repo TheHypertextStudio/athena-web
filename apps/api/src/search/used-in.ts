@@ -125,7 +125,10 @@ export async function resolveUsedIn(
     .where(and(eq(schema.mention.organizationId, organizationId), or(...arms)));
   if (mentions.length === 0) return empty;
 
-  const containersBySubject = await resolveSubjectContainers(organizationId, mentions);
+  const { containers: containersBySubject, knownTitles } = await resolveSubjectContainers(
+    organizationId,
+    mentions,
+  );
 
   // Count containers per target so the most-referencing one leads the row.
   const counts = new Map<string, Map<string, { ref: ContainerRef; count: number }>>();
@@ -165,6 +168,7 @@ export async function resolveUsedIn(
   const titles = await loadContainerTitles(
     organizationId,
     [...counts.values()].flatMap((perTarget) => [...perTarget.values()].map((v) => v.ref)),
+    knownTitles,
   );
 
   const resolved = new Map<string, readonly SearchUsedIn[]>();
@@ -176,13 +180,16 @@ export async function resolveUsedIn(
           CONTAINER_ALTITUDE[a.ref.kind] - CONTAINER_ALTITUDE[b.ref.kind] ||
           a.ref.id.localeCompare(b.ref.id),
       )
-      .slice(0, MAX_CONTAINERS_PER_ROW)
       .flatMap((entry) => {
         const title = titles.get(containerKey(entry.ref));
         // A container whose title did not resolve is dropped rather than rendered as its id: a raw
         // ULID in this column is noise, and the row still reads correctly without it.
         return title ? [{ kind: entry.ref.kind, id: entry.ref.id, title }] : [];
-      });
+      })
+      // Trim AFTER dropping title-less containers. Slicing first would let a row whose top few
+      // titles failed to load come back empty, and the Library renders that as "Not referenced
+      // yet" — the opposite of the truth for a resource that is in fact referenced.
+      .slice(0, MAX_CONTAINERS_PER_ROW);
     if (ordered.length > 0) resolved.set(documentId, ordered);
   }
   return resolved;
@@ -208,11 +215,16 @@ export async function resolveUsedIn(
 async function resolveSubjectContainers(
   organizationId: string,
   mentions: readonly { subjectType: string; subjectId: string }[],
-): Promise<ReadonlyMap<string, ContainerRef>> {
+): Promise<{
+  containers: ReadonlyMap<string, ContainerRef>;
+  /** Titles already read while walking, so the title load need not re-select them. */
+  knownTitles: ReadonlyMap<string, string>;
+}> {
   const schema = await import('@docket/db');
   // The container each subject sits in before any roll-up.
   const direct = new Map<string, ContainerRef>();
   const taskIds = new Set<string>();
+  const knownTitles = new Map<string, string>();
 
   for (const mention of mentions) {
     const key = `${mention.subjectType}:${mention.subjectId}`;
@@ -263,23 +275,50 @@ async function resolveSubjectContainers(
     if (ref.kind === 'program') programIds.add(ref.id);
   }
 
-  // A project's own program, so a project-level reference can still roll up past it.
+  // A project's own program (so a project-level reference can roll up past it) and the initiatives
+  // containing those projects. Both depend only on `projectIds`, so they run together rather than
+  // one after the other — the program lookup also feeds `programIds`, which is why the *next*
+  // query has to wait for this pair and cannot join them.
+  //
+  // The project select carries `name` so `loadContainerTitles` need not read the same rows again.
+  const [projectRows, projectInitiativeRows] = await Promise.all([
+    projectIds.size > 0
+      ? schema.db
+          .select({
+            id: schema.project.id,
+            name: schema.project.name,
+            programId: schema.project.programId,
+          })
+          .from(schema.project)
+          .where(
+            and(
+              eq(schema.project.organizationId, organizationId),
+              inArray(schema.project.id, [...projectIds]),
+            ),
+          )
+      : Promise.resolve([]),
+    projectIds.size > 0
+      ? schema.db
+          .select({
+            initiativeId: schema.initiativeProject.initiativeId,
+            projectId: schema.initiativeProject.projectId,
+          })
+          .from(schema.initiativeProject)
+          .where(
+            and(
+              eq(schema.initiativeProject.organizationId, organizationId),
+              inArray(schema.initiativeProject.projectId, [...projectIds]),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+
   const projectProgram = new Map<string, string>();
-  if (projectIds.size > 0) {
-    const rows = await schema.db
-      .select({ id: schema.project.id, programId: schema.project.programId })
-      .from(schema.project)
-      .where(
-        and(
-          eq(schema.project.organizationId, organizationId),
-          inArray(schema.project.id, [...projectIds]),
-        ),
-      );
-    for (const row of rows) {
-      if (row.programId) {
-        projectProgram.set(row.id, row.programId);
-        programIds.add(row.programId);
-      }
+  for (const row of projectRows) {
+    knownTitles.set(`project:${row.id}`, row.name);
+    if (row.programId) {
+      projectProgram.set(row.id, row.programId);
+      programIds.add(row.programId);
     }
   }
 
@@ -287,23 +326,9 @@ async function resolveSubjectContainers(
   // one chip rather than counting the same reference under both. The column answers "what is this
   // for", and two answers to that is worse than the most likely one.
   const projectInitiative = new Map<string, string>();
-  if (projectIds.size > 0) {
-    const rows = await schema.db
-      .select({
-        initiativeId: schema.initiativeProject.initiativeId,
-        projectId: schema.initiativeProject.projectId,
-      })
-      .from(schema.initiativeProject)
-      .where(
-        and(
-          eq(schema.initiativeProject.organizationId, organizationId),
-          inArray(schema.initiativeProject.projectId, [...projectIds]),
-        ),
-      );
-    for (const row of rows) {
-      if (!projectInitiative.has(row.projectId)) {
-        projectInitiative.set(row.projectId, row.initiativeId);
-      }
+  for (const row of projectInitiativeRows) {
+    if (!projectInitiative.has(row.projectId)) {
+      projectInitiative.set(row.projectId, row.initiativeId);
     }
   }
 
@@ -348,30 +373,38 @@ async function resolveSubjectContainers(
     const best = rollUp(candidates);
     if (best) resolved.set(key, best);
   }
-  return resolved;
+  return { containers: resolved, knownTitles };
 }
 
 /**
  * Load display titles for the resolved containers, one query per kind.
  *
  * @remarks
- * Four small `IN` lookups rather than a union, because the four tables name their title column
- * differently and a union would need casting each one anyway.
+ * Separate `IN` lookups rather than a union, because the four tables name their title column
+ * differently and a union would need casting each one anyway. They share no state, so they run
+ * concurrently — one round of latency instead of four.
+ *
+ * @param organizationId - The workspace the containers belong to.
+ * @param refs - Every container that needs a title.
+ * @param known - Titles the caller already read while walking containment; these are not re-queried.
  */
 async function loadContainerTitles(
   organizationId: string,
   refs: readonly ContainerRef[],
+  known: ReadonlyMap<string, string>,
 ): Promise<ReadonlyMap<string, string>> {
-  const titles = new Map<string, string>();
+  const titles = new Map<string, string>(known);
   if (refs.length === 0) return titles;
   const schema = await import('@docket/db');
 
   const idsByKind = new Map<ContainerKind, Set<string>>();
   for (const ref of refs) {
+    if (titles.has(containerKey(ref))) continue;
     const set = idsByKind.get(ref.kind) ?? new Set<string>();
     set.add(ref.id);
     idsByKind.set(ref.kind, set);
   }
+  if (idsByKind.size === 0) return titles;
 
   const tables = {
     initiative: schema.initiative,
@@ -380,13 +413,16 @@ async function loadContainerTitles(
     team: schema.team,
   } as const;
 
-  for (const [kind, ids] of idsByKind) {
-    const table = tables[kind];
-    const rows = await schema.db
-      .select({ id: table.id, name: table.name })
-      .from(table)
-      .where(and(eq(table.organizationId, organizationId), inArray(table.id, [...ids])));
-    for (const row of rows) titles.set(`${kind}:${row.id}`, row.name);
-  }
+  const loaded = await Promise.all(
+    [...idsByKind].map(async ([kind, ids]) => {
+      const table = tables[kind];
+      const rows = await schema.db
+        .select({ id: table.id, name: table.name })
+        .from(table)
+        .where(and(eq(table.organizationId, organizationId), inArray(table.id, [...ids])));
+      return rows.map((row) => [`${kind}:${row.id}`, row.name] as const);
+    }),
+  );
+  for (const [key, name] of loaded.flat()) titles.set(key, name);
   return titles;
 }

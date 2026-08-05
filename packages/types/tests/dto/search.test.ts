@@ -47,6 +47,8 @@ describe('search DTOs', () => {
         facets: { status: 'todo', priority: 'high' },
         actions: [{ kind: 'open', label: 'Open', href: `/orgs/${ORG_ID}/my-work` }],
         updatedAt: '2026-08-01T00:00:00.000Z',
+        entityId: 'entity_1',
+        externalUrl: null,
         score: 121,
       },
       {
@@ -73,6 +75,8 @@ describe('search DTOs', () => {
         facets: { subjectKind: 'task' },
         actions: [],
         updatedAt: '2026-08-01T00:00:00.000Z',
+        entityId: 'entity_1',
+        externalUrl: null,
         score: 95,
       },
       {
@@ -107,6 +111,8 @@ describe('search DTOs', () => {
           },
         ],
         updatedAt: '2026-08-01T00:00:00.000Z',
+        entityId: 'entity_1',
+        externalUrl: null,
         score: 84,
       },
       {
@@ -129,6 +135,8 @@ describe('search DTOs', () => {
         facets: { calendarId: 'primary' },
         actions: [],
         updatedAt: '2026-08-01T00:00:00.000Z',
+        entityId: 'entity_1',
+        externalUrl: null,
         score: 76,
       },
     ];
@@ -179,6 +187,8 @@ describe('search DTOs', () => {
       facets: {},
       actions: [],
       updatedAt: '2026-08-01T00:00:00.000Z',
+      entityId: 'entity_1',
+      externalUrl: null,
       score: 1,
     };
 

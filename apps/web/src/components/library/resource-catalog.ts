@@ -10,32 +10,18 @@
  * initiatives — which is why {@link FieldDescriptor.values} exists at all. Grouping by it fans a
  * row into every container it serves, so the group sizes sum to more than the row count on purpose.
  */
-import type { SearchResult } from '@docket/types';
+import { RESOURCE_PROVIDER_LABEL, type ResourceProvider, type SearchResult } from '@docket/types';
 
-import { SEARCH_KIND_LABEL } from '@/components/command-palette/use-hub-search';
 import type { FieldCatalog, FieldOption } from '@/components/views/field-catalog';
 
 /** The kinds the Library shows: material, not work-tracking. */
 export const LIBRARY_KINDS = ['external_resource', 'attachment'] as const;
 
-/** Human labels for the resource providers the workspace has referenced. */
-const PROVIDER_LABEL: Record<string, string> = {
-  web: 'Web',
-  google_drive: 'Google Drive',
-  onedrive: 'OneDrive',
-  sharepoint: 'SharePoint',
-  notion: 'Notion',
-  dropbox: 'Dropbox',
-  box: 'Box',
-  figma: 'Figma',
-  confluence: 'Confluence',
-};
-
 /**
  * What each Library group is called.
  *
  * @remarks
- * Overrides {@link SEARCH_KIND_LABEL}, whose values are singular row labels ("Resource") and read
+ * Overrides the shared kind registry, whose values are singular row labels ("Resource") and read
  * wrong as a group heading over eleven of them. The words also carry the distinction the page is
  * built on: a linked resource's body lives elsewhere, an attached one was added by hand.
  */
@@ -44,22 +30,6 @@ const LIBRARY_KIND_GROUP_LABEL: Record<(typeof LIBRARY_KINDS)[number], string> =
   attachment: 'Attached',
 };
 
-/**
- * The display label for a kind value, preferring the Library's own group wording.
- *
- * @remarks
- * Both maps are total over their own key types, so a stored value has to be *checked* against them
- * rather than indexed and defaulted — casting an arbitrary string to a key type and falling back
- * with `??` claims a safety the types do not have, and the fallback is then unreachable.
- */
-function labelForKind(value: string): string {
-  if (value in LIBRARY_KIND_GROUP_LABEL) {
-    return LIBRARY_KIND_GROUP_LABEL[value as (typeof LIBRARY_KINDS)[number]];
-  }
-  if (value in SEARCH_KIND_LABEL) return SEARCH_KIND_LABEL[value as SearchResult['kind']];
-  return value;
-}
-
 /** Read a string off a result's facet bag, which is typed as unknown per key. */
 function facetString(row: SearchResult, key: string): string | null {
   const value = row.facets[key];
@@ -67,38 +37,22 @@ function facetString(row: SearchResult, key: string): string | null {
 }
 
 /**
- * The provider URL behind a row, when it has one.
+ * The display name for a resource provider.
  *
  * @remarks
- * Read from the row's `open_external` action rather than from `source.externalUrl`, because
- * `source` is only emitted when the row carries a `sourceSystem` — and most resource providers
- * deliberately map to none, since `source_system` is the *event source* taxonomy and Docket
- * ingests no Figma or Dropbox events. The action is populated straight from the document's
- * `externalUrl`, so it is the one place every provider's link actually shows up.
+ * Delegates to the registry exported from `@docket/types`, which is derived from `RESOURCE_PROVIDERS`
+ * and is therefore total — adding a provider is a compile error there rather than a raw enum value
+ * rendered in a menu. A local copy had already drifted from it on two of nine entries.
  */
-export function externalUrlOf(row: SearchResult): string | null {
-  const action = row.actions.find((candidate) => candidate.kind === 'open_external');
-  return action?.href ?? row.source?.externalUrl ?? null;
+export function providerLabel(value: string): string {
+  return value in RESOURCE_PROVIDER_LABEL
+    ? RESOURCE_PROVIDER_LABEL[value as ResourceProvider]
+    : value;
 }
 
 /** The provider a row came from, or `null` for first-party rows that have none. */
 export function providerOf(row: SearchResult): string | null {
   return facetString(row, 'provider');
-}
-
-/**
- * The source entity id behind a search row.
- *
- * @remarks
- * `SearchResult.id` is the projection's composite id (`kind:org:entityId`), but `entityHref` and
- * the `mention` table both key off the source row's own id. The Library's `?resourceId=` therefore
- * carries *this* value, so a link from the command palette and a click on a row land on the same
- * URL rather than two that differ by a prefix.
- */
-export function resourceEntityId(row: SearchResult): string {
-  if (row.route.type === 'entity') return row.route.entityId;
-  if (row.route.type === 'content') return row.route.contentId;
-  return row.id;
 }
 
 /** Whether the row's title is the resource's real name or a URL standing in for one. */
@@ -132,7 +86,7 @@ export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalo
     .sort((a, b) => a.label.localeCompare(b.label));
 
   const providerOptions: readonly FieldOption[] = [...providers]
-    .map((value) => ({ value, label: PROVIDER_LABEL[value] ?? value }))
+    .map((value) => ({ value, label: providerLabel(value) }))
     .sort((a, b) => a.label.localeCompare(b.label));
 
   return [
@@ -152,7 +106,6 @@ export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalo
         value: kind,
         label: LIBRARY_KIND_GROUP_LABEL[kind],
       })),
-      resolveLabel: labelForKind,
       groupable: true,
     },
     {
@@ -163,7 +116,6 @@ export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalo
       accessor: (row) => row.usedIn[0]?.id ?? null,
       values: (row) => row.usedIn.map((container) => container.id),
       options: containerOptions,
-      resolveLabel: (value) => containers.get(value) ?? value,
       groupable: true,
     },
     {
@@ -172,7 +124,6 @@ export function buildResourceCatalog(rows: readonly SearchResult[]): FieldCatalo
       type: 'enum',
       accessor: (row) => providerOf(row),
       options: providerOptions,
-      resolveLabel: (value) => PROVIDER_LABEL[value] ?? value,
       groupable: true,
     },
     {

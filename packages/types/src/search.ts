@@ -178,6 +178,23 @@ export const SearchResult = z
     facets: z.record(z.string(), z.unknown()),
     actions: z.array(SearchAction),
     score: z.number(),
+    /**
+     * The source row's own id, as opposed to {@link SearchResult.id}'s `kind:org:entityId`
+     * composite. Callers that key off a record — a `?resourceId=` link, a mention lookup — need
+     * this one, and deriving it from `route` client-side gets it wrong for route variants that
+     * carry neither an `entityId` nor a `contentId`.
+     */
+    entityId: z.string(),
+    /**
+     * Where the result lives outside Docket, when it lives outside Docket.
+     *
+     * @remarks
+     * Distinct from `source.externalUrl`, which is only populated when the row also has a
+     * `sourceSystem` — and most resource providers deliberately have none, because `source_system`
+     * is the event-source taxonomy. Without this field the URL is reachable only by digging through
+     * `actions`, which turns a presentation detail into a wire contract.
+     */
+    externalUrl: z.string().nullable(),
     /** The work containers referencing this result, most-referencing first; empty when none do. */
     usedIn: z.array(SearchUsedIn).default([]),
     /**

@@ -54,7 +54,7 @@ import { Priority, WorkflowStateType } from '@docket/types';
 import { ValidationError } from '../error';
 import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 import type { WorkCursor } from './tools-shared-queries';
-import { stateTypeOf, workflowStateTypes } from './workflow-states';
+import { stateTypeOf, teamWorkflows } from './workflow-states';
 
 /**
  * The keyset predicate that resumes a page, built per table.
@@ -401,7 +401,7 @@ async function listTasks(
 
   // One lookup for the whole page, not one per row: a page can span every team in the org, and
   // resolving each row separately would make a 50-row read cost 51 queries.
-  const stateTypes = await workflowStateTypes(
+  const workflows = await teamWorkflows(
     orgId,
     rows.map((row) => row.teamId),
   );
@@ -409,7 +409,7 @@ async function listTasks(
   // `teamId` is read to resolve the state type and then dropped. It is not part of the row
   // contract, and adding it here would widen the wire on the way past rather than on purpose.
   return rows.map((row) => {
-    const stateType = stateTypeOf(stateTypes, row.teamId, row.state);
+    const stateType = stateTypeOf(workflows, row.teamId, row.state);
     return {
       id: row.id,
       title: row.title,

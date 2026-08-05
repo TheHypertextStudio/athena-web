@@ -16,7 +16,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import { listWork } from '../../src/mcp/list-work';
-import { stateTypeOf, workflowStateTypes } from '../../src/mcp/workflow-states';
+import { stateOptionsOf, stateTypeOf, teamWorkflows } from '../../src/mcp/workflow-states';
 import { resetAuthMocks } from '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
 
@@ -90,10 +90,10 @@ async function seedTeams(): Promise<{
   return { orgId, renamed: renamed!.id, other: other!.id, actorId: author!.id };
 }
 
-describe('workflowStateTypes', () => {
+describe('teamWorkflows', () => {
   it('maps every key a team defines onto its canonical type', async () => {
     const { orgId, renamed } = await seedTeams();
-    const types = await workflowStateTypes(orgId, [renamed]);
+    const types = await teamWorkflows(orgId, [renamed]);
 
     expect(stateTypeOf(types, renamed, 'icebox')).toBe('backlog');
     expect(stateTypeOf(types, renamed, 'queued')).toBe('unstarted');
@@ -104,7 +104,7 @@ describe('workflowStateTypes', () => {
 
   it('keeps two teams that reuse a stage apart', async () => {
     const { orgId, renamed, other } = await seedTeams();
-    const types = await workflowStateTypes(orgId, [renamed, other]);
+    const types = await teamWorkflows(orgId, [renamed, other]);
 
     // The whole reason the type exists: 'doing' and 'in_progress' are the same stage under
     // different names, and neither team's key means anything to the other.
@@ -120,7 +120,7 @@ describe('workflowStateTypes', () => {
     // A fifty-row page across two teams: the map is keyed by team, so the work is bounded by the
     // number of distinct teams and not by the page size.
     const perRow = Array.from({ length: 50 }, (_, i) => (i % 2 === 0 ? renamed : other));
-    const types = await workflowStateTypes(orgId, perRow);
+    const types = await teamWorkflows(orgId, perRow);
 
     expect(types.size).toBe(2);
   });
@@ -129,14 +129,14 @@ describe('workflowStateTypes', () => {
     const first = await seedTeams();
     const second = await seedTeams();
     // Scoped by org as well as id, so a team id guessed from elsewhere cannot be resolved.
-    const types = await workflowStateTypes(second.orgId, [first.renamed]);
+    const types = await teamWorkflows(second.orgId, [first.renamed]);
 
     expect(stateTypeOf(types, first.renamed, 'doing')).toBeUndefined();
   });
 
   it('skips the lookup entirely when there is nothing to resolve', async () => {
     const { orgId } = await seedTeams();
-    const types = await workflowStateTypes(orgId, []);
+    const types = await teamWorkflows(orgId, []);
 
     expect(types.size).toBe(0);
   });
@@ -192,9 +192,28 @@ describe('workflowStateTypes', () => {
     expect(byTitle.get('Doing it')).not.toHaveProperty('teamId');
   });
 
+  it('hands back the team’s own states, in board order, for a picker to offer', async () => {
+    const { orgId, renamed } = await seedTeams();
+    const workflows = await teamWorkflows(orgId, [renamed]);
+
+    // Board order, not insertion order: a picker that listed "Dropped" above "Doing" would be
+    // offering the workflow backwards.
+    expect(stateOptionsOf(workflows, renamed).map((state) => state.key)).toEqual([
+      'icebox',
+      'queued',
+      'doing',
+      'shipped',
+      'dropped',
+    ]);
+    // Nothing to offer beats a guessed list — `update` would reject an invented key anyway, and
+    // the person would have watched a control do nothing.
+    expect(stateOptionsOf(workflows, 'team_that_does_not_exist')).toEqual([]);
+    expect(stateOptionsOf(workflows, null)).toEqual([]);
+  });
+
   it('resolves nothing rather than guessing when the key left the workflow', async () => {
     const { orgId, renamed } = await seedTeams();
-    const types = await workflowStateTypes(orgId, [renamed]);
+    const types = await teamWorkflows(orgId, [renamed]);
 
     // A task can outlive the state it sits in. No glyph is correct here; a guessed one is not.
     expect(stateTypeOf(types, renamed, 'retired_stage')).toBeUndefined();

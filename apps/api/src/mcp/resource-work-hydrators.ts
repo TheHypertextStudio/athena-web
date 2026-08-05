@@ -16,7 +16,7 @@ import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import { originOf } from './change-set';
-import { stateTypeOf, workflowStateTypes } from './workflow-states';
+import { stateOptionsOf, stateTypeOf, teamWorkflows } from './workflow-states';
 
 /** A lightweight task ref shared by hydrated DTOs (dependencies, subtasks). */
 export function taskRef(t: {
@@ -67,7 +67,7 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
   if (!t) throw new NotFoundError();
 
   const cols = { id: task.id, title: task.title, state: task.state, projectId: task.projectId };
-  const [blocking, blockedBy, subtasks, origin, stateTypes] = await Promise.all([
+  const [blocking, blockedBy, subtasks, origin, workflows] = await Promise.all([
     db
       .select(cols)
       .from(taskDependency)
@@ -87,7 +87,7 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
     originOf('task', id),
     // Concurrent with the dependency reads rather than after them: the state type depends only on
     // the task row already in hand, so serialising it would add a round trip for nothing.
-    workflowStateTypes(orgId, [t.teamId]),
+    teamWorkflows(orgId, [t.teamId]),
   ]);
 
   return {
@@ -98,7 +98,15 @@ export async function hydrateTask(orgId: string, id: string): Promise<unknown> {
     state: t.state,
     // The canonical category `state` maps onto. Per-team state keys are renameable, so this is
     // what a status glyph and any cross-team comparison must key off.
-    stateType: stateTypeOf(stateTypes, t.teamId, t.state) ?? null,
+    stateType: stateTypeOf(workflows, t.teamId, t.state) ?? null,
+    // Where this task may go next, in board order. Published because a caller cannot derive it:
+    // the keys are this team's, so anything offering a state picker — a widget, or a model
+    // choosing an argument for `update` — would otherwise have to guess at names like `shipped`.
+    stateOptions: stateOptionsOf(workflows, t.teamId).map((state) => ({
+      key: state.key,
+      name: state.name,
+      type: state.type,
+    })),
     priority: t.priority,
     assigneeId: t.assigneeId,
     delegateId: t.delegateId,

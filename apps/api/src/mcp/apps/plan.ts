@@ -13,7 +13,10 @@
 import { appDocument } from './runtime';
 
 const BODY = `
-<div class="headline" id="headline" aria-live="polite"></div>
+<div class="head">
+  <div class="headline" id="headline" aria-live="polite"></div>
+  <button id="expand" class="quiet" hidden></button>
+</div>
 <div class="rows" id="rows"></div>
 <div class="muted" id="next"></div>`;
 
@@ -82,9 +85,49 @@ const SCRIPT = String.raw`
     return node;
   }
 
-  window.docket.onData((data) => {
-    day = data;
-    const items = data.items || [];
+  function hourOf(item) {
+    if (!item.startsAt) {
+      return 'Unscheduled';
+    }
+    return new Date(item.startsAt).toLocaleTimeString([], { hour: 'numeric' });
+  }
+
+  function renderRows(rows, items) {
+    const full = window.docket.displayMode === 'fullscreen';
+    if (!full) {
+      for (const item of items.slice(0, INLINE_ROWS)) {
+        rows.appendChild(row(item));
+      }
+      if (items.length > INLINE_ROWS) {
+        const more = document.createElement('div');
+        more.className = 'muted';
+        more.textContent = '…and ' + String(items.length - INLINE_ROWS) + ' more';
+        rows.appendChild(more);
+      }
+      return;
+    }
+    // A day is the one thing on this surface that is genuinely ordered, so the expanded view keeps
+    // the order and adds the shape: which hour each block belongs to.
+    let currentHour = null;
+    for (const item of items) {
+      const hour = hourOf(item);
+      if (hour !== currentHour) {
+        currentHour = hour;
+        const heading = document.createElement('div');
+        heading.className = 'group-label';
+        heading.textContent = hour;
+        rows.appendChild(heading);
+      }
+      rows.appendChild(row(item));
+    }
+  }
+
+  function render() {
+    if (!day) {
+      return;
+    }
+    const items = day.items || [];
+    const full = window.docket.displayMode === 'fullscreen';
 
     const left = items.filter((i) => i.status !== 'done').length;
     el('headline').textContent =
@@ -94,22 +137,35 @@ const SCRIPT = String.raw`
 
     const rows = el('rows');
     rows.replaceChildren();
-    for (const item of items.slice(0, INLINE_ROWS)) {
-      rows.appendChild(row(item));
-    }
-    if (items.length > INLINE_ROWS) {
-      const more = document.createElement('div');
-      more.className = 'muted';
-      more.textContent = '…and ' + String(items.length - INLINE_ROWS) + ' more';
-      rows.appendChild(more);
-    }
+    renderRows(rows, items);
+
+    const expand = el('expand');
+    expand.hidden =
+      !window.docket.canDisplay('fullscreen') || (!full && items.length <= INLINE_ROWS);
+    expand.textContent = full ? 'Show less' : 'Show all';
 
     // The next timebox is the single most useful fact about a day at a glance.
     const upcoming = items.find((i) => i.status !== 'done' && i.startsAt);
     el('next').textContent = upcoming ? 'Next timebox ' + time(upcoming.startsAt) : '';
+  }
+
+  el('expand').addEventListener('click', () => {
+    void window.docket.requestDisplayMode(
+      window.docket.displayMode === 'fullscreen' ? 'inline' : 'fullscreen',
+    );
+  });
+
+  window.docket.onDisplayMode(render);
+
+  window.docket.onData((data) => {
+    day = data;
+    render();
   });
 })();
 `;
 
 /** The rendered plan document. */
-export const PLAN_HTML = appDocument('Day plan', BODY, SCRIPT, 4);
+export const PLAN_HTML = appDocument('Day plan', BODY, SCRIPT, {
+  skeletonRows: 4,
+  displayModes: ['inline', 'fullscreen'],
+});

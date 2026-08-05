@@ -82,6 +82,8 @@ interface WidgetCase {
   readonly result: Readonly<Record<string, unknown>> | null;
   /** Send `tool-cancelled` instead of `tool-result`, the way a host does on an abandoned call. */
   readonly cancelled?: boolean;
+  /** Start the view fullscreen, so the expanded layout is photographed rather than assumed. */
+  readonly fullscreen?: boolean;
 }
 
 const CASES: readonly WidgetCase[] = [
@@ -282,6 +284,53 @@ const CASES: readonly WidgetCase[] = [
     },
   },
   {
+    name: 'work-list-fullscreen',
+    tool: 'list_work',
+    html: WORK_LIST_HTML,
+    input: { orgId: 'org_1' },
+    fullscreen: true,
+    result: {
+      structuredContent: {
+        entity: 'task',
+        items: [
+          {
+            id: 't_1',
+            title: 'Draft the Q3 service change memo',
+            state: 'doing',
+            stateType: 'started',
+          },
+          {
+            id: 't_2',
+            title: 'Reconcile the UNLV headcount',
+            state: 'doing',
+            stateType: 'started',
+          },
+          {
+            id: 't_3',
+            title: 'Review campus outreach budget',
+            state: 'queued',
+            stateType: 'unstarted',
+          },
+          {
+            id: 't_4',
+            title: 'Send the RTC coordination follow-up',
+            state: 'queued',
+            stateType: 'unstarted',
+          },
+          { id: 't_5', title: 'Fare capping pilot scoping', state: 'icebox', stateType: 'backlog' },
+          {
+            id: 't_6',
+            title: 'Book the NSU tabling slot',
+            state: 'shipped',
+            stateType: 'completed',
+          },
+          { id: 't_7', title: 'Legacy pass reconcile', state: 'dropped', stateType: 'canceled' },
+          { id: 't_8', title: 'Orphaned by a workflow edit', state: 'retired' },
+        ],
+      },
+    },
+  },
+  {
     name: 'work-list-empty',
     tool: 'list_work',
     html: WORK_LIST_HTML,
@@ -299,8 +348,17 @@ const CASES: readonly WidgetCase[] = [
           {
             id: 't_1',
             title: 'Draft the Q3 service change memo',
-            state: 'in_progress',
+            state: 'doing',
             stateType: 'started',
+            // Deliberately a team that renamed everything: the picker has to offer these labels
+            // and send these keys, not a hardcoded todo/in_progress/done.
+            stateOptions: [
+              { key: 'icebox', name: 'Icebox', type: 'backlog' },
+              { key: 'queued', name: 'Queued', type: 'unstarted' },
+              { key: 'doing', name: 'Doing', type: 'started' },
+              { key: 'shipped', name: 'Shipped', type: 'completed' },
+              { key: 'dropped', name: 'Dropped', type: 'canceled' },
+            ],
             priority: 'high',
             dueDate: '2026-08-14',
             blockedBy: ['t_9'],
@@ -372,7 +430,7 @@ function harnessPage(
 ): string {
   const context = {
     theme,
-    displayMode: 'inline',
+    displayMode: testCase.fullscreen ? 'fullscreen' : 'inline',
     availableDisplayModes: ['inline', 'fullscreen'],
     containerDimensions: { maxHeight: 640 },
     locale: 'en-US',
@@ -432,6 +490,12 @@ window.addEventListener('message', (event) => {
   if (msg.method === 'ui/notifications/size-changed') {
     view.style.height = msg.params.height + 'px';
     view.dataset.reportedHeight = String(msg.params.height);
+    return;
+  }
+  if (msg.method === 'ui/request-display-mode') {
+    // The spec allows the answer to differ from the request, and requires the host to return the
+    // mode it actually applied. This harness always grants, but it must still say so.
+    post({ jsonrpc: '2.0', id: msg.id, result: { mode: msg.params.mode } });
     return;
   }
   if (msg.id !== undefined) {

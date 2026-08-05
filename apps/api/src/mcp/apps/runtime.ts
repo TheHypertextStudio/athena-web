@@ -219,6 +219,11 @@ export const RUNTIME_JS = String.raw`
     applyTheme(hostContext);
     applyLocale(hostContext);
     applyContainerDimensions(hostContext);
+    if (hostContext && hostContext.displayMode) {
+      // The host can move the view on its own — a fullscreen card dismissed from the host's own
+      // chrome arrives here as a context change, not as a reply to anything the view asked for.
+      setDisplayMode(hostContext.displayMode);
+    }
     reportSize();
   }
 
@@ -342,10 +347,29 @@ export const RUNTIME_JS = String.raw`
     }
   });
 
+  // Declared per document, not per runtime. The spec forbids a host switching a view into a mode
+  // it never claimed, so a card with nothing more to show at full size says so by not asking.
+  const MODES = window.__docketDisplayModes || ['inline'];
+
+  let displayMode = 'inline';
+  let modeHandler = null;
+
+  function setDisplayMode(mode) {
+    if (!mode || mode === displayMode) {
+      return;
+    }
+    displayMode = mode;
+    document.body.dataset.displayMode = mode;
+    if (modeHandler) {
+      modeHandler(mode);
+    }
+    reportSize();
+  }
+
   const ready = request('ui/initialize', {
     protocolVersion: '2026-01-26',
     appInfo: { name: 'docket-widget', version: '1.0.0' },
-    appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+    appCapabilities: { availableDisplayModes: MODES },
   })
     .then((result) => {
       applyHostContext(result && result.hostContext);
@@ -389,6 +413,42 @@ export const RUNTIME_JS = String.raw`
     stateGlyph,
     /** A wire value rendered for a person: snake_case enums and ISO dates, everything else as-is. */
     label,
+    /** The mode the view is currently displayed in. */
+    get displayMode() {
+      return displayMode;
+    },
+    /** Whether the host says this view can be shown at 'mode' right now. */
+    canDisplay(mode) {
+      const available = (lastHostContext && lastHostContext.availableDisplayModes) || [];
+      return MODES.indexOf(mode) !== -1 && available.indexOf(mode) !== -1;
+    },
+    /** Re-render when the mode changes, from either side. */
+    onDisplayMode(fn) {
+      modeHandler = fn;
+      fn(displayMode);
+    },
+    /**
+     * Ask the host to show this view at 'mode'.
+     *
+     * @remarks
+     * Three spec requirements in one call, all of them MUSTs: check the host's
+     * 'availableDisplayModes' before asking, accept that the answer may be a different mode than
+     * the one requested, and render whatever comes back. A view that assumed its request was
+     * granted would draw a fullscreen layout inside an inline frame.
+     */
+    async requestDisplayMode(mode) {
+      if (!window.docket.canDisplay(mode)) {
+        return displayMode;
+      }
+      try {
+        const result = await request('ui/request-display-mode', { mode });
+        setDisplayMode((result && result.mode) || displayMode);
+      } catch {
+        // A refusal is an answer. The card stays where it is rather than reporting a failure the
+        // person did not cause.
+      }
+      return displayMode;
+    },
     call(name, args) {
       return request('tools/call', { name, arguments: args });
     },
@@ -546,6 +606,23 @@ body[data-state='error'] .skeleton { display: none; }
 }
 .diff .from { color: var(--color-text-secondary); text-decoration: line-through; }
 .diff .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+
+/* Fullscreen is the one place a card may scroll: it is no longer sitting in the transcript flow,
+   so a scroll region here traps nothing. The card loses its own frame because the host is now
+   drawing one around the whole surface. */
+body[data-display-mode='fullscreen'] { height: 100vh; }
+body[data-display-mode='fullscreen'] .card {
+  height: 100vh;
+  border: 0;
+  border-radius: 0;
+}
+body[data-display-mode='fullscreen'] .rows {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
 .skipped .name { color: var(--color-text-secondary); }
 .reason { color: var(--color-text-danger); font-size: var(--font-text-sm-size); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -570,6 +647,38 @@ button.quiet {
   color: var(--color-text-secondary);
 }
 button.quiet:hover { background: var(--color-background-secondary); color: var(--color-text-primary); }
+
+/* The two edits someone makes with the card in front of them. Native select and date input on
+   purpose: they open the host's own picker outside this frame, they are keyboard-operable and
+   labelled for free, and an inline widget must not open a popover of its own inside someone
+   else's transcript. */
+.edits { display: flex; flex-wrap: wrap; gap: 8px; }
+.field { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-text-sm-size);
+}
+select,
+input[type='date'] {
+  font: inherit;
+  min-height: 1.75rem;
+  padding: 3px 8px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--color-border-primary);
+  background: var(--color-background-primary);
+  color: var(--color-text-primary);
+  max-width: 100%;
+}
+select:focus-visible,
+input[type='date']:focus-visible {
+  outline: 2px solid var(--color-ring-primary);
+  outline-offset: 2px;
+}
+select:disabled,
+input[type='date']:disabled { opacity: 0.5; }
 
 /* Names the block below it. A group of rows with no heading reads as more of the same thing,
    which for skipped work is the opposite of true. */
@@ -614,6 +723,9 @@ button.quiet:hover { background: var(--color-background-secondary); color: var(-
   .row:has(.tick) { flex-direction: row; align-items: center; }
   .tick { width: 2.5rem; height: 2.5rem; }
   .actions button { flex: 1 1 auto; min-height: 2.5rem; }
+  .field { width: 100%; }
+  .field select,
+  .field input[type='date'] { flex: 1 1 auto; min-height: 2.5rem; }
 }
 `;
 
@@ -632,7 +744,13 @@ button.quiet:hover { background: var(--color-background-secondary); color: var(-
  *   usual density so the card does not jump size when the real content lands.
  * @returns a self-contained HTML document.
  */
-export function appDocument(title: string, body: string, script: string, skeletonRows = 2): string {
+export function appDocument(
+  title: string,
+  body: string,
+  script: string,
+  options: { skeletonRows?: number; displayModes?: readonly ('inline' | 'fullscreen')[] } = {},
+): string {
+  const { skeletonRows = 2, displayModes = ['inline'] } = options;
   const rows = Array.from({ length: skeletonRows }, () => '<div class="sk sk-row"></div>').join(
     '\n      ',
   );
@@ -645,7 +763,8 @@ export function appDocument(title: string, body: string, script: string, skeleto
 <title>${title}</title>
 <style>${RUNTIME_CSS}</style>
 </head>
-<body data-state="loading">
+<body data-state="loading" data-display-mode="inline">
+<script>window.__docketDisplayModes = ${JSON.stringify(displayModes)};</script>
 <section class="card" aria-label="${title}">
   <div class="skeleton" aria-hidden="true">
     <div class="sk sk-headline"></div>

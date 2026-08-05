@@ -11,6 +11,7 @@ import {
 import {
   MCP_UI_METHODS,
   type McpUiContentBlock,
+  type McpUiDisplayMode,
   type McpUiHostContext,
   type McpUiTheme,
 } from '@docket/types';
@@ -227,6 +228,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
   const containerRef = useRef<HTMLElement | null>(null);
   const hostRef = useRef<McpAppHost | null>(null);
   const [height, setHeight] = useState(INITIAL_HEIGHT);
+  const [displayMode, setDisplayMode] = useState<McpUiDisplayMode>('inline');
   const [failure, setFailure] = useState<string | null>(null);
 
   const proxyUrl = useMemo(() => sandboxProxyUrl(sandboxOrigin), [sandboxOrigin]);
@@ -264,6 +266,12 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
       // unauthorized call fails there, not here — but the bridge still requires an explicit
       // allow, so a widget can never reach a tool the host did not intend to expose.
       authorizeTool: () => ({ allowed: true }),
+      // The bridge already refuses a mode the view never declared, so this only has to decide
+      // whether Docket will honour it — and it will, for the two the spec defines.
+      requestDisplayMode: (mode) => {
+        setDisplayMode(mode);
+        return mode;
+      },
       openLink: (url) => {
         // The frame itself can never navigate: it has no `allow-top-navigation`. Off-origin
         // targets open in a new tab with the opener severed; anything that is not http(s) is
@@ -418,6 +426,25 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     setFailure(null);
   }, [proxyOrigin]);
 
+  // Escape closes a fullscreen card. The view is told through a host-context change rather than a
+  // reply, because nothing it sent is being answered — the host moved it.
+  useEffect(() => {
+    if (displayMode !== 'fullscreen') {
+      return;
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      setDisplayMode('inline');
+      hostRef.current?.updateHostContext({ displayMode: 'inline' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [displayMode]);
+
   if (failure) {
     return (
       <div className="bg-surface-container rounded-xl px-4 py-3" data-testid="mcp-app-view-failure">
@@ -431,8 +458,13 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
   return (
     <figure
       ref={containerRef}
-      className="bg-surface-container-low m-0 overflow-hidden rounded-xl"
+      className={
+        displayMode === 'fullscreen'
+          ? 'bg-surface-container-low fixed inset-0 z-50 m-0 flex flex-col overflow-hidden'
+          : 'bg-surface-container-low m-0 overflow-hidden rounded-xl'
+      }
       data-testid="mcp-app-view"
+      data-display-mode={displayMode}
       data-resource-uri={resource.uri}
       data-prefers-border={String(resource.meta?.prefersBorder ?? false)}
     >
@@ -446,8 +478,14 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
         referrerPolicy="no-referrer"
         // A card grows into its measured height rather than snapping. The global reduced-motion
         // rule in `globals.css` collapses this to nothing for anyone who asked for that.
-        className="block w-full border-0 bg-transparent transition-[height]"
-        style={{ height: `${String(height)}px` }}
+        className={
+          displayMode === 'fullscreen'
+            ? 'block w-full flex-1 border-0 bg-transparent'
+            : 'block w-full border-0 bg-transparent transition-[height]'
+        }
+        // Fullscreen takes the frame it is given; only an inline card sizes itself from what the
+        // view reported, because only an inline card is sitting in someone else's flow.
+        style={displayMode === 'fullscreen' ? undefined : { height: `${String(height)}px` }}
       />
       <figcaption className="px-4 pb-2">
         <Text token="label-small" tone="muted">

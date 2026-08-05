@@ -282,4 +282,4 @@ const SCRIPT = String.raw`
 `;
 
 /** The rendered change-report document. */
-export const CHANGE_REPORT_HTML = appDocument('Change report', BODY, SCRIPT, 2);
+export const CHANGE_REPORT_HTML = appDocument('Change report', BODY, SCRIPT, { skeletonRows: 2 });

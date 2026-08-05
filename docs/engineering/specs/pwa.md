@@ -1,25 +1,21 @@
 # Progressive Web App
 
-> **Status**: Implemented — installable, read-only offline, explicit update handshake.
+> **Status**: Implemented — installable, with an explicit update handshake.
 > **Applies to**: `apps/web`
-> **Last Updated**: 2026-07-25
+> **Last Updated**: 2026-08-05
 
-Docket installs as a standalone app and stays usable, read-only, when the network does not.
-Deliberately **not** in scope: web push notifications, a custom `beforeinstallprompt` UI, and any
-offline write queue.
+How Docket installs as a standalone app, and how it takes an update without breaking a live tab.
 
-## Read-only, on purpose
+**What happens without a network is a separate question**, answered in
+[`offline.md`](./offline.md) — the app shell, the route table, the document cache and the write
+queue all live there. Deliberately not in scope anywhere: web push notifications and a custom
+`beforeinstallprompt` UI.
 
-Offline, Docket shows what it already had and refuses to pretend otherwise. Mutations fail
-immediately with app-owned copy rather than being queued.
-
-Queuing was rejected rather than deferred. A replayed write lands minutes or hours later against a
-server whose state has moved on, with nobody watching the result — it needs idempotency keys,
-conflict resolution, and a per-endpoint replay-safety review before it is anything but a data-loss
-generator. This is why `mutations.networkMode` is set to `'always'` in
-[`query-core.ts`](../../../apps/web/src/lib/query-core.ts): TanStack's _default_ (`'online'`) pauses
-and replays offline mutations, which is exactly the behaviour being avoided. Queries stay on the
-default, since flipping them would make every mounted surface fail loudly the instant signal drops.
+`mutations.networkMode` is `'always'` in
+[`query-core.ts`](../../../apps/web/src/lib/query-core.ts) so TanStack's own pause-and-replay never
+runs. Docket queues offline writes itself, in the page, where the queue can be shown and reasoned
+about; see `offline.md`. Queries stay on the default, since flipping them would make every mounted
+surface fail loudly the instant signal drops.
 
 ## Pieces
 

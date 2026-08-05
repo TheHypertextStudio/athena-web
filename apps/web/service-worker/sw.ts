@@ -127,6 +127,7 @@ self.addEventListener('message', (event) => {
 
   // Who the document cache belongs to. Posted by the page after the session resolves — the worker
   // has no way to ask, and on a cold offline start it needs the answer before any page exists.
+  //
   if (type === 'OFFLINE_IDENTITY') {
     const userId = (data as { userId?: unknown }).userId;
     event.waitUntil(writeOfflineIdentity(typeof userId === 'string' && userId ? userId : null));

@@ -5,7 +5,7 @@ import {
   type HomeNavKey,
   type WorkspaceNavKey,
 } from '@docket/ui/components';
-import Link from 'next/link';
+import DocketLink from '@/components/docket-link';
 import type { ReactNode } from 'react';
 
 import { sameOriginPath } from '@/lib/same-origin-path';
@@ -200,11 +200,18 @@ export function resolveActiveOrg(
   return personal?.id ?? orgs[0]?.id ?? null;
 }
 
-/** renderLink renders an app-shell navigation item with the correct active state. */
+/**
+ * renderLink renders an app-shell navigation item with the correct active state.
+ *
+ * @remarks
+ * {@link DocketLink} rather than `next/link`, because these are the links a person reaches for
+ * *first* when the connection drops. Offline, a `next/link` click here would fail its RSC fetch and
+ * fall back to a full document navigation, tearing down the very shell this function is drawing.
+ */
 export function renderLink(href: string, content: ReactNode, className?: string): ReactNode {
   return (
-    <Link href={href} className={className}>
+    <DocketLink href={href} className={className}>
       {content}
-    </Link>
+    </DocketLink>
   );
 }

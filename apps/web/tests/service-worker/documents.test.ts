@@ -7,6 +7,7 @@ import {
   purgeDocumentCaches,
   purgePrivateDocuments,
   readOfflineIdentity,
+  shellCacheKey,
   writeOfflineIdentity,
 } from '../../service-worker/documents';
 import { navigateWithDocumentCache } from '../../service-worker/strategies';
@@ -132,6 +133,15 @@ describe('isCacheableDocument', () => {
   it('never stores a partial response', () => {
     expect(isCacheableDocument({ ok: true, status: 206, headers: html })).toBe(false);
   });
+
+  it('never stores a document that arrived by following a redirect', () => {
+    // The `ok` check above already rejects a navigation's opaqueredirect. This covers the other
+    // shape: a response that followed a redirect to a 200, which would store the destination's HTML
+    // under the requested route's key — a sign-in page pinned over a route the person can reach.
+    expect(isCacheableDocument({ ok: true, status: 200, redirected: true, headers: html })).toBe(
+      false,
+    );
+  });
 });
 
 describe('offline identity', () => {
@@ -254,12 +264,90 @@ describe('navigateWithDocumentCache', () => {
     expect(network).not.toHaveBeenCalled();
   });
 
-  it('falls back to the waiting room for a route never visited', async () => {
+  it('falls back to the waiting room for a route never visited, with no shell warmed', async () => {
     await writeOfflineIdentity('u1');
     await seedOfflinePage();
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
 
     const response = await navigateWithDocumentCache(new Request(`${ORIGIN}/never-seen`), {
+      ...OPTIONS,
+      online: false,
+    });
+
+    expect(await response.text()).toBe('<h1>offline</h1>');
+  });
+
+  /** Stand in for a page having been served earlier, which is what leaves a shell behind. */
+  async function seedShell(): Promise<void> {
+    const cache = await caches.open(OPTIONS.documentCache);
+    await cache.put(shellCacheKey(ORIGIN, 'u1'), htmlResponse('<html>app shell</html>'));
+  }
+
+  it('keeps the document it served as a stand-in shell for every other route', async () => {
+    // No route is warmed and nothing extra is fetched: whatever page you last loaded becomes the
+    // shell, because every authenticated document carries the same chrome and `RouteSlot` swaps the
+    // page for whatever the address bar asks for.
+    await writeOfflineIdentity('u1');
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<html>today</html>'));
+
+    await navigateWithDocumentCache(new Request(`${ORIGIN}/today`), OPTIONS);
+
+    const cache = await caches.open(OPTIONS.documentCache);
+    const shell = await cache.match(shellCacheKey(ORIGIN, 'u1'));
+    expect(await shell?.text()).toBe('<html>today</html>');
+  });
+
+  it('leaves no shell behind while nobody is signed in', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<html>sign in</html>'));
+
+    await navigateWithDocumentCache(new Request(`${ORIGIN}/sign-in`), OPTIONS);
+
+    const cache = await openFake(OPTIONS.documentCache);
+    expect(cache.entries.size).toBe(0);
+  });
+
+  it('serves the app shell for a route never visited, rather than the waiting room', async () => {
+    // The point of the whole feature: most routes are parameterized and cannot be pre-visited, so
+    // "never visited" is the common case rather than the edge one.
+    await writeOfflineIdentity('u1');
+    await seedOfflinePage();
+    await seedShell();
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+
+    const response = await navigateWithDocumentCache(new Request(`${ORIGIN}/orgs/o1/tasks/t1`), {
+      ...OPTIONS,
+      online: false,
+    });
+
+    expect(await response.text()).toBe('<html>app shell</html>');
+  });
+
+  it('prefers the route’s own document to the shell when it has one', async () => {
+    // A document rendered for this route carries its own server-prefetched data and hydrates against
+    // its own tree, so it is strictly better than the generic shell.
+    await writeOfflineIdentity('u1');
+    await seedOfflinePage();
+    await seedShell();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(htmlResponse('<html>today</html>'));
+    await navigateWithDocumentCache(new Request(`${ORIGIN}/today`), OPTIONS);
+
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const response = await navigateWithDocumentCache(new Request(`${ORIGIN}/today`), {
+      ...OPTIONS,
+      online: false,
+    });
+
+    expect(await response.text()).toBe('<html>today</html>');
+  });
+
+  it('never serves one account’s app shell to another', async () => {
+    await writeOfflineIdentity('u1');
+    await seedShell();
+    await seedOfflinePage();
+
+    await writeOfflineIdentity('u2');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('Failed to fetch'));
+    const response = await navigateWithDocumentCache(new Request(`${ORIGIN}/orgs/o1/tasks/t1`), {
       ...OPTIONS,
       online: false,
     });

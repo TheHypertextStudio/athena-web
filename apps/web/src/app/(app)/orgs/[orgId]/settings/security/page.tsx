@@ -16,9 +16,9 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { type JSX, Suspense, use, useEffect } from 'react';
+import { type JSX, Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAppSearchParams } from '@/lib/app-location';
+import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 
 import { useActiveOrg } from '@/components/active-org';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -40,12 +40,8 @@ function EmailChangedBanner(): JSX.Element | null {
 }
 
 /** The Security section page. */
-export default function SecuritySettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function SecuritySettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const router = useRouter();
   const { activeOrg } = useActiveOrg();
   const isPersonal = activeOrg?.isPersonal ?? false;

@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * `/orgs/[orgId]/people/[actorId]` — one person's workspace profile.
  *
@@ -10,7 +12,7 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { use, type JSX } from 'react';
+import type { JSX } from 'react';
 
 import { PersonProfileView } from '@/components/people/person-profile';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -21,12 +23,8 @@ import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
  * @param props - The dynamic route params (a Promise in the App Router).
  * @returns the rendered profile.
  */
-export default function PersonProfilePage({
-  params,
-}: {
-  params: Promise<{ orgId: string; actorId: string }>;
-}): JSX.Element {
-  const { orgId, actorId } = use(params);
+export default function PersonProfilePage(): JSX.Element {
+  const { orgId, actorId } = useAppParams<{ orgId: string; actorId: string }>();
   const { canManage } = useCanManageOrg(orgId);
   return <PersonProfileView orgId={orgId} actorId={actorId} canManage={canManage} />;
 }

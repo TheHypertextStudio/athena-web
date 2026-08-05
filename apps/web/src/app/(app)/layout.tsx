@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { type JSX, type ReactNode } from 'react';
 
 import { AppShellFrame } from '@/components/app-shell-frame';
+import RouteSlot from '@/components/pwa/route-slot';
 import { AppLocationProvider } from '@/lib/app-location';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
@@ -45,11 +46,16 @@ export default async function AppGroupLayout({
   children: ReactNode;
 }): Promise<JSX.Element> {
   const session = await readServerSession();
+  // The path this document is being rendered for. Read once and handed to the client, because it is
+  // the only thing that can tell a replayed document from a fresh one: offline the worker answers a
+  // navigation with whatever document it has, and the browser's URL is then the route the person
+  // asked for while this is the route the HTML was built for.
+  const serverPath = (await headers()).get('x-docket-pathname');
 
   if (session.state === 'signed-out') {
-    const headerStore = await headers();
-    const returnPath = headerStore.get('x-docket-pathname') ?? DEFAULT_RETURN_PATH;
-    redirect(`/sign-in?${new URLSearchParams({ callbackURL: returnPath }).toString()}`);
+    redirect(
+      `/sign-in?${new URLSearchParams({ callbackURL: serverPath ?? DEFAULT_RETURN_PATH }).toString()}`,
+    );
   }
 
   const queryClient = getServerQueryClient();
@@ -62,12 +68,14 @@ export default async function AppGroupLayout({
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
       {/* Outermost inside the group, because everything below reads the URL through it — including
-          the shell itself. It has to be here rather than in `AppShellFrame` so that a cached shell
-          document served for some other route still resolves the *requested* route, not the one the
+          the shell itself. It has to be here rather than in `AppShellFrame` so that a document
+          replayed for some other route still resolves the *requested* route, not the one the
           document was rendered for. */}
-      <AppLocationProvider>
+      <AppLocationProvider serverPath={serverPath}>
         <AppShellFrame initialSession={session.state === 'authenticated' ? session.user : null}>
-          {children}
+          {/* Renders `children` untouched whenever this document is being used for its own route,
+              which is every online load. It only diverges when the worker replayed it elsewhere. */}
+          <RouteSlot serverPath={serverPath}>{children}</RouteSlot>
         </AppShellFrame>
       </AppLocationProvider>
     </HydrationBoundary>

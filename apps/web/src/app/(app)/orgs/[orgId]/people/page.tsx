@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * `/orgs/[orgId]/people` — the workspace People roster.
  *
@@ -12,7 +14,7 @@
  * Data is fetched at runtime, so the production build needs no running server.
  */
 import { useRouter } from 'next/navigation';
-import { use, useEffect, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { PeopleList } from '@/components/people/people-list';
@@ -23,12 +25,8 @@ import { PeopleList } from '@/components/people/people-list';
  * @param props - The dynamic route params (a Promise in the App Router).
  * @returns the rendered roster.
  */
-export default function PeoplePage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function PeoplePage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const router = useRouter();
   const { activeOrg } = useActiveOrg();
   const isPersonal = activeOrg?.isPersonal ?? false;

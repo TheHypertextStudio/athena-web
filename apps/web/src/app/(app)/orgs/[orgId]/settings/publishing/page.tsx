@@ -1,6 +1,8 @@
 'use client';
 
-import { use, type JSX } from 'react';
+import { useAppParams } from '@/lib/app-location';
+
+import type { JSX } from 'react';
 
 import { PublishingSettings } from '@/components/publishing/publishing-settings';
 
@@ -15,11 +17,7 @@ import { PublishingSettings } from '@/components/publishing/publishing-settings'
  * @param props - The dynamic route params.
  * @returns The publishing settings section.
  */
-export default function PublishingSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function PublishingSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   return <PublishingSettings orgId={orgId} />;
 }

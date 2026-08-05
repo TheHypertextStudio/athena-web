@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * The Settings area root — redirects to the workspace's default section.
  *
@@ -16,7 +18,7 @@
  * caller's orgs load) before redirecting, so it never bounces a personal workspace through the
  * org default first. A calm one-line placeholder shows during that brief window.
  */
-import { use, useEffect, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -28,12 +30,8 @@ import { defaultSettingsSection, sectionHref } from '@/components/settings/secti
  * @param props - The dynamic route params (a Promise in the App Router).
  * @returns a calm placeholder while it resolves the destination, then redirects.
  */
-export default function SettingsRootPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function SettingsRootPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const router = useRouter();
   const { activeOrg } = useActiveOrg();
 

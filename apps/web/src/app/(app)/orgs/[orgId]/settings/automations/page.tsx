@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * The Automations settings section.
  *
@@ -8,7 +10,7 @@
  * (`on → when → then`) with enable/disable + delete. Defaults are seeded as editable rows.
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { use, type JSX } from 'react';
+import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import AutomationsTab from '@/components/settings/automations-tab';
@@ -18,12 +20,8 @@ import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 
 /** The Automations section page. */
-export default function AutomationsSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function AutomationsSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 

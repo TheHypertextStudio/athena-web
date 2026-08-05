@@ -8,7 +8,7 @@ import {
   patternFor,
   renderRouteModule,
   resolveAllRoutes,
-  ROUTES_WITHOUT_UI,
+  ROUTES_NOT_IN_TABLE,
 } from '../../scripts/offline-route-policy';
 import { ROUTE_PATTERNS } from '@/lib/offline-routes.generated';
 
@@ -29,7 +29,7 @@ describe('the generated offline route table', () => {
   });
 
   it('accounts for every page under the authenticated route group', () => {
-    const covered = new Set([...ROUTE_PATTERNS, ...Object.keys(ROUTES_WITHOUT_UI)]);
+    const covered = new Set([...ROUTE_PATTERNS, ...Object.keys(ROUTES_NOT_IN_TABLE)]);
     const missing = collectPages()
       .map((page) => patternFor(page))
       .filter((pattern) => !covered.has(pattern));
@@ -38,14 +38,14 @@ describe('the generated offline route table', () => {
   });
 
   it('excuses a route from having offline UI only with a stated reason', () => {
-    for (const [pattern, reason] of Object.entries(ROUTES_WITHOUT_UI)) {
+    for (const [pattern, reason] of Object.entries(ROUTES_NOT_IN_TABLE)) {
       expect(reason, `${pattern} needs a reason, not an empty string`).not.toBe('');
     }
   });
 
   it('claims no pattern that no longer has a page', () => {
     const real = new Set(collectPages().map((page) => patternFor(page)));
-    const orphaned = [...ROUTE_PATTERNS, ...Object.keys(ROUTES_WITHOUT_UI)].filter(
+    const orphaned = [...ROUTE_PATTERNS, ...Object.keys(ROUTES_NOT_IN_TABLE)].filter(
       (pattern) => !real.has(pattern),
     );
 

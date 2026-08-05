@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * The Authorized apps settings section.
  *
@@ -19,7 +21,7 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { use, type JSX } from 'react';
+import type { JSX } from 'react';
 
 import { ConnectedAppsTab } from '@/components/settings/connected-apps-tab';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -30,12 +32,8 @@ import { SectionHeader } from '@/components/settings/section-header';
  * @param props - The dynamic route params (a Promise in the App Router).
  * @returns the rendered section.
  */
-export default function ConnectedAppsSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function ConnectedAppsSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
 
   return (
     <div className="flex flex-col gap-6">

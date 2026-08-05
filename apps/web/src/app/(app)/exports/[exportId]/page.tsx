@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * Email-safe export destination.
  *
@@ -8,17 +10,13 @@
  * shell restores the person into Docket, where the export history presents the export and its
  * passkey-protected Download your data action.
  */
-import { type JSX, use } from 'react';
+import { type JSX } from 'react';
 
 import { ExportDataTab } from '@/components/settings/export-data-tab';
 
 /** Render the authenticated export destination linked from export-ready email. */
-export default function AccountExportEmailPage({
-  params,
-}: {
-  params: Promise<{ exportId: string }>;
-}): JSX.Element {
-  const { exportId } = use(params);
+export default function AccountExportEmailPage(): JSX.Element {
+  const { exportId } = useAppParams<{ exportId: string }>();
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div className="flex flex-col gap-1">

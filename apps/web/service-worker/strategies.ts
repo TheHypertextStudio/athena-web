@@ -11,7 +11,12 @@
  * is stored is {@link navigateWithDocumentCache}, whose own gate (a named user, a non-redirected
  * 200 HTML response) is documented in `documents.ts`.
  */
-import { documentCacheKey, isCacheableDocument, readOfflineIdentity } from './documents';
+import {
+  documentCacheKey,
+  isCacheableDocument,
+  readOfflineIdentity,
+  shellCacheKey,
+} from './documents';
 
 /**
  * Serve from cache, falling back to the network and storing the result.
@@ -130,6 +135,7 @@ export async function navigateWithDocumentCache(
   const path = new URL(request.url).pathname;
   const userId = await readOfflineIdentity();
   const key = userId === null ? null : documentCacheKey(options.origin, path, userId);
+  const shellKey = userId === null ? null : shellCacheKey(options.origin, userId);
 
   if (key !== null && !options.online) {
     const cached = await matchDocument(options.documentCache, key);
@@ -156,10 +162,15 @@ export async function navigateWithDocumentCache(
   const settled = await Promise.race([network, after(options.giveUpMs)]);
 
   if (settled !== TIMED_OUT && settled.ok) {
-    if (key !== null && isCacheableDocument(settled.response)) {
-      const copy = settled.response.clone();
+    if (key !== null && shellKey !== null && isCacheableDocument(settled.response)) {
       const cache = await caches.open(options.documentCache);
-      void cache.put(key, copy);
+      void cache.put(key, settled.response.clone());
+      // The same document again, under the shell key. Every authenticated document carries the same
+      // chrome, and `RouteSlot` swaps the page for whatever the address bar asks for, so the most
+      // recent one is a perfectly good stand-in for a route that has no document at all. Keeping it
+      // this way costs one extra copy and no request — the alternative was a dedicated route in the
+      // product's URL space, warmed by a fetch per user per release.
+      void cache.put(shellKey, settled.response.clone());
     }
     return settled.response;
   }
@@ -168,6 +179,21 @@ export async function navigateWithDocumentCache(
     const cached = await matchDocument(options.documentCache, key);
     if (cached) return cached;
   }
+
+  // The app shell, standing in for a route with no document of its own. This is what turns "you're
+  // offline" into the real application for every route the person never happened to open online —
+  // which is most of them, since a route like `/orgs/x/tasks/y` cannot be pre-visited. The document
+  // boots the shell, and `OfflineRouteOutlet` renders the requested route's own component from the
+  // generated route table.
+  //
+  // Below the exact-route lookup on purpose: a document rendered *for this route* carries its own
+  // server-prefetched data and hydrates against its own tree, so it is strictly better when we have
+  // it.
+  if (shellKey !== null) {
+    const shell = await matchDocument(options.documentCache, shellKey);
+    if (shell) return shell;
+  }
+
   const cache = await caches.open(options.offlineCache);
   const offline = await cache.match(options.offlineUrl);
   return (

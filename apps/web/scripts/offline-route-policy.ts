@@ -23,19 +23,20 @@ export const WEB_ROOT = join(import.meta.dirname, '..');
 export const APP_GROUP = join(WEB_ROOT, 'src/app/(app)');
 
 /**
- * Routes with no offline UI, and why.
+ * Routes deliberately kept out of the offline table, and why.
  *
  * @remarks
- * Every entry here is a page whose entire body is a `redirect()`. There is nothing to render
- * offline and nothing to cache: the destination route has its own entry, and offline navigation
- * resolves to that instead. Listing them explicitly — rather than letting the generator skip any
- * page it cannot classify — is what makes a genuinely unhandled page a build failure rather than a
- * silent hole in offline coverage.
+ * Listing them explicitly — rather than letting the generator skip any page it cannot classify — is
+ * what makes a genuinely unhandled page a build failure rather than a silent hole in offline
+ * coverage.
+ *
+ * Only one kind qualifies today: a page whose entire body is a `redirect()` has nothing to render
+ * and nothing to cache, and its destination has its own entry.
  *
  * Keyed by route pattern, valued with the reason, which is printed when the policy test reports a
  * mismatch.
  */
-export const ROUTES_WITHOUT_UI: Readonly<Record<string, string>> = {
+export const ROUTES_NOT_IN_TABLE: Readonly<Record<string, string>> = {
   '/orgs/[orgId]/agents': 'redirects to /athena',
   '/orgs/[orgId]/athena': 'redirects to /athena',
   '/orgs/[orgId]/settings/vocabulary': 'redirects to the workspace settings index',
@@ -118,22 +119,72 @@ export class UnresolvableRouteError extends Error {}
  */
 export function resolveRoute(pagePath: string): ResolvedRoute {
   const pattern = patternFor(pagePath);
+  const source = readFileSync(pagePath, 'utf8');
 
-  if (isClientModule(readFileSync(pagePath, 'utf8'))) {
+  if (isClientModule(source)) {
+    if (declaresProps(source, pagePath)) {
+      throw new UnresolvableRouteError(
+        `${pattern}: the page is a client component that takes props. The route table mounts a route with no props, because offline there is no server to resolve Next's \`params\` promise. Read them with \`useAppParams\` from \`@/lib/app-location\` instead.`,
+      );
+    }
     return { pattern, module: importSpecifier(pagePath), exportName: 'default' };
   }
 
   const siblings = clientSiblings(pagePath);
   const only = siblings[0];
   if (siblings.length === 1 && only !== undefined) {
+    if (declaresProps(readFileSync(only, 'utf8'), only)) {
+      throw new UnresolvableRouteError(
+        `${pattern}: ${basename(only)} takes props, so the route has no entry point the table can mount. Give it a prop-free sibling that resolves them from the URL, the way /search and /time do.`,
+      );
+    }
     return { pattern, module: importSpecifier(only), exportName: 'default' };
   }
 
   throw new UnresolvableRouteError(
     siblings.length > 1
       ? `${pattern}: ${String(siblings.length)} sibling *-client.tsx modules, so the route's UI is ambiguous. Give the route one client entry point.`
-      : `${pattern}: the page is a Server Component with no sibling *-client.tsx, so it has no client UI to render offline. Move its body into one, or declare it in ROUTES_WITHOUT_UI with a reason.`,
+      : `${pattern}: the page is a Server Component with no sibling *-client.tsx, so it has no client UI to render offline. Move its body into one, or declare it in ROUTES_NOT_IN_TABLE with a reason.`,
   );
+}
+
+/**
+ * Whether a module's default export declares any parameters.
+ *
+ * @remarks
+ * The route table mounts a route component with no props. A page that takes Next's `params` promise
+ * would therefore be handed nothing and read `undefined` off it — a runtime failure that shows up
+ * only offline, which is the whole class of bug this generator exists to prevent. Sixteen pages had
+ * that shape when the table was introduced and now read `useAppParams` instead.
+ *
+ * Parsed rather than pattern-matched: a signature can be spread over lines, destructured, or typed
+ * inline, and a regular expression that got any of those wrong would fail open.
+ *
+ * @param source - The module source.
+ * @param pagePath - Its path, used only for parser diagnostics.
+ * @returns Whether the default export takes parameters.
+ */
+function declaresProps(source: string, pagePath: string): boolean {
+  const file = ts.createSourceFile(
+    pagePath,
+    source,
+    ts.ScriptTarget.ESNext,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  for (const statement of file.statements) {
+    if (ts.isFunctionDeclaration(statement)) {
+      const isDefault = statement.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword,
+      );
+      if (isDefault === true) return statement.parameters.length > 0;
+      continue;
+    }
+    if (ts.isExportAssignment(statement) && ts.isArrowFunction(statement.expression)) {
+      return statement.expression.parameters.length > 0;
+    }
+  }
+  return false;
 }
 
 /** The `@/`-rooted import specifier for a module inside `src`. */
@@ -159,7 +210,7 @@ export function resolveAllRoutes(): readonly ResolvedRoute[] {
   const failures: string[] = [];
 
   for (const page of collectPages()) {
-    if (patternFor(page) in ROUTES_WITHOUT_UI) {
+    if (patternFor(page) in ROUTES_NOT_IN_TABLE) {
       continue;
     }
     try {

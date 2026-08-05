@@ -77,6 +77,8 @@ export interface DocumentResponseShape {
   readonly ok: boolean;
   /** HTTP status. */
   readonly status: number;
+  /** Whether the request followed a redirect to get here. */
+  readonly redirected?: boolean;
   /** Response headers. */
   readonly headers: { get(name: string): string | null };
 }
@@ -85,18 +87,47 @@ export interface DocumentResponseShape {
  * Whether a navigation response may be stored for offline replay.
  *
  * @remarks
- * Three conditions, each rejecting a document that would be actively wrong to serve later:
+ * Four conditions, each rejecting a document that would be actively wrong to serve later:
  * a non-OK response (including the `opaqueredirect` a signed-out request produces, whose `status` is
- * `0`), a `206 Partial Content`, and anything that is not HTML. The last one matters because a
- * navigation can legitimately resolve to a download.
+ * `0`), a `206 Partial Content`, anything that is not HTML, and anything that arrived by following a
+ * redirect. The HTML check matters because a navigation can legitimately resolve to a download.
+ *
+ * The `ok` check already covers a navigation, which the browser fetches with `redirect: 'manual'`
+ * so a signed-out request arrives as an opaqueredirect. The `redirected` check covers the other
+ * shape — a response that followed a redirect to a 200 — which would store the destination's HTML
+ * under the requested route's key, pinning a sign-in page over a route the person can reach.
  *
  * @param response - The response returned by the network.
  * @returns Whether to store it.
  */
 export function isCacheableDocument(response: DocumentResponseShape): boolean {
   if (!response.ok || response.status !== 200) return false;
+  if (response.redirected === true) return false;
   const type = response.headers.get('content-type') ?? '';
   return type.includes('text/html');
+}
+
+/**
+ * The synthetic path the most recent document is *also* stored under, to act as an app shell for
+ * routes that have no document of their own.
+ *
+ * @remarks
+ * Synthetic on purpose: the app must not gain a route that exists for the worker's benefit. Every
+ * authenticated document is interchangeable as a shell, because `(app)/layout.tsx` renders the same
+ * chrome for all of them and `RouteSlot` swaps the *page* for whatever the address bar asks for. So
+ * the shell is simply the last document the person was served, copied under this key.
+ *
+ * That also means there is nothing to warm: no extra fetch, no route to render, and the shell is as
+ * fresh as the last page that loaded. It is keyed by user like every other document, and cleared by
+ * the same purge.
+ *
+ * Prefixed with `__docket` so it can never collide with a real path.
+ */
+export const SHELL_DOCUMENT_PATH = '/__docket-offline-shell';
+
+/** The cache key holding a user's stand-in app shell. */
+export function shellCacheKey(origin: string, userId: string): string {
+  return documentCacheKey(origin, SHELL_DOCUMENT_PATH, userId);
 }
 
 /**

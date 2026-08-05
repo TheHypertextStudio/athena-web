@@ -128,6 +128,20 @@ const ServerHrefContext = createContext<Href | null>(null);
 
 /** Props for {@link AppLocationProvider}. */
 export interface AppLocationProviderProps {
+  /**
+   * The path this document was server-rendered for, from `x-docket-pathname`.
+   *
+   * @remarks
+   * Not `usePathname()`, even though that is available here. Next derives its canonical URL from
+   * `window.location` in the browser, so during hydration `usePathname()` already reports the URL
+   * the person is on — which, for a document the worker replayed under another route, is *not* the
+   * URL this HTML was built for. Using it as the server snapshot would make the first client render
+   * disagree with the markup and turn every offline navigation into a hydration error.
+   *
+   * `null` when the proxy supplied no header; the browser's own URL is then used from the first
+   * render, which is correct for every document that was not replayed.
+   */
+  readonly serverPath: string | null;
   /** The subtree that may read the location. */
   readonly children: ReactNode;
 }
@@ -146,12 +160,18 @@ export interface AppLocationProviderProps {
  * exactly what the mismatched-document case needs. The first client render matches the server's
  * HTML, and the real URL is applied in a follow-up render rather than as a hydration error.
  */
-export function AppLocationProvider({ children }: AppLocationProviderProps): JSX.Element {
+export function AppLocationProvider({
+  serverPath,
+  children,
+}: AppLocationProviderProps): JSX.Element {
   const routerPathname = usePathname();
   const routerSearch = useSearchParams();
 
+  // The document's own path when the proxy named it; otherwise fall back to the router, which is
+  // right for every document that was not replayed.
   const serverHref =
-    routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname;
+    serverPath ??
+    (routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname);
 
   useEffect(() => {
     syncLocation();

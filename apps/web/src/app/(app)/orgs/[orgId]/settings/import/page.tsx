@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * The Import settings section.
  *
@@ -11,7 +13,7 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { use, type JSX } from 'react';
+import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ImportPanel } from '@/components/settings/import-panel';
@@ -20,12 +22,8 @@ import { settingsSections } from '@/components/settings/sections';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 
 /** The Import section page. */
-export default function ImportSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function ImportSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 

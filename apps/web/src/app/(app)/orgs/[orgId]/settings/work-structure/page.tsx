@@ -1,8 +1,10 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 import type { WorkspaceSettingsOut } from '@docket/types';
 import { Skeleton } from '@docket/ui/primitives';
-import { use, useEffect, useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -11,12 +13,8 @@ import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 
 /** Configure the maximum Initiative hierarchy depth for a workspace. */
-export default function WorkStructureSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function WorkStructureSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
   const key = queryKeys.settings(orgId, 'work-structure');
   const settingsQ = useLiveApiQuery(

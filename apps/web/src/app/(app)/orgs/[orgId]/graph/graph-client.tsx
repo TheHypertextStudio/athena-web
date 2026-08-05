@@ -1,67 +1,35 @@
 'use client';
 
-/**
- * `graph-client` — the focused dependency-graph view (full density).
- *
- * @remarks
- * The expand target for every embed and the global Graph workspace. It is a thin shell over
- * {@link TaskGraphPanel} at full density with the filter/layout toolbar enabled — the panel owns
- * the canvas, filtering, editing, peek, and avatar/project resolution. The scope comes from the
- * server (derived from the query string).
- */
-import { ChevronLeft } from '@docket/ui/icons';
-import Link from 'next/link';
 import type { JSX } from 'react';
 
-import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { useGraphUrlState } from '@/components/canvas/use-graph-url-state';
-import type { TaskGraphScope } from '@/components/canvas/use-task-graph';
+import { resolveTaskGraphScope } from '@/components/canvas/scope';
+import { useAppLocation } from '@/lib/app-location';
 
-/** Props for {@link GraphClient}. */
-export interface GraphClientProps {
-  /** The scope resolved by the server from the route + query string. */
-  scope: TaskGraphScope;
-}
+import GraphCanvas from './graph-canvas';
 
 /**
- * The context the focused graph was expanded from, so we can offer a real "back" — a
- * task-neighborhood returns to that task, a project scope to that project, else the workspace.
+ * The dependency-graph route's entry point.
+ *
+ * @remarks
+ * Exists so the route has a component that can be mounted with no props. The scope the canvas needs
+ * comes entirely from the URL — the workspace from the path, the narrowing from the query string —
+ * so the server was resolving it only because it happened to be the one rendering. Offline there is
+ * no server render at all and the route table mounts this directly, so resolving it here is both
+ * necessary and the more honest place: the scope is a property of the URL, not of who rendered it.
+ *
+ * The server page keeps its own prefetch and warms the same key, because
+ * {@link resolveTaskGraphScope} is shared.
+ *
+ * @returns The focused graph canvas for the current URL.
  */
-function backTarget(scope: TaskGraphScope): { href: string; label: string } {
-  if (scope.rootTaskId !== undefined)
-    return { href: `/orgs/${scope.orgId}/tasks/${scope.rootTaskId}`, label: 'Back to task' };
-  if (scope.projectId !== undefined)
-    return { href: `/orgs/${scope.orgId}/projects/${scope.projectId}`, label: 'Back to project' };
-  return { href: `/orgs/${scope.orgId}`, label: 'Back to workspace' };
-}
+export default function GraphClient(): JSX.Element {
+  const { params, searchParams } = useAppLocation();
+  const orgId = typeof params['orgId'] === 'string' ? params['orgId'] : '';
+  const scope = resolveTaskGraphScope(orgId, {
+    projectId: searchParams.get('projectId') ?? undefined,
+    rootTaskId: searchParams.get('rootTaskId') ?? undefined,
+    depth: searchParams.get('depth') ?? undefined,
+  });
 
-/** The focused, filterable, editable dependency canvas (filter + layout persist to the URL). */
-export default function GraphClient({ scope }: GraphClientProps): JSX.Element {
-  const { filter, direction, setFilter, setDirection } = useGraphUrlState();
-  const back = backTarget(scope);
-  return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <header className="flex flex-col gap-1 px-4 pt-3 @2xl:px-6">
-        <Link
-          href={back.href}
-          className="text-on-surface-variant hover:text-on-surface inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ChevronLeft className="size-4" />
-          {back.label}
-        </Link>
-        <h1 className="text-on-surface text-title-medium font-semibold">Dependency graph</h1>
-      </header>
-      <div className="min-h-0 flex-1">
-        <TaskGraphPanel
-          scope={scope}
-          density="full"
-          showToolbar
-          filter={filter}
-          onFilterChange={setFilter}
-          direction={direction}
-          onDirectionChange={setDirection}
-        />
-      </div>
-    </div>
-  );
+  return <GraphCanvas scope={scope} />;
 }

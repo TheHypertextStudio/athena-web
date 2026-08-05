@@ -31,3 +31,36 @@ export function taskGraphScopeKey(scope: TaskGraphScope): string {
   if (scope.projectId !== undefined) return `project:${scope.projectId}`;
   return 'org';
 }
+
+/** The query-string values the graph scope is narrowed by. */
+export interface TaskGraphSearch {
+  /** Narrow to one project's tasks. */
+  projectId?: string | undefined;
+  /** Centre on one task's connected neighbourhood. */
+  rootTaskId?: string | undefined;
+  /** Neighbourhood radius, as it appears in the URL. */
+  depth?: string | undefined;
+}
+
+/**
+ * Build the scope from a workspace id and the query string.
+ *
+ * @remarks
+ * Shared by the server prefetch and the client entry point, which must agree: the server warms the
+ * graph under `taskGraphScopeKey(scope)` and the client reads the same key. They used to derive the
+ * scope separately, and offline there is no server render at all — the client entry resolves it from
+ * the URL alone — so a second copy of this would be a cache miss waiting to happen.
+ *
+ * @param orgId - The workspace whose graph is being read.
+ * @param search - The query string values.
+ * @returns The scope.
+ */
+export function resolveTaskGraphScope(orgId: string, search: TaskGraphSearch): TaskGraphScope {
+  const depth = search.depth !== undefined ? Number(search.depth) : undefined;
+  return {
+    orgId,
+    ...(search.projectId !== undefined ? { projectId: search.projectId } : {}),
+    ...(search.rootTaskId !== undefined ? { rootTaskId: search.rootTaskId } : {}),
+    ...(depth !== undefined && Number.isFinite(depth) ? { depth } : {}),
+  };
+}

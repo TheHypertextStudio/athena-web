@@ -13,30 +13,24 @@
 import { HydrationBoundary } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
-import { type TaskGraphScope, taskGraphScopeKey } from '@/components/canvas/scope';
+import {
+  resolveTaskGraphScope,
+  type TaskGraphScope,
+  taskGraphScopeKey,
+} from '@/components/canvas/scope';
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import GraphClient from './graph-client';
 
-/** Build the scope (and the endpoint query) from the route params + search params. */
-function resolveScope(
-  orgId: string,
-  search: { projectId?: string; rootTaskId?: string; depth?: string },
-): { scope: TaskGraphScope; query: Record<string, string> } {
-  const depth = search.depth !== undefined ? Number(search.depth) : undefined;
-  const scope: TaskGraphScope = {
-    orgId,
-    ...(search.projectId !== undefined ? { projectId: search.projectId } : {}),
-    ...(search.rootTaskId !== undefined ? { rootTaskId: search.rootTaskId } : {}),
-    ...(depth !== undefined && Number.isFinite(depth) ? { depth } : {}),
-  };
+/** The endpoint query string for a scope. */
+function endpointQuery(scope: TaskGraphScope): Record<string, string> {
   const query: Record<string, string> = {};
   if (scope.projectId !== undefined) query['projectId'] = scope.projectId;
   if (scope.rootTaskId !== undefined) query['rootTaskId'] = scope.rootTaskId;
   if (scope.depth !== undefined) query['depth'] = String(scope.depth);
-  return { scope, query };
+  return query;
 }
 
 /**
@@ -53,8 +47,7 @@ export default async function GraphPage({
   searchParams: Promise<{ projectId?: string; rootTaskId?: string; depth?: string }>;
 }): Promise<JSX.Element> {
   const { orgId } = await params;
-  const search = await searchParams;
-  const { scope, query } = resolveScope(orgId, search);
+  const scope = resolveTaskGraphScope(orgId, await searchParams);
 
   const queryClient = getServerQueryClient();
   const api = await getServerApi();
@@ -63,14 +56,16 @@ export default async function GraphPage({
     queryKey: queryKeys.taskGraph(orgId, taskGraphScopeKey(scope)),
     queryFn: () =>
       unwrap(
-        () => api.v1.orgs[':orgId'].graph.$get({ param: { orgId }, query }),
+        () => api.v1.orgs[':orgId'].graph.$get({ param: { orgId }, query: endpointQuery(scope) }),
         'Could not load the dependency graph.',
       ),
   });
 
+  // The client resolves the same scope from the same URL through `resolveTaskGraphScope`, so it
+  // reads exactly the key this warmed.
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <GraphClient scope={scope} />
+      <GraphClient />
     </HydrationBoundary>
   );
 }

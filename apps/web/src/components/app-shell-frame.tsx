@@ -30,6 +30,7 @@ import { CommandPaletteProvider, useCommandPalette } from '@/components/command-
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
 import { QueryPersistence } from '@/components/query-persistence';
+import { ReachabilityProvider } from '@/components/reachability';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
@@ -291,44 +292,49 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
 
   return (
     <ContextProvider initialContext={initialOrgId} initialDensity={readDensity(userId)}>
-      <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
-        {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
+      {/* Published to the whole tree so a link can tell whether navigating will reach anything.
+          `status` is the shell's own answer and is strictly better than `navigator.onLine`, which
+          is true behind a captive portal and true when the server itself is down. */}
+      <ReachabilityProvider reachable={status !== 'unreachable'}>
+        <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
+          {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
             know whose workspace to search — not once every workspace has loaded. */}
-        <CommandPaletteProvider enabled={!identityUnknown}>
-          <QueryPersistence userId={userId} />
-          {/* Beside the query cache and for the same reason: both bind local durable state to the
+          <CommandPaletteProvider enabled={!identityUnknown}>
+            <QueryPersistence userId={userId} />
+            {/* Beside the query cache and for the same reason: both bind local durable state to the
               resolved account, and this is the first place that id is known. */}
-          <OfflineSyncRuntime userId={userId} />
-          <OpenDocumentsProvider userId={userId}>
-            <AppShellInner
-              identityUnknown={identityUnknown}
-              workspacesUnknown={workspacesUnknown}
-              sessionRejected={sessionRejected}
-              settingsSurface={settingsSurface}
-              calendarSurface={calendarSurface}
-              showAthenaPulse={pathname !== '/athena'}
-              locationKey={pathname}
-              routeOrgId={routeOrgId}
-              userId={userId}
-              offline={
-                status === 'unreachable'
-                  ? {
-                      online,
-                      onRetry: () => {
-                        void refetch();
-                      },
-                    }
-                  : null
-              }
-              unavailable={unavailable}
-              workspaceKey={workspaceKeyFromPath(pathname)}
-              homeKey={homeKeyFromPath(pathname)}
-            >
-              {children}
-            </AppShellInner>
-          </OpenDocumentsProvider>
-        </CommandPaletteProvider>
-      </ActiveOrgContext>
+            <OfflineSyncRuntime userId={userId} />
+            <OpenDocumentsProvider userId={userId}>
+              <AppShellInner
+                identityUnknown={identityUnknown}
+                workspacesUnknown={workspacesUnknown}
+                sessionRejected={sessionRejected}
+                settingsSurface={settingsSurface}
+                calendarSurface={calendarSurface}
+                showAthenaPulse={pathname !== '/athena'}
+                locationKey={pathname}
+                routeOrgId={routeOrgId}
+                userId={userId}
+                offline={
+                  status === 'unreachable'
+                    ? {
+                        online,
+                        onRetry: () => {
+                          void refetch();
+                        },
+                      }
+                    : null
+                }
+                unavailable={unavailable}
+                workspaceKey={workspaceKeyFromPath(pathname)}
+                homeKey={homeKeyFromPath(pathname)}
+              >
+                {children}
+              </AppShellInner>
+            </OpenDocumentsProvider>
+          </CommandPaletteProvider>
+        </ActiveOrgContext>
+      </ReachabilityProvider>
     </ContextProvider>
   );
 }

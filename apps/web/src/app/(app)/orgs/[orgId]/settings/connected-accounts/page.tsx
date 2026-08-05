@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * The Connected accounts settings section.
  *
@@ -12,18 +14,14 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { use, type JSX } from 'react';
+import type { JSX } from 'react';
 
 import { ConnectedAccountsTab } from '@/components/settings/connected-accounts-tab';
 import { SectionHeader } from '@/components/settings/section-header';
 
 /** The Connected accounts section page. */
-export default function ConnectedAccountsSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function ConnectedAccountsSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
 
   return (
     <div className="flex flex-col gap-6">

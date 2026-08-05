@@ -1,5 +1,7 @@
 'use client';
 
+import { useAppParams } from '@/lib/app-location';
+
 /**
  * The Export data settings section.
  *
@@ -11,7 +13,7 @@
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { use, useEffect, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -20,12 +22,8 @@ import { SectionHeader } from '@/components/settings/section-header';
 import { defaultSettingsSection, sectionHref } from '@/components/settings/sections';
 
 /** The Export data section page. */
-export default function ExportDataSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+export default function ExportDataSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const router = useRouter();
   const { activeOrg } = useActiveOrg();
   const isPersonal = activeOrg?.isPersonal ?? false;

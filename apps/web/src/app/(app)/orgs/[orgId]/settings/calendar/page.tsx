@@ -8,7 +8,7 @@ import type {
   CalendarPreferences,
   HubPreferences,
 } from '@docket/types';
-import { type JSX, use, useEffect, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { calendarLayersDef } from '@/components/calendar/calendar-data';
@@ -35,12 +35,7 @@ const DEFAULTS: Required<Omit<CalendarPreferences, 'defaultLayerId'>> & {
 };
 
 /** Calendar settings route. */
-export default function CalendarSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  use(params);
+export default function CalendarSettingsPage(): JSX.Element {
   const { orgs } = useActiveOrg();
   const sharedWorkspaces = useMemo(() => orgs.filter((org) => !org.isPersonal), [orgs]);
   const [workspaceId, setWorkspaceId] = useState('');

@@ -1,7 +1,7 @@
 'use client';
 
 import type { CalendarItemOut } from '@docket/types';
-import { Input } from '@docket/ui/primitives';
+import { Input, Textarea } from '@docket/ui/primitives';
 import { type JSX, useEffect, useId, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -204,7 +204,7 @@ export function CoreFieldsForm({
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium">
         <span className="text-on-surface-variant">Description</span>
-        <textarea
+        <Textarea
           value={description}
           disabled={!canEdit}
           onChange={(event) => {
@@ -214,7 +214,7 @@ export function CoreFieldsForm({
             commitText('description');
           }}
           rows={3}
-          className="border-outline-variant text-body-medium flex w-full resize-none rounded-md border bg-transparent px-3 py-2 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          className="resize-none"
         />
       </label>
       <label className="flex flex-col gap-1 text-xs font-medium">

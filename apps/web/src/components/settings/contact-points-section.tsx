@@ -11,7 +11,7 @@
 import type { ContactPointCreate, ContactPointOut } from '@docket/notifications';
 import { cn } from '@docket/ui';
 import { CheckCircle2, Mail, MessageSquare, Trash2, X } from '@docket/ui/icons';
-import { Badge, Button, DecorativeIcon, Input } from '@docket/ui/primitives';
+import { Badge, Button, DecorativeIcon, Input, Select } from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent, useState } from 'react';
 
 /** Props for {@link ContactPointsSection}. */
@@ -82,10 +82,9 @@ export function ContactPointsSection({
       >
         <label className="text-on-surface-variant flex min-w-0 flex-col gap-1 text-xs">
           Contact method
-          <select
+          <Select
             value={contactType}
             disabled={creating}
-            className="border-outline-variant text-body-medium focus-visible:ring-ring h-9 rounded-md border bg-transparent px-3 shadow-sm focus-visible:ring-2 focus-visible:outline-none"
             onChange={(event) => {
               setContactType(event.target.value as AddableContactPointType);
               setDestination('');
@@ -96,7 +95,7 @@ export function ContactPointsSection({
                 {method.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
         <label className="text-on-surface-variant flex min-w-0 flex-1 flex-col gap-1 text-xs">
           {destinationLabel}

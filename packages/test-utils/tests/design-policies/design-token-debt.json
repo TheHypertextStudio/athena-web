@@ -224,8 +224,7 @@
     "raw-type-utility": 32
   },
   "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
-    "raw-type-utility": 11,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 11
   },
   "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
     "shadow-outside-overlay": 1
@@ -249,8 +248,7 @@
     "shadow-outside-overlay": 1
   },
   "apps/web/src/components/command-palette/command-palette-trigger.tsx": {
-    "raw-type-utility": 2,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 2
   },
   "apps/web/src/components/command-palette/command-palette.tsx": {
     "raw-type-utility": 4
@@ -274,8 +272,7 @@
     "raw-type-utility": 8
   },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
-    "raw-type-utility": 5,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 5
   },
   "apps/web/src/components/inbox/activity-row.tsx": {
     "raw-type-utility": 3
@@ -441,8 +438,7 @@
     "raw-type-utility": 7
   },
   "apps/web/src/components/settings/contact-points-section.tsx": {
-    "raw-type-utility": 6,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 6
   },
   "apps/web/src/components/settings/danger-zone-tab.tsx": {
     "raw-type-utility": 7
@@ -621,8 +617,7 @@
     "size-changing-interaction": 1
   },
   "apps/web/src/components/today/today-prompt.tsx": {
-    "raw-type-utility": 12,
-    "shadow-outside-overlay": 2
+    "raw-type-utility": 12
   },
   "apps/web/src/components/triage/source-tag.tsx": {
     "raw-type-utility": 2

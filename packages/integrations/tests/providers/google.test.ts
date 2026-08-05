@@ -148,6 +148,21 @@ describe('GoogleTasksProviderClient.importWork', () => {
     expect(items).toEqual([]);
   });
 
+  it('tolerates a tasks page with no items key for a list that does have tasks lists', async () => {
+    const http = new RecordingHttp();
+    http.respond = (path) => {
+      if (path.startsWith('/users/@me/lists')) return { items: [{ id: 'l1', title: 'List' }] };
+      // The tasks page for list l1 omits `items` entirely (an empty list can come back
+      // this way rather than as `items: []`).
+      return {};
+    };
+    const items = await tasksClient(http).importWork(
+      { connectionId: 'c1', provider: 'gtasks' },
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(items).toEqual([]);
+  });
+
   it('follows the pageToken across a second tasks page within one list', async () => {
     const http = new RecordingHttp();
     http.respond = (path) => {

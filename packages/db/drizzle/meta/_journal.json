@@ -512,6 +512,13 @@
       "when": 1786126212415,
       "tag": "0072_slimy_veda",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1786133559053,
+      "tag": "0073_safe_boomer",
+      "breakpoints": true
     }
   ]
 }

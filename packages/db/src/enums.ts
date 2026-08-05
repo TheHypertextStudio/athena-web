@@ -9,10 +9,28 @@
  */
 import { pgEnum } from 'drizzle-orm/pg-core';
 
-/** The three kinds of Actor: human, agent, or a (non-assignable) team grouping. */
+/**
+ * The three kinds of Actor: human, agent, or team.
+ *
+ * @remarks
+ * All three are assignable. A `team` actor is 1:1 with a {@link import('./schema/identity').team}
+ * row via `actor.team_id`, which is what lets a work object name a team as its assignee, lead, or
+ * owner without any work table growing a second FK. Assigning a task to a team actor routes it to
+ * that team's Triage rather than to a person.
+ */
 export const actorKind = pgEnum('actor_kind', ['human', 'agent', 'team']);
 /** Whether an Actor is active or suspended. */
 export const actorStatus = pgEnum('actor_status', ['active', 'suspended']);
+
+/**
+ * A person's standing on one team, independent of their org-wide role.
+ *
+ * @remarks
+ * Org role (`actor.role_id`) says what someone may do in the workspace; this says what they are on
+ * *this* team. The two are orthogonal — an org admin can be a plain member of a working group, and
+ * a `guest` here is a team-scoped guest, not necessarily an org guest.
+ */
+export const teamMemberRole = pgEnum('team_member_role', ['manager', 'member', 'guest']);
 
 /** Initiative (theme) status. */
 export const initiativeStatus = pgEnum('initiative_status', [

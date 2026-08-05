@@ -4,7 +4,13 @@
  * @remarks
  * Hub (personal command center, 1:1 User) · Organization (the shared tenant +
  * context boundary) · Actor (the org-scoped identity for every "who", folding in
- * human membership via `user_id` + `role_id`) · Team · TeamMember · Invitation.
+ * human membership via `user_id` + `role_id` and team identity via `team_id`) ·
+ * Team · TeamMember · Invitation.
+ *
+ * All three actor kinds are assignable. A `team` actor is the 1:1 shadow of a Team, which is how a
+ * team becomes nameable as an assignee, lead, or owner without any work table growing a second
+ * foreign key. `actor_team_kind_check` makes "team actor without a team" and "non-team actor with
+ * one" unrepresentable.
  *
  * `organization_id` leads every org-scoped index (tenant isolation). The
  * {@link auditColumns} helper supplies the common id/tenant/audit columns reused by
@@ -14,6 +20,7 @@
  */
 import { sql } from 'drizzle-orm';
 import type { AccountExportScope } from '@docket/types';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import {
   boolean,
   check,
@@ -35,6 +42,7 @@ import {
   estimationScale,
   invitationStatus,
   orgLifecycleState,
+  teamMemberRole,
   visibility,
 } from '../enums';
 import { genId } from '../id';
@@ -168,10 +176,31 @@ export const actor = pgTable(
       .references(() => organization.id, { onDelete: 'cascade' }),
     kind: actorKind('kind').notNull(),
     displayName: text('display_name').notNull(),
+    /**
+     * The person's job title within the organization ("Event Coordinator"), or null.
+     *
+     * @remarks
+     * Org-level and distinct from {@link teamMember.role}: a title says what someone *is* here, a
+     * team role says what they are *on that team*. Free text because job titles are not a closed
+     * set anyone can enumerate in advance, and because a volunteer's title is often the only place
+     * their standing in the organization is recorded at all.
+     */
+    title: text('title'),
     avatar: text('avatar'),
     status: actorStatus('status').notNull().default('active'),
     userId: text('user_id').references(() => user.id, { onDelete: 'cascade' }),
     roleId: text('role_id').references(() => role.id, { onDelete: 'set null' }),
+    /**
+     * The team this actor *is*, for `kind = 'team'` actors only.
+     *
+     * @remarks
+     * Not "the team this actor belongs to" — membership is {@link teamMember}. This is the 1:1
+     * shadow that makes a team nameable everywhere an actor is nameable, so `task.assignee_id`,
+     * `project.lead_id`, `initiative.owner_id` and `program.owner_id` can all point at a team with
+     * no new columns. The check constraint below makes the XOR unrepresentable rather than merely
+     * discouraged.
+     */
+    teamId: text('team_id').references((): AnyPgColumn => team.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
       .notNull()
@@ -184,6 +213,11 @@ export const actor = pgTable(
     uniqueIndex('actor_org_user_uq')
       .on(t.organizationId, t.userId)
       .where(sql`${t.userId} is not null`),
+    // One actor per team, and no team actor without a team: the two halves of the 1:1.
+    uniqueIndex('actor_team_uq')
+      .on(t.teamId)
+      .where(sql`${t.teamId} is not null`),
+    check('actor_team_kind_check', sql`(${t.kind} = 'team') = (${t.teamId} is not null)`),
   ],
 );
 
@@ -248,6 +282,15 @@ export const teamMember = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
+    /**
+     * This member's standing on this team. Defaults to `member`.
+     *
+     * @remarks
+     * Deliberately not a capability. Permissions resolve through `grant`, so promoting someone to
+     * `manager` here labels who runs the team without silently widening what they can do — the two
+     * would drift, and a role that quietly grants power is the kind of thing nobody audits.
+     */
+    role: teamMemberRole('role').notNull().default('member'),
   },
   (t) => [
     primaryKey({ columns: [t.teamId, t.actorId] }),

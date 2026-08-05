@@ -54,8 +54,7 @@ export type ButtonVariant = (typeof BUTTON_VARIANTS)[number];
 
 const BUTTON_COLOR: Readonly<Record<ButtonVariant, string>> = {
   default: 'bg-primary text-on-primary hover:bg-primary/90',
-  // MD3 calls this the filled tonal button, and it is a container role — not the `secondary`
-  // accent. It rendered near-white only because `--secondary` used to hold shadcn's neutral.
+  // MD3's filled tonal button: a container role rather than the `secondary` accent.
   secondary: 'bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80',
   outline:
     'border-outline-variant hover:bg-surface-container-high hover:text-on-surface border bg-transparent',

@@ -62,10 +62,8 @@ PopoverAnchor.displayName = PopoverPrimitive.Anchor.displayName;
  * `align="start"` so a property picker's panel left-edge lines up with its compact trigger
  * rather than centering under it.
  *
- * It used to carry its own copy of that surface, and the copy had drifted: `surface-container-high`
- * against the menu's `surface-container-low`, an 8px corner against 10px, and `shadow-md` against
- * `shadow-lg`. Every searchable picker in the product is a menu wearing a popover, so it now
- * shares one string with the menus and overrides only what is genuinely popover-specific.
+ * Every searchable picker in the product is a menu wearing a popover, so the surface comes from
+ * one string and this overrides only what is popover-specific.
  *
  * Layering: transient overlays (this, dropdown/context menus, tooltips, hover cards) sit at
  * `z-[120]` — above the modal layer (sheets `z-[100]`, dialogs `z-[110]`) — so a picker opened

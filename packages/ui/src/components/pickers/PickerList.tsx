@@ -16,12 +16,7 @@
  *
  * This is the "select" member of the menu family — {@link DropdownMenuItem} and
  * {@link ContextMenuItem} are the other two — and it renders from the same `menuItemClass` they
- * do. It used to reproduce the numbers as literals instead, on the grounds that `menuItemClass`
- * bundled an `!important` icon-sizing rule (`[&_svg]:size-4.5!`) that would race the one
- * {@link StatusIcon} carries on its own inner `<svg>`. The MD3 rewrite dropped that `!` — a
- * descendant selector already outranks a class on the element — so the reason is gone, and with
- * it the drift: the copy had fallen to 16px icons and `items-start` against the menu's 20px and
- * `items-center`.
+ * do.
  *
  * Rows also reserve a fixed leading-icon column whenever *any* option in the list carries one, so
  * an icon-less row still lines up under an icon-bearing sibling instead of starting flush left.

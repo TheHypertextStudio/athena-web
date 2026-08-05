@@ -50,9 +50,7 @@ export function PaletteRow({
       onClick={onSelect}
       onMouseMove={onHover}
       className={cn(
-        // A palette row is a menu row. It used to be its own recipe — 12px padding against the
-        // menu's 16dp, 16px icons against 20dp, and `surface-container-highest` for the active
-        // row instead of a state layer — which is the drift this collapses.
+        // A palette row is a menu row.
         menuItemClass('standard'),
         'cursor-pointer',
         // The palette drives its own highlight from `aria-activedescendant`, not from focus, so

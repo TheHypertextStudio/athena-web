@@ -85,8 +85,7 @@ export function SchedulingDenseOverflow({
                 'Unavailable time';
               const content =
                 renderItem?.({ item, lane, allDay: false, density: 'compact' }) ?? item.title;
-              // A row in a popover-hosted overflow list is a menu row. It used to be its own
-              // recipe: a 4px corner, a surface-swap hover, and a 2px focus ring.
+              // A row in a popover-hosted overflow list is a menu row.
               const sharedClassName = cn(
                 menuItemClass('standard'),
                 menuFocusRing,

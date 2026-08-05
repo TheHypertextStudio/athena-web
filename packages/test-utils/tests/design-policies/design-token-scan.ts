@@ -23,8 +23,8 @@
  * | `raw-type-utility` | `text-xs`, `text-2xl`, `text-[13px]`, `leading-tight`, `leading-[1.1]`, `tracking-tight`, `font-semibold` | Tailwind's stock type scale is a second, unnamed type system running alongside the MD3 one. Size, line-height, weight, and tracking are set *together* by one `text-<role>` token; setting any of them separately forks the scale. |
  * | `size-changing-interaction` | `hover:scale-105`, `active:scale-95`, `hover:p-3`, `group-hover:h-10`, `hover:text-lg` | An interactive element must never change its own size when hovered, focused, or pressed. Feedback is colour and the focus ring. |
  * | `shadow-outside-overlay` | any `shadow-*` outside the enumerated overlay modules | A shadow means "this surface floats above the page". Only overlays do. On a 32px control it is noise. |
- * | `raw-shadow-on-overlay` | `shadow-md`, `shadow-lg`, `shadow-2xl` *inside* an overlay module | An overlay does float, but at a named MD3 elevation. Tailwind's scale answers to nothing, and five menu-shaped surfaces had drifted onto four different values of it. Use `shadow-level0`–`shadow-level5`. |
- * | `legacy-color-role` | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground` | shadcn's role names are aliases onto the MD3 roles now, so these resolve to the right pixel — but two names for one colour is how the product ended up with two palettes. Use the MD3 name: `surface-container-low`, `on-surface-variant`, `outline-variant`, `error`, `on-primary`. |
+ * | `raw-shadow-on-overlay` | `shadow-md`, `shadow-lg`, `shadow-2xl` *inside* an overlay module | An overlay does float, but at a named MD3 elevation. Use `shadow-level0`–`shadow-level5`. |
+ * | `legacy-color-role` | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground` | shadcn's role names alias the MD3 roles, so they resolve to the same pixel; one name per colour keeps the palette single. Use the MD3 name: `surface-container-low`, `on-surface-variant`, `outline-variant`, `error`, `on-primary`. |
  * | `hardcoded-color` | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)` | A literal colour cannot follow the light/dark theme and is invisible to every downstream token change. |
  *
  * @see `packages/ui/src/primitives/text.tsx` for the token set `raw-type-utility` is defined against.
@@ -140,12 +140,11 @@ const UTILITY_COLOR_PREFIXES =
  *
  * @remarks
  * Each of these is an alias onto an MD3 role in `globals.css`, so a `bg-card` renders the same
- * pixel as a `bg-surface-container-low`. The reason to ban it anyway is that the product spent a
- * year with two live palettes, and a reader could not tell from a class name which system a
- * surface belonged to. One name per colour.
+ * pixel as a `bg-surface-container-low`. Banning the alias keeps one name per colour, so a class
+ * name identifies which system a surface belongs to.
  *
- * `--secondary` is absent on purpose: it is a real MD3 tonal role now, and `bg-secondary` is the
- * correct way to spell it. `secondary-foreground` is the alias and is listed.
+ * `--secondary` is absent: it is a real MD3 tonal role, so `bg-secondary` is the correct spelling.
+ * `secondary-foreground` is the alias and is listed.
  */
 const LEGACY_COLOR_ROLES = [
   'card-foreground',

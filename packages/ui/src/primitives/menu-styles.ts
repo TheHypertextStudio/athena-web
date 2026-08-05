@@ -8,18 +8,14 @@
  * and use them verbatim. A surface that renders a list of choices on a temporary surface is a
  * menu, wherever it happens to live, and it gets its numbers here.
  *
- * The module used to be private to `primitives/`, which is exactly why six surfaces outside that
- * directory ended up hand-rolling their own: they could not reach it. Reaching it is now the
- * cheapest option, and `design-token-scan.ts` fails the build on the alternative.
+ * It is exported from `@docket/ui` so a menu living outside `primitives/` can reach it;
+ * `design-token-scan.ts` fails the build on a hand-rolled menu row.
  *
  * ## The spec these values come from
  *
  * Every number and colour role below is `md.comp.menus.*` from the M3 Expressive vertical menu,
- * transcribed in **`docs/design/references/md3-menus.md`** with the source revision. Read that
- * file before changing anything here. It exists because this module used to cite
- * `tokens/_md-comp-menu.scss` — the *baseline* menu, which M3 documents as legacy — and the
- * implementation silently drifted from the current spec on container shape, row height, icon
- * size, typography, and the selection colour role.
+ * transcribed in **`docs/design/references/md3-menus.md`** against a pinned source revision. Read
+ * that file before changing anything here, and change it first if a value has to move.
  *
  * ## Two colour mappings
  *
@@ -46,9 +42,8 @@ import { cn } from '../lib/utils';
  *
  * @remarks
  * Exported so the primitive tests can check the literal class strings below against the spec
- * without re-deriving it. This is **not** a step on the shared `CONTROL` scale — it used to be
- * (`CONTROL.lg`, 36px rows and 18px icons), which is how the row drifted 8px short of the 44dp
- * the spec gives. A menu row is a spec'd component, not a control, so it carries its own metrics.
+ * without re-deriving it. A menu row is a spec'd component rather than a control, so it carries
+ * its own metrics instead of taking a step from the shared `CONTROL` scale.
  *
  * @see {@link https://m3.material.io/components/menus/specs} and
  * `docs/design/references/md3-menus.md`.
@@ -122,9 +117,8 @@ export const DEFAULT_MENU_WIDTH: MenuWidth = 'md';
  *   almost every menu in this product wants.
  * - `gap` — the "Vertical menu with gap" figure, also called the grouped layout. The container
  *   stops painting and **each section paints its own filled block**, so the surface behind the
- *   menu shows through a small gap between them. That backdrop showing through is the entire
- *   effect; a transparent wrapper with a 2dp margin renders nothing at all, which is what this
- *   used to be.
+ *   menu shows through between them. That backdrop is the effect, which is why the group and not
+ *   the container has to own the fill.
  */
 export type MenuSections = 'divider' | 'gap';
 
@@ -144,11 +138,10 @@ export const DEFAULT_MENU_SECTIONS: MenuSections = 'divider';
  * figure's 48dp row bracket is that: the 44dp `menu-item.height` plus 2dp of gap top and bottom.
  *
  * **Section gap — a deliberate deviation.** Between whole sections the gap is 4dp
- * (`md.sys.measurement.space50`), not the 2dp the token gives. Sampling the spec figure shows its
- * seam really is 2dp; what makes it read there is the lower block's drop shadow darkening the page
- * behind it, and Docket's `level2` is lighter than the figure's, so 2dp of bare backdrop
- * disappears. The gap is the entire point of this layout, so it takes the next measurement step
- * up rather than being technically correct and invisible.
+ * (`md.sys.measurement.space50`) against the token's 2dp. Sampling the spec figure shows its seam
+ * really is 2dp, and what makes it read there is the lower block's drop shadow darkening the page
+ * behind it; `level2` here is lighter, so the gap takes the next measurement step up to stay
+ * legible.
  *
  * **Shape morphing.** The spec gives a menu two container shapes: `active.container.shape`
  * (16dp) while it holds focus, and `inactive.container.shape` (8dp) once it has revealed a
@@ -171,7 +164,7 @@ const menuContentBase =
   'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ' +
   'duration-(--dur-base) ease-(--ease-out)';
 
-/** The container's own fill, padding, and elevation — the parts a grouped menu hands to its groups. */
+/** The container's fill and content roles — what a grouped menu hands to its groups. */
 const MENU_SURFACE: Readonly<Record<MenuVariant, string>> = {
   standard: 'bg-surface-container-low text-on-surface',
   vibrant: 'bg-tertiary-container text-on-tertiary-container',
@@ -186,10 +179,9 @@ const MENU_SURFACE: Readonly<Record<MenuVariant, string>> = {
  * @returns The structural base plus this mapping's container and default content roles.
  *
  * @remarks
- * Under `sections: 'gap'` the container keeps its size, stacking, motion, and scroll behaviour but
- * gives up its fill, padding, elevation, and clipping — {@link menuGroup} takes all four, once per
- * section. The container cannot keep them: an `overflow-hidden` fill spanning the whole menu is
- * precisely the thing a gap has to cut through.
+ * Under `sections: 'gap'` the container keeps its size, stacking, motion, and scroll behaviour and
+ * hands its fill, padding, elevation, and clipping to {@link menuGroup}, once per section — a fill
+ * spanning the whole menu is the thing a gap has to cut through.
  *
  * @example
  * ```tsx
@@ -245,11 +237,9 @@ const menuItemBase =
  * State-layer classes for an unselected row.
  *
  * @remarks
- * Three distinct steps, which is the part the previous implementation collapsed: hover 8%,
- * focus 10%, pressed 10%. Radix drives roving focus on pointer move, so a hovered row is also a
- * focused row — `focus:not-hover:` scopes the 10% focus layer to keyboard focus so a mouse
- * hover really does render at the spec's 8%. Without that guard the two states are
- * indistinguishable and every hover reads as a focus.
+ * Hover 8%, focus 10%, pressed 10%. Radix drives roving focus on pointer move, so a hovered row is
+ * also a focused row; `focus:not-hover:` scopes the 10% layer to keyboard focus so a mouse hover
+ * lands on the spec's 8%.
  */
 const STATE_LAYER: Readonly<Record<MenuVariant, string>> = {
   standard: 'hover:bg-on-surface/8 focus:not-hover:bg-on-surface/10 active:bg-on-surface/10',
@@ -262,10 +252,9 @@ const STATE_LAYER: Readonly<Record<MenuVariant, string>> = {
  * State-layer classes for a selected row, mixed over the row's own container colour.
  *
  * @remarks
- * A state layer is the "on" role laid over the component's container, so on a selected row it
- * has to mix into `tertiary-container` (standard) or `tertiary` (vibrant) rather than into the
- * menu surface underneath. An alpha fill would let the menu background show through the
- * selection instead, which is a different colour from the one the spec names.
+ * A state layer is the "on" role laid over the component's own container, so on a selected row it
+ * mixes into `tertiary-container` (standard) or `tertiary` (vibrant). An alpha fill would let the
+ * menu surface show through and land on a different colour than the spec names.
  */
 const SELECTED_STATE_LAYER: Readonly<Record<MenuVariant, string>> = {
   standard:
@@ -308,10 +297,9 @@ export interface MenuItemClassOptions {
  * @returns The row's complete geometry, colour, icon, and state-layer class string.
  *
  * @remarks
- * A selected row also changes shape: `menu-item.selected.shape` is `corner.medium` (12dp),
- * against `corner.extra-small` (4dp) for an unselected one. The size of the box does not move —
- * only its corners and its colour — so this stays inside the design system's rule that
- * interaction never changes geometry.
+ * A selected row also changes shape: `menu-item.selected.shape` is `corner.medium` (12dp) against
+ * `corner.extra-small` (4dp) unselected. Only the corners and the colour move, so this stays
+ * inside the design system's rule that interaction never changes geometry.
  *
  * @example
  * ```tsx
@@ -350,13 +338,9 @@ export function menuItemClass(variant: MenuVariant, options?: MenuItemClassOptio
  * @returns The checked row's shape, container, content, and state-layer escalation.
  *
  * @remarks
- * {@link menuItemClass} takes selection as a boolean, which a checkbox row can supply but a
- * radio row cannot — Radix derives a radio item's checked state from its group's value and
- * publishes it only as an attribute. This builder is that same escalation expressed as
- * `data-[state=checked]:` variants so both row types resolve to one set of roles.
- *
- * The indicator gutter is deliberately not here: a checkable row still owes the spec its 16dp
- * leading space, and the indicator sits inside that.
+ * Radix derives a radio item's checked state from its group's value and publishes it only as an
+ * attribute, so the escalation {@link menuItemClass} takes as a boolean is expressed here as
+ * `data-[state=checked]:` variants. Both row types then resolve to one set of roles.
  */
 export function menuCheckedItemClass(variant: MenuVariant): string {
   if (variant === 'vibrant') {
@@ -383,10 +367,8 @@ export function menuCheckedItemClass(variant: MenuVariant): string {
  * plain row or label that has to share the same text axis.
  *
  * @remarks
- * 16dp leading space + 20dp icon + 12dp between-space = 48dp, so a checkbox row's label lands
- * on exactly the axis an icon row's label lands on. The old value was 32px against an 18px
- * icon, which is why `CORE-08` measured Display radio rows at 32px of leading padding and
- * Filter rows at 8px and called the column "not fixed".
+ * 16dp leading space + 20dp icon + 12dp between-space = 48dp, so a checkbox row's label lands on
+ * the same axis an icon row's label lands on.
  */
 export const MENU_INDICATOR_GUTTER = 'pl-12' as const;
 
@@ -394,10 +376,8 @@ export const MENU_INDICATOR_GUTTER = 'pl-12' as const;
  * The menu row's keyboard-focus indicator.
  *
  * @remarks
- * `md.sys.state.focus-indicator`: 3dp thick at a -3dp offset, drawn inside the row so it cannot
- * collide with the neighbour above. The colour is `md.sys.color.secondary`, which `--ring`
- * resolves to. This is why menu rows do not use the shared `focusRingInset` — that ring is 1px
- * and the spec's is 3dp.
+ * `md.sys.state.focus-indicator`: 3dp thick at a -3dp offset, drawn inside the row so it clears
+ * the neighbour above. The colour is `md.sys.color.secondary`, which `--ring` resolves to.
  */
 export const menuFocusRing =
   'focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:ring-inset' as const;
@@ -428,33 +408,24 @@ export function menuLabel(variant: MenuVariant): string {
  * @returns The group's surface, shape, padding, and row rhythm.
  *
  * @remarks
- * A group is a **surface**, not just a shape. It carries the fill, the padding, the elevation, and
- * the clipping that the container gives up, which is what puts the backdrop in the gap between two
- * sections. Written as a transparent 8dp wrapper — which is what this was — it renders nothing
- * whatsoever, because an unfilled corner against an already-solid container is invisible.
+ * A group is a **surface**. It carries the fill, the 4dp inset, the elevation, and the clipping the
+ * container gives up, which is what puts the backdrop in the gap between two sections.
  *
- * **The corners are not uniform.** A group is `corner.small` (8dp) — which is exactly what
- * `md.comp.menus.group.shape` names — on the edges facing a gap, and `corner.large` (16dp) on the
- * edges that are the menu's own outer boundary. The measurements figure marks 16 at the top of the
- * menu and 8 at the seam between two blocks, and the difference is load-bearing: a smaller radius
- * at the seam is what makes two blocks read as one menu that has been cut, rather than as two
- * separate menus that happen to be stacked. A single group is both first and last, so it renders
- * as an ordinary 16dp menu.
+ * **Corners differ by edge.** `group.shape` (`corner.small`, 8dp) faces a gap; `container.shape`
+ * (`corner.large`, 16dp) faces the menu's outer boundary, which the measurements figure marks 16 at
+ * the top and 8 at the seam. The tighter radius at the seam is what makes two blocks read as one
+ * menu that has been cut. A single group is both first and last, so it renders as a 16dp menu.
  *
- * There is no padding, and `group.padding` (2dp) is spent on the row gap instead. The figure shows
- * the selected row's fill meeting the block's corner exactly, with no inset; with padding, a row
- * whose corner is larger than the block's remaining inner radius overhangs and `overflow-hidden`
- * shaves it square.
+ * The row corners fall out of that arithmetic: 16dp less the 4dp inset is the 12dp
+ * `menu-item.first-child.shape` the outermost rows take, and 8dp less the same inset is 4dp — a
+ * seam row's own `menu-item.shape`. The edge corner is therefore set here rather than on the row,
+ * since "am I on the menu's outer edge?" depends on which block a row is in.
  */
 export function menuGroup(variant: MenuVariant, sections: MenuSections = 'gap'): string {
   if (sections === 'divider') return '';
   return cn(
     'flex flex-col gap-0.5 overflow-hidden p-1 shadow-level2',
-    // Small at the seam, large at the menu's outer edge. A single group is both first and last,
-    // so it reads as an ordinary 16dp menu.
     'rounded-corner-sm first:rounded-t-corner-lg last:rounded-b-corner-lg',
-    // Only the outermost rows of the outermost blocks sit on the menu's edge and take 12dp; a row
-    // at a seam keeps its own 4dp, which is what stops it overhanging the 8dp corner there.
     'first:[&>[role^=menuitem]:first-child]:rounded-t-corner-md',
     'last:[&>[role^=menuitem]:last-child]:rounded-b-corner-md',
     MENU_SURFACE[variant],

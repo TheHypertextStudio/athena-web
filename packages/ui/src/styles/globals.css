@@ -82,10 +82,10 @@
   --shadow: oklch(0 0 0);
 
   /*
-   * shadcn-era role names, kept only as aliases onto the MD3 roles above so the utilities they
-   * back (`bg-card`, `text-muted-foreground`, `border-border`, …) resolve to MD3 values rather
-   * than to a second, parallel palette. New code uses the MD3 name; `design-token-scan.ts`
-   * fails on a new shadcn-name utility and holds the existing ones in a ratchet ledger.
+   * shadcn-era role names, kept as aliases onto the MD3 roles above so the utilities they back
+   * (`bg-card`, `text-muted-foreground`, `border-border`, …) resolve to MD3 values. New code uses
+   * the MD3 name; `design-token-scan.ts` fails on a shadcn-name utility and holds the existing
+   * ones in a ratchet ledger.
    *
    * `--ring` is MD3's focus-indicator role, which every component spec gives as `secondary`.
    */
@@ -173,9 +173,9 @@
    * laid over its own container at one of these three opacities — hover and pressed are NOT the
    * same value, and pressed is not optional.
    *
-   * Tailwind class strings have to stay literal for the static extractor, so the utilities read
-   * `/8`, `/10`, and `opacity-38` directly. These properties are the written source those
-   * literals answer to, and `design-contract.test.tsx` asserts the two agree.
+   * Tailwind class strings stay literal for the static extractor, so the utilities read `/8`,
+   * `/10`, and `opacity-38` directly. These properties are the source those literals answer to,
+   * and `design-contract.test.tsx` asserts the two agree.
    */
   --state-hover-opacity: 0.08;
   --state-focus-opacity: 0.1;
@@ -375,9 +375,8 @@
    * MD3 two-part shadow (a tight key shadow plus a wider ambient one) tinted with `--shadow`.
    * Backs `shadow-level0` through `shadow-level5`.
    *
-   * Overlay surfaces take these instead of Tailwind's `shadow-sm/md/lg/xl/2xl`, which have no
-   * relationship to any spec and had drifted to four different values across five menu-shaped
-   * surfaces. `design-token-scan.ts` fails a raw `shadow-*` on an overlay file.
+   * Overlay surfaces take these rather than Tailwind's `shadow-sm/md/lg/xl/2xl`, which map to no
+   * spec. `design-token-scan.ts` fails a raw `shadow-*` on an overlay file.
    */
   --shadow-level0: none;
   --shadow-level1:

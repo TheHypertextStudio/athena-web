@@ -117,13 +117,12 @@ export {
 export { focusRing, focusRingInset } from './focus';
 
 /*
- * The MD3 menu style source. Exported because "one menu" has to mean one across the product,
- * not one inside `packages/ui`: the command palette, the mention menu, and the editor's
- * suggestion menu are all menus that live in `apps/web`, and each of them had invented its own
- * row height, icon size, active colour, and shadow before this was reachable.
+ * The MD3 menu style source. Exported because "one menu" has to mean one across the product: the
+ * command palette, the mention menu, and the editor's suggestion menu are all menus, and they live
+ * in `apps/web`.
  *
- * A surface that renders a list of choices on a temporary surface uses these. It does not write
- * its own `min-h-*`/`rounded-*`/`px-*` set — `design-token-scan.ts` fails the build if it does.
+ * A surface that renders a list of choices on a temporary surface uses these builders rather than
+ * writing its own `min-h-*`/`rounded-*`/`px-*` set, which `design-token-scan.ts` enforces.
  */
 export {
   DEFAULT_MENU_SECTIONS,

@@ -63,8 +63,7 @@ export default function MentionRow({
         onSelect(item);
       }}
       className={cn(
-        // Same row as every other menu in the product. This was a private recipe — 36px fixed
-        // height, 16px icons, `surface-container-highest` for the active row — until it was not.
+        // Same row as every other menu in the product.
         menuItemClass('standard'),
         'cursor-pointer',
         // The list is driven by `aria-activedescendant`, not focus, so the active row applies the

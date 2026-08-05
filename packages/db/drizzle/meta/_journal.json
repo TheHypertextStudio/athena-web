@@ -498,6 +498,13 @@
       "when": 1785973310129,
       "tag": "0070_dazzling_inertia",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1785974329036,
+      "tag": "0071_time_record_optional_anchor",
+      "breakpoints": true
     }
   ]
 }

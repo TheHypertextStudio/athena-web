@@ -41,7 +41,6 @@ export const RUNTIME_JS = String.raw`
 (() => {
   const pending = new Map();
   let nextId = 1;
-  let resultHandler = null;
   let lastResult = null;
   let toolInput = null;
   let lastHostContext = null;
@@ -154,6 +153,38 @@ export const RUNTIME_JS = String.raw`
     reportSize();
   }
 
+  // The Linear-style state grammar from @docket/ui's StatusIcon, hand-written because a widget has
+  // no icon library and nothing to fetch one from. Ring, dashed ring, ring-with-dot, filled check,
+  // filled cross — keyed off the canonical type, never the free-form per-team state key, so a team
+  // that renames "In Progress" still gets the started treatment.
+  const STATE_GLYPHS = {
+    backlog:
+      '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-dasharray="2.6 2.2"/></svg>',
+    unstarted:
+      '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
+    started:
+      '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="8" cy="8" r="2.8" fill="currentColor"/></svg>',
+    completed:
+      '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.8" fill="currentColor"/><path d="M5 8.2 7 10.2 11 6.1" fill="none" stroke="var(--color-background-primary)" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    canceled:
+      '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.8" fill="currentColor"/><path d="M5.9 5.9 10.1 10.1M10.1 5.9 5.9 10.1" fill="none" stroke="var(--color-background-primary)" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  };
+
+  function stateGlyph(type) {
+    const markup = STATE_GLYPHS[type];
+    if (!markup) {
+      // No glyph beats a wrong glyph: an unresolved type means the owning team no longer lists
+      // that state key, and guessing one from the key is the mistake the type exists to prevent.
+      return null;
+    }
+    const span = document.createElement('span');
+    span.className = 'glyph state-' + type;
+    // The state is already spelled out in the row's text, so the glyph is decoration.
+    span.setAttribute('aria-hidden', 'true');
+    span.innerHTML = markup;
+    return span;
+  }
+
   function applyHostContext(hostContext) {
     // Merged, not replaced: host-context-changed sends only what moved, and a widget that reads
     // availableDisplayModes or toolInfo off the last notification would lose them on a theme flip.
@@ -164,6 +195,78 @@ export const RUNTIME_JS = String.raw`
     applyLocale(hostContext);
     applyContainerDimensions(hostContext);
     reportSize();
+  }
+
+  // How long a card waits before it stops implying the work is nearly done, and before it stops
+  // claiming anything is happening at all. A card that shows a spinner forever is a lie the user
+  // cannot detect: the tool may have failed, the host may have dropped the result, or the agent may
+  // have moved on, and all three look identical to a permanent "Working…".
+  const STALL_MS = 20000;
+  const GIVE_UP_MS = 90000;
+
+  let dataHandler = null;
+  let stallTimer = 0;
+  let giveUpTimer = 0;
+
+  function clearTimers() {
+    window.clearTimeout(stallTimer);
+    window.clearTimeout(giveUpTimer);
+    stallTimer = 0;
+    giveUpTimer = 0;
+  }
+
+  function setStatus(message, tone) {
+    const status = document.querySelector('.status');
+    if (status) {
+      status.textContent = message || '';
+      status.hidden = !message;
+      if (tone) {
+        status.dataset.tone = tone;
+      } else {
+        delete status.dataset.tone;
+      }
+    }
+    reportSize();
+  }
+
+  function setState(state, message, tone) {
+    document.body.dataset.state = state;
+    setStatus(message, tone);
+  }
+
+  function handleResult(params) {
+    clearTimers();
+    if (params && params.cancelled) {
+      setState('error', 'That was cancelled before it finished.', 'error');
+      return;
+    }
+    if (params && params.isError) {
+      // The tool's own error text is not shown. It may be a stack trace, and on a connected server
+      // it is someone else's prose appearing inside a Docket card.
+      setState('error', 'Docket could not finish that.', 'error');
+      return;
+    }
+    const data = params && params.structuredContent;
+    if (!data) {
+      setState('error', 'Docket did not send anything to show.', 'error');
+      return;
+    }
+    setState('ready');
+    if (dataHandler) {
+      dataHandler(data, params);
+    }
+    reportSize();
+  }
+
+  function startWaiting() {
+    clearTimers();
+    setState('loading');
+    stallTimer = window.setTimeout(() => {
+      setState('stalled', 'Still working…');
+    }, STALL_MS);
+    giveUpTimer = window.setTimeout(() => {
+      setState('error', 'No result arrived. Open Docket to check whether this went through.', 'error');
+    }, GIVE_UP_MS);
   }
 
   window.addEventListener('message', (event) => {
@@ -194,16 +297,13 @@ export const RUNTIME_JS = String.raw`
     }
     if (msg.method === 'ui/notifications/tool-result') {
       lastResult = msg.params;
-      if (resultHandler) {
-        resultHandler(msg.params);
-      }
+      handleResult(msg.params);
       return;
     }
     if (msg.method === 'ui/notifications/tool-cancelled') {
       // No result is coming. A card that keeps its spinner forever is worse than one that says so.
-      if (resultHandler) {
-        resultHandler({ content: [], isError: true, cancelled: true });
-      }
+      lastResult = { content: [], cancelled: true };
+      handleResult(lastResult);
       return;
     }
     if (msg.method === 'ui/notifications/host-context-changed') {
@@ -232,15 +332,36 @@ export const RUNTIME_JS = String.raw`
 
   window.docket = {
     ready,
-    onResult(fn) {
-      resultHandler = fn;
+    /**
+     * Render from the tool's structured output.
+     *
+     * The runtime owns loading, stalled, cancelled, and error. The handler runs only when there
+     * is something real to draw, so no widget has to reimplement the four ways a result can fail
+     * to arrive — which is how the old cards ended up on a hardcoded "Working…" and nothing else.
+     */
+    onData(fn) {
+      dataHandler = fn;
       if (lastResult) {
-        fn(lastResult);
+        handleResult(lastResult);
+      } else {
+        startWaiting();
       }
     },
     get input() {
       return toolInput || {};
     },
+    /**
+     * Say something alongside content that is already on screen.
+     *
+     * Distinct from the runtime's own states: this is for a failure that happens *after* the card
+     * rendered, such as an undo the server refused, where hiding what the user is looking at would
+     * lose the very context the message is about.
+     */
+    notice(message, tone) {
+      setStatus(message, tone);
+    },
+    /** The status glyph for a canonical workflow-state type, or null when it does not resolve. */
+    stateGlyph,
     call(name, args) {
       return request('tools/call', { name, arguments: args });
     },
@@ -314,8 +435,20 @@ export const RUNTIME_CSS = String.raw`
   --border-radius-md: 6px;
   --border-radius-lg: 10px;
   --border-radius-full: 999px;
+
+  /* Workflow-state colours, which the extension standardizes no vocabulary for. These are
+     Docket's own --state-* ramp verbatim, so a card in a foreign host still reads in Docket's
+     state language; Docket's own host overrides them with the live tokens. Anything outside the
+     spec's union has to be declared here or the widget receives nothing — see WIDGET_OWNED in
+     mcp-apps-tokens.test.ts. */
+  --state-backlog: light-dark(oklch(0.5 0 0), oklch(0.72 0 0));
+  --state-unstarted: light-dark(oklch(0.5 0.06 250), oklch(0.75 0.06 250));
+  --state-started: light-dark(oklch(0.52 0.15 250), oklch(0.78 0.13 250));
+  --state-completed: light-dark(oklch(0.52 0.15 150), oklch(0.78 0.14 150));
+  --state-canceled: light-dark(oklch(0.5 0.03 25), oklch(0.72 0.03 25));
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: var(--font-sans);
@@ -323,7 +456,30 @@ body {
   background: transparent;
   font-size: var(--font-text-md-size);
   line-height: var(--font-text-md-line-height);
+  /* The card reflows against the width it is actually given, not the viewport. A widget has no
+     idea how wide the transcript around it is, and on a phone that is 320px. */
+  container-type: inline-size;
 }
+
+/* The four ways a card can be, exactly one at a time. */
+body[data-state='loading'] .content,
+body[data-state='stalled'] .content,
+body[data-state='error'] .content { display: none; }
+body[data-state='ready'] .skeleton,
+body[data-state='error'] .skeleton { display: none; }
+
+.skeleton { display: flex; flex-direction: column; gap: 8px; }
+.sk { background: var(--color-background-secondary); border-radius: var(--border-radius-md); }
+.sk-headline { height: 0.9375rem; width: 42%; }
+.sk-row { height: 1.75rem; }
+@media (prefers-reduced-motion: no-preference) {
+  .sk { animation: sk-pulse 1.4s ease-in-out infinite; }
+}
+@keyframes sk-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.status { margin: 0; color: var(--color-text-secondary); }
+.status[data-tone='error'] { color: var(--color-text-danger); }
+
 .card {
   border: 1px solid var(--color-border-primary);
   border-radius: var(--border-radius-lg);
@@ -349,12 +505,23 @@ body {
   background: var(--color-background-secondary);
 }
 .row .name { font-weight: var(--font-weight-medium); flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.diff { font-variant-numeric: tabular-nums; }
+.diff {
+  font-variant-numeric: tabular-nums;
+  /* A diff line summarises what moved. Two lines is the most it can take before it stops being a
+     line and starts being the document it is describing. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
 .diff .from { color: var(--color-text-secondary); text-decoration: line-through; }
 .diff .to { color: var(--color-text-primary); font-weight: var(--font-weight-medium); }
 .skipped .name { color: var(--color-text-secondary); }
 .reason { color: var(--color-text-danger); font-size: var(--font-text-sm-size); }
-.actions { display: flex; gap: 8px; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 button {
   font: inherit;
   padding: 5px 11px;
@@ -368,17 +535,62 @@ button:hover { background: var(--color-background-secondary); }
 button:disabled { opacity: 0.5; cursor: default; }
 button:focus-visible { outline: 2px solid var(--color-ring-primary); outline-offset: 2px; }
 .empty { color: var(--color-text-secondary); }
+
+/* A tick is the one control someone taps rather than clicks, so it carries a real target even
+   though the glyph inside it is small. */
+.tick {
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+.tick[aria-checked='true'] { color: var(--color-text-success); }
+.row .name.done { text-decoration: line-through; color: var(--color-text-secondary); }
+
+/* The state glyph is the one piece of this card that is unmistakably Docket, so it renders at the
+   product's 16px icon floor rather than shrinking to fit a dense row. */
+.glyph { flex: 0 0 auto; display: inline-flex; width: 1rem; height: 1rem; }
+.glyph svg { width: 1rem; height: 1rem; display: block; }
+.state-backlog { color: var(--state-backlog); }
+.state-unstarted { color: var(--state-unstarted); }
+.state-started { color: var(--state-started); }
+.state-completed { color: var(--state-completed); }
+.state-canceled { color: var(--state-canceled); }
+
+@container (max-width: 380px) {
+  /* Below this the title and its diff cannot share a line without one of them becoming unreadable.
+     Stacking is a decision; ellipsising a title down to "LV…" is an accident. */
+  .row { flex-direction: column; align-items: stretch; gap: 2px; }
+  .row .name { white-space: normal; overflow: visible; text-overflow: clip; }
+  .row:has(.tick) { flex-direction: row; align-items: center; }
+  .tick { width: 2.5rem; height: 2.5rem; }
+  .actions button { flex: 1 1 auto; min-height: 2.5rem; }
+}
 `;
 
 /**
  * Wrap a widget body in the shared document shell.
  *
- * @param title - The document title.
- * @param body - The widget's markup.
+ * @remarks
+ * The card chrome, the loading skeleton, and the status line live here rather than in each widget,
+ * because every one of them needs all three and the four ways a result can fail to arrive are not
+ * a widget's business. A widget supplies only what it draws when there is something to draw.
+ *
+ * @param title - The document title, and the accessible name of the card.
+ * @param body - The widget's own markup, rendered inside `.content`.
  * @param script - The widget's own script, run after {@link RUNTIME_JS}.
+ * @param skeletonRows - How many placeholder rows to show while waiting, matched to the widget's
+ *   usual density so the card does not jump size when the real content lands.
  * @returns a self-contained HTML document.
  */
-export function appDocument(title: string, body: string, script: string): string {
+export function appDocument(title: string, body: string, script: string, skeletonRows = 2): string {
+  const rows = Array.from({ length: skeletonRows }, () => '<div class="sk sk-row"></div>').join(
+    '\n      ',
+  );
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -388,8 +600,17 @@ export function appDocument(title: string, body: string, script: string): string
 <title>${title}</title>
 <style>${RUNTIME_CSS}</style>
 </head>
-<body>
+<body data-state="loading">
+<section class="card" aria-label="${title}">
+  <div class="skeleton" aria-hidden="true">
+    <div class="sk sk-headline"></div>
+      ${rows}
+  </div>
+  <p class="status" role="status" hidden></p>
+  <div class="content">
 ${body}
+  </div>
+</section>
 <script>${RUNTIME_JS}</script>
 <script>${script}</script>
 </body>

@@ -49,11 +49,12 @@ import type { SQL } from 'drizzle-orm';
 import { alias, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { z } from 'zod';
 
-import { Priority } from '@docket/types';
+import { Priority, WorkflowStateType } from '@docket/types';
 
 import { ValidationError } from '../error';
 import { DESCRIPTOR_HINT, resolveDescriptor, resolveOptional } from './descriptors';
 import type { WorkCursor } from './tools-shared-queries';
+import { stateTypeOf, workflowStateTypes } from './workflow-states';
 
 /**
  * The keyset predicate that resumes a page, built per table.
@@ -190,6 +191,9 @@ export const WorkRow = z.object({
   id: z.string().describe('The entity id.'),
   title: z.string().describe('Its name or title.'),
   state: z.string().optional().describe("A task's workflow state."),
+  stateType: WorkflowStateType.optional().describe(
+    'The canonical category `state` maps onto. Workflow states are per-team and renameable, so this — not `state` — is what compares across teams and what a status glyph is keyed off. Absent when the owning team no longer lists that state key.',
+  ),
   status: z.string().optional().describe("A project, program, or initiative's status."),
   assigneeId: z.string().optional().describe('Who is accountable, when set.'),
   projectId: z.string().optional().describe('The project it belongs to, when set.'),
@@ -385,6 +389,7 @@ async function listTasks(
       id: task.id,
       title: task.title,
       state: task.state,
+      teamId: task.teamId,
       assigneeId: task.assigneeId,
       projectId: task.projectId,
       createdAt: task.createdAt,
@@ -394,14 +399,27 @@ async function listTasks(
     .orderBy(desc(task.createdAt), desc(task.id))
     .limit(limit + 1);
 
-  return rows.map((row) => ({
-    id: row.id,
-    title: row.title,
-    state: row.state,
-    ...(row.assigneeId ? { assigneeId: row.assigneeId } : {}),
-    ...(row.projectId ? { projectId: row.projectId } : {}),
-    createdAt: row.createdAt,
-  }));
+  // One lookup for the whole page, not one per row: a page can span every team in the org, and
+  // resolving each row separately would make a 50-row read cost 51 queries.
+  const stateTypes = await workflowStateTypes(
+    orgId,
+    rows.map((row) => row.teamId),
+  );
+
+  // `teamId` is read to resolve the state type and then dropped. It is not part of the row
+  // contract, and adding it here would widen the wire on the way past rather than on purpose.
+  return rows.map((row) => {
+    const stateType = stateTypeOf(stateTypes, row.teamId, row.state);
+    return {
+      id: row.id,
+      title: row.title,
+      state: row.state,
+      ...(stateType ? { stateType } : {}),
+      ...(row.assigneeId ? { assigneeId: row.assigneeId } : {}),
+      ...(row.projectId ? { projectId: row.projectId } : {}),
+      createdAt: row.createdAt,
+    };
+  });
 }
 
 /** Build and run the project/program/initiative query, which share a much smaller filter set. */

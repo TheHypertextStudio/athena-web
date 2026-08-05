@@ -311,14 +311,38 @@ async function buildPatch(
   return patch;
 }
 
+/**
+ * The longest a single side of a diff line may be.
+ *
+ * @remarks
+ * A diff line says what moved; it is not the payload that moved. Editing a description used to put
+ * the entire old text and the entire new text into one row — which broke the report card's layout,
+ * and cost the model as much context as re-reading the entity would have. Anything that needs the
+ * full value can read the entity, where it is authoritative rather than a snapshot.
+ */
+const DISPLAY_LIMIT = 200;
+
+/** Shorten one rendered value, marking the cut so nobody reads a truncation as the whole value. */
+function clamp(text: string): string {
+  return text.length > DISPLAY_LIMIT ? text.slice(0, DISPLAY_LIMIT - 1).trimEnd() + '…' : text;
+}
+
 /** Render one value for a diff line, so a report card reads without a type switch. */
 function display(value: unknown): string {
-  if (value === null || value === undefined) return 'none';
-  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) {
+    return 'none';
+  }
+  if (typeof value === 'string') {
+    return clamp(value);
+  }
   // Dates are the only tracked non-primitive, and only their day matters in a diff line.
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
-  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-  return JSON.stringify(value);
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return clamp(JSON.stringify(value));
 }
 
 /**

@@ -16,14 +16,12 @@
 import { appDocument } from './runtime';
 
 const BODY = `
-<div class="card">
-  <div class="headline" id="title">Loading…</div>
-  <div class="rows"><div class="row" id="facts"></div></div>
-  <div class="muted" id="origin"></div>
-  <div class="actions">
-    <button id="done" hidden>Mark done</button>
-    <button id="open" hidden>Open in Docket</button>
-  </div>
+<div class="headline" id="title" aria-live="polite"></div>
+<div class="rows"><div class="row" id="facts"></div></div>
+<div class="muted" id="origin"></div>
+<div class="actions">
+  <button id="done" hidden>Mark done</button>
+  <button id="open" hidden>Open in Docket</button>
 </div>`;
 
 const SCRIPT = String.raw`
@@ -39,7 +37,9 @@ const SCRIPT = String.raw`
   }
 
   function describeOrigin(origin) {
-    if (!origin) return '';
+    if (!origin) {
+      return '';
+    }
     // The client name when an agent made it, the tool otherwise — "created by capture" means
     // nothing to a person, but "created by Claude" does.
     const who = origin.client || 'an agent';
@@ -47,12 +47,13 @@ const SCRIPT = String.raw`
     return 'Created by ' + who + (when ? ' on ' + when : '');
   }
 
-  window.docket.onResult((params) => {
-    const data = params && params.structuredContent;
-    const items = (data && data.items) || [];
+  window.docket.onData((data) => {
+    const items = data.items || [];
     entity = items[0] || null;
     if (!entity) {
       el('title').textContent = 'Not found';
+      el('facts').replaceChildren();
+      el('origin').textContent = 'Nothing here matches that any more.';
       return;
     }
 
@@ -61,9 +62,21 @@ const SCRIPT = String.raw`
     const facts = el('facts');
     facts.replaceChildren();
     const state = entity.state || entity.status;
-    if (state) facts.appendChild(fact('State', String(state).replace(/_/g, ' ')));
-    if (entity.priority && entity.priority !== 'none') facts.appendChild(fact('Priority', entity.priority));
-    if (entity.dueDate) facts.appendChild(fact('Due', String(entity.dueDate).slice(0, 10)));
+    if (state) {
+      // The glyph carries the canonical type and the text carries the team's own name for it.
+      // Both, because "Doing" alone does not say whether the work has started.
+      const glyph = window.docket.stateGlyph(entity.stateType);
+      if (glyph) {
+        facts.appendChild(glyph);
+      }
+      facts.appendChild(fact('State', String(state).replace(/_/g, ' ')));
+    }
+    if (entity.priority && entity.priority !== 'none') {
+      facts.appendChild(fact('Priority', entity.priority));
+    }
+    if (entity.dueDate) {
+      facts.appendChild(fact('Due', String(entity.dueDate).slice(0, 10)));
+    }
     if (Array.isArray(entity.blockedBy) && entity.blockedBy.length > 0) {
       facts.appendChild(fact('Blocked by', String(entity.blockedBy.length)));
     }
@@ -74,7 +87,9 @@ const SCRIPT = String.raw`
   });
 
   el('done').addEventListener('click', async () => {
-    if (!entity) return;
+    if (!entity) {
+      return;
+    }
     const button = el('done');
     button.disabled = true;
     try {
@@ -87,21 +102,20 @@ const SCRIPT = String.raw`
       button.hidden = true;
       el('facts').replaceChildren(fact('State', 'done'));
       await window.docket.tell('The user marked "' + (entity.title || entity.id) + '" done from the card.');
-    } catch (err) {
+    } catch {
       button.disabled = false;
-      const reason = document.createElement('div');
-      reason.className = 'reason';
-      reason.textContent = err && err.message ? err.message : 'Could not update';
-      el('origin').after(reason);
+      window.docket.notice('That could not be marked done. Open Docket to check it.', 'error');
     }
   });
 
   el('open').addEventListener('click', () => {
     const orgId = window.docket.input.orgId;
-    if (entity && orgId) window.docket.link('/orgs/' + orgId + '/tasks/' + entity.id);
+    if (entity && orgId) {
+      window.docket.link('/orgs/' + orgId + '/tasks/' + entity.id);
+    }
   });
 })();
 `;
 
 /** The rendered entity document. */
-export const ENTITY_HTML = appDocument('Entity', BODY, SCRIPT);
+export const ENTITY_HTML = appDocument('Entity', BODY, SCRIPT, 1);

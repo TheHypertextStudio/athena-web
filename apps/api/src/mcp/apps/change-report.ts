@@ -16,14 +16,12 @@ import { appDocument } from './runtime';
 
 /** The widget's markup: a headline, the diff rows, what was skipped, and two actions. */
 const BODY = `
-<div class="card" id="card">
-  <div class="headline" id="headline">Working…</div>
-  <div class="rows" id="rows"></div>
-  <div class="rows skipped" id="skipped"></div>
-  <div class="actions">
-    <button id="undo" hidden>Undo</button>
-    <button id="open" hidden>Open in Docket</button>
-  </div>
+<div class="headline" id="headline" aria-live="polite"></div>
+<div class="rows" id="rows"></div>
+<div class="rows skipped" id="skipped"></div>
+<div class="actions">
+  <button id="undo" hidden>Undo</button>
+  <button id="open" hidden>Open in Docket</button>
 </div>`;
 
 /**
@@ -33,6 +31,9 @@ const BODY = `
  * Reads `structuredContent`, which every write tool on this surface declares an `outputSchema` for
  * — so the card renders from the same contract the model reads, and the two cannot disagree about
  * what happened.
+ *
+ * Waiting, stalling, cancellation and failure are the runtime's, not this file's. `onData` runs
+ * only when there is a change set to draw.
  */
 const SCRIPT = String.raw`
 (() => {
@@ -48,6 +49,7 @@ const SCRIPT = String.raw`
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = item.title || item.id;
+    name.title = item.title || item.id;
     row.appendChild(name);
     const fields = item.fields || [];
     if (fields.length > 0) {
@@ -62,6 +64,9 @@ const SCRIPT = String.raw`
       to.className = 'to';
       to.textContent = f.to;
       d.append(from, arrow, to);
+      // The clamp keeps the row a row; the full pair stays reachable on hover and to a screen
+      // reader, because a truncated diff a person cannot expand is worse than no diff.
+      d.title = f.field + ': ' + f.from + ' → ' + f.to;
       if (fields.length > 1) {
         const more = document.createElement('span');
         more.className = 'muted';
@@ -79,6 +84,7 @@ const SCRIPT = String.raw`
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = item.title || item.id;
+    name.title = item.title || item.id;
     const reason = document.createElement('span');
     reason.className = 'reason';
     // Spelled out, because "not_permitted" is a wire value, not something to show a person.
@@ -101,23 +107,35 @@ const SCRIPT = String.raw`
     }
     if (typeof data.created === 'number') {
       const parts = [];
-      if (data.created > 0) parts.push('Created ' + data.created);
-      if (data.matched > 0) parts.push('matched ' + data.matched + ' already there');
+      if (data.created > 0) {
+        parts.push('Created ' + data.created);
+      }
+      if (data.matched > 0) {
+        parts.push('matched ' + data.matched + ' already there');
+      }
       return parts.length > 0 ? parts.join(', ') : 'Nothing to do';
     }
-    if (data.title) return 'Captured “' + data.title + '”';
+    if (data.title) {
+      return 'Captured “' + data.title + '”';
+    }
     return 'Done';
   }
 
   function itemsOf(data) {
-    if (Array.isArray(data.changes)) return data.changes;
-    if (Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data.changes)) {
+      return data.changes;
+    }
+    if (Array.isArray(data.items)) {
+      return data.items;
+    }
     if (Array.isArray(data.placed)) {
       return data.placed
         .filter((p) => p.created)
         .map((p) => ({ id: p.id, title: p.ref, fields: [] }));
     }
-    if (data.id) return [{ id: data.id, title: data.title, fields: [] }];
+    if (data.id) {
+      return [{ id: data.id, title: data.title, fields: [] }];
+    }
     return [];
   }
 
@@ -145,7 +163,9 @@ const SCRIPT = String.raw`
   }
 
   el('undo').addEventListener('click', async () => {
-    if (!state || !state.changeSetId) return;
+    if (!state || !state.changeSetId) {
+      return;
+    }
     const button = el('undo');
     button.disabled = true;
     try {
@@ -159,11 +179,10 @@ const SCRIPT = String.raw`
       button.hidden = true;
       // Without this the agent keeps answering as though the change still stands.
       await window.docket.tell('The user undid that change from the report card. It no longer applies.');
-    } catch (err) {
-      const reason = document.createElement('div');
-      reason.className = 'reason';
-      reason.textContent = 'Could not undo: ' + (err && err.message ? err.message : 'unknown');
-      el('card').appendChild(reason);
+    } catch {
+      // The message stays beside the rows rather than replacing them: what could not be undone is
+      // exactly the thing the person needs to still be looking at.
+      window.docket.notice('That could not be undone. Open Docket to check it.', 'error');
       button.disabled = false;
     }
   });
@@ -172,19 +191,14 @@ const SCRIPT = String.raw`
     const items = state ? itemsOf(state) : [];
     const first = items[0];
     const orgId = window.docket.input.orgId;
-    if (first && orgId) window.docket.link('/orgs/' + orgId + '/tasks/' + first.id);
+    if (first && orgId) {
+      window.docket.link('/orgs/' + orgId + '/tasks/' + first.id);
+    }
   });
 
-  window.docket.onResult((params) => {
-    const data = params && params.structuredContent;
-    if (!data) {
-      text(el('headline'), 'No result to show');
-      return;
-    }
-    render(data);
-  });
+  window.docket.onData(render);
 })();
 `;
 
 /** The rendered change-report document. */
-export const CHANGE_REPORT_HTML = appDocument('Change report', BODY, SCRIPT);
+export const CHANGE_REPORT_HTML = appDocument('Change report', BODY, SCRIPT, 2);

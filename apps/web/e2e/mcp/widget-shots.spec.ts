@@ -71,6 +71,8 @@ interface WidgetCase {
   readonly input: Readonly<Record<string, unknown>>;
   /** `null` means the host never delivers a result, which is the loading state. */
   readonly result: Readonly<Record<string, unknown>> | null;
+  /** Send `tool-cancelled` instead of `tool-result`, the way a host does on an abandoned call. */
+  readonly cancelled?: boolean;
 }
 
 const CASES: readonly WidgetCase[] = [
@@ -144,6 +146,22 @@ const CASES: readonly WidgetCase[] = [
     result: { structuredContent: { changed: 0, changes: [] } },
   },
   {
+    name: 'change-report-failed',
+    html: CHANGE_REPORT_HTML,
+    input: { orgId: 'org_1' },
+    result: {
+      isError: true,
+      content: [{ type: 'text', text: 'TypeError: cannot read x of undefined' }],
+    },
+  },
+  {
+    name: 'change-report-cancelled',
+    html: CHANGE_REPORT_HTML,
+    input: { orgId: 'org_1' },
+    result: null,
+    cancelled: true,
+  },
+  {
     name: 'work-list-populated',
     html: WORK_LIST_HTML,
     input: { orgId: 'org_1' },
@@ -151,11 +169,65 @@ const CASES: readonly WidgetCase[] = [
       structuredContent: {
         entity: 'task',
         items: [
-          { id: 't_1', title: 'Draft the Q3 service change memo', state: 'in_progress' },
-          { id: 't_2', title: 'Review campus outreach budget', state: 'todo' },
-          { id: 't_3', title: 'Send the RTC coordination follow-up', state: 'todo' },
-          { id: 't_4', title: 'Book the NSU tabling slot', state: 'backlog' },
+          {
+            id: 't_1',
+            title: 'Draft the Q3 service change memo',
+            state: 'in_progress',
+            stateType: 'started',
+          },
+          {
+            id: 't_2',
+            title: 'Review campus outreach budget',
+            state: 'todo',
+            stateType: 'unstarted',
+          },
+          {
+            id: 't_3',
+            title: 'Send the RTC coordination follow-up',
+            state: 'todo',
+            stateType: 'unstarted',
+          },
+          { id: 't_4', title: 'Book the NSU tabling slot', state: 'backlog', stateType: 'backlog' },
           { id: 't_5', title: 'Reconcile the UNLV headcount', state: 'todo' },
+        ],
+      },
+    },
+  },
+  {
+    name: 'work-list-every-state-type',
+    html: WORK_LIST_HTML,
+    input: { orgId: 'org_1' },
+    result: {
+      structuredContent: {
+        entity: 'task',
+        items: [
+          // Deliberately renamed state keys against canonical types: the glyph must follow the
+          // type, and the text must follow whatever the team calls it.
+          { id: 't_1', title: 'Icebox: fare capping pilot', state: 'icebox', stateType: 'backlog' },
+          {
+            id: 't_2',
+            title: 'Queued: Maryland Pkwy counts',
+            state: 'queued',
+            stateType: 'unstarted',
+          },
+          {
+            id: 't_3',
+            title: 'Doing: Q3 service change memo',
+            state: 'doing',
+            stateType: 'started',
+          },
+          {
+            id: 't_4',
+            title: 'Shipped: NSU tabling slot',
+            state: 'shipped',
+            stateType: 'completed',
+          },
+          {
+            id: 't_5',
+            title: 'Dropped: legacy pass reconcile',
+            state: 'dropped',
+            stateType: 'canceled',
+          },
         ],
       },
     },
@@ -177,6 +249,7 @@ const CASES: readonly WidgetCase[] = [
             id: 't_1',
             title: 'Draft the Q3 service change memo',
             state: 'in_progress',
+            stateType: 'started',
             priority: 'high',
             dueDate: '2026-08-14',
             blockedBy: ['t_9'],
@@ -212,6 +285,14 @@ const CASES: readonly WidgetCase[] = [
     },
   },
 ];
+
+/** Which of the runtime's four states this case should settle in. */
+function expectedState(testCase: WidgetCase): string {
+  if (testCase.cancelled || testCase.result?.['isError']) {
+    return 'error';
+  }
+  return testCase.result ? 'ready' : 'loading';
+}
 
 /** The widths a card actually has to survive: a desktop transcript and a phone one. */
 const WIDTHS = [
@@ -262,6 +343,7 @@ const view = document.getElementById('view');
 const CONTEXT = ${JSON.stringify(context)};
 const INPUT = ${JSON.stringify(testCase.input)};
 const RESULT = ${JSON.stringify(testCase.result)};
+const CANCELLED = ${JSON.stringify(Boolean(testCase.cancelled))};
 
 window.addEventListener('message', (event) => {
   if (event.source !== view.contentWindow) {
@@ -288,7 +370,9 @@ window.addEventListener('message', (event) => {
   }
   if (msg.method === 'ui/notifications/initialized') {
     post({ jsonrpc: '2.0', method: 'ui/notifications/tool-input', params: { arguments: INPUT } });
-    if (RESULT) {
+    if (CANCELLED) {
+      post({ jsonrpc: '2.0', method: 'ui/notifications/tool-cancelled', params: {} });
+    } else if (RESULT) {
       post({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: Object.assign({ content: [] }, RESULT) });
     }
     return;
@@ -336,6 +420,14 @@ for (const palette of PALETTES) {
             // A widget must never scroll inside a transcript, at any width.
             const overflow = await body.evaluate((node) => node.scrollWidth - node.clientWidth);
             expect(overflow, 'horizontal overflow inside the card').toBeLessThanOrEqual(0);
+
+            // Exactly one of loading / stalled / ready / error, and never the old failure mode of
+            // a card sitting on a hardcoded headline with nothing behind it.
+            await expect(body).toHaveAttribute('data-state', expectedState(testCase));
+
+            // A tool's own error prose never reaches a Docket card: it may be a stack trace, and
+            // on a connected third-party server it is attacker-authored.
+            await expect(body).not.toContainText('TypeError');
 
             await page.screenshot({
               path: join(SHOT_DIR, `${testCase.name}-${palette}-${theme}-${width.name}.png`),

@@ -22,7 +22,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { RUNTIME_CSS } from '../../src/mcp/apps/runtime';
+import { RUNTIME_CSS, RUNTIME_JS } from '../../src/mcp/apps/runtime';
 
 /** The vendored copy of the extension's type source. */
 const SPEC_TYPES = join(
@@ -39,7 +39,13 @@ const SPEC_TYPES = join(
  * the real `--state-*` tokens; every other host gets the fallbacks. Anything added here is a
  * deliberate decision that a host will never be able to theme it.
  */
-const WIDGET_OWNED: readonly string[] = [];
+const WIDGET_OWNED: readonly string[] = [
+  '--state-backlog',
+  '--state-unstarted',
+  '--state-started',
+  '--state-completed',
+  '--state-canceled',
+];
 
 /** Every `--custom-property` the spec's `McpUiStyleVariableKey` union defines. */
 function specStyleVariableKeys(): Set<string> {
@@ -56,9 +62,21 @@ function specStyleVariableKeys(): Set<string> {
   return parsed;
 }
 
+/**
+ * The stylesheet with comments removed.
+ *
+ * @remarks
+ * Stripped before anything is parsed, for two independent reasons: prose contains semicolons, and
+ * splitting declarations on `;` would otherwise swallow whichever one follows a comment; and prose
+ * mentions token names, which would otherwise count as `var()` references that nothing declares.
+ */
+function styleSheet(): string {
+  return RUNTIME_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
 /** The `:root` block of the widget stylesheet, as `name → value` pairs. */
 function rootDeclarations(): Map<string, string> {
-  const block = /:root\s*\{([\s\S]*?)\}/.exec(RUNTIME_CSS);
+  const block = /:root\s*\{([\s\S]*?)\}/.exec(styleSheet());
   if (!block?.[1]) {
     throw new Error('RUNTIME_CSS no longer has a :root block');
   }
@@ -74,7 +92,7 @@ function rootDeclarations(): Map<string, string> {
 
 /** Every custom property the stylesheet reads through `var()`. */
 function referencedVariables(): Set<string> {
-  const names = RUNTIME_CSS.match(/var\(\s*(--[a-z0-9-]+)/g) ?? [];
+  const names = styleSheet().match(/var\(\s*(--[a-z0-9-]+)/g) ?? [];
   return new Set(names.map((call) => call.replace(/var\(\s*/, '')));
 }
 
@@ -114,6 +132,27 @@ describe('widget stylesheet token vocabulary', () => {
     // stylesheet reads therefore needs a value of its own, or that property resolves to `unset`
     // against a host that stayed quiet.
     expect(undeclared, 'read through var() with no :root fallback').toEqual([]);
+  });
+
+  it('survives being written as a template literal', () => {
+    // RUNTIME_CSS and RUNTIME_JS are String.raw templates, so one backtick in a comment silently
+    // ends the string and takes the rest of the stylesheet or the whole client with it. TypeScript
+    // usually catches the fallout as a parse error somewhere unrelated; this says what happened.
+    expect(RUNTIME_CSS, 'a backtick would have truncated this').not.toContain('`');
+    expect(RUNTIME_JS, 'a backtick would have truncated this').not.toContain('`');
+    // The last thing each one defines, so a silent truncation cannot pass.
+    expect(RUNTIME_CSS).toContain('@container');
+    expect(RUNTIME_JS).toContain('stateGlyph');
+  });
+
+  it('carries a glyph and a colour for every canonical workflow-state type', () => {
+    const declared = rootDeclarations();
+    for (const type of ['backlog', 'unstarted', 'started', 'completed', 'canceled']) {
+      // The inline row cap means a screenshot can only ever show four of the five, so the fifth
+      // is held here rather than left to whichever fixture happens to fit above the fold.
+      expect(RUNTIME_JS, `${type} has no glyph`).toMatch(new RegExp(`${type}:\\s*'<svg`));
+      expect(declared.has(`--state-${type}`), `${type} has no colour`).toBe(true);
+    }
   });
 
   it('states a colour scheme, so its light-dark() fallbacks have a basis', () => {

@@ -248,6 +248,13 @@ Notes on the less obvious entries:
 - **Every write records a change set** and returns a `changeSetId` for `undo`. Undo is a reverse
   replay with conflict detection, not a rollback — anything edited by someone else since is
   reported as skipped rather than clobbered.
+- **A task's `state` is not comparable across teams; its `stateType` is.** `state` holds a key
+  scoped to one team's `workflow_states`, which that team can rename at will, so two teams can call
+  the same stage `doing` and `in_flight`. `list_work` and `get` therefore return `stateType`
+  alongside it — the canonical `backlog | unstarted | started | completed | canceled` category —
+  and that is what a status glyph, a cross-team comparison, or any grouping must key off. It is
+  absent, rather than guessed, when the owning team no longer lists the stored key.
+  `workflow-states.ts` resolves it once per distinct team per page, never once per row.
 
 **Authoritative definitions live in the code, not here.** Every tool carries a `.describe()` on
 every field and an `outputSchema`, so restating them in prose guarantees drift. See

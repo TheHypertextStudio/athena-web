@@ -91,6 +91,23 @@ const STYLE_VARIABLE_MAP: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Docket-specific variables a widget owns, sent only because Docket is the host.
+ *
+ * @remarks
+ * Kept separate from {@link STYLE_VARIABLE_MAP} so that map's invariant stays true: every key in
+ * it is a member of the extension's standardized union. These names are not, and cannot be — the
+ * spec has no vocabulary for workflow state. A Docket widget declares its own fallbacks for them
+ * and a foreign host simply never sends them, which is the intended degradation.
+ */
+const DOCKET_VARIABLE_MAP: Readonly<Record<string, string>> = {
+  '--state-backlog': '--color-state-backlog',
+  '--state-unstarted': '--color-state-unstarted',
+  '--state-started': '--color-state-started',
+  '--state-completed': '--color-state-completed',
+  '--state-canceled': '--color-state-canceled',
+};
+
+/**
  * The API origin the sandbox proxy is served from.
  *
  * @remarks
@@ -140,10 +157,13 @@ function hostStyleVariables(): Record<string, string> {
   const read = (token: string): string => computed.getPropertyValue(token).trim();
 
   const variables: Record<string, string> = {};
-  for (const [specKey, docketToken] of Object.entries(STYLE_VARIABLE_MAP)) {
+  for (const [key, docketToken] of [
+    ...Object.entries(STYLE_VARIABLE_MAP),
+    ...Object.entries(DOCKET_VARIABLE_MAP),
+  ]) {
     const value = read(docketToken);
     if (value) {
-      variables[specKey] = value;
+      variables[key] = value;
     }
   }
 

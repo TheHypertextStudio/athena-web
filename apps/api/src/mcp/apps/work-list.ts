@@ -13,12 +13,10 @@
 import { appDocument } from './runtime';
 
 const BODY = `
-<div class="card">
-  <div class="headline" id="headline">Loading…</div>
-  <div class="rows" id="rows"></div>
-  <div class="actions">
-    <button id="open" hidden>Open in Docket</button>
-  </div>
+<div class="headline" id="headline" aria-live="polite"></div>
+<div class="rows" id="rows"></div>
+<div class="actions">
+  <button id="open" hidden>Open in Docket</button>
 </div>`;
 
 const SCRIPT = String.raw`
@@ -30,10 +28,20 @@ const SCRIPT = String.raw`
   function row(item) {
     const node = document.createElement('div');
     node.className = 'row';
+
+    // Tasks carry a canonical state type; containers do not, so the glyph appears on one and not
+    // the other rather than being faked for both.
+    const glyph = window.docket.stateGlyph(item.stateType);
+    if (glyph) {
+      node.appendChild(glyph);
+    }
+
     const name = document.createElement('span');
     name.className = 'name';
     name.textContent = item.title || item.id;
+    name.title = item.title || item.id;
     node.appendChild(name);
+
     // A task shows its workflow state; a container shows its status. One of the two is always set.
     const badge = item.state || item.status;
     if (badge) {
@@ -45,9 +53,8 @@ const SCRIPT = String.raw`
     return node;
   }
 
-  window.docket.onResult((params) => {
-    const data = params && params.structuredContent;
-    const items = (data && data.items) || [];
+  window.docket.onData((data) => {
+    const items = data.items || [];
     state = data;
 
     const noun = items.length === 1 ? (data.entity || 'item') : (data.entity || 'item') + 's';
@@ -56,7 +63,9 @@ const SCRIPT = String.raw`
 
     const rows = el('rows');
     rows.replaceChildren();
-    for (const item of items.slice(0, INLINE_ROWS)) rows.appendChild(row(item));
+    for (const item of items.slice(0, INLINE_ROWS)) {
+      rows.appendChild(row(item));
+    }
     if (items.length > INLINE_ROWS) {
       const more = document.createElement('div');
       more.className = 'muted';
@@ -68,10 +77,12 @@ const SCRIPT = String.raw`
 
   el('open').addEventListener('click', () => {
     const orgId = window.docket.input.orgId;
-    if (orgId) window.docket.link('/orgs/' + orgId + '/tasks');
+    if (orgId) {
+      window.docket.link('/orgs/' + orgId + '/tasks');
+    }
   });
 })();
 `;
 
 /** The rendered work-list document. */
-export const WORK_LIST_HTML = appDocument('Work list', BODY, SCRIPT);
+export const WORK_LIST_HTML = appDocument('Work list', BODY, SCRIPT, 4);

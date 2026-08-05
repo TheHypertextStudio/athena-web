@@ -13,11 +13,9 @@
 import { appDocument } from './runtime';
 
 const BODY = `
-<div class="card">
-  <div class="headline" id="headline">Loading…</div>
-  <div class="rows" id="rows"></div>
-  <div class="muted" id="next"></div>
-</div>`;
+<div class="headline" id="headline" aria-live="polite"></div>
+<div class="rows" id="rows"></div>
+<div class="muted" id="next"></div>`;
 
 const SCRIPT = String.raw`
 (() => {
@@ -29,11 +27,29 @@ const SCRIPT = String.raw`
     return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   }
 
+  function markDone(check, name) {
+    check.textContent = '✓';
+    check.setAttribute('aria-checked', 'true');
+    check.disabled = true;
+    name.classList.add('done');
+  }
+
   function row(item) {
     const node = document.createElement('div');
     node.className = 'row';
 
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = item.title;
+    name.title = item.title;
+
     const check = document.createElement('button');
+    check.className = 'tick';
+    // A glyph is not a name. Without this the control reads as "button" and nothing else, which
+    // is useless when there are four of them stacked.
+    check.setAttribute('role', 'checkbox');
+    check.setAttribute('aria-label', 'Mark “' + item.title + '” done');
+    check.setAttribute('aria-checked', item.status === 'done' ? 'true' : 'false');
     check.textContent = item.status === 'done' ? '✓' : '○';
     check.disabled = item.status === 'done';
     check.addEventListener('click', async () => {
@@ -44,18 +60,17 @@ const SCRIPT = String.raw`
           date: day.date,
           edits: [{ action: 'complete', taskId: item.taskId }],
         });
-        check.textContent = '✓';
-        name.style.textDecoration = 'line-through';
+        markDone(check, name);
         await window.docket.tell('The user marked "' + item.title + '" done on the ' + day.date + ' plan.');
       } catch {
         check.disabled = false;
+        window.docket.notice('That could not be ticked off. Open Docket to check it.', 'error');
       }
     });
 
-    const name = document.createElement('span');
-    name.className = 'name';
-    name.textContent = item.title;
-    if (item.status === 'done') name.style.textDecoration = 'line-through';
+    if (item.status === 'done') {
+      name.classList.add('done');
+    }
 
     node.append(check, name);
     if (item.startsAt) {
@@ -67,10 +82,9 @@ const SCRIPT = String.raw`
     return node;
   }
 
-  window.docket.onResult((params) => {
-    const data = params && params.structuredContent;
+  window.docket.onData((data) => {
     day = data;
-    const items = (data && data.items) || [];
+    const items = data.items || [];
 
     const left = items.filter((i) => i.status !== 'done').length;
     el('headline').textContent =
@@ -80,7 +94,9 @@ const SCRIPT = String.raw`
 
     const rows = el('rows');
     rows.replaceChildren();
-    for (const item of items.slice(0, INLINE_ROWS)) rows.appendChild(row(item));
+    for (const item of items.slice(0, INLINE_ROWS)) {
+      rows.appendChild(row(item));
+    }
     if (items.length > INLINE_ROWS) {
       const more = document.createElement('div');
       more.className = 'muted';
@@ -96,4 +112,4 @@ const SCRIPT = String.raw`
 `;
 
 /** The rendered plan document. */
-export const PLAN_HTML = appDocument('Day plan', BODY, SCRIPT);
+export const PLAN_HTML = appDocument('Day plan', BODY, SCRIPT, 4);

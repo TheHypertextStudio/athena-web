@@ -32,8 +32,13 @@ function scheduleLaneDateHeading(date: string): ScheduleLaneDateHeading | null {
  * Render one lane's heading: a person's name for a resource lane, otherwise `Sun 2`.
  *
  * @remarks
- * Today's day number is carried by a filled primary chip. That is the only emphasis in the header —
- * no borders, no second date line — because the goal is for events, not chrome, to hold the eye.
+ * Today's day number is carried by a tonal `primary-container` chip, not a solid `primary` fill.
+ * CAL-17 measured the solid fill at 5.7:1 (light) / 8.1:1 (dark) against the canvas — well above the
+ * ~1.7:1 event blocks use ({@link file://./scheduling-item-surface.ts}) — which made the day badge,
+ * not an event, the highest-contrast fill on the page. `primary-container` measures 1.26:1 (light) /
+ * 1.29:1 (dark), a step *below* an event's own fill, while `on-primary-container` still keeps the
+ * digit legible at 10.2:1 / 8.8:1. Today stays identifiable by hue and position; it no longer
+ * outranks an event for the eye.
  *
  * @param lane - The lane being titled.
  * @param displayTimezone - The canvas-wide timezone; a lane timezone equal to it is redundant.
@@ -65,7 +70,7 @@ function SchedulingLaneHeading({
               is exactly as tall as every other and the all-day row below stays on one line. */}
           <span
             className={`flex size-6 shrink-0 items-center justify-center rounded-full tabular-nums ${
-              isToday ? 'bg-primary text-on-primary' : 'text-on-surface'
+              isToday ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
             }`}
             data-schedule-lane-today={isToday ? '' : undefined}
           >

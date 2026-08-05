@@ -196,4 +196,40 @@ describe('scheduling item surface', () => {
       expect(expression.startsWith('color-mix(in oklab,')).toBe(true);
     }
   });
+
+  // CAL-17 (docs/engineering/launch-compliance.md): "event/time-block surfaces are the only elements
+  // using the highest-contrast fill". Today's lane-header day chip (scheduling-canvas-header.tsx) used
+  // to be a solid `bg-primary` fill — measured well above an event's own fill — which made a date
+  // badge, not an event, the loudest object on the grid. It now uses `primary-container`, and this
+  // pins that the tonal chip never re-outranks an event block again.
+  describe.each([
+    { theme: 'light' as const, slice: light },
+    { theme: 'dark' as const, slice: dark },
+  ])('today’s lane-header chip on the $theme canvas', ({ slice }) => {
+    it('is at or below an event’s own fill contrast against the canvas', () => {
+      const canvas = parseOklch(token(slice, 'surface'));
+      const primaryContainer = parseOklch(token(slice, 'primary-container'));
+      const { fill: eventFill } = themeColors(slice);
+
+      const chipContrast = contrast(primaryContainer, canvas);
+      const eventContrast = contrast(eventFill, canvas);
+
+      expect(chipContrast).toBeLessThanOrEqual(eventContrast);
+    });
+
+    it('never falls back to the solid, highest-contrast primary fill', () => {
+      const canvas = parseOklch(token(slice, 'surface'));
+      const primary = parseOklch(token(slice, 'primary'));
+      const primaryContainer = parseOklch(token(slice, 'primary-container'));
+
+      expect(contrast(primaryContainer, canvas)).toBeLessThan(contrast(primary, canvas));
+    });
+
+    it('keeps the day number itself legible on the tonal chip', () => {
+      const primaryContainer = parseOklch(token(slice, 'primary-container'));
+      const onPrimaryContainer = parseOklch(token(slice, 'on-primary-container'));
+
+      expect(contrast(onPrimaryContainer, primaryContainer)).toBeGreaterThanOrEqual(4.5);
+    });
+  });
 });

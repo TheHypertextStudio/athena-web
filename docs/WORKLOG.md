@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-02
+> **Last Updated**: 2026-08-05
 
 ---
 
@@ -131,6 +131,70 @@
 - **The rebase across 125 commits dropped this entry once**, because `rerere` auto-resolved the
   WORKLOG conflict by taking main's side. Worth knowing for the next long-lived branch: a
   documentation file is exactly the kind of conflict a cached resolution gets silently wrong.
+
+---
+
+### [CAL-GATES-003] Close the Calendar's last open gate (CAL-17)
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-05
+- **Completed**: 2026-08-05
+- **Priority**: P1
+- **Closes**: CAL-17 (launch-blocker) in `docs/engineering/launch-compliance.json`.
+- **Summary**: Audited `docs/engineering/launch-compliance.json`/`.md` for the concrete, currently-open
+  Calendar gates rather than re-litigating the production-launch plan's general calendar complaints
+  (most of which — the 10% viewport floor, duplicate date labels, minimum text size, two calendars on
+  screen at once, the New button wrapping — were already closed by the round-1/2/3 rebuild documented
+  in `docs/design/audits/2026-08-02-calendar-round-{1,2,3}.md` and CAL-GATES-002/CAL-CONTROLS-001/
+  CAL-CANVAS-001/CAL-INTEGRATE-001 below). The Calendar section of the compliance ledger had exactly
+  three non-`pass` rows: CAL-17 (`partial`, the only calendar `launch-blocker` still outstanding),
+  CAL-26 (`not-built`, high), and CAL-27 (`partial`, high).
+  - **CAL-17 — genuinely still broken, fixed.** `scheduling-canvas-header.tsx` marked today's lane
+    header with a solid `bg-primary` chip. Measured against the real theme tokens: 5.706:1 (light) /
+    8.084:1 (dark) contrast against the canvas — well above an event block's own fill (~1.7–2.27:1,
+    the recipe `scheduling-item-surface.ts` uses), so the day badge, not an event, was the actual
+    highest-contrast fill on the page, which is exactly what CAL-17's acceptance forbids. Swapped it
+    for the existing `primary-container`/`on-primary-container` MD3 pair, already used elsewhere in
+    this surface for lower-emphasis emphasis states: 1.257:1 (light) / 1.293:1 (dark) against the
+    canvas — below an event's own fill in both themes — while the digit stays legible at 10.212:1 /
+    8.767:1. No geometry, token, or dependency changes; only the two Tailwind classes on one `<span>`.
+  - **CAL-26 — not a product defect, left open.** Its acceptance is a documentation-existence check
+    ("a document names five distinct subagent workstreams"), not a UI/behavior requirement. The
+    calendar itself is fully rebuilt and gated; retroactively writing a document to claim five
+    subagents worked on it would be fabricating a record to satisfy a checkbox, not fixing anything
+    broken, so it was left as `not-built` rather than gamed.
+  - **CAL-27 — a reasoned, already-disclosed trade-off, left open.** The route deliberately does not
+    compose `PageHeader` because doing so would reintroduce the vertical chrome CAL-16 exists to bound
+    and a second rendering of the date CAL-18/CAL-19 forbid — a genuine conflict between two of the
+    plan's own acceptance criteria, already recorded as a conflict rather than silently resolved.
+    Forcing `PageHeader` in to close CAL-27 would very likely regress CAL-16/18/19, all of which
+    currently pass, so it was left alone.
+  - Updated `docs/engineering/launch-compliance.json`'s CAL-17 entry (`status: pass`, new evidence and
+    notes) and hand-edited the derived `docs/engineering/launch-compliance.md` to match — removed
+    CAL-17 from the master launch-blockers table, flipped its row in the Calendar section table, and
+    adjusted the Summary/launch-blocker counts (120 pass / 128 partial / 98 launch-blockers
+    outstanding, Calendar section now 0 launch-blockers outstanding). Ran
+    `pnpm exec tsx scripts/launch-scorecard.ts` first to confirm what a full regeneration would say;
+    it revealed the checked-in `.md` was already stale against `.json` independent of this change
+    (other sessions' JSON edits had accumulated without a re-render — true JSON-derived totals were
+    134 pass / 121 partial / 95 launch-blockers before this fix, not the 119/129/99 the checked-in
+    `.md` claimed). Reconciling that pre-existing, unrelated drift is out of this task's scope, so the
+    `.md` edit here applies the correct delta on top of the `.md` as it stood at `HEAD`, not a full
+    regeneration — flagged here so whoever owns the ledger next knows a full
+    `pnpm exec tsx scripts/launch-scorecard.ts && pnpm exec prettier --write docs/engineering/launch-compliance.md`
+    is still owed separately.
+- **Files Changed**: `apps/web/src/components/scheduling/scheduling-canvas-header.tsx`,
+  `apps/web/tests/scheduling/scheduling-lane-heading.test.tsx`,
+  `apps/web/tests/scheduling/scheduling-item-surface.test.ts` (new "today's lane-header chip"
+  contrast cases, measured against the real tokens the same way the existing event-fill cases are),
+  `docs/engineering/launch-compliance.json`, `docs/engineering/launch-compliance.md`.
+- **Validation**: `apps/web` vitest — `tests/scheduling` + `tests/calendar` (52 files / 504 tests) and
+  `packages/test-utils` design-token-policy suite (8 tests) all pass. `tsc --noEmit`, `eslint`, and
+  `prettier --check` clean on every touched file.
+- **Learnings**: The compliance ledger's own generator (`scripts/launch-scorecard.ts`) is the
+  authoritative way to check whether a checked-in `.md` still matches the checked-in `.json` — running
+  it (even without committing its output) is a fast, free way to catch this kind of silent drift
+  before trusting a document's stated counts.
 
 ---
 

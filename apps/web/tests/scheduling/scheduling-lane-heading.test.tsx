@@ -46,7 +46,7 @@ describe('SchedulingCanvas lane headings', () => {
     expect(document.body.textContent).not.toMatch(/Aug|August|2026/);
   });
 
-  it('marks only today with a filled day chip', () => {
+  it('marks only today with a tonal day chip, not the solid highest-contrast fill', () => {
     render(
       <SchedulingCanvas
         displayTimezone="UTC"
@@ -60,7 +60,12 @@ describe('SchedulingCanvas lane headings', () => {
     const marked = document.querySelectorAll('[data-schedule-lane-today]');
     expect(marked).toHaveLength(1);
     expect(marked[0]).toHaveTextContent('3');
-    expect(marked[0]).toHaveClass('bg-primary', 'text-on-primary');
+    // CAL-17: `bg-primary` measured 5.7:1 (light) / 8.1:1 (dark) against the canvas — higher contrast
+    // than an event's own fill (~1.7:1), which made today's badge outrank events for the eye. The
+    // tonal container is a step *below* an event's fill; see scheduling-item-surface.test.ts's "today
+    // badge" case for the measured ratios.
+    expect(marked[0]).toHaveClass('bg-primary-container', 'text-on-primary-container');
+    expect(marked[0]).not.toHaveClass('bg-primary', 'text-on-primary');
   });
 
   it('marks no lane when the canvas was given no clock', () => {

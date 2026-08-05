@@ -63,6 +63,29 @@ describe('RealSlackObserver.verifySignature', () => {
   it('rejects missing headers', () => {
     expect(observer.verifySignature({ rawBody: '{}', headers: {} })).toBe(false);
   });
+
+  it('rejects a non-numeric timestamp', () => {
+    const body = '{}';
+    expect(
+      observer.verifySignature({
+        rawBody: body,
+        headers: {
+          'x-slack-signature': sign(body, 'not-a-number'),
+          'x-slack-request-timestamp': 'not-a-number',
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('rejects a signature of the wrong byte length outright', () => {
+    const ts = recentTs();
+    expect(
+      observer.verifySignature({
+        rawBody: '{}',
+        headers: { 'x-slack-signature': 'v0=short', 'x-slack-request-timestamp': ts },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('RealSlackObserver.route', () => {
@@ -80,6 +103,10 @@ describe('RealSlackObserver.route', () => {
 
   it('returns null for the url_verification handshake', () => {
     expect(observer.route({ type: 'url_verification', challenge: 'c' })).toBeNull();
+  });
+
+  it('returns null for a non-object payload', () => {
+    expect(observer.route('not-json')).toBeNull();
   });
 });
 
@@ -236,5 +263,59 @@ describe('RealSlackObserver.normalize', () => {
         receivedAt: RECEIVED_AT,
       }),
     ).toEqual([]);
+  });
+
+  it('maps a reaction_added event to a reaction-kind draft', () => {
+    const [obs] = observer.normalize({
+      eventType: 'reaction_added',
+      payload: {
+        event: { type: 'reaction_added', user: 'U1', channel: 'C5', reaction: 'thumbsup' },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.kind).toBe('reaction');
+    expect(obs?.title).toBe('New Slack reaction');
+  });
+
+  it('falls back to a generic detail when a message/app_mention event carries no channel', () => {
+    const [obs] = observer.normalize({
+      eventType: 'message',
+      payload: { event: { type: 'message', user: 'U1', text: 'no channel here' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.entity).toBeUndefined();
+    expect(obs?.detail?.schema).toBe('generic');
+  });
+
+  it('titles a group (mpim) message and carries the channel type on the detail', () => {
+    const [obs] = observer.normalize({
+      eventType: 'message',
+      payload: {
+        event: { type: 'message', user: 'U1', channel: 'G1', channel_type: 'mpim', text: 'hey' },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.title).toBe('Slack group message');
+    expect(obs?.detail).toMatchObject({ channelType: 'mpim' });
+  });
+
+  it('titles an unmapped event with no inner type as "Slack event: unknown"', () => {
+    const [obs] = observer.normalize({
+      eventType: 'unknown',
+      payload: { event: { user: 'U1', channel: 'C5' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.title).toBe('Slack event: unknown');
+  });
+
+  it('falls back occurredAt to receivedAt when the event ts is not a valid number', () => {
+    const [obs] = observer.normalize({
+      eventType: 'message',
+      payload: {
+        event: { type: 'message', user: 'U1', channel: 'C5', text: 'hi', ts: 'not-a-number' },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(obs?.occurredAt).toBe(RECEIVED_AT);
   });
 });

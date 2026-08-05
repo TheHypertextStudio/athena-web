@@ -57,11 +57,30 @@ describe('RealDiscordObserver.verifySignature', () => {
       }),
     ).toBe(false);
   });
+
+  it('rejects everything when the configured public key does not parse as Ed25519', () => {
+    // A malformed `DISCORD_PUBLIC_KEY` (wrong length / not real key material) — `key()` must
+    // swallow the parse failure and cache `null` rather than throwing out of the pure edge.
+    const badObserver = new RealDiscordObserver({ publicKey: 'not-a-real-public-key' });
+    const body = JSON.stringify({ type: 1 });
+    const ts = '1700000000';
+    expect(
+      badObserver.verifySignature({
+        rawBody: body,
+        headers: { 'x-signature-ed25519': sign(body, ts), 'x-signature-timestamp': ts },
+      }),
+    ).toBe(false);
+  });
 });
 
 describe('RealDiscordObserver.route', () => {
   it('returns null for the type:1 PING handshake', () => {
     expect(observer.route({ type: 1 })).toBeNull();
+  });
+
+  it('returns null for a non-object payload', () => {
+    expect(observer.route(null)).toBeNull();
+    expect(observer.route('not-json')).toBeNull();
   });
 
   it('routes a relayed message by guild id + message id', () => {
@@ -73,6 +92,16 @@ describe('RealDiscordObserver.route', () => {
     expect(r?.externalWorkspaceId).toBe('G1');
     expect(r?.externalEventId).toBe('M1');
     expect(r?.eventType).toBe('MESSAGE_CREATE');
+  });
+
+  it('falls back to the raw body when there is no relay envelope, defaulting the event type and omitting the workspace id', () => {
+    const r = observer.route({ id: 'M42' });
+    expect(r).toEqual({ externalEventId: 'M42', eventType: 'MESSAGE_CREATE' });
+    expect(r).not.toHaveProperty('externalWorkspaceId');
+  });
+
+  it('returns null when the relayed message carries no id', () => {
+    expect(observer.route({ t: 'TYPING_START', d: { guild_id: 'G1' } })).toBeNull();
   });
 });
 
@@ -130,5 +159,97 @@ describe('RealDiscordObserver.normalize', () => {
     expect(
       observer.normalize({ eventType: 'PING', payload: { type: 1 }, receivedAt: RECEIVED_AT }),
     ).toEqual([]);
+  });
+
+  it('falls back to a generic detail (keeping the summary) when the message carries no channel', () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: { d: { id: 'M10', content: 'no channel field at all' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft?.entity).toBeUndefined();
+    expect(draft?.summary).toBe('no channel field at all');
+    expect(draft?.detail).toEqual({
+      schema: 'generic',
+      title: 'New Discord message',
+      summary: 'no channel field at all',
+      url: null,
+    });
+  });
+
+  it('falls back to a generic detail with no summary when the message carries no channel or content', () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: { d: { id: 'M11' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft).not.toHaveProperty('summary');
+    expect(draft?.entity).toBeUndefined();
+    expect(draft?.detail).toEqual({
+      schema: 'generic',
+      title: 'New Discord message',
+      summary: null,
+      url: null,
+    });
+  });
+
+  it('resolves the channel from the legacy `channel` field when `channel_id` is absent', () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: { d: { id: 'M12', channel: 'CHAN99', content: 'via legacy field' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft?.entity).toEqual({ kind: 'thread', externalId: 'CHAN99' });
+    expect(draft?.detail).toMatchObject({ channelId: 'CHAN99' });
+  });
+
+  it('falls back the dedupe key to the receivedAt timestamp when the message carries no id', () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: { d: { channel_id: 'C1', content: 'no id here' } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft?.dedupeKey).toBe(`discord:${RECEIVED_AT}`);
+  });
+
+  it('omits the actor entirely when the author record carries no id', () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: {
+        d: { id: 'M13', channel_id: 'C1', content: 'hi', author: { username: 'nouser' } },
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft).not.toHaveProperty('actor');
+  });
+
+  it('omits the display name when the author record carries no username/global_name', () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: { d: { id: 'M14', channel_id: 'C1', content: 'hi', author: { id: 'U8' } } },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft?.actor).toEqual({ externalId: 'U8' });
+  });
+
+  it("falls back to the message's own mentions[] when the relay did not expand mentioned_user_ids, tolerating entries with no id or no display name", () => {
+    const [draft] = observer.normalize({
+      eventType: 'MESSAGE_CREATE',
+      payload: {
+        d: {
+          id: 'M15',
+          channel_id: 'C1',
+          content: 'ping people',
+          mentions: [{ id: 'U5', username: 'has-name' }, { username: 'no-id' }, { id: 'U6' }],
+        },
+        // No `mentioned_user_ids` expansion field — forces the fallback to `d.mentions`.
+      },
+      receivedAt: RECEIVED_AT,
+    });
+    expect(draft?.kind).toBe('mention');
+    expect(draft?.participants).toEqual([
+      { externalId: 'U5', displayName: 'has-name' },
+      { externalId: 'U6' },
+    ]);
   });
 });

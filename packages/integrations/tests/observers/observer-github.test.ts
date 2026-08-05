@@ -317,4 +317,10 @@ describe('RealGitHubObserver.normalize', () => {
       observer.normalize({ eventType: 'unknown', payload: {}, receivedAt: RECEIVED_AT }),
     ).toEqual([]);
   });
+
+  it('returns [] for a non-object payload', () => {
+    expect(
+      observer.normalize({ eventType: 'issues', payload: 'not-json', receivedAt: RECEIVED_AT }),
+    ).toEqual([]);
+  });
 });

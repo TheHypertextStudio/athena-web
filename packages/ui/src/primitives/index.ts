@@ -126,9 +126,11 @@ export { focusRing, focusRingInset } from './focus';
  * its own `min-h-*`/`rounded-*`/`px-*` set — `design-token-scan.ts` fails the build if it does.
  */
 export {
+  DEFAULT_MENU_SECTIONS,
   MENU_INDICATOR_GUTTER,
   MENU_METRICS,
   type MenuItemClassOptions,
+  type MenuSections,
   type MenuVariant,
   menuBadge,
   menuCheckedItemClass,

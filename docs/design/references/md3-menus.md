@@ -103,6 +103,31 @@ tokens specify for the first and last rows.
 `between-space` is the gap between elements inside a row — leading icon to label, label to
 trailing content.
 
+`gap` (2dp) sits between **every row**, not only between sections. That is what gives a row a
+corner radius at all: the rows are discrete 4dp pills stacked 2dp apart on the container fill, not
+a flush list. The measurements figure brackets a row at 48dp, which is `menu-item.height` (44dp)
+plus that 2dp above and below.
+
+### Sections: gap or divider
+
+A vertical menu separates its sections one of two ways, and they are alternatives:
+
+| Treatment | What renders                                                                                                                                    |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Divider   | One filled container, with a 1dp rule between sections.                                                                                         |
+| Gap       | The container stops painting; **each section paints its own filled block**, and the surface behind the menu shows through the gap between them. |
+
+The gap treatment is the part most easily got wrong. The 2dp gap only reads because the blocks
+either side of it are filled — a transparent wrapper with a 2dp margin, sitting inside a container
+that is already one solid block, renders nothing whatsoever. Under this layout the group takes the
+container's fill, padding, elevation, and clipping; the container keeps only its size, stacking,
+motion, and scrolling.
+
+**Deviation.** `group.shape` is `corner.small` (8dp), and Docket uses `corner.medium` (12dp)
+instead. The measurements figure marks every one of these block corners 12, and geometry forces it
+regardless: the first and last rows inside a group take `menu-item.first-child.shape` (12dp), and a
+12dp row cannot sit inside an 8dp block without its corner overhanging the one meant to clip it.
+
 ### Typography
 
 | Element                              | Type role     |
@@ -199,27 +224,14 @@ shape. Docket tints it with the mapping's supporting-text role.
 for it. Docket uses `--dur-base` / `--ease-out`, the same pair the menu's open and close
 animation already uses.
 
-## Menu (baseline) — legacy, recorded for reference
+## Menu (baseline) — deprecated, do not build against it
 
-Docket does **not** build against this. It is here so that a future reader who finds a stray
-4dp corner or a 48dp row knows which spec it came from.
+Docket does not implement the baseline menu and no surface may reintroduce it. It is M3's legacy
+variant: square 4dp corners, 48dp rows, 24dp icons, and `secondary-container` for selection. The
+last of those is the one that matters, because it is the value this codebase had silently drifted
+onto — a reader who finds a stray `secondary-container` on a menu row is looking at the baseline
+spec, not at a design decision.
 
-| Attribute                         | Value                                            |
-| --------------------------------- | ------------------------------------------------ |
-| Container width                   | 112dp min, 280dp max                             |
-| Container shape                   | `corner.extra-small` — 4dp                       |
-| Container colour                  | `surface-container`                              |
-| Container elevation               | `level2`                                         |
-| List item height                  | 48dp                                             |
-| Left/right padding                | 12dp                                             |
-| Padding between elements in a row | 12dp                                             |
-| Leading/trailing icon size        | 24dp                                             |
-| Label text                        | `label-large`                                    |
-| Divider height / colour           | 1dp / `surface-variant`                          |
-| Divider top/bottom padding        | 8dp                                              |
-| Selected container / content      | `secondary-container` / `on-secondary-container` |
-| State layers                      | hover 0.08, focus 0.10, pressed 0.10             |
-
-The two specs disagree on container shape (4dp vs 16dp), row height (48dp vs 44dp), icon size
-(24dp vs 20dp), and — the one most likely to be mistaken for a bug — the selection colour role,
-which is `secondary-container` in baseline and `tertiary-container` in expressive.
+The full baseline token set is one click away in the spec if anyone ever needs to decode an old
+screenshot. It is deliberately not transcribed here: a table in this file reads as an option, and
+this is not one.

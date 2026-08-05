@@ -572,8 +572,29 @@ Selected rows use **`tertiary-container`**, which is the Expressive spec's selec
 baseline menu says `secondary-container`; that is the legacy spec and is the value this drifted
 onto. Vibrant escalates selection to solid `tertiary`.
 
-`DropdownMenuGroup` renders the spec's grouped layout: an 8dp-radius block, 2dp of padding, 2dp
-between groups.
+### Sections: gap or divider, never both
+
+`DropdownMenuContent` takes `sections`: `'divider'` (the default) or `'gap'`. They are the spec's
+two alternatives, and a menu that uses both reads as two competing groupings of the same rows.
+
+Under `divider`, the container paints one filled surface and `DropdownMenuSeparator` draws a
+hairline between sections; `DropdownMenuGroup` is a bare semantic wrapper that renders nothing.
+
+Under `gap`, that inverts. The container gives up its fill, padding, elevation, and clipping, and
+every `DropdownMenuGroup` paints its own 12dp block instead — so the surface behind the menu shows
+through the 2dp between them. That backdrop is the whole effect. This was previously written as a
+transparent 8dp wrapper with a 2dp margin, which rendered nothing at all against an already-solid
+container, and the grouped layout was in practice unavailable.
+
+Rows sit 2dp apart in both treatments. That is `md.comp.menus.gap`, and it is why a row has a
+corner radius: the rows are discrete pills on the container fill, not a flush list.
+
+### The baseline menu is not an option
+
+Docket implements the Expressive vertical menu only. The baseline variant — square 4dp corners,
+48dp rows, 24dp icons, `secondary-container` selection — is M3 legacy and no surface may
+reintroduce it. If you find a `secondary-container` on a menu row, that is the baseline spec
+leaking back in, not a decision.
 
 ### States
 

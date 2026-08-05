@@ -21,6 +21,7 @@ import {
 import { FIELD_VARIANTS, Field, Input, Select, Textarea } from '../../src/primitives/field';
 import { Toolbar } from '../../src/primitives/layout';
 import {
+  DEFAULT_MENU_SECTIONS,
   MENU_INDICATOR_GUTTER,
   MENU_METRICS,
   type MenuVariant,
@@ -507,11 +508,41 @@ describe('MD3 menu spec — layout and shape', () => {
     expect(menuItemClass('standard', { selected: true })).toContain('rounded-corner-md');
   });
 
-  it('groups rows into a corner.small block with 2dp padding and a 2dp gap', () => {
-    // group.shape corner.small 8dp, group.padding space25 2dp, gap space25 2dp.
-    expect(menuGroup('standard')).toContain('rounded-corner-sm');
-    expect(menuGroup('standard')).toContain('p-0.5');
-    expect(menuGroup('standard')).toContain('not-first:mt-0.5');
+  it('stacks rows 2dp apart, which is what gives a row its corner in the first place', () => {
+    // md.comp.menus.gap = space25 = 2dp, between EVERY row rather than only between sections.
+    // The measurements figure's 48dp row bracket is 44dp of menu-item.height plus that gap top
+    // and bottom. A flush list would not need a 4dp corner on each row.
+    expect(menuContentClass('standard')).toContain('gap-0.5');
+    expect(menuContentClass('standard')).toContain('flex flex-col');
+  });
+
+  it('paints each section as its own filled block under the gap layout', () => {
+    // This is the whole effect: the container stops painting, every group paints instead, and the
+    // surface behind the menu shows through between them. A transparent wrapper with a 2dp margin
+    // renders nothing, which is what this was.
+    const grouped = menuGroup('standard', 'gap');
+    expect(grouped).toContain('bg-surface-container-low');
+    expect(grouped).toContain('shadow-level2');
+    expect(grouped).toContain('rounded-corner-md');
+    expect(grouped).toContain('p-0.5');
+    expect(grouped).toContain('gap-0.5');
+    expect(menuGroup('vibrant', 'gap')).toContain('bg-tertiary-container');
+  });
+
+  it('hands the container fill to the groups rather than letting both paint', () => {
+    const container = menuContentClass('standard', 'md', 'gap');
+    expect(container).toContain('bg-transparent');
+    expect(container).not.toContain('shadow-level2');
+    expect(container).not.toContain('bg-surface-container-low');
+    // The divider layout is the inverse: the container paints and a group is a bare wrapper.
+    expect(menuContentClass('standard', 'md', 'divider')).toContain('bg-surface-container-low');
+    expect(menuContentClass('standard', 'md', 'divider')).toContain('shadow-level2');
+    expect(menuGroup('standard', 'divider')).toBe('');
+  });
+
+  it('defaults to the divider layout', () => {
+    expect(DEFAULT_MENU_SECTIONS).toBe('divider');
+    expect(menuContentClass('standard')).toBe(menuContentClass('standard', 'md', 'divider'));
   });
 
   it('takes container.elevation from the MD3 level scale, not a Tailwind shadow', () => {

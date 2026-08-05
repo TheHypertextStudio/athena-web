@@ -114,11 +114,34 @@ export const MENU_WIDTH: Readonly<Record<MenuWidth, string>> = {
 export const DEFAULT_MENU_WIDTH: MenuWidth = 'md';
 
 /**
+ * How a menu separates its sections. The spec offers exactly these two, and they are alternatives
+ * rather than things to combine.
+ *
+ * @remarks
+ * - `divider` — one filled container with a hairline rule between sections. The default, and what
+ *   almost every menu in this product wants.
+ * - `gap` — the "Vertical menu with gap" figure, also called the grouped layout. The container
+ *   stops painting and **each section paints its own filled block**, so the surface behind the
+ *   menu shows through a small gap between them. That backdrop showing through is the entire
+ *   effect; a transparent wrapper with a 2dp margin renders nothing at all, which is what this
+ *   used to be.
+ */
+export type MenuSections = 'divider' | 'gap';
+
+/** The default section treatment when a menu does not ask for one. */
+export const DEFAULT_MENU_SECTIONS: MenuSections = 'divider';
+
+/**
  * Structural classes for the floating menu surface, shared by both mappings.
  *
  * @remarks
  * Carries `container.shape` (`corner.large`, 16dp), the 4dp container padding,
  * `container.elevation` (`level2`), and the open/close motion.
+ *
+ * **Row rhythm.** `md.comp.menus.gap` is 2dp, and it sits between every row, not only between
+ * sections — which is why a row has a corner radius at all. A flush list would not need one. The
+ * rows are discrete 4dp pills stacked 2dp apart on the container fill, and the measurements
+ * figure's 48dp row bracket is that: the 44dp `menu-item.height` plus 2dp of gap top and bottom.
  *
  * **Shape morphing.** The spec gives a menu two container shapes: `active.container.shape`
  * (16dp) while it holds focus, and `inactive.container.shape` (8dp) once it has revealed a
@@ -132,7 +155,7 @@ export const DEFAULT_MENU_WIDTH: MenuWidth = 'md';
  * step, and the spec's colour list for menus has no outline role in it.
  */
 const menuContentBase =
-  'z-[120] max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-corner-lg p-1 shadow-level2 ' +
+  'z-[120] max-w-[calc(100vw-1.5rem)] flex flex-col gap-0.5 rounded-corner-lg ' +
   'has-data-[state=open]:rounded-corner-sm transition-[border-radius] ' +
   'data-[state=open]:animate-in data-[state=closed]:animate-out ' +
   'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 ' +
@@ -141,12 +164,25 @@ const menuContentBase =
   'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 ' +
   'duration-(--dur-base) ease-(--ease-out)';
 
+/** The container's own fill, padding, and elevation — the parts a grouped menu hands to its groups. */
+const MENU_SURFACE: Readonly<Record<MenuVariant, string>> = {
+  standard: 'bg-surface-container-low text-on-surface',
+  vibrant: 'bg-tertiary-container text-on-tertiary-container',
+};
+
 /**
  * Full class string for the menu container surface.
  *
  * @param variant - Which colour mapping to render in.
  * @param width - One of the four {@link MENU_WIDTH} steps. Defaults to `md`.
+ * @param sections - How sections separate. See {@link MenuSections}.
  * @returns The structural base plus this mapping's container and default content roles.
+ *
+ * @remarks
+ * Under `sections: 'gap'` the container keeps its size, stacking, motion, and scroll behaviour but
+ * gives up its fill, padding, elevation, and clipping — {@link menuGroup} takes all four, once per
+ * section. The container cannot keep them: an `overflow-hidden` fill spanning the whole menu is
+ * precisely the thing a gap has to cut through.
  *
  * @example
  * ```tsx
@@ -156,13 +192,18 @@ const menuContentBase =
 export function menuContentClass(
   variant: MenuVariant,
   width: MenuWidth = DEFAULT_MENU_WIDTH,
+  sections: MenuSections = DEFAULT_MENU_SECTIONS,
 ): string {
   return cn(
     menuContentBase,
     MENU_WIDTH[width],
-    variant === 'vibrant'
-      ? 'bg-tertiary-container text-on-tertiary-container'
-      : 'bg-surface-container-low text-on-surface',
+    sections === 'gap'
+      ? // Colour still cascades to the rows; only the painted surface moves to the groups.
+        cn(
+          'bg-transparent',
+          variant === 'vibrant' ? 'text-on-tertiary-container' : 'text-on-surface',
+        )
+      : cn('overflow-hidden p-1 shadow-level2', MENU_SURFACE[variant]),
   );
 }
 
@@ -364,19 +405,32 @@ export function menuLabel(variant: MenuVariant): string {
 }
 
 /**
- * Class string for a group wrapper — the spec's "Grouped" layout configuration.
+ * Class string for a group — one painted section of a menu in the `gap` layout.
  *
  * @param variant - Which colour mapping to render in.
- * @returns The group's shape and padding.
+ * @param sections - The enclosing menu's section treatment. Under `divider` a group is a pure
+ *   semantic wrapper and paints nothing, so the two treatments never stack.
+ * @returns The group's surface, shape, padding, and row rhythm.
  *
  * @remarks
- * `group.shape` is `corner.small` (8dp) and `group.padding` is 2dp, with a 2dp `gap` between
- * groups. A group is a shape, not a colour: it collects rows into one rounded block so a long
- * menu reads as sections without needing a rule between them. The rows inside keep their own
- * 4dp corners and the group's first and last rows still take the 12dp edge corner.
+ * A group is a **surface**, not just a shape. It carries the fill, the padding, the elevation, and
+ * the clipping that the container gives up, which is what puts the backdrop in the gap between two
+ * sections. Written as a transparent 8dp wrapper — which is what this was — it renders nothing
+ * whatsoever, because an unfilled corner against an already-solid container is invisible.
+ *
+ * The corner is `corner.medium` (12dp), not the 8dp `md.comp.menus.group.shape` names. Two reasons
+ * to prefer the figure here over the token: the measurements figure marks every one of these block
+ * corners 12, and geometry forces it anyway — the first and last rows inside a group take
+ * `menu-item.first-child.shape` (12dp), and a 12dp row cannot sit inside an 8dp block without its
+ * corner overhanging the one that is meant to clip it. Recorded in
+ * `docs/design/references/md3-menus.md` as a deliberate deviation.
  */
-export function menuGroup(_variant: MenuVariant): string {
-  return 'rounded-corner-sm p-0.5 not-first:mt-0.5';
+export function menuGroup(variant: MenuVariant, sections: MenuSections = 'gap'): string {
+  if (sections === 'divider') return '';
+  return cn(
+    'flex flex-col gap-0.5 overflow-hidden rounded-corner-md p-0.5 shadow-level2',
+    MENU_SURFACE[variant],
+  );
 }
 
 /**
@@ -396,7 +450,8 @@ export function menuGroup(_variant: MenuVariant): string {
  * *between* rows rather than a seam across the container.
  */
 export function menuSeparator(_variant: MenuVariant): string {
-  return 'bg-outline-variant my-2 h-px';
+  // 6px here plus the container's own 2dp row gap is the baseline spec's 8dp of divider padding.
+  return 'bg-outline-variant my-1.5 h-px';
 }
 
 /**

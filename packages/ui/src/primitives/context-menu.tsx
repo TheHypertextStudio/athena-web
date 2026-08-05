@@ -56,6 +56,7 @@ import { cn } from '../lib/utils';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 import {
   MENU_INDICATOR_GUTTER,
+  type MenuSections,
   type MenuVariant,
   type MenuWidth,
   menuBadge,
@@ -82,6 +83,18 @@ function useContextMenuVariant(): MenuVariant {
   return React.useContext(ContextMenuVariantContext);
 }
 
+/**
+ * File-local channel carrying the section treatment down to every group and separator, for the
+ * same reason the variant has one: the choice is made once on the content, and a group has to
+ * know whether it is the thing painting the surface or a bare semantic wrapper.
+ */
+const ContextMenuSectionsContext = React.createContext<MenuSections>('divider');
+
+/** Read the section treatment published by the nearest {@link ContextMenuContent}. */
+function useContextMenuSections(): MenuSections {
+  return React.useContext(ContextMenuSectionsContext);
+}
+
 /** Root controller for an open/closed context menu (Radix passthrough). */
 export const ContextMenu = ContextMenuPrimitive.Root;
 
@@ -100,7 +113,13 @@ export function ContextMenuGroup({
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Group>): React.JSX.Element {
   const variant = useContextMenuVariant();
-  return <ContextMenuPrimitive.Group className={cn(menuGroup(variant), className)} {...props} />;
+  const sections = useContextMenuSections();
+  return (
+    <ContextMenuPrimitive.Group
+      className={cn(menuGroup(variant, sections), className)}
+      {...props}
+    />
+  );
 }
 
 /** Portal that renders menu content into the document body (Radix passthrough). */
@@ -175,11 +194,18 @@ export function ContextMenuContent({
   className,
   collisionPadding = OVERLAY_COLLISION_PADDING,
   width = 'md',
+  sections = 'divider',
   variant = 'standard',
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   /** Tonal family for this menu and all its rows. Defaults to the surface-based `'standard'`. */
   variant?: MenuVariant;
+  /**
+   * How this menu separates its sections: a hairline `divider` (the default) or a `gap`, which
+   * splits the menu into separately painted blocks. Pick one — they are alternatives, and a menu
+   * that uses both reads as two competing groupings of the same rows.
+   */
+  sections?: MenuSections;
   /**
    * One of the four {@link MENU_WIDTH} steps. Defaults to `md` (224px). Pass a step rather than
    * a `min-w-*`/`w-*` class: the open set produced seven different widths across the product.
@@ -188,18 +214,20 @@ export function ContextMenuContent({
 }): React.JSX.Element {
   return (
     <ContextMenuVariantContext.Provider value={variant}>
-      <ContextMenuPrimitive.Portal>
-        <ContextMenuPrimitive.Content
-          collisionPadding={collisionPadding}
-          className={cn(
-            menuContentClass(variant, width),
-            // Scrollable within the viewport, growing from the Radix transform origin.
-            'max-h-[var(--radix-context-menu-content-available-height)] origin-[var(--radix-context-menu-content-transform-origin)] overflow-x-hidden overflow-y-auto',
-            className,
-          )}
-          {...props}
-        />
-      </ContextMenuPrimitive.Portal>
+      <ContextMenuSectionsContext.Provider value={sections}>
+        <ContextMenuPrimitive.Portal>
+          <ContextMenuPrimitive.Content
+            collisionPadding={collisionPadding}
+            className={cn(
+              menuContentClass(variant, width, sections),
+              // Scrollable within the viewport, growing from the Radix transform origin.
+              'max-h-[var(--radix-context-menu-content-available-height)] origin-[var(--radix-context-menu-content-transform-origin)] overflow-x-hidden overflow-y-auto',
+              className,
+            )}
+            {...props}
+          />
+        </ContextMenuPrimitive.Portal>
+      </ContextMenuSectionsContext.Provider>
     </ContextMenuVariantContext.Provider>
   );
 }

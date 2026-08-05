@@ -52,6 +52,7 @@ import { cn } from '../lib/utils';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 import {
   MENU_INDICATOR_GUTTER,
+  type MenuSections,
   type MenuVariant,
   type MenuWidth,
   menuBadge,
@@ -78,6 +79,18 @@ function useDropdownMenuVariant(): MenuVariant {
   return React.useContext(DropdownMenuVariantContext);
 }
 
+/**
+ * File-local channel carrying the section treatment down to every group and separator, for the
+ * same reason the variant has one: the choice is made once on the content, and a group has to
+ * know whether it is the thing painting the surface or a bare semantic wrapper.
+ */
+const DropdownMenuSectionsContext = React.createContext<MenuSections>('divider');
+
+/** Read the section treatment published by the nearest {@link DropdownMenuContent}. */
+function useDropdownMenuSections(): MenuSections {
+  return React.useContext(DropdownMenuSectionsContext);
+}
+
 /** Root controller for an open/closed dropdown menu (Radix passthrough). */
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 
@@ -97,7 +110,13 @@ export function DropdownMenuGroup({
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Group>): React.JSX.Element {
   const variant = useDropdownMenuVariant();
-  return <DropdownMenuPrimitive.Group className={cn(menuGroup(variant), className)} {...props} />;
+  const sections = useDropdownMenuSections();
+  return (
+    <DropdownMenuPrimitive.Group
+      className={cn(menuGroup(variant, sections), className)}
+      {...props}
+    />
+  );
 }
 
 /** Portal that renders menu content into the document body (Radix passthrough). */
@@ -168,11 +187,18 @@ export function DropdownMenuContent({
   sideOffset = 4,
   collisionPadding = OVERLAY_COLLISION_PADDING,
   width = 'md',
+  sections = 'divider',
   variant = 'standard',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   /** Tonal family for this menu and all its rows. Defaults to the surface-based `'standard'`. */
   variant?: MenuVariant;
+  /**
+   * How this menu separates its sections: a hairline `divider` (the default) or a `gap`, which
+   * splits the menu into separately painted blocks. Pick one — they are alternatives, and a menu
+   * that uses both reads as two competing groupings of the same rows.
+   */
+  sections?: MenuSections;
   /**
    * One of the four {@link MENU_WIDTH} steps. Defaults to `md` (224px). Pass a step rather than
    * a `min-w-*`/`w-*` class: the open set produced seven different widths across the product.
@@ -181,19 +207,21 @@ export function DropdownMenuContent({
 }): React.JSX.Element {
   return (
     <DropdownMenuVariantContext.Provider value={variant}>
-      <DropdownMenuPrimitive.Portal>
-        <DropdownMenuPrimitive.Content
-          sideOffset={sideOffset}
-          collisionPadding={collisionPadding}
-          className={cn(
-            menuContentClass(variant, width),
-            // Scrollable within the available viewport height Radix measures for us.
-            'max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-x-hidden overflow-y-auto',
-            className,
-          )}
-          {...props}
-        />
-      </DropdownMenuPrimitive.Portal>
+      <DropdownMenuSectionsContext.Provider value={sections}>
+        <DropdownMenuPrimitive.Portal>
+          <DropdownMenuPrimitive.Content
+            sideOffset={sideOffset}
+            collisionPadding={collisionPadding}
+            className={cn(
+              menuContentClass(variant, width, sections),
+              // Scrollable within the available viewport height Radix measures for us.
+              'max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-x-hidden overflow-y-auto',
+              className,
+            )}
+            {...props}
+          />
+        </DropdownMenuPrimitive.Portal>
+      </DropdownMenuSectionsContext.Provider>
     </DropdownMenuVariantContext.Provider>
   );
 }

@@ -180,7 +180,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
           // It used to be its own panel — surface-container-high, a 14px corner, shadow-2xl, and a
           // hardcoded 150ms — sitting at z-50, below the z-[120] overlay layer it belongs to.
           menuContentClass('standard'),
-          'relative flex max-h-[70vh] w-full max-w-xl flex-col p-0',
+          // `gap-0` because the menu's 2dp row rhythm is for rows: the palette's three children
+          // are a bordered header, the scrolling list, and a bordered footer, and a gap between
+          // them would float those rules off the panel edges.
+          'relative flex max-h-[70vh] w-full max-w-xl flex-col gap-0 p-0',
         )}
       >
         {/* Search input + scope toggle */}

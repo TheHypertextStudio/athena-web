@@ -137,7 +137,13 @@ export function FilterToolbar<T>({
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
+      {/*
+        Persistent chrome holds one row at every width. This row used to wrap, which made the bar's
+        height depend on the viewport and pushed content below the fold as controls reflowed. The
+        Filter + Display model is what makes `nowrap` safe: a surface's new capability lands inside
+        a menu, so the control count does not grow with the surface.
+      */}
+      <div className="flex min-w-0 flex-nowrap items-center gap-2">
         {leading}
 
         {filterable.length > 0 ? <AddFilterMenu fields={filterable} onAdd={addFilter} /> : null}

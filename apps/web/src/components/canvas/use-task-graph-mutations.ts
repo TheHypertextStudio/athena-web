@@ -13,13 +13,39 @@
  */
 import { dependencyEdgeId, type GraphOut, subtaskEdgeId, type TaskGraphEdge } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { optimisticPatch, queryKeys, unwrap, useApiMutation } from '@/lib/query';
 
 import { type TaskGraphScope, taskGraphScopeKey } from './scope';
+
+/**
+ * A completed edit the user can still take back, surfaced in the canvas's bottom-center strip.
+ *
+ * @remarks
+ * Removing a dependency is a destructive edit reached by a single click on a small control, so it
+ * needs a way back. A confirmation dialog would be the wrong shape here — this is a
+ * direct-manipulation canvas, and a modal in the middle of it interrupts the gesture it is meant
+ * to protect. Offering the reversal *after* the fact keeps the edit fast and still recoverable.
+ */
+export interface GraphUndo {
+  /**
+   * Application-owned label for what happened, in the past tense ("Dependency removed").
+   *
+   * @remarks
+   * Deliberately not called `message`: this is copy this module writes, never a server or
+   * exception string, and the source policy that keeps provider text out of the UI reads a
+   * rendered `.message` as exactly that.
+   */
+  label: string;
+  /** Put it back. */
+  undo: () => void;
+}
+
+/** How long the undo offer stays on screen before it lapses. */
+const UNDO_WINDOW_MS = 6000;
 
 /** The edit operations + transient error, returned by {@link useTaskGraphMutations}. */
 export interface TaskGraphMutations {
@@ -37,6 +63,10 @@ export interface TaskGraphMutations {
   error: string | null;
   /** Dismiss the current error. */
   clearError: () => void;
+  /** The most recent reversible edit, or null once taken back or lapsed. */
+  undo: GraphUndo | null;
+  /** Dismiss the undo offer without acting on it. */
+  clearUndo: () => void;
 }
 
 /** Coarse key that invalidates every scope variant of the graph at once. */
@@ -55,6 +85,31 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
   const queryClient = useQueryClient();
   const scopeKey = queryKeys.taskGraph(orgId, taskGraphScopeKey(scope));
   const [error, setError] = useState<string | null>(null);
+  const [undo, setUndo] = useState<GraphUndo | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // One live offer at a time: a second removal replaces the first rather than stacking strips.
+  const offerUndo = useCallback((next: GraphUndo) => {
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    setUndo(next);
+    undoTimer.current = setTimeout(() => {
+      undoTimer.current = null;
+      setUndo(null);
+    }, UNDO_WINDOW_MS);
+  }, []);
+
+  const clearUndo = useCallback(() => {
+    if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    undoTimer.current = null;
+    setUndo(null);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (undoTimer.current !== null) clearTimeout(undoTimer.current);
+    },
+    [],
+  );
 
   const invalidateKeys = [coarseGraphKey(orgId)] as const;
 
@@ -220,8 +275,16 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
   const removeDependency = useCallback(
     (sourceTaskId: string, targetTaskId: string) => {
       removeMutation.mutate({ sourceTaskId, targetTaskId });
+      offerUndo({
+        label: 'Dependency removed',
+        undo: () => {
+          clearUndo();
+          // The removed edge ran `source → target`, i.e. source was the blocker.
+          addMutation.mutate({ blockingTaskId: sourceTaskId, blockedTaskId: targetTaskId });
+        },
+      });
     },
-    [removeMutation],
+    [removeMutation, addMutation, offerUndo, clearUndo],
   );
   const setStateFn = useCallback(
     (taskId: string, state: string) => {
@@ -253,5 +316,7 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     createSubtask,
     error,
     clearError,
+    undo,
+    clearUndo,
   };
 }

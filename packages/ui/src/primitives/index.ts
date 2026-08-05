@@ -167,6 +167,13 @@ export {
   SheetTrigger,
 } from './sheet';
 export { Separator } from './separator';
+export {
+  Surface,
+  type SurfaceElement,
+  type SurfaceProps,
+  type SurfaceTone,
+  SURFACE_TONES,
+} from './surface';
 export { Skeleton } from './skeleton';
 export {
   Tab,

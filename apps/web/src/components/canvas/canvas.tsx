@@ -20,6 +20,7 @@ import {
   MiniMap,
   type Node,
   type NodeTypes,
+  type EdgeTypes,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
@@ -42,6 +43,8 @@ export interface CanvasProps extends GraphInteractionHandlers {
   edges: Edge[];
   /** Custom node renderers keyed by node `type`. */
   nodeTypes?: NodeTypes;
+  /** Custom edge renderers keyed by edge `type`; hosts override `default` to skin every edge. */
+  edgeTypes?: EdgeTypes;
   /** `compact` for small embeds (no minimap), `full` for the focused view. Default `full`. */
   density?: CanvasDensity;
   /** Layout flow direction (dagre rankdir). Default `LR`. */
@@ -61,15 +64,25 @@ export interface CanvasProps extends GraphInteractionHandlers {
   /** When it changes, the canvas pans/zooms to fit these node ids (e.g. search matches). */
   focusOn?: readonly string[];
   /**
-   * The largest zoom the canvas will apply, including when fitting.
+   * The largest zoom a *user* may reach by pinching or pressing the zoom-in control.
    *
    * @remarks
-   * Defaults to xyflow's own `2`. A host whose graph is a handful of large cards should pass `1`:
-   * `fitView` scales *up* as readily as down, so a sparse graph opens magnified past life size
-   * with two cards filling the viewport — the "everything feels way too zoomed in when first
-   * opened" reading. Capping at 1 makes fitting mean fitting.
+   * Deliberately separate from {@link CanvasProps.fitMaxZoom}. These used to be one number, which
+   * meant capping the automatic fit also took away the user's ability to zoom in, and leaving the
+   * user free meant a one-node graph opened at 200%.
    */
   maxZoom?: number;
+  /**
+   * The largest zoom the canvas will apply *on its own* when fitting the graph into view.
+   *
+   * @remarks
+   * `fitView` scales up as readily as down, so without a cap a graph of one or two nodes opens
+   * magnified past life size with a single card filling the viewport — the "way too zoomed in"
+   * reading. Fitting should mean fitting, so this defaults to `1`: the canvas may shrink a large
+   * graph to fit, and never enlarges one past its natural size. The user can still zoom in by hand
+   * up to {@link CanvasProps.maxZoom}.
+   */
+  fitMaxZoom?: number;
   /** Optional minimap node colorer; hosts inject any dataset-specific coloring. */
   nodeColor?: (node: Node) => string;
   /**
@@ -99,6 +112,7 @@ function CanvasInner({
   nodes: rawNodes,
   edges: rawEdges,
   nodeTypes,
+  edgeTypes,
   density = 'full',
   layoutDirection = 'LR',
   disableLayout = false,
@@ -107,6 +121,7 @@ function CanvasInner({
   highlightChains = true,
   focusOn,
   maxZoom = 2,
+  fitMaxZoom = 1,
   nodeColor,
   minimap,
   onExpand,
@@ -125,7 +140,7 @@ function CanvasInner({
 
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
   const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
-  useFitViewOnChange(focusOn);
+  useFitViewOnChange(focusOn, fitMaxZoom);
   const lod = useLodValue();
 
   return (
@@ -137,6 +152,7 @@ function CanvasInner({
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
           onPaneClick={() => onSelectNode?.(null)}
@@ -156,7 +172,7 @@ function CanvasInner({
           proOptions={{ hideAttribution: true }}
           minZoom={0.1}
           maxZoom={maxZoom}
-          fitViewOptions={{ maxZoom }}
+          fitViewOptions={{ maxZoom: fitMaxZoom, padding: 0.15 }}
         >
           {/*
             The canvas takes the page's own surface. It used to force `surface-container`, so the

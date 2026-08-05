@@ -1,20 +1,20 @@
 'use client';
 
 /**
- * `components/canvas/canvas-actions-context` — node-level actions for the per-node toolbar.
+ * `components/canvas/canvas-actions-context` — element-level actions for nodes and edges.
  *
  * @remarks
- * `task-node` is rendered deep inside `<ReactFlow>` (via `nodeTypes`), so its hover `NodeToolbar`
- * can't receive host callbacks as props. Rather than smuggle functions through node `data`, the
- * host provides them once through context; the node reads them with {@link useCanvasActions}. When
- * no provider is present (a read-only embed), actions are absent and the toolbar hides its edit
- * affordances.
+ * `task-node` and `dependency-edge` are rendered deep inside `<ReactFlow>` (via `nodeTypes` /
+ * `edgeTypes`), so neither can receive host callbacks as props. Rather than smuggle functions
+ * through element `data`, the host provides them once through context; the element reads them with
+ * {@link useCanvasActions}. When no provider is present (a read-only embed), actions are absent and
+ * every write affordance hides itself.
  */
 import { createContext, useContext } from 'react';
 
-/** The actions a node's toolbar can invoke on the host. */
+/** The actions a node's toolbar or an edge's controls can invoke on the host. */
 export interface CanvasActions {
-  /** Whether the viewer may edit (gates the toolbar's write affordances). */
+  /** Whether the viewer may edit (gates every write affordance). */
   canEdit: boolean;
   /** Navigate to a task's detail page. */
   navigate: (id: string) => void;
@@ -22,6 +22,8 @@ export interface CanvasActions {
   setState: (id: string, state: string) => void;
   /** Create a subtask under a task. */
   createSubtask: (parentId: string, title: string) => void;
+  /** Remove the dependency between two tasks (`blocking → blocked`). */
+  removeDependency: (sourceId: string, targetId: string) => void;
 }
 
 const CanvasActionsContext = createContext<CanvasActions | null>(null);

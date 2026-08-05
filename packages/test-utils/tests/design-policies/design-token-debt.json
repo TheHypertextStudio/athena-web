@@ -51,9 +51,6 @@
   "apps/web/src/app/(app)/orgs/[orgId]/cycles/[cycleId]/page.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/graph/graph-client.tsx": {
-    "raw-type-utility": 2
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page.tsx": {
     "raw-type-utility": 15
   },
@@ -225,19 +222,11 @@
   "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
     "shadow-outside-overlay": 1
   },
-  "apps/web/src/components/canvas/graph-toolbar.tsx": {
-    "raw-type-utility": 3
-  },
   "apps/web/src/components/canvas/group-node.tsx": {
     "raw-type-utility": 2
   },
   "apps/web/src/components/canvas/node-peek.tsx": {
-    "raw-type-utility": 4,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/canvas/task-graph-panel.tsx": {
-    "raw-type-utility": 3,
-    "shadow-outside-overlay": 2
+    "raw-type-utility": 4
   },
   "apps/web/src/components/canvas/task-node.tsx": {
     "raw-type-utility": 9,

@@ -67,6 +67,7 @@ const REFRESH_MS = 15_000;
 /** Project the API payload into xyflow nodes/edges, enriched with derived semantics. */
 function toFlow(
   graph: GraphOut | undefined,
+  orgId: string,
   density: CanvasDensity,
   rootTaskId: string | undefined,
   options: UseTaskGraphOptions,
@@ -83,6 +84,7 @@ function toFlow(
       type: 'task',
       position: { x: 0, y: 0 },
       data: {
+        orgId,
         title: n.title,
         state: n.state,
         priority: n.priority,
@@ -161,8 +163,8 @@ export function useTaskGraph(
   );
 
   const { nodes, edges } = useMemo(
-    () => toFlow(q.data, density, rootTaskId, { resolveAssignee, resolveProjectName }),
-    [q.data, density, rootTaskId, resolveAssignee, resolveProjectName],
+    () => toFlow(q.data, orgId, density, rootTaskId, { resolveAssignee, resolveProjectName }),
+    [q.data, orgId, density, rootTaskId, resolveAssignee, resolveProjectName],
   );
 
   return {

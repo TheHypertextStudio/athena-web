@@ -19,6 +19,8 @@ import { memo } from 'react';
 import { formatCalendarDate } from '@/lib/format-date';
 import { stateTypeOf } from '@/lib/work-state';
 
+import { objectTargetProps } from '@/lib/actions';
+
 import { useCanvasActions } from './canvas-actions-context';
 import { taskNodeTransitionName } from './transition-name';
 import { useLod } from './use-lod';
@@ -42,6 +44,8 @@ export interface ResolvedAssignee {
 
 /** The data a {@link TaskNode} renders; lives on the xyflow node's `data`. */
 export interface TaskNodeData extends Record<string, unknown> {
+  /** The owning workspace, so the card can name itself as a core object for the right-click menu. */
+  orgId: string;
   /** The task title. */
   title: string;
   /** The free-form workflow-state key (mapped to a canonical type for the glyph). */
@@ -83,7 +87,7 @@ export function taskData(node: { data: unknown }): TaskNodeData {
 
 /** A single task card on the canvas. */
 function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element {
-  const { title, state, projectName, assignee, isBlocked, isReady, dueDate, density } =
+  const { title, state, projectName, assignee, isBlocked, isReady, dueDate, density, orgId } =
     data as TaskNodeData;
   const compact = density === 'compact';
   const done = stateTypeOf(state) === 'completed' || stateTypeOf(state) === 'canceled';
@@ -95,6 +99,16 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
   const showDetail = !compact && !lod;
   return (
     <div
+      // Opting the card into the app's one right-click handler: it walks up from the pointer
+      // target looking for exactly these attributes, then asks the registry what applies. A task
+      // therefore gets the same menu here as it will anywhere else it is ever rendered.
+      {...objectTargetProps({
+        kind: 'task',
+        id,
+        organizationId: orgId,
+        title,
+        meta: { state },
+      })}
       style={{ viewTransitionName: taskNodeTransitionName(id) }}
       className={cn(
         'group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',

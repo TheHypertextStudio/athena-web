@@ -336,9 +336,6 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
         // Hovering a card should not fade the rest of the portfolio; the chain-dimming is for dense
         // task graphs, not a handful of projects.
         highlightChains={false}
-        // Fitting a small portfolio must not magnify it: a three-card workspace would otherwise
-        // open at xyflow's default 2x cap, which is precisely "way too zoomed in".
-        maxZoom={1}
         onSelectNode={setSelectedId}
         onConnectEdge={addDependency}
         onDeleteEdge={removeDependency}

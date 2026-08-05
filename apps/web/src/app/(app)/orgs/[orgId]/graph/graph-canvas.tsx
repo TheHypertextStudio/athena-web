@@ -5,20 +5,27 @@
  *
  * @remarks
  * The expand target for every embed and the global Graph workspace. It is a thin shell over
- * {@link TaskGraphPanel} at full density with the filter/layout toolbar enabled — the panel owns
- * the canvas, filtering, editing, peek, and avatar/project resolution.
+ * {@link TaskGraphPanel} at full density with the shared view bar enabled — the panel owns the
+ * canvas, filtering, editing, peek, and avatar/project resolution.
  *
  * The scope arrives as a prop, which is why this is not the route's entry point: the offline route
  * table mounts a route with no props. `graph-client.tsx` resolves the scope from the URL and renders
  * this.
+ *
+ * The page chrome is one {@link AppBar}: the title, the back link, and the view controls are slots
+ * in a single tonal band, so nothing here spells out a background or draws a rule. The canvas below
+ * sits on the page surface, and the tonal step between the two is what separates them.
  */
+import { AppBar } from '@docket/ui/components';
 import { ChevronLeft } from '@docket/ui/icons';
+import { Surface } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { useGraphUrlState } from '@/components/canvas/use-graph-url-state';
+import { useGraphDisplay } from '@/components/canvas/use-graph-display';
 import type { TaskGraphScope } from '@/components/canvas/use-task-graph';
+import { useViewState } from '@/components/views/use-view-state';
 
 /** Props for {@link GraphCanvas}. */
 export interface GraphCanvasProps {
@@ -38,33 +45,38 @@ function backTarget(scope: TaskGraphScope): { href: string; label: string } {
   return { href: `/orgs/${scope.orgId}`, label: 'Back to workspace' };
 }
 
-/** The focused, filterable, editable dependency canvas (filter + layout persist to the URL). */
+/** The focused, filterable, editable dependency canvas (query + presentation persist to the URL). */
 export default function GraphCanvas({ scope }: GraphCanvasProps): JSX.Element {
-  const { filter, direction, setFilter, setDirection } = useGraphUrlState();
+  const { state, setFilters, setGroupBy } = useViewState();
+  const { display, patchDisplay } = useGraphDisplay();
   const back = backTarget(scope);
   return (
-    <div className="flex h-full min-h-0 w-full flex-col">
-      <header className="flex flex-col gap-1 px-4 pt-3 @2xl:px-6">
-        <Link
-          href={back.href}
-          className="text-on-surface-variant hover:text-on-surface inline-flex w-fit items-center gap-1 text-sm"
-        >
-          <ChevronLeft className="size-4" />
-          {back.label}
-        </Link>
-        <h1 className="text-on-surface text-title-medium font-semibold">Dependency graph</h1>
-      </header>
-      <div className="min-h-0 flex-1">
-        <TaskGraphPanel
-          scope={scope}
-          density="full"
-          showToolbar
-          filter={filter}
-          onFilterChange={setFilter}
-          direction={direction}
-          onDirectionChange={setDirection}
-        />
-      </div>
-    </div>
+    <Surface tone="page" shape="none" className="flex h-full min-h-0 w-full flex-col">
+      <TaskGraphPanel
+        scope={scope}
+        density="full"
+        viewState={state}
+        onFiltersChange={setFilters}
+        onGroupByChange={setGroupBy}
+        display={display}
+        onDisplayChange={patchDisplay}
+        className="min-h-0 flex-1"
+        renderChrome={(bar) => (
+          <AppBar
+            title="Dependency graph"
+            leading={
+              <Link
+                href={back.href}
+                className="text-on-surface-variant hover:text-on-surface text-label-large inline-flex min-w-0 items-center gap-1"
+              >
+                <ChevronLeft className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{back.label}</span>
+              </Link>
+            }
+            controls={bar}
+          />
+        )}
+      />
+    </Surface>
   );
 }

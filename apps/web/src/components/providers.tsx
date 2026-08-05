@@ -6,6 +6,7 @@ import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { ObjectContextMenuProvider } from '@/components/context-menu';
 import { InteractionProvider } from '@/lib/actions';
 import { probeSession } from '@/lib/auth-client';
 import { createQueryClient } from '@/lib/query';
@@ -76,7 +77,15 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
             <QueryClientProvider client={queryClient}>
               <UnauthorizedWatcher handlerRef={handleCacheError} />
               <InteractionProvider>
-                <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                {/*
+                  The object menu was built and left unplugged: with no domain ever registered,
+                  every right-click fell through to the browser. Mounting it here, and registering
+                  the task domain from the shell, is what makes the app's one contextmenu handler
+                  live.
+                */}
+                <ObjectContextMenuProvider>
+                  <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                </ObjectContextMenuProvider>
               </InteractionProvider>
             </QueryClientProvider>
           </AuthenticationInterlockProvider>

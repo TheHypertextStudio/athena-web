@@ -67,13 +67,20 @@ export function useControlledFlow(laidOut: Node[], rawEdges: Edge[]): Controlled
   return { nodes, edges, onNodesChange, onEdgesChange };
 }
 
-/** Pan/zoom the viewport to fit `ids` whenever that set changes (e.g. search matches). */
-export function useFitViewOnChange(ids: readonly string[] | undefined): void {
+/**
+ * Pan/zoom the viewport to fit `ids` whenever that set changes (e.g. search matches).
+ *
+ * @param ids - The node ids to bring into view, or undefined to leave the viewport alone.
+ * @param maxZoom - The zoom ceiling for this fit. Shares the canvas's `fitMaxZoom` so narrowing a
+ *   search to one node lands it at the same scale the graph opens at, rather than magnifying it to
+ *   fill the viewport.
+ */
+export function useFitViewOnChange(ids: readonly string[] | undefined, maxZoom: number): void {
   const { fitView } = useReactFlow();
   const key = ids?.join(',') ?? '';
   useEffect(() => {
     if (ids === undefined || ids.length === 0) return;
     // Keyed on the joined id list (not the array identity); `fitView` is stable from the store.
-    void fitView({ nodes: ids.map((id) => ({ id })), duration: 400, maxZoom: 1.2, padding: 0.3 });
-  }, [key, fitView, ids]);
+    void fitView({ nodes: ids.map((id) => ({ id })), duration: 400, maxZoom, padding: 0.3 });
+  }, [key, fitView, ids, maxZoom]);
 }

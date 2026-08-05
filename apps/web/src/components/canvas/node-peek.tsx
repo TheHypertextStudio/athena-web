@@ -12,7 +12,7 @@
  */
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { ArrowRight, X } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { Button, Surface } from '@docket/ui/primitives';
 import type { Edge, Node } from '@xyflow/react';
 
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
@@ -108,7 +108,7 @@ export default function NodePeek({
     data.assignee;
 
   return (
-    <div className="border-outline-variant bg-surface-container flex w-72 flex-col gap-3 rounded-xl border p-3 shadow-lg">
+    <Surface tone="raised" pad="comfortable" className="flex w-72 flex-col gap-3">
       <div className="flex items-start gap-2">
         <StatusIcon type={stateTypeOf(data.state)} className="mt-0.5" />
         <span className="text-on-surface text-body-medium flex-1 font-medium">{data.title}</span>
@@ -148,7 +148,7 @@ export default function NodePeek({
       <RefList label="Blocks" refs={blocking} onNavigate={onNavigate} />
       <RefList label="Subtasks" refs={subtasks} onNavigate={onNavigate} />
 
-      <div className="border-outline-variant flex items-center gap-2 border-t pt-2">
+      <div className="flex items-center gap-2 pt-1">
         <Button
           type="button"
           size="sm"
@@ -174,6 +174,6 @@ export default function NodePeek({
           </Button>
         ) : null}
       </div>
-    </div>
+    </Surface>
   );
 }

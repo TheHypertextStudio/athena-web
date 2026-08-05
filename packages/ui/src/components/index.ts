@@ -6,6 +6,7 @@
  * ListView family so consumers can import them from a single subpath:
  * `import { AppShell, ListView } from '@docket/ui/components'`.
  */
+export { AppBar, type AppBarProps } from './shell/AppBar';
 export { ActorAvatar, type ActorAvatarProps, type ActorKind } from './atoms/ActorAvatar';
 export { AuthLayout, type AuthLayoutProps } from './auth/AuthLayout';
 export {

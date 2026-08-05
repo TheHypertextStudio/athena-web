@@ -11,7 +11,7 @@
  * @see `docs/engineering/specs/data-layer.md` §7.
  */
 import { HydrationBoundary } from '@tanstack/react-query';
-import type { JSX } from 'react';
+import { type JSX, Suspense } from 'react';
 
 import {
   resolveTaskGraphScope,
@@ -65,7 +65,16 @@ export default async function GraphPage({
   // reads exactly the key this warmed.
   return (
     <HydrationBoundary state={dehydrate(queryClient)}>
-      <GraphClient />
+      {/*
+        `GraphCanvas` reads the filter/presentation state out of `useSearchParams`, which opts an
+        un-suspended page out of prerendering entirely: the shell is server-rendered while the page
+        is not, and the two trees then disagree about React's generated ids — which surfaces as a
+        hydration mismatch on an unrelated element such as the sidebar's account menu. A boundary
+        here scopes the client-only part to the canvas, which is what it always was.
+      */}
+      <Suspense fallback={null}>
+        <GraphClient />
+      </Suspense>
     </HydrationBoundary>
   );
 }

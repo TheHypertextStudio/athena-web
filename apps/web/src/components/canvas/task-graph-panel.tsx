@@ -7,14 +7,20 @@
  * Feeds {@link useTaskGraph} for a scope into the generic {@link Canvas} and owns everything
  * task-specific: resolving assignee avatars + project names (from the org's members/agents/
  * projects), the `contribute` edit gate, the live-edit mutations (drag to add a `blocks` edge,
- * Delete to remove one, quick state change), the selection peek, and — when `showToolbar` — the
- * filter + layout toolbar. Loading / empty / error states are handled here so hosts stay
- * declarative. Embeds use the compact density (click navigates); the focused view passes
- * `showToolbar` + full density (click peeks, double-click navigates).
+ * click an edge's remove control or press Delete to drop one, quick state change), the selection
+ * peek, and — when `showToolbar` — the shared view bar. Loading / empty / error states are handled
+ * here so hosts stay declarative. Embeds use the compact density (click navigates); the focused
+ * view passes `showToolbar` + full density (click peeks, double-click navigates).
+ *
+ * Filtering and grouping run through the app's shared view engine
+ * ({@link import('./graph-catalog').buildGraphCatalog} + `filterRows`) rather than the bespoke
+ * facet bar this panel used to carry, so the canvas has the same Filter/Display vocabulary as
+ * every list surface. Canvas-only presentation (flow direction, overlays, neighbourhood depth)
+ * lives in {@link import('./graph-display').GraphDisplayState} beside it.
  */
 import { EmptyState } from '@docket/ui/components';
-import { Workflow, X } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Undo, Workflow, X } from '@docket/ui/icons';
+import { Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type Edge, type Node, Panel } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
@@ -24,28 +30,36 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { stateTypeOf } from '@/lib/work-state';
+import {
+  type FieldOption,
+  type ViewFilterTerm,
+  type ViewGroupTerm,
+  type ViewState,
+  EMPTY_VIEW_STATE,
+  findField,
+  labelForValue,
+} from '@/components/views/field-catalog';
+import { filterRows } from '@/components/views/apply-view';
 
 import BulkActionsBar from './bulk-actions-bar';
 import Canvas from './canvas';
-import { CanvasActionsProvider } from './canvas-actions-context';
+import { type CanvasActions, CanvasActionsProvider } from './canvas-actions-context';
+import DependencyEdge from './dependency-edge';
+import { DEFAULT_GRAPH_DISPLAY, type GraphDisplayState } from './graph-display';
+import { buildGraphCatalog, UNSET } from './graph-catalog';
+import GraphViewBar from './graph-view-bar';
 import GroupNode from './group-node';
 import { edgeKind } from './use-graph-interactions';
-import GraphToolbar, {
-  EMPTY_FILTER,
-  type FilterOption,
-  type GraphFilter,
-  type GroupBy,
-  UNASSIGNED,
-} from './graph-toolbar';
 import { type GroupSpec, layoutGrouped } from './use-grouped-layout';
 import NodePeek from './node-peek';
 import TaskNode, { type ResolvedAssignee, taskData } from './task-node';
-import { type CanvasDensity, type LayoutDirection } from './use-dagre-layout';
+import { type CanvasDensity } from './use-dagre-layout';
 import { type TaskGraphScope, useTaskGraph } from './use-task-graph';
 import { useTaskGraphMutations } from './use-task-graph-mutations';
 
-/** Stable node-type registry (must not be re-created per render — xyflow warns otherwise). */
+/** Stable registries (must not be re-created per render — xyflow warns otherwise). */
 const NODE_TYPES = { task: TaskNode, group: GroupNode };
+const EDGE_TYPES = { default: DependencyEdge };
 
 /** Props for {@link TaskGraphPanel}. */
 export interface TaskGraphPanelProps {
@@ -53,44 +67,30 @@ export interface TaskGraphPanelProps {
   scope: TaskGraphScope;
   /** Canvas density; default `compact` since the common host is an embed. */
   density?: CanvasDensity;
-  /** Show the filter + layout toolbar (focused view only). */
-  showToolbar?: boolean;
-  /** Controlled filter (e.g. URL-backed); falls back to internal state when omitted. */
-  filter?: GraphFilter;
-  /** Controlled filter setter; paired with `filter`. */
-  onFilterChange?: (filter: GraphFilter) => void;
-  /** Controlled layout direction; falls back to internal state when omitted. */
-  direction?: LayoutDirection;
-  /** Controlled direction setter; paired with `direction`. */
-  onDirectionChange?: (direction: LayoutDirection) => void;
+  /**
+   * Render the page chrome around the view bar (focused view only); omit for a bare embed.
+   *
+   * @remarks
+   * Takes the bar as an argument rather than a boolean flag so the host owns the band it lives in
+   * — an {@link AppBar} with the page title on the focused view, something else in a future host —
+   * while this panel keeps ownership of the bar's wiring. A panel that renders its own header
+   * would force every host into the same masthead.
+   */
+  renderChrome?: (bar: React.ReactNode) => React.ReactNode;
+  /** Controlled query state (URL-backed); falls back to internal state when omitted. */
+  viewState?: ViewState;
+  /** Replace the active filter predicates; paired with `viewState`. */
+  onFiltersChange?: (filters: readonly ViewFilterTerm[]) => void;
+  /** Replace the active grouping; paired with `viewState`. */
+  onGroupByChange?: (groupBy: ViewGroupTerm | null) => void;
+  /** Controlled canvas presentation; falls back to internal state when omitted. */
+  display?: GraphDisplayState;
+  /** Patch the canvas presentation; paired with `display`. */
+  onDisplayChange?: (patch: Partial<GraphDisplayState>) => void;
   /** When set, shows an expand affordance that calls this (e.g. navigate to the full view). */
   onExpand?: () => void;
   /** Extra classes for the container. */
   className?: string;
-}
-
-/** Apply the active filter to the node set; returns surviving nodes + edges (pruned). */
-function applyFilter(
-  nodes: readonly Node[],
-  edges: readonly Edge[],
-  filter: GraphFilter,
-): { nodes: Node[]; edges: Edge[] } {
-  const needle = filter.search.trim().toLowerCase();
-  const keep = (n: Node): boolean => {
-    const d = taskData(n);
-    if (needle.length > 0 && !d.title.toLowerCase().includes(needle)) return false;
-    if (filter.projects.size > 0 && !(d.projectId !== null && filter.projects.has(d.projectId)))
-      return false;
-    if (filter.assignees.size > 0 && !filter.assignees.has(d.assigneeId ?? UNASSIGNED))
-      return false;
-    if (filter.priorities.size > 0 && !filter.priorities.has(d.priority)) return false;
-    if (filter.stateTypes.size > 0 && !filter.stateTypes.has(stateTypeOf(d.state))) return false;
-    return true;
-  };
-  const keptNodes = nodes.filter(keep);
-  const ids = new Set(keptNodes.map((n) => n.id));
-  const keptEdges = edges.filter((e) => ids.has(e.source) && ids.has(e.target));
-  return { nodes: keptNodes, edges: keptEdges };
 }
 
 /** Minimap node color by workflow-state token (the canvas is generic; the host injects this). */
@@ -98,15 +98,22 @@ function taskStateColor(node: Node): string {
   return `var(--color-state-${stateTypeOf(taskData(node).state)})`;
 }
 
-/** A scoped, interactive dependency-graph canvas with peek, editing, and optional toolbar. */
+/** Keep only edges whose endpoints both survived filtering. */
+function pruneEdges(nodes: readonly Node[], edges: readonly Edge[]): Edge[] {
+  const ids = new Set(nodes.map((n) => n.id));
+  return edges.filter((e) => ids.has(e.source) && ids.has(e.target));
+}
+
+/** A scoped, interactive dependency-graph canvas with peek, editing, and optional view bar. */
 export default function TaskGraphPanel({
   scope,
   density = 'compact',
-  showToolbar = false,
-  filter: controlledFilter,
-  onFilterChange,
-  direction: controlledDirection,
-  onDirectionChange,
+  renderChrome,
+  viewState: controlledViewState,
+  onFiltersChange,
+  onGroupByChange,
+  display: controlledDisplay,
+  onDisplayChange,
   onExpand,
   className,
 }: TaskGraphPanelProps): React.JSX.Element {
@@ -184,21 +191,40 @@ export default function TaskGraphPanel({
     [projects],
   );
 
-  // Filter + layout are controlled when the host supplies them (URL-backed full view), else local.
-  const [localFilter, setLocalFilter] = useState<GraphFilter>(EMPTY_FILTER);
-  const [localDirection, setLocalDirection] = useState<LayoutDirection>('LR');
-  const filter = controlledFilter ?? localFilter;
-  const setFilter = onFilterChange ?? setLocalFilter;
-  const direction = controlledDirection ?? localDirection;
-  const setDirection = onDirectionChange ?? setLocalDirection;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showCritical, setShowCritical] = useState(false);
-  const [showReady, setShowReady] = useState(false);
-  const [groupBy, setGroupBy] = useState<GroupBy>('none');
-  const [depth, setDepth] = useState(scope.depth ?? 2);
+  // Query + presentation are controlled when the host supplies them (URL-backed full view),
+  // else held locally so an embed still works standalone.
+  const [localViewState, setLocalViewState] = useState<ViewState>(EMPTY_VIEW_STATE);
+  const [localDisplay, setLocalDisplay] = useState<GraphDisplayState>(DEFAULT_GRAPH_DISPLAY);
+  const viewState = controlledViewState ?? localViewState;
+  const display = controlledDisplay ?? localDisplay;
 
-  // In the neighborhood scope, the depth stepper overrides the incoming scope depth live.
+  const setFilters = useCallback(
+    (filters: readonly ViewFilterTerm[]) => {
+      if (onFiltersChange) onFiltersChange(filters);
+      else setLocalViewState((prev) => ({ ...prev, filters }));
+    },
+    [onFiltersChange],
+  );
+  const setGroupBy = useCallback(
+    (groupBy: ViewGroupTerm | null) => {
+      if (onGroupByChange) onGroupByChange(groupBy);
+      else setLocalViewState((prev) => ({ ...prev, groupBy }));
+    },
+    [onGroupByChange],
+  );
+  const patchDisplay = useCallback(
+    (patch: Partial<GraphDisplayState>) => {
+      if (onDisplayChange) onDisplayChange(patch);
+      else setLocalDisplay((prev) => ({ ...prev, ...patch }));
+    },
+    [onDisplayChange],
+  );
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // In the neighborhood scope, the depth control overrides the incoming scope depth live.
   const isNeighborhood = scope.rootTaskId !== undefined;
+  const depth = display.depth ?? scope.depth ?? 2;
   const effectiveScope = useMemo(
     () => (isNeighborhood ? { ...scope, depth } : scope),
     [isNeighborhood, scope, depth],
@@ -210,10 +236,37 @@ export default function TaskGraphPanel({
   });
   const mutations = useTaskGraphMutations(effectiveScope);
 
-  const filtered = useMemo(
-    () => (showToolbar ? applyFilter(nodes, edges, filter) : { nodes, edges }),
-    [showToolbar, nodes, edges, filter],
+  const toOptions = useCallback(
+    (items: readonly { id: string; name: string }[] | undefined): readonly FieldOption[] =>
+      (items ?? []).map((item) => ({ value: item.id, label: item.name })),
+    [],
   );
+
+  const catalog = useMemo(
+    () =>
+      buildGraphCatalog({
+        projectLabel: 'Project',
+        projectOptions: toOptions(projects),
+        assigneeOptions: (members ?? []).map((m) => ({ value: m.actorId, label: m.displayName })),
+        teamOptions: toOptions(teams),
+        milestoneOptions: toOptions(milestones),
+      }),
+    [toOptions, projects, members, teams, milestones],
+  );
+
+  // Search is applied alongside the predicates: it narrows the node set *and* drives the viewport
+  // fit below, which is why it is presentation state rather than another filter chip.
+  const needle = display.search.trim().toLowerCase();
+  const filtered = useMemo(() => {
+    if (renderChrome === undefined) return { nodes, edges };
+    const byPredicate = filterRows(nodes, viewState.filters, catalog);
+    const bySearch =
+      needle.length === 0
+        ? byPredicate
+        : byPredicate.filter((n) => taskData(n).title.toLowerCase().includes(needle));
+    const keptNodes = [...bySearch];
+    return { nodes: keptNodes, edges: pruneEdges(keptNodes, edges) };
+  }, [renderChrome, nodes, edges, viewState.filters, catalog, needle]);
 
   const navigate = useCallback(
     (id: string) => {
@@ -233,18 +286,6 @@ export default function TaskGraphPanel({
       else navigate(id);
     },
     [density, navigate],
-  );
-
-  const projectOptions: FilterOption[] = useMemo(
-    () => (projects ?? []).map((p) => ({ value: p.id, label: p.name })),
-    [projects],
-  );
-  const assigneeOptions: FilterOption[] = useMemo(
-    () => [
-      { value: UNASSIGNED, label: 'Unassigned' },
-      ...(members ?? []).map((m) => ({ value: m.actorId, label: m.displayName })),
-    ],
-    [members],
   );
 
   // One pass over the filtered nodes derives the critical set, ready queue, and blocked count.
@@ -268,10 +309,9 @@ export default function TaskGraphPanel({
   const { criticalIds, readyNodes, counts } = derived;
 
   // With an active search, pan/zoom the canvas to the (already-filtered) matches.
-  const searchActive = filter.search.trim().length > 0;
   const focusOn = useMemo(
-    () => (searchActive ? filtered.nodes.map((n) => n.id) : undefined),
-    [searchActive, filtered.nodes],
+    () => (needle.length > 0 ? filtered.nodes.map((n) => n.id) : undefined),
+    [needle, filtered.nodes],
   );
 
   const selectedNode = useMemo(
@@ -279,45 +319,40 @@ export default function TaskGraphPanel({
     [selectedId, filtered.nodes],
   );
 
-  // Node-level actions for the per-node toolbar (create subtask / mark done / open).
-  const nodeActions = useMemo(
+  // Element-level actions for the node toolbar and the edge's remove control.
+  const canvasActions = useMemo<CanvasActions>(
     () => ({
       canEdit,
       navigate,
       setState: mutations.setState,
       createSubtask: mutations.createSubtask,
+      removeDependency: mutations.removeDependency,
     }),
-    [canEdit, navigate, mutations.setState, mutations.createSubtask],
+    [canEdit, navigate, mutations.setState, mutations.createSubtask, mutations.removeDependency],
   );
 
-  // Grouping: map the chosen axis to a group key + label; null when ungrouped.
+  // Grouping reads straight off the catalog, so every groupable field the catalog declares works
+  // as a swimlane axis without this panel knowing which fields those are.
   const groupSpec = useMemo<GroupSpec | null>(() => {
-    if (groupBy === 'none') return null;
-    if (groupBy === 'project') {
-      return {
-        groupOf: (n) => taskData(n).projectId,
-        labelOf: (id) => projects?.find((p) => p.id === id)?.name ?? 'Project',
-      };
-    }
-    if (groupBy === 'team') {
-      return {
-        groupOf: (n) => taskData(n).teamId,
-        labelOf: (id) => teams?.find((t) => t.id === id)?.name ?? 'Team',
-      };
-    }
+    if (viewState.groupBy === null) return null;
+    const field = findField(catalog, viewState.groupBy.field);
+    if (field === undefined) return null;
     return {
-      groupOf: (n) => taskData(n).milestoneId,
-      labelOf: (id) => milestones?.find((m) => m.id === id)?.name ?? 'Milestone',
+      groupOf: (n) => {
+        const value = field.accessor(n);
+        return value === null || value === UNSET ? null : String(value);
+      },
+      labelOf: (id) => labelForValue(field, id),
     };
-  }, [groupBy, projects, teams, milestones]);
+  }, [viewState.groupBy, catalog]);
 
   // When grouped, pre-lay-out into swimlanes (dagre per lane); otherwise the canvas lays out.
   const canvasNodes = useMemo(
     () =>
       groupSpec === null
         ? filtered.nodes
-        : layoutGrouped(filtered.nodes, filtered.edges, density, direction, groupSpec),
-    [groupSpec, filtered, density, direction],
+        : layoutGrouped(filtered.nodes, filtered.edges, density, display.direction, groupSpec),
+    [groupSpec, filtered, density, display.direction],
   );
 
   const body = (() => {
@@ -346,17 +381,19 @@ export default function TaskGraphPanel({
       );
     }
     return (
-      <CanvasActionsProvider value={nodeActions}>
+      <CanvasActionsProvider value={canvasActions}>
         <Canvas
           nodes={canvasNodes}
           edges={filtered.edges}
           nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
           density={density}
-          layoutDirection={direction}
+          layoutDirection={display.direction}
           disableLayout={groupSpec !== null}
           nodeColor={taskStateColor}
+          minimap={display.minimap}
           interactive={canEdit}
-          highlightIds={showCritical ? criticalIds : null}
+          highlightIds={display.critical ? criticalIds : null}
           focusOn={focusOn}
           onExpand={onExpand}
           onSelectNode={handleSelect}
@@ -368,10 +405,10 @@ export default function TaskGraphPanel({
           onReparentEdge={mutations.reparent}
         >
           <BulkActionsBar />
-          {showReady && readyNodes.length > 0 ? (
+          {display.ready && readyNodes.length > 0 ? (
             <Panel position="bottom-left">
-              <div className="border-outline-variant bg-surface-container max-h-56 w-56 overflow-auto rounded-lg border p-2 shadow-lg">
-                <p className="text-on-surface-variant mb-1 text-xs font-medium">Ready to start</p>
+              <Surface tone="raised" pad="tight" className="max-h-56 w-56 overflow-auto">
+                <p className="text-on-surface-variant text-label-medium mb-1">Ready to start</p>
                 {readyNodes.map((n) => (
                   <button
                     key={n.id}
@@ -379,12 +416,12 @@ export default function TaskGraphPanel({
                     onClick={() => {
                       navigate(n.id);
                     }}
-                    className="hover:bg-surface-container-high text-on-surface block w-full truncate rounded px-1.5 py-1 text-left text-xs"
+                    className="hover:bg-surface-container-highest text-on-surface text-body-small block w-full truncate rounded px-1.5 py-1 text-left"
                   >
                     {taskData(n).title}
                   </button>
                 ))}
-              </div>
+              </Surface>
             </Panel>
           ) : null}
           {selectedNode !== null ? (
@@ -402,14 +439,45 @@ export default function TaskGraphPanel({
               />
             </Panel>
           ) : null}
+          {/*
+            One strip, two messages. A write that failed and an edit that can be taken back both
+            want the same place — under the graph, out of the way of the nodes — and only one of
+            them is ever live, because a successful removal clears the error and a failure never
+            offers an undo.
+          */}
           {mutations.error !== null ? (
             <Panel position="bottom-center">
-              <div className="border-state-canceled/40 bg-surface-container text-state-canceled text-body-medium flex items-center gap-2 rounded-lg border px-3 py-1.5 shadow-lg">
+              <Surface
+                tone="prominent"
+                shape="pill"
+                className="text-state-canceled text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
+              >
                 {mutations.error}
-                <button type="button" onClick={mutations.clearError} aria-label="Dismiss">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  iconOnly
+                  onClick={mutations.clearError}
+                  aria-label="Dismiss"
+                >
                   <X className="size-4" />
-                </button>
-              </div>
+                </Button>
+              </Surface>
+            </Panel>
+          ) : mutations.undo !== null ? (
+            <Panel position="bottom-center">
+              <Surface
+                tone="prominent"
+                shape="pill"
+                className="text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
+              >
+                {mutations.undo.label}
+                <Button type="button" variant="ghost" size="sm" onClick={mutations.undo.undo}>
+                  <Undo className="size-4" />
+                  Undo
+                </Button>
+              </Surface>
             </Panel>
           ) : null}
         </Canvas>
@@ -417,33 +485,27 @@ export default function TaskGraphPanel({
     );
   })();
 
+  const bar = (
+    <GraphViewBar
+      catalog={catalog}
+      state={viewState}
+      onFiltersChange={setFilters}
+      onGroupByChange={setGroupBy}
+      onSortChange={() => {
+        // The graph declares no sortable fields — rank order is the layout's job — so the shared
+        // bar renders no Ordering section and this is never reached.
+      }}
+      display={display}
+      onDisplayChange={patchDisplay}
+      showDepth={isNeighborhood}
+      depth={depth}
+      counts={counts}
+    />
+  );
+
   return (
     <div className={cn('flex h-full min-h-0 w-full flex-col', className)}>
-      {showToolbar ? (
-        <div className="border-outline-variant border-b px-4 py-2.5 @2xl:px-6">
-          <GraphToolbar
-            filter={filter}
-            onChange={setFilter}
-            projectOptions={projectOptions}
-            assigneeOptions={assigneeOptions}
-            direction={direction}
-            onDirectionChange={setDirection}
-            groupBy={groupBy}
-            onGroupByChange={setGroupBy}
-            showCritical={showCritical}
-            onToggleCritical={() => {
-              setShowCritical((v) => !v);
-            }}
-            showReady={showReady}
-            onToggleReady={() => {
-              setShowReady((v) => !v);
-            }}
-            depth={isNeighborhood ? depth : undefined}
-            onDepthChange={isNeighborhood ? setDepth : undefined}
-            counts={counts}
-          />
-        </div>
-      ) : null}
+      {renderChrome?.(bar)}
       <div className="relative min-h-0 flex-1">{body}</div>
     </div>
   );

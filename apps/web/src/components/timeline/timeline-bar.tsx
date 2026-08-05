@@ -127,7 +127,9 @@ export default function TimelineBar({
         onClick={onActivate}
         className={cn(
           'focus-visible:ring-ring absolute z-[1] flex -translate-x-1/2 items-center justify-center rounded-[3px] border-2 transition-opacity focus-visible:ring-2 focus-visible:outline-none',
-          'bg-surface-container-highest',
+          // Same tonal step as the bar body (see `BAR_SURFACE_CLASS`) — an anchor is a bar with a
+          // zero-width span, not a different kind of object.
+          'bg-surface-container-high',
           schedulable && CURSOR_DRAGGABLE,
           TINT_ANCHOR_BORDER_CLASS[tint],
           violated && 'border-destructive',

@@ -29,10 +29,16 @@ import type { TimelineTint } from './timeline-catalog';
  *
  * **No outline.** The bar used to carry a 1px `outline-variant` stroke as well, which — repeated
  * once per row and again at every gridline — is what made the chart read as a wireframe. The tone
- * alone separates it: against the plot area (the page's own `surface`) this is measured at 1.21:1
- * in light and 1.30:1 in dark.
+ * alone separates it from the plot area.
+ *
+ * **One step, not the last one.** This used to sit on `surface-container-highest` — the tonal
+ * ramp's far end, meant for a single emphasised element against its surroundings, not for the
+ * chart's dominant fill repeated down every row. A Gantt chart is mostly bars, so that read as a
+ * wall of grey slabs sitting well below the near-white plot area rather than as bars gently lifted
+ * off it. `surface-container-high` is the same direction — still a step up from the plot, still
+ * distinguishable at a glance — without carrying the whole ramp's contrast on every row.
  */
-export const BAR_SURFACE_CLASS = 'bg-surface-container-highest text-on-surface';
+export const BAR_SURFACE_CLASS = 'bg-surface-container-high text-on-surface';
 
 /**
  * The lane drawn for a row that carries no dates.

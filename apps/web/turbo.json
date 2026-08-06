@@ -6,6 +6,9 @@
   "tasks": {
     "build": {
       "env": ["NEXT_PUBLIC_*"],
+      // Set on the Vercel project and read only at runtime by the server routes. Passed through
+      // rather than declared in `env` so rotating the blob token does not bust the build cache.
+      "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"],
       // The bundled service worker is a build product alongside `.next`, so it must be restored
       // from cache with it — otherwise a cache hit leaves `public/sw.js` missing entirely.
       "outputs": ["public/sw.js"]

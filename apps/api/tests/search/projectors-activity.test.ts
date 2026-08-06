@@ -40,7 +40,7 @@ describe('eventSearchProjector', () => {
     for (const [entityKind, expectedSubjectKind] of cases) {
       const doc = await eventSearchProjector.project({
         entityId: 'event-1',
-        row: baseRow({ entity: { kind: entityKind, docketEntityId: 'target-1' } }),
+        row: baseRow({ entityKind, docketEntityId: 'target-1' }),
       });
       expect(doc?.subjectKind).toBe(expectedSubjectKind);
       expect(doc?.subjectId).toBe('target-1');
@@ -52,10 +52,23 @@ describe('eventSearchProjector', () => {
     }
   });
 
+  it('leaves an unassociated event org-wide rather than scoping it to a guess', async () => {
+    // A `work_item` event whose subject never resolved to a Docket task. Scoping needs a real id
+    // to scope to, so this stays visible to the workspace instead of being hidden behind a task
+    // nobody can name. Once the re-association sweep resolves it, a reprojection narrows it.
+    const doc = await eventSearchProjector.project({
+      entityId: 'event-1',
+      row: baseRow({ entityKind: 'work_item', docketEntityId: null }),
+    });
+    expect(doc?.subjectKind).toBeNull();
+    expect(doc?.subjectId).toBeNull();
+    expect(doc?.visibility).toEqual({ mode: 'event' });
+  });
+
   it('treats an unrecognized entity kind as having no search subject', async () => {
     const doc = await eventSearchProjector.project({
       entityId: 'event-1',
-      row: baseRow({ entity: { kind: 'something_new', docketEntityId: 'target-1' } }),
+      row: baseRow({ entityKind: 'something_new', docketEntityId: 'target-1' }),
     });
     expect(doc?.subjectKind).toBeNull();
     expect(doc?.subjectId).toBeNull();
@@ -83,7 +96,9 @@ describe('eventSearchProjector', () => {
     const doc = await eventSearchProjector.project({
       entityId: 'event-1',
       row: baseRow({
-        entity: { kind: 'project', docketEntityId: 'target-1', url: '/entity/target-1' },
+        entity: { kind: 'project', url: '/entity/target-1' },
+        entityKind: 'project',
+        docketEntityId: 'target-1',
         participants: undefined,
       }),
     });
@@ -98,7 +113,9 @@ describe('eventSearchProjector', () => {
       entityId: 'event-1',
       row: baseRow({
         externalUrl: '/events/event-1',
-        entity: { kind: 'project', docketEntityId: 'target-1', url: '/entity/target-1' },
+        entity: { kind: 'project', url: '/entity/target-1' },
+        entityKind: 'project',
+        docketEntityId: 'target-1',
         participants: [{ id: 'user-1' }],
         userId: 'user-1',
       }),

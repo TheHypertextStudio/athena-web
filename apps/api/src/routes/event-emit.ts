@@ -181,6 +181,11 @@ async function emitInternal(
             }
           : null,
         entityKind,
+        // An internal event's subject IS a Docket entity, so association is settled on write and
+        // these rows must never enter the re-association sweep's working set. A subject with no
+        // canonical kind (`time_record`, `email_suggestion`) has nothing to associate at all.
+        entityAssociation: entityKind ? 'matched' : 'unmatched',
+        docketEntityId: entityKind ? input.subject.id : null,
         participants: [],
         detail: input.detail ?? null,
         externalId: input.subject.id,

@@ -1,0 +1,147 @@
+name: E2E
+
+# Deliberately its own workflow, and deliberately NOT a gate on the production deploy.
+#
+# The browser suite runs against `pnpm dev`, so Turbopack compiles each route on first request
+# inside the test that asked for it. On a two-core runner that is slower than any per-test budget
+# worth setting: specs that finish in 14.5s locally exceeded 180s, 540s, and 120s in CI, stalling
+# on step 1 of sign-up with the auth route still compiling. It is not three bad specs — rebalancing
+# the shards simply moved the failures to whichever shard inherited them.
+#
+# Holding every production deploy on a suite that cannot pass protected nothing and cost a full
+# day of releases. It runs here, on every push and PR, and reports honestly. Put it back in
+# ci.yml's deploy gate the moment the stack serves a production build instead of a dev server.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: E2E (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    # The suite ran all 55 specs on a single worker in one job (`workers: 1` in
+    # playwright.config.ts — every spec mutates the one shared embedded dev database, so more
+    # workers *within one dev stack* isn't safe) and was taking 35-45+ minutes wall-clock. Splitting
+    # across a matrix instead of raising workers keeps that single-worker-per-database invariant —
+    # each shard is a genuinely separate runner with its own dev stack and its own embedded
+    # database — while running shards in parallel. `fail-fast: false` so one shard's failure
+    # doesn't cancel the others' results.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    # A shard's real work is a couple of minutes; the rest is tail. With playwright.config.ts at a
+    # 120s timeout and one retry, a single stuck test costs at most 4 minutes.
+    #
+    # 15, not 12: a cancelled job is a job that never told you why. Playwright's list reporter
+    # prints failure detail only at the end of the run, and the artifact upload below cannot fire
+    # for a cancellation either — so a cap tight enough to cut a genuinely failing shard short
+    # buys speed by destroying the report that would let anyone fix it. The cap is here to catch a
+    # wedged runner, not to discipline slow tests; playwright.config.ts does that.
+    timeout-minutes: 15
+    env:
+      PORTLESS_PORT: '1355'
+      PORTLESS_HTTPS: '0'
+      PORTLESS_SYNC_HOSTS: '0'
+      APP_URL: http://docket.localhost:1355
+      API_URL: http://api.docket.localhost:1355
+      WEB_URL: http://docket.localhost:1355
+      NEXT_PUBLIC_API_URL: http://api.docket.localhost:1355
+      NEXT_PUBLIC_APP_URL: http://docket.localhost:1355
+      BETTER_AUTH_URL: http://api.docket.localhost:1355
+      BETTER_AUTH_PASSKEY_RP_ID: docket.localhost
+      NEXT_PUBLIC_PASSKEY_RP_ID: docket.localhost
+      BETTER_AUTH_TRUSTED_ORIGINS: http://docket.localhost:1355,http://admin.docket.localhost:1355
+      MCP_ISSUER_URL: http://api.docket.localhost:1355
+      MCP_RESOURCE_URL: http://api.docket.localhost:1355/mcp
+      MCP_ALLOWED_ORIGINS: http://docket.localhost:1355
+      OIDC_LOGIN_PAGE_URL: http://docket.localhost:1355/sign-in
+      AGENT_MAX_TURNS: '24'
+      GOOGLE_OAUTH_PUBLIC: 'false'
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Pin the routed hosts so name resolution is deterministic on every runner image.
+      - name: Map dev hosts to loopback
+        run: echo "127.0.0.1 docket.localhost api.docket.localhost admin.docket.localhost" | sudo tee -a /etc/hosts
+
+      # Portless documents :1355 as its non-privileged mode. HTTP *.localhost remains a secure
+      # browser context for WebAuthn, so CI needs neither sudo nor a generated certificate.
+      - name: Start portless proxy
+        run: pnpm exec portless proxy start --port 1355 --no-tls
+
+      - name: Start dev stack
+        run: pnpm dev > /tmp/dev.log 2>&1 &
+
+      # The browser binary is keyed to the exact Playwright version, not the commit — it changes
+      # only when package.json's Playwright dependency does, but was being downloaded and
+      # installed from scratch on every shard of every run regardless (~30s × 4 shards, every
+      # push). `--with-deps` also apt-installs OS-level libraries every time with no cache at all.
+      - uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browser
+        run: pnpm --filter @docket/web exec playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      # `--with-deps` (above) is what apt-installs Chromium's OS-level libraries; a cache hit
+      # skips that step entirely, so those libraries never get installed on a cache hit. Playwright
+      # itself has no "verify OS deps only" mode, so this reinstalls just the OS package layer —
+      # fast (apt's own cache), and safe to always run.
+      - name: Install Playwright OS dependencies
+        run: pnpm --filter @docket/web exec playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Wait for the stack
+        run: |
+          for _ in $(seq 1 120); do
+            web=$(curl -s -o /dev/null -w "%{http_code}" http://docket.localhost:1355 || true)
+            api=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:1355/v1/health || true)
+            oidc=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:1355/api/auth/.well-known/oauth-authorization-server || true)
+            echo "web=$web api=$api oidc=$oidc"
+            if [ "$web" = "200" ] && [ "$api" = "200" ] && [ "$oidc" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          echo "dev stack never became ready" >&2
+          tail -100 /tmp/dev.log >&2
+          exit 1
+
+      - run: pnpm --filter @docket/web exec playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+
+      # `always()`, not `failure()`: the case that most needs these is a shard that ran out of
+      # wall-clock, and a timed-out job is cancelled rather than failed — so `failure()` skipped
+      # the evidence in exactly the situation nobody could otherwise diagnose. Both steps are
+      # reporting-only and neither can turn a red shard green.
+      - name: Dev stack log
+        if: always()
+        run: tail -200 /tmp/dev.log
+
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: playwright-artifacts-${{ matrix.shard }}
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

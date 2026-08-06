@@ -26,3 +26,8 @@ docs/engineering/specs/mcp-apps-conformance.md
 # Verbatim upstream specification copies. Their bytes are hashed by the conformance suite to prove
 # nobody edited a spec to agree with the implementation; reformatting them breaks that proof.
 docs/engineering/specs/vendor/
+
+# Written verbatim by `apps/web/scripts/generate-offline-routes.ts`, and a policy test asserts the
+# committed file is byte-identical to what that generator emits. Formatting it here would rewrap
+# the `load:` arrows and make that test unsatisfiable — the generator owns this file's shape.
+apps/web/src/lib/offline-routes.generated.ts

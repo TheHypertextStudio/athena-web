@@ -703,10 +703,28 @@ describe('hub /search (cross-org typed hits)', () => {
     expect(search.items).toHaveLength(0);
   });
 
-  it('rejects an empty query (422)', async () => {
+  it('treats an empty query as browse rather than rejecting it', async () => {
     const { userId } = await seedUserWithHub();
     const app = appWithSession(hub, fakeSession(userId));
-    expect((await app.request('/search?q=')).status).toBe(422);
+
+    // `q` is optional by design (see SearchQuery in @docket/types): omitting it — or sending it
+    // empty, which trims to the same thing — asks for the same permission-filtered corpus ordered
+    // by recency instead of relevance. The Library rides this path rather than getting its own
+    // endpoint, so that no second copy of the visibility filter can drift from this one. This
+    // used to assert 422, from before browse mode existed.
+    expect((await app.request('/search?q=')).status).toBe(200);
+    expect((await app.request('/search')).status).toBe(200);
+  });
+
+  it('still rejects a query it cannot parse (422)', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = appWithSession(hub, fakeSession(userId));
+
+    // `q` going optional did not make the whole query bag permissive. `limit` is still bounded,
+    // and the rejection path this covers is the one the empty-`q` case used to exercise before
+    // browse mode existed.
+    expect((await app.request('/search?limit=0')).status).toBe(422);
+    expect((await app.request('/search?limit=101')).status).toBe(422);
   });
 
   it('a deactivated membership row is excluded from search scope', async () => {

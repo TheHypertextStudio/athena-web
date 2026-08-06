@@ -64,13 +64,11 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/initiatives/[initiativeId]',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/initiatives',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/initiatives/initiatives-client')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/initiatives/initiatives-client')).default,
   },
   {
     pattern: '/orgs/[orgId]/library',
@@ -122,18 +120,15 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/settings/connected-accounts',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/settings/connected-accounts/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connected-accounts/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connected-apps',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/settings/connected-apps/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connected-apps/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections/google-calendar',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/settings/connections/google-calendar/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/google-calendar/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/connections',
@@ -161,8 +156,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/settings/notifications',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/settings/notifications/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/notifications/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings',
@@ -182,8 +176,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/orgs/[orgId]/settings/work-structure',
-    load: async () =>
-      (await import('@/app/(app)/orgs/[orgId]/settings/work-structure/page')).default,
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/work-structure/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/stream',
@@ -239,8 +232,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/settings/connections/google-calendar',
-    load: async () =>
-      (await import('@/app/(app)/settings/connections/google-calendar/page')).default,
+    load: async () => (await import('@/app/(app)/settings/connections/google-calendar/page')).default,
   },
   {
     pattern: '/settings/connections',
@@ -248,8 +240,7 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   },
   {
     pattern: '/settings/data-privacy',
-    load: async () =>
-      (await import('@/app/(app)/settings/data-privacy/data-privacy-client')).default,
+    load: async () => (await import('@/app/(app)/settings/data-privacy/data-privacy-client')).default,
   },
   {
     pattern: '/settings/notifications',

@@ -17,6 +17,33 @@ export function SchedulingGripIcon(): JSX.Element {
   );
 }
 
+/**
+ * Closed padlock marking an item this viewer cannot edit.
+ *
+ * @remarks
+ * Drawn here rather than pulled from the shared icon set so its stroke weight matches
+ * {@link SchedulingLinkIcon} and {@link SchedulingGripIcon} — the three are the only glyphs that
+ * appear on an item card, and a heavier import would read as a different family at 16px.
+ */
+export function SchedulingLockIcon(): JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      className="mx-auto size-4"
+      data-schedule-lock-icon=""
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3.25" y="7" width="9.5" height="6.5" rx="1.25" />
+      <path d="M5.75 7V5.25a2.25 2.25 0 0 1 4.5 0V7" />
+    </svg>
+  );
+}
+
 /** Chain-link icon reserved for relationship dragging. */
 export function SchedulingLinkIcon(): JSX.Element {
   return (

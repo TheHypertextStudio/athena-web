@@ -1,6 +1,7 @@
 'use client';
 
-import { Stack } from '@docket/ui/primitives';
+import { Button, Stack } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { type JSX, useMemo } from 'react';
 
 import { type AgendaEntry, isTimeboxed } from './agenda-context';
@@ -35,9 +36,15 @@ export function AgendaListArrangement({
   if (ordered.length === 0 && loading) return <></>;
   if (ordered.length === 0) {
     return (
-      <p role="status" className="text-on-surface-variant px-1 py-3 text-sm">
-        Nothing scheduled. Use the calendar to plan this day.
-      </p>
+      // A link, not an instruction to go find one. `Use the calendar to plan this day` named the
+      // destination and then made the reader locate it themselves, which is a dead empty state by
+      // any reading of the rubric.
+      <Stack gap={2} role="status" className="px-1 py-3">
+        <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
+        <Button asChild variant="outline" size="sm" className="self-start">
+          <Link href="/calendar">Plan in the calendar</Link>
+        </Button>
+      </Stack>
     );
   }
   return (

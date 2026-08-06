@@ -6,6 +6,7 @@ import {
   deriveScheduleTicks,
   scheduleWallPositionForInstant,
   type ScheduleTick,
+  type ScheduleTickLabelStyle,
 } from './scheduling-time-axis';
 import type { ScheduleLane } from './scheduling-types';
 
@@ -17,6 +18,8 @@ export interface SchedulingTimeGridProps {
   readonly displayTimezone: string;
   /** Continuous vertical scale in pixels per hour. */
   readonly pixelsPerHour: number;
+  /** Precision of the rendered hour labels. Defaults to the full `exact` form. */
+  readonly labelStyle?: ScheduleTickLabelStyle;
   /** Optional deterministic ISO instant for the current-time indicator. */
   readonly now?: string;
   /** Width of the sticky time-label gutter. */
@@ -84,6 +87,7 @@ export function SchedulingTimeGrid({
   lanes,
   displayTimezone,
   pixelsPerHour,
+  labelStyle = 'exact',
   now,
   gutterWidth,
   contentWidth,
@@ -98,8 +102,9 @@ export function SchedulingTimeGrid({
         date: referenceDate,
         timezone: displayTimezone,
         pixelsPerHour,
+        labelStyle,
       }),
-    [displayTimezone, pixelsPerHour, referenceDate],
+    [displayTimezone, labelStyle, pixelsPerHour, referenceDate],
   );
   const transitionsByDate = useMemo(() => {
     const transitions = new Map<string, ScheduleTransitionBand[]>();
@@ -126,7 +131,11 @@ export function SchedulingTimeGrid({
           .map((tick) => (
             <span
               key={tick.wallMinutes}
-              className="text-on-surface-variant text-label-large absolute right-2 -translate-y-1/2 tabular-nums"
+              // `whitespace-nowrap` because the compact gutter is sized to the label's exact
+              // measured width: without it a 44px box wraps `12 AM` onto two lines.
+              className={`text-on-surface-variant text-label-large absolute -translate-y-1/2 whitespace-nowrap tabular-nums ${
+                labelStyle === 'hour' ? 'right-1' : 'right-2'
+              }`}
               data-schedule-label={tick.wallMinutes}
               style={{ top: tickTop(tick.wallMinutes, pixelsPerHour) }}
             >

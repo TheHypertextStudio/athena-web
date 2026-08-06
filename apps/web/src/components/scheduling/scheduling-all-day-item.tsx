@@ -13,6 +13,7 @@ import {
   SchedulingAllDayResizeControl,
 } from './scheduling-all-day-edit-controls';
 import { isScheduleItemEditable } from './scheduling-date-lanes';
+import { SchedulingLinkIcon, SchedulingLockIcon } from './scheduling-item-icons';
 import {
   SchedulingRelationshipSourceControl,
   SchedulingRelationshipTargetControl,
@@ -153,10 +154,20 @@ export function SchedulingAllDayItem({
           </span>
         )}
         {!editable && item.readOnlyLabel ? (
+          // Same trade as the timed card: on a rail-width chip the word `Read-only` took nearly
+          // half the row and truncated the title to about ten characters. The lock says the same
+          // thing in 16px, and the words still reach a screen reader.
           <span
-            id={readOnlyDescriptionId}
-            className="text-on-secondary-container text-label-medium pointer-events-none shrink-0 px-1"
+            aria-hidden="true"
+            className="text-on-secondary-container pointer-events-none shrink-0 px-0.5"
           >
+            <SchedulingLockIcon />
+          </span>
+        ) : null}
+        {/* The `id` sits on the text, not on the icon's box, so `aria-describedby` resolves to the
+            words alone and a query for those words lands on the described element. */}
+        {!editable && item.readOnlyLabel ? (
+          <span id={readOnlyDescriptionId} className="sr-only">
             {item.readOnlyLabel}
           </span>
         ) : null}
@@ -171,10 +182,14 @@ export function SchedulingAllDayItem({
             item={item}
             object={dragObject}
             mode={relationshipMode}
-            className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high mx-0.5 size-4 shrink-0 cursor-grab rounded transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10"
-            activeClassName="bg-primary-container ring-primary/40 ring-2"
+            className="text-on-secondary-container focus-visible:ring-ring hover:bg-surface-container-high mx-0.5 size-4 shrink-0 cursor-grab rounded opacity-0 transition-[color,background-color,opacity] outline-none group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none [@media(pointer:coarse)]:size-10 [@media(pointer:coarse)]:opacity-100"
+            activeClassName="bg-primary-container ring-primary/40 opacity-100 ring-2"
           >
-            <span aria-hidden="true">↗</span>
+            {/* Was a raw `↗` text glyph — a different symbol from the chain link the timed card
+                uses for this same relationship-drag control, at a stroke weight nothing else on the
+                surface shares. One control, one icon. It is also revealed on hover/focus now,
+                matching the timed card, so a chip at rest is its title and nothing else. */}
+            <SchedulingLinkIcon />
           </SchedulingRelationshipSourceControl>
         ) : null}
         {exposesEndResize ? (

@@ -49,6 +49,7 @@ export default function SchedulingCanvas({
   viewportWidth,
   viewportHeight,
   minimumLaneWidth = MINIMUM_LANE_WIDTH,
+  gutterSlot,
   initialLaneIndex = 0,
   horizontalAnchorKey,
   initialScrollMinutes,
@@ -57,6 +58,7 @@ export default function SchedulingCanvas({
   onReachBoundary,
   error,
   emptyMessage = 'Nothing scheduled.',
+  emptyAction,
   renderItem,
   renderItemAction,
   selectedRegion,
@@ -101,7 +103,7 @@ export default function SchedulingCanvas({
     displayTimezone,
     lanes,
   });
-  const { viewportRef, timedGridRef, observedWidth, geometry, captureZoomAnchor, onScroll } =
+  const { viewportRef, timedGridRef, observedWidth, geometry, axis, captureZoomAnchor, onScroll } =
     useSchedulingViewport({
       lanes,
       pixelsPerHour: effectivePixelsPerHour,
@@ -248,6 +250,8 @@ export default function SchedulingCanvas({
           displayTimezone={displayTimezone}
           todayDate={todayDate}
           viewportRef={viewportRef}
+          compact={axis.labelStyle === 'hour'}
+          gutterSlot={gutterSlot}
           gutterWidth={geometry.gutterWidth}
           contentWidth={geometry.contentWidth}
           laneWidth={geometry.laneWidth}
@@ -264,6 +268,7 @@ export default function SchedulingCanvas({
             lanes={lanes}
             displayTimezone={displayTimezone}
             pixelsPerHour={effectivePixelsPerHour}
+            labelStyle={axis.labelStyle}
             now={now}
             gutterWidth={geometry.gutterWidth}
             contentWidth={geometry.contentWidth}
@@ -382,6 +387,7 @@ export default function SchedulingCanvas({
             position; its own height is cancelled by the notice's negative margin. */}
         <SchedulingCanvasNotice
           emptyMessage={emptyMessage}
+          emptyAction={emptyAction}
           error={error}
           isEmpty={lanes.every((lane) => lane.items.length === 0)}
           viewportWidth={viewportWidth ?? observedWidth}

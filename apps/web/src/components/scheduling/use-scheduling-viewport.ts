@@ -13,24 +13,14 @@ import {
 
 import {
   deriveLaneGeometry,
+  deriveScheduleAxis,
   minutesToPixels,
+  type ScheduleAxisPresentation,
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
 import { SchedulingHorizontalBoundary } from './scheduling-horizontal-boundary';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
 import { visibleScheduleLaneRange } from './scheduling-visible-lanes';
-
-/**
- * Width of the sticky hour-label gutter.
- *
- * @remarks
- * Sized so `12:00 AM` fits on one line with real padding at the gutter's type size. That size is now
- * 14px, not 12px: the hour labels are the most numerous run of text on the whole surface — 24 of
- * them — so they alone decided whether "the minimum text size" reads as raised. 76px held the 12px
- * form; 88px holds the 14px one without the label wrapping, which is the failure this width exists
- * to prevent.
- */
-const HOUR_GUTTER_WIDTH = 88;
 
 interface UseSchedulingViewportOptions {
   readonly lanes: readonly ScheduleLane[];
@@ -58,6 +48,8 @@ interface SchedulingViewportController {
   readonly timedGridRef: RefObject<HTMLDivElement | null>;
   readonly observedWidth: number;
   readonly geometry: ScheduleLaneGeometry;
+  /** The gutter width and hour-label form chosen for the measured width. */
+  readonly axis: ScheduleAxisPresentation;
   /**
    * Record the time under a zoom pointer so the next `pixelsPerHour` change keeps it in place.
    *
@@ -126,15 +118,17 @@ export function useSchedulingViewport({
     return observer.disconnect.bind(observer);
   }, [viewportWidth]);
 
+  const measuredWidth = viewportWidth ?? observedWidth;
+  const axis = useMemo(() => deriveScheduleAxis(measuredWidth), [measuredWidth]);
   const geometry = useMemo(
     () =>
       deriveLaneGeometry({
-        viewportWidth: viewportWidth ?? observedWidth,
+        viewportWidth: measuredWidth,
         laneCount: lanes.length,
-        gutterWidth: HOUR_GUTTER_WIDTH,
+        gutterWidth: axis.gutterWidth,
         minimumLaneWidth,
       }),
-    [lanes.length, minimumLaneWidth, observedWidth, viewportWidth],
+    [axis.gutterWidth, lanes.length, measuredWidth, minimumLaneWidth],
   );
   const hasMeasuredViewport = viewportWidth !== undefined || observedWidth > 0;
 
@@ -261,6 +255,7 @@ export function useSchedulingViewport({
     timedGridRef,
     observedWidth,
     geometry,
+    axis,
     captureZoomAnchor,
     onScroll: (event) => {
       const viewport = event.currentTarget;

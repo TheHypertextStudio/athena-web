@@ -49,6 +49,15 @@ vi.mock('@/components/scheduling', () => ({
   isInlineEditableScheduleItem: () => false,
   resolveScheduleTimezone: (timezone?: string) => timezone ?? 'UTC',
   scheduleInstantAt: () => null,
+  // The rail's scale stepper reads the shared zoom scale from this module, so the mock has to
+  // carry it. Real values rather than stubs: the clamp is arithmetic, and a fake one would let a
+  // broken step pass here.
+  clampPixelsPerHour: (value: number) => Math.min(240, Math.max(24, Math.round(value))),
+  DEFAULT_PIXELS_PER_HOUR: 72,
+  MAX_PIXELS_PER_HOUR: 240,
+  MIN_PIXELS_PER_HOUR: 24,
+  ZOOM_STEP_IN: 1.25,
+  ZOOM_STEP_OUT: 0.8,
   SchedulingCanvas: (props: SchedulingCanvasProps) => {
     agendaCanvas.props = props;
     return <div data-testid="agenda-scheduling-canvas" />;

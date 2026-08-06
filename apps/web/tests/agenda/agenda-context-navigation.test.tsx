@@ -264,17 +264,19 @@ describe('AgendaProvider day navigation', () => {
         { wrapper: TestProvider },
       );
 
-      expect(screen.getByText('Today', { selector: 'span' })).toBeInTheDocument();
+      // The rail's day label now always names the month: it is the only toolbar this canvas has,
+      // and the lane heading below it deliberately renders `Wed 5` with no month at all.
+      expect(screen.getByText(/^Today · /, { selector: 'span' })).toBeInTheDocument();
 
       act(() => {
         vi.advanceTimersByTime(30_000);
       });
 
-      expect(screen.getByText('Yesterday', { selector: 'span' })).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /^Today$/ }));
+      expect(screen.getByText(/^Yesterday · /, { selector: 'span' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Back to today' }));
 
       expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
-      expect(screen.getByText('Today', { selector: 'span' })).toBeInTheDocument();
+      expect(screen.getByText(/^Today · /, { selector: 'span' })).toBeInTheDocument();
     } finally {
       preferencesState.data = { timezone: 'America/Los_Angeles' };
       vi.useRealTimers();

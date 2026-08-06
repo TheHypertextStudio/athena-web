@@ -9,7 +9,7 @@
  * relatively ("Today" / "Tomorrow" / "Yesterday") and falls back to a weekday-date. Controls are
  * composed from the {@link Button} primitive rather than hand-styled buttons.
  */
-import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
+import { CalendarToday, ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { Button, Row } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
@@ -18,11 +18,28 @@ import { formatDay } from '@/components/date-picker';
 import { shiftISODate, useAgenda } from './agenda-context';
 import AgendaViewSwitcher from './agenda-view-switcher';
 
-/** Format a `YYYY-MM-DD` day as a relative label, falling back to `Mon, Jun 30`. */
-function formatAgendaDate(iso: string, today: string): string {
+/** Relative day name, when the day has one worth saying. */
+function relativeAgendaDay(iso: string, today: string): string | null {
   if (iso === today) return 'Today';
   if (iso === shiftISODate(today, 1)) return 'Tomorrow';
   if (iso === shiftISODate(today, -1)) return 'Yesterday';
+  return null;
+}
+
+/**
+ * Format a `YYYY-MM-DD` day for the rail, always naming the month.
+ *
+ * @remarks
+ * The relative name alone used to be the whole label. Combined with the lane heading below — which
+ * renders `Wed 5` and deliberately omits the month because
+ * {@link file://../scheduling/scheduling-canvas-header.tsx} assumes "the surface's own toolbar owns
+ * the month and year" — that left the rail rendering the month **zero** times. The rail is that
+ * toolbar, so it says the month.
+ */
+function formatAgendaDate(iso: string, today: string): string {
+  const absolute = formatDay(iso, { month: 'short', day: 'numeric' }) ?? iso;
+  const relative = relativeAgendaDay(iso, today);
+  if (relative) return `${relative} · ${absolute}`;
   return formatDay(iso, { weekday: 'short', month: 'short', day: 'numeric' }) ?? iso;
 }
 
@@ -30,8 +47,12 @@ function formatAgendaDate(iso: string, today: string): string {
 export default function AgendaHeader(): JSX.Element {
   const { date, today, isToday, goToPreviousDay, goToNextDay, goToToday } = useAgenda();
   return (
-    <Row justify="between" className="shrink-0 px-1 pb-1">
-      <Row gap={1}>
+    // One row at every rail width. The date is the only flexible child and it truncates; nothing
+    // else may shrink, wrap, or leave. The previous `w-28` floor on that child was what turned a
+    // too-narrow rail into a *control* pushed out of the row — the same failure round 3 fixed on
+    // the calendar toolbar by deleting its heading's `min-w-16`.
+    <Row justify="between" className="shrink-0 flex-nowrap gap-1 px-1 pb-1">
+      <Row gap={1} className="min-w-0 flex-1 flex-nowrap">
         <Button
           variant="ghost"
           iconOnly
@@ -41,7 +62,7 @@ export default function AgendaHeader(): JSX.Element {
         >
           <ChevronLeft />
         </Button>
-        <span className="text-on-surface w-28 shrink-0 px-1 text-center text-sm font-semibold whitespace-nowrap">
+        <span className="text-on-surface text-title-small min-w-0 flex-1 truncate px-1 text-center">
           {formatAgendaDate(date, today)}
         </span>
         <Button
@@ -54,10 +75,18 @@ export default function AgendaHeader(): JSX.Element {
           <ChevronRight />
         </Button>
       </Row>
-      <Row gap={1}>
+      <Row gap={1} className="shrink-0 flex-nowrap">
+        {/* Icon, not the word, exactly as the calendar toolbar collapses its own Today control:
+            the label costs ~50px in a row that has ~256px to spend. */}
         {isToday ? null : (
-          <Button variant="ghost" controlSize="sm" onClick={goToToday}>
-            Today
+          <Button
+            variant="ghost"
+            iconOnly
+            controlSize="sm"
+            aria-label="Back to today"
+            onClick={goToToday}
+          >
+            <CalendarToday />
           </Button>
         )}
         <AgendaViewSwitcher />

@@ -25,6 +25,8 @@ const STICKY_LABEL_STYLE = { top: 'var(--schedule-sticky-top, 0px)' } satisfies 
 interface SchedulingItemBodyProps {
   readonly item: ScheduleItem;
   readonly density: ScheduleItemDensity;
+  /** Rendered card height in pixels, which sets how many title lines fit. */
+  readonly height: number;
   readonly timeRange: string;
   readonly content: ReactNode;
   readonly readOnlyDescriptionId: string;
@@ -35,20 +37,46 @@ interface SchedulingItemBodyProps {
   readonly onClick: MouseEventHandler<HTMLButtonElement>;
 }
 
+/**
+ * How many lines of title a card of this height can show without spilling past its own bounds.
+ *
+ * @remarks
+ * The old rule was `truncate` at every height, so a two-hour meeting rendered one clipped line
+ * followed by 180px of empty fill. Line height is ~20px and the time line below the title takes one
+ * of them, so the budget is `(height - padding - timeLine) / lineHeight`, capped at 3 because a
+ * fourth line is a description, not a title, and a card is not a reading surface.
+ */
+function titleLineClamp(height: number): 1 | 2 | 3 {
+  if (height < 64) return 1;
+  if (height < 96) return 2;
+  return 3;
+}
+
+const TITLE_CLAMP_CLASS = {
+  1: 'line-clamp-1',
+  2: 'line-clamp-2',
+  3: 'line-clamp-3',
+} as const;
+
 /** Render the visible title/time content shared by interactive and opaque item bodies. */
 function ItemBodyContent({
-  item,
   density,
+  height,
   timeRange,
   content,
-}: Pick<SchedulingItemBodyProps, 'item' | 'density' | 'timeRange' | 'content'>): JSX.Element {
+}: Pick<SchedulingItemBodyProps, 'density' | 'height' | 'timeRange' | 'content'>): JSX.Element {
+  // A block too short for a time line still gets its title. It used to render as a featureless
+  // coloured bar with the title only in the accessibility tree — a dead element on the one surface
+  // whose entire job is saying what is happening. `leading-none` and no vertical padding is what
+  // buys one 14px line inside an 18px block, so the round-3 type floor holds.
   if (density === 'marker') {
     return (
       <span
-        aria-hidden="true"
-        className="bg-primary my-auto block h-1 w-full rounded-full"
-        style={item.color ? { backgroundColor: item.color } : undefined}
-      />
+        className="text-label-large sticky block w-full truncate leading-none"
+        style={STICKY_LABEL_STYLE}
+      >
+        {content}
+      </span>
     );
   }
 
@@ -64,9 +92,19 @@ function ItemBodyContent({
 
   // A full-height card has room for the readable 14px title; the time line stays one step down at
   // the 12px floor. Nothing on a calendar card is ever rendered below 12px.
+  //
+  // `line-clamp-*` sets `overflow: hidden` on the *title span only*. The body above must stay
+  // unclipped or it establishes a scrollport and strands the sticky label (see
+  // {@link STICKY_LABEL_STYLE}); a clipped grandchild does not.
   return (
     <span className="sticky flex min-w-0 flex-col" style={STICKY_LABEL_STYLE}>
-      <span className="text-title-small block w-full truncate">{content}</span>
+      {/* No `block` beside `line-clamp-*`: both utilities set `display`, and whichever Tailwind
+          emits later wins regardless of the order they appear in this attribute. `block` won, the
+          clamp silently did nothing, and a long title ran straight out of the bottom of its own
+          card. `line-clamp-*` already supplies the `-webkit-box` display it needs. */}
+      <span className={`text-title-small w-full ${TITLE_CLAMP_CLASS[titleLineClamp(height)]}`}>
+        {content}
+      </span>
       <span className="text-on-surface-variant text-body-medium block w-full truncate tabular-nums">
         {timeRange}
       </span>
@@ -82,12 +120,18 @@ export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element 
   // `truncate` clips instead, and the canvas clips everything past its edges.
   const bodyClassName =
     density === 'marker'
-      ? 'focus-visible:ring-ring relative z-10 size-full overflow-hidden rounded-sm p-1 outline-none focus-visible:ring-2 focus-visible:ring-inset'
+      ? 'text-on-surface focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col justify-center rounded-sm px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset'
       : 'text-on-surface text-label-large focus-visible:ring-ring relative z-10 flex size-full min-w-0 flex-col rounded-sm px-2 py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset';
-  const ariaLabel = density === 'marker' ? `${item.title}, ${timeRange}` : undefined;
   const describedBy = !editable && item.readOnlyLabel ? readOnlyDescriptionId : undefined;
   const title = `${item.title} · ${timeRange}`;
   const children = <ItemBodyContent {...props} />;
+  // Every density now renders the title as visible text, so the control is named by its own
+  // content. The marker density used to be the exception — a bare coloured bar with an `aria-label`
+  // and an `sr-only` twin — and both of those are gone with the bar. Only the time range is still
+  // unrenderable in an 18px box, so it alone stays screen-reader-only, with the comma that keeps
+  // the announcement reading as `Title, 9:00 AM – 9:05 AM` rather than running the two together.
+  const timeRangeLabel =
+    density === 'marker' ? <span className="sr-only">{`, ${timeRange}`}</span> : null;
 
   if (!openable && !movable) {
     return (
@@ -97,12 +141,8 @@ export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element 
         data-schedule-item-body={item.id}
         title={title}
       >
-        {density === 'marker' ? (
-          <span className="sr-only">
-            {item.title}, {timeRange}
-          </span>
-        ) : null}
         {children}
+        {timeRangeLabel}
       </div>
     );
   }
@@ -110,7 +150,6 @@ export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element 
   return (
     <button
       type="button"
-      aria-label={ariaLabel}
       aria-describedby={describedBy}
       className={`${bodyClassName} ${movable ? 'cursor-grab active:cursor-grabbing' : ''}`}
       data-schedule-item-body={item.id}
@@ -119,6 +158,7 @@ export function SchedulingItemBody(props: SchedulingItemBodyProps): JSX.Element 
       onClick={openable ? props.onClick : undefined}
     >
       {children}
+      {timeRangeLabel}
     </button>
   );
 }

@@ -1,4 +1,4 @@
-import type { JSX, RefObject } from 'react';
+import type { JSX, ReactNode, RefObject } from 'react';
 
 import { SchedulingAllDayLane } from './scheduling-all-day-lane';
 import type { ScheduleLane, SchedulingCanvasProps } from './scheduling-types';
@@ -48,10 +48,13 @@ function SchedulingLaneHeading({
   lane,
   displayTimezone,
   todayDate,
+  compact,
 }: {
   readonly lane: ScheduleLane;
   readonly displayTimezone: string;
   readonly todayDate?: string;
+  /** Stack the weekday over the day number, for a rail-width canvas. */
+  readonly compact: boolean;
 }): JSX.Element {
   const heading = lane.resourceId === undefined ? scheduleLaneDateHeading(lane.date) : null;
   const isToday = todayDate !== undefined && todayDate === lane.date;
@@ -60,12 +63,25 @@ function SchedulingLaneHeading({
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       {heading ? (
-        <p className="text-title-small text-on-surface flex min-w-0 items-center gap-1.5">
+        // Stacked in a rail because a rail's scarce axis is horizontal: `TUE` over `11` costs one
+        // extra text line and gives the all-day chips beside it the full lane width, where the
+        // inline form spends that width on a weekday nobody scans for.
+        <p
+          className={`text-title-small text-on-surface flex min-w-0 gap-1.5 ${
+            compact ? 'flex-col items-start gap-0' : 'items-center'
+          }`}
+        >
           {/* The weekday is the least informative atom in the heading — the day number is what a
               person scans for — and it is chrome sitting directly above the events. Dropping it to
               the variant tone keeps every day header quieter than an event's own title, which is
               the emphasis order this surface is supposed to have. */}
-          <span className="text-on-surface-variant truncate">{heading.weekday}</span>
+          <span
+            className={`text-on-surface-variant truncate ${
+              compact ? 'text-label-large uppercase' : ''
+            }`}
+          >
+            {heading.weekday}
+          </span>
           {/* The day number always occupies the same 24px box, chip or not, so every lane heading
               is exactly as tall as every other and the all-day row below stays on one line. */}
           <span
@@ -94,6 +110,8 @@ export function SchedulingCanvasHeader({
   displayTimezone,
   todayDate,
   viewportRef,
+  compact,
+  gutterSlot,
   gutterWidth,
   contentWidth,
   laneWidth,
@@ -116,6 +134,17 @@ export function SchedulingCanvasHeader({
   /** Today's date in `displayTimezone`, used only to mark the current lane. */
   readonly todayDate?: string;
   readonly viewportRef: RefObject<HTMLElement | null>;
+  /** Rail-width canvas: stack the lane date and drop the visible `All day` gutter label. */
+  readonly compact: boolean;
+  /**
+   * Consumer-owned chrome rendered in the header's gutter cell, beside the all-day row.
+   *
+   * @remarks
+   * The canvas owns no controls of its own, so this is how a surface puts one in the only piece of
+   * chrome that is neither a lane nor an item. It exists because the rail needs a scale stepper and
+   * the gutter cell is the one place on a 280px surface with room for it.
+   */
+  readonly gutterSlot?: ReactNode;
   readonly gutterWidth: number;
   readonly contentWidth: number;
   readonly laneWidth: number;
@@ -134,10 +163,17 @@ export function SchedulingCanvasHeader({
     // "there are just so many fucking borders everywhere" complaint could still point at.
     <header ref={headerRef} className="bg-surface-container-low sticky top-0 z-[60] flex">
       <div
-        className="text-on-surface-variant bg-surface-container-low text-label-large sticky left-0 z-[70] shrink-0 self-stretch px-2 py-3"
+        // A rail cannot afford a gutter as wide as the words `All day`, and it does not need one:
+        // the chips sit directly under the date and read as all-day from their position, exactly as
+        // every reference calendar renders them. The label stays in the accessibility tree so the
+        // region is still named — only its pixels go, which frees the cell for `gutterSlot`.
+        className={`text-on-surface-variant bg-surface-container-low text-label-large sticky left-0 z-[70] flex shrink-0 flex-col items-center self-stretch ${
+          compact ? 'py-1' : 'px-2 py-3'
+        }`}
         style={{ width: gutterWidth }}
       >
-        All day
+        <span className={compact ? 'sr-only' : undefined}>All day</span>
+        {gutterSlot}
       </div>
       <div className="flex" style={{ width: contentWidth }}>
         {lanes.map((lane, laneIndex) => (
@@ -151,6 +187,7 @@ export function SchedulingCanvasHeader({
               lane={lane}
               displayTimezone={displayTimezone}
               todayDate={todayDate}
+              compact={compact}
             />
             <SchedulingAllDayLane
               lane={lane}

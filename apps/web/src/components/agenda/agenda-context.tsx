@@ -15,9 +15,14 @@ import {
 
 import { calendarItemsDef } from '@/components/calendar/calendar-data';
 import {
+  clampPixelsPerHour,
+  MAX_PIXELS_PER_HOUR,
+  MIN_PIXELS_PER_HOUR,
   resolveScheduleTimezone,
   scheduleDateRange,
   useScheduleDisplayDate,
+  ZOOM_STEP_IN,
+  ZOOM_STEP_OUT,
 } from '@/components/scheduling';
 import { api } from '@/lib/api';
 import {
@@ -54,7 +59,35 @@ export {
   toAgendaEntryFromCalendarItem,
 } from './agenda-model';
 
-const DEFAULT_PIXELS_PER_HOUR = 72;
+/**
+ * The rail's own resting density, deliberately not the calendar page's 72.
+ *
+ * @remarks
+ * 48 is the product's existing `Compact` preset. At 72 a day is 1728px tall and a rail shows about
+ * nine hours of it; at 48 it is 1152px and the rail shows roughly fourteen, which is most of a
+ * working day without scrolling. The rail reads a schedule; the calendar page edits one, and it
+ * keeps its own density for that.
+ */
+const RAIL_PIXELS_PER_HOUR = 48;
+
+/** Where the rail's chosen density survives a reload. */
+const RAIL_SCALE_KEY = 'docket.rail.agenda.scale';
+
+/**
+ * Read the persisted rail density, or `null` when there is nothing legible stored.
+ *
+ * @remarks
+ * Deliberately not called from a `useState` initializer: the rail is server-rendered, and reading
+ * `localStorage` during the first render is exactly the hydration mismatch the shell's own rail
+ * state avoids by reading in an effect instead.
+ */
+function readRailScale(): number | null {
+  if (typeof window === 'undefined') return null;
+  const stored = window.localStorage.getItem(RAIL_SCALE_KEY);
+  if (stored === null) return null;
+  const parsed = Number.parseInt(stored, 10);
+  return Number.isFinite(parsed) ? clampPixelsPerHour(parsed) : null;
+}
 
 interface AgendaContextValue extends AgendaPlanMutations {
   date: string;
@@ -66,6 +99,13 @@ interface AgendaContextValue extends AgendaPlanMutations {
   retrying: boolean;
   displayTimezone: string;
   pixelsPerHour: number;
+  /** One step coarser/finer on the shared zoom scale, persisted for this rail alone. */
+  zoomIn: () => void;
+  zoomOut: () => void;
+  /** The rail's density as a multiple of its own resting scale, for the stepper's readout. */
+  scaleMultiplier: number;
+  canZoomIn: boolean;
+  canZoomOut: boolean;
   view: AgendaView;
   setView: (view: AgendaView) => void;
   goToPreviousDay: () => void;
@@ -115,7 +155,26 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
     ),
   );
   const displayTimezone = resolveScheduleTimezone(preferencesQuery.data?.timezone);
-  const pixelsPerHour = preferencesQuery.data?.calendar?.pixelsPerHour ?? DEFAULT_PIXELS_PER_HOUR;
+  const [pixelsPerHour, setPixelsPerHour] = useState(RAIL_PIXELS_PER_HOUR);
+  useEffect(() => {
+    const stored = readRailScale();
+    if (stored !== null) setPixelsPerHour(stored);
+  }, []);
+  const zoomBy = useCallback((factor: number) => {
+    setPixelsPerHour((current) => {
+      const next = clampPixelsPerHour(current * factor);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(RAIL_SCALE_KEY, String(next));
+      }
+      return next;
+    });
+  }, []);
+  const zoomIn = useCallback(() => {
+    zoomBy(ZOOM_STEP_IN);
+  }, [zoomBy]);
+  const zoomOut = useCallback(() => {
+    zoomBy(ZOOM_STEP_OUT);
+  }, [zoomBy]);
   const { date, isToday, today, setDate } = useScheduleDisplayDate({
     initialDate,
     displayTimezone,
@@ -208,6 +267,11 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
         planQuery.isFetching,
       displayTimezone,
       pixelsPerHour,
+      zoomIn,
+      zoomOut,
+      scaleMultiplier: pixelsPerHour / RAIL_PIXELS_PER_HOUR,
+      canZoomIn: pixelsPerHour < MAX_PIXELS_PER_HOUR,
+      canZoomOut: pixelsPerHour > MIN_PIXELS_PER_HOUR,
       view,
       setView,
       goToPreviousDay,
@@ -235,6 +299,8 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
       preferencesQuery.isFetching,
       displayTimezone,
       pixelsPerHour,
+      zoomIn,
+      zoomOut,
       view,
       setView,
       goToPreviousDay,

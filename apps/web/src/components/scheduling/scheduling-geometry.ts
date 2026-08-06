@@ -4,6 +4,93 @@ export const MINUTES_PER_DAY = 24 * 60;
 /** The smallest interaction increment exposed at high zoom. */
 export const MINIMUM_SNAP_MINUTES = 5;
 
+/** Smallest legal zoom — roughly a full day in view without the grid collapsing. */
+export const MIN_PIXELS_PER_HOUR = 24;
+/** Largest legal zoom — fine enough to place a five-minute block by hand. */
+export const MAX_PIXELS_PER_HOUR = 240;
+/** The one sane default density every new viewer starts at, and the `100%` zoom reference. */
+export const DEFAULT_PIXELS_PER_HOUR = 72;
+
+/** Multiplier applied by one press of the zoom-in step. */
+export const ZOOM_STEP_IN = 1.25;
+/** Multiplier applied by one press of the zoom-out step — the inverse-ish of {@link ZOOM_STEP_IN}. */
+export const ZOOM_STEP_OUT = 0.8;
+
+/**
+ * Clamp and round any proposed zoom to a legal, persistable pixels-per-hour value.
+ *
+ * @remarks
+ * The single funnel every zoom source flows through — preset, stepper, reset, and the canvas's raw
+ * pinch scale — so no code path can persist an out-of-range or fractional height. Non-finite input
+ * (a `NaN` from a degenerate gesture, say) resolves to {@link DEFAULT_PIXELS_PER_HOUR} rather than
+ * propagating into layout math.
+ *
+ * It lives here rather than beside the calendar's Display menu because the rail's own scale stepper
+ * needs the identical funnel, and a `components/` module must not import an `app/` route module.
+ *
+ * @param value - The proposed pixels-per-hour, from any source.
+ * @returns an integer within `[MIN_PIXELS_PER_HOUR, MAX_PIXELS_PER_HOUR]`.
+ *
+ * @example
+ * ```ts
+ * clampPixelsPerHour(71.4);       // 71
+ * clampPixelsPerHour(1_000);      // 240
+ * clampPixelsPerHour(Number.NaN); // 72
+ * ```
+ */
+export function clampPixelsPerHour(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_PIXELS_PER_HOUR;
+  return Math.min(MAX_PIXELS_PER_HOUR, Math.max(MIN_PIXELS_PER_HOUR, Math.round(value)));
+}
+
+/**
+ * Measured canvas width at or above which the hour axis keeps its full form.
+ *
+ * @remarks
+ * Below this the canvas is a rail, not a page. The full axis costs 88px of gutter because it has to
+ * hold `12:00 AM` on one line at 14px, which is 3% of a 1440px canvas and **34% of a 280px rail** —
+ * a third of the surface spent on labels nobody reads twice.
+ */
+export const COMPACT_AXIS_MAX_WIDTH = 640;
+
+/** Gutter width and label form chosen together, since one sizes the other. */
+export interface ScheduleAxisPresentation {
+  /** Width reserved for hour labels. */
+  readonly gutterWidth: number;
+  /** `exact` renders `12:00 AM`; `hour` renders `12 AM` and never labels a sub-hour tick. */
+  readonly labelStyle: 'exact' | 'hour';
+}
+
+const FULL_AXIS: ScheduleAxisPresentation = { gutterWidth: 88, labelStyle: 'exact' };
+/**
+ * 44px, not the ~32px a reference rail gets away with.
+ *
+ * @remarks
+ * Those rails print their hours at 10–11px. Round 3 established a hard 14px floor for this surface
+ * — zero rendered nodes at or below 12px — and `12 AM` at 14px measures ~38px plus its 4px inset.
+ * Halving the gutter is worth having; buying the other 12px by regressing a shipped type guarantee
+ * is not.
+ */
+const COMPACT_AXIS: ScheduleAxisPresentation = { gutterWidth: 44, labelStyle: 'hour' };
+
+/**
+ * Choose the hour axis's width and label form from the measured canvas width.
+ *
+ * @remarks
+ * An **unmeasured** viewport (`0`) resolves to the full axis rather than the compact one. Zero is
+ * every canvas's first paint, and resolving it compact would make the wide calendar flash a 32px
+ * gutter before its first measurement. The rail's own 88 → 32 correction lands in the same layout
+ * pass as its lane width's 0 → real correction, which already reflows the surface, so it costs no
+ * additional frame.
+ *
+ * @param viewportWidth - Measured canvas width in CSS pixels, or `0` when unmeasured.
+ * @returns The gutter width and label form for that width.
+ */
+export function deriveScheduleAxis(viewportWidth: number): ScheduleAxisPresentation {
+  if (viewportWidth <= 0) return FULL_AXIS;
+  return viewportWidth < COMPACT_AXIS_MAX_WIDTH ? COMPACT_AXIS : FULL_AXIS;
+}
+
 /** Viewport-derived horizontal lane measurements. */
 export interface ScheduleLaneGeometry {
   /** Width reserved for hour labels. */

@@ -211,6 +211,11 @@ describe('SchedulingCanvas horizontal viewport', () => {
         ]}
         pixelsPerHour={60}
         viewportWidth={500}
+        // Pinned so this case keeps testing lane-range reporting rather than lane *packing*. At
+        // 500px the axis is compact (44px gutter, not 88), which hands the lane region 44 more
+        // pixels — enough to cross the default 220px minimum and fit two lanes where it used to fit
+        // one. The assertion below is about which lanes a one-lane-wide window intersects.
+        minimumLaneWidth={456}
         initialLaneIndex={1}
         onVisibleLaneRange={onVisibleLaneRange}
       />,
@@ -248,7 +253,9 @@ describe('SchedulingCanvas horizontal viewport', () => {
     );
 
     const viewport = screen.getByRole('region', { name: 'Schedule' });
-    const gutter = screen.getByText('All day');
+    // `.parentElement`: the label is a child span of the gutter cell, and the width is on the
+    // cell. Reading it off the span gives `NaN`, which `toBe` then happily matches against `NaN`.
+    const gutter = screen.getByText('All day').parentElement!;
     const anchorLane = laneHeader('anchor');
 
     const gutterWidth = Number.parseFloat(gutter.style.width);

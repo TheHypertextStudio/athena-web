@@ -95,12 +95,25 @@ import type { CalendarAxis } from './calendar-schedule-model';
 export const CALENDAR_CONTROL_CLASS =
   'min-h-9 w-9 min-w-9 shrink gap-1.5 px-2 [&_svg]:size-4 @min-[22rem]:min-h-11 @min-[22rem]:w-11 @min-[22rem]:min-w-11 @2xl:min-h-8 @2xl:w-auto @2xl:min-w-8 @2xl:shrink-0 @2xl:px-3';
 
-/** Smallest legal zoom — roughly a full day in view without the grid collapsing. */
-export const MIN_PIXELS_PER_HOUR = 24;
-/** Largest legal zoom — fine enough to place a five-minute block by hand. */
-export const MAX_PIXELS_PER_HOUR = 240;
-/** The one sane default density every new viewer starts at, and the `100%` zoom reference. */
-export const DEFAULT_PIXELS_PER_HOUR = 72;
+// The zoom scale and its clamp moved to `components/scheduling/scheduling-geometry.ts` when the
+// rail's own scale stepper needed the identical funnel: a `components/` module must not import an
+// `app/` route module, so the shared half had to move down rather than be copied. Re-exported here
+// so every existing importer of this module keeps working.
+export {
+  clampPixelsPerHour,
+  DEFAULT_PIXELS_PER_HOUR,
+  MAX_PIXELS_PER_HOUR,
+  MIN_PIXELS_PER_HOUR,
+} from '@/components/scheduling';
+
+import {
+  clampPixelsPerHour,
+  DEFAULT_PIXELS_PER_HOUR,
+  MAX_PIXELS_PER_HOUR,
+  MIN_PIXELS_PER_HOUR,
+  ZOOM_STEP_IN,
+  ZOOM_STEP_OUT,
+} from '@/components/scheduling';
 
 /**
  * The only named densities the product exposes.
@@ -121,35 +134,6 @@ export type CalendarDensityPresetId = (typeof CALENDAR_DENSITY_PRESETS)[number][
 
 /** Radio value used when the continuous zoom matches no named preset. */
 const CUSTOM_DENSITY = '__custom__';
-
-/** Multiplier applied by one press of the zoom-in step. */
-const ZOOM_STEP_IN = 1.25;
-/** Multiplier applied by one press of the zoom-out step — the inverse-ish of {@link ZOOM_STEP_IN}. */
-const ZOOM_STEP_OUT = 0.8;
-
-/**
- * Clamp and round any proposed zoom to a legal, persistable pixels-per-hour value.
- *
- * @remarks
- * The single funnel every zoom source flows through — preset, stepper, reset, and the canvas's raw
- * pinch scale — so no code path can persist an out-of-range or fractional height. Non-finite input
- * (a `NaN` from a degenerate gesture, say) resolves to {@link DEFAULT_PIXELS_PER_HOUR} rather than
- * propagating into layout math.
- *
- * @param value - The proposed pixels-per-hour, from any source.
- * @returns an integer within `[MIN_PIXELS_PER_HOUR, MAX_PIXELS_PER_HOUR]`.
- *
- * @example
- * ```ts
- * clampPixelsPerHour(71.4);      // 71
- * clampPixelsPerHour(1_000);     // 240
- * clampPixelsPerHour(Number.NaN); // 72
- * ```
- */
-export function clampPixelsPerHour(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_PIXELS_PER_HOUR;
-  return Math.min(MAX_PIXELS_PER_HOUR, Math.max(MIN_PIXELS_PER_HOUR, Math.round(value)));
-}
 
 /**
  * Render the inline leading glyph for a density preset.

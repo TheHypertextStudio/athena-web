@@ -30,12 +30,21 @@ export default function Agenda({ initialDate }: AgendaProps): JSX.Element {
     <AgendaProvider initialDate={initialDate}>
       <Stack gap={2} className="h-full min-h-0 p-3">
         <AgendaHeader />
+        <AgendaStatusNotice />
         <AgendaViewport>
           <AgendaCanvas />
         </AgendaViewport>
       </Stack>
     </AgendaProvider>
   );
+}
+
+/** The loading or degraded disclosure, above the canvas rather than inside its scrollport. */
+function AgendaStatusNotice(): JSX.Element | null {
+  const { loading, error, retry, retrying } = useAgenda();
+  if (loading) return <AgendaLoadingNotice />;
+  if (error) return <AgendaDegradedNotice onRetry={retry} retrying={retrying} />;
+  return null;
 }
 
 /** Props for {@link AgendaViewport}. */
@@ -45,25 +54,20 @@ interface AgendaViewportProps {
 }
 
 /**
- * The scrolling body that always renders the agenda canvas once the initial read settles.
+ * The body that always renders the agenda canvas once the initial read settles.
  *
  * @remarks
  * Server data enriches this ambient shell surface; it does not own the surface. A failed refresh
  * therefore leaves cached entries in place (or renders the normal empty state on first failure)
  * with a quiet status notice instead of replacing the agenda with raw server error copy.
+ *
+ * **Exactly one scrollport.** This wrapper used to be `overflow-auto` around a canvas sized
+ * `height: 100%` that scrolls itself, so whenever a notice rendered above the canvas the wrapper
+ * overflowed too and the rail grew a second scrollbar beside the first. The notice is now a sibling
+ * of this element rather than a child, and the canvas is the only thing that scrolls.
  */
 function AgendaViewport({ children }: AgendaViewportProps): JSX.Element {
-  const { loading, error, retry, retrying } = useAgenda();
-  return (
-    <div className="min-h-0 flex-1 overflow-auto">
-      {loading ? (
-        <AgendaLoadingNotice />
-      ) : error ? (
-        <AgendaDegradedNotice onRetry={retry} retrying={retrying} />
-      ) : null}
-      {children}
-    </div>
-  );
+  return <div className="min-h-0 flex-1 overflow-hidden">{children}</div>;
 }
 
 /** A quiet disclosure that enrichment is loading while the usable calendar structure stays put. */
@@ -74,7 +78,7 @@ function AgendaLoadingNotice(): JSX.Element {
   return (
     <div
       role="status"
-      className="bg-surface-container-low text-on-surface-variant text-caption mb-2 rounded-lg px-3 py-2"
+      className="bg-surface-container-low text-on-surface-variant text-caption shrink-0 rounded-lg px-3 py-2"
     >
       Loading calendar…
     </div>
@@ -91,7 +95,7 @@ function AgendaDegradedNotice({ onRetry, retrying }: AgendaDegradedNoticeProps):
   return (
     <div
       role="status"
-      className="bg-surface-container-low text-on-surface-variant text-caption mb-2 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
+      className="bg-surface-container-low text-on-surface-variant text-caption flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
     >
       <span>Calendar updates are temporarily unavailable. Showing what we have.</span>
       <Button

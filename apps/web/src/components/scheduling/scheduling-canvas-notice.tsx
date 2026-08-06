@@ -1,9 +1,11 @@
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link SchedulingCanvasNotice}. */
 interface SchedulingCanvasNoticeProps {
   /** Guidance shown when every lane is empty. */
   readonly emptyMessage: string;
+  /** One control offered beside {@link emptyMessage}, so the empty state is not only prose. */
+  readonly emptyAction?: ReactNode;
   /** A read failure to surface instead of the empty-state guidance. */
   readonly error?: string | null;
   /** Whether every visible lane has zero items. */
@@ -32,6 +34,7 @@ interface SchedulingCanvasNoticeProps {
  */
 export function SchedulingCanvasNotice({
   emptyMessage,
+  emptyAction,
   error,
   isEmpty,
   viewportWidth,
@@ -51,16 +54,20 @@ export function SchedulingCanvasNotice({
         sentence in half on a 390px phone, where this text is the only instruction on the screen —
         the message has to survive the narrow case, and two centred lines is what that costs.
       */}
-      <p
+      <div
         role={hasError ? 'alert' : 'status'}
-        className={`text-body-medium max-w-full rounded-2xl px-3 py-1.5 text-center text-balance ${
+        className={`text-body-medium flex max-w-full flex-col items-center gap-1.5 rounded-2xl px-3 py-1.5 text-center text-balance ${
           hasError
             ? 'bg-error-container text-on-error-container'
             : 'bg-surface-container-high text-on-surface-variant'
         }`}
       >
-        {hasError ? normalizedError : normalizedEmptyMessage}
-      </p>
+        <p>{hasError ? normalizedError : normalizedEmptyMessage}</p>
+        {/* The wrapper is `pointer-events-none` so the notice never blocks a drag on the grid
+            underneath it. The action has to opt back in, or it would render as a dead control —
+            which is the exact failure an empty state is supposed to fix. */}
+        {!hasError && emptyAction ? <div className="pointer-events-auto">{emptyAction}</div> : null}
+      </div>
     </div>
   );
 }

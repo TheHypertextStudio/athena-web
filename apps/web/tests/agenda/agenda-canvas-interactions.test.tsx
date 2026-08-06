@@ -228,17 +228,23 @@ describe('Agenda scheduling interactions', () => {
     agendaState.view = 'list';
     render(<AgendaCanvas />);
 
-    expect(screen.getByRole('status')).toHaveTextContent(
-      'Nothing scheduled. Use the calendar to plan this day.',
+    // The instruction became a control. `Use the calendar to plan this day` named a destination
+    // and then left the reader to find it, which is a dead empty state.
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing scheduled.');
+    expect(screen.getByRole('link', { name: 'Plan in the calendar' })).toHaveAttribute(
+      'href',
+      '/calendar',
     );
   });
 
   it('teaches the next action when the timeline has no entries', () => {
     render(<AgendaCanvas />);
 
-    expect(canvasProps().emptyMessage).toBe(
-      'Nothing scheduled. Use the calendar to plan this day.',
-    );
+    // The sentence used to carry the whole instruction — `Use the calendar to plan this day` —
+    // which named a destination and left the reader to go find it. The action is a control now,
+    // so the prose only has to state the situation.
+    expect(canvasProps().emptyMessage).toBe('Nothing scheduled.');
+    expect(canvasProps().emptyAction).not.toBeNull();
   });
 
   it('converts a Jul 13 plan timebox proposal through the LA display timezone', () => {

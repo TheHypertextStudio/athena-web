@@ -20,7 +20,8 @@
  * // …and call clearCompose() when the dialog closes.
  * ```
  */
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 /** The query parameter asking a page to open its create composer. */
@@ -52,8 +53,8 @@ export interface ComposeParam {
  */
 export function useComposeParam(): ComposeParam {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useAppPathname();
+  const searchParams = useAppSearchParams();
 
   const composeRequested = searchParams.get(COMPOSE_PARAM) === '1';
   const templateId = searchParams.get(COMPOSE_TEMPLATE_PARAM);

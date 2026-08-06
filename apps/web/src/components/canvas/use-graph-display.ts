@@ -13,7 +13,8 @@
  * and grouping, on the shared `filter`/`group` params — and this one owns presentation, on the
  * canvas's own keys. Neither codec touches the other's params, so the two compose on one URL.
  */
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useMemo } from 'react';
 
 import { type GraphDisplayState, parseGraphDisplay, serializeGraphDisplay } from './graph-display';
@@ -36,8 +37,8 @@ export interface GraphDisplayBinding {
 /** Bind the canvas presentation options to the URL search params. */
 export function useGraphDisplay(): GraphDisplayBinding {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const pathname = useAppPathname();
+  const searchParams = useAppSearchParams();
 
   // Key the parse on the string form; `useSearchParams` returns a stable object whose contents
   // change without its identity doing so.

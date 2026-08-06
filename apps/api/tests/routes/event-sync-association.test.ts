@@ -149,6 +149,57 @@ describe('entity association in the drain', () => {
     expect(row.docketEntityId).toBeNull();
   });
 
+  it('reindexes the associated task, so external activity refreshes what it concerns', async () => {
+    // The first consumer switched onto the resolved id. Before association, an external event was
+    // indexed as activity but never told the search index that the task it was about had moved.
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const actorId = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, actorId);
+    const [taskRow] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Mirrored issue',
+        state: 'todo',
+        visibility: 'public',
+        source: 'linked',
+        sourceIntegrationId: intgId,
+        externalId: 'LIN-11',
+      })
+      .returning({ id: schema.task.id });
+    await seedInboundEvent(orgId, intgId, 'ev_assoc_reindex', 'LIN-11');
+
+    await sweepInboundEvents(new Date());
+
+    const row = await soleEvent(orgId);
+    const jobs = await db
+      .select({
+        sourceTable: schema.searchIndexJob.sourceTable,
+        entityId: schema.searchIndexJob.entityId,
+      })
+      .from(schema.searchIndexJob)
+      .where(eq(schema.searchIndexJob.sourceEventId, row.id));
+    expect(jobs).toEqual(expect.arrayContaining([{ sourceTable: 'task', entityId: taskRow!.id }]));
+  });
+
+  it('enqueues no entity reindex when the subject never resolved', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const actorId = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, actorId);
+    await seedInboundEvent(orgId, intgId, 'ev_assoc_no_reindex', 'LIN-ABSENT');
+
+    await sweepInboundEvents(new Date());
+
+    const row = await soleEvent(orgId);
+    const jobs = await db
+      .select({ sourceTable: schema.searchIndexJob.sourceTable })
+      .from(schema.searchIndexJob)
+      .where(eq(schema.searchIndexJob.sourceEventId, row.id));
+    // Only the event's own activity document. Nothing to refresh, and nothing invented.
+    expect(jobs).toEqual([{ sourceTable: 'event' }]);
+  });
+
   it('will not associate across integrations within one org', async () => {
     const { orgId, teamId } = await seedBaseOrg(db, schema);
     const actorId = await seedUserActor(orgId);

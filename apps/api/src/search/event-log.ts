@@ -1,16 +1,9 @@
-import type { CanonicalEntityKind, SourceSystemKind } from '@docket/types';
+import type { CanonicalEntityKind } from '@docket/types';
 
 /** The source row an event should cause the search indexer to reproject. */
 export interface EventSearchReindexTarget {
   sourceTable: string;
   entityId: string;
-}
-
-interface EventEntityForSearch {
-  kind: CanonicalEntityKind;
-  source: SourceSystemKind;
-  externalId: string;
-  docketEntityId?: string | null;
 }
 
 const ENTITY_SOURCE_TABLE: Partial<Record<CanonicalEntityKind, string>> = {
@@ -27,16 +20,23 @@ const ENTITY_SOURCE_TABLE: Partial<Record<CanonicalEntityKind, string>> = {
  * Resolve the Docket source row that should be reindexed after a canonical event.
  *
  * @remarks
- * Docket-origin events use `externalId` as the Docket id. External events only reindex
- * a Docket object once enrichment has filled `docketEntityId`; otherwise the event is
- * still searchable as activity but does not imply an internal object changed rank.
+ * Activity on a thing is evidence the thing changed rank, so a Linear comment bumps the freshness
+ * of the task mirroring that issue. External events reached this with `null` for years, because
+ * association was never implemented and every external ref carried no Docket id; they were indexed
+ * as activity but never refreshed the object they concerned.
+ *
+ * Takes the resolved id directly rather than digging it out of an entity ref: internal and external
+ * events reach this from different shapes, and both now carry the same answer on the event row.
+ *
+ * @param entityKind - The canonical kind of the event's subject, when it has one.
+ * @param docketEntityId - The Docket entity the event resolved to, or null when unassociated.
+ * @returns the table and row to reproject, or null when there is nothing to refresh.
  */
 export function eventSearchReindexTarget(
-  entity: EventEntityForSearch | null | undefined,
+  entityKind: CanonicalEntityKind | null | undefined,
+  docketEntityId: string | null,
 ): EventSearchReindexTarget | null {
-  if (!entity) return null;
-  const sourceTable = ENTITY_SOURCE_TABLE[entity.kind];
-  if (!sourceTable) return null;
-  const entityId = entity.docketEntityId ?? (entity.source === 'docket' ? entity.externalId : null);
-  return entityId ? { sourceTable, entityId } : null;
+  if (!entityKind || !docketEntityId) return null;
+  const sourceTable = ENTITY_SOURCE_TABLE[entityKind];
+  return sourceTable ? { sourceTable, entityId: docketEntityId } : null;
 }

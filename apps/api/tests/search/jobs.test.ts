@@ -322,6 +322,10 @@ describe('search index jobs', () => {
         docketEntityId: taskRow.id,
       },
       entityKind: 'work_item',
+      // Both halves of association, as `emitEvent` and the drain now write them: the reindex
+      // target reads the resolved column, and the CHECK constraint ties it to the state.
+      entityAssociation: 'matched',
+      docketEntityId: taskRow.id,
       dedupeKey: 'test:event_new_repair',
     });
 

@@ -22,9 +22,19 @@ env:
   TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
 jobs:
-  # Lint + typecheck run together — same install, no reason for separate runners.
-  quality:
-    name: Lint & Types
+  # Lint and typecheck were one job on the theory that they share an install. They also shared a
+  # runner, and `ubuntu-latest` has two cores — so turbo scheduled them in parallel and the CPU
+  # serialized them anyway. Measured at concurrency 2: lint 83s, typecheck 48s, 166s together in
+  # CI. Two jobs cost the slower one rather than the sum, and a second install off a warm pnpm
+  # store is 15s.
+  #
+  # Lint is the expensive half and it is two packages: @docket/web at 53.7s and @docket/api at
+  # 51.7s, out of 159s of total task time. Both are type-aware — tooling/eslint-config/index.js
+  # turns on strictTypeChecked/stylisticTypeChecked with projectService — so ESLint builds the
+  # same TypeScript program `tsc --noEmit` just built, then runs rules over it. That duplication
+  # is the real defect here; splitting the jobs only stops us paying for it twice in series.
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -44,12 +54,39 @@ jobs:
       - uses: actions/cache@v5
         with:
           path: .turbo
-          key: turbo-quality-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-quality-${{ runner.os }}-
+          key: turbo-lint-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-lint-${{ runner.os }}-
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run lint typecheck --cache-dir=.turbo
+      - run: pnpm turbo run lint --cache-dir=.turbo
+
+  typecheck:
+    name: Types
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      - uses: actions/cache@v5
+        with:
+          path: .turbo
+          key: turbo-typecheck-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-typecheck-${{ runner.os }}-
+
+      - run: pnpm install --frozen-lockfile
+
+      # Rides with typecheck rather than lint to balance the two runners: typecheck 48s plus
+      # format 33s lands beside lint's 83s.
+      - run: pnpm turbo run typecheck --cache-dir=.turbo
 
       - run: pnpm format:check
 
@@ -316,7 +353,7 @@ jobs:
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [quality, secret-scan, test, build, e2e]
+    needs: [lint, typecheck, secret-scan, test, build, e2e]
     permissions:
       contents: read
       id-token: write

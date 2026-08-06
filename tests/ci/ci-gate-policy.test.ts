@@ -343,8 +343,8 @@ describe('the real workflows', () => {
 
     // Recorded expectation: adding a check job to ci.yml must update this list *and*
     // deploy-production.needs, which is exactly the coupling SCR-19 asks for.
-    expect(checkJobs).toEqual(['quality', 'secret-scan', 'test', 'build', 'e2e']);
-    expect(deploy?.needs).toEqual(['quality', 'secret-scan', 'test', 'build', 'e2e']);
+    expect(checkJobs).toEqual(['lint', 'typecheck', 'secret-scan', 'test', 'build', 'e2e']);
+    expect(deploy?.needs).toEqual(['lint', 'typecheck', 'secret-scan', 'test', 'build', 'e2e']);
   });
 
   it('runs the coverage gate — a bare `vitest run` enforces no thresholds (SCR-15)', () => {

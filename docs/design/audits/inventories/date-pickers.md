@@ -48,6 +48,8 @@ Asserted in `apps/web/tests/pickers/date-picker-contract.test.tsx` (17 cases) an
 | 12  | Athena conversation browser → search lens | `apps/web/src/components/athena/athena-conversation-browser.tsx`    | From, To                   | **Migrated** from a raw `<input type="date">` |
 | 13  | Calendar → item drawer, all-day item      | `apps/web/src/components/calendar/item-drawer/core-fields-form.tsx` | Starts, Ends               | **Migrated** from a raw `<input type="date">` |
 | 14  | Project detail → Milestones panel         | `apps/web/src/components/project-detail/project-milestones.tsx`     | Target date                | Shared picker                                 |
+| 15  | Project create/edit composer → pickers    | `apps/web/src/components/projects/project-form-pickers.tsx`         | Timeline (start → target)  | Shared picker                                 |
+| 16  | Initiative create/edit composer → pickers | `apps/web/src/components/initiatives/initiative-form-pickers.tsx`   | Target date                | Shared picker                                 |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

@@ -73,6 +73,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
       (await import('@/app/(app)/orgs/[orgId]/initiatives/initiatives-client')).default,
   },
   {
+    pattern: '/orgs/[orgId]/library',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/library/library-client')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/my-work',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/my-work/my-work-client')).default,
   },
@@ -171,6 +175,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
   {
     pattern: '/orgs/[orgId]/settings/security',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/security/page')).default,
+  },
+  {
+    pattern: '/orgs/[orgId]/settings/templates',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/templates/page')).default,
   },
   {
     pattern: '/orgs/[orgId]/settings/work-structure',

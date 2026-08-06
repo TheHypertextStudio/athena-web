@@ -86,8 +86,14 @@ describe('CalendarComparisonControls', () => {
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     expect(workspace).toHaveAttribute('name', 'comparison-workspace');
     // The legacy `border-outline` / `bg-surface` pair is what put two token systems in one view.
-    expect(workspace).toHaveClass('border-outline-variant', 'bg-surface-container-low');
-    expect(workspace.className).not.toContain('border-outline');
+    // The control now comes from the shared Select primitive, which draws its own surface — so the
+    // token this asserts is the border role, not a background the primitive no longer sets.
+    expect(workspace).toHaveClass('border-outline-variant');
+    // Whole class names, not a substring. `not.toContain('border-outline')` could never pass:
+    // `border-outline-variant` asserted one line above contains it. Splitting also keeps the
+    // primitive's legitimate `hover:border-outline` from reading as the legacy bare utility.
+    expect(workspace.className.split(/\s+/)).not.toContain('border-outline');
+    expect(workspace.className.split(/\s+/)).not.toContain('bg-surface');
     expect(workspace.className).not.toContain('shadow');
 
     fireEvent.change(workspace, { target: { value: WORKSPACES[0]!.id } });

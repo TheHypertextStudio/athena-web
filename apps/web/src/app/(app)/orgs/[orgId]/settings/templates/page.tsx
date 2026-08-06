@@ -24,7 +24,7 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/icons';
-import { type JSX, use, useState } from 'react';
+import { type JSX, useState } from 'react';
 
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { SectionHeader } from '@/components/settings/section-header';
@@ -35,6 +35,7 @@ import {
   useCreateTemplate,
   useDeleteTemplate,
 } from '@/components/templates/queries';
+import { useAppParams } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
 import { useApiListQuery } from '@/lib/query';
 
@@ -54,13 +55,17 @@ interface EditorTarget {
   template: TemplateOut | null;
 }
 
-/** Manage the workspace's reusable create drafts. */
-export default function TemplatesSettingsPage({
-  params,
-}: {
-  params: Promise<{ orgId: string }>;
-}): JSX.Element {
-  const { orgId } = use(params);
+/**
+ * Manage the workspace's reusable create drafts.
+ *
+ * @remarks
+ * Reads the org id with `useAppParams` rather than taking Next's `params` promise as a prop. The
+ * offline route table mounts every route with no props at all — offline there is no server to
+ * resolve that promise — so a page with a props signature reads `undefined` the moment it renders
+ * without a network. See `scripts/offline-route-policy.ts`.
+ */
+export default function TemplatesSettingsPage(): JSX.Element {
+  const { orgId } = useAppParams<{ orgId: string }>();
   const query = useApiListQuery(templatesDef(orgId));
   const duplicate = useCreateTemplate(orgId);
   const remove = useDeleteTemplate(orgId);

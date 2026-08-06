@@ -203,7 +203,7 @@ async function repairEventRows(limit: number): Promise<RepairSearchIndexResult> 
     });
     enqueued += 1;
 
-    const target = eventSearchReindexTarget(row.entity);
+    const target = eventSearchReindexTarget(row.entityKind, row.docketEntityId);
     if (!target) continue;
     await enqueueSearchIndexJob({
       organizationId: row.organizationId,

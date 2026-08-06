@@ -217,14 +217,8 @@ async function emitInternal(
 
   if (result) {
     const entityReindexTarget = eventSearchReindexTarget(
-      entityKind
-        ? {
-            kind: entityKind,
-            source: 'docket',
-            externalId: input.subject.id,
-            docketEntityId: input.subject.id,
-          }
-        : null,
+      entityKind,
+      entityKind ? input.subject.id : null,
     );
     await enqueueSearchIndexJobs([
       {

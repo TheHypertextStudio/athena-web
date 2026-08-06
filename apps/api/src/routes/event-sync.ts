@@ -366,7 +366,10 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
     if (result) {
       created += 1;
-      const entityReindexTarget = eventSearchReindexTarget(entityRef);
+      // Association resolved this event to a Docket entity, so the entity's search document is
+      // now stale — external activity refreshing the thing it concerns is the first consumer to
+      // act on the resolved id.
+      const entityReindexTarget = eventSearchReindexTarget(entityKind, association.docketEntityId);
       await enqueueSearchIndexJobs([
         {
           organizationId: orgId,

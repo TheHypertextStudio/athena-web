@@ -99,9 +99,6 @@
   "apps/web/src/app/(app)/settings/athena/page.tsx": {
     "raw-type-utility": 12
   },
-  "apps/web/src/app/(app)/settings/data-privacy/data-privacy-client.tsx": {
-    "raw-type-utility": 4
-  },
   "apps/web/src/app/(app)/settings/profile/page.tsx": {
     "raw-type-utility": 14
   },

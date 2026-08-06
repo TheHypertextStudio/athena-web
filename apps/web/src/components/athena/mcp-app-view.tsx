@@ -493,7 +493,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
           <button
             type="button"
             autoFocus
-            className="text-on-surface-variant hover:bg-surface-container rounded-md px-3 py-1.5 text-sm"
+            className="text-on-surface-variant hover:bg-surface-container text-label-large rounded-md px-3 py-1.5"
             onClick={() => {
               setDisplayMode('inline');
               hostRef.current?.updateHostContext({ displayMode: 'inline' });

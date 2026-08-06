@@ -276,7 +276,7 @@ function KindGroup({
                     Duplicate
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
+                    className="text-error focus:text-error"
                     onSelect={() => {
                       onDelete(template);
                     }}

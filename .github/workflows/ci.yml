@@ -201,10 +201,15 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    # A shard's real work is a couple of minutes; the rest was tail. With playwright.config.ts now
-    # at a 120s timeout and one retry, the worst a single stuck test can cost is 4 minutes, so a
-    # shard sitting here for 12 is wedged rather than busy and should say so quickly.
-    timeout-minutes: 12
+    # A shard's real work is a couple of minutes; the rest is tail. With playwright.config.ts at a
+    # 120s timeout and one retry, a single stuck test costs at most 4 minutes.
+    #
+    # 15, not 12: a cancelled job is a job that never told you why. Playwright's list reporter
+    # prints failure detail only at the end of the run, and the artifact upload below cannot fire
+    # for a cancellation either — so a cap tight enough to cut a genuinely failing shard short
+    # buys speed by destroying the report that would let anyone fix it. The cap is here to catch a
+    # wedged runner, not to discipline slow tests; playwright.config.ts does that.
+    timeout-minutes: 15
     env:
       PORTLESS_PORT: '1355'
       PORTLESS_HTTPS: '0'
@@ -287,18 +292,23 @@ jobs:
 
       - run: pnpm --filter @docket/web exec playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-      - name: Dev stack log on failure
-        if: failure()
+      # `always()`, not `failure()`: the case that most needs these is a shard that ran out of
+      # wall-clock, and a timed-out job is cancelled rather than failed — so `failure()` skipped
+      # the evidence in exactly the situation nobody could otherwise diagnose. Both steps are
+      # reporting-only and neither can turn a red shard green.
+      - name: Dev stack log
+        if: always()
         run: tail -200 /tmp/dev.log
 
       - uses: actions/upload-artifact@v6
-        if: failure()
+        if: always()
         with:
           name: playwright-artifacts-${{ matrix.shard }}
           path: |
             apps/web/playwright-report/
             apps/web/test-results/
           retention-days: 7
+          if-no-files-found: ignore
 
   # SCR-19: `needs` must name EVERY job above that runs tests or checks. Adding a check job
   # without adding it here would let a red check ship to production; `pnpm ci:gate-policy`

@@ -343,17 +343,21 @@ describe('the real workflows', () => {
 
     // Recorded expectation: adding a check job to ci.yml must update this list *and*
     // deploy-production.needs, which is exactly the coupling SCR-19 asks for.
-    expect(checkJobs).toEqual(['quality', 'secret-scan', 'test', 'coverage', 'build', 'e2e']);
-    expect(deploy?.needs).toEqual(['quality', 'secret-scan', 'test', 'coverage', 'build', 'e2e']);
+    expect(checkJobs).toEqual(['quality', 'secret-scan', 'test', 'build', 'e2e']);
+    expect(deploy?.needs).toEqual(['quality', 'secret-scan', 'test', 'build', 'e2e']);
   });
 
-  it('runs the coverage gate — `turbo run test` alone enforces no thresholds (SCR-15)', () => {
+  it('runs the coverage gate — a bare `vitest run` enforces no thresholds (SCR-15)', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
-    const coverage = ci?.jobs.find((job) => job.id === 'coverage');
-    const commands = (coverage?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));
+    // One job, not two. `test` and `coverage` ran the same suites over the same file set; only
+    // the `test:coverage` script applies tooling/vitest/preset.ts's thresholds, so that is the
+    // command the gate has to see.
+    const test = ci?.jobs.find((job) => job.id === 'test');
+    const commands = (test?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));
 
     expect(commands).toContain('pnpm turbo run test:coverage --cache-dir=.turbo');
-    expect(coverage?.steps.every((step) => !step.continueOnError)).toBe(true);
+    expect(commands).not.toContain('pnpm turbo run test --cache-dir=.turbo');
+    expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
   });
 
   it('runs the secret scan against the committed .gitleaks.toml (GEN-06 clause 1)', () => {

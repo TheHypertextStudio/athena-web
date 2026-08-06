@@ -31,11 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
-
-      - run: npm install -g corepack@0.35.0 && corepack enable
+          cache: pnpm
 
       # Turbo task cache — on exact SHA hit turbo replays outputs without re-running.
       # restore-keys falls back to the nearest ancestor commit's cache so only
@@ -46,7 +47,7 @@ jobs:
           key: turbo-quality-${{ runner.os }}-${{ github.sha }}
           restore-keys: turbo-quality-${{ runner.os }}-
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm turbo run lint typecheck --cache-dir=.turbo
 
@@ -80,16 +81,29 @@ jobs:
           # on this same checkout without re-cloning.
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
+          cache: pnpm
 
-      - run: npm install -g corepack@0.35.0 && corepack enable
-
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm secret-scan
 
+  # SCR-15: the repo's gating test command. Every package's `test` script is a bare `vitest run`
+  # that enforces no thresholds, on purpose, so the inner loop (`pnpm --filter <pkg> test`) stays
+  # fast. The thresholds in tooling/vitest/preset.ts (90 default, 100 for the trust-spine
+  # packages) only fire under `test:coverage`, so that is what runs here and what makes a coverage
+  # regression fail the build. Do not soft-fail it.
+  # Current per-package numbers: docs/engineering/coverage-ledger.md
+  #
+  # This job used to be two. A separate `coverage` job ran `turbo run test:coverage` while this
+  # one ran `turbo run test` — the same 17 package suites, over the same file set from
+  # tooling/vitest/preset.ts, on a second runner with a second cold install. `--coverage` is
+  # strictly additive instrumentation, and `all: true` makes the instrumented pass the slower of
+  # the two, so the uninstrumented run told us nothing the instrumented one did not.
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -100,11 +114,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
-
-      - run: npm install -g corepack@0.35.0 && corepack enable
+          cache: pnpm
 
       - uses: actions/cache@v5
         with:
@@ -112,11 +127,11 @@ jobs:
           key: turbo-test-${{ runner.os }}-${{ github.sha }}
           restore-keys: turbo-test-${{ runner.os }}-
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run test --cache-dir=.turbo
+      - run: pnpm turbo run test:coverage --cache-dir=.turbo
 
-      # `turbo run test` only runs *package* suites. The repository-level suites under `tests/`
+      # `turbo run test:coverage` only runs *package* suites. The repository-level suites under `tests/`
       # — the CI gate policy (tests/ci) and the launch-record reconciler (tests/launch) — belong
       # to no workspace package, so turbo never sees them. Without this step the guards that
       # protect this very file would not run in CI at all.
@@ -138,38 +153,6 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: false
 
-  # SCR-15: the repo's *gating* test command. `turbo run test` (the `test` job above) runs the
-  # suites but enforces no thresholds — every package's `test` script is a bare `vitest run`, on
-  # purpose, so the inner loop (`pnpm --filter <pkg> test`) stays fast. The thresholds in
-  # tooling/vitest/preset.ts (90 default, 100 for the trust-spine packages) only fire under each
-  # package's `test:coverage` script, so THIS is the job that makes a coverage regression fail
-  # the build. It is listed in deploy-production.needs; do not soft-fail it.
-  # Current per-package numbers and the debt this gate exposes: docs/engineering/coverage-ledger.md
-  coverage:
-    name: Coverage
-    runs-on: ubuntu-latest
-    env:
-      SKIP_ENV_VALIDATION: '1'
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-
-      - run: npm install -g corepack@0.35.0 && corepack enable
-
-      - uses: actions/cache@v5
-        with:
-          path: .turbo
-          key: turbo-coverage-${{ runner.os }}-${{ github.sha }}
-          restore-keys: turbo-coverage-${{ runner.os }}-
-
-      - run: pnpm install --no-frozen-lockfile
-
-      - run: pnpm turbo run test:coverage --cache-dir=.turbo
-
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -184,11 +167,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
-
-      - run: npm install -g corepack@0.35.0 && corepack enable
+          cache: pnpm
 
       - uses: actions/cache@v5
         with:
@@ -196,7 +180,7 @@ jobs:
           key: turbo-build-${{ runner.os }}-${{ github.sha }}
           restore-keys: turbo-build-${{ runner.os }}-
 
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm turbo run build --cache-dir=.turbo
 
@@ -241,13 +225,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v6
+
       - uses: actions/setup-node@v6
         with:
           node-version-file: '.node-version'
+          cache: pnpm
 
-      - run: npm install -g corepack@0.35.0 && corepack enable
-
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
 
       # Pin the routed hosts so name resolution is deterministic on every runner image.
       - name: Map dev hosts to loopback
@@ -318,7 +303,7 @@ jobs:
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [quality, secret-scan, test, coverage, build, e2e]
+    needs: [quality, secret-scan, test, build, e2e]
     permissions:
       contents: read
       id-token: write

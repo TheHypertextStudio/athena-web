@@ -59,7 +59,8 @@
       "persistent": true
     },
     "test:coverage": {
-      "outputs": ["coverage/**"]
+      "outputs": ["coverage/**"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
     "test:e2e": {
       "dependsOn": ["build"],

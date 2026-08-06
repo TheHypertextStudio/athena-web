@@ -124,12 +124,6 @@ test.describe('signing in with an identity provider', () => {
     test('completes a real OAuth2 ceremony against the local fake identity provider and mints a real session', async ({
       page,
     }) => {
-      // Same cold-dev-server caution as every ceremony spec that pays a real network round trip
-      // through routes `warmUpAuth` does not pre-compile: `/sign-in/oauth2` and
-      // `/oauth2/callback/test-oauth` aren't in its warm set, and this test additionally waits on a
-      // real, uncached server-to-server token + userinfo exchange inside `apps/api` itself.
-      test.slow();
-
       await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
 
       // The client-side half of clicking a real provider button: ask Better Auth to start the
@@ -194,12 +188,6 @@ test.describe('signing in with an identity provider', () => {
   test('hands the ceremony to the provider, and the real callback refuses a forged return', async ({
     page,
   }) => {
-    // This is the one test in the file that leaves the origin and comes back through a real server
-    // route, and `/api/auth/callback/*` is not one of the endpoints `warmUpAuth` pre-compiles — so
-    // on a cold dev server the return leg pays Turbopack's on-demand compile inside the ceremony
-    // budget. Observed once at 30s+ mid-suite and 1.7s warm. Same cause and same remedy as the
-    // three specs `playwright.config.ts` already documents.
-    test.slow();
     await stubConfig(page, ['google']);
 
     // Stands in for a Better Auth with real Google credentials: it answers the sign-in request with

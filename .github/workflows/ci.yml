@@ -201,7 +201,10 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    timeout-minutes: 20
+    # A shard's real work is a couple of minutes; the rest was tail. With playwright.config.ts now
+    # at a 120s timeout and one retry, the worst a single stuck test can cost is 4 minutes, so a
+    # shard sitting here for 12 is wedged rather than busy and should say so quickly.
+    timeout-minutes: 12
     env:
       PORTLESS_PORT: '1355'
       PORTLESS_HTTPS: '0'

@@ -44,7 +44,6 @@ test.describe('offline reads, offline writes, and sync on reconnect', () => {
     page,
     context,
   }) => {
-    test.slow();
     mkdirSync(SHOTS, { recursive: true });
     const { orgId } = await signUpAndOnboard(page, 'pwa-sync');
 

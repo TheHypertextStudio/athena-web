@@ -21,9 +21,6 @@ test('an MCP client can trigger an agent session and approve its proposed action
   page,
   request,
 }) => {
-  // Sign-up + onboarding + a full authorize/consent/token round before the session dance;
-  // see mcp-connect.spec.ts for why the default 120s is too tight on a busy dev stack.
-  test.slow();
   const { orgId } = await signUpAndOnboard(page, 'McpSession');
 
   // Register a runnable agent (backed by the scripted mock runtime) via the typed API.

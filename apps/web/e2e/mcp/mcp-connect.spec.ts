@@ -26,10 +26,6 @@ test('an MCP client can discover, register, consent, read, step up, and write', 
   page,
   request,
 }) => {
-  // The longest flow in the suite: sign-up + onboarding, then TWO full authorize/consent/
-  // token rounds (read, then step-up) around the MCP calls. Triple the budget — under a
-  // busy dev stack the chain legitimately exceeds the default 120s.
-  test.slow();
   // ── No credential: /mcp must answer 401 with the discovery-pointing challenge ──
   const unauthed = await mcpCall(request, null, 'tools/list', {});
   expect(unauthed.status).toBe(401);

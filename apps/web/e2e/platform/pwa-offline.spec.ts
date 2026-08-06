@@ -273,8 +273,6 @@ test.describe('offline behaviour', () => {
  * tab bar — with the requested route rendered from what was already cached.
  */
 test.describe('offline with a session', () => {
-  test.slow();
-
   test('keeps the shell for a route that has no document of its own', async ({ page, context }) => {
     // The case that matters most and used to fail: most routes are parameterized, so a route nobody
     // opened online is the normal case rather than the edge one.

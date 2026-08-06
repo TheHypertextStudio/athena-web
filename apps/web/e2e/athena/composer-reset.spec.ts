@@ -26,12 +26,6 @@ import { attachShot } from '../helpers/ui';
 
 test.describe('create composers reopen pristine', () => {
   test('a seeded composer clears its draft but keeps its defaults', async ({ page }, testInfo) => {
-    // The longest chain in this file: sign-up + onboarding, a project create, a route to its
-    // detail screen, then a full task-composer create/reopen round — on a busy dev stack the
-    // on-demand Turbopack compile for each of those routes can push this past the default 120s
-    // (see mcp-connect.spec.ts for the same root cause). Triple the budget rather than pin a
-    // number that will need bumping again the next time a route gets one chunk heavier.
-    test.slow();
     const { orgId } = await signUpAndOnboard(page, 'ComposerResetSeeded');
 
     // Create a project, which lands on its detail screen.
@@ -75,9 +69,6 @@ test.describe('create composers reopen pristine', () => {
   });
 
   test('task composer clears after creating a task', async ({ page }, testInfo) => {
-    // Same cold-start compile cost as the seeded case above, just for whichever routes THIS
-    // test happens to be first to touch — measured hitting it too, not only the seeded test.
-    test.slow();
     const { orgId } = await signUpAndOnboard(page, 'ComposerResetTask');
 
     await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });

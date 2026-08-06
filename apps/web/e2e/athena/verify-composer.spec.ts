@@ -12,10 +12,6 @@ import { attachShot, setColorScheme } from '../helpers/ui';
 
 test.describe('new-task composer', () => {
   test('opens and renders (light, dark, discard)', async ({ page }, testInfo) => {
-    // This is the suite's first hit on '/my-work' and its create-task composer, so it can pay
-    // Turbopack's on-demand compile cost for both — measured well past the default budget on a
-    // busy CI runner (see composer-reset.spec.ts / mcp-connect.spec.ts for the same root cause).
-    test.slow();
     const { orgId } = await signUpAndOnboard(page, 'Composer');
 
     await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });

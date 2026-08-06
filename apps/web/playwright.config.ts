@@ -31,16 +31,23 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   // Retry in CI so a transient timing race (e.g. an async auto-scroll landing mid-assertion) fails
-  // the whole suite only when it reproduces, not on a single unlucky run.
-  retries: process.env['CI'] ? 2 : 0,
+  // the whole suite only when it reproduces, not on a single unlucky run. One retry, not two:
+  // every extra attempt is another full `timeout` added to the worst case, and a race that
+  // survives two attempts is a bug report rather than a flake.
+  retries: process.env['CI'] ? 1 : 0,
   forbidOnly: !!process.env['CI'],
-  // Single-worker (below) means whichever spec happens to run first pays Turbopack's on-demand
-  // compile cost for every route/chunk it touches that nothing earlier in the run has warmed —
-  // repeatedly measured at 100s+ in CI (composer-reset.spec.ts, mcp-connect.spec.ts,
-  // mcp-session.spec.ts each independently hit this and needed `test.slow()` for the identical
-  // reason). 120s left too little margin across the whole suite, not just those three files;
-  // raised once, globally, rather than opting in file by file as each one gets unlucky.
-  timeout: 180_000,
+  // The budget a test gets before it is called stuck, NOT a budget for compiling the app.
+  //
+  // This was 180s with nine specs calling `test.slow()` on top, which triples it. A flaky test
+  // therefore burned 540s per attempt: on the last green run one offline-sync test failed at
+  // exactly 9.0m and then passed on retry in 55s, which was the whole difference between that
+  // shard at 12.6m and its siblings at 4-7m. The suite is not slow — its tail is.
+  //
+  // Those budgets all existed to absorb Turbopack's on-demand compile, because the e2e job runs
+  // against `next dev`. Until that job runs a production build, a test that legitimately needs
+  // the compile budget will fail here rather than stall the shard, which is the trade we want:
+  // a fast, loud failure beats a nine-minute wait for the same information.
+  timeout: 120_000,
   expect: { timeout: TIMEOUTS.ui },
   reporter: 'list',
   use: {

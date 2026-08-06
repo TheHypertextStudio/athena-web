@@ -861,9 +861,6 @@ importers:
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
-      '@docket/web':
-        specifier: workspace:*
-        version: link:../../apps/web
       '@types/node':
         specifier: 26.1.0
         version: 26.1.0

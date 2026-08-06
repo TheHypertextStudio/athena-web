@@ -10,7 +10,7 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "next build",
+    "build": "next build && tsx ../../packages/service-worker/bin/build.ts --app-root=. --production",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx ../../packages/service-worker/bin/build.ts --app-root=. && next dev'",
     "start": "next start",

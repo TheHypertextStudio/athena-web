@@ -6,9 +6,19 @@ on:
   pull_request:
     branches: [main]
 
+# Superseded pull-request runs are worth cancelling; superseded pushes to `main` are not.
+#
+# On 2026-08-05 this cancelled every run for nearly a full day. Merges were landing every few
+# minutes, each one killed the run before it, and because `deploy-production` lives at the end of
+# that run nothing reached production for 21 hours — while Vercel held each web deployment waiting
+# on a check that was never going to report. Commits also merged unverified the whole time, so the
+# gate could not catch what was breaking either.
+#
+# Runs on `main` now queue instead. The concurrency group still serializes them one at a time, so
+# two deploys can never race; they simply take turns, and every commit gets its deploy.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 # Turbo Remote Cache (optional): set these to share the cache across CI runs and machines so a
 # task computed on one run is replayed on the next. All unset → turbo silently uses the local

@@ -9,7 +9,7 @@
 'use client';
 
 import type { ActionSpec, AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
-import { Button, Card, CardContent, Input } from '@docket/ui/primitives';
+import { Button, Card, CardContent, Input, Select } from '@docket/ui/primitives';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -211,18 +211,17 @@ export default function AutomationsTab({
             </div>
             <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
               Workflow
-              <select
+              <Select
                 value={template}
                 onChange={(event) => {
                   const next = event.target.value as AutomationTemplate;
                   setTemplate(next);
                   setName(TEMPLATE_NAMES[next]);
                 }}
-                className="border-outline-variant bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
               >
                 <option value="archive_completed_email">Archive email after task completion</option>
                 <option value="dismiss_promotions">Dismiss promotional suggestions</option>
-              </select>
+              </Select>
             </label>
             <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
               Name

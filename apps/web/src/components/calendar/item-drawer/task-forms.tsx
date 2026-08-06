@@ -2,7 +2,7 @@
 
 import type { CalendarItemTaskRole } from '@docket/types';
 import { OrganizationId, TaskId } from '@docket/types';
-import { Button, Input } from '@docket/ui/primitives';
+import { Button, Input, Select } from '@docket/ui/primitives';
 import { type JSX, type SubmitEventHandler, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -67,19 +67,18 @@ export function CreateTaskForm({
       </label>
       <label className="text-label-medium flex flex-col gap-1">
         <span className="text-on-surface-variant">Role</span>
-        <select
+        <Select
           value={role}
           onChange={(event) => {
             setRole(event.target.value as CalendarItemTaskRole);
           }}
-          className="border-outline-variant text-body-medium rounded-md border bg-transparent px-2 py-1.5"
         >
           {TASK_ROLE_ORDER.map((option) => (
             <option key={option} value={option}>
               {TASK_ROLE_LABEL[option]}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <TaskFormActions
         onDone={onDone}
@@ -170,19 +169,18 @@ function OrganizationPicker({
   return (
     <label className="text-label-medium flex flex-col gap-1">
       <span className="text-on-surface-variant">Organization</span>
-      <select
+      <Select
         value={organizationId ?? ''}
         onChange={(event) => {
           onChange(OrganizationId.parse(event.target.value));
         }}
-        className="border-outline-variant text-body-medium rounded-md border bg-transparent px-2 py-1.5"
       >
         {organizations.map((org) => (
           <option key={org.id} value={org.id}>
             {org.name}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

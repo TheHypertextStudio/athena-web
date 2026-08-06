@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  Select,
 } from '@docket/ui/primitives';
 import type { JSX, SyntheticEvent } from 'react';
 
@@ -261,7 +262,7 @@ function ComposeCard({
           </Field>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Audience">
-              <select
+              <Select
                 value={draft.audienceType}
                 onChange={(event) => {
                   onDraftChange(
@@ -269,29 +270,27 @@ function ComposeCard({
                     event.target.value as NotificationAnnouncementDraft['audienceType'],
                   );
                 }}
-                className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
               >
                 <option value="user">One user</option>
                 <option value="users">Specific users</option>
                 <option value="segment">Segment</option>
                 <option value="all_users">All users</option>
-              </select>
+              </Select>
             </Field>
             {draft.audienceType === 'segment' ? (
               <Field label="Segment">
-                <select
+                <Select
                   value={draft.audienceValue}
                   onChange={(event) => {
                     onDraftChange('audienceValue', event.target.value);
                   }}
-                  className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
                 >
                   {notificationAudienceSegments.map((segment) => (
                     <option key={segment} value={segment}>
                       {segment}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             ) : (
               <Field label={draft.audienceType === 'users' ? 'User ids' : 'User id'}>
@@ -306,7 +305,7 @@ function ComposeCard({
               </Field>
             )}
             <Field label="Priority">
-              <select
+              <Select
                 value={draft.priority}
                 onChange={(event) => {
                   onDraftChange(
@@ -314,17 +313,16 @@ function ComposeCard({
                     event.target.value as NotificationAnnouncementDraft['priority'],
                   );
                 }}
-                className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
               >
                 {['low', 'normal', 'high', 'urgent'].map((priority) => (
                   <option key={priority} value={priority}>
                     {priority}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
             <Field label="Reply policy">
-              <select
+              <Select
                 value={draft.replyPolicy}
                 onChange={(event) => {
                   onDraftChange(
@@ -332,14 +330,13 @@ function ComposeCard({
                     event.target.value as NotificationAnnouncementDraft['replyPolicy'],
                   );
                 }}
-                className="border-outline bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm focus-visible:ring-2 focus-visible:outline-none"
               >
                 {['none', 'staff_inbox', 'org_admins', 'automation'].map((policy) => (
                   <option key={policy} value={policy}>
                     {policy}
                   </option>
                 ))}
-              </select>
+              </Select>
             </Field>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">

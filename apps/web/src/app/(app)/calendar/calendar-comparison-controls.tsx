@@ -5,7 +5,7 @@
  *
  * @remarks
  * These controls used to render inline in the page's flex column, above the grid: a bordered
- * `<section>` holding a bordered `<select>` (styled from the *legacy* `border-outline` /
+ * `<section>` holding a bordered `<Select>` (styled from the *legacy* `border-outline` /
  * `bg-surface` pair, one row away from MD3-tokenized neighbours) and one bordered chip per
  * person carrying a bare checkbox and a name. It cost roughly 90px of vertical budget whenever the
  * People axis was active and was a material contributor to the calendar collapsing to 5.55% of the
@@ -26,28 +26,16 @@ import {
   Avatar,
   AvatarFallback,
   Button,
-  focusRing,
   focusRingInset,
   Popover,
   PopoverContent,
   PopoverTrigger,
+  Select,
 } from '@docket/ui/primitives';
 import { type JSX, useId } from 'react';
 
 import { CALENDAR_CONTROL_CLASS } from './calendar-view-settings';
 import type { ComparisonMember } from './use-calendar-people-axis';
-
-/**
- * The app's MD3 `<select>` recipe, matching `settings/team-mapping-picker.tsx`.
- *
- * @remarks
- * Written out here so this control resolves to the same token family as its neighbours. The old
- * markup mixed `border-outline` / `bg-surface` (legacy) into a view whose every other control used
- * `border-outline-variant` — two token systems one row apart. No shadow: separation comes from the
- * tonal step off the popover surface.
- */
-const SELECT_CLASS =
-  'border-outline-variant bg-surface-container-low text-on-surface text-body-medium h-9 w-full rounded-md border px-2';
 
 /**
  * Reduce a display name to at most two initials for the avatar fallback.
@@ -116,13 +104,12 @@ export function CalendarComparisonControls({
       <PopoverContent align="end" aria-label="People" className="flex w-80 flex-col gap-3 p-2">
         <label className="flex flex-col gap-1">
           <span className="text-label-medium text-on-surface-variant px-1">Workspace</span>
-          <select
+          <Select
             name="comparison-workspace"
             value={workspaceId}
             onChange={(event) => {
               onWorkspaceChange(event.target.value);
             }}
-            className={cn(SELECT_CLASS, focusRing)}
           >
             {workspaces.length === 0 ? <option value="">No shared workspaces</option> : null}
             {workspaces.map((workspace) => (
@@ -130,7 +117,7 @@ export function CalendarComparisonControls({
                 {workspace.name}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
 
         <div className="flex min-w-0 flex-col gap-1">

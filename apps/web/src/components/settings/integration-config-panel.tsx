@@ -23,7 +23,7 @@
 import { type ConnectorConfig, type IntegrationOut, type TeamOut } from '@docket/types';
 import { cn } from '@docket/ui';
 import { Check } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Select, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useState } from 'react';
@@ -407,7 +407,7 @@ export function IntegrationConfigPanel({
           >
             Land mirrored work in
           </label>
-          <select
+          <Select
             id={`team-${integration.id}`}
             value={teamId}
             onChange={(e) => {
@@ -415,7 +415,6 @@ export function IntegrationConfigPanel({
               setTeamId(nextTeamId);
               commit(buildPayload({ twoWay, teamId: nextTeamId, allMode, listIds, teamMap }));
             }}
-            className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
           >
             <option value="">First team (default)</option>
             {teams.map((t) => (
@@ -423,7 +422,7 @@ export function IntegrationConfigPanel({
                 {t.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       ) : null}
 

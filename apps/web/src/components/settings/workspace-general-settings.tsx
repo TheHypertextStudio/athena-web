@@ -1,7 +1,7 @@
 'use client';
 
 import type { OrgOut, OrgUpdate, VocabularyPreset } from '@docket/types';
-import { Input, Skeleton } from '@docket/ui/primitives';
+import { Input, Select, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useState, type JSX } from 'react';
 
 import { api } from '@/lib/api';
@@ -260,18 +260,17 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
 
             <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
               Terminology
-              <select
+              <Select
                 value={draft.vocabulary}
                 disabled={readOnly}
                 onChange={(event) => {
                   updateAndCommit('vocabulary', event.target.value as VocabularyPreset);
                 }}
-                className="border-outline-variant bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm outline-none focus-visible:ring-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="startup">Product and startup</option>
                 <option value="nonprofit">Nonprofit and programs</option>
                 <option value="agency">Agency and client work</option>
-              </select>
+              </Select>
             </label>
 
             <div className="sm:col-span-2">

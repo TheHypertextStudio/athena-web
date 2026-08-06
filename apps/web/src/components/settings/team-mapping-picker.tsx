@@ -5,14 +5,14 @@
  *
  * @remarks
  * Renders one row per external team (fetched live from `GET /:id/lists`) with a Docket-team
- * `<select>`. Choosing "Not synced" — the default for a team not yet present in
+ * `<Select>`. Choosing "Not synced" — the default for a team not yet present in
  * `config.teamMappings` — excludes that external team from the mapping table entirely: an
  * external team absent from `teamMappings` is NOT synced (no fallback), so "Not synced" is a
  * real, explicit state rather than a placeholder. Controlled: the caller owns the mapping state
  * (external team id -> Docket team id) and this component only renders it and reports changes.
  */
 import type { ConnectorResourceRef, TeamOut } from '@docket/types';
-import { Skeleton } from '@docket/ui/primitives';
+import { Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 /** The mapping value for an external team that is not synced. */
@@ -66,13 +66,13 @@ export default function TeamMappingPicker({
           <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
             {team.title}
           </span>
-          <select
+          <Select
             aria-label={`Docket team for ${team.title}`}
             value={mapping[team.id] ?? NOT_SYNCED}
             onChange={(e) => {
               onChange(team.id, e.target.value);
             }}
-            className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring shrink-0 rounded-lg border px-3 py-2 outline-none focus-visible:ring-2"
+            className="shrink-0"
           >
             <option value={NOT_SYNCED}>Not synced</option>
             {orgTeams.map((t) => (
@@ -80,7 +80,7 @@ export default function TeamMappingPicker({
                 {t.name}
               </option>
             ))}
-          </select>
+          </Select>
         </li>
       ))}
     </ul>

@@ -1,3 +1,4 @@
+import { Select } from '@docket/ui/primitives';
 import type { IdentityOut } from '@docket/types';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
@@ -37,13 +38,13 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
       </label>
       {model.available.length > 0 ? (
         <>
-          <select
+          <Select
             id="linear-identity"
             value={model.selectedId}
             onChange={(event) => {
               model.setSelectedId(event.target.value);
             }}
-            className="border-outline-variant bg-surface text-on-surface min-w-56 rounded-md border px-3 py-2 text-sm"
+            className="min-w-56"
           >
             <option value="">Choose an account</option>
             {model.available.map((identity) => (
@@ -53,7 +54,7 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
                   `Linear account …${identity.accountId.slice(-8)}`}
               </option>
             ))}
-          </select>
+          </Select>
           <IntegrationActionButton
             tone="primary"
             disabled={model.selectedId.length === 0 || model.busy}

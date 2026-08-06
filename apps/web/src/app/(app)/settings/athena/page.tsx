@@ -1,7 +1,7 @@
 'use client';
 
 import type { AthenaApprovalMode, HubPreferences } from '@docket/types';
-import { Skeleton } from '@docket/ui/primitives';
+import { Select, Skeleton } from '@docket/ui/primitives';
 import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { McpConnectorsSection } from '@/components/settings/mcp-connectors-section';
@@ -118,7 +118,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
           </label>
           <label className="text-on-surface flex max-w-md flex-col gap-1.5 text-sm font-medium">
             Approval behavior
-            <select
+            <Select
               value={approvalMode}
               onChange={(event) => {
                 const next = event.target.value as AthenaApprovalMode;
@@ -127,12 +127,11 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
                   persist({ instructions, approvalMode: next });
                 }
               }}
-              className="border-outline-variant bg-surface text-on-surface focus-visible:ring-ring h-10 rounded-md border px-3 text-sm outline-none focus-visible:ring-2"
             >
               <option value="ask_before_acting">Ask before acting</option>
               <option value="routine_autonomy">Act on routine work</option>
               <option value="suggest_only">Suggest only</option>
-            </select>
+            </Select>
           </label>
           {save.isError ? (
             <p role="alert" className="text-error text-sm">

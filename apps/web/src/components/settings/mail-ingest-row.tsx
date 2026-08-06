@@ -1,7 +1,7 @@
 'use client';
 
 import type { IntegrationOut } from '@docket/types';
-import { Button } from '@docket/ui/primitives';
+import { Button, Select } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { THRESHOLD_CHOICES, useMailIngestRow } from './use-mail-ingest-controller';
@@ -50,9 +50,8 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
       {canManage ? (
         <label className="text-on-surface-variant flex items-center gap-2 text-xs">
           Sensitivity
-          <select
+          <Select
             aria-label="Suggestion sensitivity"
-            className="border-outline-variant bg-surface rounded-md border px-2 py-1"
             value={row.enabled ? row.activeThreshold : row.threshold}
             disabled={row.saving}
             onChange={(e) => {
@@ -64,7 +63,7 @@ export function MailIngestRow({ orgId, integration, canManage }: MailIngestRowPr
                 {choice.label}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       ) : null}
 

@@ -1,6 +1,7 @@
 'use client';
 
 /** Personal calendar preferences and permission-safe workspace sharing. */
+import { Select } from '@docket/ui/primitives';
 import type {
   CalendarItemCreateIntent,
   CalendarLayerShareAccess,
@@ -168,7 +169,7 @@ export default function CalendarSettingsPage(): JSX.Element {
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">New regions become</span>
-            <select
+            <Select
               value={draft.defaultCreateIntent ?? DEFAULTS.defaultCreateIntent}
               onChange={(event) => {
                 setDraft((current) => ({
@@ -176,22 +177,20 @@ export default function CalendarSettingsPage(): JSX.Element {
                   defaultCreateIntent: event.target.value as CalendarItemCreateIntent,
                 }));
               }}
-              className="border-outline bg-surface h-9 rounded-md border px-2"
             >
               <option value="event">Event</option>
               <option value="timebox">Timebox</option>
-            </select>
+            </Select>
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
             <span className="font-medium">Default event calendar</span>
-            <select
+            <Select
               value={draft.defaultLayerId ?? ''}
               onChange={(event) => {
                 const layer = destinations.find((candidate) => candidate.id === event.target.value);
                 setDraft((current) => ({ ...current, defaultLayerId: layer?.id ?? null }));
               }}
-              className="border-outline bg-surface h-9 rounded-md border px-2"
             >
               <option value="">Docket calendar</option>
               {destinations.map((layer) => (
@@ -199,7 +198,7 @@ export default function CalendarSettingsPage(): JSX.Element {
                   {layer.title}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className="flex flex-col gap-1 text-sm">
@@ -270,19 +269,18 @@ export default function CalendarSettingsPage(): JSX.Element {
           <>
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium">Workspace</span>
-              <select
+              <Select
                 value={workspaceId}
                 onChange={(event) => {
                   setWorkspaceId(event.target.value);
                 }}
-                className="border-outline bg-surface h-9 rounded-md border px-2"
               >
                 {sharedWorkspaces.map((org) => (
                   <option key={org.id} value={org.id}>
                     {org.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
 
             <div className="border-outline-variant divide-outline-variant divide-y rounded-lg border">
@@ -308,7 +306,7 @@ export default function CalendarSettingsPage(): JSX.Element {
                       <span className="truncate">{layer.title}</span>
                     </label>
                     {access ? (
-                      <select
+                      <Select
                         aria-label={`Sharing level for ${layer.title}`}
                         value={access}
                         onChange={(event) => {
@@ -317,11 +315,10 @@ export default function CalendarSettingsPage(): JSX.Element {
                             [layer.id]: event.target.value as CalendarLayerShareAccess,
                           }));
                         }}
-                        className="border-outline bg-surface h-8 rounded-md border px-2 text-xs"
                       >
                         <option value="details">Details</option>
                         <option value="busy">Busy only</option>
-                      </select>
+                      </Select>
                     ) : null}
                   </div>
                 );

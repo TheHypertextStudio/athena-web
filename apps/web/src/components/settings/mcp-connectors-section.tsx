@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
   Input,
+  Select,
   Skeleton,
 } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
@@ -561,18 +562,17 @@ export function AddMcpConnectorForm({ orgId, onConnected }: AddMcpConnectorFormP
               <label htmlFor={authId} className="text-on-surface text-sm font-medium">
                 Connection method
               </label>
-              <select
+              <Select
                 id={authId}
                 value={authMode}
                 onChange={(event) => {
                   setAuthMode(event.target.value as 'oauth' | 'bearer' | 'none');
                 }}
-                className="border-outline-variant bg-surface text-on-surface h-10 rounded-md border px-3 text-sm"
               >
                 <option value="oauth">Sign in and approve access</option>
                 <option value="bearer">Bearer token</option>
                 <option value="none">No authentication</option>
-              </select>
+              </Select>
             </div>
             {authMode === 'bearer' ? (
               <div className="flex flex-col gap-1.5">

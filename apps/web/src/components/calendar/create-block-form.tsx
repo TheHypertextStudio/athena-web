@@ -15,17 +15,16 @@ import {
   type CalendarLayerOut,
   type CalendarPreferences,
 } from '@docket/types';
-import { cn } from '@docket/ui';
 import { Plus } from '@docket/ui/icons';
 import {
   Button,
-  focusRing,
   Input,
   Popover,
   PopoverAnchor,
-  type PopoverVirtualAnchorRef,
   PopoverContent,
   PopoverTrigger,
+  type PopoverVirtualAnchorRef,
+  Select,
 } from '@docket/ui/primitives';
 import {
   type JSX,
@@ -49,19 +48,6 @@ import { CreateBlockTypeSelector } from './create-block-type-selector';
 import { useCreateCalendarItem } from './calendar-mutations';
 
 export type { CalendarRegionSelection } from './calendar-time-draft';
-
-/**
- * The app's MD3 `<select>` recipe, matching `settings/team-mapping-picker.tsx`.
- *
- * @remarks
- * Replaces the legacy `border-outline` / `bg-surface` pair this control used to carry, which put
- * two token systems inside one popover. Every property is now the {@link Input} recipe verbatim —
- * `h-9`, `rounded-md`, one `outline-variant` hairline, a transparent fill, no elevation — so a text
- * field, a `<select>`, and a `datetime-local` stacked in this form are indistinguishable except for
- * what they do. They previously differed in both fill and box-shadow.
- */
-const SELECT_CLASS =
-  'border-outline-variant text-on-surface text-body-medium h-9 w-full rounded-md border bg-transparent px-3';
 
 /**
  * The calendar toolbar row's shared control geometry.
@@ -247,13 +233,12 @@ export default function CreateBlockForm({
           {intent === 'event' ? (
             <label className="flex flex-col gap-1">
               <span className="text-label-medium text-on-surface-variant">Calendar</span>
-              <select
+              <Select
                 value={layerId}
                 onChange={(event) => {
                   layerEdited.current = true;
                   setLayerId(event.target.value ? CalendarLayerId.parse(event.target.value) : '');
                 }}
-                className={cn(SELECT_CLASS, focusRing)}
               >
                 <option value="">Docket calendar</option>
                 {destinations.map((layer) => (
@@ -261,7 +246,7 @@ export default function CreateBlockForm({
                     {layer.title}
                   </option>
                 ))}
-              </select>
+              </Select>
               {!configuredLayerAvailable ? (
                 <span className="text-body-small text-on-surface-variant">
                   Your saved calendar is unavailable, so this will use Docket.

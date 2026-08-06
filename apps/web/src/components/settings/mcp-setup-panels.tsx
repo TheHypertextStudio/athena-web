@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@docket/ui/primitives';
+import { Button, Select } from '@docket/ui/primitives';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import type {
@@ -197,20 +197,20 @@ export function ClientSetup({ mcpUrl }: { mcpUrl: string }): JSX.Element {
         <label htmlFor="mcp-client-select" className="text-on-surface text-body-medium font-medium">
           Which app are you setting up?
         </label>
-        <select
+        <Select
           id="mcp-client-select"
           value={selectedId}
           onChange={(e) => {
             setSelectedId(e.target.value);
           }}
-          className="border-outline-variant bg-surface-container-low text-on-surface focus:ring-primary text-body-medium w-full rounded-lg border px-3 py-2 outline-none focus:ring-2"
+          className="w-full"
         >
           {MCP_CLIENTS.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
 
       {client.kind === 'cli' ? (

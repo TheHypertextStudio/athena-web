@@ -9,8 +9,8 @@ import {
   readOfflineIdentity,
   shellCacheKey,
   writeOfflineIdentity,
-} from '../../service-worker/documents';
-import { navigateWithDocumentCache } from '../../service-worker/strategies';
+} from '../src/worker/documents';
+import { navigateWithDocumentCache } from '../src/worker/strategies';
 
 /**
  * The offline document cache — the one place this worker stores an authenticated response, and

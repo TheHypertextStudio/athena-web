@@ -387,6 +387,9 @@ importers:
       '@docket/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
+      '@docket/service-worker':
+        specifier: workspace:*
+        version: link:../../packages/service-worker
       '@docket/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -499,9 +502,6 @@ importers:
       '@vitejs/plugin-react':
         specifier: 'catalog:'
         version: 6.0.2(vite@8.0.16(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
-      esbuild:
-        specifier: ^0.28.1
-        version: 0.28.1
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@2.2.0)
@@ -855,6 +855,21 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.8(@types/node@26.1.0)(@vitest/coverage-v8@4.1.8)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.2(@types/node@26.1.0)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.22.4)(yaml@2.9.0))
+
+  packages/service-worker:
+    devDependencies:
+      '@docket/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint-config
+      '@docket/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/tsconfig
+      '@types/node':
+        specifier: 26.1.0
+        version: 26.1.0
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
 
   packages/test-utils:
     dependencies:

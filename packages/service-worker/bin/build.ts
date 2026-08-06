@@ -1,6 +1,11 @@
 /**
- * `pnpm --filter @docket/web exec tsx scripts/build-service-worker.ts` — bundle
- * {@link file://../service-worker/sw.ts} to `public/sw.js`.
+ * Bundle {@link file://../src/worker/sw.ts} into a host app's `public/sw.js`.
+ *
+ * @remarks
+ * Invoked as `tsx bin/build.ts --app-root=<path> [--production]`. `apps/web` drives it through
+ * its own `build:sw` script, and `turbo.json` — not a shell `&&` — is what guarantees this runs
+ * after `next build`, because the cache version and the precache list are both read out of
+ * `.next`.
  *
  * @remarks
  * The worker is authored in TypeScript and bundled rather than hand-written as plain JavaScript in
@@ -28,7 +33,7 @@
  */
 import { build } from 'esbuild';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -37,9 +42,29 @@ import {
   formatBytes,
   totalBytes,
   type PrecacheAsset,
-} from './precache-manifest';
+} from '../src/precache-manifest';
 
-const WEB_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+/** This package's own root — where the worker source lives. */
+const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * The host application's root: where `.next` is read from and `public/sw.js` is written.
+ *
+ * @remarks
+ * Required, never inferred. This bundler used to sit inside `apps/web` and could assume its own
+ * location was the app; it is now a package that any app can call, and quietly defaulting to a
+ * guess would write a worker into whichever directory happened to be current.
+ */
+function readAppRoot(argv: readonly string[]): string {
+  const flag = argv.find((arg) => arg.startsWith('--app-root='));
+  const value = flag?.slice('--app-root='.length);
+  if (value === undefined || value.length === 0) {
+    throw new Error('build-service-worker: --app-root=<path to the host app> is required');
+  }
+  return resolve(value);
+}
+
+const WEB_ROOT = readAppRoot(process.argv.slice(2));
 
 /** Next's build id, or `'dev'` when no production build is present. */
 function readBuildId(): string {
@@ -79,9 +104,9 @@ const precache: readonly PrecacheAsset[] = production
 assertWithinBudget(precache);
 
 await build({
-  absWorkingDir: WEB_ROOT,
-  entryPoints: ['service-worker/sw.ts'],
-  outfile: 'public/sw.js',
+  absWorkingDir: PACKAGE_ROOT,
+  entryPoints: ['src/worker/sw.ts'],
+  outfile: join(WEB_ROOT, 'public/sw.js'),
   bundle: true,
   format: 'iife',
   target: 'es2022',

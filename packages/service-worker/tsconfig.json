@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@docket/tsconfig/base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "noEmit": true,
+    // The bundler is Node, but the specs exercise the worker's modules against browser globals
+    // (`caches`, `Request`, `Response`) under jsdom, so this program needs `DOM` alongside. The
+    // worker's own source is compiled separately against `WebWorker` — see src/worker/tsconfig.json
+    // — which is what keeps `window`/`document` genuinely unavailable to the shipped code.
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  // `src/worker` is deliberately absent: it is a WebWorker program with no `window` and no
+  // `document`, compiled on its own by `src/worker/tsconfig.json`. Loading `DOM` and `WebWorker`
+  // in one program collides on shared globals, so the bundler (Node) and the thing it bundles
+  // (worker) never share a compilation.
+  "include": ["bin/**/*.ts", "tests/**/*.ts", "src/*.ts"],
+  "exclude": ["node_modules", "src/worker"]
+}

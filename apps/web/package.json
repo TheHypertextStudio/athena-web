@@ -10,11 +10,12 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "next build && tsx scripts/build-service-worker.ts --production",
+    "build": "tsx ../../packages/service-worker/bin/build.ts --app-root=. --production",
+    "build:next": "next build",
     "dev": "portless run --force",
-    "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx scripts/build-service-worker.ts && next dev'",
+    "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx ../../packages/service-worker/bin/build.ts --app-root=. && next dev'",
     "start": "next start",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p service-worker/tsconfig.json",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run",
     "test:watch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest",
@@ -51,7 +52,8 @@
     "idb-keyval": "^6.3.0",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "@docket/service-worker": "workspace:*"
   },
   "devDependencies": {
     "@docket/brand": "workspace:*",
@@ -68,7 +70,6 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
-    "esbuild": "^0.28.1",
     "jsdom": "^29.1.1",
     "sharp": "^0.35.3",
     "tailwindcss": "^4.3.2",

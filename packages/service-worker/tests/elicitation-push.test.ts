@@ -13,7 +13,7 @@ import {
   answerEndpoint,
   readPushPayload,
   resolveNotificationIntent,
-} from '../../service-worker/elicitation-push';
+} from '../src/worker/elicitation-push';
 
 /** The payload the server actually sends, built the same way `elicitationPushMessage` builds it. */
 const PAYLOAD = JSON.stringify({

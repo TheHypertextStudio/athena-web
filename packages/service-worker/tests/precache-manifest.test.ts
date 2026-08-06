@@ -10,7 +10,7 @@ import {
   formatBytes,
   PRECACHE_BUDGET_BYTES,
   totalBytes,
-} from '../../scripts/precache-manifest';
+} from '../src/precache-manifest';
 
 /**
  * The precache manifest decides how much of a person's device Docket takes, and whether a route

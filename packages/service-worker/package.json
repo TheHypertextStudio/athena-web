@@ -1,0 +1,30 @@
+{
+  "name": "@docket/service-worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Docket's service worker — the offline routing table, cache strategies, and the bundler that emits it into a host app's public directory.",
+  "exports": {
+    "./routing": "./src/routing.ts",
+    "./strategies": "./src/strategies.ts",
+    "./documents": "./src/documents.ts",
+    "./elicitation-push": "./src/elicitation-push.ts",
+    "./precache-manifest": "./src/precache-manifest.ts",
+    "./build": "./bin/build.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit -p src/worker/tsconfig.json",
+    "lint": "eslint .",
+    "clean": "rm -rf .turbo *.tsbuildinfo",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@docket/eslint-config": "workspace:*",
+    "@docket/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "esbuild": "^0.28.1"
+  }
+}

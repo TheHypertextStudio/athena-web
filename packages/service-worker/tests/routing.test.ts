@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { routeRequest } from '../../service-worker/routing';
+import { routeRequest } from '../src/worker/routing';
 
 const ORIGIN = 'https://docket.localhost';
 

@@ -3,17 +3,21 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
+import type * as RulesModule from '../../src/lib/automation/rules-store';
 import type * as DrainModule from '../../src/routes/event-sync';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let sweepInboundEvents!: typeof DrainModule.sweepInboundEvents;
+let seedDefaultAutomationRules!: typeof RulesModule.seedDefaultAutomationRules;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   sweepInboundEvents = (await import('../../src/routes/event-sync')).sweepInboundEvents;
+  seedDefaultAutomationRules = (await import('../../src/lib/automation/rules-store'))
+    .seedDefaultAutomationRules;
 });
 
 let seq = 0;
@@ -198,6 +202,97 @@ describe('entity association in the drain', () => {
       .where(eq(schema.searchIndexJob.sourceEventId, row.id));
     // Only the event's own activity document. Nothing to refresh, and nothing invented.
     expect(jobs).toEqual([{ sourceTable: 'event' }]);
+  });
+
+  it('lets an upstream completion reach the shipped archive-the-email rule', async () => {
+    // A behaviour change, deliberately locked in here. The seeded rule matches
+    // `{kind:'completed', subjectType:'task'}`, and external events never carried a subjectType,
+    // so closing an issue in Linear left the attached mail thread alone while closing the mirror
+    // in Docket archived it. The task IS that issue, so the two now agree.
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const actorId = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, actorId);
+    await seedDefaultAutomationRules(orgId, actorId);
+
+    const [taskRow] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Mirrored issue',
+        state: 'todo',
+        visibility: 'public',
+        source: 'linked',
+        sourceIntegrationId: intgId,
+        externalId: 'LIN-12',
+      })
+      .returning({ id: schema.task.id });
+
+    // The mail action resolves through the attachment's own integration, which must be the
+    // mail-capable one — `asMailActor` is gated by provider capability, not by rule config.
+    const [mailIntg] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'gmail',
+        pattern: 'connector',
+        roles: ['context'],
+        status: 'connected',
+        createdBy: actorId,
+      })
+      .returning({ id: schema.integration.id });
+    const [attachmentRow] = await db
+      .insert(schema.attachment)
+      .values({
+        organizationId: orgId,
+        subjectType: 'task',
+        subjectId: taskRow!.id,
+        kind: 'email',
+        title: 'Re: the thing',
+        sourceIntegrationId: mailIntg!.id,
+        externalId: 'thread-abc',
+      })
+      .returning({ id: schema.attachment.id });
+
+    await db.insert(schema.inboundEvent).values({
+      organizationId: orgId,
+      integrationId: intgId,
+      provider: 'linear',
+      externalEventId: 'ev_assoc_automation',
+      eventType: 'mock',
+      payload: { kind: 'completed', title: 'Closed upstream', id: 'LIN-12' },
+      signatureVerified: true,
+    });
+
+    await sweepInboundEvents(new Date());
+
+    const [after] = await db
+      .select({ lastEmailStateAction: schema.attachment.lastEmailStateAction })
+      .from(schema.attachment)
+      .where(eq(schema.attachment.id, attachmentRow!.id));
+    expect(after!.lastEmailStateAction).toBe('mail.archive');
+  });
+
+  it('leaves the mail thread alone when the completion resolves to no Docket task', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const actorId = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, actorId);
+    await seedDefaultAutomationRules(orgId, actorId);
+    await db.insert(schema.inboundEvent).values({
+      organizationId: orgId,
+      integrationId: intgId,
+      provider: 'linear',
+      externalEventId: 'ev_assoc_automation_miss',
+      eventType: 'mock',
+      payload: { kind: 'completed', title: 'Closed upstream', id: 'LIN-UNMIRRORED' },
+      signatureVerified: true,
+    });
+
+    await sweepInboundEvents(new Date());
+
+    // No subject means no rule match, which is what keeps an unassociated event inert.
+    const row = await soleEvent(orgId);
+    expect(row.entityAssociation).toBe('pending');
   });
 
   it('will not associate across integrations within one org', async () => {

@@ -68,8 +68,11 @@ import {
 import { cn } from '@docket/ui/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage, Button, focusRingInset } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useAppSearchParams } from '@/lib/app-location';
+// `next/navigation` directly, not `@/lib/app-location`: this page is in the `(auth)` route group,
+// which mounts no `AppLocationProvider` — that provider wraps `(app)` only. Reading through the
+// app-location hooks here throws at prerender. The `no-restricted-imports` rule scopes itself to
+// `(app)/`, `components/`, and `lib/` for the same reason.
+import { useRouter, useSearchParams } from 'next/navigation';
 import { type ComponentType, type JSX, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { signInReturnPath } from '@/components/app-shell-utils';
@@ -268,7 +271,7 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
 /** The inner consent page that reads searchParams and renders the form. */
 function ConsentPage(): JSX.Element {
   const router = useRouter();
-  const params = useAppSearchParams();
+  const params = useSearchParams();
   const { data: session, isPending: sessionPending, error: sessionError } = useSession();
 
   // `oauthProvider()` redirects here with the SIGNED authorization query — every original
@@ -505,7 +508,7 @@ function ConsentPage(): JSX.Element {
  * The OAuth 2.1 consent page.
  *
  * @remarks
- * Wrapped in `<Suspense>` because `useAppSearchParams()` requires it in Next.js App Router.
+ * Wrapped in `<Suspense>` because `useSearchParams()` requires it in Next.js App Router.
  */
 export default function OAuthAuthorizePage(): JSX.Element {
   return (

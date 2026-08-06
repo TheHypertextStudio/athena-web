@@ -22,7 +22,11 @@ import {
   type ScheduleOverlapPlacement,
 } from './scheduling-overlap-layout';
 import { SchedulingItemBody } from './scheduling-item-body';
-import { SchedulingGripIcon, SchedulingLinkIcon } from './scheduling-item-icons';
+import {
+  SchedulingGripIcon,
+  SchedulingLinkIcon,
+  SchedulingLockIcon,
+} from './scheduling-item-icons';
 import {
   scheduleItemFill,
   scheduleItemRaisedFill,
@@ -70,10 +74,23 @@ export interface SchedulingItemCardProps {
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }
 
-/** Choose how much card detail fits without obscuring adjacent times. */
+/**
+ * Choose how much card detail fits without obscuring adjacent times.
+ *
+ * @remarks
+ * Width demotes a card only when it is **also short**. The old rule was `height < 48 || width <
+ * 120`, from when a full-density title was a single `truncate`d line that genuinely needed 120px of
+ * run. The title wraps now ({@link file://./scheduling-item-body.tsx}), so a tall narrow card has
+ * somewhere to put the overflow and vertical room is the only thing full density actually needs.
+ *
+ * That `||` was what kept the rail truncating. A 280px rail leaves the lane ~216px, so any two
+ * overlapping events split it into ~104px columns — under 120 — and a two-hour meeting with 96px of
+ * empty fill beneath it rendered as one clipped line.
+ */
 function itemDensity(height: number, width: number): ScheduleItemDensity {
   if (height < 24) return 'marker';
-  if (height < 48 || width < 120) return 'compact';
+  if (height < 48) return 'compact';
+  if (width < 120 && height < 64) return 'compact';
   return 'full';
 }
 
@@ -254,6 +271,7 @@ export function SchedulingItemCard({
         <SchedulingItemBody
           item={item}
           density={density}
+          height={visibleHeight}
           timeRange={timeRange}
           content={content}
           readOnlyDescriptionId={readOnlyDescriptionId}
@@ -264,10 +282,23 @@ export function SchedulingItemCard({
           onClick={gesture.onBodyClick}
         />
         {!editable && item.readOnlyLabel ? (
+          // A glyph, not the word. As a text chip this sat at the title's own type size on an
+          // opaque fill, permanently, and on a narrow lane it pushed the title into truncation —
+          // chrome outranking content on the surface whose job is showing events. It also occupied
+          // the exact coordinates of the hover action slot below, so the two stacked. The lock is
+          // the same treatment the list card already uses, and the words still reach a screen
+          // reader through `aria-describedby`.
           <span
-            id={readOnlyDescriptionId}
-            className="bg-surface/90 text-on-surface-variant text-label-large pointer-events-none absolute right-0.5 bottom-0.5 z-30 max-w-[calc(100%-0.25rem)] truncate rounded px-1 py-0.5"
+            aria-hidden="true"
+            className="text-on-surface-variant pointer-events-none absolute top-1 right-1 z-20 flex size-4 items-center justify-center"
           >
+            <SchedulingLockIcon />
+          </span>
+        ) : null}
+        {/* The `id` sits on the text, not on the icon's box: `aria-describedby` should resolve to
+            the words alone, and a query for those words should land on the described element. */}
+        {!editable && item.readOnlyLabel ? (
+          <span id={readOnlyDescriptionId} className="sr-only">
             {item.readOnlyLabel}
           </span>
         ) : null}

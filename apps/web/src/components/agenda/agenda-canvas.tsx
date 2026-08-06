@@ -1,8 +1,11 @@
 'use client';
 
 /** `agenda/agenda-canvas` — list and shared-fluid-canvas arrangements of one agenda. */
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+
+import { Button } from '@docket/ui/primitives';
 
 import CalendarItemDrawer from '@/components/calendar/calendar-item-drawer';
 import { formatDay } from '@/components/date-picker';
@@ -24,6 +27,7 @@ import { useNow } from '@/lib/use-now';
 
 import { type AgendaEntry, useAgenda } from './agenda-context';
 import { AgendaListArrangement } from './agenda-list-arrangement';
+import AgendaScaleStepper from './agenda-scale-stepper';
 import {
   isAgendaEntryInlineEditable,
   isAgendaRelationshipTarget,
@@ -209,12 +213,20 @@ function TimelineArrangement({
         now={now}
         viewportHeight="100%"
         minimumLaneWidth={180}
+        gutterSlot={<AgendaScaleStepper />}
         error={
           timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
             ? INLINE_UPDATE_FAILURE_COPY
             : null
         }
-        emptyMessage={loading ? '' : 'Nothing scheduled. Use the calendar to plan this day.'}
+        emptyMessage={loading ? '' : 'Nothing scheduled.'}
+        emptyAction={
+          loading ? null : (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/calendar">Plan in the calendar</Link>
+            </Button>
+          )
+        }
         onOpenItem={({ item }) => {
           const entry = entryById.get(item.id);
           if (!entry) return;

@@ -81,9 +81,14 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
-import { ShellActivityBar } from './ShellActivityBar';
+import {
+  SHELL_ACTIVITY_BAR_INLINE_SIZE,
+  SHELL_RAIL_GUTTER_INLINE_SIZE,
+  ShellActivityBar,
+} from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
 import {
+  RAIL_INLINE_SIZE,
   RAIL_MAX_INLINE_SIZE_PX,
   RAIL_MIN_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
@@ -468,6 +473,29 @@ export function AppShell({
       clearTimeout(timer);
     };
   }, [activeOrgId]);
+
+  // Publish how much of the viewport's right edge the rail occupies, so `position: fixed` chrome
+  // that is *not* inside this flex row can clear it. The Athena pill is the case that forced this:
+  // it is fixed to the viewport and mounted as a sibling of the shell, so it knew nothing about the
+  // rail and floated over the docked panel's lower-right corner — on the Agenda panel, directly
+  // over the evening hours and the current-time line.
+  //
+  // It goes on `documentElement` rather than on this root because a variable set here would only
+  // inherit to descendants, and the whole problem is chrome that is not one. Zero below `lg`, where
+  // both rail columns are CSS-hidden, and the activity bar alone while the panel is collapsed.
+  React.useEffect(() => {
+    const barAndGutter = `${SHELL_RAIL_GUTTER_INLINE_SIZE} + ${SHELL_ACTIVITY_BAR_INLINE_SIZE}`;
+    const railWidth =
+      !isDesktop || activePanel === null
+        ? '0px'
+        : railCollapsed
+          ? `calc(${barAndGutter})`
+          : `calc(${barAndGutter} + ${RAIL_INLINE_SIZE})`;
+    document.documentElement.style.setProperty('--shell-rail-inline-size', railWidth);
+    return () => {
+      document.documentElement.style.removeProperty('--shell-rail-inline-size');
+    };
+  }, [activePanel, isDesktop, railCollapsed]);
 
   return (
     <div

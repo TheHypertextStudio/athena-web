@@ -192,18 +192,28 @@ export function AthenaPanelProvider({
           onClick={() => {
             openAthena();
           }}
-          className="border-outline-variant bg-inverse-surface text-inverse-on-surface focus-visible:ring-ring fixed right-4 bottom-[4.75rem] z-30 flex min-h-12 max-w-[calc(100vw-2rem)] items-center gap-2 overflow-hidden rounded-full border px-4 shadow-lg transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:outline-none lg:right-6 lg:bottom-6"
+          // `right` clears the shell's rail via `--shell-rail-inline-size`, published on
+          // `documentElement` by `AppShell`. This pill is fixed to the viewport and mounted as a
+          // sibling of the shell, so without that variable it floated over the docked panel's
+          // lower-right corner — on the Agenda rail, directly over the evening hours and the
+          // current-time line. The variable is `0px` wherever there is no rail, so the fallback
+          // here is the pre-existing position rather than a guess.
+          //
+          // No `shadow-lg` and no `border`: the shell's own panels and the scheduling canvas both
+          // separate by tonal step, and this was the one piece of chrome still doing it with a
+          // drop shadow. `bg-inverse-surface` is already the strongest tonal step available.
+          className="bg-inverse-surface text-inverse-on-surface focus-visible:ring-ring fixed right-4 bottom-[4.75rem] z-30 flex min-h-12 max-w-[calc(100vw-2rem)] items-center gap-2 overflow-hidden rounded-full px-4 transition-transform hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:outline-none lg:right-[calc(1.5rem+var(--shell-rail-inline-size,0px))] lg:bottom-6"
         >
           <Sparkles aria-hidden="true" className="size-4" />
-          <span className="text-sm font-semibold">Athena</span>
+          <span className="text-label-large font-semibold">Athena</span>
           {counts && (counts.needsYou > 0 || counts.working > 0) ? (
-            <span className="text-inverse-on-surface/80 min-w-0 truncate text-xs tabular-nums">
+            <span className="text-inverse-on-surface/80 text-label-medium min-w-0 truncate tabular-nums">
               {counts.needsYou > 0 ? `${counts.needsYou} needs you` : null}
               {counts.needsYou > 0 && counts.working > 0 ? ' · ' : null}
               {counts.working > 0 ? `${counts.working} working` : null}
             </span>
           ) : null}
-          <kbd className="text-inverse-on-surface/60 hidden text-[0.65rem] sm:inline">
+          <kbd className="text-inverse-on-surface/60 text-label-medium hidden sm:inline">
             {shortcutLabel}
           </kbd>
         </button>

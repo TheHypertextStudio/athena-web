@@ -14,15 +14,24 @@ export {
   type ScheduleItemLaneBounds,
 } from './scheduling-date-lanes';
 export {
+  clampPixelsPerHour,
+  COMPACT_AXIS_MAX_WIDTH,
+  DEFAULT_PIXELS_PER_HOUR,
   deriveLaneGeometry,
+  deriveScheduleAxis,
   deriveSnapMinutes,
   laneIndexAtOffset,
+  MAX_PIXELS_PER_HOUR,
+  MIN_PIXELS_PER_HOUR,
   MINIMUM_SNAP_MINUTES,
   MINUTES_PER_DAY,
   minutesToPixels,
   pixelDeltaToMinutes,
   pixelsToMinutes,
+  ZOOM_STEP_IN,
+  ZOOM_STEP_OUT,
   type DeriveLaneGeometryOptions,
+  type ScheduleAxisPresentation,
   type ScheduleLaneGeometry,
 } from './scheduling-geometry';
 export { moveScheduleInstantRange, type MovedScheduleInstantRange } from './scheduling-exact-move';
@@ -48,6 +57,7 @@ export {
   type DeriveScheduleTicksOptions,
   type ScheduleDateRange,
   type ScheduleTick,
+  type ScheduleTickLabelStyle,
   type ScheduleTimeDisambiguation,
   type ScheduleWallInstantResolution,
   type ScheduleWallTimeCandidate,

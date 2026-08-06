@@ -36,6 +36,25 @@ export interface ShellActivityBarProps {
   readonly onIconClick: (id: string) => void;
 }
 
+/**
+ * The activity bar's inline size, matching its `w-12` class.
+ *
+ * @remarks
+ * Exported so `position: fixed` chrome mounted outside the shell's flex row can clear the rail. It
+ * duplicates a Tailwind literal because Tailwind's scanner needs the class written out; the comment
+ * on that class points back here so the pair is not silently split.
+ */
+export const SHELL_ACTIVITY_BAR_INLINE_SIZE = '3rem';
+
+/**
+ * Shell padding plus one column gap — the strip between the viewport edge and the activity bar.
+ *
+ * @remarks
+ * The shell root is `lg:gap-2 lg:p-2`, so the right edge carries 8px of padding and the rail's own
+ * 8px gap. Named because the same 1rem appears in {@link SHELL_DESKTOP_CHROME_PX}'s 40px of gutters.
+ */
+export const SHELL_RAIL_GUTTER_INLINE_SIZE = '1rem';
+
 /** The far-right icon rail that switches supplemental panels and toggles the host collapse. */
 export function ShellActivityBar({
   panels,
@@ -46,6 +65,9 @@ export function ShellActivityBar({
   return (
     <nav
       aria-label="Panels"
+      // `w-12` is {@link SHELL_ACTIVITY_BAR_INLINE_SIZE}. Tailwind needs the literal class, so the
+      // two have to move together — the constant exists because chrome outside the shell's flex row
+      // has to do arithmetic against this width and cannot read a utility class.
       className="hidden h-full w-12 shrink-0 flex-col items-center gap-1 py-2 lg:flex"
     >
       {panels.map((panel) => {

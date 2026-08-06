@@ -164,6 +164,15 @@ export interface SchedulingCanvasProps {
   readonly viewportHeight?: string | number;
   /** Minimum readable lane width; the visible lane count is derived from this and the viewport. */
   readonly minimumLaneWidth?: number;
+  /**
+   * Consumer-owned chrome placed in the header's hour-gutter cell.
+   *
+   * @remarks
+   * The canvas exposes no controls of its own — zoom, navigation, and view choice all belong to the
+   * surface around it. This is the one exception's escape hatch: a control that has to sit *inside*
+   * the grid's own coordinate system to make sense, which today is the rail's scale stepper.
+   */
+  readonly gutterSlot?: ReactNode;
   /** Lane aligned at the leading edge when a rolling window mounts. */
   readonly initialLaneIndex?: number;
   /** Consumer-owned signal that realigns the initial lane even when the lane window is unchanged. */
@@ -186,6 +195,8 @@ export interface SchedulingCanvasProps {
   readonly error?: string | null;
   /** Application-owned empty copy shown when every lane has no items. */
   readonly emptyMessage?: string;
+  /** One control rendered beside {@link emptyMessage}, so an empty canvas offers a way forward. */
+  readonly emptyAction?: ReactNode;
   /** Customize item content without transferring gesture or geometry ownership. */
   readonly renderItem?: (context: ScheduleItemRenderContext) => ReactNode;
   /**

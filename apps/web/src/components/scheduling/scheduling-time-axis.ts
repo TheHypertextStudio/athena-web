@@ -21,6 +21,17 @@ export type {
 const MINIMUM_MAJOR_TICK_SEPARATION = 44;
 const MAJOR_TICK_INTERVALS = [15, 30, 60, 120] as const;
 
+/**
+ * How much precision an hour label carries.
+ *
+ * @remarks
+ * `exact` is `12:00 AM` — the form a full-width calendar can afford. `hour` is `12 AM`, which drops
+ * roughly half the glyphs and lets the gutter shrink from 88px to 32px, at the cost of never being
+ * able to label a half-hour. See {@link file://./scheduling-geometry.ts}'s `deriveScheduleAxis`,
+ * which picks the pair.
+ */
+export type ScheduleTickLabelStyle = 'exact' | 'hour';
+
 /** One wall-clock line emitted for the scheduling grid. */
 export interface ScheduleTick {
   /** Minute offset from the lane's local midnight. */
@@ -41,6 +52,8 @@ export interface DeriveScheduleTicksOptions {
   readonly timezone: string;
   /** Current continuous vertical zoom in physical pixels per hour. */
   readonly pixelsPerHour: number;
+  /** Precision of the emitted major labels. Defaults to the full `exact` form. */
+  readonly labelStyle?: ScheduleTickLabelStyle;
   /** Optional locale override used by deterministic consumers and tests. */
   readonly locale?: string;
 }
@@ -92,6 +105,19 @@ export function majorTickInterval(pixelsPerHour: number): number {
   );
 }
 
+/**
+ * Apply the label form's own floor to the interval vertical space would allow.
+ *
+ * @remarks
+ * The `hour` form renders `4 AM`, which cannot distinguish 4:00 from 4:30. Zooming in far enough to
+ * fit a 30-minute label would otherwise print `4 AM` twice in a row. Vertical room is a ceiling on
+ * label density; the label's own precision is a floor, and the coarser of the two wins.
+ */
+function labelledTickInterval(pixelsPerHour: number, labelStyle: ScheduleTickLabelStyle): number {
+  const interval = majorTickInterval(pixelsPerHour);
+  return labelStyle === 'hour' ? Math.max(60, interval) : interval;
+}
+
 /** Format a requested wall time that has no corresponding instant. */
 function formatSkippedWallTime(
   formatter: Intl.DateTimeFormat,
@@ -120,21 +146,23 @@ export function deriveScheduleTicks({
   date,
   timezone,
   pixelsPerHour,
+  labelStyle = 'exact',
   locale,
 }: DeriveScheduleTicksOptions): ScheduleTick[] {
   const plainDate = Temporal.PlainDate.from(date);
   const zone = resolveScheduleTimezone(timezone);
   const snapMinutes = deriveSnapMinutes(pixelsPerHour);
-  const majorMinutes = majorTickInterval(pixelsPerHour);
-  const zonedFormatter = new Intl.DateTimeFormat(locale, {
-    timeZone: zone,
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  const skippedFormatter = new Intl.DateTimeFormat(locale, {
+  const majorMinutes = labelledTickInterval(pixelsPerHour, labelStyle);
+  const exactParts = { hour: 'numeric', minute: '2-digit' } as const;
+  const zonedFormatter = new Intl.DateTimeFormat(locale, { timeZone: zone, ...exactParts });
+  const skippedFormatter = new Intl.DateTimeFormat(locale, { timeZone: 'UTC', ...exactParts });
+  // Only *major* ticks are ever rendered in the compact form. Minor ticks keep their exact label so
+  // the returned data never claims 4:10 is "4 AM" — nothing draws them, but the array is read by
+  // gesture code and tests, and a lying value there is a trap rather than a saving.
+  const zonedHourFormatter = new Intl.DateTimeFormat(locale, { timeZone: zone, hour: 'numeric' });
+  const skippedHourFormatter = new Intl.DateTimeFormat(locale, {
     timeZone: 'UTC',
     hour: 'numeric',
-    minute: '2-digit',
   });
   const ticks: ScheduleTick[] = [];
 
@@ -143,17 +171,14 @@ export function deriveScheduleTicks({
     const transition = resolution?.kind ?? 'skipped';
     const plainDateTime = plainDate.toPlainDateTime().add({ minutes: wallMinutes });
     const instant = resolution?.kind === 'normal' ? resolution.instant : null;
+    const kind = wallMinutes % majorMinutes === 0 ? 'major' : 'minor';
+    const compact = labelStyle === 'hour' && kind === 'major';
     const label =
       transition !== 'normal' || !instant
-        ? formatSkippedWallTime(skippedFormatter, plainDateTime)
-        : zonedFormatter.format(new Date(instant));
+        ? formatSkippedWallTime(compact ? skippedHourFormatter : skippedFormatter, plainDateTime)
+        : (compact ? zonedHourFormatter : zonedFormatter).format(new Date(instant));
 
-    ticks.push({
-      wallMinutes,
-      label,
-      kind: wallMinutes % majorMinutes === 0 ? 'major' : 'minor',
-      transition,
-    });
+    ticks.push({ wallMinutes, label, kind, transition });
   }
 
   return ticks;

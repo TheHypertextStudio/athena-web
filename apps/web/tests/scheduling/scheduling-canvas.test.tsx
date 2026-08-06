@@ -854,7 +854,11 @@ describe('SchedulingCanvas', () => {
     const startGrip = screen.getByRole('button', { name: 'Resize Short overview from start' });
     const endGrip = screen.getByRole('button', { name: 'Resize Short overview from end' });
     expect(article).toHaveClass('overflow-visible');
-    expect(body).toHaveClass('cursor-grab', 'overflow-hidden', 'rounded-sm');
+    // No `overflow-hidden` on the body any more: a marker-density card now renders a real sticky
+    // title, and a scrollport on the body strands that label at the card's own top edge. The
+    // title's own `truncate` does the clipping.
+    expect(body).toHaveClass('cursor-grab', 'rounded-sm');
+    expect(body).not.toHaveClass('overflow-hidden');
     expect(move).toHaveClass('z-30');
     expect(link).toHaveClass('z-30');
     expect(link).toHaveAttribute('draggable', 'true');
@@ -1489,13 +1493,16 @@ describe('SchedulingCanvas', () => {
     expect(onReachBoundary).toHaveBeenCalledTimes(2);
   });
 
+  // 800px, not 500: label density is a function of vertical zoom *and* the axis form, and below
+  // 640px the axis is compact and refuses to label a sub-hour tick however far you zoom in. This
+  // case owns the full form; the one after it owns the compact one.
   it('renders adaptive major labels and minor lines at exact wall-minute positions', () => {
     const { rerender } = render(
       <SchedulingCanvas
         displayTimezone="UTC"
         lanes={[lane('date', 'Date')]}
         pixelsPerHour={24}
-        viewportWidth={500}
+        viewportWidth={800}
       />,
     );
 
@@ -1513,13 +1520,55 @@ describe('SchedulingCanvas', () => {
         displayTimezone="UTC"
         lanes={[lane('date', 'Date')]}
         pixelsPerHour={144}
-        viewportWidth={500}
+        viewportWidth={800}
       />,
     );
     expect(document.querySelectorAll('[data-schedule-tick="major"]')).toHaveLength(49);
     expect(document.querySelectorAll('[data-schedule-tick="minor"]')).toHaveLength(240);
     expect(document.querySelector('[data-schedule-label="30"]')).toHaveStyle({ top: '72px' });
     expect(document.querySelector('[data-schedule-tick-minutes="5"]')).toHaveStyle({ top: '12px' });
+  });
+
+  // `All day` is a child span of the gutter cell — `sr-only` in the compact form — so the width
+  // lives on its parent. Reading `.style.width` off the span itself yields `NaN`, which silently
+  // satisfies a `toBe` comparison against another `NaN`.
+  const gutterCell = (): HTMLElement => {
+    const cell = screen.getByText('All day').parentElement;
+    if (!cell) throw new Error('the All day label has no gutter cell');
+    return cell;
+  };
+
+  it('holds the compact axis to whole hours and a 44px gutter however far it is zoomed', () => {
+    const { rerender } = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('date', 'Date')]}
+        pixelsPerHour={144}
+        viewportWidth={352}
+      />,
+    );
+
+    // 144px/hour puts 72px between half-hours — well past the 44px a label needs — so the full
+    // axis would label every 30 minutes here. `12 AM` cannot say which half of the hour it means,
+    // so the compact form floors the interval at an hour instead of printing the same label twice.
+    expect(document.querySelectorAll('[data-schedule-tick="major"]')).toHaveLength(25);
+    expect(document.querySelector('[data-schedule-label="60"]')).toHaveTextContent(/^1\s?AM$/);
+    expect(document.querySelector('[data-schedule-label="30"]')).toBeNull();
+    expect(gutterCell()).toHaveStyle({ width: '44px' });
+
+    // The threshold is the *measured* width, not the zoom: the same canvas one pixel into the full
+    // band labels half-hours and pays 88px for the room to do it.
+    rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[lane('date', 'Date')]}
+        pixelsPerHour={144}
+        viewportWidth={640}
+      />,
+    );
+    expect(document.querySelectorAll('[data-schedule-tick="major"]')).toHaveLength(49);
+    expect(document.querySelector('[data-schedule-label="30"]')).toHaveTextContent('12:30 AM');
+    expect(gutterCell()).toHaveStyle({ width: '88px' });
   });
 
   it('renders a deterministic current-time line only in lanes for its display-zone date', () => {
@@ -1671,7 +1720,10 @@ describe('SchedulingCanvas', () => {
           displayTimezone="UTC"
           lanes={[lane('dense', 'Dense', items)]}
           pixelsPerHour={60}
-          viewportWidth={280}
+          // 236, not 280: the axis is compact at this width, so the gutter is 44px rather than
+          // 88 and this keeps the lane region at the same 192px the packing assertions below
+          // were written against.
+          viewportWidth={236}
           onResizeItem={vi.fn()}
         />,
       );
@@ -1986,7 +2038,12 @@ describe('SchedulingCanvas', () => {
     expect(renderedItem('compact')).toHaveAttribute('data-item-density', 'compact');
     expect(renderedItem('full')).toHaveAttribute('data-item-density', 'full');
     expect(screen.getByRole('button', { name: 'Custom compact Team offsite' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Marker.*9:00.*9:05/ })).toBeInTheDocument();
+    // A marker card now renders `renderItem`'s output like every other density. It used to discard
+    // it and print a featureless bar, which made passing `density: 'marker'` to the renderer a
+    // promise the canvas never kept.
+    expect(
+      screen.getByRole('button', { name: /^Custom marker Marker.*9:00.*9:05/ }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('button', { name: /^Custom compact Compact.*10:00.*10:30/ }),
     ).toBeInTheDocument();

@@ -1,0 +1,17 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    // Ordering comes from the package graph, not from a hand-written edge: this package depends on
+    // @docket/web because it is built *from* the app's output — the cache version is `.next/BUILD_ID`
+    // and the precache list is walked out of `.next/static`. The root `build` task already declares
+    // `dependsOn: ["^build"]`, so `turbo run build` builds the app and then the worker with nothing
+    // further to say. The dependency only ever points this way; apps/web must not depend back on
+    // this package, or the graph would cycle.
+    "build": {
+      // The artifact lands in apps/web/public/sw.js — outside this package, so turbo cannot own it
+      // as a cached output. Caching a task whose real output it cannot restore is how you get a
+      // cache hit that silently leaves public/sw.js missing. It is a one-second esbuild; run it.
+      "cache": false
+    }
+  }
+}

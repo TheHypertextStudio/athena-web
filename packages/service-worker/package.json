@@ -14,6 +14,7 @@
     "./build": "./bin/build.ts"
   },
   "scripts": {
+    "build": "tsx bin/build.ts --app-root=../../apps/web --production",
     "typecheck": "tsc --noEmit && tsc --noEmit -p src/worker/tsconfig.json",
     "lint": "eslint .",
     "clean": "rm -rf .turbo *.tsbuildinfo",
@@ -25,6 +26,7 @@
     "@docket/eslint-config": "workspace:*",
     "@docket/tsconfig": "workspace:*",
     "@types/node": "catalog:",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "@docket/web": "workspace:*"
   }
 }

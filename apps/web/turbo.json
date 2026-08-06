@@ -4,23 +4,15 @@
   // build cache key. `dev` additionally runs the server-side `/passkey-intent` route, which signs
   // the intent token with `BETTER_AUTH_SECRET` (read from `process.env`, not via `@docket/env`).
   "tasks": {
-    // Two tasks, ordered by the graph rather than by `next build && tsx …`. The worker's cache
-    // version comes from `.next/BUILD_ID` and its precache list is walked out of `.next/static`,
-    // so it genuinely cannot run before Next has built — that is a dependency edge, and turbo is
-    // what expresses dependency edges here. `build` is the one that emits the worker; depending on
-    // `build:next` is what makes `turbo run build` produce a complete app.
     "build": {
-      "dependsOn": ["^build", "build:next"],
-      "env": ["NEXT_PUBLIC_*"],
-      // Read by the worker bundle and baked into its bytes, so it belongs to this task's key.
-      "outputs": ["public/sw.js"]
-    },
-    "build:next": {
-      "dependsOn": ["^build"],
       "env": ["NEXT_PUBLIC_*"],
       // Set on the Vercel project and read only at runtime by the server routes. Passed through
       // rather than declared in `env` so rotating the blob token does not bust the build cache.
       "passThroughEnv": ["BLOB_READ_WRITE_TOKEN"],
+      // Stated in full rather than inherited: a package-level `outputs` replaces the root's
+      // instead of adding to it, so naming only the service worker here (as this file used to)
+      // silently dropped `.next` from the cache entirely. The worker is no longer this app's
+      // build product — @docket/service-worker emits it — so `.next` is all that belongs here.
       "outputs": [".next/**", "!.next/cache/**"]
     },
     "dev": {

@@ -387,9 +387,6 @@ importers:
       '@docket/notifications':
         specifier: workspace:*
         version: link:../../packages/notifications
-      '@docket/service-worker':
-        specifier: workspace:*
-        version: link:../../packages/service-worker
       '@docket/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -864,6 +861,9 @@ importers:
       '@docket/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/tsconfig
+      '@docket/web':
+        specifier: workspace:*
+        version: link:../../apps/web
       '@types/node':
         specifier: 26.1.0
         version: 26.1.0

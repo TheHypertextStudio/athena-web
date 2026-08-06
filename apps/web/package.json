@@ -10,8 +10,7 @@
     "script": "dev:app"
   },
   "scripts": {
-    "build": "tsx ../../packages/service-worker/bin/build.ts --app-root=. --production",
-    "build:next": "next build",
+    "build": "next build",
     "dev": "portless run --force",
     "dev:app": "tsx ../../scripts/portless-env.ts sh -c 'tsx ../../packages/service-worker/bin/build.ts --app-root=. && next dev'",
     "start": "next start",
@@ -52,8 +51,7 @@
     "idb-keyval": "^6.3.0",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:",
-    "@docket/service-worker": "workspace:*"
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@docket/brand": "workspace:*",

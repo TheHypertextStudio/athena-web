@@ -76,6 +76,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
     );
     create type visibility as enum ('public', 'private');
     create type grant_effect as enum ('allow', 'deny');
+    create type estimation_scale as enum ('none', 'exponential', 'fibonacci', 'linear', 't_shirt');
 
     create table "organization" (
       id text primary key,
@@ -88,6 +89,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       agent_guidance text,
       approval_routing jsonb,
       initiative_max_depth integer not null default 2,
+      estimation_scale estimation_scale not null default 'fibonacci',
       lifecycle_state org_lifecycle_state not null default 'trialing',
       export_ready_at timestamp,
       delete_after_at timestamp,

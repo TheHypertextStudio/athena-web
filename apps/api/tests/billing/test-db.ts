@@ -28,6 +28,7 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       'pending_deletion',
       'deleted'
     );
+    create type estimation_scale as enum ('none', 'exponential', 'fibonacci', 'linear', 't_shirt');
 
     create table "organization" (
       id text primary key,
@@ -40,6 +41,7 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       agent_guidance text,
       approval_routing jsonb,
       initiative_max_depth integer not null default 2,
+      estimation_scale estimation_scale not null default 'fibonacci',
       lifecycle_state org_lifecycle_state not null default 'trialing',
       export_ready_at timestamp,
       delete_after_at timestamp,

@@ -12,7 +12,6 @@ import {
 
 interface EventEntity {
   kind?: string | null;
-  docketEntityId?: string | null;
   title?: string | null;
   url?: string | null;
 }
@@ -30,6 +29,7 @@ interface EventRow {
   actor?: unknown;
   entity?: EventEntity | null;
   entityKind?: string | null;
+  docketEntityId?: string | null;
   participants?: unknown[];
   detail?: unknown;
   createdAt?: Date | null;
@@ -37,9 +37,20 @@ interface EventRow {
   archivedAt?: Date | null;
 }
 
-function searchKindForEntity(entity: EventEntity | null | undefined): SearchDocumentKind | null {
-  if (!entity?.docketEntityId) return null;
-  switch (entity.kind) {
+/**
+ * The search kind an event's subject scopes to, or null when it has no Docket subject.
+ *
+ * @remarks
+ * Reads the resolved association rather than the `entity` jsonb. Until association existed this
+ * returned null for every external event, so all external activity was indexed org-wide visible
+ * instead of being scoped to the thing it was about.
+ */
+function searchKindForEntity(
+  entityKind: string | null | undefined,
+  docketEntityId: string | null | undefined,
+): SearchDocumentKind | null {
+  if (!docketEntityId) return null;
+  switch (entityKind) {
     case 'work_item':
       return 'task';
     case 'project':
@@ -63,8 +74,8 @@ function searchKindForEntity(entity: EventEntity | null | undefined): SearchDocu
 export const eventSearchProjector = preloadedProjector<EventRow>(
   'event',
   (row): SearchDocumentDraft => {
-    const subjectKind = searchKindForEntity(row.entity);
-    const subjectId = subjectKind ? (row.entity?.docketEntityId ?? null) : null;
+    const subjectKind = searchKindForEntity(row.entityKind, row.docketEntityId);
+    const subjectId = subjectKind ? (row.docketEntityId ?? null) : null;
     return {
       id: searchDocumentId('activity', row.organizationId, row.id),
       organizationId: row.organizationId,

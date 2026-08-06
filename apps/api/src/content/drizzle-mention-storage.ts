@@ -187,6 +187,7 @@ export function createDrizzleMentionStorage(): MentionStorage {
         initiative: schema.initiative,
         comment: schema.comment,
         update: schema.update,
+        team: schema.team,
       } as const;
       const table = tables[subjectType];
       const rows = await schema.db
@@ -196,7 +197,13 @@ export function createDrizzleMentionStorage(): MentionStorage {
         .limit(1);
       const row = rows[0];
       if (!row) return undefined;
-      return { createdBy: row.createdBy, prose: readProse(row, fields) };
+      // `team` is the one subject that predates `auditColumns()` and so records no creator. The
+      // field is nullable precisely for cases like this, and inventing an author would be worse
+      // than admitting there isn't one.
+      return {
+        createdBy: 'createdBy' in row ? row.createdBy : null,
+        prose: readProse(row, fields),
+      };
     },
 
     async entityExists(

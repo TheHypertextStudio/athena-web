@@ -7,8 +7,16 @@
  */
 import { z } from 'zod';
 
-/** Work entities that may carry separately stored display metadata. */
-export const EntityDisplaySubjectType = z.enum(['initiative', 'project']);
+/**
+ * Entities that may carry separately stored display metadata.
+ *
+ * @remarks
+ * A Team is here because it is a thing people look at and pick out of a grid, not because it is a
+ * work item — it owns work rather than being work. Sharing the catalog with initiatives and
+ * projects is the point: one icon set and one color set across every surface that names something,
+ * rather than a second, drifting vocabulary for teams alone.
+ */
+export const EntityDisplaySubjectType = z.enum(['initiative', 'project', 'team']);
 /** Supported display-metadata subject type. */
 export type EntityDisplaySubjectType = z.infer<typeof EntityDisplaySubjectType>;
 
@@ -189,6 +197,12 @@ export const EntityDisplayOut = z.object({
   iconKey: EntityDisplayIconKey,
   colorKey: EntityDisplayColorKey,
   customColor: EntityDisplayCustomColor.nullable(),
+  coverImage: z
+    .string()
+    .nullable()
+    .describe(
+      'Managed public URL of an uploaded cover image, or null when the cover is derived from `iconKey` + `colorKey`. Null is the ordinary state, not a missing value — a derived cover always renders.',
+    ),
   customized: z.boolean(),
 });
 /** Composed entity-display metadata. */
@@ -199,6 +213,13 @@ export const EntityDisplayUpdate = z.object({
   iconKey: EntityDisplayIconKey,
   colorKey: EntityDisplayColorKey,
   customColor: EntityDisplayCustomColor.nullable(),
+  coverImage: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "A `data:` image URL to store as this entity's cover, or null to clear it and fall back to the derived cover. Omit to leave the current cover unchanged.",
+    ),
 });
 /** Validated entity-display update. */
 export type EntityDisplayUpdate = z.infer<typeof EntityDisplayUpdate>;
@@ -211,9 +232,17 @@ export function defaultEntityDisplay(
   return {
     subjectType,
     subjectId,
-    iconKey: subjectType === 'initiative' ? 'target' : 'folder',
+    iconKey: DEFAULT_SUBJECT_ICON[subjectType],
     colorKey: 'neutral',
     customColor: null,
+    coverImage: null,
     customized: false,
   };
 }
+
+/** The starting icon for each subject type, before anyone customizes it. */
+const DEFAULT_SUBJECT_ICON: Record<EntityDisplaySubjectType, EntityDisplayIconKey> = {
+  initiative: 'target',
+  project: 'folder',
+  team: 'users',
+};

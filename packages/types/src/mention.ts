@@ -31,6 +31,7 @@ export const MentionSubjectType = z.enum([
   'initiative',
   'comment',
   'update',
+  'team',
 ]);
 /** Mention-subject-type value. */
 export type MentionSubjectType = z.infer<typeof MentionSubjectType>;

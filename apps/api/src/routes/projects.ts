@@ -401,6 +401,7 @@ const projects = new Hono<AppEnv>()
                   iconKey: display.iconKey,
                   colorKey: display.colorKey,
                   customColor: display.customColor,
+                  coverImage: display.coverImage,
                   customized: true,
                 }
               : defaultEntityDisplay('project', row.id),

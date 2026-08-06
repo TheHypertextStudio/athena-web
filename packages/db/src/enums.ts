@@ -870,6 +870,7 @@ export const mentionSubjectType = pgEnum('mention_subject_type', [
   'initiative',
   'comment',
   'update',
+  'team',
 ]);
 /**
  * Which arm of a {@link mention} carries its target.

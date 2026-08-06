@@ -240,6 +240,103 @@ export const TeamDetail = TeamOut.extend({
 /** Team-detail value. */
 export type TeamDetail = z.infer<typeof TeamDetail>;
 
+/** A person's standing on one team, independent of what they may do in the workspace. */
+export const TeamMemberRole = z
+  .enum(['manager', 'member', 'guest'])
+  .describe(
+    "The member's standing on this team. Deliberately not a capability — permissions resolve through grants, so 'manager' labels who runs the team without widening what they can do.",
+  );
+/** Team-member-role value. */
+export type TeamMemberRole = z.infer<typeof TeamMemberRole>;
+
+/**
+ * One person on a team.
+ *
+ * @remarks
+ * Carries no field saying whether this person holds a Docket account. That omission is deliberate
+ * and load-bearing: a volunteer who never signs in is a full participant, and a client that cannot
+ * see the difference cannot render one. See `docs/engineering/specs/people.md`.
+ */
+export const TeamMemberOut = z
+  .object({
+    actorId: z.string().describe('The actor id of this member.'),
+    displayName: z.string().describe("The member's display name."),
+    title: z
+      .string()
+      .nullable()
+      .describe(
+        "The member's org-level job title (e.g. 'Event Coordinator'), or null when unset. Distinct from `role`, which is their standing on this team.",
+      ),
+    avatar: z.string().nullable().describe("URL of the member's avatar, or null."),
+    role: TeamMemberRole,
+    openTaskCount: z
+      .number()
+      .int()
+      .describe(
+        "How many of this team's tasks are assigned to this person and not yet completed or canceled. The observed load signal capacity reads, rather than a declared allocation percentage that would go stale silently while looking authoritative.",
+      ),
+  })
+  .meta({ id: 'TeamMemberOut', description: 'One member of a team.' });
+/** Team-member value. */
+export type TeamMemberOut = z.infer<typeof TeamMemberOut>;
+
+/**
+ * One bucket of a team's current work, keyed by workflow-state type.
+ *
+ * @remarks
+ * Counted per {@link WorkflowStateType} rather than per named state, because two teams that both
+ * have three "in progress" columns under different names still have to be comparable.
+ */
+export const TeamCapacityBucket = z
+  .object({
+    type: WorkflowStateType,
+    taskCount: z.number().int().describe('How many of the team’s open tasks sit in this bucket.'),
+    estimate: z
+      .number()
+      .int()
+      .describe(
+        'The summed `estimate` points of those tasks; unestimated tasks contribute 0. Zero across every bucket means the workspace does not estimate, which the chart says out loud rather than drawing a flat line.',
+      ),
+  })
+  .meta({ id: 'TeamCapacityBucket', description: "One workflow-state bucket of a team's work." });
+/** Team-capacity-bucket value. */
+export type TeamCapacityBucket = z.infer<typeof TeamCapacityBucket>;
+
+/** One day on a team's throughput series. */
+export const TeamThroughputPoint = z
+  .object({
+    date: z.string().describe('The ISO-8601 date (YYYY-MM-DD) this point covers.'),
+    pending: z
+      .number()
+      .int()
+      .describe('Cumulative tasks opened on or before this day and not yet closed.'),
+    completed: z.number().int().describe('Cumulative tasks completed on or before this day.'),
+  })
+  .meta({ id: 'TeamThroughputPoint', description: "One day on a team's throughput line." });
+/** Team-throughput-point value. */
+export type TeamThroughputPoint = z.infer<typeof TeamThroughputPoint>;
+
+/**
+ * A team's activity report: what it is holding now, and how it has been moving.
+ *
+ * @remarks
+ * Two questions with two shapes. `capacity` is a snapshot answering "what is this team holding
+ * right now"; `throughput` is a series answering "is it keeping up". They share one payload because
+ * a team page shows them behind a single toggle and fetching twice would let the two disagree.
+ */
+export const TeamActivityOut = z
+  .object({
+    teamId: TeamId.describe('The team this report covers.'),
+    capacity: z
+      .array(TeamCapacityBucket)
+      .describe("The team's open work bucketed by workflow-state type."),
+    throughput: z.array(TeamThroughputPoint).describe('The rolling daily series, oldest first.'),
+    windowDays: z.number().int().describe('How many days the throughput series spans.'),
+  })
+  .meta({ id: 'TeamActivityOut', description: "A team's capacity snapshot + throughput series." });
+/** Team-activity value. */
+export type TeamActivityOut = z.infer<typeof TeamActivityOut>;
+
 /** Result of soft-deleting (archiving) a Team. */
 export const TeamDeleteResult = z
   .object({

@@ -11,9 +11,11 @@
 import { db, defaultWorkflowStates, team } from '@docket/db';
 import {
   pageOf,
+  TeamActivityOut,
   TeamCreate,
   TeamDeleteResult,
   TeamDetail,
+  TeamMemberOut,
   TeamOut,
   TeamUpdate,
 } from '@docket/types';
@@ -29,7 +31,14 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
+import { entityMentionRoutes } from './entity-mentions';
 import { archiveTeamActor, createTeamActor, renameTeamActor } from './team-actor';
+import {
+  loadTeamActivity,
+  loadTeamMembers,
+  teamExists,
+  THROUGHPUT_WINDOW_DAYS,
+} from './team-reports';
 
 type TeamRow = typeof team.$inferSelect;
 
@@ -257,6 +266,51 @@ After archival the team disappears from \`GET /\` and \`GET /:teamId\` (both fil
       await enqueueSearchDelete(orgId, 'team', row.id);
       return ok(c, TeamDeleteResult, { id: row.id, archivedAt: archivedIso });
     },
-  );
+  )
+  .get(
+    '/:teamId/members',
+    apiDoc({
+      tag: 'Teams',
+      summary: "List a team's members",
+      response: pageOf(TeamMemberOut),
+      description: `The people on this team — display name, org-level job \`title\`, their \`role\` on this team (manager / member / guest), and \`openTaskCount\`, being how many of the team's not-yet-closed tasks are assigned to them.
+
+There is deliberately **no field indicating whether a member holds a Docket account**. A volunteer who never signs in and a full-time staffer come back as the same shape, so no client can render one as second-class (see \`docs/engineering/specs/people.md\`). \`openTaskCount\` is the observed load signal — Docket stores no declared allocation percentage, because a maintained percentage goes stale silently while still looking authoritative.
+
+Ordered by name, case-insensitively. Requires only org membership. Unknown or archived team → **404**.`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { teamId } = c.req.valid('param');
+      if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
+      const items = await loadTeamMembers(orgId, teamId);
+      return ok(c, pageOf(TeamMemberOut), { items });
+    },
+  )
+  .get(
+    '/:teamId/activity',
+    apiDoc({
+      tag: 'Teams',
+      summary: "Report a team's capacity and throughput",
+      response: TeamActivityOut,
+      description: `Two views of the same team in one payload, because the team page shows them behind a single toggle and two fetches could disagree with each other.
+
+\`capacity\` is a snapshot: every still-open task bucketed by canonical workflow-state **type** (backlog / unstarted / started) rather than by the team's own state names, so two teams that each have three differently-named in-progress columns stay comparable. Each bucket carries both a \`taskCount\` and an \`estimate\` sum; unestimated tasks contribute 0, so an \`estimate\` of 0 across every bucket means the workspace does not estimate rather than meaning the team has no work.
+
+\`throughput\` is a ${String(THROUGHPUT_WINDOW_DAYS)}-day rolling series, oldest first. For each day it reports the tasks open at that day's end and the tasks completed by it; the two lines converging is the team keeping up. A task whose state key is no longer present in the team's workflow (someone replaced the whole array) is genuinely uncategorizable and is left out of \`capacity\` rather than being put in an invented bucket.
+
+Requires only org membership. Unknown or archived team → **404**.`,
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { teamId } = c.req.valid('param');
+      if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
+      const report = await loadTeamActivity(orgId, teamId, new Date());
+      return ok(c, TeamActivityOut, report);
+    },
+  )
+  .route('/', entityMentionRoutes('team', 'Teams'));
 
 export default teams;

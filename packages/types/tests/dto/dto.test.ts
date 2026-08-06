@@ -140,7 +140,7 @@ import {
   dependencyEdgeId,
   subtaskEdgeId,
 } from '../../src/task';
-import { TeamOut } from '../../src/team';
+import { TeamActivityOut, TeamMemberOut, TeamMemberRole, TeamOut } from '../../src/team';
 import { UpdateCreate, UpdateListQuery, UpdateOut, UpdateSubjectType } from '../../src/update';
 
 /** A canonical valid 26-char Crockford ULID, reused across DTO fixtures. */
@@ -505,6 +505,57 @@ describe('actor + team DTOs', () => {
       TeamOut.safeParse({ id: ID, organizationId: ID2, name: 'Eng', key: 'ENG' }).success,
     ).toBe(false);
   });
+
+  it('TeamMemberOut carries a title and team role, and no account field at all', () => {
+    const member = TeamMemberOut.parse({
+      actorId: ID,
+      displayName: 'Sam Rivera',
+      title: 'Event Coordinator',
+      avatar: null,
+      role: 'manager',
+      openTaskCount: 3,
+    });
+    expect(member.role).toBe('manager');
+    expect(member.title).toBe('Event Coordinator');
+
+    // The absence of any account/user field is the contract, not an oversight: a client that
+    // cannot see who signs in cannot render volunteers as second-class. See people.md.
+    expect(Object.keys(member)).toEqual([
+      'actorId',
+      'displayName',
+      'title',
+      'avatar',
+      'role',
+      'openTaskCount',
+    ]);
+
+    expect(TeamMemberRole.safeParse('owner').success).toBe(false);
+  });
+
+  it('TeamActivityOut buckets capacity by workflow-state type and carries a dated series', () => {
+    const activity = TeamActivityOut.parse({
+      teamId: ID,
+      capacity: [
+        { type: 'backlog', taskCount: 12, estimate: 0 },
+        { type: 'started', taskCount: 4, estimate: 0 },
+      ],
+      throughput: [{ date: '2026-08-01', pending: 12, completed: 3 }],
+      windowDays: 30,
+    });
+    expect(activity.capacity[0]?.type).toBe('backlog');
+    expect(activity.throughput[0]?.completed).toBe(3);
+
+    // Buckets are workflow-state *types*, so two teams naming their in-progress columns
+    // differently stay comparable. A per-team state key would not parse.
+    expect(
+      TeamActivityOut.safeParse({
+        teamId: ID,
+        capacity: [{ type: 'in_review', taskCount: 1, estimate: 0 }],
+        throughput: [],
+        windowDays: 30,
+      }).success,
+    ).toBe(false);
+  });
 });
 
 describe('initiative DTOs', () => {
@@ -635,18 +686,20 @@ describe('entity display DTOs', () => {
         iconKey: 'target',
         colorKey: 'neutral',
         customColor: null,
+        coverImage: null,
         customized: false,
       }).customized,
     ).toBe(false);
   });
 
-  it('defaults an Initiative to the target icon and a Project to the folder icon', () => {
+  it('defaults each subject type to its own icon, with no cover until one is uploaded', () => {
     expect(defaultEntityDisplay('initiative', ID)).toEqual({
       subjectType: 'initiative',
       subjectId: ID,
       iconKey: 'target',
       colorKey: 'neutral',
       customColor: null,
+      coverImage: null,
       customized: false,
     });
     expect(defaultEntityDisplay('project', ID)).toEqual({
@@ -655,6 +708,16 @@ describe('entity display DTOs', () => {
       iconKey: 'folder',
       colorKey: 'neutral',
       customColor: null,
+      coverImage: null,
+      customized: false,
+    });
+    expect(defaultEntityDisplay('team', ID)).toEqual({
+      subjectType: 'team',
+      subjectId: ID,
+      iconKey: 'users',
+      colorKey: 'neutral',
+      customColor: null,
+      coverImage: null,
       customized: false,
     });
   });

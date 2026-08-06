@@ -255,6 +255,7 @@ const initiativeAggregates = new Hono<AppEnv>()
                   iconKey: display.iconKey,
                   colorKey: display.colorKey,
                   customColor: display.customColor,
+                  coverImage: display.coverImage,
                   customized: true,
                 }
               : defaultEntityDisplay('initiative', row.id),

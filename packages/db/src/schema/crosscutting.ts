@@ -172,6 +172,15 @@ export const entityDisplay = pgTable(
     iconKey: text('icon_key').$type<EntityDisplayIconKey>().notNull(),
     colorKey: text('color_key').$type<EntityDisplayColorKey>().notNull(),
     customColor: text('custom_color'),
+    /**
+     * A managed public URL for an uploaded cover image, or null to draw the generated one.
+     *
+     * @remarks
+     * Null is the normal state, not a gap: a cover is derived from `icon_key` + `color_key`
+     * whenever this is unset, so a workspace that has never uploaded anything still renders a
+     * composed grid rather than a wall of blank rectangles. This column only records the override.
+     */
+    coverImage: text('cover_image'),
     createdBy: text('created_by').references(() => actor.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at')
@@ -181,7 +190,10 @@ export const entityDisplay = pgTable(
   },
   (t) => [
     uniqueIndex('entity_display_subject_uq').on(t.organizationId, t.subjectType, t.subjectId),
-    check('entity_display_subject_type_check', sql`${t.subjectType} in ('initiative', 'project')`),
+    check(
+      'entity_display_subject_type_check',
+      sql`${t.subjectType} in ('initiative', 'project', 'team')`,
+    ),
     check('entity_display_icon_key_check', sql`${t.iconKey} in (${entityDisplayIconKeyList})`),
     check('entity_display_color_key_check', sql`${t.colorKey} in (${entityDisplayColorKeyList})`),
     check(

@@ -1,10 +1,11 @@
 /** Workspace-scoped presentation metadata for supported work entities. */
-import { db, entityDisplay, initiative, project } from '@docket/db';
+import { db, entityDisplay, initiative, project, team } from '@docket/db';
 import {
   defaultEntityDisplay,
   EntityDisplayOut,
   EntityDisplaySubjectType,
   EntityDisplayUpdate,
+  pageOf,
 } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -22,23 +23,32 @@ const displayParam = z.object({
   subjectId: z.string(),
 });
 
+/**
+ * The table each subject type's rows live in.
+ *
+ * @remarks
+ * A `Record` rather than a chain of conditionals, so adding a subject type to
+ * {@link EntityDisplaySubjectType} without teaching this module about it is a type error. The
+ * previous shape was `subjectType === 'initiative' ? initiative : project`, which silently
+ * validated every future subject type against the project table — exactly the failure adding
+ * `team` would have hit.
+ */
+const SUBJECT_TABLE: Record<
+  EntityDisplaySubjectType,
+  typeof initiative | typeof project | typeof team
+> = { initiative, project, team };
+
 async function assertSubjectInWorkspace(
   organizationId: string,
   subjectType: EntityDisplaySubjectType,
   subjectId: string,
 ): Promise<void> {
-  const rows =
-    subjectType === 'initiative'
-      ? await db
-          .select({ id: initiative.id })
-          .from(initiative)
-          .where(and(eq(initiative.id, subjectId), eq(initiative.organizationId, organizationId)))
-          .limit(1)
-      : await db
-          .select({ id: project.id })
-          .from(project)
-          .where(and(eq(project.id, subjectId), eq(project.organizationId, organizationId)))
-          .limit(1);
+  const table = SUBJECT_TABLE[subjectType];
+  const rows = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, subjectId), eq(table.organizationId, organizationId)))
+    .limit(1);
   if (!rows[0]) throw new NotFoundError('Work item not found');
 }
 
@@ -79,6 +89,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
               iconKey: row.iconKey,
               colorKey: row.colorKey,
               customColor: row.customColor,
+              coverImage: row.coverImage,
               customized: true,
             }
           : defaultEntityDisplay(subjectType, subjectId),
@@ -112,6 +123,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
           iconKey: body.iconKey,
           colorKey: body.colorKey,
           customColor: body.customColor,
+          ...(body.coverImage === undefined ? {} : { coverImage: body.coverImage }),
           createdBy: actorId,
         })
         .onConflictDoUpdate({
@@ -124,6 +136,9 @@ const entityDisplayRouter = new Hono<AppEnv>()
             iconKey: body.iconKey,
             colorKey: body.colorKey,
             customColor: body.customColor,
+            // Omitted means "leave the cover alone", which is what lets the icon/color picker save
+            // without having to resend an image it never loaded.
+            ...(body.coverImage === undefined ? {} : { coverImage: body.coverImage }),
             updatedAt: new Date(),
           },
         })
@@ -136,7 +151,40 @@ const entityDisplayRouter = new Hono<AppEnv>()
         iconKey: row.iconKey,
         colorKey: row.colorKey,
         customColor: row.customColor,
+        coverImage: row.coverImage,
         customized: true,
+      });
+    },
+  )
+  .get(
+    '/:subjectType',
+    apiDoc({
+      tag: 'Display',
+      summary: 'List display metadata for every customized subject of one type',
+      description:
+        'Returns the stored display rows for one subject type across the workspace. Only **customized** subjects appear — anything absent takes the stable default for its type, which the client already knows how to compose. This exists so a grid of N teams costs one request instead of N.',
+      response: pageOf(EntityDisplayOut),
+    }),
+    zParam(z.object({ subjectType: EntityDisplaySubjectType })),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { subjectType } = c.req.valid('param');
+      const rows = await db
+        .select()
+        .from(entityDisplay)
+        .where(
+          and(eq(entityDisplay.organizationId, orgId), eq(entityDisplay.subjectType, subjectType)),
+        );
+      return ok(c, pageOf(EntityDisplayOut), {
+        items: rows.map((row) => ({
+          subjectType,
+          subjectId: row.subjectId,
+          iconKey: row.iconKey,
+          colorKey: row.colorKey,
+          customColor: row.customColor,
+          coverImage: row.coverImage,
+          customized: true,
+        })),
       });
     },
   )

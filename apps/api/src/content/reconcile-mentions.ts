@@ -38,6 +38,9 @@ export const MARKDOWN_FIELDS: Readonly<Record<MentionSubjectType, readonly strin
   initiative: ['description'],
   comment: ['body'],
   update: ['body'],
+  // A team's description is where someone writes what the team is for, and the resources they
+  // reference there are exactly what its Library should surface without anyone attaching them.
+  team: ['description'],
 };
 
 /** Whether a source table carries prose the reconciler knows how to read. */

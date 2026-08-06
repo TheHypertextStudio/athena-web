@@ -91,11 +91,18 @@ jobs:
           cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
           cp -r apps/web/public apps/web/.next/standalone/apps/web/public
 
+      # Through `dotenv -e .env.local`, exactly as the root `dev` script does. That file is
+      # committed and carries the local-mode settings the suite depends on — `DATABASE_URL` for the
+      # embedded PGlite, and `APP_MODE=local`, which is what makes the sign-up endpoint echo its
+      # one-time code back so the passkey ceremonies can complete without a mailbox. The job-level
+      # `env` above still wins, since dotenv does not overwrite what is already set.
       - name: Apply migrations
-        run: pnpm turbo run db:migrate --filter=@docket/db
+        run: pnpm exec dotenv -e .env.local -- pnpm turbo run db:migrate --filter=@docket/db
 
       - name: Start the API
-        run: PORT=4000 pnpm --filter @docket/api exec tsx src/server.ts > /tmp/api.log 2>&1 &
+        run: |
+          PORT=4000 pnpm exec dotenv -e .env.local -- \
+            pnpm --filter @docket/api exec tsx src/server.ts > /tmp/api.log 2>&1 &
 
       # Served straight from the standalone output. `next start` does not honour the config's
       # `/v1` and `/api/auth` rewrites under `output: standalone` — it warns and tells you to run

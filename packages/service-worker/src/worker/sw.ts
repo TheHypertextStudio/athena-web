@@ -4,7 +4,7 @@
  * @remarks
  * Authored as **ES modules** (this file, {@link file://./routing.ts}, and
  * {@link file://./strategies.ts}) in a TypeScript program of its own, then bundled by
- * `scripts/build-service-worker.ts` into a single classic worker at `public/sw.js`. Authoring in
+ * `../../bin/build.ts` into a single classic worker in the host app's `public/sw.js`. Authoring in
  * ESM and shipping a bundle is what lets the code be modular and individually testable **without**
  * narrowing browser support: native module workers (`register(..., { type: 'module' })`) are still
  * unsupported in Firefox and in Safari before 16.4, and offline support should not be a

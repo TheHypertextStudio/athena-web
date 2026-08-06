@@ -19,26 +19,26 @@ surface fail loudly the instant signal drops.
 
 ## Pieces
 
-| Concern                      | Where                                                                                   |
-| ---------------------------- | --------------------------------------------------------------------------------------- |
-| Manifest                     | `apps/web/src/app/manifest.ts` (Next metadata route — typechecked, not a static file)   |
-| Brand mark + icon generators | `packages/brand` → `src/app/icon.svg`, `public/icons/*`, `src/app/apple-icon<n>.png`    |
-| Document metadata            | `metadata` + `viewport` exports in `apps/web/src/app/layout.tsx`                        |
-| Standalone chrome            | `h-dvh` and `env(safe-area-inset-*)` in `packages/ui/src/components/shell/AppShell.tsx` |
-| Service worker               | `apps/web/service-worker/{sw,routing,strategies}.ts` → bundled to `public/sw.js`        |
-| Registration + update prompt | `apps/web/src/components/service-worker-provider.tsx`                                   |
-| Offline document             | `apps/web/public/offline.html` (static, hand-authored)                                  |
-| Session state machine        | `apps/web/src/lib/session-status.ts`                                                    |
-| Offline identity             | `apps/web/src/lib/session-snapshot.ts`                                                  |
-| Cache persistence            | `apps/web/src/lib/query-persist.ts`, `components/query-persistence.tsx`                 |
-| Sign-out teardown            | `apps/web/src/lib/sign-out.ts`                                                          |
+| Concern                      | Where                                                                                                |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Manifest                     | `apps/web/src/app/manifest.ts` (Next metadata route — typechecked, not a static file)                |
+| Brand mark + icon generators | `packages/brand` → `src/app/icon.svg`, `public/icons/*`, `src/app/apple-icon<n>.png`                 |
+| Document metadata            | `metadata` + `viewport` exports in `apps/web/src/app/layout.tsx`                                     |
+| Standalone chrome            | `h-dvh` and `env(safe-area-inset-*)` in `packages/ui/src/components/shell/AppShell.tsx`              |
+| Service worker               | `packages/service-worker/src/worker/{sw,routing,strategies}.ts` → bundled to `apps/web/public/sw.js` |
+| Registration + update prompt | `apps/web/src/components/service-worker-provider.tsx`                                                |
+| Offline document             | `apps/web/public/offline.html` (static, hand-authored)                                               |
+| Session state machine        | `apps/web/src/lib/session-status.ts`                                                                 |
+| Offline identity             | `apps/web/src/lib/session-snapshot.ts`                                                               |
+| Cache persistence            | `apps/web/src/lib/query-persist.ts`, `components/query-persistence.tsx`                              |
+| Sign-out teardown            | `apps/web/src/lib/sign-out.ts`                                                                       |
 
 `start_url` is `/today`, not `/` — the root belongs to the marketing route group, and an installed
 app must not launch into the marketing site.
 
 ## The service worker
 
-Authored as ES modules in its own TypeScript program (`service-worker/tsconfig.json`, `lib:
+Authored as ES modules in its own TypeScript program (`packages/service-worker/src/worker/tsconfig.json`, `lib:
 ["ES2022", "WebWorker"]`) and bundled by esbuild into a single **classic** worker.
 
 - **Why its own program**: `WebWorker` and `DOM` collide on shared globals in one program. Keeping
@@ -79,10 +79,11 @@ and therefore exercisable by the e2e suite.
 reload; only on acceptance does the page post `{ type: 'SKIP_WAITING' }`, the worker activate, and
 the page reload. Swapping a worker into a live tab would mix old chunks with new ones mid-session.
 
-The cache version is Next's `BUILD_ID`, so the worker must be built **after** `next build` — hence
-`"build": "next build && tsx scripts/build-service-worker.ts --production"` rather than a `prebuild`
-hook. Production mode is passed explicitly, never inferred from a `.next/BUILD_ID` that any earlier
-build may have left behind.
+The cache version is Next's `BUILD_ID`, so the worker must be built **after** `next build`. That is
+a dependency edge, and `apps/web/turbo.json` states it as one: the `build` task (which emits the
+worker) declares `dependsOn: ["build:next"]`. Turbo decides the order, not a shell `&&`. Production
+mode is passed explicitly, never inferred from a `.next/BUILD_ID` that any earlier build may have
+left behind.
 
 Registration happens at the **root**, not in the authenticated shell: someone arriving at `/sign-in`
 is exactly who needs the offline page cached before they need it.

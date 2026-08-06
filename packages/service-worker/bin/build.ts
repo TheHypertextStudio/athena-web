@@ -25,8 +25,9 @@
  * The output is generated, so it is gitignored; `turbo.json` lists it as a build output.
  *
  * **Ordering matters.** The cache version comes from Next's own `.next/BUILD_ID`, which only exists
- * after `next build` — hence `"build": "next build && tsx scripts/build-service-worker.ts"` rather
- * than a `prebuild` hook. A stable id per build is what makes the update prompt fire exactly once
+ * after `next build`. `apps/web/turbo.json` states that as a dependency edge — its `build` task
+ * dependsOn `build:next` — rather than as a shell chain. A stable id per build is what makes the
+ * update prompt fire exactly once
  * per deploy: the bundled bytes change, the browser sees a byte-different worker, and it installs
  * into the waiting state. In dev the id falls back to `dev`, so restarting the dev server does not
  * masquerade as a new version.

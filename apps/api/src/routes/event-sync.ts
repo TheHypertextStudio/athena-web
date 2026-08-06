@@ -403,7 +403,12 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
           kind: kind.data,
           source,
           entityKind,
-          docketEntityId: entityRef?.docketEntityId ?? null,
+          // Rules can finally address the Docket entity an external event is about. This widens
+          // the shipped "archive the email when its task is completed" rule to reach completions
+          // that happened in Linear or GitHub: the task is a mirror of that issue, so closing it
+          // upstream is closing it. See `docs/engineering/hub-architecture.md`, which traces
+          // `Linear → event → task → attachment → Gmail` as the intended path.
+          docketEntityId: association.docketEntityId,
           title: draft.title,
           detail: draft.detail ?? null,
           occurredAt,

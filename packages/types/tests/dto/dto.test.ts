@@ -662,7 +662,12 @@ describe('entity display DTOs', () => {
 
 describe('workspace settings DTOs', () => {
   it('accepts Initiative maximum depths from one through five', () => {
-    expect(WorkspaceSettingsOut.parse({ initiativeMaxDepth: 2 }).initiativeMaxDepth).toBe(2);
+    // Out is what the server sends, so every field is present — including estimationScale, which
+    // has no default precisely because a workspace's scale is always a real stored choice.
+    expect(
+      WorkspaceSettingsOut.parse({ initiativeMaxDepth: 2, estimationScale: 'fibonacci' })
+        .initiativeMaxDepth,
+    ).toBe(2);
     expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 1 }).initiativeMaxDepth).toBe(1);
     expect(WorkspaceSettingsUpdate.parse({ initiativeMaxDepth: 5 }).initiativeMaxDepth).toBe(5);
   });

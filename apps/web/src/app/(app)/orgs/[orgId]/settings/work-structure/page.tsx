@@ -50,7 +50,7 @@ function AutosaveStatus({
   idleLabel,
 }: AutosaveStatusProps): JSX.Element {
   return (
-    <div className="flex min-h-5 items-center gap-2 text-label-medium" aria-live="polite">
+    <div className="text-label-medium flex min-h-5 items-center gap-2" aria-live="polite">
       {pending ? (
         <span className="text-on-surface-variant">Saving…</span>
       ) : error ? (
@@ -136,7 +136,7 @@ export default function WorkStructureSettingsPage(): JSX.Element {
       ) : (
         <section aria-labelledby="initiative-depth" className="flex max-w-2xl flex-col gap-5">
           {!permissionLoading && !canManage ? (
-            <p className="bg-surface-container text-on-surface-variant rounded-md px-3 py-2 text-body-medium">
+            <p className="bg-surface-container text-on-surface-variant text-body-medium rounded-md px-3 py-2">
               Only workspace owners and admins can change this limit.
             </p>
           ) : null}
@@ -165,7 +165,7 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                     saveDepth.mutate(value);
                   }
                 }}
-                className={`focus-visible:ring-ring size-10 rounded-md border text-label-large focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`focus-visible:ring-ring text-label-large size-10 rounded-md border focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
                   depth === value
                     ? 'border-primary bg-primary text-on-primary'
                     : 'border-outline-variant text-on-surface hover:bg-surface-container'

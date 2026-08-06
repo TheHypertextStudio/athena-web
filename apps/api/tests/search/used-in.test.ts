@@ -12,6 +12,10 @@ import { getDb, addMember, one, seedOrg, seedUserWithHub } from '../support/rout
 
 import { resolveUsedIn } from '../../src/search/used-in';
 
+/** A gate that admits everything — visibility itself is covered by its own tests. */
+const allVisible = (_orgId: string, ids: readonly string[]): Promise<ReadonlySet<string>> =>
+  Promise.resolve(new Set(ids));
+
 describe('used-in resolution', () => {
   it('rolls a task-level mention up to the initiative that contains its project', async () => {
     const schema = await getDb();
@@ -85,9 +89,11 @@ describe('used-in resolution', () => {
       label: 'Launch plan',
     });
 
-    const resolved = await resolveUsedIn(orgId, [
-      { documentId: 'doc-1', kind: 'external_resource', entityId: resourceId },
-    ]);
+    const resolved = await resolveUsedIn(
+      orgId,
+      [{ documentId: 'doc-1', kind: 'external_resource', entityId: resourceId }],
+      allVisible,
+    );
 
     // The mention was authored on a task, but the column must name the launch.
     expect(resolved.get('doc-1')).toEqual([
@@ -144,9 +150,11 @@ describe('used-in resolution', () => {
       label: 'Notes',
     });
 
-    const resolved = await resolveUsedIn(orgId, [
-      { documentId: 'doc-2', kind: 'external_resource', entityId: resourceId },
-    ]);
+    const resolved = await resolveUsedIn(
+      orgId,
+      [{ documentId: 'doc-2', kind: 'external_resource', entityId: resourceId }],
+      allVisible,
+    );
     expect(resolved.get('doc-2')).toEqual([
       { kind: 'project', id: projectId, title: 'Standalone project' },
     ]);
@@ -173,10 +181,72 @@ describe('used-in resolution', () => {
         .returning({ id: schema.externalResource.id }),
     ).id;
 
-    const resolved = await resolveUsedIn(orgId, [
-      { documentId: 'doc-3', kind: 'external_resource', entityId: resourceId },
-    ]);
+    const resolved = await resolveUsedIn(
+      orgId,
+      [{ documentId: 'doc-3', kind: 'external_resource', entityId: resourceId }],
+      allVisible,
+    );
     // Absence is the answer the Library renders as "Not referenced yet".
     expect(resolved.get('doc-3')).toBeUndefined();
+  });
+
+  it('drops a mention whose subject the caller cannot see', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'UsedInHiddenSubjectUser');
+    const orgId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, orgId, userId);
+
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Hidden Team',
+          key: `H${Math.random().toString(36).slice(2, 8)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({ organizationId: orgId, name: 'Confidential project', teamId })
+        .returning({ id: schema.project.id }),
+    ).id;
+    const resourceId = one(
+      await db
+        .insert(schema.externalResource)
+        .values({
+          organizationId: orgId,
+          createdBy: actorId,
+          provider: 'web',
+          canonicalKey: `hidden_${Math.random().toString(36).slice(2, 10)}`,
+          canonicalUrl: 'https://example.com/confidential',
+          resourceType: 'page',
+        })
+        .returning({ id: schema.externalResource.id }),
+    ).id;
+
+    await db.insert(schema.mention).values({
+      organizationId: orgId,
+      createdBy: actorId,
+      subjectType: 'project',
+      subjectId: projectId,
+      field: 'description',
+      position: 0,
+      targetKind: 'external',
+      externalResourceId: resourceId,
+      label: 'Confidential',
+    });
+
+    // The gate reports the subject as invisible, so neither the reference nor the container's
+    // name may reach the column — a private project must not be named by what it links to.
+    const noneVisible = (): Promise<ReadonlySet<string>> => Promise.resolve(new Set<string>());
+    const resolved = await resolveUsedIn(
+      orgId,
+      [{ documentId: 'doc-hidden', kind: 'external_resource', entityId: resourceId }],
+      noneVisible,
+    );
+    expect(resolved.get('doc-hidden')).toBeUndefined();
   });
 });

@@ -52,6 +52,21 @@ function rollUp(candidates: readonly ContainerRef[]): ContainerRef | null {
 /** How many containers one row reports before collapsing the rest into a `+N` on the client. */
 const MAX_CONTAINERS_PER_ROW = 4;
 
+/**
+ * The visibility gate this module filters through, supplied by the caller.
+ *
+ * @remarks
+ * Injected rather than imported because `query.ts` already imports this module, and the one true
+ * implementation — `loadVisibleDocuments` — lives there. Declaring the dependency keeps the single
+ * visibility filter single, without an import cycle and without a second copy.
+ *
+ * Given entity ids, returns the subset the caller may see.
+ */
+export type VisibleEntityLookup = (
+  organizationId: string,
+  entityIds: readonly string[],
+) => Promise<ReadonlySet<string>>;
+
 /** A row this module resolves containers for. */
 export interface UsedInTarget {
   /** The `search_document.id`, used only to key the result map. */
@@ -80,13 +95,22 @@ function containerKey(ref: ContainerRef): string {
  * renders as "Not referenced yet". That state is the point — it surfaces documentation nothing
  * points at, which a count would bury among the ones and twos.
  *
+ * Two visibility passes, both necessary. A mention is dropped unless its *subject* is visible,
+ * because otherwise the column reveals that some record the reader cannot open points at this
+ * document. A container is then dropped unless it too is visible, because a public task can sit
+ * inside a private project and naming that project would leak it. Mentions are queried by
+ * organization alone — the `mention` table carries no visibility of its own — so neither pass is
+ * optional.
+ *
  * @param organizationId - The workspace to resolve within; mentions never cross it.
  * @param targets - The page's rows.
+ * @param visible - The caller's visibility gate; see {@link VisibleEntityLookup}.
  * @returns A map from `documentId` to its containers, most-referencing first.
  */
 export async function resolveUsedIn(
   organizationId: string,
   targets: readonly UsedInTarget[],
+  visible: VisibleEntityLookup,
 ): Promise<ReadonlyMap<string, readonly SearchUsedIn[]>> {
   const empty = new Map<string, readonly SearchUsedIn[]>();
   if (targets.length === 0) return empty;
@@ -125,9 +149,15 @@ export async function resolveUsedIn(
     .where(and(eq(schema.mention.organizationId, organizationId), or(...arms)));
   if (mentions.length === 0) return empty;
 
+  const visibleSubjects = await visible(organizationId, [
+    ...new Set(mentions.map((mention) => mention.subjectId)),
+  ]);
+  const readableMentions = mentions.filter((mention) => visibleSubjects.has(mention.subjectId));
+  if (readableMentions.length === 0) return empty;
+
   const { containers: containersBySubject, knownTitles } = await resolveSubjectContainers(
     organizationId,
-    mentions,
+    readableMentions,
   );
 
   // Count containers per target so the most-referencing one leads the row.
@@ -139,7 +169,7 @@ export async function resolveUsedIn(
     targetByEntity.set(target.entityId, list);
   }
 
-  for (const mention of mentions) {
+  for (const mention of readableMentions) {
     const entityId = mention.externalResourceId ?? mention.targetEntityId;
     if (!entityId) continue;
     const container = containersBySubject.get(`${mention.subjectType}:${mention.subjectId}`);
@@ -165,9 +195,16 @@ export async function resolveUsedIn(
     }
   }
 
+  const containerRefs = [...counts.values()].flatMap((perTarget) =>
+    [...perTarget.values()].map((entry) => entry.ref),
+  );
+  // A public task can sit inside a private project; naming that project would leak it.
+  const visibleContainers = await visible(organizationId, [
+    ...new Set(containerRefs.map((ref) => ref.id)),
+  ]);
   const titles = await loadContainerTitles(
     organizationId,
-    [...counts.values()].flatMap((perTarget) => [...perTarget.values()].map((v) => v.ref)),
+    containerRefs.filter((ref) => visibleContainers.has(ref.id)),
     knownTitles,
   );
 
@@ -393,7 +430,10 @@ async function loadContainerTitles(
   refs: readonly ContainerRef[],
   known: ReadonlyMap<string, string>,
 ): Promise<ReadonlyMap<string, string>> {
-  const titles = new Map<string, string>(known);
+  // Seeded titles are keyed the same way, but only for refs that survived the visibility filter —
+  // seeding the whole map would reintroduce the names this call exists to withhold.
+  const allowed = new Set(refs.map(containerKey));
+  const titles = new Map<string, string>([...known].filter(([key]) => allowed.has(key)));
   if (refs.length === 0) return titles;
   const schema = await import('@docket/db');
 

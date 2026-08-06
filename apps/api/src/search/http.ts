@@ -58,6 +58,8 @@ export const SearchHttpQuery = z.object({
   ownerIds: csvStringList(),
   assigneeIds: csvStringList(),
   labelIds: csvStringList(),
+  /** Resolve specific source entity ids, for a deep link to a row that is not on the first page. */
+  ids: csvStringList(),
   statuses: csvStringList(),
   healths: csvStringList(),
   activeOrgId: z.string().optional(),

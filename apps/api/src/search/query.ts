@@ -46,6 +46,7 @@ interface SearchWorkspaceInput {
     ownerIds?: readonly string[];
     assigneeIds?: readonly string[];
     labelIds?: readonly string[];
+    ids?: readonly string[];
     statuses?: readonly string[];
     healths?: readonly string[];
     activeOrgId?: string;
@@ -112,6 +113,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
   if (query.length === 0) {
     return browseDocuments({
       params: input.params,
+      caller: input.caller,
       limit,
       ownerUserId,
       orgIds: accessibleOrgIds,
@@ -155,7 +157,7 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
       : scored;
   const page = surfaced.slice(0, limit);
   const next = surfaced[limit];
-  const usedIn = await usedInForPage(page);
+  const usedIn = await usedInForPage(page, input.caller);
   return {
     query,
     items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
@@ -177,6 +179,8 @@ const BROWSE_REFILL_ROUNDS = 6;
 
 interface BrowseInput {
   params: SearchWorkspaceInput['params'];
+  /** Whose permissions the "used in" resolution filters through. */
+  caller: SearchCaller;
   limit: number;
   ownerUserId: string | null;
   orgIds: readonly string[];
@@ -219,6 +223,7 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
       limit: chunkSize,
       kinds: input.params.kinds ?? [],
       families: input.params.families ?? [],
+      ids: input.params.ids ?? [],
     });
     if (rows.length < chunkSize) exhausted = true;
     const lastFetched = rows[rows.length - 1];
@@ -240,7 +245,7 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
   const page = collected.slice(0, input.limit);
   const last = page[page.length - 1];
   const hasMore = collected.length > input.limit;
-  const usedIn = await usedInForPage(page);
+  const usedIn = await usedInForPage(page, input.caller);
   return {
     query: '',
     // These facets summarize the returned page, not the corpus. The Library's filter options come
@@ -288,6 +293,7 @@ async function loadBrowseRows(input: {
   limit: number;
   kinds: readonly string[];
   families: readonly string[];
+  ids: readonly string[];
 }) {
   const schema = await import('@docket/db');
   // A caller with no owning user (an agent) reaches org documents only. An empty candidate set is
@@ -313,6 +319,11 @@ async function loadBrowseRows(input: {
   }
   if (input.families.length > 0) {
     conditions.push(inArray(schema.searchDocument.family, [...input.families] as 'work'[]));
+  }
+  // A deep link names one row that may sit far past the first page; resolving it by id keeps that
+  // link working without paging the whole corpus to find it.
+  if (input.ids.length > 0) {
+    conditions.push(inArray(schema.searchDocument.entityId, [...input.ids]));
   }
 
   const rows = await schema.db
@@ -858,6 +869,7 @@ const USED_IN_KINDS = new Set<SearchDocumentKind>(['external_resource', 'attachm
  */
 async function usedInForPage(
   page: readonly ScoredRow[],
+  caller: SearchCaller,
 ): Promise<ReadonlyMap<string, readonly SearchUsedIn[]>> {
   const byOrg = new Map<string, UsedInTarget[]>();
   for (const scored of page) {
@@ -874,13 +886,33 @@ async function usedInForPage(
   }
   if (byOrg.size === 0) return new Map();
   const perOrg = await Promise.all(
-    [...byOrg].map(([organizationId, targets]) => resolveUsedIn(organizationId, targets)),
+    [...byOrg].map(([organizationId, targets]) =>
+      resolveUsedIn(organizationId, targets, visibleEntityIds(caller)),
+    ),
   );
   const merged = new Map<string, readonly SearchUsedIn[]>();
   for (const resolved of perOrg) {
     for (const [documentId, containers] of resolved) merged.set(documentId, containers);
   }
   return merged;
+}
+
+/**
+ * The visibility gate handed to {@link resolveUsedIn}.
+ *
+ * @remarks
+ * Wraps {@link loadVisibleDocuments} so the "used in" resolver filters through the same permission
+ * check every other read here uses, rather than a second copy of it. Ids with no search document
+ * are absent from the result and therefore treated as not visible, which is the safe direction.
+ */
+function visibleEntityIds(caller: SearchCaller) {
+  return async (
+    organizationId: string,
+    entityIds: readonly string[],
+  ): Promise<ReadonlySet<string>> => {
+    const documents = await loadVisibleDocuments({ caller, orgId: organizationId, entityIds });
+    return new Set(documents.map((document) => document.entityId));
+  };
 }
 
 function toSearchResult(

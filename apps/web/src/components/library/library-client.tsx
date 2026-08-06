@@ -15,11 +15,13 @@
 import type { ExternalResourceType, SearchResult } from '@docket/types';
 import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
 import { Library, Link as LinkIcon, type LucideIcon } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Button, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
+
+import { useAppSearchParams } from '@/lib/app-location';
 
 import { useActiveOrg } from '@/components/active-org';
 import { relativeTime } from '@/components/project-detail/format-time';
@@ -81,10 +83,14 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   const { state, setFilters, setGroupBy, setSort } = useViewState();
   const { activeOrg } = useActiveOrg();
   const router = useRouter();
-  const searchParams = useSearchParams();
+  // Not Next's `useSearchParams`: with the offline shell, the router reports the route the cached
+  // document was rendered for, not the one the reader is on. See docs/engineering/specs/offline.md.
+  const searchParams = useAppSearchParams();
   // The opened entry lives in the URL, so a detail view is linkable and the back button closes it.
   // `entityHref` and the command palette both already hand out `?resourceId=`.
   const openedId = searchParams.get('resourceId');
+  /** Wraps the list so closing the panel can hand focus back to the grid inside it. */
+  const gridRef = useRef<HTMLDivElement>(null);
 
   /**
    * Open or close the detail panel without disturbing the active filters.
@@ -97,6 +103,12 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   function setOpened(resourceId: string | null): void {
     if (resourceId === null) {
       router.back();
+      // Closing removes the panel — and with it whatever held focus. Hand focus back to the grid
+      // the reader came from, rather than letting it fall to `<body>`. The frame lets the list
+      // finish un-hiding first; a `display: none` element cannot take focus.
+      requestAnimationFrame(() => {
+        gridRef.current?.querySelector<HTMLElement>('[role="grid"]')?.focus();
+      });
       return;
     }
     const next = new URLSearchParams(searchParams.toString());
@@ -214,8 +226,28 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   );
 
   const filtered = state.filters.length > 0;
-  // Resolved against the loaded page rather than refetched: the panel is only reachable from a row.
-  const opened = openedId === null ? null : (rows.find((row) => row.entityId === openedId) ?? null);
+  const onPage = openedId === null ? null : (rows.find((row) => row.entityId === openedId) ?? null);
+
+  // A `?resourceId=` link — from the command palette, or a URL someone shared — can name a row
+  // that sits past the loaded page. Without this the panel silently rendered nothing: no error,
+  // no empty state, and a URL that looked like it had worked.
+  const deepLinkQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.search('org', `library:id:${openedId ?? ''}`, orgId),
+      () =>
+        api.v1.orgs[':orgId'].search.$get({
+          param: { orgId },
+          query: { kinds: LIBRARY_KINDS.join(','), ids: openedId ?? '', limit: '1' },
+        }),
+      'Could not load that entry.',
+      { enabled: openedId !== null && onPage === null && !resourcesQ.isPending },
+    ),
+  );
+  const opened = onPage ?? deepLinkQ.data?.items[0] ?? null;
+  // The drill-down stands the list down only while there is something to stand it down *for* —
+  // including the moment a deep link is still resolving, so the panel does not pop in beside a
+  // list that then vanishes.
+  const panelOpen = opened !== null || deepLinkQ.isPending;
 
   return (
     <ListPageLayout
@@ -266,7 +298,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
            * On a narrow container the panel takes the whole page and the list stands down: a
            * drill-down, not a squeeze. Driven by whether an entry is open, never by a device check.
            */}
-          <div className={opened ? 'hidden min-w-0 @4xl:block' : 'min-w-0'}>
+          <div ref={gridRef} className={panelOpen ? 'hidden min-w-0 @4xl:block' : 'min-w-0'}>
             <EntityTable
               columns={columns}
               groups={groups}
@@ -286,6 +318,38 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                 setOpened(null);
               }}
             />
+          ) : panelOpen ? (
+            <aside
+              aria-label="Loading entry"
+              aria-busy="true"
+              className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl p-4"
+            >
+              {Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={index} className="h-7 w-full" />
+              ))}
+            </aside>
+          ) : openedId !== null ? (
+            // The link named something this reader cannot see, or that no longer exists. Both
+            // read the same on purpose — distinguishing them would confirm the id exists.
+            <aside
+              aria-label="Entry unavailable"
+              className="bg-surface-container-low flex min-w-0 flex-col gap-2 rounded-xl p-4"
+            >
+              <p className="text-on-surface text-title-small">Not available</p>
+              <p className="text-on-surface-variant text-body-medium">
+                That entry is no longer here, or you do not have access to it.
+              </p>
+              <Button
+                variant="outline"
+                controlSize="lg"
+                className="self-start"
+                onClick={() => {
+                  setOpened(null);
+                }}
+              >
+                Back to the library
+              </Button>
+            </aside>
           ) : null}
         </div>
       )}

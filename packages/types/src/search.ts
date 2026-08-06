@@ -232,6 +232,8 @@ export const SearchQuery = z
     ownerIds: z.array(z.string()).default([]),
     assigneeIds: z.array(z.string()).default([]),
     labelIds: z.array(z.string()).default([]),
+    /** Resolve specific source entity ids, for a deep link to a row that is not on the first page. */
+    ids: z.array(z.string()).default([]),
     statuses: z.array(z.string()).default([]),
     healths: z.array(z.string()).default([]),
     activeOrgId: OrganizationId.optional(),

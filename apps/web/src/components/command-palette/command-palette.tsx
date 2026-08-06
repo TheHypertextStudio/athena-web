@@ -101,7 +101,12 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   }, [open]);
 
   const commands = useCommandActions({ scope, open, close: onClose });
-  const { results, loading, error, hasQuery } = useHubSearch({ query, scope, close: onClose });
+  const { results, loading, error, hasQuery } = useHubSearch({
+    query,
+    scope,
+    close: onClose,
+    open,
+  });
 
   // The static (navigation/actions/org) commands matching the query.
   const staticMatches = useMemo(() => filterCommands(commands, query), [commands, query]);

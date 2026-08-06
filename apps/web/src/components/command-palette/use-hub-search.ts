@@ -153,6 +153,15 @@ interface HubSearchInput {
   scope: PaletteScope;
   /** Close the palette; result selection calls this before navigating. */
   close: () => void;
+  /**
+   * Whether the palette is on screen.
+   *
+   * @remarks
+   * The palette is mounted by the app shell on every page and only returns null *after* its hooks
+   * run, so without this the empty-query browse fires on every page load and again on every window
+   * refocus. Recents are worth fetching when someone opens the palette, not when they open the app.
+   */
+  open: boolean;
 }
 
 /**
@@ -171,7 +180,7 @@ interface HubSearchInput {
  * @param input - The query, scope, and the palette `close` callback.
  * @returns the reactive {@link HubSearchState}.
  */
-export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearchState {
+export function useHubSearch({ query, scope, close, open }: HubSearchInput): HubSearchState {
   const router = useRouter();
   const { activeOrgId, orgName } = useActiveOrg();
 
@@ -219,7 +228,7 @@ export function useHubSearch({ query, scope, close }: HubSearchInput): HubSearch
               },
             }),
       'Search failed.',
-      { enabled: scope === 'hub' || Boolean(orgFilter) },
+      { enabled: open && (scope === 'hub' || Boolean(orgFilter)) },
     ),
   );
 

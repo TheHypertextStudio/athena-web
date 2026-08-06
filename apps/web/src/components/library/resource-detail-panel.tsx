@@ -16,7 +16,7 @@ import type { SearchResult } from '@docket/types';
 import { OpenInNew, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
-import type { JSX } from 'react';
+import { type JSX, useEffect, useRef } from 'react';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -55,6 +55,22 @@ export default function ResourceDetailPanel({
   onClose,
 }: ResourceDetailPanelProps): JSX.Element {
   const externalUrl = resource.externalUrl;
+  const headingRef = useRef<HTMLHeadingElement>(null);
+
+  /*
+   * Take focus when the panel appears.
+   *
+   * Below the split breakpoint the list is `display: none` while the grid inside it still holds
+   * DOM focus, and hiding a focused element drops focus to `<body>` — a keyboard or screen-reader
+   * user activates a row and lands nowhere, with nothing announcing that a panel opened. Moving
+   * focus to the heading both restores a position and reads the entry's name.
+   *
+   * Keyed on the entry, so paging from one row to the next re-announces rather than sitting
+   * silently on the previous heading.
+   */
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, [resource.entityId]);
 
   const referencesQ = useApiQuery(
     apiQueryOptions(
@@ -73,7 +89,13 @@ export default function ResourceDetailPanel({
       className="bg-surface-container-low flex min-w-0 flex-col gap-4 rounded-xl p-4"
     >
       <div className="flex items-start gap-2">
-        <h2 className="text-title-small text-on-surface min-w-0 flex-1 break-words">
+        {/* `tabIndex={-1}` makes the heading programmatically focusable without adding it to the
+            tab order — the focus target above, not a stop a keyboard user has to pass through. */}
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="text-title-small text-on-surface min-w-0 flex-1 break-words outline-none"
+        >
           {resource.title}
         </h2>
         <Button

@@ -46,7 +46,7 @@ jobs:
           push: true
           # The migration step below runs this exact image. Exporting it to the runner's daemon
           # here costs a local image load; re-fetching it from Artifact Registry cost a full pull
-          # of an image this runner had just finished building.
+          # of an image this runner builds moments earlier.
           load: true
           tags: ${{ env.REGISTRY }}/api:${{ github.sha }}
           cache-from: type=gha,scope=api

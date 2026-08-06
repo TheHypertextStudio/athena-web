@@ -1,16 +1,14 @@
 name: E2E
 
-# Deliberately its own workflow, and deliberately NOT a gate on the production deploy.
+# Its own workflow, and deliberately NOT a gate on the production deploy.
 #
-# The browser suite runs against `pnpm dev`, so Turbopack compiles each route on first request
-# inside the test that asked for it. On a two-core runner that is slower than any per-test budget
-# worth setting: specs that finish in 14.5s locally exceeded 180s, 540s, and 120s in CI, stalling
-# on step 1 of sign-up with the auth route still compiling. It is not three bad specs — rebalancing
-# the shards simply moved the failures to whichever shard inherited them.
+# The suite runs against `pnpm dev`, so Turbopack compiles each route on first request inside the
+# test that asked for it. On a two-core runner that outlasts any per-test budget worth setting, and
+# it is not a handful of bad specs — resharding only moves the failures to whichever shard inherits
+# them. A gate that cannot go green is not protecting anything, so this reports on every push and
+# PR without deciding whether production ships.
 #
-# Holding every production deploy on a suite that cannot pass protected nothing and cost a full
-# day of releases. It runs here, on every push and PR, and reports honestly. Put it back in
-# ci.yml's deploy gate the moment the stack serves a production build instead of a dev server.
+# Move it back into ci.yml's `deploy-production.needs` once the stack serves a production build.
 
 on:
   push:

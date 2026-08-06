@@ -326,10 +326,9 @@ describe('the real workflows', () => {
     expect(workflows.map((workflow) => workflow.path)).toEqual([
       '.github/workflows/ci.yml',
       '.github/workflows/deploy.yml',
-      // e2e lives in its own workflow and deliberately does not gate the deploy — it runs against
-      // `next dev`, so Turbopack compiles routes inside the tests and the suite cannot pass on a
-      // two-core runner. SCR-19 is unaffected: it governs the workflow that owns
-      // `deploy-production`, and a check job outside that file is not a gate it can skip.
+      // e2e is a check job that deliberately does not gate the deploy; see e2e.yml for why.
+      // SCR-19 is unaffected — it governs the workflow owning `deploy-production`, so a check job
+      // in another file is not a gate that file can skip.
       '.github/workflows/e2e.yml',
       '.github/workflows/neon-branch.yml',
     ]);

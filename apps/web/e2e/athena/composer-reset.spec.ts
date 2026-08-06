@@ -25,7 +25,7 @@ import { expect, test } from '../helpers/fixtures';
 import { attachShot } from '../helpers/ui';
 
 test.describe('create composers reopen pristine', () => {
-  // QUARANTINED — same CI-only stall as athena-personal.spec.ts; see the note there.
+  // Same CI-only stall as athena-personal.spec.ts; see the note there.
   test.fixme('a seeded composer clears its draft but keeps its defaults', async ({
     page,
   }, testInfo) => {
@@ -71,7 +71,7 @@ test.describe('create composers reopen pristine', () => {
     await expect(reopened.getByRole('button', { name: /Atlas re-platform/ })).toBeVisible();
   });
 
-  // QUARANTINED — same CI-only stall as athena-personal.spec.ts; see the note there.
+  // Same CI-only stall as athena-personal.spec.ts; see the note there.
   test.fixme('task composer clears after creating a task', async ({ page }, testInfo) => {
     const { orgId } = await signUpAndOnboard(page, 'ComposerResetTask');
 

@@ -230,9 +230,9 @@ describe('guided integration bootstrap contracts', () => {
     expect(workflow).toContain('secrets: ${{ vars.API_SECRET_BINDINGS }}');
     // Every job in deploy.yml reaches production, so every one must be bound to the `production`
     // environment — that binding is what applies the environment's protection rules and scopes the
-    // secrets it may read. Counted against the number of jobs rather than pinned to a literal:
-    // splitting a deploy job (the scheduler pass came out of deploy-api) must not fail this test
-    // for merely existing, but a new job that forgets the binding still must.
+    // secrets it may read. Counted against the number of jobs rather than pinned to a literal, so
+    // splitting a deploy job does not fail this test for merely existing, while a new job that
+    // forgets the binding still does.
     const jobBlock = workflow.slice(workflow.indexOf('\njobs:\n'));
     const jobIds = jobBlock.match(/^ {2}[a-z0-9-]+:$/gm) ?? [];
     expect(jobIds.length).toBeGreaterThan(0);

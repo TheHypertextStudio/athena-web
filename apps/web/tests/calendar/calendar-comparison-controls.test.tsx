@@ -89,9 +89,9 @@ describe('CalendarComparisonControls', () => {
     // The control now comes from the shared Select primitive, which draws its own surface — so the
     // token this asserts is the border role, not a background the primitive no longer sets.
     expect(workspace).toHaveClass('border-outline-variant');
-    // Whole class names, not a substring. `not.toContain('border-outline')` could never pass:
-    // `border-outline-variant` asserted one line above contains it. Splitting also keeps the
-    // primitive's legitimate `hover:border-outline` from reading as the legacy bare utility.
+    // Split into whole class names: a substring check cannot express this, because the
+    // `border-outline-variant` asserted above contains `border-outline`, and the primitive's own
+    // `hover:border-outline` is legitimate.
     expect(workspace.className.split(/\s+/)).not.toContain('border-outline');
     expect(workspace.className.split(/\s+/)).not.toContain('bg-surface');
     expect(workspace.className).not.toContain('shadow');

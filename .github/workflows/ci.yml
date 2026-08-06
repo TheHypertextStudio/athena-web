@@ -7,15 +7,10 @@ on:
     branches: [main]
 
 # Superseded pull-request runs are worth cancelling; superseded pushes to `main` are not.
-#
-# On 2026-08-05 this cancelled every run for nearly a full day. Merges were landing every few
-# minutes, each one killed the run before it, and because `deploy-production` lives at the end of
-# that run nothing reached production for 21 hours — while Vercel held each web deployment waiting
-# on a check that was never going to report. Commits also merged unverified the whole time, so the
-# gate could not catch what was breaking either.
-#
-# Runs on `main` now queue instead. The concurrency group still serializes them one at a time, so
-# two deploys can never race; they simply take turns, and every commit gets its deploy.
+# `deploy-production` is the last job of this run, so cancelling a push to `main` throws away that
+# commit's only deploy — and at this repo's merge rate, every run cancels the one before it and
+# nothing ever ships. Pushes to `main` queue instead. The concurrency group still serializes them,
+# so two deploys can never race; they take turns.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
@@ -146,11 +141,9 @@ jobs:
   # regression fail the build. Do not soft-fail it.
   # Current per-package numbers: docs/engineering/coverage-ledger.md
   #
-  # This job used to be two. A separate `coverage` job ran `turbo run test:coverage` while this
-  # one ran `turbo run test` — the same 17 package suites, over the same file set from
-  # tooling/vitest/preset.ts, on a second runner with a second cold install. `--coverage` is
-  # strictly additive instrumentation, and `all: true` makes the instrumented pass the slower of
-  # the two, so the uninstrumented run told us nothing the instrumented one did not.
+  # One job, not two. `turbo run test` and `turbo run test:coverage` run the same suites over the
+  # same file set; `--coverage` is additive instrumentation and `all: true` makes it the slower of
+  # the pair, so a separate uninstrumented run reports nothing this one does not.
   test:
     name: Test
     runs-on: ubuntu-latest

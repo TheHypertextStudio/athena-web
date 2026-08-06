@@ -218,12 +218,10 @@ async function installAthenaFixture(
   return { releaseApproval, readApprovalPath: () => approvalPath };
 }
 
-// QUARANTINED — hangs on CI only, and has blocked every production deploy since 09:30 on
-// 2026-08-05. It passes locally against the dev stack in 14.5s and never completes on a CI runner,
-// at 180s, at 540s, or at 120s: it stalls on step 1 of sign-up with /api/auth/sign-up/request-code
-// unanswered, which is Turbopack compiling the route inside the test on a two-core runner. The fix
-// is running the e2e stack against a production build instead of `next dev`; until that lands this
-// gate cannot be met and holding the deploy on it helps nobody.
+// Passes locally in seconds and never completes on a two-core CI runner, at any timeout tried: it
+// stalls on step 1 of sign-up with `/api/auth/sign-up/request-code` unanswered, because Turbopack
+// is compiling that route inside the test. Un-fixme it once the e2e job serves a production build
+// instead of `next dev`.
 test.fixme('personal Athena dock, workbench, context, redirects, and responsive themes', async ({
   page,
 }, testInfo) => {

@@ -28,11 +28,8 @@ const VIEWPORT = { width: 1440, height: 900 } as const;
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
-  // Evidence capture, not regression tests — and 118 of the suite's 175 tests, 112 of them in
-  // widget-shots alone. They drive the app to take screenshots for human review and assert little
-  // or nothing, so gating a production deploy on them bought no safety and cost the deploy: the
-  // shard carrying widget-shots ran past 15 minutes while the other three finished in 1.4.
-  //
+  // Evidence capture, not regression tests: these drive the app to take screenshots for human
+  // review and assert little or nothing, while accounting for two thirds of the suite's runtime.
   // Run them deliberately with `pnpm test:e2e:evidence`, which sets E2E_EVIDENCE=1.
   testIgnore:
     process.env['E2E_EVIDENCE'] === '1'
@@ -46,17 +43,10 @@ export default defineConfig({
   // survives two attempts is a bug report rather than a flake.
   retries: process.env['CI'] ? 1 : 0,
   forbidOnly: !!process.env['CI'],
-  // The budget a test gets before it is called stuck, NOT a budget for compiling the app.
-  //
-  // This was 180s with nine specs calling `test.slow()` on top, which triples it. A flaky test
-  // therefore burned 540s per attempt: on the last green run one offline-sync test failed at
-  // exactly 9.0m and then passed on retry in 55s, which was the whole difference between that
-  // shard at 12.6m and its siblings at 4-7m. The suite is not slow — its tail is.
-  //
-  // Those budgets all existed to absorb Turbopack's on-demand compile, because the e2e job runs
-  // against `next dev`. Until that job runs a production build, a test that legitimately needs
-  // the compile budget will fail here rather than stall the shard, which is the trade we want:
-  // a fast, loud failure beats a nine-minute wait for the same information.
+  // The budget a test gets before it is called stuck, NOT a budget for compiling the app. Raising
+  // it to absorb Turbopack's on-demand compile only converts a stall into a longer stall — every
+  // extra second is spent by whichever test is unlucky, multiplied by the retries. A test that
+  // genuinely needs more than this fails fast and loud, which is the more useful answer.
   timeout: 120_000,
   expect: { timeout: TIMEOUTS.ui },
   reporter: 'list',

@@ -710,8 +710,7 @@ describe('hub /search (cross-org typed hits)', () => {
     // `q` is optional by design (see SearchQuery in @docket/types): omitting it — or sending it
     // empty, which trims to the same thing — asks for the same permission-filtered corpus ordered
     // by recency instead of relevance. The Library rides this path rather than getting its own
-    // endpoint, so that no second copy of the visibility filter can drift from this one. This
-    // used to assert 422, from before browse mode existed.
+    // endpoint, so that no second copy of the visibility filter can drift from this one.
     expect((await app.request('/search?q=')).status).toBe(200);
     expect((await app.request('/search')).status).toBe(200);
   });

@@ -44,6 +44,10 @@ jobs:
           context: .
           file: apps/api/Dockerfile
           push: true
+          # The migration step below runs this exact image. Exporting it to the runner's daemon
+          # here costs a local image load; re-fetching it from Artifact Registry cost a full pull
+          # of an image this runner had just finished building.
+          load: true
           tags: ${{ env.REGISTRY }}/api:${{ github.sha }}
           cache-from: type=gha,scope=api
           cache-to: type=gha,scope=api,mode=max
@@ -60,7 +64,6 @@ jobs:
             --secret=docket-database-url-unpooled \
             --project='${{ vars.GCP_PROJECT_ID }}')"
           export DATABASE_URL_UNPOOLED
-          docker pull "$API_IMAGE"
           docker run --rm \
             --env DATABASE_URL_UNPOOLED \
             "$API_IMAGE" \
@@ -132,6 +135,26 @@ jobs:
             *) echo "signup challenge probe returned HTTP $signup_status" >&2; exit 1 ;;
           esac
 
+  # Split out of deploy-api deliberately. Vercel gates production promotion on the check named
+  # "Deploy production / Migrate database and deploy API" (docs/engineering/deployment.md), so
+  # every second spent in that job delays the web release. Provisioning schedulers gates nothing
+  # and runs ~10 describe+update pairs against gcloud, so it waits behind the API instead.
+  ensure-scheduler:
+    name: Ensure Cloud Scheduler jobs
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
       - name: Ensure Cloud Scheduler jobs
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -139,9 +162,12 @@ jobs:
           API_URL: ${{ vars.API_URL }}
         run: npx -y tsx scripts/scheduler-setup.ts
 
+  # No `needs: deploy-api`. The admin image consumes nothing the API job produces — every build
+  # arg comes from repo vars — so the two Docker builds ran back to back for no reason. Admin is
+  # the internal console and reaches the database only through the API, so the few seconds where
+  # a new admin revision may precede the new API revision costs nothing a user can see.
   deploy-admin:
     name: Deploy admin
-    needs: deploy-api
     runs-on: ubuntu-latest
     environment: production
     permissions:

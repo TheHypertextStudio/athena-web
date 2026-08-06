@@ -694,6 +694,16 @@ export const inboundEventStatus = pgEnum('inbound_event_status', [
   'failed',
   'skipped',
 ]);
+/**
+ * How far entity association has got for one event.
+ *
+ * @remarks
+ * `unmatched` and `pending` both leave `entity.docketEntityId` null, and the difference is what
+ * bounds the re-association sweep: `pending` is "Docket could mirror this and has not yet",
+ * `unmatched` is "no Docket table represents this kind". Order-locked against `EntityAssociation`
+ * in `@docket/types`.
+ */
+export const entityAssociation = pgEnum('entity_association', ['pending', 'matched', 'unmatched']);
 /** Lifecycle status of one user's daily digest for a given day (`skipped_empty` = no activity). */
 export const dailyDigestStatus = pgEnum('daily_digest_status', [
   'pending',

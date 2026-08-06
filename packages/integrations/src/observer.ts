@@ -87,6 +87,15 @@ export interface EventActorRef {
   readonly displayName?: string;
   /** Avatar URL, when known. */
   readonly avatarUrl?: string;
+  /**
+   * The person's email at the source, when the provider exposes one.
+   *
+   * @remarks
+   * Feeds the ad-hoc email fallback in `resolveExternalActor`, which is the only rung that can
+   * match somebody who has never linked their account and has no `external_actor` row yet. That
+   * rung was unreachable from the webhook path while this field did not exist.
+   */
+  readonly email?: string;
 }
 
 /**

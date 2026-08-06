@@ -23,6 +23,7 @@ import type { EventDraft, Observer, ObserverProvider } from '@docket/integration
 import type {
   ActorRef,
   CanonicalEntityKind,
+  EntityAssociation,
   EntityRef,
   SourceSystemKind,
   StreamRelevance,
@@ -35,6 +36,12 @@ import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container
 import { projectInboundDraft } from '../lib/automation/event';
 import { runAutomationsForEvent } from '../lib/automation/runtime';
 import { resolveExternalActor } from '../lib/identity/resolve-external-actor';
+import {
+  externalEntityKey,
+  isAssociableKind,
+  resolveExternalEntities,
+  type ResolvedEntities,
+} from '../lib/identity/resolve-external-entity';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
 import { eventSearchReindexTarget } from '../search/event-log';
 import { asObserverProvider } from './integration-provider';
@@ -148,10 +155,10 @@ async function resolveLinkedIdentityRecipients(
  * enriching it with the Docket actor it maps to (if any) via {@link resolveExternalActor}.
  *
  * @remarks
- * `EventActorRef` (the draft shape) carries only `externalId` today, no email, so this call
- * only ever exercises the manual-override, linked-account, and email-matched-`external_actor`
- * rungs of {@link resolveExternalActor} — its ad-hoc email fallback activates automatically
- * once a draft actor shape gains an email field, with no change needed here.
+ * Passes the draft's email through when the provider exposed one, which is what reaches the ad-hoc
+ * email fallback — the only rung of {@link resolveExternalActor} that can match a person who has
+ * neither linked their account nor been seen by a full sync. Providers that expose no email still
+ * resolve through the manual-override, linked-account and email-matched-`external_actor` rungs.
  */
 async function toActorRef(
   orgId: string,
@@ -159,7 +166,11 @@ async function toActorRef(
   source: SourceSystemKind,
 ): Promise<ActorRef | null> {
   if (!draftActor) return null;
-  const resolved = await resolveExternalActor(orgId, { source, externalId: draftActor.externalId });
+  const resolved = await resolveExternalActor(orgId, {
+    source,
+    externalId: draftActor.externalId,
+    ...(draftActor.email ? { email: draftActor.email } : {}),
+  });
   return {
     source,
     externalId: draftActor.externalId,
@@ -169,21 +180,56 @@ async function toActorRef(
   };
 }
 
-/** Lift a draft entity into a canonical {@link EntityRef} stamped with the resolved source. */
+/**
+ * Lift a draft entity into a canonical {@link EntityRef} stamped with the resolved source.
+ *
+ * @remarks
+ * `docketEntityId` stays null here even when association succeeded, and that is deliberate. Four
+ * consumers read this jsonb field — owner fan-out, search reindex, activity-document visibility and
+ * automation subject matching — so filling it in is indistinguishable from switching all four on in
+ * one commit. The resolved id goes to the `event.docket_entity_id` column instead, which nothing
+ * reads yet; each consumer is repointed at it separately so a regression is attributable.
+ */
 function toEntityRef(
   draftEntity: EventDraft['entity'],
   source: SourceSystemKind,
 ): EntityRef | null {
   if (!draftEntity) return null;
-  const maybeMapped = draftEntity as EventDraft['entity'] & { docketEntityId?: unknown };
   return {
     kind: draftEntity.kind,
     source,
     externalId: draftEntity.externalId,
     title: draftEntity.title ?? null,
     url: draftEntity.url ?? null,
-    docketEntityId:
-      typeof maybeMapped.docketEntityId === 'string' ? maybeMapped.docketEntityId : null,
+    docketEntityId: null,
+  };
+}
+
+/** One draft's association outcome — the state and, at `matched`, the id it resolved to. */
+interface DraftAssociation {
+  readonly state: EntityAssociation;
+  readonly docketEntityId: string | null;
+}
+
+/**
+ * Decide one draft's association from the batch-resolved lookup.
+ *
+ * @param draftEntity - The draft's subject, when it has one.
+ * @param resolved - Docket ids resolved for this whole delivery.
+ * @returns the association state, and the Docket id when it matched.
+ */
+function associationFor(
+  draftEntity: EventDraft['entity'],
+  resolved: ResolvedEntities,
+): DraftAssociation {
+  // No subject at all: nothing to associate, and it must never enter the sweep's working set.
+  if (!draftEntity) return { state: 'unmatched', docketEntityId: null };
+  const docketEntityId = resolved.get(externalEntityKey(draftEntity.kind, draftEntity.externalId));
+  if (docketEntityId) return { state: 'matched', docketEntityId };
+  // `pending` only when a mirror could plausibly appear later; otherwise retrying is pure waste.
+  return {
+    state: isAssociableKind(draftEntity.kind) ? 'pending' : 'unmatched',
+    docketEntityId: null,
   };
 }
 
@@ -232,6 +278,16 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
   const userId = ev.integrationId ? await ownerUserId(ctx, ev.integrationId) : null;
 
+  // Associate every subject in this delivery at once — one query per distinct entity kind, not one
+  // per draft. Without an integration there is no tenancy to scope a mirror lookup by, so nothing
+  // resolves and `associationFor` settles each draft on kind alone.
+  const resolvedEntities = ev.integrationId
+    ? await resolveExternalEntities(
+        { organizationId: orgId, integrationId: ev.integrationId },
+        drafts.flatMap((draft) => (draft.entity ? [draft.entity] : [])),
+      )
+    : new Map<string, string>();
+
   let created = 0;
   for (const draft of drafts) {
     const kind = EventKind.safeParse(draft.kind);
@@ -239,6 +295,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
     const occurredAt = new Date(draft.occurredAt);
     const entityKind: CanonicalEntityKind | null = draft.entity?.kind ?? null;
     const entityRef = toEntityRef(draft.entity, source);
+    const association = associationFor(draft.entity, resolvedEntities);
     // Resolve mentioned external users → linked Docket users, so the mention routes to whoever was
     // actually named (the integration-owner fallback below still applies for unlinked participants).
     const externalRecipients = await resolveLinkedIdentityRecipients(
@@ -271,6 +328,8 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
           actor: actorRef,
           entity: entityRef,
           entityKind,
+          entityAssociation: association.state,
+          docketEntityId: association.docketEntityId,
           participants: participantRefs,
           detail: draft.detail ?? null,
           sourceEventId: ev.id,

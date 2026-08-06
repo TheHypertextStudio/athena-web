@@ -449,6 +449,33 @@ export const EventOut = z
 /** Event representation value. */
 export type EventOut = z.infer<typeof EventOut>;
 
+/**
+ * How far entity association has got for one event.
+ *
+ * @remarks
+ * Lives on the event row rather than inside {@link EntityRef} because it is the firehose's
+ * bookkeeping about its own resolution work, not a property of the reference. `EntityRef` is shared
+ * vocabulary — time tracking flattens it into `time_context` columns and never resolves anything, so
+ * `pending` would be a meaningless state to force on it.
+ *
+ * `unmatched` and `pending` are both `docketEntityId === null` and must stay distinguishable, since
+ * that is what bounds the sweep's working set. A Linear issue Docket has not mirrored yet is
+ * `pending` and will resolve once the mirror lands; a Slack thread is `unmatched` because no Docket
+ * table represents one, and re-checking it every sweep forever would be pure waste.
+ *
+ * Order-locked against the `entity_association` DB enum.
+ */
+export const EntityAssociation = z.enum([
+  /** Docket could mirror this, and does not yet — the re-association sweep retries these. */
+  'pending',
+  /** Resolved to a Docket entity; `entity.docketEntityId` carries it. */
+  'matched',
+  /** Docket has no representation for this kind at all, so retrying can never help. */
+  'unmatched',
+]);
+/** Entity-association value. */
+export type EntityAssociation = z.infer<typeof EntityAssociation>;
+
 /** Processing status of one raw inbound event in the durable write-ahead inbox. */
 export const InboundEventStatus = z.enum([
   'received',

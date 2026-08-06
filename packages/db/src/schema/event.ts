@@ -22,6 +22,7 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  check,
   date,
   index,
   integer,
@@ -36,6 +37,7 @@ import {
 import {
   canonicalEntityKind,
   dailyDigestStatus,
+  entityAssociation,
   eventKind,
   eventSubscriptionStatus,
   inboundEventStatus,
@@ -122,6 +124,26 @@ export const event = pgTable(
     entity: jsonb('entity').$type<EntityRef>(),
     /** Denormalized from `entity.kind` for join-free, jsonb-free filtering. */
     entityKind: canonicalEntityKind('entity_kind'),
+    /**
+     * How far entity association has got.
+     *
+     * @remarks
+     * A column rather than a field inside the `entity` jsonb: this is the firehose's bookkeeping
+     * about its own resolution work, and the sweep that re-resolves `pending` rows wants an indexed
+     * scan, not a jsonb probe.
+     */
+    entityAssociation: entityAssociation('entity_association').notNull().default('pending'),
+    /**
+     * The Docket entity this event turned out to be about.
+     *
+     * @remarks
+     * A real column rather than only `entity.docketEntityId` inside the jsonb, for two reasons.
+     * "Everything that happened to this task, across every tool" is a headline read and a btree
+     * index serves it; a jsonb probe does not. And it decouples resolving from acting on the
+     * result — four consumers read the jsonb field, so populating that field is indistinguishable
+     * from switching all four on at once, which is exactly what the rollout must avoid.
+     */
+    docketEntityId: text('docket_entity_id'),
     participants: jsonb('participants')
       .$type<ActorRef[]>()
       .notNull()
@@ -145,6 +167,23 @@ export const event = pgTable(
     // Powers "all <entity_kind> activity across tools" — the scale-to-many-tools headline read.
     index('event_org_entitykind_occurred_idx').on(t.organizationId, t.entityKind, t.occurredAt),
     uniqueIndex('event_org_dedupe_uq').on(t.organizationId, t.dedupeKey),
+    // The re-association sweep claims rows whose subject had no Docket entity when it first
+    // arrived. Partial on both columns: `pending` drains toward empty, and an event with no subject
+    // at all has nothing to associate, so it must never enter the sweep's working set.
+    index('event_pending_association_idx')
+      .on(t.organizationId, t.entityKind)
+      .where(sql`${t.entityAssociation} = 'pending' and ${t.entityKind} is not null`),
+    // "Everything that happened to this thing, across every tool" — the read association exists to
+    // make possible. Partial, because unassociated rows can never satisfy it.
+    index('event_docket_entity_occurred_idx')
+      .on(t.docketEntityId, t.occurredAt)
+      .where(sql`${t.docketEntityId} is not null`),
+    // `matched` is exactly "we have an id", in both directions. Without this the two columns can
+    // drift into a row claiming a match it cannot name, or naming an id it does not claim.
+    check(
+      'event_association_id_check',
+      sql`(${t.entityAssociation} = 'matched') = (${t.docketEntityId} IS NOT NULL)`,
+    ),
   ],
 );
 

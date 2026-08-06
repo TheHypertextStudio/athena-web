@@ -18,7 +18,7 @@ import { PageContainer } from './page-layout';
 
 /** Props for {@link EntityDetailLayout}. */
 export interface EntityDetailLayoutProps {
-  /** A rare band above the masthead — e.g. the Initiative breadcrumb + Print action. */
+  /** The breadcrumb (e.g. the Initiative breadcrumb), sharing a row with {@link actions}. */
   eyebrow?: ReactNode;
   /** The entity icon rendered above the title (an editable picker or a static glyph, ~40px). */
   icon: ReactNode;
@@ -28,7 +28,7 @@ export interface EntityDetailLayoutProps {
   subtitle?: ReactNode;
   /** The inline metadata row — typically an {@link EntityMetadataRow} of property pickers. */
   metadata?: ReactNode;
-  /** Right-aligned masthead actions (e.g. the ⋯ menu). */
+  /** Masthead actions (e.g. the ⋯ menu), sharing the eyebrow row rather than the title's. */
   actions?: ReactNode;
   /** The tab bar (a `Tabs` element). A {@link Separator} is rendered directly beneath it. */
   tabs: ReactNode;
@@ -42,10 +42,12 @@ export interface EntityDetailLayoutProps {
  * The standard entity-detail arrangement.
  *
  * @remarks
- * Renders (top to bottom): the optional eyebrow, a masthead whose identity pair stacks the icon
- * above the title + subtitle (title filling the available width, subtitle a single line) with any
- * actions right-aligned, the metadata row, then the tab bar, then the active panel. Status/health
- * and every other property live in the metadata slot, never inline with the title.
+ * Renders (top to bottom): an eyebrow/actions row, a masthead whose identity pair stacks the icon
+ * above the title + subtitle (title filling the available width, subtitle wrapping like ordinary
+ * text), the metadata row, then the tab bar, then the active panel. `actions` shares the eyebrow's
+ * row rather than the title's — a title can run to any length without ever having to compete with
+ * the ⋯ menu or the publish action for width, so it never gets squeezed into clipping. Status/
+ * health and every other property live in the metadata slot, never inline with the title.
  *
  * @param props - The {@link EntityDetailLayoutProps}.
  * @returns the composed detail page.
@@ -63,21 +65,21 @@ export function EntityDetailLayout({
 }: EntityDetailLayoutProps): JSX.Element {
   return (
     <PageContainer className={className}>
-      {eyebrow}
-      <header className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="shrink-0">{icon}</div>
-            <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
-              {title}
-            </h1>
-            {subtitle ? (
-              <div className="text-on-surface-variant text-body-large w-full min-w-0">
-                {subtitle}
-              </div>
-            ) : null}
-          </div>
+      {eyebrow || actions ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">{eyebrow}</div>
           {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+        </div>
+      ) : null}
+      <header className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <div className="shrink-0">{icon}</div>
+          <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
+            {title}
+          </h1>
+          {subtitle ? (
+            <div className="text-on-surface-variant text-body-large w-full min-w-0">{subtitle}</div>
+          ) : null}
         </div>
         {metadata}
       </header>

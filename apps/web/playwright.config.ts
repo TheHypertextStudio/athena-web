@@ -28,6 +28,16 @@ const VIEWPORT = { width: 1440, height: 900 } as const;
 export default defineConfig({
   testDir: './e2e',
   testMatch: '**/*.spec.ts',
+  // Evidence capture, not regression tests — and 118 of the suite's 175 tests, 112 of them in
+  // widget-shots alone. They drive the app to take screenshots for human review and assert little
+  // or nothing, so gating a production deploy on them bought no safety and cost the deploy: the
+  // shard carrying widget-shots ran past 15 minutes while the other three finished in 1.4.
+  //
+  // Run them deliberately with `pnpm test:e2e:evidence`, which sets E2E_EVIDENCE=1.
+  testIgnore:
+    process.env['E2E_EVIDENCE'] === '1'
+      ? []
+      : ['**/*-shots.spec.ts', '**/verify-*.spec.ts', '**/*-evidence.spec.ts'],
   fullyParallel: false,
   workers: 1,
   // Retry in CI so a transient timing race (e.g. an async auto-scroll landing mid-assertion) fails

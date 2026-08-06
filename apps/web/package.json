@@ -20,7 +20,8 @@
     "test:watch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest",
     "test:coverage": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run --coverage",
     "test:e2e": "playwright test",
-    "clean": "rm -rf .next .turbo *.tsbuildinfo"
+    "clean": "rm -rf .next .turbo *.tsbuildinfo",
+    "test:e2e:evidence": "E2E_EVIDENCE=1 playwright test"
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",

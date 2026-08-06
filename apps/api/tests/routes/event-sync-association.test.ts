@@ -22,8 +22,8 @@ beforeAll(async () => {
 
 let seq = 0;
 
-/** Seed a Better Auth user + a human actor linked to it; returns the actor id. */
-async function seedUserActor(orgId: string): Promise<string> {
+/** Seed a Better Auth user + a human actor linked to it; returns both ids. */
+async function seedUserActor(orgId: string): Promise<{ userId: string; actorId: string }> {
   seq += 1;
   const [u] = await db
     .insert(schema.user)
@@ -33,7 +33,7 @@ async function seedUserActor(orgId: string): Promise<string> {
     .insert(schema.actor)
     .values({ organizationId: orgId, kind: 'human', displayName: 'Ada', userId: u!.id })
     .returning({ id: schema.actor.id });
-  return a!.id;
+  return { userId: u!.id, actorId: a!.id };
 }
 
 /** Seed a connected Linear integration owned by `actorId`. */
@@ -87,7 +87,7 @@ async function soleEvent(orgId: string) {
 describe('entity association in the drain', () => {
   it('matches a webhook to the Docket task mirroring its subject', async () => {
     const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     const [taskRow] = await db
       .insert(schema.task)
@@ -116,7 +116,7 @@ describe('entity association in the drain', () => {
     // automation subject matching all read `entity.docketEntityId`; writing it there would switch
     // all four on in one commit, which is precisely what resolving into a column avoids.
     const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await db.insert(schema.task).values({
       organizationId: orgId,
@@ -140,7 +140,7 @@ describe('entity association in the drain', () => {
 
   it('marks a subject Docket has not mirrored yet as pending, for the sweep to retry', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await seedInboundEvent(orgId, intgId, 'ev_assoc_miss', 'LIN-NEVER');
 
@@ -157,7 +157,7 @@ describe('entity association in the drain', () => {
     // The first consumer switched onto the resolved id. Before association, an external event was
     // indexed as activity but never told the search index that the task it was about had moved.
     const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     const [taskRow] = await db
       .insert(schema.task)
@@ -189,7 +189,7 @@ describe('entity association in the drain', () => {
 
   it('enqueues no entity reindex when the subject never resolved', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await seedInboundEvent(orgId, intgId, 'ev_assoc_no_reindex', 'LIN-ABSENT');
 
@@ -210,7 +210,7 @@ describe('entity association in the drain', () => {
     // so closing an issue in Linear left the attached mail thread alone while closing the mirror
     // in Docket archived it. The task IS that issue, so the two now agree.
     const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await seedDefaultAutomationRules(orgId, actorId);
 
@@ -275,7 +275,7 @@ describe('entity association in the drain', () => {
 
   it('leaves the mail thread alone when the completion resolves to no Docket task', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const intgId = await seedIntegration(orgId, actorId);
     await seedDefaultAutomationRules(orgId, actorId);
     await db.insert(schema.inboundEvent).values({
@@ -295,9 +295,72 @@ describe('entity association in the drain', () => {
     expect(row.entityAssociation).toBe('pending');
   });
 
+  it('fans an external event out to the assignee of the task it is about', async () => {
+    // Owner rules query a Docket row by id, so a null association meant they never ran for
+    // external activity: the assignee of a mirrored issue heard about Docket-side edits and
+    // nothing that happened upstream, even though it is the same piece of work.
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { actorId: ownerActorId } = await seedUserActor(orgId);
+    const { userId: assigneeUserId, actorId: assigneeActorId } = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, ownerActorId);
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'Mirrored issue',
+      state: 'todo',
+      visibility: 'public',
+      source: 'linked',
+      sourceIntegrationId: intgId,
+      externalId: 'LIN-13',
+      assigneeId: assigneeActorId,
+    });
+    await seedInboundEvent(orgId, intgId, 'ev_assoc_fanout', 'LIN-13');
+
+    const result = await sweepInboundEvents(new Date());
+
+    const recipients = await db
+      .select({ reason: schema.eventRecipient.reason })
+      .from(schema.eventRecipient)
+      .where(eq(schema.eventRecipient.userId, assigneeUserId));
+    expect(recipients).toEqual([{ reason: 'owned' }]);
+    // The drain reports what it associated and how much feed it produced, which is how the
+    // rollout is watched: a collapse in associated/events means resolution broke upstream.
+    expect(result.associated).toBe(1);
+    expect(result.recipients).toBeGreaterThanOrEqual(2);
+  });
+
+  it('fans out to nobody extra when the subject never resolved', async () => {
+    const { orgId, teamId } = await seedBaseOrg(db, schema);
+    const { actorId: ownerActorId } = await seedUserActor(orgId);
+    const { userId: assigneeUserId, actorId: assigneeActorId } = await seedUserActor(orgId);
+    const intgId = await seedIntegration(orgId, ownerActorId);
+    // A task assigned to someone, but mirroring a DIFFERENT issue than the one that fired.
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      title: 'Unrelated mirror',
+      state: 'todo',
+      visibility: 'public',
+      source: 'linked',
+      sourceIntegrationId: intgId,
+      externalId: 'LIN-OTHER',
+      assigneeId: assigneeActorId,
+    });
+    await seedInboundEvent(orgId, intgId, 'ev_assoc_fanout_miss', 'LIN-14');
+
+    const result = await sweepInboundEvents(new Date());
+
+    const recipients = await db
+      .select({ reason: schema.eventRecipient.reason })
+      .from(schema.eventRecipient)
+      .where(eq(schema.eventRecipient.userId, assigneeUserId));
+    expect(recipients).toEqual([]);
+    expect(result.associated).toBe(0);
+  });
+
   it('will not associate across integrations within one org', async () => {
     const { orgId, teamId } = await seedBaseOrg(db, schema);
-    const actorId = await seedUserActor(orgId);
+    const { actorId } = await seedUserActor(orgId);
     const delivering = await seedIntegration(orgId, actorId);
     const other = await seedIntegration(orgId, actorId);
     await db.insert(schema.task).values({

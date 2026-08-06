@@ -62,9 +62,37 @@ export interface DrainResult {
   readonly processed: number;
   /** Canonical events created this run. */
   readonly events: number;
+  /**
+   * Of those, how many resolved to a Docket entity.
+   *
+   * @remarks
+   * The association rate. `events - associated` is the backlog the re-association sweep will
+   * retry, and a sudden collapse in the ratio is the signal that a provider changed its ids or a
+   * mirror stopped syncing — neither of which shows up as an error anywhere else.
+   */
+  readonly associated: number;
+  /**
+   * Recipient rows written this run — the direct measure of how much feed this drain produced.
+   *
+   * @remarks
+   * Association makes owner rules reachable for external events, so this is the number that moves
+   * when fan-out widens. Reported here rather than instrumented separately because the sweep is
+   * the only writer and already returns its own tally.
+   */
+  readonly recipients: number;
   /** Events that errored (recorded + attempts incremented). */
   readonly failed: number;
 }
+
+/** What one inbound event produced, accumulated into {@link DrainResult}. */
+interface ProcessedTally {
+  readonly events: number;
+  readonly associated: number;
+  readonly recipients: number;
+}
+
+/** The tally for an event that produced nothing (unrouted, unsupported, or no drafts). */
+const NO_OUTPUT: ProcessedTally = { events: 0, associated: 0, recipients: 0 };
 
 /** Atomically claim one inbound event for processing. */
 async function claimEvent(id: string, now: Date, staleBefore: Date): Promise<boolean> {
@@ -233,8 +261,8 @@ function associationFor(
   };
 }
 
-/** Normalize + persist one inbound event's canonical events; returns the count created. */
-async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
+/** Normalize + persist one inbound event's canonical events; returns what it produced. */
+async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<ProcessedTally> {
   const now = ctx.now;
   const provider = asObserverProvider(ev.provider);
   const orgId = ev.organizationId;
@@ -246,7 +274,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
       .update(inboundEvent)
       .set({ status: 'skipped', processedAt: now })
       .where(eq(inboundEvent.id, ev.id));
-    return 0;
+    return NO_OUTPUT;
   }
 
   // Linear Issue webhooks are both activity and a freshness signal. Reconcile through the same
@@ -289,6 +317,8 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
     : new Map<string, string>();
 
   let created = 0;
+  let associated = 0;
+  let recipientsWritten = 0;
   for (const draft of drafts) {
     const kind = EventKind.safeParse(draft.kind);
     if (!kind.success) continue; // skip drafts whose kind isn't a known enum value
@@ -341,12 +371,15 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
       if (!row) return null; // duplicate — already recorded
 
+      // The resolved association is what lets `OWNER_RULES` run at all: they query a Docket row
+      // by id, and until now every external event handed them null. An assignee, lead or creator
+      // who was only ever told about Docket-side changes now hears about the upstream ones too.
       const routableEntity: RoutableEntity | null = entityRef
         ? {
             kind: entityRef.kind,
             source: entityRef.source,
             externalId: entityRef.externalId,
-            docketEntityId: entityRef.docketEntityId,
+            docketEntityId: association.docketEntityId,
           }
         : null;
       const recipients = await routeAndWriteRecipients(
@@ -366,6 +399,8 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
 
     if (result) {
       created += 1;
+      if (association.state === 'matched') associated += 1;
+      recipientsWritten += result.recipients.size;
       // Association resolved this event to a Docket entity, so the entity's search document is
       // now stale — external activity refreshing the thing it concerns is the first consumer to
       // act on the resolved id.
@@ -421,7 +456,7 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<number> {
     .update(inboundEvent)
     .set({ status: 'processed', processedAt: now })
     .where(eq(inboundEvent.id, ev.id));
-  return created;
+  return { events: created, associated, recipients: recipientsWritten };
 }
 
 /**
@@ -456,11 +491,16 @@ export async function sweepInboundEvents(now: Date): Promise<DrainResult> {
 
   let processed = 0;
   let events = 0;
+  let associated = 0;
+  let recipients = 0;
   let failed = 0;
   for (const ev of candidates) {
     if (!(await claimEvent(ev.id, now, staleBefore))) continue;
     try {
-      events += await processOne(ev, ctx);
+      const tally = await processOne(ev, ctx);
+      events += tally.events;
+      associated += tally.associated;
+      recipients += tally.recipients;
       processed += 1;
     } catch (err) {
       failed += 1;
@@ -472,5 +512,5 @@ export async function sweepInboundEvents(now: Date): Promise<DrainResult> {
     }
   }
 
-  return { found: candidates.length, processed, events, failed };
+  return { found: candidates.length, processed, events, associated, recipients, failed };
 }

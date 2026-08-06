@@ -35,9 +35,6 @@ export async function loseDevice(page: Page): Promise<void> {
   await signOut(page);
 }
 
-/** Resolves once this worker process has compiled the auth routes; `undefined` until first asked. */
-let authWarmUp: Promise<void> | undefined;
-
 /** Hit a same-origin `path` until next-dev has compiled it (a real HTTP status, not an abort). */
 async function pollCompiled(page: Page, path: string, init: ApiInit = {}): Promise<void> {
   for (let i = 0; i < 30; i++) {
@@ -59,34 +56,21 @@ async function pollCompiled(page: Page, path: string, init: ApiInit = {}): Promi
  * in-flight passkey ceremony — surfacing as a "temporarily unavailable" alert. Polling each endpoint
  * until it returns a real status proves the route is compiled. Call on a page already on the app
  * origin.
- *
- * Idempotent per worker: later callers await the first caller's result rather than re-polling six
- * already-compiled routes. Route compilation is a property of the server, not of the test asking
- * for it, and Playwright gives each worker its own process — so this warms once per worker instead
- * of once per sign-up, and this suite signs up 73 times across 29 specs.
  */
 async function warmUpAuth(page: Page): Promise<void> {
-  authWarmUp ??= (async () => {
-    const post: ApiInit = { method: 'POST', body: {} };
-    // The independent passkey + sign-up-challenge routes compile in parallel.
-    await Promise.all([
-      apiFetch(page, '/api/auth/sign-up/request-code', {
-        method: 'POST',
-        body: { name: 'warm', email: `warm-${Date.now()}@example.com` },
-      }).catch(() => null),
-      pollCompiled(page, '/api/auth/sign-up/verify-code', post),
-      pollCompiled(page, '/api/auth/passkey/generate-authenticate-options'),
-      pollCompiled(page, '/api/auth/passkey/verify-authentication', post),
-      pollCompiled(page, '/api/auth/passkey/verify-registration', post),
-      pollCompiled(page, '/api/auth/passkey/generate-register-options', post),
-    ]);
-  })().catch((error: unknown) => {
-    // A failed warm-up must not poison every later sign-up in this worker with a rejected promise,
-    // nor leave them believing a cold route is warm. Clear the memo and let the next caller retry.
-    authWarmUp = undefined;
-    throw error;
-  });
-  await authWarmUp;
+  const post: ApiInit = { method: 'POST', body: {} };
+  // The independent passkey + sign-up-challenge routes compile in parallel.
+  await Promise.all([
+    apiFetch(page, '/api/auth/sign-up/request-code', {
+      method: 'POST',
+      body: { name: 'warm', email: `warm-${Date.now()}@example.com` },
+    }).catch(() => null),
+    pollCompiled(page, '/api/auth/sign-up/verify-code', post),
+    pollCompiled(page, '/api/auth/passkey/generate-authenticate-options'),
+    pollCompiled(page, '/api/auth/passkey/verify-authentication', post),
+    pollCompiled(page, '/api/auth/passkey/verify-registration', post),
+    pollCompiled(page, '/api/auth/passkey/generate-register-options', post),
+  ]);
 }
 
 /**

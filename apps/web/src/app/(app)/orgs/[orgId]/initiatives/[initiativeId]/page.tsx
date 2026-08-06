@@ -168,6 +168,9 @@ export default function InitiativeDetailPage(): JSX.Element {
         iconKey,
         colorKey,
         customColor,
+        // The icon/color picker never touches the cover, so an optimistic update must carry the
+        // stored one through rather than blanking it until the refetch lands.
+        coverImage: previous?.coverImage ?? null,
         customized: true,
       });
       return { previous };

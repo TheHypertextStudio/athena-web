@@ -23,7 +23,7 @@ import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityDocument } from '@/components/editor/entity-document';
-import { EntityIconGlyph } from '@/components/initiatives/initiative-icon-picker';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { PageContainer } from '@/components/views/page-layout';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';

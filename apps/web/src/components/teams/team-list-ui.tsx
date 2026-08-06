@@ -1,16 +1,20 @@
 'use client';
 
 /**
- * The Teams roster — a 72px identity-row grid, standardized with Initiatives/Programs/Projects/
- * Cycles.
+ * The Teams roster in list layout — a 72px identity-row grid, standardized with Initiatives /
+ * Programs / Projects / Cycles.
  *
  * @remarks
- * Previously rendered through the dense `EntityListRow` family (36px "comfortable" rows, `tone=
- * "bordered"`, `interactive={false}` since a team has no destination screen yet). This hand-rolls
- * the same aligned-column grid the other rosters use — a team's identity is its short `key`
- * (`ENG`, `OPS`, …), so the leading glyph is that key set inside an {@link IdentityGlyph} circle
- * (the same 40px weight `StatusGlyph`/`ProgramGlyph` use elsewhere) rather than the small inline
- * mono chip it rendered before.
+ * The alternative to the card grid, which is the hub's default. Rows earn their place for the one
+ * job cards do badly: comparing counts down an aligned column.
+ *
+ * Rows used to be inert, because a team had no destination screen — and were nonetheless wired as
+ * drag sources whose payload no drop target in the app accepted, so a row could be picked up and
+ * put nowhere. Now that a team has a page, the row is a link to it and the drag has a meaning, so
+ * both halves of that contradiction are gone.
+ *
+ * A team's identity is its short `key` (`ENG`, `OPS`, …), so the leading glyph is that key set
+ * inside an {@link IdentityGlyph} circle at the same 40px weight `StatusGlyph`/`ProgramGlyph` use.
  */
 import type { TeamOut } from '@docket/types';
 import { IdentityGlyph } from '@docket/ui/components';
@@ -18,6 +22,7 @@ import { FolderKanban, ListChecks, Workflow } from '@docket/ui/icons';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';
+import Link from 'next/link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 import { useRef } from 'react';
 
@@ -40,6 +45,8 @@ export interface TeamRow {
  */
 export interface TeamRowsProps extends ComponentPropsWithoutRef<'div'> {
   rows: readonly TeamRow[];
+  /** The active workspace, used to build each row's link to its team page. */
+  orgId: string;
   projectNoun: string;
   projectNounPlural: string;
   taskNoun: string;
@@ -50,7 +57,7 @@ export interface TeamRowsProps extends ComponentPropsWithoutRef<'div'> {
 /** Column widths shared by {@link TeamRows}'s header and each data row. */
 const ROW_GRID = 'grid-cols-[minmax(20rem,1fr)_7rem_7rem_7rem]';
 
-/** One 72px team row. Rows have no destination yet, but each is still a drag source for its team. */
+/** One 72px team row: a link to the team's page, and a drag source for the team itself. */
 function TeamGridRow({
   team,
   projectCount,
@@ -60,10 +67,11 @@ function TeamGridRow({
   projectNounPlural,
   taskNoun,
   taskNounPlural,
+  orgId,
 }: TeamRow &
   Pick<
     TeamRowsProps,
-    'projectNoun' | 'projectNounPlural' | 'taskNoun' | 'taskNounPlural'
+    'orgId' | 'projectNoun' | 'projectNounPlural' | 'taskNoun' | 'taskNounPlural'
   >): JSX.Element {
   const dragOccurredRef = useRef(false);
   const dragProps = dragSourceProps(
@@ -85,11 +93,22 @@ function TeamGridRow({
   const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
 
   return (
-    <div
+    <Link
       role="row"
+      href={`/orgs/${orgId}/teams/${team.id}`}
       aria-label={`${team.key} ${team.name}`}
+      onClick={(event) => {
+        // A drag that ends over this row still fires a click. Swallowing it keeps a drop from
+        // navigating away from the screen the person was arranging.
+        if (dragOccurredRef.current) event.preventDefault();
+      }}
       {...dragProps}
-      className={cn('grid min-h-[72px] items-center rounded-lg', ROW_GRID, dragProps?.className)}
+      className={cn(
+        'hover:bg-surface-container focus-visible:ring-ring grid min-h-[72px] items-center',
+        'rounded-lg transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none',
+        ROW_GRID,
+        dragProps?.className,
+      )}
     >
       <div className="flex min-w-0 items-center gap-3 px-2 py-2">
         <IdentityGlyph>
@@ -123,7 +142,7 @@ function TeamGridRow({
         </span>
         {team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -131,11 +150,12 @@ function TeamGridRow({
  * The Teams roster frame: the 72px-row grid's shared column header + its data rows.
  *
  * @remarks
- * Rows have no destination yet, so they stay inert — but each one is still a drag source for its
- * team, which is what lets a team be dropped onto a target that scopes work to it.
+ * Each row opens its team and is a drag source for it, which is what lets a team be dropped onto a
+ * target that scopes work to it.
  */
 export function TeamRows({
   rows,
+  orgId,
   projectNoun,
   projectNounPlural,
   taskNoun,
@@ -169,6 +189,7 @@ export function TeamRows({
             <TeamGridRow
               key={row.team.id}
               {...row}
+              orgId={orgId}
               projectNoun={projectNoun}
               projectNounPlural={projectNounPlural}
               taskNoun={taskNoun}

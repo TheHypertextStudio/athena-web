@@ -15,12 +15,13 @@ import { apiQueryOptions, queryKeys, STALE, useApiQuery } from './query';
 
 /** The route segment each mentionable subject is mounted under. */
 const SUBJECT_PATH: Partial<
-  Record<MentionSubjectType, 'projects' | 'tasks' | 'initiatives' | 'programs'>
+  Record<MentionSubjectType, 'projects' | 'tasks' | 'initiatives' | 'programs' | 'teams'>
 > = {
   project: 'projects',
   task: 'tasks',
   initiative: 'initiatives',
   program: 'programs',
+  team: 'teams',
 };
 
 /** What an entity's prose points at, plus the read's state. */

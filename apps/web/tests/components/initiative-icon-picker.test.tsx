@@ -23,6 +23,7 @@ describe('InitiativeIconPicker', () => {
           iconKey: 'target',
           colorKey: 'neutral',
           customColor: null,
+          coverImage: null,
           customized: false,
         }}
         initiativeName="Transit coalition"
@@ -58,6 +59,7 @@ describe('InitiativeIconPicker', () => {
           iconKey: 'target',
           colorKey: 'neutral',
           customColor: null,
+          coverImage: null,
           customized: false,
         }}
         initiativeName="Transit education"
@@ -87,6 +89,7 @@ describe('InitiativeIconPicker', () => {
           iconKey: 'globe',
           colorKey: 'primary',
           customColor: null,
+          coverImage: null,
           customized: true,
         }}
         initiativeName="Regional coalition"

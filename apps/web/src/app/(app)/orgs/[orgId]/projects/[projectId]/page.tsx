@@ -287,6 +287,7 @@ export default function ProjectDetailPage(): JSX.Element {
               iconKey: 'folder',
               colorKey: 'neutral',
               customColor: null,
+              coverImage: null,
               customized: false,
             }
           }

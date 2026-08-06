@@ -1,53 +1,58 @@
 'use client';
 
-import type { TeamOut } from '@docket/types';
+import type { EntityDisplayOut, TeamOut } from '@docket/types';
+import { defaultEntityDisplay } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Plus, Users } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
-import { useAppParams } from '@/lib/app-location';
+import { LayoutGrid, ListView, Plus, Users } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+} from '@docket/ui/primitives';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
+import { type TeamCardMember, TeamCard, TeamCardsSkeleton } from '@/components/teams/team-card';
 import { CreateTeamDialog } from '@/components/teams/create-team';
 import { buildTeamCatalog } from '@/components/teams/team-catalog';
 import { type TeamRow, ListSkeleton, TeamRows } from '@/components/teams/team-list-ui';
 import { applyView } from '@/components/views/apply-view';
 import { FilterToolbar } from '@/components/views/filter-toolbar';
+import { type LayoutMode, useLayoutMode } from '@/components/views/use-layout-mode';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
+import { useAppParams } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
 
 /**
- * The org Teams list — the roster of first-class units within the org (§7), as dense rows.
+ * The org Teams hub — every team in the workspace, as cards by default.
  *
  * @remarks
- * A Client Component reached at `/orgs/[orgId]/teams`. A Team owns its own workflow states,
- * cycles, and Triage queue ({@link TeamOut}); each {@link EntityListRow} leads with the team
- * `key` as a monospace chip and surfaces the team name, its workflow-state count, and its scope
- * roll-up ("N projects" + "M tasks"), with a Triage {@link Badge} in the trailing slot when the
- * queue is enabled. The former card grid is replaced by one clean bordered list of
- * hairline-divided rows (design-system §5.1). The rows are *presentational* (`interactive`
- * disabled): there is no team-detail screen yet, so a row deliberately offers no click target
- * that would 404 — mirroring the old non-interactive card.
+ * A Client Component at `/orgs/[orgId]/teams`. Until now this roster had no destination: rows were
+ * inert because there was no team page to open, and each one was nonetheless wired as a drag source
+ * whose payload nothing in the app accepted. Both halves of that are fixed here — a card opens the
+ * team, and the drag source now has somewhere to land.
  *
- * It composes three slices through the dynamic-data layer — teams, projects, and tasks — so each
- * stays live (auto-refetch on focus + after a create) without a manual refresh control, and rolls
- * up the per-team scope client-side (a project belongs via `project.teamId`; a task belongs via
- * `task.teamId`) so the roster renders without an N-round-trip detail fan-out.
+ * **Cards are the default and the list is the alternative**, which is the reverse of every other
+ * roster in Docket. A team is one of the few objects here a person recognizes rather than reads:
+ * the list is short, it changes slowly, and the question being asked of it is "which one is mine",
+ * answered faster by a shape and a color than by a name in row four. The list stays one menu item
+ * away for the job rows genuinely do better — comparing counts down a column.
  *
- * Filtering is the unified engine: a single {@link FilterToolbar} over the team
- * {@link buildTeamCatalog | catalog} lets the roster be filtered by triage state, grouped, and
- * sorted (by triage, workflow-state count, key, or name) — all applied **client-side** over the
- * already-loaded {@link useApiListQuery} results (Phase B data flow is preserved; no manual refresh).
- * The view state is held in the URL by {@link useViewState}, so a filtered roster is shareable and
- * survives a reload. Entity nouns route through {@link useVocabulary}; data is fetched at runtime
- * so the production build needs no running server.
+ * The layout lives in the Display menu rather than beside it, so the page keeps one control row no
+ * matter how many capabilities it grows, and it rides the URL so a shared link arrives in the
+ * layout the sender was looking at.
+ *
+ * Four slices compose here — teams, their display metadata, every team's roster, and the project /
+ * task counts. Each is one request for the whole workspace rather than one per team, so a hub of
+ * twenty teams costs five requests rather than sixty.
  */
 export default function TeamsListClient(): JSX.Element {
-  const params = useAppParams<{ orgId: string }>();
-  const orgId = params.orgId;
+  const { orgId } = useAppParams<{ orgId: string }>();
   const queryClient = useQueryClient();
 
   const projectNoun = useVocabulary('project').toLowerCase();
@@ -57,14 +62,32 @@ export default function TeamsListClient(): JSX.Element {
 
   const [createOpen, setCreateOpen] = useState(false);
   const { state, setFilters, setGroupBy, setSort } = useViewState();
+  const { layout, setLayout } = useLayoutMode('cards');
 
-  // The roster is the primary slice (its load gates the page); projects + tasks enrich each row's
-  // scope roll-up and degrade gracefully (an empty list) if they fail, mirroring prior behavior.
+  // The roster is the primary slice (its load gates the page); the rest enrich each card and
+  // degrade to nothing if they fail, which is why none of them gates rendering.
   const teamsQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
       () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
       'Could not load your teams.',
+    ),
+  );
+  const displaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'team'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'team' },
+        }),
+      'Could not load team icons.',
+    ),
+  );
+  const rostersQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.teamRosters(orgId),
+      () => api.v1.orgs[':orgId'].teams.rosters.$get({ param: { orgId } }),
+      'Could not load team members.',
     ),
   );
   const projectsQ = useApiListQuery(
@@ -107,13 +130,41 @@ export default function TeamsListClient(): JSX.Element {
     return counts;
   }, [tasks]);
 
+  /**
+   * Display metadata by team id.
+   *
+   * @remarks
+   * Only customized teams come back from the API, so a miss is the normal case rather than an
+   * error — {@link defaultEntityDisplay} composes the same defaults the server would have.
+   */
+  const displayByTeam = useMemo(() => {
+    const byId = new Map<string, EntityDisplayOut>();
+    for (const display of displaysQ.data?.items ?? []) byId.set(display.subjectId, display);
+    return byId;
+  }, [displaysQ.data]);
+
+  /** Members by team id, for the card's face stack. */
+  const membersByTeam = useMemo(() => {
+    const byTeam = new Map<string, TeamCardMember[]>();
+    for (const entry of rostersQ.data?.items ?? []) {
+      const list = byTeam.get(entry.teamId) ?? [];
+      list.push({
+        actorId: entry.actorId,
+        displayName: entry.displayName,
+        avatar: entry.avatar,
+      });
+      byTeam.set(entry.teamId, list);
+    }
+    return byTeam;
+  }, [rostersQ.data]);
+
   /** The team field catalog driving the toolbar + the apply engine. */
   const catalog = useMemo(() => buildTeamCatalog(), []);
 
   /** Filter + sort + group the loaded roster client-side per the active view state. */
   const applied = useMemo(() => applyView(teams, state, catalog), [teams, state, catalog]);
 
-  /** Adapt a team to its dense-row view-model (scope + workflow roll-up). */
+  /** Adapt a team to the dense-row view-model the list layout draws. */
   const toRow = useCallback(
     (team: TeamOut): TeamRow => ({
       team,
@@ -124,10 +175,66 @@ export default function TeamsListClient(): JSX.Element {
     [projectCountByTeam, taskCountByTeam],
   );
 
-  /** Refetch the roster from the server (teams have no detail route to open), then close the dialog. */
+  /** Render one group's teams in whichever layout is active. */
+  const renderTeams = useCallback(
+    (rows: readonly TeamOut[], ariaLabel: string): JSX.Element => {
+      if (layout === 'list') {
+        return (
+          <TeamRows
+            rows={rows.map(toRow)}
+            orgId={orgId}
+            projectNoun={projectNoun}
+            projectNounPlural={projectNounPlural}
+            taskNoun={taskNoun}
+            taskNounPlural={taskNounPlural}
+            ariaLabel={ariaLabel}
+          />
+        );
+      }
+      return (
+        <ul
+          aria-label={ariaLabel}
+          className="grid list-none grid-cols-1 gap-3 @2xl:grid-cols-2 @5xl:grid-cols-3"
+        >
+          {rows.map((team) => (
+            <li key={team.id} className="contents">
+              <TeamCard
+                team={team}
+                display={displayByTeam.get(team.id) ?? defaultEntityDisplay('team', team.id)}
+                members={membersByTeam.get(team.id) ?? []}
+                projectCount={projectCountByTeam.get(team.id) ?? 0}
+                taskCount={taskCountByTeam.get(team.id) ?? 0}
+                href={`/orgs/${orgId}/teams/${team.id}`}
+                projectNoun={projectNoun}
+                projectNounPlural={projectNounPlural}
+                taskNoun={taskNoun}
+                taskNounPlural={taskNounPlural}
+              />
+            </li>
+          ))}
+        </ul>
+      );
+    },
+    [
+      displayByTeam,
+      layout,
+      membersByTeam,
+      orgId,
+      projectCountByTeam,
+      projectNoun,
+      projectNounPlural,
+      taskCountByTeam,
+      taskNoun,
+      taskNounPlural,
+      toRow,
+    ],
+  );
+
+  /** Refetch the roster after a create, then close the dialog. */
   const handleCreated = useCallback(
     (_created: TeamOut): void => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.teams(orgId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.teamRosters(orgId) });
       setCreateOpen(false);
     },
     [orgId, queryClient],
@@ -168,11 +275,16 @@ export default function TeamsListClient(): JSX.Element {
           onFiltersChange={setFilters}
           onGroupByChange={setGroupBy}
           onSortChange={setSort}
+          displayExtras={<LayoutMenuItems layout={layout} onLayoutChange={setLayout} />}
         />
       ) : null}
 
       {loading ? (
-        <ListSkeleton />
+        layout === 'list' ? (
+          <ListSkeleton />
+        ) : (
+          <TeamCardsSkeleton />
+        )
       ) : loadError ? (
         <p
           role="alert"
@@ -206,27 +318,51 @@ export default function TeamsListClient(): JSX.Element {
                 <span>{group.label}</span>
                 <span className="text-on-surface-variant/70 tabular-nums">{group.rows.length}</span>
               </h2>
-              <TeamRows
-                rows={group.rows.map(toRow)}
-                projectNoun={projectNoun}
-                projectNounPlural={projectNounPlural}
-                taskNoun={taskNoun}
-                taskNounPlural={taskNounPlural}
-                ariaLabel={`Teams — ${group.label}`}
-              />
+              {renderTeams(group.rows, `Teams — ${group.label}`)}
             </section>
           ))}
         </div>
       ) : (
-        <TeamRows
-          rows={applied.rows.map(toRow)}
-          projectNoun={projectNoun}
-          projectNounPlural={projectNounPlural}
-          taskNoun={taskNoun}
-          taskNounPlural={taskNounPlural}
-          ariaLabel="Teams"
-        />
+        renderTeams(applied.rows, 'Teams')
       )}
     </div>
+  );
+}
+
+/** Props for {@link LayoutMenuItems}. */
+interface LayoutMenuItemsProps {
+  layout: LayoutMode;
+  onLayoutChange: (layout: LayoutMode) => void;
+}
+
+/**
+ * The layout chooser, contributed into the Display menu.
+ *
+ * @remarks
+ * A menu item rather than a pair of pills beside the toolbar. Two peer buttons would compete with
+ * Filter and Display for the same row and would put the page one capability away from wrapping onto
+ * a second line, which persistent control rows are not allowed to do.
+ */
+function LayoutMenuItems({ layout, onLayoutChange }: LayoutMenuItemsProps): JSX.Element {
+  return (
+    <>
+      <DropdownMenuLabel>Layout</DropdownMenuLabel>
+      <DropdownMenuRadioGroup
+        value={layout}
+        onValueChange={(value) => {
+          onLayoutChange(value === 'list' ? 'list' : 'cards');
+        }}
+      >
+        <DropdownMenuRadioItem value="cards">
+          <LayoutGrid aria-hidden="true" className="size-4" />
+          Cards
+        </DropdownMenuRadioItem>
+        <DropdownMenuRadioItem value="list">
+          <ListView aria-hidden="true" className="size-4" />
+          List
+        </DropdownMenuRadioItem>
+      </DropdownMenuRadioGroup>
+      <DropdownMenuSeparator />
+    </>
   );
 }

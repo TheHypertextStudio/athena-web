@@ -343,6 +343,9 @@ export default function InitiativesListClient(): JSX.Element {
                         iconKey,
                         colorKey,
                         customColor,
+                        // Carried through: the picker changes icon and color only, so an
+                        // optimistic write must not blank an uploaded cover.
+                        coverImage: item.display.coverImage,
                         customized: true,
                       },
                     }

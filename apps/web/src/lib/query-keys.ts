@@ -36,6 +36,17 @@ export const queryKeys = {
   cycle: (orgId: string, cycleId: string) => ['org', orgId, 'cycles', cycleId] as const,
   teams: (orgId: string) => ['org', orgId, 'teams'] as const,
   team: (orgId: string, teamId: string) => ['org', orgId, 'teams', teamId] as const,
+  teamRosters: (orgId: string) => ['org', orgId, 'teams', 'rosters'] as const,
+  teamMembers: (orgId: string, teamId: string) =>
+    ['org', orgId, 'teams', teamId, 'members'] as const,
+  teamActivity: (orgId: string, teamId: string) =>
+    ['org', orgId, 'teams', teamId, 'activity'] as const,
+  // Keyed by subject type: the hub reads one type in bulk and each detail page reads one subject,
+  // so the two never share a cache entry and invalidating a type does not disturb the others.
+  entityDisplays: (orgId: string, subjectType: string) =>
+    ['org', orgId, 'display', subjectType] as const,
+  entityDisplay: (orgId: string, subjectType: string, subjectId: string) =>
+    ['org', orgId, 'display', subjectType, subjectId] as const,
   milestones: (orgId: string) => ['org', orgId, 'milestones'] as const,
   members: (orgId: string) => ['org', orgId, 'members'] as const,
   roles: (orgId: string) => ['org', orgId, 'roles'] as const,

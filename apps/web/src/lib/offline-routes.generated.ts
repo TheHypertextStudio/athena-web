@@ -195,6 +195,11 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/teams/teams-client')).default,
   },
   {
+    pattern: '/orgs/[orgId]/teams/[teamId]',
+    load: async () =>
+      (await import('@/app/(app)/orgs/[orgId]/teams/[teamId]/team-detail-client')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/triage',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/triage/page')).default,
   },

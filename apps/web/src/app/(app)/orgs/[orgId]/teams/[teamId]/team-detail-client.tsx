@@ -10,10 +10,10 @@
  * this exists.
  *
  * Two audiences read it, and they want the same facts. A person opening a team wants to see what it
- * is for and what it is carrying. Athena wants a team's charter and its capacity so it can route
- * work without guessing. `agentGuidance` is the charter as Athena reads it, and it is edited here,
- * in the open, rather than buried in settings — the house rules a team operates under should be
- * visible to the people operating under them.
+ * is for and what it is carrying. Athena wants the same, so it can route work without guessing.
+ * `agentGuidance` is shown here under its own name rather than dressed up as something else: it is
+ * the standing instruction Athena follows on this team, and the people it will be applied to should
+ * be able to read it without going into settings.
  *
  * Sections with nothing in them collapse rather than rendering empty frames. That is about genuinely
  * empty sections, not about kinds of team: a committee that meets monthly has cycles and tasks like
@@ -144,6 +144,7 @@ export default function TeamDetailClient(): JSX.Element {
 
   return (
     <EntityDetailLayout
+      cover={<TeamCover display={display} teamName={team.name} className="h-32 w-full @2xl:h-44" />}
       eyebrow={<BackToTeams orgId={orgId} />}
       icon={
         <EntityIconGlyph
@@ -188,12 +189,6 @@ export default function TeamDetailClient(): JSX.Element {
     >
       {tab === 'overview' ? (
         <section className="flex flex-col gap-6">
-          {/* A band, not a hero. A derived cover carries no information the masthead glyph does
-              not already carry, so it earns a strip of color and nothing more; an uploaded one
-              gets the same strip, which is enough to set a team's tone without pushing its
-              description below the fold. */}
-          <TeamCover display={display} teamName={team.name} className="h-20 w-full rounded-xl" />
-
           <EntityDocument
             value={team.description}
             canEdit
@@ -205,12 +200,9 @@ export default function TeamDetailClient(): JSX.Element {
 
           {team.agentGuidance ? (
             <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-4">
-              <h2 className="text-on-surface text-sm font-medium">Working agreement</h2>
+              <h2 className="text-on-surface text-sm font-medium">Athena guidance</h2>
               <p className="text-on-surface-variant text-sm whitespace-pre-wrap">
                 {team.agentGuidance}
-              </p>
-              <p className="text-on-surface-variant/70 text-xs">
-                Athena follows this when it works on this team.
               </p>
             </div>
           ) : null}

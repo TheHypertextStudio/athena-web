@@ -12,12 +12,23 @@
  * content through slots. The canonical title token (`text-headline-medium font-medium`) is owned
  * here so no page can diverge from it.
  */
+import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
 import { PageContainer } from './page-layout';
 
 /** Props for {@link EntityDetailLayout}. */
 export interface EntityDetailLayoutProps {
+  /**
+   * A full-bleed banner across the very top of the page, behind everything else.
+   *
+   * @remarks
+   * Edge to edge on purpose. A cover inset inside the content padding is just a picture *in* the
+   * page; a cover that spans the top is the page's header, which is the only version worth having.
+   * The masthead is pulled up so the icon straddles its lower edge, exactly as a team card does, so
+   * identity and cover read as one object rather than a caption under a photograph.
+   */
+  cover?: ReactNode;
   /** The breadcrumb (e.g. the Initiative breadcrumb), sharing a row with {@link actions}. */
   eyebrow?: ReactNode;
   /** The entity icon rendered above the title (an editable picker or a static glyph, ~40px). */
@@ -53,6 +64,7 @@ export interface EntityDetailLayoutProps {
  * @returns the composed detail page.
  */
 export function EntityDetailLayout({
+  cover,
   eyebrow,
   icon,
   title,
@@ -63,6 +75,59 @@ export function EntityDetailLayout({
   children,
   className,
 }: EntityDetailLayoutProps): JSX.Element {
+  if (cover) {
+    return (
+      <div className="flex w-full flex-col">
+        {/* The banner starts at the very top of the pane — a strip of page above it would make it
+            a picture in the page rather than the page's header. The eyebrow floats over it in a
+            backdrop-blurred pill, which is what keeps a back link legible over artwork nobody
+            chose for legibility. */}
+        <div className="relative">
+          {cover}
+          {/* Eyebrow and actions share one row over the banner, matching the row they share when
+              there is no banner. Each sits in its own blurred pill, which is what keeps a back
+              link and a menu legible over artwork nobody chose for legibility. */}
+          {eyebrow || actions ? (
+            <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 px-3 pt-3 @2xl:px-6 @2xl:pt-4 @4xl:px-8">
+              {eyebrow ? (
+                <div className="bg-surface/70 min-w-0 rounded-full px-2 py-1 backdrop-blur-sm">
+                  {eyebrow}
+                </div>
+              ) : (
+                <span />
+              )}
+              {actions ? (
+                <div className="bg-surface/70 flex shrink-0 items-center gap-1 rounded-full px-1 backdrop-blur-sm">
+                  {actions}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        <PageContainer className={cn('-mt-10', className)}>
+          <header className="flex flex-col gap-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <div className="w-fit shrink-0 rounded-full ring-4 ring-[var(--color-surface)]">
+                {icon}
+              </div>
+              <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
+                {title}
+              </h1>
+              {subtitle ? (
+                <div className="text-on-surface-variant text-body-large w-full min-w-0">
+                  {subtitle}
+                </div>
+              ) : null}
+            </div>
+            {metadata}
+          </header>
+          {tabs}
+          {children}
+        </PageContainer>
+      </div>
+    );
+  }
+
   return (
     <PageContainer className={className}>
       {eyebrow || actions ? (

@@ -580,11 +580,15 @@ export function AppShell({
             // desktop, so `<main>`'s "a page's `h-full` means all the space `<main>` has left"
             // contract is unchanged there — and still holds when inset, just `inset` px shorter.
             //
+            // pb-28/lg:pb-6 additionally reserves room for the floating Athena launcher
+            // (fixed bottom-[4.75rem] on mobile, lg:bottom-6 on desktop — see
+            // athena-panel-provider.tsx), so it never sits on top of a page's last section.
+            //
             // No border and no shadow: the tonal step from the `surface-container` canvas onto
             // `surface` is the separation, exactly as every other panel in the shell does it. A
             // border plus a drop shadow on the outermost frame drew a second box around content
             // that already had one.
-            'bg-surface @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto pb-[env(safe-area-inset-bottom)] outline-none lg:rounded-xl',
+            'bg-surface @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] outline-none lg:rounded-xl lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
             rebinding && 'animate-org-rebind',
           )}
         >

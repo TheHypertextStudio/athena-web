@@ -1,16 +1,15 @@
 'use client';
 
 /**
- * `EditableSubtitle` — a plain single-line summary that autosaves on a debounce.
+ * `EditableSubtitle` — a plain summary that autosaves on a debounce.
  *
  * @remarks
- * The masthead subtitle (project/initiative/program summary) is one line of plain text, not a
- * document — it has no business pulling in {@link EditableFreeformText}'s Markdown editor, whose
- * reserved editor height is what was blowing out the space between the subtitle and the property
- * row below it. This is `EditableTitle`'s always-editable-input + debounced-autosave pattern
- * without the "titles can't be empty" constraint: a cleared subtitle saves as `null`. The
- * non-editable and empty-draft states both truncate to a single line so a long summary never
- * pushes the layout below it around.
+ * The masthead subtitle (project/initiative/program summary) is plain text, not a document — it
+ * has no business pulling in {@link EditableFreeformText}'s Markdown editor, whose reserved editor
+ * height is what was blowing out the space between the subtitle and the property row below it.
+ * This is `EditableTitle`'s click-to-edit pattern (wrap at rest, single-line `<input>` while
+ * focused) plus debounced autosave, without the "titles can't be empty" constraint: a cleared
+ * subtitle saves as `null`.
  */
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useEffect, useRef, useState } from 'react';
@@ -23,7 +22,7 @@ export interface EditableSubtitleProps {
   value: string | null | undefined;
   /** Persist a trimmed, changed summary, or `null` when the draft is cleared. */
   onSave: (next: string | null) => void;
-  /** Whether the viewer may edit; false renders plain, non-interactive (and still one-line) text. */
+  /** Whether the viewer may edit; false renders plain, non-interactive, wrappable text. */
   canEdit: boolean;
   /** Accessible label for the edit field, e.g. `"Project summary"`. */
   ariaLabel: string;
@@ -33,7 +32,7 @@ export interface EditableSubtitleProps {
   placeholder?: string;
 }
 
-/** A one-line summary that edits in place and never reserves multi-line editor height. */
+/** A summary that wraps at rest and edits in place as a single-line input, never reserving a Markdown editor's multi-line height. */
 export function EditableSubtitle({
   value,
   onSave,
@@ -67,9 +66,37 @@ export function EditableSubtitle({
     save: commit,
   });
 
+  // Focus + select the whole summary when the display span swaps for the input.
+  useEffect(() => {
+    if (!focused) return;
+    const input = inputRef.current;
+    if (!input || document.activeElement === input) return;
+    input.focus();
+    input.select();
+  }, [focused]);
+
   if (!canEdit) {
+    return <span className={cn('block', className)}>{baseline.length > 0 ? baseline : ''}</span>;
+  }
+
+  if (!focused) {
     return (
-      <span className={cn('block truncate', className)}>{baseline.length > 0 ? baseline : ''}</span>
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          setFocused(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setFocused(true);
+          }
+        }}
+        className={cn('block cursor-text', className)}
+      >
+        {baseline.length > 0 ? baseline : placeholder}
+      </span>
     );
   }
 
@@ -100,10 +127,7 @@ export function EditableSubtitle({
           inputRef.current?.blur();
         }
       }}
-      className={cn(
-        'm-0 w-full min-w-0 truncate border-0 bg-transparent p-0 outline-none',
-        className,
-      )}
+      className={cn('m-0 w-full min-w-0 border-0 bg-transparent p-0 outline-none', className)}
     />
   );
 }

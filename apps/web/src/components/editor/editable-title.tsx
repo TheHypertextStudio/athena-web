@@ -7,12 +7,14 @@
  * @remarks
  * The counterpart to {@link EditableFreeformText} for one-line strings (titles/names), not bodies:
  * no Markdown editor, no toolbar, no separate "Edit" mode chrome. In `click` mode (detail headings)
- * the field is always an editable `<input>` — there is no separate read/edit toggle to click into —
- * and edits persist via {@link useDebouncedAutosave} the same way the body does, so the field is
- * never `disabled` while a save is in flight (optimistic updates make that unnecessary). An empty
- * value reverts to the last saved title on blur (titles cannot be emptied). `Enter` forces an
- * immediate save (rather than waiting out the debounce) and blurs the field; the pending debounce
- * for that same value is a no-op once it fires because `lastSaved` already matches it.
+ * the unfocused display wraps across lines like ordinary text — a title is never clipped — and a
+ * single click (or Enter/Space, for keyboard reachability) swaps it for an `<input>`, which is
+ * inherently one line while editing. Edits persist via {@link useDebouncedAutosave} the same way
+ * the body does, so the field is never `disabled` while a save is in flight (optimistic updates
+ * make that unnecessary). An empty value reverts to the last saved title on blur (titles cannot be
+ * emptied). `Enter` forces an immediate save (rather than waiting out the debounce) and blurs the
+ * field; the pending debounce for that same value is a no-op once it fires because `lastSaved`
+ * already matches it.
  *
  * `doubleClick` mode (for navigable list rows) keeps a distinct activation gesture because the
  * click is already spoken for by the row's open action: a **double-click** enters edit, while a
@@ -150,6 +152,27 @@ export function EditableTitle({
         </span>
       );
     }
+  } else if (!focused) {
+    // Detail-heading mode: wrap like ordinary text until clicked (or Enter/Space, for keyboard
+    // reachability) swaps in the single-line input to edit — a title is never clipped at rest.
+    return (
+      <span
+        role="button"
+        tabIndex={0}
+        onClick={() => {
+          setFocused(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setFocused(true);
+          }
+        }}
+        className={cn('cursor-text', className)}
+      >
+        {value.length > 0 ? value : placeholder}
+      </span>
+    );
   }
 
   return (

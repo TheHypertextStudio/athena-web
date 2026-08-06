@@ -65,14 +65,14 @@ export function EntityDetailLayout({
     <PageContainer className={className}>
       {eyebrow}
       <header className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="shrink-0">{icon}</div>
             <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
               {title}
             </h1>
             {subtitle ? (
-              <div className="text-on-surface-variant text-body-large w-full truncate">
+              <div className="text-on-surface-variant text-body-large w-full min-w-0">
                 {subtitle}
               </div>
             ) : null}

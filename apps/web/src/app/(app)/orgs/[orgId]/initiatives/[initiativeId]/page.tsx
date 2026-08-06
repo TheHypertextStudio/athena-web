@@ -28,7 +28,6 @@ import { useRouter } from 'next/navigation';
 import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -247,41 +246,29 @@ export default function InitiativeDetailPage(): JSX.Element {
     <EntityDetailLayout
       className="initiative-print"
       eyebrow={
-        <div className="no-print flex items-center justify-between">
-          <nav
-            className="text-on-surface-variant flex items-center gap-2 text-sm"
-            aria-label="Breadcrumb"
+        <nav
+          className="no-print text-on-surface-variant flex items-center gap-2 text-sm"
+          aria-label="Breadcrumb"
+        >
+          <Link
+            href={`/orgs/${orgId}/initiatives`}
+            className="hover:text-on-surface inline-flex items-center gap-1"
           >
-            <Link
-              href={`/orgs/${orgId}/initiatives`}
-              className="hover:text-on-surface inline-flex items-center gap-1"
-            >
-              <ChevronLeft className="size-4" />
-              All {initiativePlural.toLowerCase()}
-            </Link>
-            {detail.parent ? (
-              <>
-                <span aria-hidden>/</span>
-                <Link
-                  href={`/orgs/${detail.parent.organizationId}/initiatives/${detail.parent.id}`}
-                  className="hover:text-on-surface truncate"
-                >
-                  {detail.parent.name}
-                </Link>
-              </>
-            ) : null}
-          </nav>
-          <Button
-            className="min-h-10"
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              window.print();
-            }}
-          >
-            Print
-          </Button>
-        </div>
+            <ChevronLeft className="size-4" />
+            All {initiativePlural.toLowerCase()}
+          </Link>
+          {detail.parent ? (
+            <>
+              <span aria-hidden>/</span>
+              <Link
+                href={`/orgs/${detail.parent.organizationId}/initiatives/${detail.parent.id}`}
+                className="hover:text-on-surface truncate"
+              >
+                {detail.parent.name}
+              </Link>
+            </>
+          ) : null}
+        </nav>
       }
       icon={
         <InitiativeIconPicker
@@ -375,14 +362,6 @@ export default function InitiativeDetailPage(): JSX.Element {
         // what makes the publish icon and the overflow icon provably the same size (CORE-28)
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
-          <AthenaContextAction
-            label={`Open Athena for this ${initiativeNoun.toLowerCase()}`}
-            context={{
-              workspaceId: orgId,
-              source: { type: 'initiative', id: initiativeId, label: detail.name },
-            }}
-            variant="ghost"
-          />
           <PublishAction
             orgId={orgId}
             subjectKind="initiative"

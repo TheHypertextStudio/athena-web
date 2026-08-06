@@ -280,6 +280,50 @@ export const TeamMemberOut = z
 /** Team-member value. */
 export type TeamMemberOut = z.infer<typeof TeamMemberOut>;
 
+/** Body for adding someone to a team, or changing their standing on it. */
+export const TeamMemberUpsert = z
+  .object({
+    actorId: z
+      .string()
+      .min(1)
+      .describe(
+        'The actor to place on the team. Any human actor in the org is eligible, whether or not they hold a Docket account — a volunteer who never signs in joins a team on the same terms as staff.',
+      ),
+    role: TeamMemberRole.optional().describe("The member's standing. Defaults to 'member'."),
+  })
+  .meta({ id: 'TeamMemberUpsert', description: 'Add or re-role a team member.' });
+/** Validated team-member upsert body. */
+export type TeamMemberUpsert = z.infer<typeof TeamMemberUpsert>;
+
+/** Result of removing someone from a team. */
+export const TeamMemberRemoveResult = z
+  .object({
+    teamId: TeamId.describe('The team they were removed from.'),
+    actorId: z.string().describe('The actor that was removed.'),
+  })
+  .meta({ id: 'TeamMemberRemoveResult', description: 'The removed membership.' });
+/** Team-member-remove-result value. */
+export type TeamMemberRemoveResult = z.infer<typeof TeamMemberRemoveResult>;
+
+/**
+ * One (team, member) pair, for surfaces that render many teams' rosters at once.
+ *
+ * @remarks
+ * Identity only. The hub draws a stack of faces per card and nothing more, so computing each
+ * person's open-task load — the expensive part of {@link TeamMemberOut} — would be work thrown
+ * away. A grid of N teams costs one request for this instead of N for the full roster.
+ */
+export const TeamRosterEntry = z
+  .object({
+    teamId: TeamId.describe('The team this membership belongs to.'),
+    actorId: z.string().describe('The member.'),
+    displayName: z.string().describe("The member's display name."),
+    avatar: z.string().nullable().describe("URL of the member's avatar, or null."),
+  })
+  .meta({ id: 'TeamRosterEntry', description: 'One team membership, identity only.' });
+/** Team-roster-entry value. */
+export type TeamRosterEntry = z.infer<typeof TeamRosterEntry>;
+
 /**
  * One bucket of a team's current work, keyed by workflow-state type.
  *

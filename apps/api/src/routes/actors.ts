@@ -90,10 +90,19 @@ export const PersonUpdate = z
       .nullable()
       .optional()
       .describe("Re-point or clear (null) the person's avatar image. Omit to leave unchanged."),
+    title: z
+      .string()
+      .trim()
+      .max(120)
+      .nullable()
+      .optional()
+      .describe(
+        "The person's job title in this organization (e.g. 'Event Coordinator'), or null to clear it. Omit to leave unchanged. Workspace-owned like the display name: for someone who never signs in, this is the only record of their standing in the organization, so it is editable on the same terms as anyone else's.",
+      ),
   })
   .meta({
     id: 'PersonUpdate',
-    description: "Update a person's workspace display name or avatar.",
+    description: "Update a person's workspace display name, avatar, or job title.",
   });
 /** Validated person-update body. */
 export type PersonUpdate = z.infer<typeof PersonUpdate>;
@@ -143,6 +152,10 @@ export const PersonProfileOut = z
     organizationId: OrganizationId.describe('The workspace this profile belongs to.'),
     displayName: z.string().describe("The person's name as this workspace shows it."),
     avatar: z.string().nullable().describe("URL of the person's avatar image, or null."),
+    title: z
+      .string()
+      .nullable()
+      .describe("The person's job title in this organization, or null when unset."),
     status: z
       .enum(['active', 'suspended'])
       .describe("Participation status: 'active' or 'suspended'."),
@@ -188,6 +201,7 @@ export async function loadPersonProfile(
       organizationId: actor.organizationId,
       displayName: actor.displayName,
       avatar: actor.avatar,
+      title: actor.title,
       status: actor.status,
       roleId: actor.roleId,
       roleName: role.name,
@@ -249,6 +263,7 @@ export async function loadPersonProfile(
     organizationId: person.organizationId,
     displayName: person.displayName,
     avatar: person.avatar,
+    title: person.title,
     status: person.status,
     roleId: person.roleId,
     roleName: person.roleName ?? null,

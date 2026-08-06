@@ -317,7 +317,7 @@ The target must be a human Actor in this org; anything else 404s (existence-hidi
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Members',
-      summary: "Update a person's name or avatar",
+      summary: "Update a person's name, avatar, or job title",
       capability: 'manage',
       response: PersonProfileOut,
       description: `Rename a person or re-point their avatar. Both fields are optional; an absent key leaves the column untouched and \`avatar: null\` clears it. Requires \`manage\`, and the target must be a human Actor in this org (404 otherwise, existence-hiding).
@@ -343,6 +343,7 @@ Role and status live on \`PATCH /:actorId\` (they carry the last-owner guard); t
       const values = {
         ...(body.displayName !== undefined ? { displayName: body.displayName } : {}),
         ...(body.avatar !== undefined ? { avatar: body.avatar } : {}),
+        ...(body.title !== undefined ? { title: body.title } : {}),
       };
       // An empty patch is a valid no-op: skip the UPDATE and re-read, exactly as the org and
       // project patches do, rather than issuing a SET with nothing in it.

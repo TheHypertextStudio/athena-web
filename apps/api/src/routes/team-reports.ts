@@ -13,7 +13,12 @@
  * is that observed signal.
  */
 import { actor, db, task, team, teamMember } from '@docket/db';
-import type { TeamActivityOut, TeamMemberOut, WorkflowStateType } from '@docket/types';
+import type {
+  TeamActivityOut,
+  TeamMemberOut,
+  TeamRosterEntry,
+  WorkflowStateType,
+} from '@docket/types';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 
 /** How many days of history the throughput series covers. */
@@ -89,6 +94,37 @@ export async function loadTeamMembers(orgId: string, teamId: string): Promise<Te
     avatar: row.avatar,
     role: row.role,
     openTaskCount: loadByActor.get(row.actorId) ?? 0,
+  }));
+}
+
+/**
+ * Read every team membership in the org, identity only.
+ *
+ * @remarks
+ * One query for the whole workspace, because the Teams hub draws a face stack on every card and
+ * asking per team would be one request per card. Deliberately omits `openTaskCount`: the hub never
+ * shows it, and computing it for every member of every team would be work thrown away.
+ *
+ * @param orgId - The tenant.
+ * @returns Every (team, member) pair, ordered by team then name.
+ */
+export async function loadOrgTeamRosters(orgId: string): Promise<TeamRosterEntry[]> {
+  const rows = await db
+    .select({
+      teamId: teamMember.teamId,
+      actorId: actor.id,
+      displayName: actor.displayName,
+      avatar: actor.avatar,
+    })
+    .from(teamMember)
+    .innerJoin(actor, eq(actor.id, teamMember.actorId))
+    .where(and(eq(teamMember.organizationId, orgId), isNull(actor.archivedAt)))
+    .orderBy(teamMember.teamId, sql`lower(${actor.displayName})`);
+  return rows.map((row) => ({
+    teamId: row.teamId as TeamRosterEntry['teamId'],
+    actorId: row.actorId,
+    displayName: row.displayName,
+    avatar: row.avatar,
   }));
 }
 
@@ -230,16 +266,21 @@ function buildThroughput(
     const dayEnd = new Date(windowStart);
     dayEnd.setUTCDate(dayEnd.getUTCDate() + offset);
     dayEnd.setUTCHours(23, 59, 59, 999);
-    if (dayEnd > now) break;
+    if (dayEnd.getTime() - 86_399_999 > now.getTime()) break;
+
+    // The current day's boundary is *now*, not midnight. Breaking out on a future midnight
+    // instead dropped today's column entirely, so anything completed today was invisible until
+    // tomorrow — the chart's most-watched point was the one it never drew.
+    const boundary = dayEnd > now ? now : dayEnd;
 
     let pending = 0;
     let completed = 0;
     for (const row of rows) {
-      if (row.createdAt > dayEnd) continue;
+      if (row.createdAt > boundary) continue;
       const closedBy =
-        (row.completedAt !== null && row.completedAt <= dayEnd) ||
-        (row.canceledAt !== null && row.canceledAt <= dayEnd);
-      if (row.completedAt !== null && row.completedAt <= dayEnd) completed += 1;
+        (row.completedAt !== null && row.completedAt <= boundary) ||
+        (row.canceledAt !== null && row.canceledAt <= boundary);
+      if (row.completedAt !== null && row.completedAt <= boundary) completed += 1;
       if (!closedBy) pending += 1;
     }
     points.push({ date: dayEnd.toISOString().slice(0, 10), pending, completed });

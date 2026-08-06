@@ -8,7 +8,7 @@
  * require `manage`. A team's `key` is unique within the org; create/patch reject a
  * duplicate key with a 409. Delete is a soft archive (sets `archived_at`).
  */
-import { db, defaultWorkflowStates, team } from '@docket/db';
+import { actor, db, defaultWorkflowStates, team, teamMember } from '@docket/db';
 import {
   pageOf,
   TeamActivityOut,
@@ -16,7 +16,10 @@ import {
   TeamDeleteResult,
   TeamDetail,
   TeamMemberOut,
+  TeamMemberRemoveResult,
+  TeamMemberUpsert,
   TeamOut,
+  TeamRosterEntry,
   TeamUpdate,
 } from '@docket/types';
 import { and, eq, isNull } from 'drizzle-orm';
@@ -34,6 +37,7 @@ import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-throug
 import { entityMentionRoutes } from './entity-mentions';
 import { archiveTeamActor, createTeamActor, renameTeamActor } from './team-actor';
 import {
+  loadOrgTeamRosters,
   loadTeamActivity,
   loadTeamMembers,
   teamExists,
@@ -150,6 +154,22 @@ Defaults applied when omitted: \`workflowStates\` seeds the canonical five-state
       });
       await enqueueSearchUpsert(orgId, 'team', row.id);
       return ok(c, TeamDetail, toOut(row));
+    },
+  )
+  .get(
+    '/rosters',
+    apiDoc({
+      tag: 'Teams',
+      summary: 'List every team membership in the workspace',
+      response: pageOf(TeamRosterEntry),
+      description: `Every \`(team, member)\` pair in the org, identity only — no per-person load figures. This exists so the Teams hub can draw a face stack on every card with **one** request instead of one per team.
+
+Declared before \`GET /:teamId\` so the literal segment wins the route match. Ordered after it, this returns 404 with \`rosters\` read as a team id — which is silent, because the hub degrades to "No members yet" rather than showing an error. Requires only org membership.`,
+    }),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const items = await loadOrgTeamRosters(orgId);
+      return ok(c, pageOf(TeamRosterEntry), { items });
     },
   )
   .get(
@@ -309,6 +329,92 @@ Requires only org membership. Unknown or archived team → **404**.`,
       if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
       const report = await loadTeamActivity(orgId, teamId, new Date());
       return ok(c, TeamActivityOut, report);
+    },
+  )
+  .put(
+    '/:teamId/members',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Teams',
+      summary: 'Add someone to a team, or change their standing on it',
+      capability: 'manage',
+      response: TeamMemberOut,
+      description: `Place a human actor on this team, or re-role somebody already on it — one idempotent upsert rather than separate add and update calls, since "make sure this person is a manager here" is the operation callers actually have.
+
+\`role\` defaults to \`member\`. The role labels who runs the team; it grants nothing, because permissions resolve through grants and a role that quietly widened capability is the kind of thing nobody audits.
+
+**Any human actor in the org is eligible, account or not.** A volunteer who never signs in joins on exactly the same terms as staff — the handler checks \`kind = 'human'\` and tenancy, and nothing else (see \`docs/engineering/specs/people.md\`). An agent or team actor is rejected with **404**, as is an actor from another org.`,
+    }),
+    zParam(idParam),
+    zJson(TeamMemberUpsert),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { teamId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      if (!(await teamExists(orgId, teamId))) throw new NotFoundError('Team not found');
+
+      const people = await db
+        .select({ id: actor.id })
+        .from(actor)
+        .where(
+          and(
+            eq(actor.id, body.actorId),
+            eq(actor.organizationId, orgId),
+            eq(actor.kind, 'human'),
+            isNull(actor.archivedAt),
+          ),
+        )
+        .limit(1);
+      if (!people[0]) throw new NotFoundError('Person not found');
+
+      const role = body.role ?? 'member';
+      await db
+        .insert(teamMember)
+        .values({ teamId, actorId: body.actorId, organizationId: orgId, role })
+        .onConflictDoUpdate({
+          target: [teamMember.teamId, teamMember.actorId],
+          set: { role },
+        });
+
+      const members = await loadTeamMembers(orgId, teamId);
+      const added = members.find((m) => m.actorId === body.actorId);
+      /* v8 ignore next -- @preserve defensive: the row was just written */
+      if (!added) throw new NotFoundError('Person not found');
+      return ok(c, TeamMemberOut, added);
+    },
+  )
+  .delete(
+    '/:teamId/members/:actorId',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Teams',
+      summary: 'Remove someone from a team',
+      capability: 'manage',
+      response: TeamMemberRemoveResult,
+      description: `Drop one membership. The person and everything they own stay exactly as they were — this severs the team relationship and nothing else, so work they are assigned keeps its assignee rather than being silently orphaned.
+
+Removing a membership that is not there returns **404**, which makes a repeated delete safe to observe rather than silently successful.`,
+    }),
+    zParam(z.object({ teamId: z.string(), actorId: z.string() })),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { teamId, actorId } = c.req.valid('param');
+      const removed = await db
+        .delete(teamMember)
+        .where(
+          and(
+            eq(teamMember.teamId, teamId),
+            eq(teamMember.actorId, actorId),
+            eq(teamMember.organizationId, orgId),
+          ),
+        )
+        .returning({ teamId: teamMember.teamId, actorId: teamMember.actorId });
+      const row = removed[0];
+      if (!row) throw new NotFoundError('Membership not found');
+      return ok(c, TeamMemberRemoveResult, {
+        teamId: row.teamId,
+        actorId: row.actorId,
+      });
     },
   )
   .route('/', entityMentionRoutes('team', 'Teams'));

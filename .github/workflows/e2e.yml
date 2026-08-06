@@ -1,14 +1,11 @@
 name: E2E
 
-# Its own workflow, and deliberately NOT a gate on the production deploy.
+# Its own workflow, and not a gate on the production deploy. The browser suite is a slower, more
+# fragile signal than the rest of CI, and a deploy held behind it stops shipping the moment it goes
+# red. It reports here on every push and PR instead.
 #
-# The suite runs against `pnpm dev`, so Turbopack compiles each route on first request inside the
-# test that asked for it. On a two-core runner that outlasts any per-test budget worth setting, and
-# it is not a handful of bad specs — resharding only moves the failures to whichever shard inherits
-# them. A gate that cannot go green is not protecting anything, so this reports on every push and
-# PR without deciding whether production ships.
-#
-# Move it back into ci.yml's `deploy-production.needs` once the stack serves a production build.
+# Move it back into ci.yml's `deploy-production.needs` once it has been green for long enough to
+# trust as a release gate.
 
 on:
   push:
@@ -24,45 +21,37 @@ jobs:
   e2e:
     name: E2E (${{ matrix.shard }}/${{ strategy.job-total }})
     runs-on: ubuntu-latest
-    # The suite ran all 55 specs on a single worker in one job (`workers: 1` in
-    # playwright.config.ts — every spec mutates the one shared embedded dev database, so more
-    # workers *within one dev stack* isn't safe) and was taking 35-45+ minutes wall-clock. Splitting
-    # across a matrix instead of raising workers keeps that single-worker-per-database invariant —
-    # each shard is a genuinely separate runner with its own dev stack and its own embedded
-    # database — while running shards in parallel. `fail-fast: false` so one shard's failure
-    # doesn't cancel the others' results.
+    # Each shard is a separate runner with its own stack and its own embedded database, which is
+    # what lets `workers: 1` (playwright.config.ts — the specs share one mutable database) coexist
+    # with real parallelism. `fail-fast: false` so one shard's failure keeps the others' results.
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
-    # A shard's real work is a couple of minutes; the rest is tail. With playwright.config.ts at a
-    # 120s timeout and one retry, a single stuck test costs at most 4 minutes.
-    #
-    # 15, not 12: a cancelled job is a job that never told you why. Playwright's list reporter
-    # prints failure detail only at the end of the run, and the artifact upload below cannot fire
-    # for a cancellation either — so a cap tight enough to cut a genuinely failing shard short
-    # buys speed by destroying the report that would let anyone fix it. The cap is here to catch a
-    # wedged runner, not to discipline slow tests; playwright.config.ts does that.
+    # Catches a wedged runner, nothing finer. playwright.config.ts bounds individual tests, and a
+    # cap tight enough to cut a failing shard short destroys the report that explains it: a
+    # timed-out job is cancelled, so the reporter never prints and the upload below never fires.
     timeout-minutes: 15
     env:
-      PORTLESS_PORT: '1355'
-      PORTLESS_HTTPS: '0'
-      PORTLESS_SYNC_HOSTS: '0'
-      APP_URL: http://docket.localhost:1355
-      API_URL: http://api.docket.localhost:1355
-      WEB_URL: http://docket.localhost:1355
-      NEXT_PUBLIC_API_URL: http://api.docket.localhost:1355
-      NEXT_PUBLIC_APP_URL: http://docket.localhost:1355
-      BETTER_AUTH_URL: http://api.docket.localhost:1355
+      # The suite drives a production build served directly, so there is no dev proxy and no
+      # port assignment to discover — the two servers own these ports. `*.localhost` resolves to
+      # loopback, and stays a secure context, which WebAuthn needs for the passkey ceremonies.
+      APP_URL: http://docket.localhost:3000
+      WEB_URL: http://docket.localhost:3000
+      API_URL: http://api.docket.localhost:4000
+      NEXT_PUBLIC_APP_URL: http://docket.localhost:3000
+      NEXT_PUBLIC_API_URL: http://api.docket.localhost:4000
+      BETTER_AUTH_URL: http://api.docket.localhost:4000
       BETTER_AUTH_PASSKEY_RP_ID: docket.localhost
       NEXT_PUBLIC_PASSKEY_RP_ID: docket.localhost
-      BETTER_AUTH_TRUSTED_ORIGINS: http://docket.localhost:1355,http://admin.docket.localhost:1355
-      MCP_ISSUER_URL: http://api.docket.localhost:1355
-      MCP_RESOURCE_URL: http://api.docket.localhost:1355/mcp
-      MCP_ALLOWED_ORIGINS: http://docket.localhost:1355
-      OIDC_LOGIN_PAGE_URL: http://docket.localhost:1355/sign-in
+      BETTER_AUTH_TRUSTED_ORIGINS: http://docket.localhost:3000
+      MCP_ISSUER_URL: http://api.docket.localhost:4000
+      MCP_RESOURCE_URL: http://api.docket.localhost:4000/mcp
+      MCP_ALLOWED_ORIGINS: http://docket.localhost:3000
+      OIDC_LOGIN_PAGE_URL: http://docket.localhost:3000/sign-in
       AGENT_MAX_TURNS: '24'
       GOOGLE_OAUTH_PUBLIC: 'false'
+      SKIP_ENV_VALIDATION: '1'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6
@@ -74,24 +63,49 @@ jobs:
           node-version-file: '.node-version'
           cache: pnpm
 
+      - uses: actions/cache@v5
+        with:
+          path: .turbo
+          key: turbo-e2e-${{ runner.os }}-${{ github.sha }}
+          restore-keys: turbo-e2e-${{ runner.os }}-
+
       - run: pnpm install --frozen-lockfile
 
-      # Pin the routed hosts so name resolution is deterministic on every runner image.
       - name: Map dev hosts to loopback
-        run: echo "127.0.0.1 docket.localhost api.docket.localhost admin.docket.localhost" | sudo tee -a /etc/hosts
+        run: echo "127.0.0.1 docket.localhost api.docket.localhost" | sudo tee -a /etc/hosts
 
-      # Portless documents :1355 as its non-privileged mode. HTTP *.localhost remains a secure
-      # browser context for WebAuthn, so CI needs neither sudo nor a generated certificate.
-      - name: Start portless proxy
-        run: pnpm exec portless proxy start --port 1355 --no-tls
+      # A production build, not `next dev`. Under the dev server Turbopack compiles each route on
+      # first request — inside whichever test asked for it — which on a two-core runner outlasts
+      # any per-test budget worth setting and makes the suite's result a function of which spec
+      # drew the cold route. `NEXT_PUBLIC_*` above are inlined here, so this must run after they
+      # are set.
+      - name: Build the app
+        run: pnpm turbo run build --filter=@docket/web --cache-dir=.turbo
 
-      - name: Start dev stack
-        run: pnpm dev > /tmp/dev.log 2>&1 &
+      # `output: standalone` emits a server plus a traced module graph, but neither the static
+      # assets nor `public/` — Next expects the deployment to place those, exactly as the
+      # Dockerfiles do.
+      - name: Assemble the standalone server
+        run: |
+          set -euo pipefail
+          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          cp -r apps/web/public apps/web/.next/standalone/apps/web/public
 
-      # The browser binary is keyed to the exact Playwright version, not the commit — it changes
-      # only when package.json's Playwright dependency does, but was being downloaded and
-      # installed from scratch on every shard of every run regardless (~30s × 4 shards, every
-      # push). `--with-deps` also apt-installs OS-level libraries every time with no cache at all.
+      - name: Apply migrations
+        run: pnpm turbo run db:migrate --filter=@docket/db
+
+      - name: Start the API
+        run: PORT=4000 pnpm --filter @docket/api exec tsx src/server.ts > /tmp/api.log 2>&1 &
+
+      # Served straight from the standalone output. `next start` does not honour the config's
+      # `/v1` and `/api/auth` rewrites under `output: standalone` — it warns and tells you to run
+      # this instead — and without those rewrites every auth request 404s and the suite stalls on
+      # sign-up.
+      - name: Start the web server
+        run: |
+          cd apps/web/.next/standalone/apps/web
+          PORT=3000 HOSTNAME=127.0.0.1 node server.js > /tmp/web.log 2>&1 &
+
       - uses: actions/cache@v5
         id: playwright-cache
         with:
@@ -102,37 +116,33 @@ jobs:
         run: pnpm --filter @docket/web exec playwright install --with-deps chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
 
-      # `--with-deps` (above) is what apt-installs Chromium's OS-level libraries; a cache hit
-      # skips that step entirely, so those libraries never get installed on a cache hit. Playwright
-      # itself has no "verify OS deps only" mode, so this reinstalls just the OS package layer —
-      # fast (apt's own cache), and safe to always run.
+      # `--with-deps` above is what apt-installs Chromium's OS libraries, so a cache hit skips
+      # them entirely. Playwright has no verify-deps-only mode; this reinstalls just that layer.
       - name: Install Playwright OS dependencies
         run: pnpm --filter @docket/web exec playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
 
       - name: Wait for the stack
         run: |
-          for _ in $(seq 1 120); do
-            web=$(curl -s -o /dev/null -w "%{http_code}" http://docket.localhost:1355 || true)
-            api=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:1355/v1/health || true)
-            oidc=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:1355/api/auth/.well-known/oauth-authorization-server || true)
+          for _ in $(seq 1 60); do
+            web=$(curl -s -o /dev/null -w "%{http_code}" http://docket.localhost:3000/sign-in || true)
+            api=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:4000/v1/health || true)
+            oidc=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:4000/api/auth/.well-known/oauth-authorization-server || true)
             echo "web=$web api=$api oidc=$oidc"
             if [ "$web" = "200" ] && [ "$api" = "200" ] && [ "$oidc" = "200" ]; then exit 0; fi
             sleep 5
           done
-          echo "dev stack never became ready" >&2
-          tail -100 /tmp/dev.log >&2
+          echo "stack never became ready" >&2
+          tail -50 /tmp/web.log /tmp/api.log >&2
           exit 1
 
       - run: pnpm --filter @docket/web exec playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-      # `always()`, not `failure()`: the case that most needs these is a shard that ran out of
-      # wall-clock, and a timed-out job is cancelled rather than failed — so `failure()` skipped
-      # the evidence in exactly the situation nobody could otherwise diagnose. Both steps are
-      # reporting-only and neither can turn a red shard green.
-      - name: Dev stack log
+      # `always()`, not `failure()`: a shard that runs out of wall-clock is cancelled rather than
+      # failed, and that is the case with the least other evidence. Both steps only report.
+      - name: Server logs
         if: always()
-        run: tail -200 /tmp/dev.log
+        run: tail -100 /tmp/web.log /tmp/api.log
 
       - uses: actions/upload-artifact@v6
         if: always()

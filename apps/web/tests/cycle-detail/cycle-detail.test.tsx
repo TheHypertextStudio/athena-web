@@ -239,10 +239,16 @@ function occurrences(haystack: string, needle: string): number {
  */
 function readableText(container: HTMLElement): string {
   // A field shows its value, or — only when that value is empty — its placeholder. Never both.
+  //
+  // A `<textarea>` also carries its value as a DOM text child, unlike an `<input>`, so reading
+  // `textContent` and the field values together would count a textarea-backed title twice and
+  // report a duplicate nobody can see. Blank the text children on a clone before reading.
+  const clone = container.cloneNode(true) as HTMLElement;
+  for (const field of clone.querySelectorAll('textarea')) field.textContent = '';
   const fields = [...container.querySelectorAll('input, textarea')]
     .map((field) => (field as HTMLInputElement).value || (field.getAttribute('placeholder') ?? ''))
     .join(' ');
-  return `${container.textContent} ${fields}`;
+  return `${clone.textContent} ${fields}`;
 }
 
 /**

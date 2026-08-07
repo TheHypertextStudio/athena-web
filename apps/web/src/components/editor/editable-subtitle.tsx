@@ -7,9 +7,9 @@
  * The masthead subtitle (project/initiative/program summary) is plain text, not a document — it
  * has no business pulling in {@link EditableFreeformText}'s Markdown editor, whose reserved editor
  * height is what was blowing out the space between the subtitle and the property row below it.
- * This is `EditableTitle`'s click-to-edit pattern (wrap at rest, single-line `<input>` while
- * focused) plus debounced autosave, without the "titles can't be empty" constraint: a cleared
- * subtitle saves as `null`.
+ * This is `EditableTitle`'s always-live field (an auto-growing `<textarea>`, so the summary wraps
+ * instead of clipping and there is no read/edit view to swap between) plus debounced autosave,
+ * without the "titles can't be empty" constraint: a cleared subtitle saves as `null`.
  */
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useEffect, useRef, useState } from 'react';
@@ -32,7 +32,7 @@ export interface EditableSubtitleProps {
   placeholder?: string;
 }
 
-/** A summary that wraps at rest and edits in place as a single-line input, never reserving a Markdown editor's multi-line height. */
+/** A summary that wraps and edits in place, never reserving a Markdown editor's multi-line height. */
 export function EditableSubtitle({
   value,
   onSave,
@@ -44,7 +44,7 @@ export function EditableSubtitle({
   const baseline = value ?? '';
   const [draft, setDraft] = useState(baseline);
   const [focused, setFocused] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const fieldRef = useRef<HTMLTextAreaElement>(null);
   const lastSaved = useRef(baseline);
 
   useEffect(() => {
@@ -66,43 +66,33 @@ export function EditableSubtitle({
     save: commit,
   });
 
-  // Focus + select the whole summary when the display span swaps for the input.
+  // Focus + select the whole summary when something else hands the field focus.
   useEffect(() => {
     if (!focused) return;
-    const input = inputRef.current;
-    if (!input || document.activeElement === input) return;
-    input.focus();
-    input.select();
+    const field = fieldRef.current;
+    if (!field || document.activeElement === field) return;
+    field.focus();
+    field.select();
   }, [focused]);
+
+  // Grow to the wrapped content so the field occupies exactly the height its text needs, which is
+  // what lets an always-live control sit where a `<span>` used to without clipping or reserving
+  // slack. `scrollHeight` is 0 in jsdom, so the guard stops a test collapsing the field.
+  useEffect(() => {
+    const field = fieldRef.current;
+    if (!field) return;
+    field.style.height = 'auto';
+    if (field.scrollHeight > 0) field.style.height = `${String(field.scrollHeight)}px`;
+  }, [draft]);
 
   if (!canEdit) {
     return <span className={cn('block', className)}>{baseline.length > 0 ? baseline : ''}</span>;
   }
 
-  if (!focused) {
-    return (
-      <span
-        role="button"
-        tabIndex={0}
-        onClick={() => {
-          setFocused(true);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            setFocused(true);
-          }
-        }}
-        className={cn('block cursor-text', className)}
-      >
-        {baseline.length > 0 ? baseline : placeholder}
-      </span>
-    );
-  }
-
   return (
-    <input
-      ref={inputRef}
+    <textarea
+      ref={fieldRef}
+      rows={1}
       value={draft}
       aria-label={ariaLabel}
       placeholder={placeholder}
@@ -120,14 +110,17 @@ export function EditableSubtitle({
         if (event.key === 'Enter') {
           event.preventDefault();
           commit(draft);
-          inputRef.current?.blur();
+          fieldRef.current?.blur();
         } else if (event.key === 'Escape') {
           event.preventDefault();
           setDraft(baseline);
-          inputRef.current?.blur();
+          fieldRef.current?.blur();
         }
       }}
-      className={cn('m-0 w-full min-w-0 border-0 bg-transparent p-0 outline-none', className)}
+      className={cn(
+        'm-0 w-full min-w-0 resize-none overflow-hidden border-0 bg-transparent p-0 outline-none',
+        className,
+      )}
     />
   );
 }

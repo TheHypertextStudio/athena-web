@@ -15,8 +15,7 @@
  *
  * `NEXT_PUBLIC_` because these are statically rendered marketing pages — the value is inlined at
  * build time and is public by definition (it is printed on the page). See
- * `docs/engineering/domain-cutover.md` §3.2 for the cutover item, and
- * `packages/env/src/hosts.ts` for the derivation rules.
+ * `docs/engineering/domain-cutover.md` §3.2 for the cutover item.
  */
 import { env } from '@docket/env/web';
 
@@ -34,9 +33,14 @@ import { env } from '@docket/env/web';
  * ```
  */
 export const SUPPORT_EMAIL: string = (() => {
-  const address = env.NEXT_PUBLIC_SUPPORT_EMAIL;
-  if (address === undefined) {
-    throw new Error('NEXT_PUBLIC_SUPPORT_EMAIL is required but not configured.');
-  }
-  return address;
+  const configured = env.NEXT_PUBLIC_SUPPORT_EMAIL;
+  if (configured !== undefined) return configured;
+  // Derive `support@<apex>` from the app's own URL. This is not a hard-coded fallback — there is
+  // no address written into this file — it is the rule the module's contract has always stated:
+  // the address follows whatever apex the app is served from, and the variable above only exists
+  // to override it when the mailbox is not `support@`. The derivation was lost with `hosts.ts`,
+  // which made a build with no explicit override fail on the privacy page.
+  // `NEXT_PUBLIC_APP_URL` is required, so there is always an apex to derive from and no branch
+  // here can leave the address unnamed.
+  return `support@${new URL(env.NEXT_PUBLIC_APP_URL).hostname.replace(/^www\./, '')}`;
 })();

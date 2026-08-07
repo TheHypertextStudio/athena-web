@@ -364,10 +364,10 @@ const time = new Hono<AppEnv>()
     async (c) => {
       const { user } = requireSession(c);
       const minted = await createTimeShareToken(user.id, c.req.valid('json'));
-      // The configured API host is authoritative when one is set; falling back to the request's
-      // own origin keeps the snippet correct on preview and local stacks, where the widget would
-      // otherwise be handed a URL pointing at production.
-      const origin = apiHosts.api ?? new URL(c.req.url).origin;
+      // `API_URL` is required, so the configured origin is always present and always authoritative.
+      // This used to fall back to the request's own origin for preview and local stacks; those set
+      // `API_URL` to their own origin anyway, so the fallback could only ever have restated it.
+      const origin = apiHosts.api;
       const statusUrl = `${origin}${SHARED_TIMER_STATUS_PATH}`;
       return ok(c, TimeShareTokenCreated, {
         ...minted.stored,

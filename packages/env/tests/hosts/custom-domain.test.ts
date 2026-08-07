@@ -24,6 +24,7 @@ import {
   generateCustomDomainToken,
   isReservedCustomDomain,
   normalizeCustomDomain,
+  parseHost,
   type TxtLookup,
   verifyCustomDomain,
 } from '../../src/custom-domain';
@@ -267,5 +268,39 @@ describe('verifyCustomDomain', () => {
     const lookupTxt = lookupReturning([]);
     const result = await verifyCustomDomain({ host: 'example.com', token: TOKEN, lookupTxt });
     expect(result.record).toEqual(domainVerificationRecord('example.com', TOKEN));
+  });
+});
+
+describe('parseHost', () => {
+  // These moved here with the function when `hosts.ts` was deleted; every branch is a real input
+  // a person can paste into the custom-domain field.
+  it('accepts a bare host, a URL, and a host with a port', () => {
+    expect(parseHost('example.com')).toEqual({ host: 'example.com', port: undefined });
+    expect(parseHost('https://Example.COM/path')).toEqual({
+      host: 'example.com',
+      port: undefined,
+    });
+    expect(parseHost('example.com:8443')).toEqual({ host: 'example.com', port: 8443 });
+  });
+
+  it('drops a trailing dot, which is a legal but non-canonical FQDN', () => {
+    expect(parseHost('example.com.')?.host).toBe('example.com');
+  });
+
+  it('returns undefined for nothing at all', () => {
+    expect(parseHost(undefined)).toBeUndefined();
+    expect(parseHost(null)).toBeUndefined();
+    expect(parseHost('')).toBeUndefined();
+    expect(parseHost('   ')).toBeUndefined();
+  });
+
+  it('returns undefined rather than throwing on something unparseable', () => {
+    expect(parseHost('http://')).toBeUndefined();
+    expect(parseHost('::::')).toBeUndefined();
+  });
+
+  it('returns undefined when a value parses but names no host', () => {
+    // `file:` and friends are valid URLs with an empty authority, so the guard is not dead code.
+    expect(parseHost('file:///etc/hosts')).toBeUndefined();
   });
 });

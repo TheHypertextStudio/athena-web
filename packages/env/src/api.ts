@@ -124,7 +124,9 @@ export function requireEnvOrigin(value: string | undefined, name: string): strin
 /** Every configured origin or host the product itself answers on. */
 export const OWN_HOSTS: readonly string[] = [apiHosts.app, apiHosts.api, apiHosts.admin]
   .filter((value): value is string => value !== undefined)
-  .map((origin) => new URL(origin).host)
+  // `.hostname`, not `.host`: a custom domain never carries a port, so comparing against
+  // `localhost:3000` would never match and the dev origin would not be reserved.
+  .map((origin) => new URL(origin).hostname)
   .concat([apiHosts.brief, apiHosts.athenaMail].filter((v): v is string => v !== undefined));
 
 /**
@@ -140,7 +142,7 @@ export function isOwnHost(host: string): boolean {
 /** The product's own hosts, in the shape `@docket/env/custom-domain` reserves against. */
 export const RESERVED_HOSTS: ReservedHosts = {
   hosts: OWN_HOSTS,
-  apex: apiHosts.app === undefined ? undefined : new URL(apiHosts.app).host,
+  apex: apiHosts.app === undefined ? undefined : new URL(apiHosts.app).hostname,
 };
 
 /**

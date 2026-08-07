@@ -104,7 +104,12 @@ export function EntityDetailLayout({
             </div>
           ) : null}
         </div>
-        <PageContainer className={cn('-mt-10', className)}>
+        {/* `relative z-10` is load-bearing, not decoration. The banner above lives in a
+            positioned box, and a positioned element paints in a later layer than a non-positioned
+            sibling — so without this the banner drew *over* the masthead that overlaps it, and the
+            icon's opaque disc was covered by the banner's own edge and watermark. It read exactly
+            like a transparency bug and is a paint-order one. */}
+        <PageContainer className={cn('relative z-10 -mt-10', className)}>
           <header className="flex flex-col gap-3">
             <div className="flex min-w-0 flex-col gap-1">
               {/* An opaque disc, not just a ring. Every entity glyph paints its tint at ~15%

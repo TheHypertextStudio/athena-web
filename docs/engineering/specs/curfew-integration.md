@@ -1,5 +1,9 @@
 # Directive Feed — the generic surface a device-control app rides (area: `directive`)
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](../domains.md).
+
 > **Status**: proposed — design-complete, not yet implemented. Every piece marked "reused" below is
 > shipped; every piece marked "net-new" is not.
 > **Last Updated**: 2026-08-02

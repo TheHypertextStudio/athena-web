@@ -1,5 +1,9 @@
 # Docket — Env & Bootstrap Implementation Spec
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](../domains.md).
+
 **Spec area:** `env-and-bootstrap` · **Status:** implementation-grade · **Verified against current docs 2026-06-05** (t3-oss/env, Neon CLI `neonctl`, Vercel CLI, Stripe CLI, Better Auth 1.6.14, Linear OAuth).
 
 > **Note on §3 (bootstrap flow):** This spec was written targeting Vercel as the deployment platform. The production deployment now uses **GCP Cloud Run** — see [`docs/engineering/deployment.md`](../deployment.md) for the actual deployment reference, GitHub Actions variables, GCP resource inventory, and first-deploy walkthrough. Sections §0–§2 (env-var contract and `@docket/env` package design) remain accurate. Section §3 reflects the intended full provisioning flow; steps §3.8–§3.9 (Vercel CLI env writes, `vercel link`) do not apply to the current implementation.

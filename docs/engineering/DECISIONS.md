@@ -1,5 +1,9 @@
 # Docket — Resolved Decisions (build-readiness pass)
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](./domains.md).
+
 > Supplements `RECONCILIATION.md`. Every previously-open question/gap/flag in the specs now has a **concrete frozen choice**. Builders and agents follow these verbatim — no further judgment required.
 
 _Resolved 105 open items across 7 areas._

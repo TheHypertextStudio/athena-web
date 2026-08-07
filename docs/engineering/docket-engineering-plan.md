@@ -1,5 +1,9 @@
 # Docket — Engineering Plan
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](./domains.md).
+
 > **Companion to** `docs/core/mvp-plan.md` (the product plan). This document is the _how_: stack, architecture, auth/identity, billing, the MCP server, the data model, and infrastructure. Grounded against current documentation (workflow research, 2026‑06‑04/05); pin versions and re‑verify before upgrading.
 
 ---

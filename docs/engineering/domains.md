@@ -1,4 +1,48 @@
-# Candidate domains for Docket and Athena
+# Domains — where Docket runs, and where it is going
+
+> **Read this first.** §0 is what production answers on **today**. Everything from §1 onwards is
+> the shortlist for a domain that **has not been bought yet**. The two are constantly confused,
+> which is why they now live on one page.
+
+---
+
+## 0. The production hosts, today
+
+Docket runs on the studio apex as an interim home. These are live and serving:
+
+| Role              | Host                            | Env var                     |
+| ----------------- | ------------------------------- | --------------------------- |
+| Web app           | `docket.hypertext.studio`       | `WEB_URL`                   |
+| API               | `docket-api.hypertext.studio`   | `API_URL`                   |
+| Admin back-office | `docket-admin.hypertext.studio` | `ADMIN_URL`                 |
+| Passkey RP ID     | `hypertext.studio`              | `BETTER_AUTH_PASSKEY_RP_ID` |
+
+Note the shape: three **hyphenated siblings** under one apex, not nested subdomains. That is why
+the session cookie is scoped to `hypertext.studio` — `docket-api` is not a child of `docket`, so a
+cookie set on the app host is invisible to the API without the shared parent.
+
+**The single source of truth is `PUBLIC_ROOT_DOMAIN`, resolved by
+[`packages/env/src/hosts.ts`](../../packages/env/src/hosts.ts).** No hostname is hard-coded in
+production source; every consumer asks that module, and it derives `app` / `api` / `admin` /
+`briefs` from the one apex. Setting the apex moves the whole product. Do not add a literal —
+`packages/env/tests/hosts/legacy-host-policy.test.ts` fails the build on one, which is
+[GEN-25](./domain-cutover.md) enforcing the move off the studio apex.
+
+Docs are outside that ban, which is why this page may name the hosts and source may not.
+
+### What `docket.app` means in this repo
+
+A **placeholder for the apex Docket has not bought yet** — not a live host, and not a decision. It
+appears in doc comments and examples because `hosts.ts` derives `api.<apex>` / `admin.<apex>`, the
+shape the product will have _after_ the cutover, which is not the hyphenated shape it has now.
+Where you see it, read `<future-apex>`.
+
+The cutover itself — the order of operations, and the passkey-invalidation trap in it — is
+[`domain-cutover.md`](./domain-cutover.md).
+
+---
+
+## The shortlist for that apex
 
 > **Requirement:** GEN-23 — "Produce candidate domain names for Docket and for Athena as an
 > explicit deliverable."

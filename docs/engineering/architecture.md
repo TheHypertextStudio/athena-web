@@ -1,5 +1,9 @@
 # Docket — System Architecture
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](./domains.md).
+
 > **Companion** to `docs/engineering/docket-engineering-plan.md` (the written overview) and `docs/engineering/specs/*` (build-ready specs; `RECONCILIATION.md` is the decision tie-breaker). These diagrams reflect the **Docket** design — a Turborepo of Next.js apps + a Hono API on **Vercel**, backed by **Neon** Postgres, **Better Auth**, **Stripe**, and a remote **MCP** server. _(Supersedes the archived "Project Athena" architecture under `docs/_archive/`.)_
 
 ## Overview

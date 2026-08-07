@@ -312,10 +312,12 @@ async function gatherConfig(): Promise<Config> {
 
   const repo = await prompt('GitHub owner/repo to deploy from (CI)', detectRepo());
 
+  // No default placeholder: the apex has not been bought yet, and a suggested one gets accepted.
+  // Today's hosts are three hyphenated siblings under the studio apex rather than subdomains of
+  // Docket's own — see docs/engineering/domains.md §0.
   const domain = await prompt(
     'Production apex domain shared by all prod hosts (passkey RP ID)',
     '',
-    'docket.app',
   );
   if (!domain) {
     cancel('A production domain is required.');
@@ -325,7 +327,8 @@ async function gatherConfig(): Promise<Config> {
     warn(`"${domain}" looks like a local dev value — this is the production setup.`);
   }
 
-  // Derive default prod URLs from the apex (e.g. docket.app → app/api/admin.docket.app).
+  // Derive default prod URLs from the apex (<apex> → app/api/admin.<apex>), the shape
+  // `packages/env/src/hosts.ts` resolves. Today's interim hosts do not follow it.
   const webUrl = await prompt('Production web app URL', `https://app.${domain}`);
   const apiUrl = await prompt('Production API URL', `https://api.${domain}`);
   const adminUrl = await prompt('Production admin URL', `https://admin.${domain}`);

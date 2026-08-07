@@ -1,5 +1,9 @@
 # Docket — Build Manifest (atomic, dependency-ordered)
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](./domains.md).
+
 > Generated from the specs + the frozen `DECISIONS.md`. The foundation (P0–P5) is **sequential**; **P6** is the parallel fan-out. Each ticket lists the files it owns, the governing spec section, what to build, and the acceptance gate that must pass before it's accepted.
 
 ## Summary

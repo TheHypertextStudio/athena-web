@@ -2,6 +2,10 @@
 
 # Docket MCP Surface — Implementation Spec (area: `mcp-surface`)
 
+> **Hosts:** `docket.app` below is a placeholder for an apex Docket has not bought yet.
+> Production answers on `docket.hypertext.studio` / `docket-api.hypertext.studio` /
+> `docket-admin.hypertext.studio` today — see [`domains.md` §0](../domains.md).
+
 > **Status:** implementation-grade. Built against MCP spec **2025-11-25** (authorization, tools, resources, tasks, lifecycle), Better Auth **1.6.14** (`mcp`/`oidcProvider` plugins), the Docket engineering plan §4, and the data model in §5. All facts re-verified against current MCP + Better Auth docs on 2026-06-05.
 >
 > **Scope of this area.** The `/mcp` HTTP endpoint and transport; the complete **tool** list (mutations) with Zod input/output and annotations; the **resource + resource-template** list (reads) and the `docket://` URI scheme; **auth wiring** (PRM RFC 9728, AS metadata RFC 8414, audience binding RFC 8707, scope set, no token passthrough); and **capability negotiation**. It does NOT define the provider-side agent runtime (see `agents-sessions`), the DB schema (see `data-model`), or the human REST/RPC API (see `api-surface`) — but it calls into all three.

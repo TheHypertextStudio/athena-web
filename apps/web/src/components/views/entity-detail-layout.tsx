@@ -107,7 +107,10 @@ export function EntityDetailLayout({
         <PageContainer className={cn('-mt-10', className)}>
           <header className="flex flex-col gap-3">
             <div className="flex min-w-0 flex-col gap-1">
-              <div className="w-fit shrink-0 rounded-full ring-4 ring-[var(--color-surface)]">
+              {/* An opaque disc, not just a ring. Every entity glyph paints its tint at ~15%
+                  alpha, so straddling the banner let the cover composite straight through the
+                  icon; the ring alone only fixed the 4px around it. */}
+              <div className="bg-surface ring-surface w-fit shrink-0 rounded-full ring-4">
                 {icon}
               </div>
               <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">

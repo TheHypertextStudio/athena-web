@@ -10,10 +10,14 @@
  * this exists.
  *
  * Two audiences read it, and they want the same facts. A person opening a team wants to see what it
- * is for and what it is carrying. Athena wants the same, so it can route work without guessing.
- * `agentGuidance` is shown here under its own name rather than dressed up as something else: it is
- * the standing instruction Athena follows on this team, and the people it will be applied to should
- * be able to read it without going into settings.
+ * is for and what it is carrying. Athena wants the same, so it can route work without guessing —
+ * from the description and the capacity report, which are the team's actual state.
+ *
+ * `agentGuidance` is deliberately **not** surfaced here, and should not be surfaced anywhere. Asking
+ * someone to hand-write house rules per team is premature optimization of a problem Athena does not
+ * have: it can read the description, the roster and the capacity report, which are things people
+ * maintain anyway because the team needs them. A configuration knob that only earns its keep once
+ * somebody fills it in is a knob that stays empty.
  *
  * Sections with nothing in them collapse rather than rendering empty frames. That is about genuinely
  * empty sections, not about kinds of team: a committee that meets monthly has cycles and tasks like
@@ -197,15 +201,6 @@ export default function TeamDetailClient(): JSX.Element {
             }}
             placeholder="What is this team for? Anything you reference here shows up in its Library."
           />
-
-          {team.agentGuidance ? (
-            <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl p-4">
-              <h2 className="text-on-surface text-sm font-medium">Athena guidance</h2>
-              <p className="text-on-surface-variant text-sm whitespace-pre-wrap">
-                {team.agentGuidance}
-              </p>
-            </div>
-          ) : null}
         </section>
       ) : null}
 

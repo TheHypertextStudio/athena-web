@@ -1123,7 +1123,7 @@ describe('TabBar', () => {
     expect(inactiveTab).not.toHaveClass('bg-secondary-container', 'ring-1', 'shadow-sm');
   });
 
-  it('gives each tab a fixed width with a flexing, truncating title and a right-pinned close', () => {
+  it('gives each tab a bounded width with a flexing, truncating title and a right-pinned close', () => {
     render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
@@ -1133,8 +1133,11 @@ describe('TabBar', () => {
       />,
     );
     const tab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
-    // Fixed width, never shrinks (so a crowded bar scrolls instead of squishing tabs).
-    expect(tab).toHaveClass('w-40', 'shrink-0');
+    // A width RANGE rather than one rigid width: tabs shrink toward `min-w-24` so more of them fit
+    // before the strip has to scroll on a phone, and stop at `max-w-40` so a lone tab is not
+    // stretched across the bar. The floor is what keeps a crowded bar readable instead of
+    // squeezing every tab down to its close button.
+    expect(tab).toHaveClass('min-w-24', 'max-w-40', 'flex-1', 'shrink');
     // The title is the routing anchor itself, made the flexing child so it fills + truncates.
     const link = within(tab).getByRole('link', { name: 'Fix the build' });
     expect(link).toHaveClass('flex-1', 'min-w-0');

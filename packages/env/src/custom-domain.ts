@@ -22,7 +22,39 @@
  *
  * @see {@link ./hosts} for the product's own hosts, which are configuration, not user input.
  */
-import { type HostConfig, isUnderApex, parseHost } from './hosts';
+
+/**
+ * Reduce a URL, an authority, or a bare hostname to its lowercased hostname and port.
+ *
+ * @remarks
+ * Accepts every shape configuration realistically carries — `https://docket.place/`,
+ * `docket.place:1355`, `Docket.Place.` — because requiring one shape just moves the parsing
+ * into every caller. A value with no recognisable host yields `undefined` rather than a
+ * partially-parsed guess.
+ *
+ * @param value - A URL, `host[:port]` authority, or bare hostname.
+ * @returns The hostname and optional port, or `undefined` when nothing usable was supplied.
+ */
+export function parseHost(
+  value: string | undefined | null,
+): { host: string; port: number | undefined } | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  // `new URL` needs a scheme; adding a placeholder one is cheaper and safer than a regex that
+  // has to re-implement IPv6 bracket syntax and userinfo stripping.
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  let url: URL;
+  try {
+    url = new URL(withScheme);
+  } catch {
+    return undefined;
+  }
+  const host = url.hostname.toLowerCase().replace(/\.$/, '');
+  if (host.length === 0) return undefined;
+  const port = url.port === '' ? undefined : Number(url.port);
+  return { host, port };
+}
 
 /** DNS label the verification `TXT` record is published under. */
 export const CUSTOM_DOMAIN_TXT_LABEL = '_docket-verify';
@@ -98,6 +130,7 @@ const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
  * by the time it runs, every name is punycoded.
  *
  * @param input - Whatever the user typed or pasted.
+ * @param reserved - The hosts and apex the product itself answers on.
  * @returns The canonical host, or a stable rejection code.
  *
  * @example
@@ -137,6 +170,20 @@ export function normalizeCustomDomain(input: string | undefined | null): CustomD
 }
 
 /**
+ * The hosts a custom domain may never be.
+ *
+ * @remarks
+ * Passed in rather than read from the environment so these stay pure functions: the caller owns
+ * configuration, and a test can state the whole world in one literal.
+ */
+export interface ReservedHosts {
+  /** Every bare host the product itself answers on. */
+  readonly hosts: readonly string[];
+  /** The apex everything under which is also refused, if there is one. */
+  readonly apex?: string;
+}
+
+/**
  * Whether a normalized host may not be claimed by a workspace.
  *
  * @remarks
@@ -145,28 +192,33 @@ export function normalizeCustomDomain(input: string | undefined | null): CustomD
  * browser — and every one of Docket's own cookies — already trusts.
  *
  * @param host - A host already through {@link normalizeCustomDomain}.
- * @param config - The resolved product host contract.
+ * @param reserved - The hosts and apex the product itself answers on.
  * @returns `true` when the host must be refused.
  */
-export function isReservedCustomDomain(host: string, config: HostConfig): boolean {
-  if (config.rootDomain !== undefined && isUnderApex(host, config.rootDomain)) return true;
-  return Object.values(config.hosts).some((resolved) => resolved.host === host);
+export function isReservedCustomDomain(host: string, reserved: ReservedHosts): boolean {
+  if (reserved.hosts.includes(host)) return true;
+  // Exact matches are not enough: a workspace pointing `anything.<our-apex>` at itself would be
+  // served a cookie the browser already trusts for every Docket host, so everything at or under
+  // the apex is refused too.
+  const apex = reserved.apex;
+  if (apex === undefined) return false;
+  return host === apex || host.endsWith(`.${apex}`);
 }
 
 /**
  * Normalize and reserve-check in one call — the function a create-domain endpoint wants.
  *
  * @param input - Whatever the user typed or pasted.
- * @param config - The resolved product host contract.
+ * @param reserved - The hosts and apex the product itself answers on.
  * @returns The canonical host, or a stable rejection code.
  */
 export function acceptCustomDomain(
   input: string | undefined | null,
-  config: HostConfig,
+  reserved: ReservedHosts,
 ): CustomDomainNormalization {
   const normalized = normalizeCustomDomain(input);
   if (!normalized.ok) return normalized;
-  if (isReservedCustomDomain(normalized.host, config)) return { ok: false, reason: 'reserved' };
+  if (isReservedCustomDomain(normalized.host, reserved)) return { ok: false, reason: 'reserved' };
   return normalized;
 }
 
@@ -244,21 +296,18 @@ export function domainVerificationRecord(host: string, token: string): DomainDns
  * configuration rather than a constant baked into the settings screen.
  *
  * @param host - A host already through {@link normalizeCustomDomain}.
- * @param config - The resolved product host contract.
+ * @param target - The CNAME target, from `CUSTOM_DOMAIN_CNAME_TARGET`.
  * @returns The record to publish.
  * @throws {Error} When no custom-domain target is configured.
  */
-export function domainRoutingRecord(host: string, config: HostConfig): DomainDnsRecord {
-  if (config.customDomainTarget === undefined) {
-    throw new Error(
-      'No custom-domain target is configured. Set CUSTOM_DOMAIN_CNAME_TARGET, or set ' +
-        'PUBLIC_BRIEF_HOST / PUBLIC_ROOT_DOMAIN so the brief host can supply it.',
-    );
+export function domainRoutingRecord(host: string, target: string | undefined): DomainDnsRecord {
+  if (target === undefined) {
+    throw new Error('No custom-domain target is configured. Set CUSTOM_DOMAIN_CNAME_TARGET.');
   }
   return {
     type: 'CNAME',
     name: host,
-    value: config.customDomainTarget,
+    value: target,
     ttlSeconds: CUSTOM_DOMAIN_TXT_TTL_SECONDS,
   };
 }

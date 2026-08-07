@@ -27,9 +27,7 @@ import {
   type TxtLookup,
   verifyCustomDomain,
 } from '../../src/custom-domain';
-import { resolveHostConfig } from '../../src/hosts';
 
-const CONFIG = resolveHostConfig({ rootDomain: 'docket.place' });
 const TOKEN = 'a'.repeat(CUSTOM_DOMAIN_TOKEN_LENGTH);
 
 describe('normalizeCustomDomain', () => {
@@ -100,40 +98,41 @@ describe('normalizeCustomDomain', () => {
   });
 });
 
+const RESERVED = { hosts: ['docket.place', 'api.docket.place'], apex: 'docket.place' } as const;
+
 describe('isReservedCustomDomain / acceptCustomDomain', () => {
   it('reserves the product apex and everything under it', () => {
-    expect(isReservedCustomDomain('docket.place', CONFIG)).toBe(true);
-    expect(isReservedCustomDomain('api.docket.place', CONFIG)).toBe(true);
-    expect(isReservedCustomDomain('anything.docket.place', CONFIG)).toBe(true);
-    expect(isReservedCustomDomain('example.com', CONFIG)).toBe(false);
+    expect(isReservedCustomDomain('docket.place', RESERVED)).toBe(true);
+    expect(isReservedCustomDomain('api.docket.place', RESERVED)).toBe(true);
+    expect(isReservedCustomDomain('anything.docket.place', RESERVED)).toBe(true);
+    expect(isReservedCustomDomain('example.com', RESERVED)).toBe(false);
   });
 
   it('reserves an off-apex host the product itself serves', () => {
     // A brief host or mail host parked on another domain is still Docket's, and a workspace
     // claiming it would take over a live product surface.
-    const split = resolveHostConfig({
-      rootDomain: 'docket.place',
-      briefHost: 'briefs.example.net',
-      athenaInboundMailHost: 'inbox.athena.example.org',
-    });
+    const split = { hosts: ['briefs.example.net', 'inbox.athena.example.org'] };
     expect(isReservedCustomDomain('briefs.example.net', split)).toBe(true);
     expect(isReservedCustomDomain('inbox.athena.example.org', split)).toBe(true);
   });
 
   it('does not reserve everything when no apex is configured', () => {
-    expect(isReservedCustomDomain('example.com', resolveHostConfig({}))).toBe(false);
+    expect(isReservedCustomDomain('example.com', { hosts: [] })).toBe(false);
   });
 
   it('normalizes and reserve-checks in one call', () => {
-    expect(acceptCustomDomain('https://WWW.Example.com/', CONFIG)).toEqual({
+    expect(acceptCustomDomain('https://WWW.Example.com/', RESERVED)).toEqual({
       ok: true,
       host: 'example.com',
     });
-    expect(acceptCustomDomain('api.docket.place', CONFIG)).toEqual({
+    expect(acceptCustomDomain('api.docket.place', RESERVED)).toEqual({
       ok: false,
       reason: 'reserved',
     });
-    expect(acceptCustomDomain('*.example.com', CONFIG)).toEqual({ ok: false, reason: 'wildcard' });
+    expect(acceptCustomDomain('*.example.com', RESERVED)).toEqual({
+      ok: false,
+      reason: 'wildcard',
+    });
   });
 });
 
@@ -168,23 +167,19 @@ describe('DNS records shown to the operator', () => {
   });
 
   it('points the routing record at the configured target', () => {
-    expect(domainRoutingRecord('example.com', CONFIG)).toMatchObject({
+    expect(domainRoutingRecord('example.com', 'briefs.docket.place')).toMatchObject({
       type: 'CNAME',
       name: 'example.com',
       value: 'briefs.docket.place',
     });
 
-    const overridden = resolveHostConfig({
-      rootDomain: 'docket.place',
-      customDomainTarget: 'edge.docket.place',
-    });
-    expect(domainRoutingRecord('example.com', overridden).value).toBe('edge.docket.place');
+    expect(domainRoutingRecord('example.com', 'edge.docket.place').value).toBe('edge.docket.place');
   });
 
   it('refuses to invent a routing target', () => {
     // Publishing a CNAME to a host that does not serve would leave the domain dark while the UI
     // claimed it was set up correctly.
-    expect(() => domainRoutingRecord('example.com', resolveHostConfig({}))).toThrow(
+    expect(() => domainRoutingRecord('example.com', undefined)).toThrow(
       /CUSTOM_DOMAIN_CNAME_TARGET/,
     );
   });

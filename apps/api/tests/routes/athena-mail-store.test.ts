@@ -6,7 +6,7 @@
  * `listAttachmentTargets`.
  */
 import type * as DbModule from '@docket/db';
-import { apiHostConfig } from '@docket/env/api';
+import { apiHosts } from '@docket/env/api';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -82,9 +82,9 @@ describe('ensureMailbox', () => {
 
 describe('when Athena has no receiving domain configured', () => {
   it('reports no host, no address, and routes nothing', async () => {
-    const hosts = apiHostConfig.hosts as Record<string, unknown>;
-    const saved = hosts['athena-mail'];
-    delete hosts['athena-mail'];
+    const hosts = apiHosts as unknown as Record<string, unknown>;
+    const saved = hosts['athenaMail'];
+    delete hosts['athenaMail'];
     try {
       expect(athenaMailHost()).toBeNull();
       const userId = await seedUserWithHub(db, schema, 'NoHostOwner');
@@ -93,7 +93,7 @@ describe('when Athena has no receiving domain configured', () => {
       expect(mailboxAddress(mailbox)).toBeNull();
       expect(await resolveMailboxForRecipients([`${mailbox.key}@anywhere.example`])).toBeNull();
     } finally {
-      hosts['athena-mail'] = saved;
+      hosts['athenaMail'] = saved;
     }
   });
 });

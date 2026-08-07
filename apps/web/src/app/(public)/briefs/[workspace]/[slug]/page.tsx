@@ -1,5 +1,5 @@
 import type { PublicBriefOut } from '@docket/types';
-import { browserHostConfig, requireOrigin } from '@docket/env/hosts';
+import { env } from '@docket/env/web';
 import type { Metadata } from 'next';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
@@ -75,7 +75,7 @@ async function visitorHost(): Promise<string | undefined> {
  * status there: a visitor must not be able to tell an unpublished brief from a nonexistent one.
  */
 async function readBrief(params: BriefParams): Promise<PublicBriefOut | null> {
-  const apiOrigin = requireOrigin(browserHostConfig(), 'api');
+  const apiOrigin = env.NEXT_PUBLIC_API_URL;
   const host = await visitorHost();
   const url = new URL(
     `/v1/public/briefs/${encodeURIComponent(params.workspace)}/${encodeURIComponent(params.slug)}`,

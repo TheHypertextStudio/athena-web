@@ -29,8 +29,7 @@
  * do it — and reports it to us as an `interrupt` message carrying exactly how much of the
  * utterance was actually heard.
  */
-import { apiHostConfig } from '@docket/env/api';
-import { requireOrigin } from '@docket/env/hosts';
+import { apiHosts, requireEnvOrigin } from '@docket/env/api';
 import { Hono } from 'hono';
 
 import { env } from '../env';
@@ -136,7 +135,7 @@ export function relayTwiml(socketUrl: string, voiceSessionId: string, greeting: 
  * separate env var, so it follows a domain cutover automatically and cannot point at the old apex.
  */
 export function relaySocketUrl(): string {
-  const origin = requireOrigin(apiHostConfig, 'api');
+  const origin = requireEnvOrigin(apiHosts.api, 'API_URL');
   return `${origin.replace(/^http/, 'ws')}${RELAY_SOCKET_PATH}`;
 }
 

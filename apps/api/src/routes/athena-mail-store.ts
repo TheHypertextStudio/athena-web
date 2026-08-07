@@ -9,7 +9,7 @@
  * "what Athena's address is" and one of "what a received message looks like".
  *
  * The receiving **domain is never stored** — only the address's local part is. Composing the
- * address from `requireHost(apiHostConfig, 'athena-mail')` at read time is what makes the final
+ * address from `apiHosts.athenaMail` at read time is what makes the final
  * domain a configuration change rather than a code change *and* a data migration (ACH-23).
  */
 import { randomBytes } from 'node:crypto';
@@ -23,8 +23,7 @@ import {
   project,
   task,
 } from '@docket/db';
-import { apiHostConfig } from '@docket/env/api';
-import { resolveHost } from '@docket/env/hosts';
+import { apiHosts } from '@docket/env/api';
 import { mailboxHostOf, mailboxKeyOf } from '@docket/mail';
 import type { AthenaMailMessageOut, AthenaMailAttachmentTargetOut } from '@docket/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
@@ -98,7 +97,7 @@ export function mintMailboxKey(random: (size: number) => Uint8Array = randomByte
  * @returns the receiving host, or `null`.
  */
 export function athenaMailHost(): string | null {
-  return resolveHost(apiHostConfig, 'athena-mail')?.host ?? null;
+  return apiHosts.athenaMail ?? null;
 }
 
 /**

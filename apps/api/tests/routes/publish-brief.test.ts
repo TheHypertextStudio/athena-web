@@ -7,7 +7,7 @@
  * ids — cheap to exercise without standing up a full HTTP round trip for each one.
  */
 import type * as DbModule from '@docket/db';
-import { apiHostConfig, env } from '@docket/env/api';
+import { apiHosts, env, OWN_HOSTS } from '@docket/env/api';
 import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -40,8 +40,8 @@ beforeAll(async () => {
 
 describe('isProductHost', () => {
   it('is true for every one of Docket’s own configured hosts', () => {
-    for (const resolved of Object.values(apiHostConfig.hosts)) {
-      expect(isProductHost(resolved.host)).toBe(true);
+    for (const host of OWN_HOSTS) {
+      expect(isProductHost(host)).toBe(true);
     }
   });
 
@@ -180,7 +180,7 @@ describe('briefUrls', () => {
     });
 
     const urls = await briefUrls(orgId, 'brief-slug');
-    expect(urls[0]).toBe(`${apiHostConfig.hosts.brief?.origin}/briefs/${slug}/brief-slug`);
+    expect(urls[0]).toBe(`https://${apiHosts.brief}/briefs/${slug}/brief-slug`);
     expect(urls).toContain(`https://urls-verified.example/briefs/${slug}/brief-slug`);
     expect(urls).not.toContain(`https://urls-unverified.example/briefs/${slug}/brief-slug`);
     expect(urls).toHaveLength(2);
@@ -189,7 +189,7 @@ describe('briefUrls', () => {
 
 describe('when no brief host is configured for this deployment', () => {
   it('returns null from briefUrlOnBriefHost, and briefUrls skips the canonical entry entirely', async () => {
-    const hosts = apiHostConfig.hosts as Record<string, unknown>;
+    const hosts = apiHosts as unknown as Record<string, unknown>;
     const saved = hosts['brief'];
     delete hosts['brief'];
     try {

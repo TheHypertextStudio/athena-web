@@ -15,29 +15,6 @@ export { findVar, VAR_REGISTRY } from './registry';
 export type AppMode = 'local' | 'test' | 'production';
 export { isRealValue, realEnvValue } from './real-value';
 
-// The host contract. Re-exported from the barrel as well as from `@docket/env/hosts` and
-// `@docket/env/custom-domain` because tooling (`scripts/domain-check.ts`) imports the barrel to
-// avoid pulling in a fail-fast composition, and a feature should never have to know which of the
-// two modules a helper lives in.
-export type { HostConfig, HostEnvSource, HostRole, ResolvedHost } from './hosts';
-export {
-  apexOf,
-  assertHostConfigIsolated,
-  browserHostConfig,
-  DEFAULT_ADMIN_SUBDOMAIN,
-  DEFAULT_API_SUBDOMAIN,
-  DEFAULT_BRIEF_SUBDOMAIN,
-  DEFAULT_SUPPORT_MAILBOX,
-  HOST_ROLES,
-  isUnderApex,
-  parseHost,
-  requireHost,
-  requireOrigin,
-  requireSupportEmail,
-  resolveHost,
-  resolveHostConfig,
-  WEB_HOST_ROLES,
-} from './hosts';
 export type {
   CustomDomainNormalization,
   CustomDomainRejection,

@@ -37,7 +37,7 @@ import {
   workspaceDomain,
   workspacePublicSlug,
 } from '@docket/db';
-import { apiHostConfig } from '@docket/env/api';
+import { apiHosts, isOwnHost } from '@docket/env/api';
 import { normalizeCustomDomain } from '@docket/env/custom-domain';
 import type {
   BriefFact,
@@ -109,7 +109,7 @@ export interface BriefLocator {
  * @returns `true` when the host belongs to Docket rather than to a workspace.
  */
 export function isProductHost(host: string): boolean {
-  if (Object.values(apiHostConfig.hosts).some((resolved) => resolved.host === host)) return true;
+  if (isOwnHost(host)) return true;
   if (env.APP_MODE === 'production') return false;
   return host === 'localhost' || host.endsWith('.localhost');
 }
@@ -555,9 +555,9 @@ export function briefPath(workspaceSlug: string, slug: string): string {
  * @returns The absolute URL, or `null` when no brief host is configured.
  */
 export function briefUrlOnBriefHost(workspaceSlug: string, slug: string): string | null {
-  const briefHost = apiHostConfig.hosts.brief;
-  if (!briefHost) return null;
-  return `${briefHost.origin}${briefPath(workspaceSlug, slug)}`;
+  const briefHost = apiHosts.brief;
+  if (briefHost === undefined) return null;
+  return `https://${briefHost}${briefPath(workspaceSlug, slug)}`;
 }
 
 /**

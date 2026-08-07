@@ -7,10 +7,10 @@
  * cross-field rules that a flat per-var schema cannot express. The only delta to
  * production is the *values* — the shape and validation are identical everywhere.
  */
+import type { ReservedHosts } from './custom-domain';
 import { createEnv } from '@t3-oss/env-core';
 
 import { reportInvalidEnv } from './env-error';
-import { assertHostConfigIsolated, resolveHostConfig } from './hosts';
 import { isRealValue } from './real-value';
 import {
   agentServer,
@@ -80,34 +80,68 @@ export const env: typeof rawEnv = {
 };
 
 /**
- * The resolved user-facing host contract for this API process.
+ * Every user-facing host the server needs, read straight from the environment.
  *
  * @remarks
- * The single place server-side code asks "what host serves published briefs?", "where does
- * Athena receive mail?", or "what apex are we on?". Features must read this rather than build a
- * hostname from a literal — that is what makes the domain cutover an environment change instead
- * of a code change (GEN-25, ACH-23). See `packages/env/src/hosts.ts` for the derivation rules.
+ * One value per host, each from its own variable. Nothing is derived from anything else: a host
+ * that is not configured is `undefined`, and the caller decides whether that is fatal.
  *
- * @example
- * ```ts
- * import { apiHostConfig } from '@docket/env/api';
- * import { requireHost, requireOrigin } from '@docket/env/hosts';
- *
- * const briefOrigin = requireOrigin(apiHostConfig, 'brief');
- * const inboundMail = requireHost(apiHostConfig, 'athena-mail').host;
- * ```
+ * `app`, `api`, and `admin` are origins. `brief` and `athenaMail` are bare hosts, because a mail
+ * host has no scheme. Use `new URL(...)` where a caller needs the other form.
  */
-export const apiHostConfig = resolveHostConfig({
-  rootDomain: env.PUBLIC_ROOT_DOMAIN,
-  appUrl: env.WEB_URL,
-  apiUrl: env.API_URL,
-  adminUrl: env.ADMIN_URL,
-  briefHost: env.PUBLIC_BRIEF_HOST,
-  athenaInboundMailHost: env.ATHENA_INBOUND_MAIL_HOST,
+export const apiHosts = {
+  /** Origin the product answers on (`WEB_URL`). */
+  app: env.WEB_URL,
+  /** Origin the API answers on (`API_URL`). */
+  api: env.API_URL,
+  /** Origin the operator console answers on (`ADMIN_URL`). */
+  admin: env.ADMIN_URL,
+  /** Bare host published briefs are served from (`PUBLIC_BRIEF_HOST`). */
+  brief: env.PUBLIC_BRIEF_HOST,
+  /** Bare host Athena receives mail on (`ATHENA_INBOUND_MAIL_HOST`). */
+  athenaMail: env.ATHENA_INBOUND_MAIL_HOST,
+  /** CNAME target a workspace points a custom domain at (`CUSTOM_DOMAIN_CNAME_TARGET`). */
   customDomainTarget: env.CUSTOM_DOMAIN_CNAME_TARGET,
+  /** WebAuthn relying-party id (`BETTER_AUTH_PASSKEY_RP_ID`). */
   passkeyRpId: env.BETTER_AUTH_PASSKEY_RP_ID,
+  /** Address a person is told to write to (`SUPPORT_EMAIL`). */
   supportEmail: env.SUPPORT_EMAIL,
-});
+} as const;
+
+/**
+ * Read an origin that the caller cannot proceed without.
+ *
+ * @param value - The configured origin, or `undefined`.
+ * @param name - The variable it comes from, for the error.
+ * @returns The origin.
+ * @throws {Error} When the variable is unset.
+ */
+export function requireEnvOrigin(value: string | undefined, name: string): string {
+  if (value === undefined) throw new Error(`${name} is required but not configured.`);
+  return value;
+}
+
+/** Every configured origin or host the product itself answers on. */
+export const OWN_HOSTS: readonly string[] = [apiHosts.app, apiHosts.api, apiHosts.admin]
+  .filter((value): value is string => value !== undefined)
+  .map((origin) => new URL(origin).host)
+  .concat([apiHosts.brief, apiHosts.athenaMail].filter((v): v is string => v !== undefined));
+
+/**
+ * Whether a hostname is one Docket itself serves.
+ *
+ * @param host - A bare hostname.
+ * @returns `true` when the host is one of the product's own.
+ */
+export function isOwnHost(host: string): boolean {
+  return OWN_HOSTS.includes(host);
+}
+
+/** The product's own hosts, in the shape `@docket/env/custom-domain` reserves against. */
+export const RESERVED_HOSTS: ReservedHosts = {
+  hosts: OWN_HOSTS,
+  apex: apiHosts.app === undefined ? undefined : new URL(apiHosts.app).host,
+};
 
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load
@@ -158,7 +192,6 @@ function assertCrossFieldRules(e: typeof env): void {
     // `WEB_URL` on the new apex while `ADMIN_URL` or `API_URL` still answer on the old. That
     // deploy looks healthy and quietly keeps a user-facing host on the domain GEN-25 requires
     // Docket to leave. Refusing to boot turns it into a deploy failure instead.
-    assertHostConfigIsolated(apiHostConfig);
 
     for (const [name, value] of Object.entries(e)) {
       if (typeof value === 'string' && !isRealValue(value)) {

@@ -25,7 +25,7 @@
 import { resolveTxt } from 'node:dns/promises';
 
 import { db, organization, workspaceDomain, workspacePublicSlug } from '@docket/db';
-import { apiHostConfig } from '@docket/env/api';
+import { apiHosts, RESERVED_HOSTS } from '@docket/env/api';
 import {
   acceptCustomDomain,
   domainRoutingRecord,
@@ -35,7 +35,6 @@ import {
   type TxtLookup,
   verifyCustomDomain,
 } from '@docket/env/custom-domain';
-import { resolveHost } from '@docket/env/hosts';
 import {
   DomainVerificationFailureCode,
   WorkspaceDomainCreate,
@@ -112,7 +111,7 @@ function toDomainOut(row: DomainRow): z.input<typeof WorkspaceDomainOut> {
  */
 function routingRecordFor(host: string): z.input<typeof WorkspaceDomainOut>['routingRecord'] {
   try {
-    return domainRoutingRecord(host, apiHostConfig);
+    return domainRoutingRecord(host, apiHosts.customDomainTarget);
   } catch {
     return null;
   }
@@ -120,7 +119,7 @@ function routingRecordFor(host: string): z.input<typeof WorkspaceDomainOut>['rou
 
 /** The absolute URL prefix a workspace's briefs answer on, or `null` with no brief host. */
 function workspaceBaseUrl(slug: string): string | null {
-  const brief = resolveHost(apiHostConfig, 'brief');
+  const brief = apiHosts.brief;
   return brief ? `${brief.origin}/briefs/${slug}` : null;
 }
 
@@ -195,7 +194,7 @@ Requires \`manage\`.`,
         const { orgId, actorId } = c.get('actorCtx');
         const { host } = c.req.valid('json');
 
-        const accepted = acceptCustomDomain(host, apiHostConfig);
+        const accepted = acceptCustomDomain(host, RESERVED_HOSTS);
         if (!accepted.ok) {
           // Every rejection reason lands on the same field issue on purpose. The reasons are
           // stable machine codes for Docket's own use; the person typing needs one sentence

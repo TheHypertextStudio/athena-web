@@ -19,11 +19,10 @@
  * "Visit our website" is a dead end when you are holding a phone to your ear. The plan
  * announcement speaks the exact address, host and path, with the path spoken as "slash pricing" so
  * it survives text-to-speech. The host comes from the host-config contract
- * ({@link @docket/env/hosts}), so the address the caller hears follows the product's own apex and
+ * (`WEB_URL`), so the address the caller hears follows the product's own host and
  * cannot drift from it during a domain cutover.
  */
-import { apiHostConfig } from '@docket/env/api';
-import { requireOrigin } from '@docket/env/hosts';
+import { apiHosts, requireEnvOrigin } from '@docket/env/api';
 
 /** The path on the web app that lists purchasable plans. */
 export const PLANS_PATH = '/pricing';
@@ -42,13 +41,13 @@ export const forbiddenAnnouncementWords: readonly string[] = [
  *
  * @remarks
  * Absolute, on the product's own apex, and the same string the acceptance check fetches. Built
- * from {@link requireOrigin} rather than assembled from an env var so a half-applied domain
+ * from `WEB_URL` rather than assembled from parts so a half-applied domain
  * cutover fails at boot instead of dictating an address that does not resolve.
  *
  * @returns e.g. `https://docket.place/pricing`.
  */
 export function plansUrl(): string {
-  return `${requireOrigin(apiHostConfig, 'app')}${PLANS_PATH}`;
+  return `${requireEnvOrigin(apiHosts.app, 'WEB_URL')}${PLANS_PATH}`;
 }
 
 /**
@@ -101,7 +100,7 @@ export function planRequiredAnnouncement(): string {
  * @returns the announcement script.
  */
 export function unrecognizedCallerAnnouncement(): string {
-  const url = requireOrigin(apiHostConfig, 'app');
+  const url = requireEnvOrigin(apiHosts.app, 'WEB_URL');
   return [
     'Hi, this is Athena from Docket.',
     'I can only pick up when I recognize the number you are calling from.',

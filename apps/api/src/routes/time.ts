@@ -6,8 +6,7 @@
  * public API that starts, stops, repairs, contextualizes, or allocates actual tracked time; Tasks,
  * Calendar, Agenda, and agents contribute typed context through this same contract.
  */
-import { apiHostConfig } from '@docket/env/api';
-import { resolveHost } from '@docket/env/hosts';
+import { apiHosts } from '@docket/env/api';
 import {
   TimeActiveOut,
   TimeAllocationReplace,
@@ -368,7 +367,7 @@ const time = new Hono<AppEnv>()
       // The configured API host is authoritative when one is set; falling back to the request's
       // own origin keeps the snippet correct on preview and local stacks, where the widget would
       // otherwise be handed a URL pointing at production.
-      const origin = resolveHost(apiHostConfig, 'api')?.origin ?? new URL(c.req.url).origin;
+      const origin = apiHosts.api ?? new URL(c.req.url).origin;
       const statusUrl = `${origin}${SHARED_TIMER_STATUS_PATH}`;
       return ok(c, TimeShareTokenCreated, {
         ...minted.stored,

@@ -18,7 +18,7 @@
  * `docs/engineering/domain-cutover.md` §3.2 for the cutover item, and
  * `packages/env/src/hosts.ts` for the derivation rules.
  */
-import { browserHostConfig, requireSupportEmail } from '@docket/env/hosts';
+import { env } from '@docket/env/web';
 
 /**
  * Address shown on the privacy and terms pages, and used in their `mailto:` links.
@@ -33,4 +33,10 @@ import { browserHostConfig, requireSupportEmail } from '@docket/env/hosts';
  * <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
  * ```
  */
-export const SUPPORT_EMAIL: string = requireSupportEmail(browserHostConfig());
+export const SUPPORT_EMAIL: string = (() => {
+  const address = env.NEXT_PUBLIC_SUPPORT_EMAIL;
+  if (address === undefined) {
+    throw new Error('NEXT_PUBLIC_SUPPORT_EMAIL is required but not configured.');
+  }
+  return address;
+})();

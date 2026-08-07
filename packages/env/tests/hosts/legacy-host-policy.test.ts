@@ -17,7 +17,7 @@
  *
  * **The literal appears here and nowhere else in the repo's own code.** A ban has to be able
  * to name what it bans, and a test file is not production source. The corresponding *runtime*
- * check is deliberately structural instead: {@link assertHostConfigIsolated} requires every
+ * check is deliberately structural instead: every host comes from its own variable, so every
  * user-facing host to sit under the configured apex, which catches a half-applied cutover to
  * any domain rather than only the one somebody remembered to write down.
  */
@@ -136,7 +136,7 @@ describe('legacy-host policy', () => {
   it('scans a non-trivial amount of production source', () => {
     // Guards the guard: a broken walk would make the assertion below vacuously true.
     expect(files.length).toBeGreaterThan(200);
-    expect(files.some((f) => f.endsWith(join('packages', 'env', 'src', 'hosts.ts')))).toBe(true);
+    expect(files.some((f) => f.endsWith(join('packages', 'env', 'src', 'api.ts')))).toBe(true);
   });
 
   it('contains no legacy hostname anywhere in production source', () => {
@@ -145,7 +145,7 @@ describe('legacy-host policy', () => {
       hits,
       `A legacy hostname is hard-coded in production source. GEN-25 requires every ` +
         `user-facing Docket/Athena host to come from configuration — resolve it through ` +
-        `@docket/env/hosts instead. Offending lines:\n  ${hits.join('\n  ')}`,
+        `the configured host variables instead. Offending lines:\n  ${hits.join('\n  ')}`,
     ).toEqual([]);
   });
 

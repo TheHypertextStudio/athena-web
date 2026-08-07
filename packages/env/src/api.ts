@@ -126,7 +126,8 @@ export const OWN_HOSTS: readonly string[] = [apiHosts.app, apiHosts.api, apiHost
   .filter((value): value is string => value !== undefined)
   // `.hostname`, not `.host`: a custom domain never carries a port, so comparing against
   // `localhost:3000` would never match and the dev origin would not be reserved.
-  .map((origin) => new URL(origin).hostname)
+  .map((origin) => hostnameOf(origin))
+  .filter((host): host is string => host !== undefined)
   .concat([apiHosts.brief, apiHosts.athenaMail].filter((v): v is string => v !== undefined));
 
 /**
@@ -139,10 +140,29 @@ export function isOwnHost(host: string): boolean {
   return OWN_HOSTS.includes(host);
 }
 
+/**
+ * Read the hostname out of an origin.
+ *
+ * @remarks
+ * `try`/`catch` rather than a check against `undefined`: the schema types `WEB_URL` as required,
+ * so a comparison reads as dead code, but `SKIP_ENV_VALIDATION` bypasses the schema and the value
+ * really can be missing at runtime. A malformed origin lands here too.
+ *
+ * @param origin - An absolute origin.
+ * @returns The hostname, or `undefined` when there is nothing to parse.
+ */
+function hostnameOf(origin: string): string | undefined {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The product's own hosts, in the shape `@docket/env/custom-domain` reserves against. */
 export const RESERVED_HOSTS: ReservedHosts = {
   hosts: OWN_HOSTS,
-  apex: apiHosts.app === undefined ? undefined : new URL(apiHosts.app).hostname,
+  apex: hostnameOf(apiHosts.app),
 };
 
 /**

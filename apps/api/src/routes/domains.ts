@@ -120,7 +120,7 @@ function routingRecordFor(host: string): z.input<typeof WorkspaceDomainOut>['rou
 /** The absolute URL prefix a workspace's briefs answer on, or `null` with no brief host. */
 function workspaceBaseUrl(slug: string): string | null {
   const brief = apiHosts.brief;
-  return brief ? `${brief.origin}/briefs/${slug}` : null;
+  return brief === undefined ? null : `https://${brief}/briefs/${slug}`;
 }
 
 /** Load one domain scoped to the org, or 404. */

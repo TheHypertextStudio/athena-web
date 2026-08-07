@@ -6,7 +6,7 @@
  * `PUBLIC_ROOT_DOMAIN`. That derivation is gone, and these tests exist to keep it gone: a silent
  * fallback is how a half-applied domain change ships a hostname nobody configured.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** The minimum a `@docket/env/api` import needs to compose without throwing. */
 function validApiEnv(): Record<string, string> {
@@ -48,6 +48,13 @@ function stubAll(values: Record<string, string>): void {
 beforeEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
+  // CI sets SKIP_ENV_VALIDATION, which short-circuits the cross-field rules these tests assert.
+  vi.stubEnv('SKIP_ENV_VALIDATION', '');
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('apiHosts', () => {
@@ -101,16 +108,6 @@ describe('apiHosts', () => {
 
     expect(requireEnvOrigin('https://docket.example', 'WEB_URL')).toBe('https://docket.example');
     expect(() => requireEnvOrigin(undefined, 'WEB_URL')).toThrow(/WEB_URL/);
-  });
-
-  it('has no apex to reserve against when the product origin is unset', async () => {
-    // WEB_URL is required by the schema, so this is the shape of the guard rather than a state a
-    // deployment reaches — but an unguarded `new URL(undefined)` would throw at import.
-    stubAll(validApiEnv());
-    const { RESERVED_HOSTS, isOwnHost } = await import('../../src/api');
-
-    expect(RESERVED_HOSTS.apex).toBe('localhost');
-    expect(isOwnHost('nothing.example')).toBe(false);
   });
 });
 

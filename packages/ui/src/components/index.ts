@@ -126,6 +126,13 @@ export {
   shellMainInlineSize,
 } from './shell/AppShell';
 export {
+  PageScrollProvider,
+  type PageScrollOwner,
+  type PageScrollProviderProps,
+  usePageScrollOwner,
+  useOwnPageScroll,
+} from './shell/page-scroll';
+export {
   type AppShellAside,
   RAIL_INLINE_SIZE,
   RAIL_MAX_INLINE_SIZE_PX,

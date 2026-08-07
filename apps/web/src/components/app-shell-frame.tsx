@@ -5,6 +5,7 @@ import {
   type AppShellAside,
   ContextProvider,
   type HomeNavKey,
+  PageScrollProvider,
   type RailPanel,
   Sidebar,
   TabBar,
@@ -716,57 +717,61 @@ function AppShellInner({
 
   return (
     <VocabularyProvider skin={skin}>
-      <AthenaPanelProvider
-        showPulse={showAthenaPulse}
-        locationKey={locationKey}
-        context={
-          resolvedOrgId ? { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName } : null
-        }
-      >
-        <AppShell
-          sidebar={sidebar}
-          tabBar={tabBar}
-          mobileBrand={mobileBrand}
-          mobileActions={mobileActions}
-          // The shell banner slot is a sibling of `<main>`, so these never disturb a page's
-          // `h-full` sizing the way page-level content would. Offline outranks the update prompt:
-          // reloading for a new version is pointless — and would land on the offline page —
-          // while there is no connection to fetch it over.
-          banner={
-            // The sync indicator is additive rather than exclusive: "you're offline" and "these
-            // three changes are waiting" are different facts, and collapsing them would drop the
-            // one that is actionable. It renders nothing at all when the queue is empty, which is
-            // why `hasQueuedWork` gates the wrapper — an empty banner slot would still occupy the
-            // shell's gap above `<main>`.
-            //
-            // The offline notice is suppressed while `unavailable`: its promise ("showing what was
-            // loaded earlier") is false when nothing was ever loaded, and the content state already
-            // says the same thing better.
-            standingNotice || hasQueuedWork ? (
-              <Stack gap={2}>
-                {standingNotice}
-                <OfflineSyncIndicator />
-              </Stack>
-            ) : undefined
-          }
-          aside={
-            settingsSurface
-              ? undefined
-              : railAsideFor(identityUnknown, calendarSurface, timerStatus)
+      <PageScrollProvider>
+        <AthenaPanelProvider
+          showPulse={showAthenaPulse}
+          locationKey={locationKey}
+          context={
+            resolvedOrgId
+              ? { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
+              : null
           }
         >
-          {/* The page renders unconditionally while the session and workspace list resolve. Each
+          <AppShell
+            sidebar={sidebar}
+            tabBar={tabBar}
+            mobileBrand={mobileBrand}
+            mobileActions={mobileActions}
+            // The shell banner slot is a sibling of `<main>`, so these never disturb a page's
+            // `h-full` sizing the way page-level content would. Offline outranks the update prompt:
+            // reloading for a new version is pointless — and would land on the offline page —
+            // while there is no connection to fetch it over.
+            banner={
+              // The sync indicator is additive rather than exclusive: "you're offline" and "these
+              // three changes are waiting" are different facts, and collapsing them would drop the
+              // one that is actionable. It renders nothing at all when the queue is empty, which is
+              // why `hasQueuedWork` gates the wrapper — an empty banner slot would still occupy the
+              // shell's gap above `<main>`.
+              //
+              // The offline notice is suppressed while `unavailable`: its promise ("showing what was
+              // loaded earlier") is false when nothing was ever loaded, and the content state already
+              // says the same thing better.
+              standingNotice || hasQueuedWork ? (
+                <Stack gap={2}>
+                  {standingNotice}
+                  <OfflineSyncIndicator />
+                </Stack>
+              ) : undefined
+            }
+            aside={
+              settingsSurface
+                ? undefined
+                : railAsideFor(identityUnknown, calendarSurface, timerStatus)
+            }
+          >
+            {/* The page renders unconditionally while the session and workspace list resolve. Each
               surface already paints its own heading and toolbar from static copy and owns an
               in-region treatment for its own data, so a shell-level gate on top only delayed
               content that was ready. The two exceptions are not loading states: `unavailable` has
               nothing to show, and `sessionRejected` must not show it. */}
-          {unavailable ? (
-            <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
-          ) : sessionRejected ? null : (
-            children
-          )}
-        </AppShell>
-      </AthenaPanelProvider>
+            {unavailable ? (
+              <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
+            ) : sessionRejected ? null : (
+              children
+            )}
+          </AppShell>
+        </AthenaPanelProvider>
+      </PageScrollProvider>
     </VocabularyProvider>
   );
 }

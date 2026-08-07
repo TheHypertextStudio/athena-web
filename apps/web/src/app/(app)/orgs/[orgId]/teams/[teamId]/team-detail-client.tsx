@@ -148,7 +148,8 @@ export default function TeamDetailClient(): JSX.Element {
 
   return (
     <EntityDetailLayout
-      cover={<TeamCover display={display} teamName={team.name} className="h-32 w-full @2xl:h-44" />}
+      // The layout owns the banner's height so it can collapse it on scroll; the cover just fills it.
+      cover={<TeamCover display={display} teamName={team.name} className="size-full" />}
       eyebrow={<BackToTeams orgId={orgId} />}
       icon={
         <EntityIconGlyph

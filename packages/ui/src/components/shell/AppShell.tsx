@@ -97,6 +97,7 @@ import {
   ShellAside,
   type AppShellAside,
 } from './ShellAside';
+import { usePageScrollOwner } from './page-scroll';
 import { ShellDrawerProvider } from './ShellDrawerContext';
 import { ShellSidebarProvider } from './ShellSidebarContext';
 
@@ -370,6 +371,7 @@ export function AppShell({
   children,
 }: AppShellProps): React.JSX.Element {
   const { orgAccent, density, activeOrgId } = useContextState();
+  const pageScrollOwner = usePageScrollOwner();
   // Drives only the *modal* presentations (the nav drawer's and the rail sheet's focus traps), which
   // cannot be a CSS concern. Every docked column hides itself in CSS, so the layout never depends on
   // this having resolved.
@@ -605,7 +607,15 @@ export function AppShell({
             // `surface` is the separation, exactly as every other panel in the shell does it. A
             // border plus a drop shadow on the outermost frame drew a second box around content
             // that already had one.
-            'bg-surface @container min-h-0 flex-1 scrollbar-gutter-stable overflow-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] outline-none lg:rounded-xl lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
+            'bg-surface @container min-h-0 flex-1 outline-none lg:rounded-xl',
+            // The default: `<main>` is the shell's one scroll container, with a stable gutter so
+            // content does not shift when it grows past the viewport, and bottom padding clearing
+            // the floating Athena launcher.
+            pageScrollOwner === 'shell' &&
+              'scrollbar-gutter-stable overflow-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
+            // A page that scrolls itself gets the box whole: no scrolling here, so no reserved
+            // gutter stealing the right edge, and no bottom padding — the page owns both.
+            pageScrollOwner === 'page' && 'overflow-hidden',
             rebinding && 'animate-org-rebind',
           )}
         >

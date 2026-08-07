@@ -12,6 +12,7 @@
  * content through slots. The canonical title token (`text-headline-medium font-medium`) is owned
  * here so no page can diverge from it.
  */
+import { useOwnPageScroll } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
@@ -77,62 +78,9 @@ export function EntityDetailLayout({
 }: EntityDetailLayoutProps): JSX.Element {
   if (cover) {
     return (
-      <div className="flex w-full flex-col">
-        {/* The banner starts at the very top of the pane — a strip of page above it would make it
-            a picture in the page rather than the page's header. The eyebrow floats over it in a
-            backdrop-blurred pill, which is what keeps a back link legible over artwork nobody
-            chose for legibility. */}
-        <div className="relative">
-          {cover}
-          {/* Eyebrow and actions share one row over the banner, matching the row they share when
-              there is no banner. Each sits in its own blurred pill, which is what keeps a back
-              link and a menu legible over artwork nobody chose for legibility. */}
-          {eyebrow || actions ? (
-            <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 px-3 pt-3 @2xl:px-6 @2xl:pt-4 @4xl:px-8">
-              {eyebrow ? (
-                <div className="bg-surface/70 min-w-0 rounded-full px-2 py-1 backdrop-blur-sm">
-                  {eyebrow}
-                </div>
-              ) : (
-                <span />
-              )}
-              {actions ? (
-                <div className="bg-surface/70 flex shrink-0 items-center gap-1 rounded-full px-1 backdrop-blur-sm">
-                  {actions}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-        {/* `relative z-10` is load-bearing, not decoration. The banner above lives in a
-            positioned box, and a positioned element paints in a later layer than a non-positioned
-            sibling — so without this the banner drew *over* the masthead that overlaps it, and the
-            icon's opaque disc was covered by the banner's own edge and watermark. It read exactly
-            like a transparency bug and is a paint-order one. */}
-        <PageContainer className={cn('relative z-10 -mt-10', className)}>
-          <header className="flex flex-col gap-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              {/* An opaque disc, not just a ring. Every entity glyph paints its tint at ~15%
-                  alpha, so straddling the banner let the cover composite straight through the
-                  icon; the ring alone only fixed the 4px around it. */}
-              <div className="bg-surface ring-surface w-fit shrink-0 rounded-full ring-4">
-                {icon}
-              </div>
-              <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
-                {title}
-              </h1>
-              {subtitle ? (
-                <div className="text-on-surface-variant text-body-large w-full min-w-0">
-                  {subtitle}
-                </div>
-              ) : null}
-            </div>
-            {metadata}
-          </header>
-          {tabs}
-          {children}
-        </PageContainer>
-      </div>
+      <CoverDetailLayout
+        {...{ cover, eyebrow, icon, title, subtitle, metadata, actions, tabs, children, className }}
+      />
     );
   }
 
@@ -190,6 +138,115 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
   return (
     <div role="group" aria-label={ariaLabel} className="flex flex-wrap items-center gap-2">
       {children}
+    </div>
+  );
+}
+
+/**
+ * The banner variant: one scrolling column with a pinned masthead.
+ *
+ * @remarks
+ * The page takes ownership of scrolling ({@link useOwnPageScroll}), so the shell's `<main>` stops
+ * being a scroll container. That is what lets the banner reach the pane's right edge — `<main>`
+ * reserves a permanent scrollbar gutter while it scrolls (11px, measured) and no child can cross
+ * it.
+ *
+ * The masthead is `sticky`, not collapsible-by-height. Shrinking the banner on scroll was the
+ * obvious reading of "semi-collapsible" and it oscillates: collapsing gives height back to the
+ * panel, which removes the overflow that triggered the collapse, which expands it again. Sticky
+ * has no such loop because the column's height never changes — the banner simply scrolls up and
+ * out under a masthead that stays put, which is also what Linear's detail pages actually do.
+ *
+ * The identity row is `sticky` too, one layer above the banner and directly below nothing, so
+ * title, tabs and the way back stay reachable at any scroll depth.
+ */
+function CoverDetailLayout({
+  cover,
+  eyebrow,
+  icon,
+  title,
+  subtitle,
+  metadata,
+  actions,
+  tabs,
+  children,
+  className,
+}: EntityDetailLayoutProps): JSX.Element {
+  useOwnPageScroll();
+
+  return (
+    // The one scrolling box on the page. No stable scrollbar gutter here: reserving one would
+    // inset the banner from the pane's right edge, which is the whole reason the page took
+    // ownership of scrolling in the first place.
+    <div data-detail-panel-scroll="" className="h-full min-h-0 w-full overflow-y-auto">
+      <div className="relative h-32 w-full @2xl:h-44">
+        {cover}
+        {/* Eyebrow and actions share one row over the banner, matching the row they share when
+            there is no banner. Each sits in its own blurred pill, which keeps a back link and a
+            menu legible over artwork nobody chose for legibility. */}
+        {eyebrow || actions ? (
+          <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 px-3 pt-3 @2xl:px-6 @2xl:pt-4 @4xl:px-8">
+            {eyebrow ? (
+              <div className="bg-surface/70 min-w-0 rounded-full px-2 py-1 backdrop-blur-sm">
+                {eyebrow}
+              </div>
+            ) : (
+              <span />
+            )}
+            {actions ? (
+              <div className="bg-surface/70 flex shrink-0 items-center gap-1 rounded-full px-1 backdrop-blur-sm">
+                {actions}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {/* `relative z-10` is load-bearing: the banner above lives in a positioned box, and a
+          positioned element paints in a later layer than a non-positioned sibling — so without
+          this the banner draws over the icon that deliberately overlaps it, which reads exactly
+          like a transparency bug and is paint order. */}
+      <div
+        className={cn(
+          'bg-surface relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-3 px-3 @2xl:px-6 @4xl:px-8',
+          className,
+        )}
+      >
+        <header className="-mt-10 flex flex-col gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            {/* An opaque disc, not just a ring: every entity glyph paints its tint at ~15% alpha,
+                so straddling the banner would otherwise let the cover composite through the icon. */}
+            <div className="bg-surface ring-surface w-fit shrink-0 rounded-full ring-4">{icon}</div>
+            <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
+              {title}
+            </h1>
+            {subtitle ? (
+              <div className="text-on-surface-variant text-body-large w-full min-w-0">
+                {subtitle}
+              </div>
+            ) : null}
+          </div>
+          {metadata}
+        </header>
+      </div>
+
+      {/* The tab bar pins, the masthead above it scrolls away. Sticking the whole masthead clipped
+          the icon, because the icon is pulled up into the banner by `-mt-10` and a sticky box has
+          nowhere to put the part that hangs above its own top edge. Pinning the tabs keeps the one
+          thing a reader needs at depth — the way between sections — without that problem, and
+          without the height-shrinking approach that oscillates. */}
+      <div
+        className={cn(
+          'bg-surface sticky top-0 z-20 mx-auto w-full max-w-7xl px-3 pt-1 pb-2 @2xl:px-6 @4xl:px-8',
+          className,
+        )}
+      >
+        {tabs}
+      </div>
+
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)] @2xl:gap-5 @2xl:px-6 @4xl:px-8">
+        {children}
+      </div>
     </div>
   );
 }

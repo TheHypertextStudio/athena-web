@@ -24,25 +24,20 @@
  */
 
 /**
- * Reduce a URL, an authority, or a bare hostname to its lowercased hostname and port.
+ * Reduce a URL, an authority, or a bare hostname to its lowercased hostname.
  *
  * @remarks
- * Accepts every shape configuration realistically carries — `https://docket.place/`,
- * `docket.place:1355`, `Docket.Place.` — because requiring one shape just moves the parsing
- * into every caller. A value with no recognisable host yields `undefined` rather than a
- * partially-parsed guess.
+ * Someone pasting a domain into the settings field types whatever their registrar showed them —
+ * `https://docket.place/`, `docket.place:1355`, `Docket.Place.` — so the parsing happens here
+ * once rather than in each caller.
  *
- * @param value - A URL, `host[:port]` authority, or bare hostname.
- * @returns The hostname and optional port, or `undefined` when nothing usable was supplied.
+ * @param value - A non-empty URL, `host[:port]` authority, or bare hostname.
+ * @returns The lowercased hostname, or `undefined` when the value has none.
  */
-export function parseHost(
-  value: string | undefined | null,
-): { host: string; port: number | undefined } | undefined {
-  if (!value) return undefined;
-  const trimmed = value.trim();
-  if (trimmed.length === 0) return undefined;
+function hostnameOf(value: string): string | undefined {
   // `new URL` needs a scheme; adding a placeholder one is cheaper and safer than a regex that
   // has to re-implement IPv6 bracket syntax and userinfo stripping.
+  const trimmed = value.trim();
   const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   let url: URL;
   try {
@@ -51,9 +46,7 @@ export function parseHost(
     return undefined;
   }
   const host = url.hostname.toLowerCase().replace(/\.$/, '');
-  if (host.length === 0) return undefined;
-  const port = url.port === '' ? undefined : Number(url.port);
-  return { host, port };
+  return host.length === 0 ? undefined : host;
 }
 
 /** DNS label the verification `TXT` record is published under. */
@@ -95,8 +88,7 @@ export type CustomDomainRejection =
   | 'label-too-long'
   | 'invalid-label'
   | 'not-a-domain'
-  | 'wildcard'
-  | 'reserved';
+  | 'wildcard';
 
 /** The outcome of {@link normalizeCustomDomain}. */
 export type CustomDomainNormalization =
@@ -147,10 +139,10 @@ export function normalizeCustomDomain(input: string | undefined | null): CustomD
   // would otherwise sail through and be persisted as a literal host that can never resolve.
   if (input.includes('*')) return { ok: false, reason: 'wildcard' };
 
-  const parsed = parseHost(input);
-  if (!parsed) return { ok: false, reason: 'unparsable' };
+  const parsed = hostnameOf(input);
+  if (parsed === undefined) return { ok: false, reason: 'unparsable' };
 
-  let host = parsed.host;
+  let host = parsed;
   if (host.startsWith(WWW_PREFIX)) host = host.slice(WWW_PREFIX.length);
 
   if (host.length > MAX_HOST_LENGTH) return { ok: false, reason: 'too-long' };
@@ -167,59 +159,6 @@ export function normalizeCustomDomain(input: string | undefined | null): CustomD
   }
 
   return { ok: true, host };
-}
-
-/**
- * The hosts a custom domain may never be.
- *
- * @remarks
- * Passed in rather than read from the environment so these stay pure functions: the caller owns
- * configuration, and a test can state the whole world in one literal.
- */
-export interface ReservedHosts {
-  /** Every bare host the product itself answers on. */
-  readonly hosts: readonly string[];
-  /** The apex everything under which is also refused, if there is one. */
-  readonly apex?: string;
-}
-
-/**
- * Whether a normalized host may not be claimed by a workspace.
- *
- * @remarks
- * Docket's own apex and everything under it are reserved. Without this a workspace could claim
- * the product's marketing host, or `api.<apex>`, and serve its own content from an origin the
- * browser — and every one of Docket's own cookies — already trusts.
- *
- * @param host - A host already through {@link normalizeCustomDomain}.
- * @param reserved - The hosts and apex the product itself answers on.
- * @returns `true` when the host must be refused.
- */
-export function isReservedCustomDomain(host: string, reserved: ReservedHosts): boolean {
-  if (reserved.hosts.includes(host)) return true;
-  // Exact matches are not enough: a workspace pointing `anything.<our-apex>` at itself would be
-  // served a cookie the browser already trusts for every Docket host, so everything at or under
-  // the apex is refused too.
-  const apex = reserved.apex;
-  if (apex === undefined) return false;
-  return host === apex || host.endsWith(`.${apex}`);
-}
-
-/**
- * Normalize and reserve-check in one call — the function a create-domain endpoint wants.
- *
- * @param input - Whatever the user typed or pasted.
- * @param reserved - The hosts and apex the product itself answers on.
- * @returns The canonical host, or a stable rejection code.
- */
-export function acceptCustomDomain(
-  input: string | undefined | null,
-  reserved: ReservedHosts,
-): CustomDomainNormalization {
-  const normalized = normalizeCustomDomain(input);
-  if (!normalized.ok) return normalized;
-  if (isReservedCustomDomain(normalized.host, reserved)) return { ok: false, reason: 'reserved' };
-  return normalized;
 }
 
 /**

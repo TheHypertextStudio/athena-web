@@ -24,7 +24,6 @@ export type {
   TxtLookup,
 } from './custom-domain';
 export {
-  acceptCustomDomain,
   CUSTOM_DOMAIN_TOKEN_LENGTH,
   CUSTOM_DOMAIN_TXT_LABEL,
   CUSTOM_DOMAIN_TXT_PREFIX,
@@ -32,7 +31,6 @@ export {
   domainRoutingRecord,
   domainVerificationRecord,
   generateCustomDomainToken,
-  isReservedCustomDomain,
   normalizeCustomDomain,
   verifyCustomDomain,
 } from './custom-domain';

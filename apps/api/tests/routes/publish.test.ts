@@ -632,7 +632,7 @@ describe('CORE-29 · only workspace admins configure domains', () => {
     expect(after.items).toHaveLength(0);
   });
 
-  it('rejects a malformed or reserved host with a field issue and no row', async () => {
+  it('rejects a malformed host with a field issue and no row', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const admin = await addressApp(orgId, ['manage'], {}, humanActorId);
     for (const host of ['localhost', '203.0.113.10', '*.wild.example', 'not a domain']) {

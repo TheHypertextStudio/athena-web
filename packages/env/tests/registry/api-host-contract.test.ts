@@ -86,20 +86,19 @@ describe('apiHosts', () => {
     expect(apiHosts.brief).toBeUndefined();
   });
 
-  it('collects the product’s own hosts for the custom-domain reservation', async () => {
+  it('collects the product’s own hosts so routing can tell them from a workspace domain', async () => {
     stubAll({
       ...validApiEnv(),
       WEB_URL: 'https://docket.example',
       API_URL: 'https://api.docket.example',
       PUBLIC_BRIEF_HOST: 'briefs.docket.example',
     });
-    const { isOwnHost, RESERVED_HOSTS } = await import('../../src/api');
+    const { isOwnHost } = await import('../../src/api');
 
     expect(isOwnHost('docket.example')).toBe(true);
     expect(isOwnHost('api.docket.example')).toBe(true);
     expect(isOwnHost('briefs.docket.example')).toBe(true);
     expect(isOwnHost('example.com')).toBe(false);
-    expect(RESERVED_HOSTS.apex).toBe('docket.example');
   });
 
   it('names the variable when an origin the caller needs is unset', async () => {

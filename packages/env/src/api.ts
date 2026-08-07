@@ -7,7 +7,6 @@
  * cross-field rules that a flat per-var schema cannot express. The only delta to
  * production is the *values* — the shape and validation are identical everywhere.
  */
-import type { ReservedHosts } from './custom-domain';
 import { createEnv } from '@t3-oss/env-core';
 
 import { reportInvalidEnv } from './env-error';
@@ -121,13 +120,17 @@ export function requireEnvOrigin(value: string | undefined, name: string): strin
   return value;
 }
 
-/** Every configured origin or host the product itself answers on. */
+/**
+ * Every bare host the product itself answers on.
+ *
+ * @remarks
+ * Used to tell an incoming request apart from one arriving on a workspace's custom domain, which
+ * is a routing question. `.hostname`, not `.host`: a request's `Host` header is compared without
+ * a port, and `localhost:3000` would never match.
+ */
 export const OWN_HOSTS: readonly string[] = [apiHosts.app, apiHosts.api, apiHosts.admin]
   .filter((value): value is string => value !== undefined)
-  // `.hostname`, not `.host`: a custom domain never carries a port, so comparing against
-  // `localhost:3000` would never match and the dev origin would not be reserved.
-  .map((origin) => hostnameOf(origin))
-  .filter((host): host is string => host !== undefined)
+  .map((origin) => new URL(origin).hostname)
   .concat([apiHosts.brief, apiHosts.athenaMail].filter((v): v is string => v !== undefined));
 
 /**
@@ -139,31 +142,6 @@ export const OWN_HOSTS: readonly string[] = [apiHosts.app, apiHosts.api, apiHost
 export function isOwnHost(host: string): boolean {
   return OWN_HOSTS.includes(host);
 }
-
-/**
- * Read the hostname out of an origin.
- *
- * @remarks
- * `try`/`catch` rather than a check against `undefined`: the schema types `WEB_URL` as required,
- * so a comparison reads as dead code, but `SKIP_ENV_VALIDATION` bypasses the schema and the value
- * really can be missing at runtime. A malformed origin lands here too.
- *
- * @param origin - An absolute origin.
- * @returns The hostname, or `undefined` when there is nothing to parse.
- */
-function hostnameOf(origin: string): string | undefined {
-  try {
-    return new URL(origin).hostname;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The product's own hosts, in the shape `@docket/env/custom-domain` reserves against. */
-export const RESERVED_HOSTS: ReservedHosts = {
-  hosts: OWN_HOSTS,
-  apex: hostnameOf(apiHosts.app),
-};
 
 /**
  * Cross-field invariants that a per-var schema cannot express. Runs at module load

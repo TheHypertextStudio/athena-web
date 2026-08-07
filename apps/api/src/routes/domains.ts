@@ -25,9 +25,9 @@
 import { resolveTxt } from 'node:dns/promises';
 
 import { db, organization, workspaceDomain, workspacePublicSlug } from '@docket/db';
-import { apiHosts, RESERVED_HOSTS } from '@docket/env/api';
+import { apiHosts } from '@docket/env/api';
 import {
-  acceptCustomDomain,
+  normalizeCustomDomain,
   domainRoutingRecord,
   domainVerificationRecord,
   generateCustomDomainToken,
@@ -194,7 +194,7 @@ Requires \`manage\`.`,
         const { orgId, actorId } = c.get('actorCtx');
         const { host } = c.req.valid('json');
 
-        const accepted = acceptCustomDomain(host, RESERVED_HOSTS);
+        const accepted = normalizeCustomDomain(host);
         if (!accepted.ok) {
           // Every rejection reason lands on the same field issue on purpose. The reasons are
           // stable machine codes for Docket's own use; the person typing needs one sentence

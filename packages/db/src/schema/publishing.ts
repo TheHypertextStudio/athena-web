@@ -87,7 +87,7 @@ export const publication = pgTable(
  * @remarks
  * `host` is globally unique — that single index is CORE-30's real enforcement. A handler check
  * alone loses the race between two concurrent claims; a unique index cannot. The value stored
- * is always the output of `acceptCustomDomain`, so `Example.COM.`, `www.example.com`, and
+ * is always the output of `normalizeCustomDomain`, so `Example.COM.`, `www.example.com`, and
  * `https://example.com/x` collapse to one row and collide with each other.
  *
  * `verifiedAt` is the serving gate (CORE-31): a row exists from the moment it is claimed, and

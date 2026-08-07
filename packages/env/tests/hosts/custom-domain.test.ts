@@ -2,29 +2,24 @@
  * Behavior tests for per-workspace custom domains.
  *
  * @remarks
- * Three classes of bug are what this file exists for, and each is a real security or
+ * Two classes of bug are what this file exists for, and each is a real security or
  * data-integrity failure rather than a cosmetic one:
  *
  * - **Normalization drift.** If two callers spell the same host differently, the uniqueness
  *   constraint that stops workspace B stealing workspace A's domain (CORE-30) never fires.
  * - **Verification that passes too easily.** A substring match, a stale token, or a swallowed
  *   resolver error would each let an unverified domain serve (CORE-31, MISS-04).
- * - **Reserved-host escape.** Claiming a host on Docket's own apex would let a workspace serve
- *   its content from an origin the browser already trusts.
  */
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  acceptCustomDomain,
   CUSTOM_DOMAIN_TOKEN_LENGTH,
   CUSTOM_DOMAIN_TXT_LABEL,
   CUSTOM_DOMAIN_TXT_PREFIX,
   domainRoutingRecord,
   domainVerificationRecord,
   generateCustomDomainToken,
-  isReservedCustomDomain,
   normalizeCustomDomain,
-  parseHost,
   type TxtLookup,
   verifyCustomDomain,
 } from '../../src/custom-domain';
@@ -96,44 +91,6 @@ describe('normalizeCustomDomain', () => {
     const longHost = `${Array.from({ length: 8 }, () => 'a'.repeat(31)).join('.')}.example.com`;
     expect(longHost.length).toBeGreaterThan(253);
     expect(normalizeCustomDomain(longHost)).toEqual({ ok: false, reason: 'too-long' });
-  });
-});
-
-const RESERVED = { hosts: ['docket.place', 'api.docket.place'], apex: 'docket.place' } as const;
-
-describe('isReservedCustomDomain / acceptCustomDomain', () => {
-  it('reserves the product apex and everything under it', () => {
-    expect(isReservedCustomDomain('docket.place', RESERVED)).toBe(true);
-    expect(isReservedCustomDomain('api.docket.place', RESERVED)).toBe(true);
-    expect(isReservedCustomDomain('anything.docket.place', RESERVED)).toBe(true);
-    expect(isReservedCustomDomain('example.com', RESERVED)).toBe(false);
-  });
-
-  it('reserves an off-apex host the product itself serves', () => {
-    // A brief host or mail host parked on another domain is still Docket's, and a workspace
-    // claiming it would take over a live product surface.
-    const split = { hosts: ['briefs.example.net', 'inbox.athena.example.org'] };
-    expect(isReservedCustomDomain('briefs.example.net', split)).toBe(true);
-    expect(isReservedCustomDomain('inbox.athena.example.org', split)).toBe(true);
-  });
-
-  it('does not reserve everything when no apex is configured', () => {
-    expect(isReservedCustomDomain('example.com', { hosts: [] })).toBe(false);
-  });
-
-  it('normalizes and reserve-checks in one call', () => {
-    expect(acceptCustomDomain('https://WWW.Example.com/', RESERVED)).toEqual({
-      ok: true,
-      host: 'example.com',
-    });
-    expect(acceptCustomDomain('api.docket.place', RESERVED)).toEqual({
-      ok: false,
-      reason: 'reserved',
-    });
-    expect(acceptCustomDomain('*.example.com', RESERVED)).toEqual({
-      ok: false,
-      reason: 'wildcard',
-    });
   });
 });
 
@@ -271,36 +228,30 @@ describe('verifyCustomDomain', () => {
   });
 });
 
-describe('parseHost', () => {
-  // These moved here with the function when `hosts.ts` was deleted; every branch is a real input
-  // a person can paste into the custom-domain field.
-  it('accepts a bare host, a URL, and a host with a port', () => {
-    expect(parseHost('example.com')).toEqual({ host: 'example.com', port: undefined });
-    expect(parseHost('https://Example.COM/path')).toEqual({
+describe('the shapes a person pastes into the domain field', () => {
+  it('reduces a URL, a mixed-case host, and a host with a port to the bare hostname', () => {
+    expect(normalizeCustomDomain('example.com')).toEqual({ ok: true, host: 'example.com' });
+    expect(normalizeCustomDomain('https://Example.COM/path')).toEqual({
+      ok: true,
       host: 'example.com',
-      port: undefined,
     });
-    expect(parseHost('example.com:8443')).toEqual({ host: 'example.com', port: 8443 });
+    expect(normalizeCustomDomain('example.com:8443')).toEqual({ ok: true, host: 'example.com' });
   });
 
   it('drops a trailing dot, which is a legal but non-canonical FQDN', () => {
-    expect(parseHost('example.com.')?.host).toBe('example.com');
+    expect(normalizeCustomDomain('example.com.')).toEqual({ ok: true, host: 'example.com' });
   });
 
-  it('returns undefined for nothing at all', () => {
-    expect(parseHost(undefined)).toBeUndefined();
-    expect(parseHost(null)).toBeUndefined();
-    expect(parseHost('')).toBeUndefined();
-    expect(parseHost('   ')).toBeUndefined();
+  it('rejects rather than throwing on something unparseable', () => {
+    expect(normalizeCustomDomain('http://')).toEqual({ ok: false, reason: 'unparsable' });
+    expect(normalizeCustomDomain('::::')).toEqual({ ok: false, reason: 'unparsable' });
   });
 
-  it('returns undefined rather than throwing on something unparseable', () => {
-    expect(parseHost('http://')).toBeUndefined();
-    expect(parseHost('::::')).toBeUndefined();
-  });
-
-  it('returns undefined when a value parses but names no host', () => {
+  it('rejects a value that parses but names no host', () => {
     // `file:` and friends are valid URLs with an empty authority, so the guard is not dead code.
-    expect(parseHost('file:///etc/hosts')).toBeUndefined();
+    expect(normalizeCustomDomain('file:///etc/hosts')).toEqual({
+      ok: false,
+      reason: 'unparsable',
+    });
   });
 });

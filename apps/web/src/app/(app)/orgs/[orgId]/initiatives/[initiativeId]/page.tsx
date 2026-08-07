@@ -28,6 +28,7 @@ import { useRouter } from 'next/navigation';
 import { useAppParams, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
+import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { ConfirmDeleteDialog } from '@/components/confirm-delete-dialog';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -362,6 +363,14 @@ export default function InitiativeDetailPage(): JSX.Element {
         // what makes the publish icon and the overflow icon provably the same size (CORE-28)
         // rather than the same size until someone edits one of them.
         <ControlGroup controlSize="xl">
+          <AthenaContextAction
+            label={`Open Athena for this ${initiativeNoun.toLowerCase()}`}
+            context={{
+              workspaceId: orgId,
+              source: { type: 'initiative', id: initiativeId, label: detail.name },
+            }}
+            variant="ghost"
+          />
           <PublishAction
             orgId={orgId}
             subjectKind="initiative"

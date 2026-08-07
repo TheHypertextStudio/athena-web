@@ -12,6 +12,7 @@
     "./lib/org-accent": "./src/lib/org-accent.ts",
     "./lib/stretched-link": "./src/lib/stretched-link.ts",
     "./lib/draggable": "./src/lib/draggable.ts",
+    "./lib/browser-storage": "./src/lib/browser-storage.ts",
     "./lib/webauthn": "./src/lib/webauthn.ts",
     "./primitives": "./src/primitives/index.ts",
     "./icons": "./src/icons/index.ts",

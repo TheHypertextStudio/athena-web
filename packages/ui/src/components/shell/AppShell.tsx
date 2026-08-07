@@ -78,6 +78,7 @@
 import * as React from 'react';
 
 import { useMediaQuery } from '../../hooks/useMediaQuery';
+import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
 import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
@@ -256,15 +257,10 @@ const INITIAL_RAIL_STATE: RailState = { activeId: null, collapsed: false };
  * class the server emitted — the rail silently ignored the viewer's saved choice.
  */
 function readRailState(): RailState {
-  if (typeof window === 'undefined') return INITIAL_RAIL_STATE;
-  try {
-    return {
-      activeId: window.localStorage.getItem(RAIL_ACTIVE_KEY),
-      collapsed: window.localStorage.getItem(RAIL_COLLAPSED_KEY) === '1',
-    };
-  } catch {
-    return INITIAL_RAIL_STATE;
-  }
+  return {
+    activeId: readStoredString(RAIL_ACTIVE_KEY),
+    collapsed: readStoredBoolean(RAIL_COLLAPSED_KEY) ?? INITIAL_RAIL_STATE.collapsed,
+  };
 }
 
 /**
@@ -281,24 +277,17 @@ function readRailState(): RailState {
  * precisely the discontinuity the layout contract forbids.
  */
 function readSidebarCollapsed(): boolean {
+  const stored = readStoredBoolean(SIDEBAR_COLLAPSED_KEY);
+  if (stored !== null) return stored;
+  // No stored choice. Under SSR there is no width to consult either, and `false` is the expanded
+  // default the server already rendered.
   if (typeof window === 'undefined') return false;
-  try {
-    const stored = window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (stored !== null) return stored === '1';
-  } catch {
-    /* fall through to the width default */
-  }
   return window.innerWidth < SHELL_SIDEBAR_EXPAND_MIN_PX;
 }
 
-/** Persist a rail-state value, ignoring storage failures (private mode, quota). */
+/** Persist a rail-state value. Storage failures are absorbed by {@link writeStoredValue}. */
 function writeRailState(key: string, value: string): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    /* ignore */
-  }
+  writeStoredValue(key, value);
 }
 
 /** Props for {@link AppShell}. */

@@ -13,6 +13,8 @@ import {
   useState,
 } from 'react';
 
+import { readStoredInteger, writeStoredValue } from '@docket/ui/lib/browser-storage';
+
 import { calendarItemsDef } from '@/components/calendar/calendar-data';
 import {
   clampPixelsPerHour,
@@ -78,15 +80,17 @@ const RAIL_SCALE_KEY = 'docket.rail.agenda.scale';
  *
  * @remarks
  * Deliberately not called from a `useState` initializer: the rail is server-rendered, and reading
- * `localStorage` during the first render is exactly the hydration mismatch the shell's own rail
- * state avoids by reading in an effect instead.
+ * storage during the first render is exactly the hydration mismatch
+ * {@link file://../../../../../packages/ui/src/lib/browser-storage.ts} documents. Read on mount
+ * instead, like the shell's own rail state.
+ *
+ * The clamp is applied here rather than trusted from storage, because a stored number is only
+ * proof that *something* wrote it — an older build, a hand-edited value, or a scale whose legal
+ * range has since narrowed.
  */
 function readRailScale(): number | null {
-  if (typeof window === 'undefined') return null;
-  const stored = window.localStorage.getItem(RAIL_SCALE_KEY);
-  if (stored === null) return null;
-  const parsed = Number.parseInt(stored, 10);
-  return Number.isFinite(parsed) ? clampPixelsPerHour(parsed) : null;
+  const stored = readStoredInteger(RAIL_SCALE_KEY);
+  return stored === null ? null : clampPixelsPerHour(stored);
 }
 
 interface AgendaContextValue extends AgendaPlanMutations {
@@ -163,9 +167,7 @@ export function AgendaProvider({ initialDate, children }: AgendaProviderProps): 
   const zoomBy = useCallback((factor: number) => {
     setPixelsPerHour((current) => {
       const next = clampPixelsPerHour(current * factor);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem(RAIL_SCALE_KEY, String(next));
-      }
+      writeStoredValue(RAIL_SCALE_KEY, next);
       return next;
     });
   }, []);

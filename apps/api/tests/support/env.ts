@@ -28,4 +28,8 @@ export const API_TEST_ENV = {
   // value `apiHosts.athenaMail` is undefined and every inbound-mail test
   // would exercise the "no inbox configured" branch instead of the pipeline.
   ATHENA_INBOUND_MAIL_HOST: 'inbox.athena.docket.localhost',
+  // The host published briefs answer on. Nothing derives it any more — it used to fall out of
+  // PUBLIC_ROOT_DOMAIN — so without a value `apiHosts.brief` is undefined and `briefUrls` would
+  // skip its canonical entry in every test rather than only in the one that asks for that branch.
+  PUBLIC_BRIEF_HOST: 'briefs.docket.localhost',
 } as const satisfies Record<string, string>;

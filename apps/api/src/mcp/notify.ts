@@ -175,6 +175,35 @@ export async function notifyResourceUpdated(uri: string): Promise<void> {
 }
 
 /**
+ * Notify one principal's subscribed sessions that a caller-scoped Hub resource changed.
+ *
+ * @remarks
+ * Hub URIs (`docket://hub/...`) are the same string for every caller and resolve against the
+ * reader's own Hub, so the per-entity fan-out ({@link notifyResourceUpdated}) would wake every
+ * subscriber in the system for one person's change — each re-reading their own unchanged
+ * directive. The join to `mcp_session.principal_key` addresses only the affected person's live
+ * sessions, which is what keeps the posture sweep's publish per-Hub rather than global.
+ *
+ * @param principalKey - The affected principal ({@link import('./principal').principalKey} —
+ *   the user id for human principals, which is the only kind that has a Hub).
+ * @param uri - The caller-scoped `docket://hub/...` URI that changed.
+ */
+export async function notifyHubResourceUpdated(principalKey: string, uri: string): Promise<void> {
+  await db.execute(sql`
+    select ${envelopeSql(
+      sql`sub.session_id`,
+      'notifications/resources/updated',
+      sql`json_build_object('uri', ${uri}::text)`,
+    )}
+    from ${mcpSubscription} sub
+    join ${mcpSession} s on s.id = sub.session_id
+    where sub.uri = ${uri}
+      and s.principal_key = ${principalKey}
+      and s.ended_at is null
+  `);
+}
+
+/**
  * Tell the live sessions of everyone a grant change affects that their tool list moved.
  *
  * @remarks

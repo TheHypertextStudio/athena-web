@@ -116,6 +116,13 @@ const JOBS: readonly CronJob[] = [
     description:
       'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
   },
+  {
+    name: 'docket-directive-posture',
+    path: '/internal/cron/directive-posture',
+    schedule: '*/5 * * * *',
+    description:
+      "Docket: directive-posture sweep (recomputes each configured Hub's daily posture and notifies subscribed clients only on change).",
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

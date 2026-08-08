@@ -65,7 +65,7 @@ const PlanItem = z.object({
  * @returns the Hub id and the user it belongs to.
  * @throws {NotFoundError} When the caller is an agent, or has no Hub yet.
  */
-async function callerHub(ctx: McpContext): Promise<{ hubId: string; userId: string }> {
+export async function callerHub(ctx: McpContext): Promise<{ hubId: string; userId: string }> {
   if (ctx.principal.kind === 'agent') throw new NotFoundError('Hub not found');
   const rows = await db
     .select({ id: hub.id })

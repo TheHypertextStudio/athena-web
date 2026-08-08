@@ -21,6 +21,7 @@ import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';
 import { sweepCalendarSync } from './calendar-sync-sweep';
 import { sweepConnectorSync } from './integration-sync';
+import { sweepDirectivePosture } from './directive-sweep';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
 import { sweepLinearAgentSessions } from './linear-agent-sweep';
@@ -159,6 +160,15 @@ const cron = new Hono()
   .post('/run-linear-agent-sessions', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepLinearAgentSessions(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Directive-posture sweep: recompute each configured Hub's posture for its local today from
+  // the day's blocks vs. the wall clock, and publish resources/updated for the directive
+  // resource only when the posture actually changed — an unchanged day rewrites and publishes
+  // nothing, so a scheduler retry is a no-op.
+  .post('/directive-posture', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepDirectivePosture(new Date());
     return c.json({ swept: true, ...result });
   })
   // User-owned Athena schedules are assignment-scoped, five-minute minimum, and re-authorize the

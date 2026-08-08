@@ -411,8 +411,16 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `lifecycle-sweep`                      | Advance orgs through the data-lifecycle deletion state machine (also expires/purges resolved email suggestions from M7)                             | daily 03:00              |
 | `account-deletion-sweep`               | Purge accounts past their 14-day grace window                                                                                                       | daily 03:30              |
 | `account-export-sweep`                 | Generate pending personal-data exports + email the link                                                                                             | every 10 min             |
+| `sync-calendars`                       | Re-sync every connected user's calendars, drain the write outbox, renew push watches                                                                | every 10 min             |
+| `run-linear-agent-sessions`            | Drive queued Linear Agent session runs and relay the activity back to Linear                                                                        | every 1 min              |
+| `expired-sessions-sweep`               | Delete session rows past their `expiresAt` (Better Auth only prunes lazily)                                                                         | hourly                   |
+| `athena-triggers`                      | Run every due user-owned scheduled Athena trigger (five-minute minimum schedule)                                                                    | every 1 min              |
+| `elicitation-deadlines`                | Auto-answer derivable overdue Athena questions, park the rest                                                                                       | every 5 min              |
+| `search-index`                         | Drain durable search-projection jobs from entity writes and backfills                                                                               | every 2 min              |
+| `legacy-mentions`                      | Convert prose still holding the legacy shortcode mention form (self-limiting)                                                                       | hourly at :15            |
+| `unfurl-resources`                     | Resolve titles/icons/previews for pending referenced URLs                                                                                           | every 5 min              |
 
-All seven jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
+All fifteen jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
 truth. It runs automatically after every API deploy (the `Ensure Cloud Scheduler jobs` step in
 the `deploy-api` job) and can be run by hand. The script is idempotent — it `describe`s each job
 and `update`s or `create`s it — and reads the secret from `docket-cron-secret` (never logged).

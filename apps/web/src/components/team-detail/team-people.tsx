@@ -50,7 +50,7 @@ export interface TeamPeopleProps {
 export function TeamPeople({ members, taskNounPlural, className }: TeamPeopleProps): JSX.Element {
   if (members.length === 0) {
     return (
-      <p className={cn('text-on-surface-variant text-sm', className)}>
+      <p className={cn('text-on-surface-variant text-body-medium', className)}>
         Nobody is on this team yet.
       </p>
     );
@@ -75,13 +75,15 @@ export function TeamPeople({ members, taskNounPlural, className }: TeamPeoplePro
               size={32}
             />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-on-surface line-clamp-1 text-sm font-medium">
+              <span className="text-on-surface text-body-medium line-clamp-1">
                 {member.displayName}
               </span>
               {/* A title is the one place a volunteer's standing in the organization is often
                   recorded at all, so it gets the subtitle slot rather than a tooltip. */}
               {member.title ? (
-                <span className="text-on-surface-variant line-clamp-1 text-xs">{member.title}</span>
+                <span className="text-on-surface-variant text-body-small line-clamp-1">
+                  {member.title}
+                </span>
               ) : null}
             </div>
             {roleLabel ? (
@@ -89,7 +91,7 @@ export function TeamPeople({ members, taskNounPlural, className }: TeamPeoplePro
                 {roleLabel}
               </Badge>
             ) : null}
-            <span className="text-on-surface-variant w-24 shrink-0 text-right text-xs tabular-nums">
+            <span className="text-on-surface-variant text-label-small w-24 shrink-0 text-right tabular-nums">
               {member.openTaskCount > 0 ? (
                 <>
                   {member.openTaskCount} open

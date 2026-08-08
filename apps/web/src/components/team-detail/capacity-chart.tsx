@@ -75,7 +75,7 @@ export function CapacityChart({
   // failure, so it is replaced by a sentence saying what would fill it.
   if (total === 0) {
     return (
-      <p className={cn('text-on-surface-variant text-sm', className)}>
+      <p className={cn('text-on-surface-variant text-body-medium', className)}>
         {weightByEstimate
           ? 'No estimated work is open on this team. Estimate some open tasks to see capacity by points.'
           : 'No open work on this team right now.'}
@@ -127,10 +127,10 @@ export function CapacityChart({
               aria-hidden="true"
               className={cn('size-2.5 shrink-0 rounded-sm', BUCKET_STYLE[entry.type].swatch)}
             />
-            <span className="text-on-surface-variant text-xs">
+            <span className="text-on-surface-variant text-label-small">
               {BUCKET_STYLE[entry.type].label}
             </span>
-            <span className="text-on-surface text-xs font-medium tabular-nums">{entry.value}</span>
+            <span className="text-on-surface text-label-small tabular-nums">{entry.value}</span>
           </li>
         ))}
       </ul>

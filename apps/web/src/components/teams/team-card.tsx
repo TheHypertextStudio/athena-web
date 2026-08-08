@@ -110,15 +110,15 @@ export function TeamCard({
 
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex min-w-0 items-center gap-2">
-            <h3 className="text-on-surface line-clamp-1 text-sm font-semibold">{team.name}</h3>
-            <span className="text-on-surface-variant bg-surface-container-high shrink-0 rounded px-1.5 py-0.5 font-mono text-[0.625rem] leading-4">
+            <h3 className="text-on-surface text-title-small line-clamp-1">{team.name}</h3>
+            <span className="text-on-surface-variant bg-surface-container-high text-label-small shrink-0 rounded px-1.5 py-0.5 font-mono">
               {team.key}
             </span>
           </div>
           {/* The tagline is the team's purpose in one line. A team without one gets nothing here
               rather than filler, because invented copy would be worse than a shorter card. */}
           {team.summary ? (
-            <p className="text-on-surface-variant line-clamp-2 text-xs leading-4">{team.summary}</p>
+            <p className="text-on-surface-variant text-body-small line-clamp-2">{team.summary}</p>
           ) : null}
         </div>
 
@@ -139,16 +139,16 @@ export function TeamCard({
                 </span>
               ))}
               {overflow > 0 ? (
-                <span className="text-on-surface-variant ml-1.5 text-[0.6875rem] tabular-nums">
+                <span className="text-on-surface-variant text-label-small ml-1.5 tabular-nums">
                   +{overflow}
                 </span>
               ) : null}
             </div>
           ) : (
-            <span className="text-on-surface-variant text-[0.6875rem]">No members yet</span>
+            <span className="text-on-surface-variant text-label-small">No members yet</span>
           )}
 
-          <div className="text-on-surface-variant flex shrink-0 items-center gap-3 text-xs tabular-nums">
+          <div className="text-on-surface-variant text-label-small flex shrink-0 items-center gap-3 tabular-nums">
             <span className="flex items-center gap-1">
               <FolderKanban aria-hidden="true" className="size-3.5" />
               {projectCount}

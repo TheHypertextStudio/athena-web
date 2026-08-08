@@ -50,7 +50,7 @@ export function ThroughputChart({
   // Fewer than two points is a line with no direction. Saying so beats drawing a dot.
   if (throughput.length < 2) {
     return (
-      <p className={cn('text-on-surface-variant text-sm', className)}>
+      <p className={cn('text-on-surface-variant text-body-medium', className)}>
         Not enough history yet to show a trend. This fills in as the team works.
       </p>
     );
@@ -130,8 +130,8 @@ export function ThroughputChart({
         <ul className="flex list-none flex-wrap gap-x-5 gap-y-1.5">
           <li className="flex items-center gap-2">
             <span aria-hidden="true" className="bg-primary h-0.5 w-4 shrink-0 rounded-full" />
-            <span className="text-on-surface-variant text-xs">Open</span>
-            <span className="text-on-surface text-xs font-medium tabular-nums">
+            <span className="text-on-surface-variant text-label-small">Open</span>
+            <span className="text-on-surface text-label-small tabular-nums">
               {last?.pending ?? 0}
             </span>
           </li>
@@ -140,13 +140,13 @@ export function ThroughputChart({
               aria-hidden="true"
               className="bg-state-completed h-0.5 w-4 shrink-0 rounded-full"
             />
-            <span className="text-on-surface-variant text-xs">Completed</span>
-            <span className="text-on-surface text-xs font-medium tabular-nums">
+            <span className="text-on-surface-variant text-label-small">Completed</span>
+            <span className="text-on-surface text-label-small tabular-nums">
               {last?.completed ?? 0}
             </span>
           </li>
         </ul>
-        <span className="text-on-surface-variant shrink-0 text-[0.6875rem]">
+        <span className="text-on-surface-variant text-label-small shrink-0">
           Last {windowDays} days
         </span>
       </div>

@@ -162,7 +162,7 @@ export default function TeamDetailClient(): JSX.Element {
       title={
         <span className="flex flex-wrap items-center gap-2">
           {team.name}
-          <span className="text-on-surface-variant bg-surface-container-high rounded px-1.5 py-0.5 font-mono text-xs leading-5">
+          <span className="text-on-surface-variant bg-surface-container-high text-label-small rounded px-1.5 py-0.5 font-mono">
             {team.key}
           </span>
         </span>
@@ -245,7 +245,7 @@ export default function TeamDetailClient(): JSX.Element {
             // placeholder: the team's open work by state, and its 30-day open/completed trend.
             <Skeleton aria-hidden="true" className="h-40 w-full rounded-xl" />
           ) : activityQ.isError ? (
-            <p role="alert" className="text-error text-sm">
+            <p role="alert" className="text-error text-body-medium">
               {userErrorMessage(activityQ.error, 'Could not load this team’s activity.')}
             </p>
           ) : lens === 'capacity' ? (
@@ -274,7 +274,7 @@ export default function TeamDetailClient(): JSX.Element {
             hasProse={hasProse}
           />
           {referenceCount === 0 && !mentions.isPending ? (
-            <p className="text-on-surface-variant text-sm">
+            <p className="text-on-surface-variant text-body-medium">
               Nothing is in this team’s library yet. Mention a document or a project in the team
               description and it appears here — nobody has to attach it separately.
             </p>
@@ -300,7 +300,7 @@ function BackToTeams({ orgId }: { orgId: string }): JSX.Element {
   return (
     <Link
       href={`/orgs/${orgId}/teams`}
-      className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring inline-flex w-fit items-center gap-1 rounded text-xs outline-none focus-visible:ring-2"
+      className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-label-small inline-flex w-fit items-center gap-1 rounded outline-none focus-visible:ring-2"
     >
       <ChevronLeft aria-hidden="true" className="size-3.5" />
       Teams

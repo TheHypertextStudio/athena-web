@@ -73,6 +73,16 @@ export interface McpContext {
    * agent principal carries the fixed agent-session set (never `connectors:link`).
    */
   readonly scopes: readonly string[];
+  /**
+   * The registered OAuth client the call arrived through (the token's verified `azp`), or
+   * null for a first-party cookie session and for the internal agent path.
+   *
+   * @remarks
+   * This is what lets an audit row name *which* connected client did something without the
+   * schema ever naming one (curfew-integration.md §3.3) — it is attribution only, never an
+   * authorization input; the scope and grant layers alone decide what a call may do.
+   */
+  readonly clientId?: string | null;
 }
 
 /**
@@ -285,6 +295,7 @@ async function resolveBearerContext(token: string): Promise<McpContext> {
       userEmail: row?.email ?? '',
     },
     scopes,
+    clientId,
   };
 }
 
@@ -326,6 +337,7 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
     // A consented first-party session is granted the full scope set; the granular per-org
     // grant cascade remains the binding authorization layer for it.
     scopes: [...MCP_SCOPES],
+    clientId: null,
   };
 }
 

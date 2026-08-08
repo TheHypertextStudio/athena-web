@@ -4149,6 +4149,53 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [DIRECTIVE-MCP-001] Expose the directive feed on the MCP surface
+
+- **Completed**: 2026-08-07
+- **Priority**: P1
+- **Summary**: `curfew-integration.md` §1's three-piece coupling boundary was two-thirds missing:
+  the service (`directive-service.ts`), the DTOs, and the tables all shipped, but the only
+  consumer-facing surface was the cookie-session router at `/v1/directive` — which a third-party
+  device-control client cannot authenticate against (spec §6.7: `/v1` resolves auth only via
+  cookie). This lands the MCP half: the `docket://hub/directive` static resource (`work:read`,
+  subscribable), the `acknowledge_directive` tool (`work:write`, upsert-idempotent), and the
+  five-minute `sweepDirectivePosture` cron that recomputes posture and publishes
+  `notifications/resources/updated` only when it changed.
+- **What changed for a consumer**: any registered MCP client holding `work:read` can now read
+  the same directive payload the app computes (the resource and the HTTP route call one
+  `computeDirective`, so two consumers can never see different days), subscribe to it, learn
+  within ~5 minutes that the posture moved, and close the loop with an acknowledgment that names
+  which posture it acted on and whether it enforced anything.
+- **Decisions**:
+  - **Change detection rides `directiveId`.** `computeDirective` already regenerates the id
+    exactly when the persisted posture or reason moves, so the sweep compares ids instead of
+    keeping a second copy of the change rule.
+  - **Hub-aggregate notifications are addressed per-principal.** `docket://hub/directive` is the
+    same string for every caller, so the per-entity fan-out (`notifyResourceUpdated`) would wake
+    every subscriber in the system for one person's change. `notifyHubResourceUpdated` joins the
+    subscription to its session's `principal_key` and wakes only the affected person's sessions.
+    The spec's suggested one-line reuse of the entity fan-out was wrong for caller-scoped URIs.
+  - **The audit row is attributed by OAuth client id.** `McpContext` now carries the verified
+    `azp` claim (null for cookie sessions and the internal agent path); attribution only, never
+    an authorization input. This is what spec §3.3's `oauthClientId` column was for.
+  - **Sweep eligibility is `scheduling_preference`, not a new opt-in flag.** The spec predates
+    the landed service, which keys the daily loop off configured scheduling
+    (`hubsWithSchedulingConfigured`) rather than the never-built `HubPreferences.directive`
+    block; the sweep follows the code that exists.
+  - **No `plan_day` publish hook.** The spec's §3.2 trigger (a) assumed the directive plan read
+    `daily_plan_item`; the landed service computes it from calendar blocks, which `plan_day`
+    does not touch, so that hook would announce changes the payload never shows.
+- **Files Changed**: `apps/api/src/mcp/resource-statics.ts`, `apps/api/src/mcp/directive-tools.ts`
+  (new), `apps/api/src/mcp/tools.ts`, `apps/api/src/mcp/scope.ts`, `apps/api/src/mcp/auth.ts`,
+  `apps/api/src/mcp/notify.ts`, `apps/api/src/mcp/plan-tools.ts` (export `callerHub`),
+  `apps/api/src/routes/directive-sweep.ts` (new), `apps/api/src/routes/cron.ts`,
+  `scripts/scheduler-setup.ts`, `apps/api/tests/mcp/mcp-directive.test.ts` (new).
+- **Learnings**: a caller-scoped resource URI breaks the "one URI, one entity" assumption the
+  notification fan-out was built on; any future Hub-aggregate publish (`docket://hub/today` has
+  the identical latent gap) must go through the principal-addressed variant. Separately, this
+  entry itself was dropped once by a rebase onto main — the INGEST-001 warning about verifying
+  `git show <sha> -- docs/WORKLOG.md` after rebasing held for the second branch in a row.
+
 ### [SHELL-TABS-001] Make the document tab strip legible and the PWA update banner honest
 
 - **Completed**: 2026-08-07

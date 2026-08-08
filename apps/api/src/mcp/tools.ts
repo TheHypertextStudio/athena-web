@@ -20,6 +20,7 @@ import type { McpRegistrar } from './catalog';
 import type { McpContext } from './auth';
 import { registerArchiveTool } from './archive-tool';
 import { registerContentTools } from './content-tools';
+import { registerDirectiveTools } from './directive-tools';
 import { registerLinkTool } from './link-tool';
 import { registerOrganizeTool } from './organize-tool';
 import { registerPlanTools } from './plan-tools';
@@ -60,6 +61,7 @@ export function registerTools(
   registerLinkTool(server, ctx, sessionId);
   registerArchiveTool(server, ctx, sessionId);
   registerPlanTools(server, ctx);
+  registerDirectiveTools(server, ctx);
   registerWorkspacesTool(server, ctx);
   registerAthenaAssignmentTools(server, ctx);
   registerTimeTools(server, ctx);

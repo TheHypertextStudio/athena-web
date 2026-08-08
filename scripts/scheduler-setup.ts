@@ -161,6 +161,13 @@ export const JOBS: readonly CronJob[] = [
     description:
       'Docket: resource-unfurl drain (resolves titles/icons/previews for pending referenced URLs).',
   },
+  {
+    name: 'docket-directive-posture',
+    path: '/internal/cron/directive-posture',
+    schedule: '*/5 * * * *',
+    description:
+      "Docket: directive-posture sweep (recomputes each configured Hub's daily posture and notifies subscribed clients only on change).",
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

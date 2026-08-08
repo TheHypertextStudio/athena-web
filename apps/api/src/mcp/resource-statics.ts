@@ -1,10 +1,16 @@
 import { actor, agentSession, db, organization, program, project, task } from '@docket/db';
+import { DirectiveOut } from '@docket/types';
 import type { McpRegistrar } from './catalog';
 import type { ReadResourceResult } from '@modelcontextprotocol/sdk/types.js';
 import { and, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
 import { buildHubTodayPayload } from '../routes/hub-today';
+import { computeDirective, loadDayContext } from '../services/scheduling/directive-service';
+import { loadSchedulingPreferences } from '../services/scheduling/repository';
+import { localDateString } from '../services/scheduling/zoned-time';
 import type { McpContext } from './auth';
+import { callerHub } from './plan-tools';
+import { RESOURCE_READ_SCOPE, requireScope } from './scope';
 
 /** Build the standard hydrated JSON read result for `uri`. */
 export function jsonRead(uri: URL, dto: unknown): ReadResourceResult {
@@ -97,9 +103,9 @@ export function firstVar(value: string | string[] | undefined): string | undefin
 }
 
 /**
- * Register the four static Hub resources on `server`: orgs list, hub-today,
- * hub-inbox, and hub-portfolio. All are gated by the caller principal (token sub only;
- * no per-org actor resolution needed for cross-org personal surfaces).
+ * Register the five static Hub resources on `server`: orgs list, hub-today,
+ * hub-inbox, hub-portfolio, and hub-directive. All are gated by the caller principal
+ * (token sub only; no per-org actor resolution needed for cross-org personal surfaces).
  */
 export function registerStaticResources(server: McpRegistrar, ctx: McpContext): void {
   server.registerResource(
@@ -172,6 +178,35 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
       return jsonRead(uri, {
         approvals: awaiting.map((a) => ({ sessionId: a.id, taskId: a.taskId })),
       });
+    },
+  );
+
+  server.registerResource(
+    'hub-directive',
+    'docket://hub/directive',
+    {
+      title: 'Hub - directive',
+      description:
+        "The caller's daily directive: today's committed plan, a posture with a plain-language reason, at most one narrowing recommendation, and the gates the day is waiting on (Hub-scoped, by token sub). Subscribable; re-read on notifications/resources/updated.",
+      mimeType: 'application/json',
+    },
+    async (uri): Promise<ReadResourceResult> => {
+      // The scope gate is asserted in the handler (mirroring `authorizeResourceUri`'s Hub
+      // branch, which already gates subscribe the same way) because this surface exists for
+      // unattended third-party clients whose tokens may carry any scope subset — unlike its
+      // sibling statics, whose consumers are effectively first-party and full-scope.
+      requireScope(ctx.scopes, RESOURCE_READ_SCOPE);
+      // Always today in the Hub's timezone — a device-control client asking "what should I be
+      // doing right now" never means another day, so there is deliberately no date parameter.
+      const { hubId, userId } = await callerHub(ctx);
+      const preferences = await loadSchedulingPreferences(db, hubId);
+      const date = localDateString(new Date(), preferences.timezone);
+      const context = await loadDayContext(db, { hubId, userId, date });
+      // The same service call backing `GET /v1/directive`, so an MCP consumer can never see a
+      // different day than the app does. Parsed through the DTO so the wire shape is guaranteed,
+      // exactly like the HTTP route's response serialization.
+      const payload = await computeDirective(db, context, {});
+      return jsonRead(uri, DirectiveOut.parse(payload));
     },
   );
 

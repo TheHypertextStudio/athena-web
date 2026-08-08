@@ -278,6 +278,32 @@ gcloud scheduler jobs describe docket-sync-calendars --location=<REGION> --proje
 git commit --allow-empty -m "chore: force redeploy" && git push
 ```
 
+### Skipping the Vercel web build for pushes that do not touch it
+
+`apps/web/vercel.json` sets `ignoreCommand` to `npx turbo-ignore@2.10.2 @docket/web
+--fallback=<sha> --turbo-version=2.10.2`, pinned to the `turbo` devDependency version
+in the root `package.json` (there is no `turbo` entry in the pnpm catalog — it is not
+a cross-cut pin). Vercel runs this inside the project's Root Directory (`apps/web`)
+before every build. `turbo-ignore` asks turbo whether the pushed commit changed
+`@docket/web`'s build-task hash relative to the last deployed commit; if not, it exits
+`0` and Vercel skips the build. `--fallback` only matters on a commit with no prior
+deployment to diff against (first deploy on a branch); in normal operation turbo-ignore
+diffs against the last successfully-deployed commit for the project automatically.
+
+This skips builds for pushes confined to `.github/`, `scripts/`, or a package `@docket/web`
+does not depend on. It does **not** skip pushes to `apps/api` or `packages/integrations`:
+`apps/web/package.json` depends on `@docket/api` directly (the Hono RPC `AppType` contract)
+and on `@docket/integrations`, and turbo's default `build` task inputs are
+`$TURBO_DEFAULT$` (everything except `*.md`) with no exclusion for test files — so even an
+api test-only commit changes `@docket/api#build`'s hash, which cascades to
+`@docket/web#build` through `dependsOn: ["^build"]`. Verified directly: a commit touching
+only `apps/api/tests/**` produced `This commit affects "@docket/web"` (exit 1, build) from
+`turbo-ignore`, while commits confined to `.github/workflows/**` or `scripts/**` produced
+`This project and its dependencies are not affected` (exit 0, skip). Across the last 25
+commits on `main`, only the `.github`-only and `scripts`-only ones would have skipped — most
+of tonight's apps/api and packages/integrations work still triggers a web build, correctly,
+because it changes what `@docket/web` imports.
+
 ### Rotating a Secret Manager secret
 
 ```bash

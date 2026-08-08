@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "npx turbo-ignore@2.10.2 @docket/web --fallback=98811d722085c09ba242e86ec0e9a3772dba1ff1 --turbo-version=2.10.2"
+}

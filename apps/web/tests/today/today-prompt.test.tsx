@@ -62,11 +62,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TodayPrompt', () => {
-  it('sends to capture in the default Task mode and never opens Athena', async () => {
+  it('names the destination on the control, so the consequence is never inferred', async () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     typeDraft('Buy milk');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Task' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add task' }));
 
     await waitFor(() => {
       expect(capturePost).toHaveBeenCalledOnce();
@@ -76,10 +76,10 @@ describe('TodayPrompt', () => {
 
   it('routes the same draft to Athena once the mode is switched, and remembers the choice', async () => {
     const first = render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+    fireEvent.click(screen.getByRole('button', { name: /Switch to Athena/ }));
     typeDraft('Plan the launch');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Send to Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
 
     expect(openAthena).toHaveBeenCalledOnce();
     expect(capturePost).not.toHaveBeenCalled();
@@ -88,7 +88,7 @@ describe('TodayPrompt', () => {
     first.unmount();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Send to Athena' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeInTheDocument();
     });
   });
 
@@ -120,12 +120,12 @@ describe('TodayPrompt', () => {
 
   it('keeps the send disabled until there is something to send', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
-    expect(screen.getByRole('button', { name: 'Send to Task' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled();
 
     typeDraft('   ');
-    expect(screen.getByRole('button', { name: 'Send to Task' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeDisabled();
 
     typeDraft('Real work');
-    expect(screen.getByRole('button', { name: 'Send to Task' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeEnabled();
   });
 });

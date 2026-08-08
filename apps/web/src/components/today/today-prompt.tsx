@@ -13,13 +13,21 @@
  * - **Ask Athena** opens the global personal dock with this workspace and draft attached. The dock
  *   creates and supervises the work; Today does not grow its own mini session UI.
  *
- * One box, one visible action, one behaviour at every moment. It carries no heading, no
- * explanatory paragraph, no destination caption, and no empty-workspace variant — all of which it
- * used to, and all of which were the field describing itself to the person already using it.
- * Enter captures; ⌘/Ctrl+Enter hands the same text to Athena instead, which is also what the
- * global Athena pill does.
+ * **The two destinations are not a preference, and the box must not pretend otherwise.** Capture is
+ * a deterministic insert: `deriveTitle` takes the first non-empty line, truncates it, and puts the
+ * rest in the description — no parsing, no decomposition, no agent. Athena spawns a task, an agent,
+ * and an approval loop. Hiding which one is armed would be lying about consequences, which is why
+ * the destination is named on the control rather than inferred.
+ *
+ * That is also why the placeholder no longer says "paste a plan". In Task mode a twelve-line
+ * braindump becomes *one* task titled by line one; only Athena decomposes it.
+ *
+ * A line, not a card. The bordered box with a toolbar along its bottom edge made the page's first
+ * element a form, and its inner text sat inset from the column every other line on the page aligns
+ * to. This shares the page's left edge, so it lines up by construction rather than by a negative
+ * margin.
  */
-import { ArrowUp, CornerDownLeft, ListChecks, Sparkles } from '@docket/ui/icons';
+import { ChevronDown, ListChecks, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { readStoredString, writeStoredValue } from '@docket/ui/lib/browser-storage';
 import Link from 'next/link';
@@ -158,7 +166,7 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
           "What's on your plate?" over two sentences describing what pasting does — was the field
           narrating itself to the person already using it. */}
-      <div className="border-outline-variant bg-surface-container-low focus-within:ring-ring focus-within:border-ring flex flex-col gap-2 rounded-2xl border p-3 transition-colors duration-(--dur-base) ease-(--ease-out) focus-within:ring-2 @2xl:p-4">
+      <div className="border-outline-variant focus-within:border-primary flex flex-col gap-2 border-b pb-2 transition-colors duration-(--dur-base) ease-(--ease-out)">
         <MentionTextarea
           value={text}
           onChange={(next) => {
@@ -173,49 +181,37 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           rows={1}
           autoGrow
           maxRows={10}
-          placeholder="Capture a task, paste a plan, or ask Athena…"
+          placeholder="What needs doing?"
           aria-label="Capture a task or ask Athena"
           disabled={orgId === null}
-          className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent px-1 pt-1 text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
+          className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
         />
-        {/* The bottom row: destination on the left, send on the right. One send, because a field
-            with two peer submit buttons makes every entry a mode decision before typing is worth
-            anything. The destination is a setting you flip and it stays, which is what lets the
-            send button be a bare arrow — the mode pill is already saying where the text goes. */}
-        <div className="flex items-center gap-2">
+        {/* One control, and it says what it will do. The arrow it replaces meant nothing on a
+            surface where "send" can mean "insert a row" or "start an agent", and the separate
+            destination pill beside it was a second thing to decode before the first made sense.
+            The label is the destination; the chevron changes it. */}
+        <div className="flex items-center justify-end gap-1">
           <Button
             type="button"
+            variant={canSubmit ? 'default' : 'ghost'}
+            controlSize="sm"
+            disabled={!canSubmit}
+            onClick={submit}
+          >
+            {mode === 'task' ? <ListChecks /> : <Sparkles />}
+            {busy === 'capture' ? 'Adding…' : mode === 'task' ? 'Add task' : 'Ask Athena'}
+          </Button>
+          <Button
+            type="button"
+            iconOnly
             variant="ghost"
-            controlSize="xs"
-            className="rounded-full"
-            aria-pressed={mode === 'athena'}
-            title={`Sending to ${modeLabel}. Switch to ${nextMode === 'task' ? 'Task' : 'Athena'}.`}
+            controlSize="sm"
+            aria-label={`Send to ${modeLabel}. Switch to ${nextMode === 'task' ? 'Task' : 'Athena'}.`}
             onClick={() => {
               setMode(nextMode);
             }}
           >
-            {mode === 'task' ? <ListChecks /> : <Sparkles />}
-            {modeLabel}
-          </Button>
-          <span className="text-on-surface-variant text-label-small ml-auto hidden items-center gap-1 @lg:flex">
-            <CornerDownLeft aria-hidden="true" className="size-3.5" />
-            to send
-          </span>
-          {/* Filled only once there is something to send. A permanently filled button meant the
-              resting state of an empty field was a loud control for an action that was not yet
-              available. `rounded-full` overrides the primitive's `rounded-md`; it is the one
-              circular control in the app and it earns that by being the composer's single action. */}
-          <Button
-            type="button"
-            iconOnly
-            controlSize="md"
-            variant={canSubmit ? 'default' : 'ghost'}
-            className="ml-auto rounded-full @lg:ml-0"
-            disabled={!canSubmit}
-            aria-label={busy === 'capture' ? 'Adding…' : `Send to ${modeLabel}`}
-            onClick={submit}
-          >
-            <ArrowUp />
+            <ChevronDown />
           </Button>
         </div>
       </div>

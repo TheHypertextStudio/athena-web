@@ -1,75 +1,58 @@
 'use client';
 
-import { Button, Stack } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { GhostProposals } from '@/components/today/ghost-proposals';
-import NextUp from '@/components/today/next-up';
+import NeedsYou from '@/components/today/needs-you';
+import TodaysWork from '@/components/today/todays-work';
 import { TodayPrompt } from '@/components/today/today-prompt';
-import { useNow } from '@/lib/use-now';
 
 import { useTodayData } from './use-today-data';
 
-/** A warm, time-of-day greeting above the masthead. */
-function greetingFor(hour: number): string {
-  if (hour < 5) return 'Late night';
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  if (hour < 21) return 'Good evening';
-  return 'Winding down';
-}
-
 /**
- * TodayPage — the caller's calm daily landing.
+ * TodayPage — where the day starts: what is waiting on you, and what you meant to do.
  *
  * @remarks
- * A single focused column: a large "Today" over the date, the capture box, and "Next up" (the next
- * few timeboxed blocks, or tasks due today). The day's full agenda is not on this surface — it
- * lives in the shell's portable agenda rail (registered globally, rides along on every page), so
- * the Today page itself just renders its masthead + capture + the "Next up" peek.
+ * Two jobs, in this order:
  *
- * The masthead carries no Athena door of its own. Athena is the engine behind every door rather
- * than a place to be opened, and this page already has two of those doors — the capture box and
- * the global pill.
+ * 1. **Start something.** The prompt is the first thing under the date, because the most common
+ *    reason to open this page is that you arrived with something in your head.
+ * 2. **See where things stand.** Athena's proposals, then what is waiting on your approval or
+ *    blocked, then the day's own tasks.
+ *
+ * The order is deliberate and it is not chronological: a proposal or an approval will not move
+ * without you, and a plan you wrote yesterday will. Anything with nothing in it renders nothing —
+ * a clear day should be a short page, not a column of empty panels.
+ *
+ * **Not a three-pane cockpit.** `docs/core/mvp-plan.md` §8.1 specifies Plan · Calendar ·
+ * Needs-Attention side by side. The calendar pane is gone because the shell's agenda rail renders
+ * the same day on every route, and the remaining two read better stacked in one column than split
+ * into panes that each get a third of the width.
+ *
+ * **No Athena door of its own.** Athena is the engine behind every door rather than a place to be
+ * opened, and this page already has two — the prompt, and the global pill.
  */
 export default function TodayPage(): JSX.Element {
-  const { data, loading, error, refetch, taskTitle, orgName, heading, activeOrgId } =
-    useTodayData();
-  const now = useNow(60_000);
+  const { data, loading, error, refetch, orgName, heading, activeOrgId } = useTodayData();
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 px-6 py-8 @2xl:px-10 @2xl:py-10 @4xl:px-12">
-      {/* Tightened so the composer sits near the top of the fold. The masthead used to spend a
-          `gap-3` stack inside a `gap-10` column on top of `py-14`, which put roughly a quarter of
-          a 900px viewport between opening the page and reaching the one thing you came to do. */}
-      <Stack
-        as="header"
-        gap={1}
-        className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-700 motion-safe:ease-out"
-      >
-        {/* "Today" at display size over the date at headline size. The in-app type scale tops out at
-            text-title-large, so these editorial sizes are a deliberate, surface-specific choice for the daily
-            landing (a fixed display size, not the marketing clamp which grows much larger). */}
-        <span className="text-on-surface-variant text-label-large tracking-wide">
-          {greetingFor(now.getHours())}
-        </span>
-        <h1 className="text-on-surface text-[3rem] leading-[1.1] font-semibold tracking-[-0.01em]">
-          Today
-        </h1>
-        <p className="text-on-surface-variant text-title-medium">{heading}</p>
-        {/* No "Open Athena for today" door here. Athena is the engine behind every door, not a
-            place you go — and the capture box directly below this is already one of those doors,
-            with the global pill a third. Three entry points to one engine on a single screen is
-            the model leaking into the layout. */}
-      </Stack>
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-6 py-8 @2xl:px-10 @2xl:py-10">
+      {/* `Today · Friday, August 7` on one line at the app's real page-title size. The 48px display
+          heading this replaces was 2.4× the documented ceiling (`design-system.md:293`: "page
+          titles are 20px, not a marketing 24px+"), and it sat over a separate date line and a
+          time-of-day greeting no spec ever asked for — three lines of masthead before the first
+          thing you can act on. */}
+      <h1 className="text-on-surface text-title-large shrink-0 font-semibold">
+        Today
+        <span className="text-on-surface-variant ml-2 font-normal">{heading}</span>
+      </h1>
 
       <TodayPrompt
         orgId={activeOrgId}
-        orgLabel={activeOrgId ? orgName(activeOrgId) : 'your space'}
+        orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
         onCaptured={refetch}
       />
-
-      <GhostProposals orgId={activeOrgId} onApplied={refetch} />
 
       {error ? (
         <div
@@ -83,16 +66,15 @@ export default function TodayPage(): JSX.Element {
         </div>
       ) : null}
 
-      {/* No loading branch around this section. `NextUp` paints its own heading immediately and
-          confines the placeholder to the rows, so the statically-known "Next up" label is never
-          replaced by a grey bar while the Hub read is in flight. */}
-      <NextUp
-        blocks={data?.calendar ?? []}
-        dueToday={data?.needsAttention.dueToday ?? []}
-        taskTitle={taskTitle}
+      <GhostProposals orgId={activeOrgId} onApplied={refetch} />
+
+      <NeedsYou
+        approvals={data?.needsAttention.approvals ?? []}
+        blocked={data?.needsAttention.blocked ?? []}
         orgName={orgName}
-        loading={loading}
       />
+
+      <TodaysWork plan={data?.plan ?? []} orgName={orgName} loading={loading} />
     </div>
   );
 }

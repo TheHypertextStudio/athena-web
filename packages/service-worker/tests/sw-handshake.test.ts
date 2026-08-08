@@ -31,6 +31,18 @@ const fakeCaches = {
   ),
 };
 
+/**
+ * Load a module without adding it to this spec's TypeScript program.
+ *
+ * `sw.ts` is worker-only source — it declares `self` as `ServiceWorkerGlobalScope` and registers
+ * worker `FetchEvent`/`PushEvent` handlers — and is type-checked solely by `src/worker/tsconfig.json`
+ * against the `WebWorker` lib. This spec belongs to the package root tsconfig, whose `DOM` lib has
+ * none of those globals. A string-literal `import('../src/worker/sw')` would pull sw.ts into that
+ * `DOM` program and fail the typecheck (`Cannot find name 'ServiceWorkerGlobalScope'`); a
+ * `string`-typed specifier keeps the runtime import while erasing the compile-time reference.
+ */
+const importUntyped = (specifier: string): Promise<unknown> => import(specifier);
+
 /** Run a captured listener with a waitUntil-capturing event and await its extended lifetime. */
 async function dispatch(name: string, event: Record<string, unknown> = {}): Promise<void> {
   const handler = handlers.get(name);
@@ -67,7 +79,7 @@ beforeAll(async () => {
       registration: {},
     },
   });
-  await import('../src/worker/sw');
+  await importUntyped('../src/worker/sw');
 });
 
 beforeEach(() => {

@@ -20,6 +20,7 @@
  *   raise a prompt would be a lie.
  */
 import { Bell, BellOff } from '@docket/ui/icons';
+import { readStoredBoolean, writeStoredValue } from '@docket/ui/lib/browser-storage';
 import { cn } from '@docket/ui/lib/utils';
 import { Button, ControlGroup, Text } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useState } from 'react';
@@ -100,7 +101,7 @@ export function EnableNotificationsPrompt({
     void readNotificationPermission().then((state) => {
       if (!cancelled) setPermission(state);
     });
-    setDismissed(window.localStorage.getItem(NOTIFICATION_PROMPT_DISMISSED_KEY) === '1');
+    setDismissed(readStoredBoolean(NOTIFICATION_PROMPT_DISMISSED_KEY) ?? false);
     return () => {
       cancelled = true;
     };
@@ -185,7 +186,7 @@ export function EnableNotificationsPrompt({
           type="button"
           variant="ghost"
           onClick={() => {
-            window.localStorage.setItem(NOTIFICATION_PROMPT_DISMISSED_KEY, '1');
+            writeStoredValue(NOTIFICATION_PROMPT_DISMISSED_KEY, true);
             setDismissed(true);
           }}
         >

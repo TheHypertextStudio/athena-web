@@ -5,6 +5,13 @@ import {
   type HomeNavKey,
   type WorkspaceNavKey,
 } from '@docket/ui/components';
+import {
+  clearStoredValue,
+  readStoredBoolean,
+  readStoredString,
+  writeStoredValue,
+} from '@docket/ui/lib/browser-storage';
+
 import DocketLink from '@/components/docket-link';
 import type { ReactNode } from 'react';
 
@@ -118,22 +125,14 @@ export function lastOrgStorageKey(userId: string): string {
 
 /** readLastOrg reads persisted app shell preferences from browser storage. */
 export function readLastOrg(userId: string | null): string | null {
-  if (!userId || typeof window === 'undefined') return null;
-  try {
-    return window.localStorage.getItem(lastOrgStorageKey(userId));
-  } catch {
-    return null;
-  }
+  if (!userId) return null;
+  return readStoredString(lastOrgStorageKey(userId));
 }
 
 /** writeLastOrg writes persisted app shell preferences to browser storage. */
 export function writeLastOrg(userId: string | null, orgId: string): void {
-  if (!userId || typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(lastOrgStorageKey(userId), orgId);
-  } catch {
-    // Non-fatal: persistence is best-effort.
-  }
+  if (!userId) return;
+  writeStoredValue(lastOrgStorageKey(userId), orgId);
 }
 
 /** densityStorageKey derives a stable app shell storage or navigation key. */
@@ -143,23 +142,17 @@ export function densityStorageKey(userId: string): string {
 
 /** readDensity reads persisted app shell preferences from browser storage. */
 export function readDensity(userId: string | null): Density {
-  if (!userId || typeof window === 'undefined') return 'comfortable';
-  try {
-    const raw = window.localStorage.getItem(densityStorageKey(userId));
-    return DENSITIES.includes(raw as Density) ? (raw as Density) : 'comfortable';
-  } catch {
-    return 'comfortable';
-  }
+  if (!userId) return 'comfortable';
+  const raw = readStoredString(densityStorageKey(userId));
+  // `find`, not `includes(raw as Density)`. The cast asserted the answer to the very question
+  // being asked, and it is the caller's job to decide legality — storage only reports bytes.
+  return DENSITIES.find((density) => density === raw) ?? 'comfortable';
 }
 
 /** writeDensity writes persisted app shell preferences to browser storage. */
 export function writeDensity(userId: string | null, density: Density): void {
-  if (!userId || typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(densityStorageKey(userId), density);
-  } catch {
-    // Non-fatal: persistence is best-effort.
-  }
+  if (!userId) return;
+  writeStoredValue(densityStorageKey(userId), density);
 }
 
 /** recoveryNudgeDismissedKey derives the per-user key for the recovery-codes nudge dismissal. */
@@ -169,23 +162,18 @@ export function recoveryNudgeDismissedKey(userId: string): string {
 
 /** readRecoveryNudgeDismissed reads whether the recovery-codes nudge was dismissed. */
 export function readRecoveryNudgeDismissed(userId: string | null): boolean {
-  if (!userId || typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(recoveryNudgeDismissedKey(userId)) === '1';
-  } catch {
-    return false;
-  }
+  if (!userId) return false;
+  return readStoredBoolean(recoveryNudgeDismissedKey(userId)) ?? false;
 }
 
 /** writeRecoveryNudgeDismissed persists (or clears) the recovery-codes nudge dismissal (best-effort). */
 export function writeRecoveryNudgeDismissed(userId: string | null, dismissed: boolean): void {
-  if (!userId || typeof window === 'undefined') return;
-  try {
-    if (dismissed) window.localStorage.setItem(recoveryNudgeDismissedKey(userId), '1');
-    else window.localStorage.removeItem(recoveryNudgeDismissedKey(userId));
-  } catch {
-    // Non-fatal: persistence is best-effort.
-  }
+  if (!userId) return;
+  const key = recoveryNudgeDismissedKey(userId);
+  // Cleared rather than written as `'0'`: absence is what "never dismissed" has always meant here,
+  // and writing a falsy value would leave a key behind that reads the same but is not the same.
+  if (dismissed) writeStoredValue(key, true);
+  else clearStoredValue(key);
 }
 
 /** resolveActiveOrg supports the app shell workflow. */

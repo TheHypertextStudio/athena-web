@@ -17,6 +17,7 @@ import type { Editor } from '@tiptap/core';
 import type { EditorView } from '@tiptap/pm/view';
 import type { MentionItem, MentionRef } from '@docket/types';
 import { mentionRefKey } from '@docket/types';
+import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 
 import { MENTION_NODE, attributesFromRef } from './mention-extension';
 import { decideTrigger, type MentionTrigger } from './mention-trigger';
@@ -283,19 +284,20 @@ export function useMentionController(input: MentionControllerOptions): MentionCo
   };
 }
 
+/** Where the recently-inserted mention keys live between sessions. */
+const RECENT_MENTIONS_KEY = 'docket.mentions.recent';
+
+/** How many recent mentions bare `@` offers back before the oldest falls off. */
+const RECENT_MENTIONS_LIMIT = 8;
+
 /** Remember an inserted reference so bare `@` can offer it back immediately next time. */
 function rememberMention(ref: MentionRef): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const key = 'docket.mentions.recent';
-    const raw = window.localStorage.getItem(key);
-    const previous = raw === null ? [] : (JSON.parse(raw) as string[]);
-    const next = [mentionRefKey(ref), ...previous.filter((k) => k !== mentionRefKey(ref))].slice(
-      0,
-      8,
-    );
-    window.localStorage.setItem(key, JSON.stringify(next));
-  } catch {
-    // A full or disabled storage is not a reason to fail an insert.
-  }
+  const stored = readStoredJson(RECENT_MENTIONS_KEY);
+  // Filtered to strings rather than asserted as `string[]`. This list is written by builds older
+  // than this one and is hand-editable, so a single non-string entry used to reach `.filter` on a
+  // value the type system had already promised was a string.
+  const previous = Array.isArray(stored) ? stored.filter((k) => typeof k === 'string') : [];
+  const key = mentionRefKey(ref);
+  const next = [key, ...previous.filter((k) => k !== key)].slice(0, RECENT_MENTIONS_LIMIT);
+  writeStoredJson(RECENT_MENTIONS_KEY, next);
 }

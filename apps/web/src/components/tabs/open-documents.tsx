@@ -23,6 +23,7 @@
  */
 import { ULID_REGEX } from '@docket/types';
 import type { OpenTab } from '@docket/ui/components';
+import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 import { useRouter } from 'next/navigation';
 import { useAppPathname } from '@/lib/app-location';
 import {
@@ -61,42 +62,33 @@ function storageKey(userId: string): string {
 
 /** Read the persisted tab set for a user, tolerating absent/corrupt storage. */
 function readPersisted(userId: string): readonly OpenTab[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.sessionStorage.getItem(storageKey(userId));
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    // Keep only well-formed entries (defensive against schema drift across sessions). The org
-    // and document ids must be real ULIDs, so any junk tab persisted before the route guard
-    // landed — e.g. a stale "Session undefined" with `id: 'undefined'` — is dropped on hydration
-    // rather than resurrected.
-    return parsed.filter((t): t is OpenTab => {
-      if (typeof t !== 'object' || t === null) return false;
-      const tab = t as OpenTab;
-      return (
-        typeof tab.key === 'string' &&
-        typeof tab.id === 'string' &&
-        typeof tab.orgId === 'string' &&
-        typeof tab.href === 'string' &&
-        typeof tab.title === 'string' &&
-        ULID_REGEX.test(tab.id) &&
-        ULID_REGEX.test(tab.orgId)
-      );
-    });
-  } catch {
-    return [];
-  }
+  const parsed = readStoredJson(storageKey(userId), 'session');
+  if (!Array.isArray(parsed)) return [];
+  // Keep only well-formed entries (defensive against schema drift across sessions). The org
+  // and document ids must be real ULIDs, so any junk tab persisted before the route guard
+  // landed — e.g. a stale "Session undefined" with `id: 'undefined'` — is dropped on hydration
+  // rather than resurrected.
+  return parsed.filter(isOpenTab);
+}
+
+/** Whether one parsed entry is a usable {@link OpenTab} rather than drift from an older schema. */
+function isOpenTab(value: unknown): value is OpenTab {
+  if (typeof value !== 'object' || value === null) return false;
+  const tab: Partial<Record<keyof OpenTab, unknown>> = value;
+  return (
+    typeof tab.key === 'string' &&
+    typeof tab.id === 'string' &&
+    typeof tab.orgId === 'string' &&
+    typeof tab.href === 'string' &&
+    typeof tab.title === 'string' &&
+    ULID_REGEX.test(tab.id) &&
+    ULID_REGEX.test(tab.orgId)
+  );
 }
 
 /** Persist the tab set for a user, ignoring storage failures (quota/private mode). */
 function persist(userId: string, tabs: readonly OpenTab[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage.setItem(storageKey(userId), JSON.stringify(tabs));
-  } catch {
-    // Non-fatal: persistence is best-effort.
-  }
+  writeStoredJson(storageKey(userId), tabs, 'session');
 }
 
 /** Props for {@link OpenDocumentsProvider}. */

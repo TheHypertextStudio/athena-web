@@ -29,6 +29,7 @@
  *
  * @see {@link file://./session-status.ts} for the state machine that decides when this is read.
  */
+import { clearStoredValue, readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 
 /** The storage key. Not user-keyed: only one person can be signed in per origin at a time. */
 const STORAGE_KEY = 'docket:session-snapshot';
@@ -79,19 +80,13 @@ function isSnapshot(value: unknown): value is SessionSnapshot {
  * @returns The snapshot, or `null` when absent, malformed, expired, or storage is unavailable.
  */
 export function readSessionSnapshot(now: number): SessionSnapshot | null {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (!isSnapshot(parsed)) return null;
-    if (now - parsed.savedAt > SNAPSHOT_MAX_AGE_MS) return null;
-    return parsed;
-  } catch {
-    // Private mode, disabled storage, or a hand-edited value. Absence is always a safe answer:
-    // the caller falls back to the plain offline screen.
-    return null;
-  }
+  // Private mode, disabled storage, or a hand-edited value all arrive here as `null` from
+  // {@link readStoredJson}. Absence is always a safe answer: the caller falls back to the plain
+  // offline screen.
+  const parsed = readStoredJson(STORAGE_KEY);
+  if (!isSnapshot(parsed)) return null;
+  if (now - parsed.savedAt > SNAPSHOT_MAX_AGE_MS) return null;
+  return parsed;
 }
 
 /**
@@ -104,21 +99,12 @@ export function writeSessionSnapshot(
   snapshot: Omit<SessionSnapshot, 'savedAt'>,
   now: number,
 ): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...snapshot, savedAt: now }));
-  } catch {
-    // Best-effort, exactly like the other shell preferences: failing to persist costs an offline
-    // convenience, never correctness.
-  }
+  // Best-effort, exactly like the other shell preferences: failing to persist costs an offline
+  // convenience, never correctness.
+  writeStoredJson(STORAGE_KEY, { ...snapshot, savedAt: now });
 }
 
 /** Forget the stored identity. Called on sign-out and on session expiry, before any redirect. */
 export function clearSessionSnapshot(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
+  clearStoredValue(STORAGE_KEY);
 }

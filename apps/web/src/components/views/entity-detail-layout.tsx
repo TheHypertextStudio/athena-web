@@ -16,8 +16,6 @@ import { useOwnPageScroll } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
-import { PageContainer } from './page-layout';
-
 /** Props for {@link EntityDetailLayout}. */
 export interface EntityDetailLayoutProps {
   /**
@@ -76,37 +74,64 @@ export function EntityDetailLayout({
   children,
   className,
 }: EntityDetailLayoutProps): JSX.Element {
-  if (cover) {
-    return (
-      <CoverDetailLayout
-        {...{ cover, eyebrow, icon, title, subtitle, metadata, actions, tabs, children, className }}
-      />
-    );
-  }
+  // Every detail page owns its scrolling, backdrop or not. Making it conditional would mean two
+  // layouts again — one that scrolls itself and one the shell scrolls — which is the duplication
+  // this component exists to remove. It is also required for a backdrop: the shell's `<main>`
+  // reserves a permanent scrollbar gutter while it scrolls, and no child of a gutter-reserving box
+  // can reach the pane's edge. Owning the scroll additionally gives the header something to pin to
+  // and a timeline to collapse against, which every detail page benefits from equally.
+  useOwnPageScroll();
 
   return (
-    <PageContainer className={className}>
-      {eyebrow || actions ? (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">{eyebrow}</div>
-          {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
-        </div>
-      ) : null}
-      <header className="flex flex-col gap-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="shrink-0">{icon}</div>
-          <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
+    <div
+      data-detail-panel-scroll=""
+      className={cn(
+        // Sections are rows of this grid, so the rhythm between them is declared once here rather
+        // than by each section spacing itself against its neighbours.
+        'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto pb-24 lg:pb-6 @2xl:gap-y-5',
+        className,
+      )}
+    >
+      {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
+          children through the nested grid, so nothing inside has to know it sits in a bleeding
+          section. */}
+      <header className="page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-3 pt-1 pb-1">
+        {/* The backdrop is a layer of this header, not a section above it. `isolate` traps it in
+            the header's own stacking context, so it cannot paint over anything outside — the class
+            of bug that made an opaque icon look transparent. It has no height of its own: it is
+            whatever the header is, so collapsing the header collapses the artwork with it. */}
+        {cover ? <div className="absolute inset-0 -z-10 overflow-hidden">{cover}</div> : null}
+
+        {eyebrow || actions ? (
+          <div className="flex items-center justify-between gap-3 pt-3">
+            <div className="min-w-0">{eyebrow}</div>
+            {actions ? <div className="flex shrink-0 items-center gap-1">{actions}</div> : null}
+          </div>
+        ) : null}
+
+        {cover ? <div aria-hidden="true" className="detail-backdrop-space" /> : null}
+
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="detail-glyph w-fit shrink-0 origin-left">{icon}</div>
+          <h1 className="detail-title text-on-surface text-headline-medium min-w-0 flex-1 truncate font-medium">
             {title}
           </h1>
-          {subtitle ? (
-            <div className="text-on-surface-variant text-body-large w-full min-w-0">{subtitle}</div>
-          ) : null}
         </div>
-        {metadata}
+
+        <div className="detail-secondary">
+          <div className="flex min-w-0 flex-col gap-3">
+            {subtitle ? (
+              <div className="text-on-surface-variant text-body-large min-w-0">{subtitle}</div>
+            ) : null}
+            {metadata}
+          </div>
+        </div>
+
+        {tabs}
       </header>
-      {tabs}
+
       {children}
-    </PageContainer>
+    </div>
   );
 }
 
@@ -138,115 +163,6 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
   return (
     <div role="group" aria-label={ariaLabel} className="flex flex-wrap items-center gap-2">
       {children}
-    </div>
-  );
-}
-
-/**
- * The banner variant: one scrolling column with a pinned masthead.
- *
- * @remarks
- * The page takes ownership of scrolling ({@link useOwnPageScroll}), so the shell's `<main>` stops
- * being a scroll container. That is what lets the banner reach the pane's right edge — `<main>`
- * reserves a permanent scrollbar gutter while it scrolls (11px, measured) and no child can cross
- * it.
- *
- * The masthead is `sticky`, not collapsible-by-height. Shrinking the banner on scroll was the
- * obvious reading of "semi-collapsible" and it oscillates: collapsing gives height back to the
- * panel, which removes the overflow that triggered the collapse, which expands it again. Sticky
- * has no such loop because the column's height never changes — the banner simply scrolls up and
- * out under a masthead that stays put, which is also what Linear's detail pages actually do.
- *
- * The identity row is `sticky` too, one layer above the banner and directly below nothing, so
- * title, tabs and the way back stay reachable at any scroll depth.
- */
-function CoverDetailLayout({
-  cover,
-  eyebrow,
-  icon,
-  title,
-  subtitle,
-  metadata,
-  actions,
-  tabs,
-  children,
-  className,
-}: EntityDetailLayoutProps): JSX.Element {
-  useOwnPageScroll();
-
-  return (
-    // The one scrolling box on the page. No stable scrollbar gutter here: reserving one would
-    // inset the banner from the pane's right edge, which is the whole reason the page took
-    // ownership of scrolling in the first place.
-    <div data-detail-panel-scroll="" className="h-full min-h-0 w-full overflow-y-auto">
-      <div className="relative h-32 w-full @2xl:h-44">
-        {cover}
-        {/* Eyebrow and actions share one row over the banner, matching the row they share when
-            there is no banner. Each sits in its own blurred pill, which keeps a back link and a
-            menu legible over artwork nobody chose for legibility. */}
-        {eyebrow || actions ? (
-          <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-3 px-3 pt-3 @2xl:px-6 @2xl:pt-4 @4xl:px-8">
-            {eyebrow ? (
-              <div className="bg-surface/70 min-w-0 rounded-full px-2 py-1 backdrop-blur-sm">
-                {eyebrow}
-              </div>
-            ) : (
-              <span />
-            )}
-            {actions ? (
-              <div className="bg-surface/70 flex shrink-0 items-center gap-1 rounded-full px-1 backdrop-blur-sm">
-                {actions}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      {/* `relative z-10` is load-bearing: the banner above lives in a positioned box, and a
-          positioned element paints in a later layer than a non-positioned sibling — so without
-          this the banner draws over the icon that deliberately overlaps it, which reads exactly
-          like a transparency bug and is paint order. */}
-      <div
-        className={cn(
-          'bg-surface relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-3 px-3 @2xl:px-6 @4xl:px-8',
-          className,
-        )}
-      >
-        <header className="-mt-10 flex flex-col gap-3">
-          <div className="flex min-w-0 flex-col gap-1">
-            {/* An opaque disc, not just a ring: every entity glyph paints its tint at ~15% alpha,
-                so straddling the banner would otherwise let the cover composite through the icon. */}
-            <div className="bg-surface ring-surface w-fit shrink-0 rounded-full ring-4">{icon}</div>
-            <h1 className="text-on-surface text-headline-medium w-full min-w-0 font-medium">
-              {title}
-            </h1>
-            {subtitle ? (
-              <div className="text-on-surface-variant text-body-large w-full min-w-0">
-                {subtitle}
-              </div>
-            ) : null}
-          </div>
-          {metadata}
-        </header>
-      </div>
-
-      {/* The tab bar pins, the masthead above it scrolls away. Sticking the whole masthead clipped
-          the icon, because the icon is pulled up into the banner by `-mt-10` and a sticky box has
-          nowhere to put the part that hangs above its own top edge. Pinning the tabs keeps the one
-          thing a reader needs at depth — the way between sections — without that problem, and
-          without the height-shrinking approach that oscillates. */}
-      <div
-        className={cn(
-          'bg-surface sticky top-0 z-20 mx-auto w-full max-w-7xl px-3 pt-1 pb-2 @2xl:px-6 @4xl:px-8',
-          className,
-        )}
-      >
-        {tabs}
-      </div>
-
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-3 pt-4 pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)] @2xl:gap-5 @2xl:px-6 @4xl:px-8">
-        {children}
-      </div>
     </div>
   );
 }

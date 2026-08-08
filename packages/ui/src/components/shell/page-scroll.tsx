@@ -65,8 +65,10 @@ export function usePageScrollOwner(): PageScrollOwner {
  *
  * @remarks
  * Reverts to `shell` on unmount, so a page that forgets to release it cannot leave the next route
- * unable to scroll. Call it unconditionally at the top of a page component — it is a layout
- * declaration, not a behaviour to toggle.
+ * unable to scroll. Call it unconditionally and pass `enabled`, rather than calling it
+ * conditionally — a layout whose shape depends on a prop still has to run the same hooks.
+ *
+ * @param enabled - Whether this page owns scrolling. Defaults to true.
  *
  * @example
  * ```tsx
@@ -76,14 +78,14 @@ export function usePageScrollOwner(): PageScrollOwner {
  * }
  * ```
  */
-export function useOwnPageScroll(): void {
+export function useOwnPageScroll(enabled = true): void {
   const ctx = React.useContext(PageScrollContext);
   const setOwner = ctx?.setOwner;
   React.useEffect(() => {
-    if (!setOwner) return;
+    if (!setOwner || !enabled) return;
     setOwner('page');
     return () => {
       setOwner('shell');
     };
-  }, [setOwner]);
+  }, [enabled, setOwner]);
 }

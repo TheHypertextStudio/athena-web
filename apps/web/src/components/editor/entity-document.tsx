@@ -50,6 +50,14 @@ export interface EntityDocumentProps {
   onSave: (value: string | null) => void;
   /** The quiet prompt shown before anything is written. */
   placeholder?: string;
+  /**
+   * Whether to generate a table of contents from the body's headings. Defaults to true.
+   *
+   * @remarks
+   * Off for bodies that are short by nature. A contents rail beside two headings is navigation for
+   * a distance nobody has to travel, and it costs a column of the measure to say so.
+   */
+  contents?: boolean;
 }
 
 /** A document-style entity body with a responsive generated table of contents. */
@@ -58,6 +66,7 @@ export function EntityDocument({
   canEdit,
   onSave,
   placeholder = 'Add a description…',
+  contents = true,
 }: EntityDocumentProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const headings = useMemo(() => extractMarkdownHeadings(value ?? ''), [value]);
@@ -89,7 +98,7 @@ export function EntityDocument({
     };
   }, [headings]);
 
-  const hasContents = headings.length >= 2;
+  const hasContents = contents && headings.length >= 2;
   const renderContents = (showLabel: boolean): JSX.Element => (
     <nav aria-label="Document contents" className="entity-contents print:block">
       {showLabel ? (

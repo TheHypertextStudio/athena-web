@@ -656,3 +656,151 @@
 @utility scrollbar-gutter-stable {
   scrollbar-gutter: stable;
 }
+
+/*
+ * The page bleed grid: one declaration of the measure, for every section that sits on it.
+ *
+ * Sections used to each re-derive `mx-auto max-w-7xl px-3 …`, which meant four copies of the same
+ * decision and four chances for them to drift. Here the container states it once and children say
+ * only which track they occupy — `measure` by default, `full` to bleed. A section cannot be
+ * misaligned, because a section no longer decides its own alignment.
+ *
+ * The gutter steps with the shell's container queries rather than the viewport, because the pane
+ * is what actually narrows when the sidebar or rail opens.
+ */
+.page-grid {
+  --page-gutter: 0.75rem;
+  --page-measure: 80rem;
+  display: grid;
+  align-content: start;
+  grid-template-columns:
+    [full-start] minmax(var(--page-gutter), 1fr)
+    [measure-start] min(var(--page-measure), 100% - 2 * var(--page-gutter)) [measure-end]
+    minmax(var(--page-gutter), 1fr) [full-end];
+}
+
+@container (min-width: 42rem) {
+  .page-grid {
+    --page-gutter: 1.5rem;
+  }
+}
+
+@container (min-width: 56rem) {
+  .page-grid {
+    --page-gutter: 2rem;
+  }
+}
+
+/* `min-width: 0` so a long title truncates inside its track instead of widening it. */
+.page-grid > * {
+  grid-column: measure;
+  min-width: 0;
+}
+
+.page-grid > .page-bleed {
+  grid-column: full;
+}
+
+/*
+ * The collapsing entity-detail header.
+ *
+ * The backdrop is a *layer of this header*, not a section above it: absolutely positioned inside an
+ * `isolate` stacking context, behind the content. That is what makes the overlap structural rather
+ * than negotiated — a background cannot paint over foreground in the same box, so there is no
+ * z-index to get wrong, no negative margin to clip, and the artwork has no height of its own. It is
+ * whatever the header is, so collapsing the header collapses the artwork with it for free.
+ *
+ * Scroll-driven, not state-driven: `animation-timeline: scroll()` ties progress to the scroller's
+ * offset with no listener and no re-render per frame, and it cannot oscillate. Driving this from a
+ * `collapsed` boolean means the collapse changes the layout height, which can remove the overflow
+ * that triggered it, which expands it again — a loop that is easy to write and impossible to tune
+ * out.
+ *
+ * Everything animated sits inside `@supports`, so a browser without scroll timelines keeps the
+ * header at its expanded size. Worse, not broken.
+ */
+/*
+ * The room the artwork gets above the identity, as a row of the header rather than padding on
+ * anything. Its only job is to be that height and then stop being it, so neither the eyebrow row
+ * above nor the identity below has to know the backdrop exists.
+ */
+.detail-backdrop-space {
+  height: 5.5rem;
+}
+
+@container (min-width: 42rem) {
+  .detail-backdrop-space {
+    height: 8rem;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  @media not (prefers-reduced-motion: reduce) {
+    .detail-backdrop-space,
+    .detail-glyph,
+    .detail-title,
+    .detail-secondary {
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: scroll(nearest);
+      /* The collapse finishes over the header's own expanded height, so identity has reached its
+         compact size exactly when the artwork has finished shrinking behind it. */
+      animation-range: 0 var(--detail-collapse-range, 6rem);
+    }
+
+    .detail-backdrop-space {
+      animation-name: detail-backdrop-collapse;
+    }
+
+    .detail-glyph {
+      animation-name: detail-glyph-collapse;
+    }
+
+    .detail-title {
+      animation-name: detail-title-collapse;
+    }
+
+    /* `grid-template-rows: 1fr → 0fr` collapses to the content's real height with no magic number,
+       which `max-height` cannot do without someone guessing one. */
+    .detail-secondary {
+      display: grid;
+      grid-template-rows: 1fr;
+      animation-name: detail-secondary-collapse;
+    }
+
+    .detail-secondary > * {
+      min-height: 0;
+      overflow: hidden;
+    }
+  }
+}
+
+@keyframes detail-backdrop-collapse {
+  to {
+    height: 0.5rem;
+  }
+}
+
+@keyframes detail-glyph-collapse {
+  to {
+    scale: 0.6;
+  }
+}
+
+@keyframes detail-title-collapse {
+  from {
+    font-size: var(--text-headline-medium);
+    line-height: var(--text-headline-medium--line-height);
+  }
+  to {
+    font-size: var(--text-title-medium);
+    line-height: var(--text-title-medium--line-height);
+  }
+}
+
+@keyframes detail-secondary-collapse {
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+}

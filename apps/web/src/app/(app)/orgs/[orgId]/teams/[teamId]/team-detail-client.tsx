@@ -197,6 +197,9 @@ export default function TeamDetailClient(): JSX.Element {
           <EntityDocument
             value={team.description}
             canEdit
+            // A team charter is a few short sections. A contents rail beside two headings is
+            // navigation for a distance nobody has to travel.
+            contents={false}
             onSave={(value) => {
               saveDescription.mutate(value);
             }}

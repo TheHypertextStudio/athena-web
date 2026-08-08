@@ -334,9 +334,13 @@ describe('members router — member removal', () => {
     expect((await w.request(`/${MISSING}`, { method: 'DELETE' })).status).toBe(404);
 
     // 404: a team (non-human) actor is not a member.
+    const [squad] = await db
+      .insert(schema.team)
+      .values({ organizationId: orgId, name: 'Squad', key: 'SQD' })
+      .returning({ id: schema.team.id });
     const [teamActor] = await db
       .insert(schema.actor)
-      .values({ organizationId: orgId, kind: 'team', displayName: 'Squad' })
+      .values({ organizationId: orgId, kind: 'team', displayName: 'Squad', teamId: squad!.id })
       .returning({ id: schema.actor.id });
     expect((await w.request(`/${teamActor!.id}`, { method: 'DELETE' })).status).toBe(404);
 

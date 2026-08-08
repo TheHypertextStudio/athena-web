@@ -379,9 +379,18 @@ describe('people — an actor with no Docket account', () => {
       .insert(schema.actor)
       .values({ organizationId: seeded.orgId, kind: 'agent', displayName: 'Athena' })
       .returning({ id: schema.actor.id });
+    const [general] = await db
+      .insert(schema.team)
+      .values({ organizationId: seeded.orgId, name: 'General', key: 'GEN2' })
+      .returning({ id: schema.team.id });
     const [teamActor] = await db
       .insert(schema.actor)
-      .values({ organizationId: seeded.orgId, kind: 'team', displayName: 'General' })
+      .values({
+        organizationId: seeded.orgId,
+        kind: 'team',
+        displayName: 'General',
+        teamId: general!.id,
+      })
       .returning({ id: schema.actor.id });
 
     for (const id of [agent!.id, teamActor!.id, other.ownerActorId, '01ARZ3NDEKTSV4RRFFQ69G5FAV']) {

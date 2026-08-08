@@ -127,6 +127,7 @@ describe('initiatives detail roll-up', () => {
       iconKey: 'flag',
       colorKey: 'primary',
       customColor: null,
+      coverImage: null,
       customized: true,
     });
   });

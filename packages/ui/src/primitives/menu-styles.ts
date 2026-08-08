@@ -207,6 +207,11 @@ export function menuContentClass(
           'gap-0.5 overflow-hidden p-1 shadow-level2',
           '[&>[role^=menuitem]:first-child]:rounded-t-corner-md',
           '[&>[role^=menuitem]:last-child]:rounded-b-corner-md',
+          // A semantic group renders `display: contents`, so its rows lay out as the container's
+          // own children — but a selector still has to walk through it, since `:first-child`
+          // reads the DOM tree and not the layout tree.
+          '[&>[role=group]:first-child>[role^=menuitem]:first-child]:rounded-t-corner-md',
+          '[&>[role=group]:last-child>[role^=menuitem]:last-child]:rounded-b-corner-md',
           MENU_SURFACE[variant],
         ),
   );
@@ -407,6 +412,10 @@ export function menuLabel(variant: MenuVariant): string {
  *   semantic wrapper and paints nothing, so the two treatments never stack.
  * @returns The group's surface, shape, padding, and row rhythm.
  *
+ * **A divider menu's group is `display: contents`.** It still has to exist for screen readers,
+ * but as a box it would eat the container's 2dp row gap and leave its rows flush against each
+ * other. Removing it from the layout tree puts the rows back in the container's flex flow.
+ *
  * @remarks
  * A group is a **surface**. It carries the fill, the 4dp inset, the elevation, and the clipping the
  * container gives up, which is what puts the backdrop in the gap between two sections.
@@ -422,7 +431,7 @@ export function menuLabel(variant: MenuVariant): string {
  * since "am I on the menu's outer edge?" depends on which block a row is in.
  */
 export function menuGroup(variant: MenuVariant, sections: MenuSections = 'gap'): string {
-  if (sections === 'divider') return '';
+  if (sections === 'divider') return 'contents';
   return cn(
     'flex flex-col gap-0.5 overflow-hidden p-1 shadow-level2',
     'rounded-corner-sm first:rounded-t-corner-lg last:rounded-b-corner-lg',

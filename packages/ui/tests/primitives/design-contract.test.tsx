@@ -562,7 +562,25 @@ describe('MD3 menu spec — layout and shape', () => {
     // The divider layout is the inverse: the container paints and a group is a bare wrapper.
     expect(menuContentClass('standard', 'md', 'divider')).toContain('bg-surface-container-low');
     expect(menuContentClass('standard', 'md', 'divider')).toContain('shadow-level2');
-    expect(menuGroup('standard', 'divider')).toBe('');
+  });
+
+  it('keeps a semantic group out of the divider layout entirely', () => {
+    // A group still has to exist for screen readers, but as a box it would swallow the
+    // container's 2dp row gap and leave its rows flush. `display: contents` drops it from the
+    // layout tree so the rows rejoin the container's flex flow.
+    expect(menuGroup('standard', 'divider')).toBe('contents');
+
+    // Selectors read the DOM tree rather than the layout tree, so `display: contents` does not
+    // make the group transparent to `:first-child`. The edge-corner rule has to walk through it,
+    // or the top and bottom rows of a grouped menu lose their 12dp concentric corner and read as
+    // 4dp pills against a 16dp container.
+    const container = menuContentClass('standard', 'md', 'divider');
+    expect(container).toContain(
+      '[&>[role=group]:first-child>[role^=menuitem]:first-child]:rounded-t-corner-md',
+    );
+    expect(container).toContain(
+      '[&>[role=group]:last-child>[role^=menuitem]:last-child]:rounded-b-corner-md',
+    );
   });
 
   it('defaults to the divider layout', () => {

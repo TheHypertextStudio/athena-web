@@ -90,3 +90,6 @@ temp/
 
 # Bundled service worker (generated from apps/web/service-worker by the build script)
 apps/web/public/sw.js
+
+# Local scratch space for one-off audit scripts; never committed.
+.scratch/

@@ -62,21 +62,32 @@ function is total and never spins.
 ### Estimates and placement
 
 Duration per task: `clamp(estimateMinutes ?? DEFAULT_TASK_MINUTES)` into `[MIN, MAX]`, with the
-provenance reported (`measured` when the task carried an estimate, `shape_default` otherwise) —
-consistent with how `duration-model.ts` already reports where a number came from.
+provenance reported (`requested` when the task carried an estimate, `shape_default` otherwise) —
+`duration-model.ts`'s own vocabulary, in which a number someone supplied is `requested` and
+`measured` is reserved for time actually tracked.
 
-Placement walks the topological order and takes the earliest fitting run from the `SpanPool`
-(`desk` first, `field` as fallback), which stuffs the windows front-to-back. A task that no longer
-fits is **still placed on the plan, in order, without a timebox**, and reported in `unplaced` with
-a reason — an over-full day is reported honestly rather than silently truncated.
+Placement walks the topological order and takes the earliest fitting run from the `SpanPool`,
+**strictly forward in time**: each task starts at or after the previous one ended, so the
+timeboxes agree with the dependency order rather than merely the line numbers. Without that, a
+short blocked task could slip into a gap ahead of the long blocker it waits on. The pool holds
+only `desk` and `field` spans (`transit` is reading time, not a slot for a ticket), and no kind
+filter is applied when taking from it — preferring desk would leave an earlier field window
+standing empty, which is the opposite of stuffing the day.
+
+A task that no longer fits is **still placed on the plan, in order, without a timebox**, and
+reported in `unplaced` with a reason — an over-full day is reported honestly rather than silently
+truncated.
 
 ### Candidate selection
 
-Incomplete, non-archived tasks in the org, assigned to the caller, that are any of:
+Live tasks in the org — not archived, completed or cancelled — that are any of:
 
-- already on the day's plan (a manual add is never dropped by an auto-plan),
-- `startDate` falls on the day (the reconciler's planned day), or
-- `dueDate` falls on the day.
+- already on the day's plan (a manual add is never dropped by an auto-plan);
+- assigned to the caller and `startDate` falls on the day (the reconciler's planned day); or
+- assigned to the caller and `dueDate` falls on the day.
+
+The assignee restriction applies to the date-driven cases only. A task someone put on their own
+plan by hand stays on it whoever it is assigned to.
 
 ## MCP surface
 
@@ -96,7 +107,9 @@ timeboxes it cannot fit rather than leaving a stale one pointing at yesterday's 
 ## Files
 
 - `apps/api/src/services/scheduling/day-planner.ts` — new, pure.
-- `apps/api/src/services/scheduling/repository.ts` — candidate + dependency-edge loaders.
+- `apps/api/src/services/scheduling/day-plan-repository.ts` — new; the candidate and
+  dependency-edge loaders. Kept out of the 895-line `repository.ts` because it answers a different
+  question: that module reads a Hub's calendar, this one reads its work.
 - `apps/api/src/mcp/plan-tools.ts` — `autoPlan` param, applied before edits.
 - `apps/api/tests/services/scheduling/day-planner.test.ts` — new.
 - `apps/api/tests/mcp/mcp-plan-tools.test.ts` — extended.
@@ -111,6 +124,11 @@ timeboxes it cannot fit rather than leaving a stale one pointing at yesterday's 
 - **No double-booking**: no two timeboxes overlap, and none lands in protected time or on a week
   planner block.
 - Existing `plan_day` hand-edit tests must pass unchanged.
+
+**Not yet executed.** The suites above are written but were not run: every test command in the
+authoring session was refused by the harness permission gate, and the session was non-interactive
+so nothing could approve them. ESLint and Prettier did run, via the `lint-staged` pre-commit hook,
+and passed. Run `pnpm --filter @docket/api test`, `typecheck` and `lint` before relying on this.
 
 ## Risks
 

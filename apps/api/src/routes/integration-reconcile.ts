@@ -27,10 +27,12 @@ import type { ConnectorProvider, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
+import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { type IntegrationRow } from './integration-provider';
 import { recordSyncConflict } from './sync-notion';
+import { wouldCreateSubtaskCycle } from './task-helpers';
 
 /** A linked task projected to just the fields reconciliation needs to decide a direction. */
 export interface ReconcileLocalTask {
@@ -346,7 +348,7 @@ export async function reconcileTasks(
       taskIdByExternalId.set(externalId, insertedId);
       tally.inserted += 1;
     } else if (action.kind === 'pull' && local && remote) {
-      await applyPull(local.id, remote, keys, taskIdByExternalId);
+      await applyPull(orgId, local.id, remote, keys, taskIdByExternalId);
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pulled += 1;
     } else if (action.kind === 'push' && local && writable) {
@@ -392,8 +394,11 @@ export async function reconcileTasks(
  * so a child inserted before its parent would degrade to a top-level task. Sorting by depth in
  * the pulled batch's parent chain (a top-level item is depth 0, its children 1, and so on) makes
  * the degradation impossible for any batch that carries the parent. The sort is stable, so items
- * at the same depth keep the pull's order. A malformed cycle resolves as depth 0 rather than
- * recursing forever.
+ * at the same depth keep the pull's order. A malformed parent cycle cannot recurse forever: each
+ * id pre-seeds its own depth as 0 before walking to its parent, so the walk that re-enters the
+ * cycle reads that placeholder and stops — members of a multi-node cycle end up with finite,
+ * entry-order-dependent depths (e.g. a↔b memoizes as b=1, a=2), which is meaningless as
+ * hierarchy but harmless as an ordering.
  */
 function orderParentsFirst(
   externalIds: ReadonlySet<string>,
@@ -476,6 +481,7 @@ async function insertLinked(
 
 /** Apply a newer remote's fields onto a local linked task and restamp the anchors. */
 async function applyPull(
+  orgId: string,
   taskId: string,
   item: ImportedItem,
   keys: StateKeys,
@@ -492,36 +498,46 @@ async function applyPull(
   // without them cannot clear a value the user set locally. An explicit `null` DOES clear. An
   // unresolvable (or self-referencing) parent id leaves the local parent alone: hierarchy is
   // metadata, and a broken reference must not detach or corrupt existing structure.
+  const patch = {
+    title: item.title,
+    description: item.body ?? null,
+    state: item.completed ? keys.completedKey : keys.openKey,
+    completedAt: item.completed ? anchor : null,
+    dueDate: item.dueDate ? new Date(item.dueDate) : null,
+    ...(item.startDate !== undefined
+      ? { startDate: item.startDate ? new Date(item.startDate) : null }
+      : {}),
+    ...(item.estimateMinutes !== undefined ? { estimateMinutes: item.estimateMinutes } : {}),
+    ...(item.parentExternalId === null ? { parentTaskId: null } : {}),
+    externalListId: item.provenance.externalListId ?? null,
+    externalEtag: item.provenance.externalEtag ?? null,
+    // Echo guard: updatedAt == externalUpdatedAt → clean, next pull is a no-op.
+    externalUpdatedAt: anchor,
+    updatedAt: anchor,
+  };
+
   const resolvedParent =
     typeof item.parentExternalId === 'string'
       ? taskIdByExternalId.get(item.parentExternalId)
       : undefined;
-  const parentPatch =
-    item.parentExternalId === null
-      ? { parentTaskId: null }
-      : resolvedParent !== undefined && resolvedParent !== taskId
-        ? { parentTaskId: resolvedParent }
-        : {};
-  await db
-    .update(task)
-    .set({
-      title: item.title,
-      description: item.body ?? null,
-      state: item.completed ? keys.completedKey : keys.openKey,
-      completedAt: item.completed ? anchor : null,
-      dueDate: item.dueDate ? new Date(item.dueDate) : null,
-      ...(item.startDate !== undefined
-        ? { startDate: item.startDate ? new Date(item.startDate) : null }
-        : {}),
-      ...(item.estimateMinutes !== undefined ? { estimateMinutes: item.estimateMinutes } : {}),
-      ...parentPatch,
-      externalListId: item.provenance.externalListId ?? null,
-      externalEtag: item.provenance.externalEtag ?? null,
-      // Echo guard: updatedAt == externalUpdatedAt → clean, next pull is a no-op.
-      externalUpdatedAt: anchor,
-      updatedAt: anchor,
-    })
-    .where(eq(task.id, taskId));
+  if (resolvedParent !== undefined && resolvedParent !== taskId) {
+    // Re-parenting to a non-null parent must uphold the same acyclic invariant the PATCH route
+    // enforces (tasks.ts): check + write atomically under SERIALIZABLE, via the same
+    // `wouldCreateSubtaskCycle` walk, so a pull racing another reparent can't commit a loop the
+    // per-row CHECK (length-1 only) would miss. Where PATCH rejects with a 409, a pull DROPS the
+    // parent link and keeps the rest of the update: hierarchy is metadata here (an unresolvable
+    // parent already degrades the same way), and refusing the whole item over it would abort a
+    // sync run because of one bad remote edge.
+    await serializableTx(async (tx) => {
+      const cyclic = await wouldCreateSubtaskCycle(tx, orgId, taskId, resolvedParent);
+      await tx
+        .update(task)
+        .set({ ...patch, ...(cyclic ? {} : { parentTaskId: resolvedParent }) })
+        .where(eq(task.id, taskId));
+    });
+    return;
+  }
+  await db.update(task).set(patch).where(eq(task.id, taskId));
 }
 
 /** Push a dirty local task's fields to the provider and restamp the anchors from the echo. */

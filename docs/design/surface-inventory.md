@@ -4,7 +4,7 @@ Every user-facing surface in the launch, one row each: a route for every `page.t
 
 This inventory is the first half of **GEN-10** in `docs/engineering/launch-compliance.json`. It makes "which surfaces exist" a fact rather than a guess. **It does not close GEN-10.** That requirement closes only when every row below carries at least one Craft Rubric scorecard whose five hard gates pass and whose lowest dimension score is at or above the ship bar of 3 (`docs/design/craft-rubric.md`). Scoring the surfaces is design-review work; this file exists to keep the count honest while that work happens.
 
-**Coverage**: 45 of 107 surfaces have at least one scorecard under `docs/design/audits/`; the remaining 62 have none, and driving that number to zero is the open GEN-10 work.
+**Coverage**: 46 of 110 surfaces have at least one scorecard under `docs/design/audits/`; the remaining 64 have none, and driving that number to zero is the open GEN-10 work.
 
 Coverage counts existence, not verdicts — a surface whose only scorecard says `needs-work` is covered but is not shipped. `packages/test-utils/tests/design-policies/scorecard-schema.test.ts` separately forbids a `ship` verdict on any scorecard with a failing gate or a dimension below the bar, which is how the "zero scorecards recording a known-degraded state" half of GEN-10 stays enforced.
 
@@ -122,6 +122,16 @@ GEN-10's acceptance criteria also name the published-brief templates. No publish
 | `passkeys-section`             | —   | `apps/web/src/components/settings/passkeys-section.tsx`                 | —            |
 | `recovery-codes-dialog`        | —   | `apps/web/src/components/settings/recovery-codes-dialog.tsx`            | —            |
 | `naming-dialog`                | —   | `apps/web/src/components/time-tracking/naming-dialog.tsx`               | —            |
+
+## Shell rail panels
+
+The right-hand supplemental panels, registered per route by `apps/web/src/components/app-shell-frame.tsx`. They are a class of their own rather than overlays: at `lg` and above each is a **docked column** beside `<main>`, and only below `lg` is it presented in a Sheet. Every route in the `(app)` group hosts exactly two of them, so they are on screen for more of a session than most rows in this file.
+
+| Surface id        | URL | Source                                                  | Scorecard(s)                                   |
+| ----------------- | --- | ------------------------------------------------------- | ---------------------------------------------- |
+| `agenda`          | —   | `apps/web/src/components/agenda/agenda.tsx`             | `docs/design/audits/2026-08-07-agenda-rail.md` |
+| `day-tasks-panel` | —   | `apps/web/src/components/rail/day-tasks-panel.tsx`      | —                                              |
+| `focus-panel`     | —   | `apps/web/src/components/time-tracking/focus-panel.tsx` | —                                              |
 
 ## MCP App widgets
 

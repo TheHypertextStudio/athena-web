@@ -26,18 +26,16 @@
  * "migration, not connector" means in this codebase (see `docs/migration/sunsama-to-docket.md` §5
  * and `packages/types/src/integration.ts`'s `IntegrationPattern` doc).
  *
- * **Fields this adapter cannot carry through.** `ImportedItem` only has
- * `title`/`body`/`completed`/`dueDate` plus provenance — there is no `startDate` or
- * `estimateMinutes`, and `reconcileTasks`'s `insertLinked`/`applyPull` do not write them even
- * where the column exists on `task`. So `SunsamaTask.plannedDate` (→ `task.startDate`) and
- * `SunsamaTask.timeEstimateMinutes` (→ `task.estimateMinutes`) — both documented destinations in
- * `SUNSAMA_FIELD_MAPPING` — are NOT persisted by a run through this adapter today, and neither are
- * per-task subtasks as child rows (`ImportedItem` has no parent-task linkage at all). This is a
- * limitation of the shared `ImportedItem`/`reconcileTasks` contract every connector adapter
- * shares, not something specific to Sunsama, and closing it means extending that shared contract —
- * out of scope here (`integration-reconcile.ts` is off-limits to this change). `mapSunsamaTask`'s
- * `MappedSunsamaTask` still carries the true values ({@link SunsamaImportedTask.notWrittenByReconciler}
- * surfaces them here too) so a future write path has everything it needs without re-deriving it.
+ * **Every documented destination is on the write path.** `ImportedItem` carries
+ * `startDate`/`estimateMinutes`/`parentExternalId` alongside `title`/`body`/`completed`/`dueDate`
+ * (the shared-contract extension `docs/migration/sunsama-to-docket.md` §5.3 used to name as the
+ * one remaining field gap), so `SunsamaTask.plannedDate` (→ `task.startDate`),
+ * `SunsamaTask.timeEstimateMinutes` (→ `task.estimateMinutes`), and each subtask (→ its own child
+ * `task` row via `parentExternalId`) all persist through `reconcileTasks` exactly as
+ * `SUNSAMA_FIELD_MAPPING` declares. A subtask becomes a sibling {@link ImportedItem} on
+ * {@link SunsamaImportedTask.childItems}, keyed by Sunsama's own subtask id when it supplied one
+ * and by a stable `<parent>/subtask-<n>` id otherwise, so a re-run reconciles children as
+ * idempotently as parents.
  */
 import type { ImportedItem, ItemProvenance, ConnectorProvider } from './connector';
 import {
@@ -101,26 +99,19 @@ export const SUNSAMA_ROUTING: SunsamaWorkspaceRouting = {
  */
 export const SUNSAMA_PROVENANCE_PROVIDER = 'sunsama' as ConnectorProvider;
 
-/** One Sunsama task, mapped to the shape `reconcileTasks` can write, plus what it still can't. */
+/** One Sunsama task, mapped to the shape `reconcileTasks` writes. */
 export interface SunsamaImportedTask {
   /** The destination workspace this task was routed to. */
   readonly workspace: DocketWorkspaceName;
   /** The connector-shaped item, ready for `reconcileTasks`. */
   readonly item: ImportedItem;
   /**
-   * Fields {@link SUNSAMA_FIELD_MAPPING} documents a Docket destination for for, but that
-   * {@link SunsamaImportedTask.item}'s `ImportedItem` shape has no field for and the shared
-   * `reconcileTasks` write path does not persist — preserved here (not silently dropped) so a
-   * caller building the migration report, or a future write path, still has them.
+   * One item per Sunsama subtask, each carrying `parentExternalId` back to
+   * {@link SunsamaImportedTask.item} so `reconcileTasks` writes it as a child `task` row
+   * (`task.parentTaskId`) with its own completion state. Children always land in the parent's
+   * workspace — Sunsama has no per-subtask stream.
    */
-  readonly notWrittenByReconciler: {
-    /** `task.startDate` (Sunsama's planned day) — see this module's top doc. */
-    readonly startDate: string | null;
-    /** `task.estimateMinutes` — see this module's top doc. */
-    readonly estimateMinutes: number | null;
-    /** How many subtasks existed on the source task (not written as child rows). */
-    readonly subtaskCount: number;
-  };
+  readonly childItems: readonly ImportedItem[];
 }
 
 /**
@@ -159,18 +150,36 @@ export function sunsamaTaskToImportedItem(
     ...(mapped.description !== null ? { body: mapped.description } : {}),
     completed: mapped.completed,
     dueDate: mapped.dueDate,
+    startDate: mapped.startDate,
+    estimateMinutes: mapped.estimateMinutes,
     provenance,
   };
 
-  return {
-    workspace: mapped.workspace,
-    item,
-    notWrittenByReconciler: {
-      startDate: mapped.startDate,
-      estimateMinutes: mapped.estimateMinutes,
-      subtaskCount: mapped.children.length,
-    },
-  };
+  const childItems: ImportedItem[] = mapped.children.map((child, index) => {
+    // Sunsama's own subtask id when it supplied one, else a synthesized id that is stable for an
+    // unchanged source (position-keyed) — either way a re-run matches the same linked child row
+    // and no-ops instead of duplicating it.
+    const childExternalId = child.id ?? `${mapped.externalId}/subtask-${String(index + 1)}`;
+    return {
+      id: childExternalId,
+      kind: 'issue',
+      title: child.title,
+      completed: child.completed,
+      parentExternalId: mapped.externalId,
+      provenance: {
+        provider: SUNSAMA_PROVENANCE_PROVIDER,
+        externalId: childExternalId,
+        importedAt,
+        // Sunsama subtasks carry no modification time of their own; the parent's is the closest
+        // honest anchor, and it keeps a child born clean exactly as its parent is.
+        ...(mapped.externalUpdatedAt !== null
+          ? { externalUpdatedAt: mapped.externalUpdatedAt }
+          : {}),
+      },
+    };
+  });
+
+  return { workspace: mapped.workspace, item, childItems };
 }
 
 /**
@@ -194,7 +203,9 @@ export function sunsamaAccountToImportedItems(
  * @remarks
  * `reconcileTasks` reconciles one (org, team) at a time, and in Docket each of the eight named
  * workspaces is its own organization — so a caller writing the migration needs the tasks split
- * per destination workspace to reconcile each group into the right org/team. Pure grouping only;
+ * per destination workspace to reconcile each group into the right org/team. Each entry's
+ * `childItems` land in the same bucket as (and after) their parent, so one `reconcileTasks` call
+ * per workspace sees the whole family and can link `task.parentTaskId`. Pure grouping only;
  * resolving a workspace name to a real `orgId`/`teamId` is the caller's job.
  *
  * @param mapped - The account's mapped tasks (e.g. from {@link sunsamaAccountToImportedItems}).
@@ -204,9 +215,9 @@ export function groupSunsamaImportedItemsByWorkspace(
 ): ReadonlyMap<DocketWorkspaceName, readonly ImportedItem[]> {
   const groups = new Map<DocketWorkspaceName, ImportedItem[]>();
   for (const entry of mapped) {
-    const bucket = groups.get(entry.workspace);
-    if (bucket) bucket.push(entry.item);
-    else groups.set(entry.workspace, [entry.item]);
+    const bucket = groups.get(entry.workspace) ?? [];
+    bucket.push(entry.item, ...entry.childItems);
+    groups.set(entry.workspace, bucket);
   }
   return groups;
 }

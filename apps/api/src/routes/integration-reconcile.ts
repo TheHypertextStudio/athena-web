@@ -292,6 +292,13 @@ export async function reconcileTasks(
   const remoteById = new Map<string, ImportedItem>();
   for (const item of items) remoteById.set(item.provenance.externalId, item);
 
+  // Parent linkage (`ImportedItem.parentExternalId`) resolves against this map, which starts as
+  // the already-linked tasks and grows as inserts land — so a child inserted in the same batch as
+  // its parent still finds a real task id, provided the parent is processed first (see the
+  // depth ordering below).
+  const taskIdByExternalId = new Map<string, string>();
+  for (const t of localRows) if (t.externalId) taskIdByExternalId.set(t.externalId, t.id);
+
   const tally = {
     inserted: 0,
     pulled: 0,
@@ -303,7 +310,7 @@ export async function reconcileTasks(
   };
 
   const externalIds = new Set<string>([...localById.keys(), ...remoteById.keys()]);
-  for (const externalId of externalIds) {
+  for (const externalId of orderParentsFirst(externalIds, remoteById)) {
     const localRow = localById.get(externalId);
     const remote = remoteById.get(externalId);
     const local: ReconcileLocalTask | undefined = localRow
@@ -326,10 +333,20 @@ export async function reconcileTasks(
     // guards re-narrow that for the type system (the repo forbids non-null assertions).
     const action = planTaskReconcile(local, remote, { writeBack });
     if (action.kind === 'insert' && remote) {
-      await insertLinked(orgId, actorId, row.id, teamId, remote, keys, options.assigneeId);
+      const insertedId = await insertLinked(
+        orgId,
+        actorId,
+        row.id,
+        teamId,
+        remote,
+        keys,
+        options.assigneeId,
+        resolveParentTaskId(remote, taskIdByExternalId),
+      );
+      taskIdByExternalId.set(externalId, insertedId);
       tally.inserted += 1;
     } else if (action.kind === 'pull' && local && remote) {
-      await applyPull(local.id, remote, keys);
+      await applyPull(local.id, remote, keys, taskIdByExternalId);
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.pulled += 1;
     } else if (action.kind === 'push' && local && writable) {
@@ -367,6 +384,46 @@ export async function reconcileTasks(
   return tally;
 }
 
+/**
+ * Order external ids so every parent precedes its children.
+ *
+ * @remarks
+ * `insertLinked` resolves `parentExternalId` against the tasks that exist at the moment it runs,
+ * so a child inserted before its parent would degrade to a top-level task. Sorting by depth in
+ * the pulled batch's parent chain (a top-level item is depth 0, its children 1, and so on) makes
+ * the degradation impossible for any batch that carries the parent. The sort is stable, so items
+ * at the same depth keep the pull's order. A malformed cycle resolves as depth 0 rather than
+ * recursing forever.
+ */
+function orderParentsFirst(
+  externalIds: ReadonlySet<string>,
+  remoteById: ReadonlyMap<string, ImportedItem>,
+): readonly string[] {
+  const depths = new Map<string, number>();
+  const depthOf = (id: string): number => {
+    const cached = depths.get(id);
+    if (cached !== undefined) return cached;
+    depths.set(id, 0); // pre-seed so a parent cycle terminates at this id instead of recursing
+    const parentId = remoteById.get(id)?.parentExternalId;
+    const depth = typeof parentId === 'string' && parentId !== id ? depthOf(parentId) + 1 : 0;
+    depths.set(id, depth);
+    return depth;
+  };
+  return [...externalIds].sort((a, b) => depthOf(a) - depthOf(b));
+}
+
+/**
+ * Resolve an item's `parentExternalId` to the linked parent task's id, or null when the item is
+ * top-level or the parent cannot be found (see {@link ImportedItem.parentExternalId}).
+ */
+function resolveParentTaskId(
+  item: ImportedItem,
+  taskIdByExternalId: ReadonlyMap<string, string>,
+): string | null {
+  if (typeof item.parentExternalId !== 'string') return null;
+  return taskIdByExternalId.get(item.parentExternalId) ?? null;
+}
+
 /** Insert a remote item as a new linked task, persisting the two-way anchors. */
 async function insertLinked(
   orgId: string,
@@ -376,7 +433,8 @@ async function insertLinked(
   item: ImportedItem,
   keys: StateKeys,
   assigneeId: string | null,
-): Promise<void> {
+  parentTaskId: string | null,
+): Promise<string> {
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : null;
@@ -391,6 +449,12 @@ async function insertLinked(
       ...(item.completed ? { completedAt: anchor ?? new Date() } : {}),
       ...(assigneeId !== null ? { assigneeId } : {}),
       ...(item.dueDate ? { dueDate: new Date(item.dueDate) } : {}),
+      ...(item.startDate ? { startDate: new Date(item.startDate) } : {}),
+      // Zero is a real estimate ("no work left"), so test for the type, not truthiness.
+      ...(typeof item.estimateMinutes === 'number'
+        ? { estimateMinutes: item.estimateMinutes }
+        : {}),
+      ...(parentTaskId !== null ? { parentTaskId } : {}),
       source: 'linked',
       sourceIntegrationId: integrationId,
       externalId: item.provenance.externalId,
@@ -407,16 +471,37 @@ async function insertLinked(
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
   if (!row) throw new Error('linked task insert returned no row');
   await enqueueSearchUpsert(orgId, 'task', row.id);
+  return row.id;
 }
 
 /** Apply a newer remote's fields onto a local linked task and restamp the anchors. */
-async function applyPull(taskId: string, item: ImportedItem, keys: StateKeys): Promise<void> {
+async function applyPull(
+  taskId: string,
+  item: ImportedItem,
+  keys: StateKeys,
+  taskIdByExternalId: ReadonlyMap<string, string>,
+): Promise<void> {
   /* v8 ignore next -- @preserve defensive: applyPull's one call site only runs when
    * planTaskReconcile returned 'pull', which requires `remoteNewer`, which itself requires
    * `remote.provenance.externalUpdatedAt` to be parseable — so it is always truthy here. */
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : new Date();
+  // `startDate`/`estimateMinutes`/`parentExternalId` are patched only when the provider carries
+  // the concept (`undefined` means it does not — see the ImportedItem field docs), so a connector
+  // without them cannot clear a value the user set locally. An explicit `null` DOES clear. An
+  // unresolvable (or self-referencing) parent id leaves the local parent alone: hierarchy is
+  // metadata, and a broken reference must not detach or corrupt existing structure.
+  const resolvedParent =
+    typeof item.parentExternalId === 'string'
+      ? taskIdByExternalId.get(item.parentExternalId)
+      : undefined;
+  const parentPatch =
+    item.parentExternalId === null
+      ? { parentTaskId: null }
+      : resolvedParent !== undefined && resolvedParent !== taskId
+        ? { parentTaskId: resolvedParent }
+        : {};
   await db
     .update(task)
     .set({
@@ -425,6 +510,11 @@ async function applyPull(taskId: string, item: ImportedItem, keys: StateKeys): P
       state: item.completed ? keys.completedKey : keys.openKey,
       completedAt: item.completed ? anchor : null,
       dueDate: item.dueDate ? new Date(item.dueDate) : null,
+      ...(item.startDate !== undefined
+        ? { startDate: item.startDate ? new Date(item.startDate) : null }
+        : {}),
+      ...(item.estimateMinutes !== undefined ? { estimateMinutes: item.estimateMinutes } : {}),
+      ...parentPatch,
       externalListId: item.provenance.externalListId ?? null,
       externalEtag: item.provenance.externalEtag ?? null,
       // Echo guard: updatedAt == externalUpdatedAt → clean, next pull is a no-op.

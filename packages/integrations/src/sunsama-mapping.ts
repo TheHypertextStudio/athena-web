@@ -325,8 +325,8 @@ export interface MappedSunsamaTask {
   readonly externalUpdatedAt: string | null;
   /** The provenance URL, when Sunsama's integration string was one. */
   readonly externalUrl: string | null;
-  /** Child tasks, one per Sunsama subtask. */
-  readonly children: readonly { title: string; completed: boolean }[];
+  /** Child tasks, one per Sunsama subtask (`id` is Sunsama's own, when it supplied one). */
+  readonly children: readonly { id: string | null; title: string; completed: boolean }[];
   /** Every source field with no Docket destination, kept for the run report. */
   readonly preserved: Readonly<Record<string, unknown>>;
 }
@@ -375,7 +375,13 @@ export function mapSunsamaTask(
       task.sourceIntegration !== null && isUrl(task.sourceIntegration)
         ? task.sourceIntegration
         : null,
-    children: task.subtasks.map((s) => ({ title: s.title, completed: s.completed })),
+    children: task.subtasks.map((s) => ({
+      id: s.id,
+      // The same not-blank normalization the parent title gets: a child becomes a real task row,
+      // so it faces the same CHECK constraint.
+      title: s.title.trim() === '' ? 'Untitled task' : s.title,
+      completed: s.completed,
+    })),
     preserved,
   };
 }

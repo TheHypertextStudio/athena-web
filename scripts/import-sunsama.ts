@@ -172,9 +172,11 @@ interface WorkspaceOutcome {
   readonly workspace: string;
   /** Tasks routed here. */
   readonly routed: number;
-  /** Tasks created this run (0 unless `--apply` actually wrote). */
+  /** Subtask child rows riding along with the tasks routed here. */
+  readonly childRows: number;
+  /** Rows (tasks + child rows) created this run (0 unless `--apply` actually wrote). */
   readonly created: number;
-  /** Tasks already present from an earlier `--apply` run of the same source id. */
+  /** Rows already present from an earlier `--apply` run of the same source id. */
   readonly alreadyPresent: number;
 }
 
@@ -223,21 +225,20 @@ interface RunReport {
   /** Per-task fields that had no Docket destination — preserved, never dropped silently. */
   readonly preservedFields: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   /**
-   * Fields {@link SUNSAMA_FIELD_MAPPING} documents a destination for that the write path used by
-   * `--apply` does not persist (see `sunsama-connector.ts`'s top doc and
-   * `docs/migration/sunsama-to-docket.md` §5.3) — per task, so nothing is silently unaccounted for
-   * even once `--apply` is real.
+   * What the reconcile write path measurably persisted, counted from the database AFTER the run —
+   * not echoed from the input. Present only on an applied run. These are the three fields
+   * `docs/migration/sunsama-to-docket.md` §5.3 once named as dropped by the shared
+   * `ImportedItem`/`reconcileTasks` contract; the counts prove the closure on every run rather
+   * than asserting it once.
    */
-  readonly notWrittenByReconciler: Readonly<
-    Record<
-      string,
-      {
-        readonly startDate: string | null;
-        readonly estimateMinutes: number | null;
-        readonly subtaskCount: number;
-      }
-    >
-  >;
+  readonly persistedByReconciler?: {
+    /** Linked rows with a non-null `task.startDate` (Sunsama's planned day). */
+    readonly startDate: number;
+    /** Linked rows with a non-null `task.estimateMinutes`. */
+    readonly estimateMinutes: number;
+    /** Linked rows that are child rows (`task.parentTaskId` set) — one per Sunsama subtask. */
+    readonly childRows: number;
+  };
 }
 
 /** Read the Sunsama account for the chosen source. */
@@ -472,6 +473,8 @@ interface ApplyResult {
   readonly unmatchedSunsamaIds: readonly string[];
   /** Docket-linked-task ids/external ids carrying a Sunsama id the source no longer has. */
   readonly unmatchedDocketIds: readonly string[];
+  /** DB-measured field persistence (see `RunReport.persistedByReconciler`). */
+  readonly persisted: { startDate: number; estimateMinutes: number; childRows: number };
 }
 
 /**
@@ -522,7 +525,13 @@ async function applyToDocket(
       : await db.query.task.findMany({
           where: (t, { and, eq, inArray }) =>
             and(inArray(t.sourceIntegrationId, integrationIds), eq(t.source, 'linked')),
-          columns: { id: true, externalId: true },
+          columns: {
+            id: true,
+            externalId: true,
+            startDate: true,
+            estimateMinutes: true,
+            parentTaskId: true,
+          },
         });
 
   const docketExternalIds = new Set(
@@ -534,6 +543,14 @@ async function applyToDocket(
     .filter((row) => row.externalId === null || !sunsamaIdSet.has(row.externalId))
     .map((row) => row.externalId ?? row.id);
 
+  // Measured from what the database actually holds after the reconcile — the proof that the
+  // §5.3 fields (planned day, estimate, subtasks-as-child-rows) survive the write path.
+  const persisted = {
+    startDate: linkedRows.filter((row) => row.startDate !== null).length,
+    estimateMinutes: linkedRows.filter((row) => row.estimateMinutes !== null).length,
+    childRows: linkedRows.filter((row) => row.parentTaskId !== null).length,
+  };
+
   // The database handle (PGlite or postgres-js) keeps its own timers/sockets alive, which would
   // otherwise leave the CLI process hanging after the report is written — close it explicitly so
   // `pnpm sunsama:import --apply` exits on its own rather than needing Ctrl-C every time.
@@ -544,6 +561,7 @@ async function applyToDocket(
     docketMatchedCount: docketExternalIds.size,
     unmatchedSunsamaIds,
     unmatchedDocketIds,
+    persisted,
   };
 }
 
@@ -584,27 +602,23 @@ async function main(): Promise<void> {
 
   const mappedItems = sunsamaAccountToImportedItems(account.tasks, SUNSAMA_ROUTING, importedAt);
   const itemsByWorkspace = groupSunsamaImportedItemsByWorkspace(mappedItems);
-  const notWrittenByReconciler: Record<
-    string,
-    { startDate: string | null; estimateMinutes: number | null; subtaskCount: number }
-  > = {};
+  // The WIL-01 reconciliation set: every source id the write path is expected to land, which
+  // since the §5.3 closure includes each subtask's child-row id alongside its parent's.
+  const allSourceIds = mappedItems.flatMap((entry) => [
+    entry.item.provenance.externalId,
+    ...entry.childItems.map((child) => child.provenance.externalId),
+  ]);
+  const childRowsByWorkspace = new Map<string, number>();
   for (const entry of mappedItems) {
-    const { startDate, estimateMinutes, subtaskCount } = entry.notWrittenByReconciler;
-    if (startDate !== null || estimateMinutes !== null || subtaskCount > 0) {
-      notWrittenByReconciler[entry.item.provenance.externalId] = {
-        startDate,
-        estimateMinutes,
-        subtaskCount,
-      };
-    }
+    childRowsByWorkspace.set(
+      entry.workspace,
+      (childRowsByWorkspace.get(entry.workspace) ?? 0) + entry.childItems.length,
+    );
   }
 
   const applyResult =
     options.apply && options.source === 'fixture'
-      ? await applyToDocket(
-          itemsByWorkspace,
-          account.tasks.map((t) => t.id),
-        )
+      ? await applyToDocket(itemsByWorkspace, allSourceIds)
       : undefined;
 
   const outcomes: WorkspaceOutcome[] = [];
@@ -613,6 +627,7 @@ async function main(): Promise<void> {
     outcomes.push({
       workspace,
       routed: entries.length,
+      childRows: childRowsByWorkspace.get(workspace) ?? 0,
       created: counts?.created ?? 0,
       alreadyPresent: counts?.alreadyPresent ?? 0,
     });
@@ -622,9 +637,7 @@ async function main(): Promise<void> {
   // applyToDocket already computed the real reconciliation.
   const docketMatched = applyResult?.docketMatchedCount ?? 0;
   const unmatchedDocketIds = applyResult ? [...applyResult.unmatchedDocketIds] : [];
-  const unmatchedSunsamaIds = applyResult
-    ? [...applyResult.unmatchedSunsamaIds]
-    : account.tasks.map((t) => t.id);
+  const unmatchedSunsamaIds = applyResult ? [...applyResult.unmatchedSunsamaIds] : allSourceIds;
 
   const report: RunReport = {
     ranAt: new Date().toISOString(),
@@ -654,7 +667,7 @@ async function main(): Promise<void> {
     missingCapabilities: [...account.missingCapabilities],
     plannedDayWindow: options.days,
     preservedFields,
-    notWrittenByReconciler,
+    ...(applyResult ? { persistedByReconciler: applyResult.persisted } : {}),
   };
 
   const reportPath = resolve(process.cwd(), options.reportPath);
@@ -668,7 +681,7 @@ async function main(): Promise<void> {
   console.log(`  archived tasks read    ${report.sunsamaArchivedCount}`);
   for (const outcome of outcomes) {
     console.log(
-      `  ${outcome.workspace.padEnd(52)} routed ${outcome.routed}  created ${outcome.created}  already-present ${outcome.alreadyPresent}`,
+      `  ${outcome.workspace.padEnd(52)} routed ${outcome.routed}  child rows ${outcome.childRows}  created ${outcome.created}  already-present ${outcome.alreadyPresent}`,
     );
   }
   console.log(
@@ -688,11 +701,18 @@ async function main(): Promise<void> {
   }
   if (report.applied) {
     console.log(
-      `  RECONCILED             ${String(docketMatched)}/${String(account.tasks.length)} Sunsama tasks now have a Docket task id` +
+      `  RECONCILED             ${String(docketMatched)}/${String(allSourceIds.length)} Sunsama tasks and subtasks now have a Docket task id` +
         (unmatchedSunsamaIds.length > 0
           ? ` — ${String(unmatchedSunsamaIds.length)} still unmatched`
           : ''),
     );
+    if (applyResult) {
+      console.log(
+        `  PERSISTED              startDate on ${String(applyResult.persisted.startDate)} rows, ` +
+          `estimateMinutes on ${String(applyResult.persisted.estimateMinutes)} rows, ` +
+          `${String(applyResult.persisted.childRows)} subtask child rows`,
+      );
+    }
   } else {
     const reason =
       options.source === 'live'

@@ -46,7 +46,7 @@ export default function TodaySession({
     // cross-fading two unrelated elements.
     <Stack gap={3} className="min-h-0 flex-1" style={{ viewTransitionName: 'today-composer' }}>
       <div className="flex shrink-0 items-center justify-between gap-2">
-        <h2 className="text-on-surface text-title-medium font-semibold">Athena</h2>
+        <h2 className="text-on-surface text-title-medium">Athena</h2>
         <div className="flex shrink-0 items-center gap-2">
           <VoiceLaunch workspaceId={orgId} />
           <Button

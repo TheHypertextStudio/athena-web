@@ -583,10 +583,6 @@
   "apps/web/src/components/today/ghost-proposals.tsx": {
     "raw-type-utility": 4
   },
-  "apps/web/src/components/today/next-up.tsx": {
-    "raw-type-utility": 8,
-    "shadow-outside-overlay": 1
-  },
   "apps/web/src/components/today/today-prompt.tsx": {
     "raw-type-utility": 12
   },

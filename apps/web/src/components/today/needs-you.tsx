@@ -70,7 +70,7 @@ export default function NeedsYou({
   if (approvals.length === 0 && blocked.length === 0) return null;
   return (
     <Stack as="section" gap={4} aria-labelledby="today-needs-you-heading">
-      <h2 id="today-needs-you-heading" className="text-on-surface text-title-medium font-semibold">
+      <h2 id="today-needs-you-heading" className="text-on-surface text-title-medium">
         Needs you
       </h2>
       <Group heading="Waiting on your approval" tasks={approvals} orgName={orgName} />

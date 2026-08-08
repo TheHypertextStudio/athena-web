@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import type { HubTaskItem } from '@docket/types';
+import { OrganizationId, TaskId } from '@docket/types';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -12,10 +13,26 @@ vi.mock('../../src/components/org-chip', () => ({
   OrgChip: ({ name }: { name: string }) => <span data-org-chip="">{name}</span>,
 }));
 
-const ORG_A = '01JQ000000000000000000000A';
-const ORG_B = '01JQ000000000000000000000B';
+const ORG_A = OrganizationId.parse('01JQ000000000000000000000A');
+const ORG_B = OrganizationId.parse('01JQ000000000000000000000B');
 
-function task(overrides: Partial<HubTaskItem> & { id: string; title: string }): HubTaskItem {
+/**
+ * Short, readable ids ('a1', 't2', …) padded out to a real ULID shape so they parse as branded
+ * {@link TaskId}s — nothing in this file asserts on the id itself, only on title/heading text.
+ */
+function taskId(label: string) {
+  return TaskId.parse(label.toUpperCase().padEnd(26, '0'));
+}
+
+/** {@link task}'s overrides — `id`/`organizationId` take the short unbranded labels above. */
+type TaskOverrides = Omit<Partial<HubTaskItem>, 'id' | 'organizationId'> & {
+  id: string;
+  title: string;
+  organizationId?: string;
+};
+
+function task(overrides: TaskOverrides): HubTaskItem {
+  const { id, organizationId, ...rest } = overrides;
   return {
     organizationId: ORG_A,
     state: 'todo',
@@ -23,7 +40,11 @@ function task(overrides: Partial<HubTaskItem> & { id: string; title: string }): 
     assigneeId: null,
     projectId: null,
     dueDate: null,
-    ...overrides,
+    ...rest,
+    id: taskId(id),
+    ...(organizationId !== undefined
+      ? { organizationId: OrganizationId.parse(organizationId) }
+      : {}),
   } as HubTaskItem;
 }
 

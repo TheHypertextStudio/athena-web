@@ -64,7 +64,7 @@ export default function TodaysWork({ plan, orgName, loading }: TodaysWorkProps):
     <Stack as="section" gap={4} aria-labelledby="today-work-heading">
       {/* The heading paints immediately, loading or not: it is a compile-time constant, and a grey
           bar standing where a known word belongs is strictly less information than the word. */}
-      <h2 id="today-work-heading" className="text-on-surface text-title-medium font-semibold">
+      <h2 id="today-work-heading" className="text-on-surface text-title-medium">
         Today
       </h2>
 

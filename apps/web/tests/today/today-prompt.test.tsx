@@ -116,9 +116,10 @@ describe('TodayPrompt', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
 
-    // Both happen: the draft seeds the one shared thread, and the host expands into that thread.
-    expect(openAthena).toHaveBeenCalledOnce();
-    expect(onStartSession).toHaveBeenCalledOnce();
+    // Exactly one surface. Firing both put the dock on top of the page that had just become the
+    // same conversation — two Athena surfaces at once, which is the thing the model forbids.
+    expect(onStartSession).toHaveBeenCalledWith('Plan the launch');
+    expect(openAthena).not.toHaveBeenCalled();
   });
 
   it('still opens the dock when the host hosts no session of its own', () => {

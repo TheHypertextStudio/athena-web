@@ -72,11 +72,11 @@ export interface TodayPromptProps {
    * Expand this page into the Athena conversation, carrying the draft with it.
    *
    * @remarks
-   * When the host supplies this, Athena mode stays on the page instead of opening the ⌘J dock.
-   * Same conversation either way — the dock and this render the one persistent thread — so this is
-   * a choice about where it appears, not about how many there are.
+   * When the host supplies this, Athena mode stays on the page instead of opening the ⌘J dock, and
+   * the draft rides along. Same conversation either way — the dock and the page render the one
+   * persistent thread — so this only decides where it appears, not how many there are.
    */
-  onStartSession?: () => void;
+  onStartSession?: (draft: string) => void;
 }
 
 /** The hybrid prompt box: capture a task, or hand the thought to Athena. */
@@ -144,12 +144,13 @@ export function TodayPrompt({
     if (!orgId || !text.trim()) return;
     setError(null);
     setNotice(null);
-    // The draft goes to the same place either way. `openAthena` seeds the shared thread and the
-    // host, if it hosts one, then expands into that thread in place rather than sliding the dock
-    // over the page you were already reading.
-    openAthena({ workspaceId: orgId, workspaceName: orgLabel }, text.trim());
+    const draft = text.trim();
     setText('');
-    onStartSession?.();
+    // Exactly one surface, never both. A host that shows the conversation itself takes the draft
+    // and expands in place; without one, the ⌘J dock is the door. Doing both put the dock on top of
+    // the page that had just become the same conversation.
+    if (onStartSession) onStartSession(draft);
+    else openAthena({ workspaceId: orgId, workspaceName: orgLabel }, draft);
   }, [openAthena, orgId, orgLabel, text, onStartSession]);
 
   /** Send the draft wherever the active mode points. */

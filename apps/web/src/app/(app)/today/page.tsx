@@ -40,16 +40,16 @@ import { useTodayData } from './use-today-data';
  */
 export default function TodayPage(): JSX.Element {
   const { data, loading, error, refetch, orgName, heading, activeOrgId } = useTodayData();
-  const [inSession, setInSession] = useState(false);
+  const [session, setSession] = useState<{ draft: string } | null>(null);
 
-  const openSession = useCallback(() => {
+  const openSession = useCallback((draft: string) => {
     startViewTransition(() => {
-      setInSession(true);
+      setSession({ draft });
     });
   }, []);
   const closeSession = useCallback(() => {
     startViewTransition(() => {
-      setInSession(false);
+      setSession(null);
     });
     // The day may have moved while the conversation was open — Athena files work as it goes.
     refetch();
@@ -67,8 +67,8 @@ export default function TodayPage(): JSX.Element {
         <span className="text-on-surface-variant ml-2 font-normal">{heading}</span>
       </h1>
 
-      {inSession && activeOrgId ? (
-        <TodaySession orgId={activeOrgId} onClose={closeSession} />
+      {session && activeOrgId ? (
+        <TodaySession orgId={activeOrgId} onClose={closeSession} initialDraft={session.draft} />
       ) : (
         <>
           <TodayPrompt

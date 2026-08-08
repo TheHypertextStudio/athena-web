@@ -101,16 +101,23 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
     // above does not cover (it only pre-compiles the API routes) — a cold `/sign-up` bundle can
     // leave this button disabled well past `ui`'s budget, and unlike the ceremony-failure retry
     // below, a timeout here throws immediately rather than looping to a fresh attempt.
-    // Typed, not `fill`ed. `fill` sets the value and dispatches one `input`, and against these
-    // controlled fields the value reads back empty a moment later — the form re-renders from state
-    // that never saw the change, so `canSubmit` stays false and this block times out with no
-    // symptom other than a disabled button. Typing produces the per-keystroke events the field
-    // actually reacts to. `''` first so a retry does not append to a half-filled field.
+    // Clicked, then typed. `fill` sets the value and dispatches one synthetic `input`, and against
+    // these controlled fields the value reads back empty a moment later — the form re-renders from
+    // state that never saw the change, so `canSubmit` stays false and this block times out with no
+    // symptom beyond a disabled button. Typing sends the per-keystroke events the field reacts to,
+    // but only once it holds focus, so the click is load-bearing rather than decoration.
+    //
+    // `fill('')` first so a retry does not append to a half-filled field.
     await expect(async () => {
-      await page.locator('#name').fill('');
-      await page.locator('#name').pressSequentially(name);
-      await page.locator('#email').fill('');
-      await page.locator('#email').pressSequentially(email);
+      for (const [selector, value] of [
+        ['#name', name],
+        ['#email', email],
+      ] as const) {
+        const field = page.locator(selector);
+        await field.click();
+        await field.fill('');
+        await field.pressSequentially(value);
+      }
       expect(await continueButton.isEnabled()).toBe(true);
     }).toPass({ timeout: TIMEOUTS.pageReady });
 

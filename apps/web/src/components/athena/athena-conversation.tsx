@@ -45,19 +45,29 @@ export interface AthenaConversationProps {
   orgId: string;
   /** Extra class names for the root element (host controls height/width). */
   className?: string;
+  /**
+   * Text to open the composer with, from a door that collected it before this mounted.
+   *
+   * @remarks
+   * Today's prompt is such a door: you write there, the page expands into this, and the draft has
+   * to arrive with you. Seeded once on mount rather than kept in sync — after that the composer is
+   * yours, and a prop that kept overwriting it would fight your typing.
+   */
+  initialDraft?: string;
 }
 
 /** AthenaConversation renders the org's persistent Athena conversation. */
 export default function AthenaConversation({
   orgId,
   className,
+  initialDraft,
 }: AthenaConversationProps): JSX.Element {
   const [thread, setThread] = useState<AgentSessionDetailOut | null>(null);
   const mentionOrgId = useMentionOrgId(orgId);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(initialDraft ?? '');
   const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
 

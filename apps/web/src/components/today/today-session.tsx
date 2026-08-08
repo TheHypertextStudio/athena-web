@@ -30,10 +30,16 @@ export interface TodaySessionProps {
   readonly orgId: string;
   /** Leave the session and restore the resting page. */
   readonly onClose: () => void;
+  /** What was typed in the prompt before the page expanded, carried into the composer. */
+  readonly initialDraft?: string;
 }
 
 /** The conversation and its chrome, occupying the page while it is open. */
-export default function TodaySession({ orgId, onClose }: TodaySessionProps): JSX.Element {
+export default function TodaySession({
+  orgId,
+  onClose,
+  initialDraft,
+}: TodaySessionProps): JSX.Element {
   return (
     // The shared name is what makes this a morph rather than a swap: the prompt carries the same
     // `view-transition-name`, so the browser animates one box growing into the other instead of
@@ -54,7 +60,11 @@ export default function TodaySession({ orgId, onClose }: TodaySessionProps): JSX
           </Button>
         </div>
       </div>
-      <AthenaConversation orgId={orgId} className="min-h-0 flex-1" />
+      <AthenaConversation
+        orgId={orgId}
+        className="min-h-0 flex-1"
+        {...(initialDraft === undefined ? {} : { initialDraft })}
+      />
     </Stack>
   );
 }

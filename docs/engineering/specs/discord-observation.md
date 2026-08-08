@@ -1,8 +1,16 @@
 # Discord Observation — mentions in the firehose, against a hostile transport
 
-> **Status**: implemented; Phase 1 serverless seam, identity attribution, firehose UI hooks, and
-> Phase 2 Gateway relay are in-tree. Live Discord test-guild smoke remains the deployment
-> acceptance check, not an implementation blocker.
+> **Status**: NOT wired end to end. The relay (`services/discord-relay`) and the observer
+> (`packages/integrations/src/observer-discord.ts`) are both in-tree, and so is the token column
+> the relay authenticates with (`event_subscription.ingest_token`). The edge they need is missing:
+> there is no `/internal/ingest/discord/:token` route, `buildObserver` throws for `discord`, and
+> nothing reads `ingest_token`. Every message the relay forwards today gets a 404.
+>
+> Three things close it, and none is large: register a Discord entry in the ingest channel
+> registry, let `route()` see the path token (the `Observer` port already anticipates this —
+> `InboundRouting.externalWorkspaceId` is documented as absent "for providers routed by an opaque
+> per-integration token in the ingest URL instead"), and read `ingest_token` to resolve the
+> integration. Live Discord test-guild smoke is then the deployment acceptance check.
 > **Extends**: [`activity-feed.md`](./activity-feed.md) — this is one more tool on the canonical
 > Event substrate, plus the two things Discord forces that Slack did not.
 > **Related decisions**: `DECISIONS.md` → "Discord message mentions require a Gateway relay" and

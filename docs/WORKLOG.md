@@ -4149,6 +4149,61 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [INGEST-001] Associate third-party activity with the Docket entities it concerns
+
+- **Completed**: 2026-08-07
+- **Priority**: P1
+- **Summary**: `entity.docketEntityId` had been null on every external event since the field
+  existed. `toEntityRef` cast its input to a property `EventEntityRef` never declares, so it read
+  back `undefined` and stored null; the internal emit path set it correctly, which is why the gap
+  survived inspection. Four consumers were written against that field and had silently done
+  nothing for external activity the whole time.
+- **What changed for a user**: a Linear comment now marks the mirrored task's search document
+  stale; closing an issue upstream archives the Gmail thread attached to the mirrored task;
+  assignees and leads hear about upstream activity on work they own; and external activity is
+  scoped to its subject in search instead of being workspace-wide.
+- **Shape**: `resolveExternalEntities` matches an external subject against `task`, `project` and
+  `cycle` on their existing `(sourceIntegrationId, externalId)` mirror index, scoped to the
+  delivering integration so two workspaces with colliding issue numbers cannot cross-wire. It
+  takes a list and returns a map — the actor resolver beside it ran one query per participant per
+  event, and a single-ref signature would invite that back.
+- **Two design decisions, both forced by evidence rather than taste**:
+  - Resolution state went onto the event row, not into `EntityRef`. `EntityRef` is shared
+    vocabulary: time tracking flattens it into `time_context` columns, mentions consume it, the web
+    client reads it. Time tracking never resolves anything, so `pending` would be a meaningless
+    state to force on it.
+  - The resolved id went to `event.docket_entity_id`, not the `entity` jsonb. All four consumers
+    read that jsonb, so writing it there is the same act as enabling all four at once — and two of
+    them change what people can see. A column separated deciding from acting, which is what made
+    the rollout sequenceable. It is also the right long-term home: "everything that happened to
+    this task, across every tool" wants a btree index a jsonb probe cannot use.
+- **Rollout**: one commit lands association inert, then one consumer per commit, cheapest to
+  reverse first — search reindex, automation subjects, owner fan-out, activity visibility. Each
+  reverts alone.
+- **Deliberate behaviour change**: every org is seeded with an enabled rule matching
+  `{kind: 'completed', subjectType: 'task'}` with no source filter, so enabling subject matching
+  widened it to Linear and GitHub completions. Chosen over pinning the shipped rule to
+  `source: 'docket'`, which the engine supports.
+- **Observability**: `DrainResult` gained `associated` and `recipients` rather than separate
+  instrumentation — the sweep is the only writer and already returned a tally. `events -
+associated` is the re-association backlog.
+- **Files Changed**: `packages/types/src/event.ts`, `packages/db/src/enums.ts`,
+  `packages/db/src/schema/event.ts`, `packages/db/drizzle/0072_slimy_veda.sql`,
+  `apps/api/src/lib/identity/resolve-external-entity.ts`, `apps/api/src/routes/event-sync.ts`,
+  `apps/api/src/routes/event-emit.ts`, `apps/api/src/search/event-log.ts`,
+  `apps/api/src/search/projectors/activity.ts`, `apps/api/src/search/backfill.ts`,
+  `packages/integrations/src/observer.ts`, plus tests in `@docket/db` and `apps/api`.
+- **Open follow-up**: activity-visibility scoping is not retroactive. Existing documents keep the
+  visibility they were projected with until reprojected, which is an operator step against the
+  target database: `DATABASE_URL=<target> pnpm tsx scripts/search-backfill.ts event`. It is
+  enqueue-only and safe to repeat.
+- **Learnings**: a field that only one of two write paths populates reads as working under every
+  spot check, because the path someone checks is usually the internal one. The four dead consumers
+  were the real cost, and nothing failed — they returned null and carried on. Grepping the readers
+  before changing a shared type killed two designs that looked right in isolation: `EntityRef` is
+  used by subsystems that have no notion of resolution, and the jsonb field is read by every
+  consumer the rollout needed to separate.
+
 ### [ATHENA-MCP-UX-002] Clarify personal connector management
 
 - **Completed**: 2026-07-14

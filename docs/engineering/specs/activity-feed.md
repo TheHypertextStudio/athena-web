@@ -32,8 +32,28 @@ tool-specific pocket (`detail`).
 | who         | `ActorRef { source, externalId, displayName?, avatarUrl?, docketActorId? }` |                                                                                                                                                                                                                                                                  |
 | detail      | `EventDetail` (closed discriminated union on `schema`)                      | typed per source (`linear.issue`, `github.pull_request`, `docket.state_change`) **plus a `generic` variant** so an unmapped-but-valid event still surfaces (degraded) instead of being dropped; the raw original stays in `inbound_event` for re-enrichment      |
 
-`docketEntityId` / `docketActorId` are reserved enrichment slots (resolve an external ref to
-its Docket twin later); null today.
+`docketEntityId` / `docketActorId` resolve an external ref to its Docket twin. Both are filled
+now — actors through `resolveExternalActor`, entities through `resolveExternalEntities`, which
+matches an external subject against `task`, `project` and `cycle` on their
+`(sourceIntegrationId, externalId)` mirror index, scoped to the delivering integration.
+
+The resolved **entity** id lives on the event row as `event.docket_entity_id`, not inside the
+`entity` jsonb, for two reasons. "Everything that happened to this thing, across every tool" is a
+headline read and wants a btree index a jsonb probe cannot use; and four consumers read the jsonb
+field, so filling it in would have been indistinguishable from switching all four on at once —
+owner fan-out, search reindex, activity-document visibility and automation subject matching each
+had to land separately. `event.entity_association` records how far resolution got: `pending` means
+Docket could mirror this kind and has not yet (a re-association sweep retries these), `unmatched`
+means no Docket table represents the kind at all, so a Slack thread is never re-checked. A CHECK
+constraint ties `matched` to a non-null id in both directions.
+
+Association is not retroactive for the **search index**: an activity document keeps the visibility
+it was projected with. Reprojecting existing rows is an operator step, enqueue-only and safe to
+repeat, run against the target database rather than from CI:
+
+```bash
+DATABASE_URL=<target> pnpm tsx scripts/search-backfill.ts event
+```
 
 **Storage** (`@docket/db` `event` table): canonical columns are lean; `source_system` /
 `integration_id` / `external_url` are flat columns (queried/joined); `entity_kind` is

@@ -500,6 +500,81 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
     expect(afterNull.estimateMinutes).toBeNull();
   });
 
+  it('refuses a re-parent that would form a cycle across runs, without failing the pull', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+
+    // Run 1: insert A (top-level) and B (child of A) — a legitimate hierarchy.
+    const runOne = await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'cycle-a',
+          title: 'A',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'cycle-a',
+            importedAt: '2026-08-01T00:00:00.000Z',
+            externalUpdatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        }),
+        remote({
+          id: 'cycle-b',
+          title: 'B',
+          parentExternalId: 'cycle-a',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'cycle-b',
+            importedAt: '2026-08-01T00:00:00.000Z',
+            externalUpdatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+    expect(runOne.inserted).toBe(2);
+    const aRow = one(
+      await db.select().from(schema.task).where(eq(schema.task.externalId, 'cycle-a')),
+    );
+    const bRow = one(
+      await db.select().from(schema.task).where(eq(schema.task.externalId, 'cycle-b')),
+    );
+    expect(bRow.parentTaskId).toBe(aRow.id);
+
+    // Run 2: the provider now claims A is a child of B — an A→B→A loop the length-1 DB CHECK
+    // cannot see. The pull must land A's other fields and drop only the parent link.
+    const runTwo = await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'cycle-a',
+          title: 'A, renamed remotely',
+          parentExternalId: 'cycle-b',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'cycle-a',
+            importedAt: '2026-08-02T00:00:00.000Z',
+            externalUpdatedAt: '2026-02-01T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+    expect(runTwo.pulled).toBe(1); // the run did not fail wholesale
+
+    const aAfter = one(await db.select().from(schema.task).where(eq(schema.task.id, aRow.id)));
+    const bAfter = one(await db.select().from(schema.task).where(eq(schema.task.id, bRow.id)));
+    expect(aAfter.title).toBe('A, renamed remotely'); // the rest of the pull applied
+    expect(aAfter.parentTaskId).toBeNull(); // the cycle-forming link was refused
+    expect(bAfter.parentTaskId).toBe(aRow.id); // the existing hierarchy is untouched
+  });
+
   it('a pull can update the fields and re-parent under another linked task', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integration = await seedIntegration(orgId, humanActorId);

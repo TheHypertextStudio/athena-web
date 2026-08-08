@@ -177,12 +177,22 @@ describe('mapSunsamaTask', () => {
     expect(mapped.workspace).toBe('Las Vegans for Better Transit');
   });
 
-  it('turns each subtask into a child task keeping its own completion', () => {
+  it('turns each subtask into a child task keeping its own id and completion', () => {
     const withSubtasks = TASKS.find((t) => t.id === 'su-001');
     if (withSubtasks === undefined) throw new Error('fixture missing');
     expect(mapSunsamaTask(withSubtasks, ROUTING).children).toEqual([
-      { title: 'Attach the W-9', completed: true },
-      { title: 'Send for signature', completed: false },
+      { id: 'sub-001a', title: 'Attach the W-9', completed: true },
+      { id: 'sub-001b', title: 'Send for signature', completed: false },
+    ]);
+  });
+
+  it('never produces a blank child title — a child row faces the same not-blank CHECK', () => {
+    const blankChild: SunsamaTask = {
+      ...TASKS[0]!,
+      subtasks: [{ id: 'sub-blank', title: '   ', completed: false }],
+    };
+    expect(mapSunsamaTask(blankChild, ROUTING).children).toEqual([
+      { id: 'sub-blank', title: 'Untitled task', completed: false },
     ]);
   });
 

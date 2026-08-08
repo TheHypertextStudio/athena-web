@@ -111,6 +111,75 @@ Worker secret so production origin changes do not require committing an environm
 Deploy creates/updates the Worker and declared Workflow binding; the Queue and DLQ must already
 exist.
 
+Once the account is provisioned, the `deploy-runner` job in
+[`deploy.yml`](../../.github/workflows/deploy.yml) redeploys the Worker on every push to `main`,
+so the manual `wrangler deploy` above is only for first bring-up and emergencies. That job skips
+while the `CLOUDFLARE_ACCOUNT_ID` repository variable is unset.
+
+## Production rollout and flag flip
+
+This section addresses the operator taking the deployed-but-idle runner live. Starting state on
+`main`: `deploy.yml` deploys `docket-athena-runner` after the API, and the same file pins
+`ATHENA_ASYNC_RUNNER_ENABLED: "false"`, so the Worker exists but receives no Docket traffic.
+
+### One-time provisioning
+
+1. Confirm `wrangler whoami` shows the Docket production Cloudflare account, then run the
+   provisioning commands above: create both queues and set the three Worker secrets. Generate two
+   distinct 32-or-more-character random secrets; `DOCKET_API_URL` is the production API origin.
+2. Set the GitHub repository variable `CLOUDFLARE_ACCOUNT_ID` and the repository secret
+   `CLOUDFLARE_API_TOKEN` (Workers Scripts:Edit, Queues:Edit, Workflows:Edit). The next push to
+   `main` deploys the Worker. Nothing routes to it yet.
+3. Store the same two HMAC values for the API in Secret Manager under the production naming
+   convention (`docket-<kebab-case-var-name>`), grant the runtime service account
+   `roles/secretmanager.secretAccessor` on both, and append two lines to the
+   `API_SECRET_BINDINGS` repository variable:
+
+   ```
+   CLOUDFLARE_TO_DOCKET_HMAC_SECRET=docket-cloudflare-to-docket-hmac-secret:latest
+   DOCKET_TO_CLOUDFLARE_HMAC_SECRET=docket-docket-to-cloudflare-hmac-secret:latest
+   ```
+
+   Direction matters: the value Docket signs `/enqueue` and `/wake` with
+   (`DOCKET_TO_CLOUDFLARE_HMAC_SECRET`) must equal the Worker secret of the same name, and
+   likewise for the Cloudflare-to-Docket value. `scripts/production-secrets.ts` rejects missing
+   or placeholder bindings at the next deploy.
+
+4. Set the repository variable `CLOUDFLARE_ATHENA_RUNNER_URL` to
+   `https://docket-athena-runner.<account-subdomain>.workers.dev`.
+
+### The flip PR
+
+One PR edits the API env file in `deploy.yml` and nothing else:
+
+- change `ATHENA_ASYNC_RUNNER_ENABLED` to `"true"`, and
+- add `CLOUDFLARE_ATHENA_RUNNER_URL: "${{ vars.CLOUDFLARE_ATHENA_RUNNER_URL }}"`.
+
+`packages/env/src/api.ts` fails production boot when the flag is true without the runner URL and
+both distinct secrets, so a half-configured flip stops at deploy rather than at the first user
+run. `MCP_TASKS_ENABLED` sits in the same env file but gates an unrelated MCP surface; the runner
+flip does not touch it.
+
+### Verification
+
+1. The deploy run is green and the existing `/v1/health` check passes.
+2. Start a personal Athena run. The transaction that queued it also wrote an
+   `agent_session_dispatch` row with `action='enqueue'`; within about a minute it must reach
+   `status='delivered'` and the `agent_session_run` row must move `queued → running`. A row stuck
+   in `pending` or `failed` means the Worker rejected the signed dispatch — suspect mismatched
+   directional secrets first.
+3. `pnpm exec wrangler tail docket-athena-runner` shows one `athena_dispatch_sweep_completed`
+   line per minute from cron, plus enqueue traffic during runs.
+4. Long-run survival: start a `run_agent` session sized to outlive the Cloud Run request
+   timeout and confirm it keeps committing generations. The Workflow callback chain, not the
+   original HTTP request, now carries the run.
+5. The DLQ stays empty and no `agent_session_dispatch` row sits in `status='failed'`.
+
+### Rollback
+
+Revert the flip PR. New personal mutations route synchronously again; queued and waiting
+Workflow instances still need draining or deliberate retirement (see Operations and recovery).
+
 ## Validation without deployment
 
 ```bash
@@ -177,4 +246,5 @@ pnpm exec wrangler queues delete docket-athena-runs
 pnpm exec wrangler queues delete docket-athena-runs-dlq
 ```
 
-No provisioning, deployment, secret mutation, or teardown command is part of normal CI.
+No provisioning, secret mutation, or teardown command is part of normal CI. The one CI-run
+mutation is `wrangler deploy` inside the gated `deploy-runner` job described above.

@@ -116,10 +116,12 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       organization_id text not null,
       kind actor_kind not null,
       display_name text not null,
+      title text,
       avatar text,
       status actor_status not null default 'active',
       user_id text,
       role_id text,
+      team_id text,
       created_at timestamp not null default now(),
       updated_at timestamp not null default now(),
       archived_at timestamp

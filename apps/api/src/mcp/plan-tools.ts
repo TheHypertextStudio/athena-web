@@ -12,6 +12,15 @@
  *
  * `plan_day` is one call that reads and edits, because a plan is revised in the same breath it is
  * read — "move the review after lunch and drop the third one" should not be three round trips.
+ *
+ * It also *builds* a day rather than only recording one. With `autoPlan`, the day is produced
+ * deterministically by {@link planDay}: the caller's tasks for the day are ordered by a
+ * topological sort of the dependency graph — the same `task_dependency` relation the canvas at
+ * `/v1/orgs/:orgId/graph` draws — with priority breaking ties only within what dependencies
+ * permit, then timeboxed into availability that has already had protected time and everything on
+ * the calendar removed. Auto-planning runs *before* the edits, which is what keeps this an added
+ * capability rather than a replaced one: the planner proposes, and a hand edit in the same call
+ * still wins.
  */
 import { dailyPlanItem, db, hub, task } from '@docket/db';
 import { and, asc, eq, inArray, max } from 'drizzle-orm';
@@ -19,6 +28,9 @@ import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
 import { buildHubTodayPayload } from '../routes/hub-today';
+import { loadDayCandidates, loadDependencyEdges } from '../services/scheduling/day-plan-repository';
+import { planDay } from '../services/scheduling/day-planner';
+import { loadDayBlocks, loadSchedulingPreferences } from '../services/scheduling/repository';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { WIDGET, widgetMeta } from './apps';
@@ -42,6 +54,13 @@ const PlanEdit = z.object({
 });
 /** One edit to a day's plan. */
 type PlanEdit = z.infer<typeof PlanEdit>;
+
+/** A task the planner kept on the day but had no time for. */
+const PlanUnplaced = z.object({
+  taskId: z.string(),
+  title: z.string(),
+  reason: z.string().describe('Why it got no timebox. Currently only `day_full`.'),
+});
 
 /** One line of a day's plan as the caller sees it. */
 const PlanItem = z.object({
@@ -125,10 +144,16 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
     {
       title: 'Plan a day',
       description:
-        "Read a day's plan and change it in the same call: add tasks, drop them, tick them off, or set a timebox. Edits apply in the order given, and the whole day is returned afterwards so the caller sees the result rather than inferring it. Call with no edits just to read.",
+        "Read a day's plan and change it in the same call: add tasks, drop them, tick them off, or set a timebox. Set `autoPlan` to build the day first — the planner orders the caller's tasks for the day by dependency then priority, and timeboxes them into their real availability. Edits apply after that, in the order given, so a hand edit always wins. The whole day is returned afterwards so the caller sees the result rather than inferring it. Call with no edits and no `autoPlan` just to read.",
       inputSchema: {
         orgId: orgIdParam,
         date: z.iso.date().describe('The day, as `YYYY-MM-DD`.'),
+        autoPlan: z
+          .boolean()
+          .optional()
+          .describe(
+            "Build the day deterministically before applying edits: the caller's tasks planned for or due on the day are ordered so nothing precedes what blocks it, then timeboxed into availability that already excludes protected time and anything on the calendar. Re-sequences tasks already on the plan rather than discarding them.",
+          ),
         edits: z
           .array(PlanEdit)
           .optional()
@@ -138,6 +163,15 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
         date: z.string(),
         items: z.array(PlanItem).describe('The day, in order, after any edits.'),
         applied: z.number().int().describe('How many edits changed something.'),
+        autoPlanned: z
+          .number()
+          .int()
+          .describe('How many tasks the planner placed. Zero unless `autoPlan` was set.'),
+        unplaced: z
+          .array(PlanUnplaced)
+          .describe(
+            'Tasks the planner kept on the day but could not give time to, and why. Empty unless the day was over-full.',
+          ),
       },
       _meta: widgetMeta(WIDGET.plan),
       annotations: {
@@ -149,25 +183,149 @@ export function registerPlanTools(server: McpRegistrar, ctx: McpContext): void {
     },
     (input) =>
       runTool(async () => {
-        const actorCtx = await scopedActor(
-          ctx,
-          input.orgId,
-          input.edits && input.edits.length > 0 ? 'work:write' : 'work:read',
-        );
+        const writes = input.autoPlan === true || (input.edits?.length ?? 0) > 0;
+        const actorCtx = await scopedActor(ctx, input.orgId, writes ? 'work:write' : 'work:read');
         await authorize(actorCtx, 'view', {
           kind: 'organization',
           id: input.orgId,
           orgId: input.orgId,
         });
-        const { hubId } = await callerHub(ctx);
+        const { hubId, userId } = await callerHub(ctx);
+
+        // Auto-plan runs BEFORE the edits, and that ordering is the whole guarantee that this
+        // adds a capability rather than taking one away: whatever the planner decided, a hand
+        // edit in the same call lands on top of it.
+        const auto =
+          input.autoPlan === true
+            ? await autoPlanDay({
+                hubId,
+                userId,
+                orgId: input.orgId,
+                actorId: actorCtx.actorId,
+                date: input.date,
+              })
+            : { autoPlanned: 0, unplaced: [] };
 
         let applied = 0;
         for (const edit of input.edits ?? []) {
           if (await applyEdit(hubId, input.orgId, input.date, edit)) applied += 1;
         }
-        return jsonResult({ date: input.date, items: await readDay(hubId, input.date), applied });
+        return jsonResult({
+          date: input.date,
+          items: await readDay(hubId, input.date),
+          applied,
+          autoPlanned: auto.autoPlanned,
+          unplaced: auto.unplaced,
+        });
       }),
   );
+}
+
+/**
+ * Build a day from priority, dependencies and real availability, and persist it.
+ *
+ * @remarks
+ * The seam between the two scheduling systems that had never been connected. Availability comes
+ * from the same `scheduling_preference` the week planner uses, so protected time is unreachable
+ * here for exactly the reason it is unreachable there — it is removed before a pool exists. The
+ * blocks the week planner already placed are read as **busy**, so an auto-planned day fits into
+ * the week rather than on top of it.
+ *
+ * Ordering and placement are delegated whole to the pure {@link planDay}; everything this
+ * function does is I/O. That split is what lets "the same inputs produce the same day" be a
+ * property test rather than an integration test.
+ *
+ * Persistence is an upsert, never a wipe: a task already on the day keeps its row (and so its
+ * `status` — a completed task stays completed) and is re-sequenced and re-timeboxed in place. A
+ * task the planner could not fit has its stale timebox cleared rather than left pointing at a
+ * slot that no longer exists.
+ *
+ * @param input - Whose day, which day, and in which organization.
+ * @returns how many tasks were placed, and what could not be.
+ */
+async function autoPlanDay(input: {
+  hubId: string;
+  userId: string;
+  orgId: string;
+  actorId: string;
+  date: string;
+}): Promise<{ autoPlanned: number; unplaced: z.infer<typeof PlanUnplaced>[] }> {
+  const preferences = await loadSchedulingPreferences(db, input.hubId);
+  const candidates = await loadDayCandidates(db, {
+    orgId: input.orgId,
+    actorId: input.actorId,
+    hubId: input.hubId,
+    date: input.date,
+    timezone: preferences.timezone,
+  });
+  if (candidates.length === 0) return { autoPlanned: 0, unplaced: [] };
+
+  const edges = await loadDependencyEdges(
+    db,
+    input.orgId,
+    candidates.map((c) => c.taskId),
+  );
+  // Everything already on the calendar for the day — the week planner's own blocks included.
+  const busy = (await loadDayBlocks(db, input.userId, input.date, preferences.timezone)).map(
+    (b) => ({ start: b.start, end: b.end }),
+  );
+
+  const result = planDay({
+    date: input.date,
+    timezone: preferences.timezone,
+    windows: preferences.windows,
+    busy,
+    candidates,
+    edges,
+  });
+
+  // Hub-wide for the date, because that is the grain the plan is stored at. `plan_day` is
+  // org-scoped by its own signature, so a row belonging to another organization is left exactly
+  // as it was — it is not this call's to re-sequence. Its `sort` can then tie with one this run
+  // assigns, which `readDay` already breaks by `createdAt`, so the day stays stably ordered.
+  const existing = new Map(
+    (
+      await db
+        .select({ id: dailyPlanItem.id, refTaskId: dailyPlanItem.refTaskId })
+        .from(dailyPlanItem)
+        .where(and(eq(dailyPlanItem.hubId, input.hubId), eq(dailyPlanItem.date, input.date)))
+    ).map((row) => [row.refTaskId, row.id]),
+  );
+
+  let placed = 0;
+  for (const item of result.items) {
+    const timebox = {
+      timeboxStartsAt: item.start === null ? null : new Date(item.start),
+      timeboxEndsAt: item.end === null ? null : new Date(item.end),
+    };
+    if (item.start !== null) placed += 1;
+
+    const rowId = existing.get(item.taskId);
+    if (rowId === undefined) {
+      await db.insert(dailyPlanItem).values({
+        hubId: input.hubId,
+        refOrganizationId: item.organizationId,
+        refTaskId: item.taskId,
+        date: input.date,
+        sort: item.sort,
+        ...timebox,
+      });
+      continue;
+    }
+    await db
+      .update(dailyPlanItem)
+      .set({ sort: item.sort, ...timebox })
+      .where(eq(dailyPlanItem.id, rowId));
+  }
+
+  return {
+    autoPlanned: placed,
+    unplaced: result.unplaced.map((u) => ({
+      taskId: u.taskId,
+      title: u.title,
+      reason: u.reason,
+    })),
+  };
 }
 
 /**

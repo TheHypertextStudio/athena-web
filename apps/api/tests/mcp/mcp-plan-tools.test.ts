@@ -100,7 +100,11 @@ async function seedOrg(withHub = true): Promise<Seed> {
   };
 }
 
-async function seedTask(s: Seed, title: string): Promise<string> {
+async function seedTask(
+  s: Seed,
+  title: string,
+  over: Partial<typeof schema.task.$inferInsert> = {},
+): Promise<string> {
   const [row] = await db
     .insert(schema.task)
     .values({
@@ -109,6 +113,7 @@ async function seedTask(s: Seed, title: string): Promise<string> {
       teamId: s.teamId,
       state: 'backlog',
       createdBy: s.actorId,
+      ...over,
     })
     .returning({ id: schema.task.id });
   return row!.id;
@@ -145,7 +150,14 @@ function payload(res: CallToolResult): Record<string, unknown> {
 
 interface Day {
   date: string;
-  items: { taskId: string; title: string; status: string; sort: number; startsAt?: string }[];
+  items: {
+    taskId: string;
+    title: string;
+    status: string;
+    sort: number;
+    startsAt?: string;
+    endsAt?: string;
+  }[];
   applied: number;
 }
 
@@ -310,6 +322,195 @@ describe('plan_day', () => {
       .from(schema.dailyPlanItem)
       .where(eq(schema.dailyPlanItem.hubId, mine.hubId));
     expect(rows).toEqual([]);
+  });
+});
+
+/**
+ * A Monday. `DATE` above is a Sunday, which the default availability model protects end to end —
+ * an auto-plan there correctly places nothing, which is not what these tests are about.
+ */
+const PLAN_DATE = '2026-07-27';
+
+interface AutoDay extends Day {
+  autoPlanned: number;
+  unplaced: { taskId: string; title: string; reason: string }[];
+}
+
+/** A task assigned to the caller and planned for {@link PLAN_DATE}. */
+async function seedPlannedTask(
+  s: Seed,
+  title: string,
+  over: Partial<typeof schema.task.$inferInsert> = {},
+): Promise<string> {
+  return seedTask(s, title, {
+    assigneeId: s.actorId,
+    startDate: new Date(`${PLAN_DATE}T10:00:00.000Z`),
+    ...over,
+  });
+}
+
+async function autoPlan(client: Client, orgId: string): Promise<AutoDay> {
+  return payload(
+    (await client.callTool({
+      name: 'plan_day',
+      arguments: { orgId, date: PLAN_DATE, autoPlan: true },
+    })) as CallToolResult,
+  ) as unknown as AutoDay;
+}
+
+describe('plan_day — autoPlan', () => {
+  it('builds a day from tasks planned for it, timeboxed into real availability', async () => {
+    const s = await seedOrg();
+    await seedPlannedTask(s, 'Planned work', { estimateMinutes: 60 });
+
+    const client = await connect(s.ctx);
+    const out = await autoPlan(client, s.orgId);
+
+    expect(out.autoPlanned).toBe(1);
+    expect(out.items).toHaveLength(1);
+    // The Hub has no saved preferences, so the documented default model applies: desk hours
+    // open at 09:00, and with no timezone set that is 09:00 UTC.
+    expect(out.items[0]?.startsAt).toBe(`${PLAN_DATE}T09:00:00.000Z`);
+    expect(out.items[0]?.endsAt).toBe(`${PLAN_DATE}T10:00:00.000Z`);
+  });
+
+  it('never puts a blocked task before its blocker, however urgent the blocked one is', async () => {
+    const s = await seedOrg();
+    const blocker = await seedPlannedTask(s, 'Blocker', {
+      priority: 'none',
+      estimateMinutes: 60,
+    });
+    const blocked = await seedPlannedTask(s, 'Blocked', {
+      priority: 'urgent',
+      estimateMinutes: 60,
+    });
+    await db.insert(schema.taskDependency).values({
+      organizationId: s.orgId,
+      blockingTaskId: blocker,
+      blockedTaskId: blocked,
+    });
+
+    const client = await connect(s.ctx);
+    const out = await autoPlan(client, s.orgId);
+
+    expect(out.items.map((i) => i.title)).toEqual(['Blocker', 'Blocked']);
+    // And in time, not merely in line order.
+    expect(out.items[0]?.startsAt).toBe(`${PLAN_DATE}T09:00:00.000Z`);
+    expect(out.items[1]?.startsAt).toBe(`${PLAN_DATE}T10:00:00.000Z`);
+  });
+
+  it('consumes the estimate the reconciler persisted', async () => {
+    const s = await seedOrg();
+    await seedPlannedTask(s, 'Two hours of it', { estimateMinutes: 120 });
+
+    const client = await connect(s.ctx);
+    const out = await autoPlan(client, s.orgId);
+    const item = out.items[0]!;
+    const minutes = (Date.parse(item.endsAt!) - Date.parse(item.startsAt!)) / 60_000;
+    expect(minutes).toBe(120);
+  });
+
+  it('is deterministic: planning the same day twice produces the same day', async () => {
+    const s = await seedOrg();
+    await seedPlannedTask(s, 'Alpha', { estimateMinutes: 60, priority: 'high' });
+    await seedPlannedTask(s, 'Beta', { estimateMinutes: 30, priority: 'high' });
+    await seedPlannedTask(s, 'Gamma', { estimateMinutes: 45 });
+
+    const client = await connect(s.ctx);
+    const first = await autoPlan(client, s.orgId);
+    const second = await autoPlan(client, s.orgId);
+    expect(second.items).toEqual(first.items);
+  });
+
+  it('re-sequences a hand-built day rather than discarding it', async () => {
+    const s = await seedOrg();
+    // Added by hand, and NOT planned for the day by any date field — an auto-plan must still
+    // keep it, or "manual control is preserved" would not be true.
+    const manual = await seedTask(s, 'Added by hand');
+    const client = await connect(s.ctx);
+    await client.callTool({
+      name: 'plan_day',
+      arguments: { orgId: s.orgId, date: PLAN_DATE, edits: [{ action: 'add', taskId: manual }] },
+    });
+
+    const out = await autoPlan(client, s.orgId);
+    expect(out.items.map((i) => i.title)).toContain('Added by hand');
+    expect(out.items[0]?.startsAt).toBe(`${PLAN_DATE}T09:00:00.000Z`);
+  });
+
+  it('applies hand edits after the plan, so a manual edit always wins', async () => {
+    const s = await seedOrg();
+    const dropped = await seedPlannedTask(s, 'Not today after all', { estimateMinutes: 60 });
+    await seedPlannedTask(s, 'Keep', { estimateMinutes: 60 });
+
+    const client = await connect(s.ctx);
+    const out = payload(
+      (await client.callTool({
+        name: 'plan_day',
+        arguments: {
+          orgId: s.orgId,
+          date: PLAN_DATE,
+          autoPlan: true,
+          edits: [{ action: 'remove', taskId: dropped }],
+        },
+      })) as CallToolResult,
+    ) as unknown as AutoDay;
+
+    expect(out.applied).toBe(1);
+    expect(out.items.map((i) => i.title)).toEqual(['Keep']);
+  });
+
+  it('keeps an over-full day honest instead of silently dropping work', async () => {
+    const s = await seedOrg();
+    // The default weekday model offers seven desk hours and three field hours; twelve
+    // four-hour tasks cannot fit in it.
+    for (let i = 0; i < 12; i += 1) {
+      await seedPlannedTask(s, `Big ${String(i).padStart(2, '0')}`, { estimateMinutes: 240 });
+    }
+
+    const client = await connect(s.ctx);
+    const out = await autoPlan(client, s.orgId);
+
+    expect(out.items).toHaveLength(12);
+    expect(out.unplaced.length).toBeGreaterThan(0);
+    expect(out.autoPlanned + out.unplaced.length).toBe(12);
+    for (const un of out.unplaced) {
+      expect(un.reason).toBe('day_full');
+      expect(out.items.find((i) => i.taskId === un.taskId)?.startsAt).toBeUndefined();
+    }
+  });
+
+  it('does not plan a task assigned to somebody else', async () => {
+    const s = await seedOrg();
+    const [other] = await db
+      .insert(schema.actor)
+      .values({ organizationId: s.orgId, kind: 'human', displayName: 'Someone else' })
+      .returning({ id: schema.actor.id });
+    await seedTask(s, 'Theirs', {
+      assigneeId: other!.id,
+      startDate: new Date(`${PLAN_DATE}T10:00:00.000Z`),
+      estimateMinutes: 60,
+    });
+
+    const client = await connect(s.ctx);
+    const out = await autoPlan(client, s.orgId);
+    expect(out.items).toEqual([]);
+    expect(out.autoPlanned).toBe(0);
+  });
+
+  it('reports nothing planned and changes nothing when not asked to auto-plan', async () => {
+    const s = await seedOrg();
+    await seedPlannedTask(s, 'Eligible but unasked', { estimateMinutes: 60 });
+
+    const client = await connect(s.ctx);
+    const out = payload(
+      (await client.callTool({
+        name: 'plan_day',
+        arguments: { orgId: s.orgId, date: PLAN_DATE },
+      })) as CallToolResult,
+    ) as unknown as AutoDay;
+    expect(out.autoPlanned).toBe(0);
+    expect(out.items).toEqual([]);
   });
 });
 

@@ -7,6 +7,45 @@
 
 ## Active Tasks
 
+### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
+
+- **Status**: REVIEW
+- **Started**: 2026-08-08
+- **Priority**: P1
+- **Description**: Three systems that had never met. `services/scheduling/week-planner.ts` is a
+  pure, property-tested planner with an availability model that makes protected time structurally
+  unreachable and a learned duration model — but it plans `SchedulingCommitment`s by `WorkShape`.
+  `mcp/plan-tools.ts`'s `plan_day` was hand-edit CRUD over `daily_plan_item`. Neither consumed the
+  dependency DAG that `/v1/orgs/:orgId/graph` already renders. So a day was a list you typed, not
+  a day anything reasoned about.
+- **Approach**: A new pure `services/scheduling/day-planner.ts` (`planDay`), held to the same
+  discipline as `planWeek`: no I/O, no clock, no model call. Ordering is Kahn's algorithm over the
+  dependency DAG restricted to the day's candidates, with the ready set drained by priority → due
+  date → planned date → **task id**. That last tiebreak is the whole determinism story: without it
+  the same day plans differently depending on how the database paged its rows. Placement walks
+  that order and takes the earliest fitting run strictly forward in time, so the timeboxes agree
+  with the dependency order rather than merely the line numbers.
+  `plan_day` gains an opt-in `autoPlan`, applied **before** the edits so a hand edit still wins.
+- **Notes**: Two premises in the brief needed correcting. (1) The fields are `task.estimateMinutes`
+  and `task.startDate`; `timeEstimateMinutes`/`plannedDate` are _Sunsama's_ names for them (see
+  RECONCILER-001), and have zero hits in this repo. (2) `planWeek`'s output is not a list of tasks,
+  so it cannot be "converted into" a day — reusing it as a task planner would be a category error.
+  What genuinely connects the two is the substrate plus the placed time: the week planner's blocks
+  are read as **busy**, so an auto-planned day fits into the week instead of on top of it.
+- **Files Changed**: `apps/api/src/services/scheduling/day-planner.ts` (new),
+  `day-plan-repository.ts` (new), `apps/api/src/mcp/plan-tools.ts`,
+  `apps/api/tests/services/scheduling/day-planner.test.ts` (new),
+  `apps/api/tests/mcp/mcp-plan-tools.test.ts`,
+  `docs/superpowers/specs/2026-08-08-deterministic-plan-day-design.md`.
+- **Blockers**: The suites are written but **were not executed** — every test-running command in
+  this session (`pnpm test`, `pnpm exec vitest`, `node node_modules/vitest/vitest.mjs`, direct
+  `tsc`) is refused by the harness permission gate, and the session is non-interactive so nothing
+  can approve them. `pnpm install --frozen-lockfile` was permitted and did run. The next session
+  must run `pnpm --filter @docket/api test tests/mcp tests/services/scheduling` plus `typecheck`
+  and `lint` before this leaves REVIEW.
+
+---
+
 ### [RECONCILER-001] Close §5.3: the shared import write path persists planned day, estimate, and subtasks
 
 - **Status**: COMPLETED

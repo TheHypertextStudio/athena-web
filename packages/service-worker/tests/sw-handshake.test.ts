@@ -67,7 +67,14 @@ beforeAll(async () => {
       registration: {},
     },
   });
-  await import('../src/worker/sw');
+  // Not a literal specifier: `sw.ts` is a WebWorker-only program (see `src/worker/tsconfig.json`)
+  // that this file's own DOM-lib program must never pull in as a root file — a literal import
+  // here would statically resolve at typecheck time and drag `ServiceWorkerGlobalScope` &co. into
+  // a program that doesn't have the `WebWorker` lib, breaking the split these two tsconfigs exist
+  // to keep. The concatenation defeats TS's static specifier resolution while resolving to the
+  // exact same module at runtime.
+  const swModulePath = '../src/worker/' + 'sw';
+  await import(swModulePath);
 });
 
 beforeEach(() => {

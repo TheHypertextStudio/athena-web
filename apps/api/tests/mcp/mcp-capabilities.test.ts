@@ -16,6 +16,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
+import type { OrgLifecycleState } from '../../src/billing/lifecycle';
 import type { McpContext } from '../../src/mcp/auth';
 import type { registerResources as RegisterResources } from '../../src/mcp/resources';
 import type { processSearchIndexJobs as ProcessSearchIndexJobs } from '../../src/search/process-jobs';
@@ -140,6 +141,28 @@ afterEach(async () => {
   resetAuthMocks();
 });
 
+/**
+ * Add a second workspace for `userId`, in `lifecycleState` or the column default when omitted.
+ *
+ * @param userId - The person to give a human actor in the new org.
+ * @param lifecycleState - The org's data-lifecycle state; omit to take the schema default.
+ * @returns the new organization's id.
+ */
+async function joinOrg(userId: string, lifecycleState?: OrgLifecycleState): Promise<string> {
+  const slug = `cap-lc-${Math.random().toString(36).slice(2, 10)}`;
+  const [org] = await db
+    .insert(schema.organization)
+    .values({ name: slug, slug, ...(lifecycleState ? { lifecycleState } : {}) })
+    .returning({ id: schema.organization.id });
+  await db.insert(schema.actor).values({
+    organizationId: org!.id,
+    kind: 'human',
+    displayName: 'Ada',
+    userId,
+  });
+  return org!.id;
+}
+
 /** Call a tool and fail loudly with the server's own message when it errors. */
 async function call(
   client: Client,
@@ -181,6 +204,49 @@ describe('capability: get references for all my workspaces', () => {
     expect(ids).toContain(org2!.id);
     // Names and slugs come back, so the next call can be addressed the way a person says it.
     expect(out.workspaces.find((w) => w.id === first.orgId)?.slug).toBe(first.orgSlug);
+  });
+
+  it('lists an org the caller has not paid for, and hides only the ones winding down', async () => {
+    const base = await seedOrg();
+    // The first one omits `lifecycleState` on purpose. Production takes the column default,
+    // which is `trialing`, while every fixture in this suite pins `'active'` — that gap is
+    // exactly why a tool that filtered on `= 'active'` returned an empty list to every
+    // customer still on trial without a single test going red.
+    const trialing = await joinOrg(base.userId);
+    const active = await joinOrg(base.userId, 'active');
+    const pastDue = await joinOrg(base.userId, 'past_due');
+    const exportWindow = await joinOrg(base.userId, 'export_window');
+    const pendingDeletion = await joinOrg(base.userId, 'pending_deletion');
+    const deleted = await joinOrg(base.userId, 'deleted');
+
+    const client = await connect(base.ctx);
+    const out = (await call(client, 'workspaces', {})) as { workspaces: { id: string }[] };
+    const ids = out.workspaces.map((w) => w.id);
+
+    // Still operating, so still somewhere work can be placed. `past_due` is a soft warning the
+    // billing state machine deliberately keeps usable, and paying is enforced at the point of
+    // action by the entitlement gate rather than by hiding the workspace.
+    expect(ids).toContain(trialing);
+    expect(ids).toContain(active);
+    expect(ids).toContain(pastDue);
+    // Winding down: these exist to be exported and purged, so offering them as a place to work
+    // would be a lie the agent cannot detect.
+    expect(ids).not.toContain(exportWindow);
+    expect(ids).not.toContain(pendingDeletion);
+    expect(ids).not.toContain(deleted);
+  });
+
+  it('agrees with docket://orgs about a trialing workspace', async () => {
+    const base = await seedOrg();
+    const trialing = await joinOrg(base.userId);
+
+    const client = await connect(base.ctx);
+    const res = await client.readResource({ uri: 'docket://orgs' });
+    const rows = JSON.parse((res.contents[0] as { text: string }).text) as { id: string }[];
+
+    // The tool and the resource are two doors onto the same list; a trialing org must come
+    // back through both, or the answer depends on which door the client happens to open.
+    expect(rows.map((o) => o.id)).toContain(trialing);
   });
 });
 

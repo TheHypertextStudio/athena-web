@@ -23,6 +23,29 @@ import { and, eq, inArray, isNotNull, lte, notInArray } from 'drizzle-orm';
 /** The organization data-lifecycle state union, derived from the schema column. */
 export type OrgLifecycleState = (typeof organization.$inferSelect)['lifecycleState'];
 
+/**
+ * The states in which an org is still operating, so a member should be able to find it.
+ *
+ * @remarks
+ * The pre-terminal band of the state machine. `trialing` is where every org starts
+ * ({@link organization}'s column default), `active` is a paid subscription, and `past_due` is
+ * documented by {@link onPastDue} as a soft warning that "keeps the org usable" until a
+ * cancellation moves it on. The wind-down band — `export_window`, `pending_deletion`,
+ * `deleted` — is deliberately absent: those orgs exist to be exported and purged, not worked in,
+ * and a surface that offers them as somewhere to place work is lying to whoever reads it.
+ *
+ * This answers a LIFECYCLE question ("does this org still operate?") and NOT an entitlement one
+ * ("may this org run the paid feature?"). Entitlement has its own gate in `./entitlement.ts`,
+ * whose narrower set excludes `past_due` and which a staff-issued `billingExemption` can waive.
+ * Do not merge the two sets: a membership list is not a paywall, and gating discovery on billing
+ * is how the MCP `workspaces` tool once returned nothing at all to every trialing customer.
+ */
+export const OPERATING_LIFECYCLE_STATES: readonly OrgLifecycleState[] = [
+  'trialing',
+  'active',
+  'past_due',
+];
+
 /** Number of days an org's data stays in the export window before deletion advances. */
 export const EXPORT_WINDOW_DAYS = 14;
 

@@ -14,6 +14,7 @@ import { actor, db, organization, team } from '@docket/db';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { OPERATING_LIFECYCLE_STATES } from '../billing/lifecycle';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { jsonResult, runTool } from './result';
@@ -76,7 +77,12 @@ export function registerWorkspacesTool(server: McpRegistrar, ctx: McpContext): v
                     eq(actor.kind, 'human'),
                     eq(actor.status, 'active'),
                     isNull(actor.archivedAt),
-                    eq(organization.lifecycleState, 'active'),
+                    // Not `= 'active'`. Every org is born `trialing` (the column default), so that
+                    // equality returned nothing to every customer who had not yet paid — which,
+                    // because this is the only tool that needs no orgId, silently disabled the
+                    // entire MCP surface for them. Whether the plan is paid for is a question for
+                    // the entitlement gate at the point of action, not for the membership list.
+                    inArray(organization.lifecycleState, [...OPERATING_LIFECYCLE_STATES]),
                   ),
                 )
                 .orderBy(asc(organization.name));

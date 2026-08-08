@@ -25,8 +25,19 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
-      // Docs-only edits never change build output — keep them out of the cache key.
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+      // Docs-only edits and test-only changes never change build output — keep them
+      // out of the cache key so that editing a .test.ts file in a dependency no longer
+      // invalidates the web build (and the Vercel deploy it triggers).
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md",
+        "!**/*.test.ts",
+        "!**/*.test.tsx",
+        "!**/*.spec.ts",
+        "!**/*.spec.tsx",
+        "!**/__tests__/**",
+        "!tests/**"
+      ]
     },
     "dev": {
       "cache": false,

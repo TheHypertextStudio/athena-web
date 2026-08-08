@@ -74,10 +74,14 @@ export interface McpContext {
    */
   readonly scopes: readonly string[];
   /**
-   * The registered OAuth client the call arrived through (the token's verified `azp`), or
-   * null for a first-party cookie session and for the internal agent path.
+   * The registered OAuth client the call arrived through (the token's verified `azp`).
    *
    * @remarks
+   * Set ONLY by the Bearer path, where a registered client actually exists; absent for a
+   * first-party cookie session and for the internal agent path, so "no client" has one
+   * spelling and {@link resolveBearerContext} stays the field's only writer. Consumers read
+   * it as `ctx.clientId ?? null`.
+   *
    * This is what lets an audit row name *which* connected client did something without the
    * schema ever naming one (curfew-integration.md §3.3) — it is attribution only, never an
    * authorization input; the scope and grant layers alone decide what a call may do.
@@ -335,9 +339,9 @@ export async function resolveMcpContext(headers: Headers): Promise<McpContext> {
       userEmail: session.user.email,
     },
     // A consented first-party session is granted the full scope set; the granular per-org
-    // grant cascade remains the binding authorization layer for it.
+    // grant cascade remains the binding authorization layer for it. No `clientId`: there is
+    // no registered OAuth client on this path, and the field's absence is what says so.
     scopes: [...MCP_SCOPES],
-    clientId: null,
   };
 }
 

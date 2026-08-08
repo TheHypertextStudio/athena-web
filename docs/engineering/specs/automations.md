@@ -1,8 +1,9 @@
 # Automations
 
 > **Status**: Engine + wiring shipped (M1); generic action handlers, enablement, and rule
-> seeding-on-toggle shipped (M5). A visual rule builder is a later milestone.
-> **Last Updated**: 2026-07-02
+> seeding-on-toggle shipped (M5); inbound-item routing (`task.route`, §4.1) shipped (C6).
+> A visual rule builder is a later milestone.
+> **Last Updated**: 2026-08-08
 > **Owners**: Platform
 > **Supersedes**: `email-to-task.md` §7, which described the engine when it was email-only.
 > This spec is canonical for the app-wide system.

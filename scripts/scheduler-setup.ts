@@ -28,7 +28,10 @@
  */
 
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 
 /** The Secret Manager secret holding the shared `CRON_SECRET` (created by `pnpm bootstrap`). */
 const SECRET_NAME = 'docket-cron-secret';
@@ -115,6 +118,48 @@ const JOBS: readonly CronJob[] = [
     schedule: '0 * * * *',
     description:
       'Docket: expired-session sweep (deletes session rows past their expiresAt — Better Auth only prunes these lazily).',
+  },
+  // User schedules have a five-minute floor (AthenaTriggerCreate.scheduleMinutes min 5), so a
+  // one-minute sweep keeps a run within a minute of its due time; the row claim and cooldown
+  // make an overlapping tick harmless.
+  {
+    name: 'docket-athena-triggers',
+    path: '/internal/cron/athena-triggers',
+    schedule: '*/1 * * * *',
+    description:
+      'Docket: Athena assignment-trigger sweep (runs every due user-owned scheduled trigger).',
+  },
+  {
+    name: 'docket-elicitation-deadlines',
+    path: '/internal/cron/elicitation-deadlines',
+    schedule: '*/5 * * * *',
+    description:
+      'Docket: elicitation-deadline sweep (auto-answers derivable overdue questions, parks the rest).',
+  },
+  // The projection queue is durable, so cadence is purely search staleness; two minutes matches
+  // the process-events precedent for user-visible freshness.
+  {
+    name: 'docket-search-index',
+    path: '/internal/cron/search-index',
+    schedule: '*/2 * * * *',
+    description:
+      'Docket: search-index drain (processes durable projection jobs from entity writes and backfills).',
+  },
+  // Self-limiting backfill: once no legacy row remains, each tick is one indexed scan that finds
+  // nothing — hourly is plenty, offset to avoid the top-of-hour pile-up.
+  {
+    name: 'docket-legacy-mentions',
+    path: '/internal/cron/legacy-mentions',
+    schedule: '15 * * * *',
+    description:
+      'Docket: legacy-mention sweep (one-way conversion of prose still holding the old shortcode form).',
+  },
+  {
+    name: 'docket-unfurl-resources',
+    path: '/internal/cron/unfurl-resources',
+    schedule: '*/5 * * * *',
+    description:
+      'Docket: resource-unfurl drain (resolves titles/icons/previews for pending referenced URLs).',
   },
 ];
 
@@ -269,6 +314,41 @@ function failOrSkip(action: string, err: string): never {
   process.exit(1);
 }
 
+/** The route file the drift check reads, relative to the repo root. */
+const CRON_ROUTES_FILE = 'apps/api/src/routes/cron.ts';
+
+/**
+ * Warn when `cron.ts` and `JOBS` disagree. The two are hand-maintained views of the same set,
+ * and five routes once shipped without a job entry — every scheduled behavior behind them was
+ * silently dead in prod. A route with no job never runs; a job with no route POSTs a 404
+ * forever. Warn-only: provisioning the jobs that do line up is still worth doing, and the
+ * warning surfaces in every deploy log and every manual run.
+ */
+function warnOnRouteDrift(): void {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  let source: string;
+  try {
+    source = readFileSync(path.join(repoRoot, CRON_ROUTES_FILE), 'utf8');
+  } catch {
+    warn(`drift check skipped — could not read ${CRON_ROUTES_FILE}`);
+    return;
+  }
+  const routes = new Set<string>();
+  for (const match of source.matchAll(/\.post\(\s*'\/([A-Za-z0-9-]+)'/g)) {
+    const name = match[1];
+    if (name) routes.add(`/internal/cron/${name}`);
+  }
+  const scheduled = new Set(JOBS.map((job) => job.path));
+  for (const route of routes) {
+    if (!scheduled.has(route))
+      warn(`cron route ${route} has no scheduler job — it never runs in prod. Add it to JOBS.`);
+  }
+  for (const job of scheduled) {
+    if (!routes.has(job))
+      warn(`job targets ${job}, but ${CRON_ROUTES_FILE} declares no such route.`);
+  }
+}
+
 // ── main ───────────────────────────────────────────────────────────────────────
 
 function main(): void {
@@ -284,6 +364,8 @@ function main(): void {
 
   section(`Cloud Scheduler — ${ctx.project} / ${ctx.region}${dryRun ? '  (dry run)' : ''}`);
   console.log(`  API host: ${ctx.apiUrl}`);
+
+  warnOnRouteDrift();
 
   let secret = SECRET_REDACTED;
   if (!dryRun) {

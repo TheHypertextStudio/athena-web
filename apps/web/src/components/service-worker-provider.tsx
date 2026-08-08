@@ -216,9 +216,9 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
 
 /**
  * The "new version ready" prompt: a card docked at the bottom of the sidebar, above the account
- * row. The whole card is the action — one label, one press, no explanatory copy. It steps up to
- * the panel `surface` tone from the sidebar's canvas, the same separation every other card in the
- * shell uses, so it reads as an affordance rather than an alert.
+ * row. The whole card is the action — one label, one press, no explanatory copy. It wears MD3's
+ * secondary-container role, the same tonal-emphasis fill a filled tonal button uses, so it reads
+ * as a prompt worth pressing rather than another resting nav row.
  */
 export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.Element {
   return (
@@ -227,14 +227,14 @@ export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.E
         type="button"
         onClick={onApply}
         className={cn(
-          'group bg-surface text-on-surface text-label-large hover:bg-surface-container-lowest flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors',
+          'group bg-secondary-container text-on-secondary-container text-label-large shadow-level1 hover:bg-secondary-container/80 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors',
           focusRing,
         )}
       >
         <span className="min-w-0 flex-1 truncate text-left">Update ready</span>
         <ArrowRight
           aria-hidden="true"
-          className="text-on-surface-variant size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+          className="size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
         />
       </button>
     </div>

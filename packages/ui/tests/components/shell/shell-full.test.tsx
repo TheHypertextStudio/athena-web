@@ -865,8 +865,8 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'Projects' })).toBeDisabled();
   });
 
-  it('pins optional footer content to the bottom of the nav', () => {
-    render(
+  it('pins optional footer content to the bottom of the nav, outside the scrolling middle', () => {
+    const { container } = render(
       <ContextProvider initialContext={ACME.id}>
         <Sidebar
           workspaces={WORKSPACES}
@@ -878,7 +878,15 @@ describe('Sidebar', () => {
       </ContextProvider>,
     );
     const footerButton = screen.getByRole('button', { name: 'Sign out' });
-    expect(footerButton.parentElement).toHaveClass('mt-auto');
+    // Not `mt-auto` on a scrolling parent (the old bug: the whole rail scrolled as one region).
+    // `shrink-0` is what keeps the footer from being squeezed by the scrolling middle sibling.
+    expect(footerButton.parentElement).toHaveClass('shrink-0');
+    // The switcher and the footer are outside the scrollable region; only the middle scrolls.
+    const aside = container.querySelector('aside')!;
+    expect(aside).not.toHaveClass('overflow-y-auto');
+    const scrollRegion = aside.querySelector(':scope > .overflow-y-auto');
+    expect(scrollRegion).not.toBeNull();
+    expect(scrollRegion?.contains(footerButton)).toBe(false);
   });
 });
 

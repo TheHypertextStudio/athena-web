@@ -97,6 +97,15 @@ export const SHADOW_ALLOWED_FILES: ReadonlySet<string> = new Set([
   // focus and this list must leave the caret in the editor so typing keeps filtering. It
   // therefore needs the same elevation as the menus it sits alongside.
   'apps/web/src/components/editor/suggestion-menu.tsx',
+  // The two exceptions to "float over content": the sidebar's recovery-codes nudge and its
+  // update-ready card. Neither floats — both sit in the footer's normal document flow — so this
+  // is a deliberate departure from the rule above, made once and directly rather than eroding it
+  // by precedent. They are MD3 "elevated card" surfaces: standing prompts on the sidebar canvas
+  // that need to read as distinct, interactive cards rather than another resting nav row, which
+  // tonal contrast alone did not achieve at this size. `level1`, the lowest non-zero step, is the
+  // ceiling for either — nothing in the footer should out-rank the menus and dialogs above it.
+  'apps/web/src/components/recovery-nudge-banner.tsx',
+  'apps/web/src/components/service-worker-provider.tsx',
 ]);
 
 /**

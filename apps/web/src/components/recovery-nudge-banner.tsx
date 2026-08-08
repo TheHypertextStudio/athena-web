@@ -80,7 +80,7 @@ export function RecoveryNudgeBanner({
   return (
     <div
       role="status"
-      className="bg-surface-container-high text-on-surface mb-2 flex flex-col gap-1.5 rounded-lg p-2.5"
+      className="bg-surface-container-high text-on-surface shadow-level1 flex flex-col gap-1.5 rounded-lg p-2.5"
     >
       <div className="flex items-start gap-2">
         <Shield

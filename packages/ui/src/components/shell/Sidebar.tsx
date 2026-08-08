@@ -10,9 +10,11 @@
  * shell canvas**: it carries no panel chrome of its own — no `surface` fill, border, rounding,
  * or elevation — so it reads as part of the tinted `surface-container` background rather than a
  * separate floating container (only the `<main>` content stays a distinct rounded surface
- * panel). It keeps its own padding, width, and scroll. Pinned at the top is the
- * {@link WorkspaceSwitcher} (the active workspace + a one-click switch between every org the
- * caller belongs to). Below it, two sections shown on every route:
+ * panel). It keeps its own padding and width. Only the nav rows scroll — the
+ * {@link WorkspaceSwitcher} is fixed at the top and the {@link SidebarProps.footer} (recovery
+ * nudge, update prompt, account row) is fixed at the bottom, so both stay reachable regardless of
+ * how many Workspace rows are above the fold. Below the switcher, two sections shown on every
+ * route:
  *
  * - **Home** (cross-org, no header): Today · Inbox · Portfolio · Search (opens the command
  *   palette). These route to `/today`, `/inbox`, `/portfolio` regardless of the active org.
@@ -122,7 +124,8 @@ export interface SidebarProps {
   readonly personalWorkspace?: boolean;
   /**
    * Optional content pinned to the bottom of the sidebar, below the nav (e.g. the account menu with
-   * sign-out). Separated from the scrolling nav by `mt-auto` so it stays at the foot of the rail.
+   * sign-out). Rendered as a fixed sibling after the scrolling nav region, so it stays pinned to
+   * the foot of the rail regardless of how much the Workspace section scrolls above it.
    */
   readonly footer?: React.ReactNode;
 }
@@ -272,14 +275,14 @@ export function Sidebar({
       <aside
         aria-label="Navigation"
         className={cn(
-          'text-on-surface flex h-full w-full shrink-0 flex-col overflow-y-auto p-2',
+          'text-on-surface flex h-full w-full shrink-0 flex-col p-2',
           collapsed ? 'lg:w-14 lg:items-center' : 'lg:w-60',
         )}
       >
         {/* The switcher and the collapse control share the header row. The toggle lives here
-            rather than at the foot because the foot is `mt-auto`'d to the bottom edge — a control
-            placed after it sits below the fold on a short window, which is exactly where somebody
-            looking for "how do I get the labels back" cannot find it. */}
+            rather than at the foot because the foot is a fixed sibling pinned to the bottom
+            edge — a control placed after it sits below the fold on a short window, which is
+            exactly where somebody looking for "how do I get the labels back" cannot find it. */}
         <div
           className={cn(
             'flex shrink-0 gap-1',
@@ -322,61 +325,30 @@ export function Sidebar({
           ) : null}
         </div>
 
-        <nav
-          aria-label="Home"
-          className="flex flex-col space-y-0.5 pt-2"
-          onClick={handleNavActivate}
-        >
-          {homeRows.map((row) => {
-            const href = hrefForHome(row.key);
-            const active = activeHomeKey === row.key;
-            return (
-              <SidebarNavItem
-                key={row.key}
-                label={row.label}
-                icon={row.icon}
-                active={active}
-                badge={row.key === 'inbox' ? unreadCount : undefined}
-                badgeLabel="unread"
-                collapsed={collapsed}
-                asChild
-              >
-                {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
-              </SidebarNavItem>
-            );
-          })}
-          <SidebarNavItem
-            label="Search"
-            icon={Search}
-            onSelect={onOpenSearch}
-            disabled={loading}
-            collapsed={collapsed}
-          />
-        </nav>
-
-        <GroupLabel collapsed={collapsed}>Workspace</GroupLabel>
-        {/* Every label in `workspaceRows` is a compile-time constant, so there is nothing here to
-          wait for: the rows paint immediately and only their `href` depends on the resolved
-          workspace. A grey bar in place of the word "Projects" is strictly less information than
-          the word "Projects" — it hides a label we already know in order to reserve the space that
-          label would have occupied. While `activeOrgId` is unresolved the same rows render
-          non-navigable (same text, same icons, same heights), so the section's rhythm is held by
-          real content rather than by a placeholder standing in for it. */}
-        {activeOrgId ? (
+        {/*
+          Everything between the switcher and the footer scrolls as its own region — the switcher
+          stays reachable at the top and the footer (recovery nudge, update card, account row) at
+          the bottom regardless of how many Workspace rows are above the fold. `min-h-0` is load
+          bearing: without it a flex child with `overflow-y-auto` refuses to shrink below its
+          content height and the whole `<aside>` scrolls instead, which is the bug this fixes.
+        */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <nav
-            aria-label="Workspace"
-            className="flex flex-col space-y-0.5"
+            aria-label="Home"
+            className="flex flex-col space-y-0.5 pt-2"
             onClick={handleNavActivate}
           >
-            {workspaceRows.map((row) => {
-              const href = hrefForWorkspace(activeOrgId, row.key);
-              const active = activeWorkspaceKey === row.key;
+            {homeRows.map((row) => {
+              const href = hrefForHome(row.key);
+              const active = activeHomeKey === row.key;
               return (
                 <SidebarNavItem
                   key={row.key}
                   label={row.label}
                   icon={row.icon}
                   active={active}
+                  badge={row.key === 'inbox' ? unreadCount : undefined}
+                  badgeLabel="unread"
                   collapsed={collapsed}
                   asChild
                 >
@@ -384,30 +356,70 @@ export function Sidebar({
                 </SidebarNavItem>
               );
             })}
+            <SidebarNavItem
+              label="Search"
+              icon={Search}
+              onSelect={onOpenSearch}
+              disabled={loading}
+              collapsed={collapsed}
+            />
           </nav>
-        ) : loading || workspaces.length > 0 ? (
-          // `workspaces.length > 0` with no `activeOrgId` is the one-frame gap between the list
-          // arriving and the host binding an active workspace to it. Falling through to
-          // `WorkspaceEmpty` there would flash "No workspace yet" at someone who plainly has one —
-          // the false empty state the old skeleton existed to avoid, which is avoided here by
-          // showing the real rows instead of a placeholder.
-          <nav aria-label="Workspace" className="flex flex-col space-y-0.5">
-            {workspaceRows.map((row) => (
-              <SidebarNavItem
-                key={row.key}
-                label={row.label}
-                icon={row.icon}
-                collapsed={collapsed}
-                disabled
-              />
-            ))}
-          </nav>
-        ) : collapsed ? null : (
-          <WorkspaceEmpty />
-        )}
+
+          <GroupLabel collapsed={collapsed}>Workspace</GroupLabel>
+          {/* Every label in `workspaceRows` is a compile-time constant, so there is nothing here to
+          wait for: the rows paint immediately and only their `href` depends on the resolved
+          workspace. A grey bar in place of the word "Projects" is strictly less information than
+          the word "Projects" — it hides a label we already know in order to reserve the space that
+          label would have occupied. While `activeOrgId` is unresolved the same rows render
+          non-navigable (same text, same icons, same heights), so the section's rhythm is held by
+          real content rather than by a placeholder standing in for it. */}
+          {activeOrgId ? (
+            <nav
+              aria-label="Workspace"
+              className="flex flex-col space-y-0.5"
+              onClick={handleNavActivate}
+            >
+              {workspaceRows.map((row) => {
+                const href = hrefForWorkspace(activeOrgId, row.key);
+                const active = activeWorkspaceKey === row.key;
+                return (
+                  <SidebarNavItem
+                    key={row.key}
+                    label={row.label}
+                    icon={row.icon}
+                    active={active}
+                    collapsed={collapsed}
+                    asChild
+                  >
+                    {renderLink(href, <RowBody icon={row.icon} label={row.label} />)}
+                  </SidebarNavItem>
+                );
+              })}
+            </nav>
+          ) : loading || workspaces.length > 0 ? (
+            // `workspaces.length > 0` with no `activeOrgId` is the one-frame gap between the list
+            // arriving and the host binding an active workspace to it. Falling through to
+            // `WorkspaceEmpty` there would flash "No workspace yet" at someone who plainly has one —
+            // the false empty state the old skeleton existed to avoid, which is avoided here by
+            // showing the real rows instead of a placeholder.
+            <nav aria-label="Workspace" className="flex flex-col space-y-0.5">
+              {workspaceRows.map((row) => (
+                <SidebarNavItem
+                  key={row.key}
+                  label={row.label}
+                  icon={row.icon}
+                  collapsed={collapsed}
+                  disabled
+                />
+              ))}
+            </nav>
+          ) : collapsed ? null : (
+            <WorkspaceEmpty />
+          )}
+        </div>
 
         {footer ? (
-          <div className={cn('mt-auto pt-2', collapsed ? 'w-full' : null)}>{footer}</div>
+          <div className={cn('shrink-0 pt-2', collapsed ? 'w-full' : null)}>{footer}</div>
         ) : null}
       </aside>
     </TooltipProvider>

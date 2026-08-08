@@ -668,11 +668,14 @@ function AppShellInner({
         identityUnknown ? (
           <AppShellAccountSkeleton />
         ) : (
-          <>
-            {applyUpdate ? <SidebarUpdateCard onApply={applyUpdate} /> : null}
+          // A real gap between every footer card, including the account row — the recovery nudge
+          // and update card previously relied on their own bottom margin, which left them flush
+          // against whichever card came before them.
+          <div className="flex flex-col gap-2">
             <SidebarRecoveryNudge personalOrgId={personalOrgId} userId={userId} />
+            {applyUpdate ? <SidebarUpdateCard onApply={applyUpdate} /> : null}
             <AccountMenu onCreateWorkspace={onCreateWorkspace} />
-          </>
+          </div>
         )
       }
     />

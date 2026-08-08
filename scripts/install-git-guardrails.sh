@@ -29,7 +29,17 @@ if [ -s "$repo_root/.nvmrc" ]; then
     . "$nvm_dir/nvm.sh"
     old_pwd=$(pwd)
     cd "$repo_root"
-    nvm use --silent >/dev/null
+    # `|| true`: selecting the pinned Node is an optimization, not a requirement. `nvm use` exits
+    # non-zero when `.nvmrc` names a version this machine has not installed, and under `set -e`
+    # that killed the hook before it ran anything — every commit on the machine failed, silently
+    # and with no output, because the hook died before reaching the validator that prints.
+    #
+    # Falling back to whatever Node is on PATH is safe: `engines` in package.json is the real
+    # floor (`>=24.15 <27`), and pnpm enforces it. `.nvmrc` only says which of the legal versions
+    # to prefer, so being one minor behind it must never be fatal. This is not hypothetical —
+    # bumping `.nvmrc` to 26 blocked committing for everyone still on 24, which the same commit's
+    # own `engines` range explicitly allows.
+    nvm use --silent >/dev/null 2>&1 || true
     cd "$old_pwd"
   fi
 fi

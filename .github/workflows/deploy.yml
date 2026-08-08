@@ -242,10 +242,14 @@ jobs:
   #   (DOCKET_TO_CLOUDFLARE_HMAC_SECRET, CLOUDFLARE_TO_DOCKET_HMAC_SECRET, DOCKET_API_URL),
   #   created with `wrangler queues create` / `wrangler secret put` per the doc above. This job
   #   only deploys; it creates no queues and writes no secrets.
+  # The explicit needs.deploy-api.result guard keeps the ordering invariant written into the
+  # condition itself. Today it is redundant — an `if` with no status-check function is evaluated
+  # with an implicit success() gate — but it stays correct even if someone later adds a status
+  # function such as always(), which is the one edit that would silently drop the implicit gate.
   deploy-runner:
     name: Deploy Athena runner
     needs: deploy-api
-    if: vars.CLOUDFLARE_ACCOUNT_ID != ''
+    if: needs.deploy-api.result == 'success' && vars.CLOUDFLARE_ACCOUNT_ID != ''
     runs-on: ubuntu-latest
     environment: production
     permissions:

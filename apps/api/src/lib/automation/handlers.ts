@@ -23,6 +23,7 @@ import { enqueueSearchUpsert } from '../../search/write-through';
 import type { ActionContext } from './engine';
 import type { AutomationEvent } from './event';
 import { createRegistry, type Registry } from './registry';
+import { RouteTaskParams, routeInboundItemToTask } from './route-task';
 
 export type { AutomationEvent } from './event';
 
@@ -317,6 +318,34 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
             : {}),
         },
       });
+    },
+  });
+
+  // task.route — the inbound-item action: an email, pull request or issue the org is monitoring
+  // becomes (or updates) exactly one task, in the workspace the rule names. Unlike every other
+  // handler here this one may write outside the firing event's workspace, which is the whole
+  // point of routing and the reason the shared lib re-authorizes the person against the target.
+  registry.register({
+    type: 'task.route',
+    run: async (ctx, params): Promise<void> => {
+      const event = eventOf(ctx);
+      const parsed = RouteTaskParams.safeParse(params);
+      if (!parsed.success) return;
+      const outcome = await routeInboundItemToTask(event, parsed.data);
+      if (outcome.kind === 'skipped') {
+        // Routing that quietly does nothing is the failure mode people cannot debug, so every
+        // decision not to act says which one it was.
+        console.info(
+          JSON.stringify({
+            level: 'info',
+            source: 'automation',
+            event: 'task.route.skipped',
+            reason: outcome.reason,
+            organizationId: event.organizationId,
+            target: parsed.data.organizationId ?? event.organizationId,
+          }),
+        );
+      }
     },
   });
 

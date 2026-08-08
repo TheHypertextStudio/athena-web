@@ -28,11 +28,14 @@ export interface LandingTarget {
  * team to land in (callers surface that as a 404).
  *
  * @param orgId - The active organization id.
- * @param actorId - The calling actor (becomes the assignee when resolvable).
+ * @param actorId - The calling actor (becomes the assignee when resolvable). `null` for a
+ *   landing with no human behind it — an automation rule routing an inbound item into a
+ *   workspace nobody is currently acting in — which lands the task unassigned rather than
+ *   inventing an assignee.
  */
 export async function resolveLandingTarget(
   orgId: string,
-  actorId: string,
+  actorId: string | null,
 ): Promise<LandingTarget | null> {
   // Team and assignee lookups are independent — run them together; the cycle needs the team.
   const [teamRows, assigneeRows] = await Promise.all([
@@ -42,11 +45,13 @@ export async function resolveLandingTarget(
       .where(eq(team.organizationId, orgId))
       .orderBy(asc(team.createdAt))
       .limit(1),
-    db
-      .select({ id: actor.id })
-      .from(actor)
-      .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
-      .limit(1),
+    actorId === null
+      ? Promise.resolve([])
+      : db
+          .select({ id: actor.id })
+          .from(actor)
+          .where(and(eq(actor.id, actorId), eq(actor.organizationId, orgId)))
+          .limit(1),
   ]);
   const teamRow = teamRows[0];
   if (!teamRow) return null;

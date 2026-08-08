@@ -306,6 +306,20 @@ export const EventDetail = z
       category: z.string().nullable(),
       /** Funnel confidence score (0–100) the suggestion was created with. */
       confidence: z.number().int(),
+      /**
+       * The email's own subject line, sender and snippet, carried so an automation rule can
+       * condition on what the mail actually says.
+       *
+       * @remarks
+       * Without these an `email_suggestion` event describes only the funnel's verdict, and the
+       * strongest condition a rule can express is "anything the funnel scored highly" — which
+       * is not a rule, it is a firehose. "A limited-time LVBT opportunity belongs in the LVBT
+       * workspace" is a statement about the words in the mail, so the words have to be on the
+       * event. All three are the ingest-time snapshot: what the sweep saw, not a live read.
+       */
+      subject: z.string(),
+      sender: z.string(),
+      snippet: z.string(),
     }),
     z.object({
       /**

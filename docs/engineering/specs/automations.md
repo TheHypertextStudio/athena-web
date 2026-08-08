@@ -128,12 +128,79 @@ subject type or invalid params — rules can never throw domain errors.
 | `task.applyLabel` | `{ labelId: string }` | `task` | Attaches a label through the shared `attachLabels` write path, so a rule obeys label-group exclusivity exactly as a person does: applying `Type: Bug` to a task already carrying `Type: Feature` **swaps** rather than stacking. A rule is the caller most likely to violate that invariant at scale, and an invariant only the picker honours is decorative. Resolves against the task's own team, so a team-limited label applies and a cross-tenant id is a silent no-op. | union collapses, so re-applying is a no-op |
 | `notification.send` | `{ to: 'actor'\|'taskAssignee', title, summary? }` | any (task for `taskAssignee`) | Writes an `automation`-type inbox notification to the resolved user; links to the task when the subject is one. Agent actors (no user) → no-op. | inbox row per firing |
 | `suggestion.autoAccept` | `{}` | `email_suggestion` | Materializes the pending suggestion through the shared accept lib (`lib/email-to-task/accept.ts` — the same path as the accept route: landing, email attachment, event). Non-pending → logged no-op. | `pending`-status guard |
+| `task.route` | `{ organizationId?, teamId?, projectId?, state?, priority?, labelId? }` | `email_suggestion`, or any external event (`source != 'docket'`) | Turns one **inbound item** into exactly one task in the workspace the rule names (`lib/automation/route-task.ts`). See §4.1. | `inbound_task_route` ledger, keyed on the item's stable external identity |
 
 All mutating handlers reuse the **shared lib mutations** (`setTaskState`, `acceptSuggestion`)
 so route behavior and automation behavior cannot diverge; events they emit are recorded and
 fanned out but never trigger another rule pass (§5's depth-1 cap). `comment.create` remains
 deliberately unimplemented — no shipped rule needs it, and polymorphic comment creation
 (mention parsing, subject fan-out) adds surface without a driver.
+
+### 4.1 `task.route` — stream monitoring becomes task creation
+
+The action that closes the loop between ambient ingestion and work. Gmail sweeps, GitHub
+webhooks and Linear webhooks all already end at a committed observation the engine sees;
+`task.route` is what a rule dispatches when the answer is "there should be a task for this,
+over there".
+
+**The item, not the delivery.** Routing resolves the firing event back to the inbound item
+behind it and keys on that item's _stable external identity_ in `inbound_task_route`
+(unique on `(organization_id, source_system, source_key)`):
+
+| Source              | `source_key`                                         |
+| ------------------- | ---------------------------------------------------- |
+| Gmail / Outlook     | RFC 5322 `Message-ID`, falling back to the thread id |
+| GitHub / Linear / … | the entity's native id (`event.externalId`)          |
+
+Two consequences, and both are the point. A re-listed thread or a redelivered webhook
+resolves to the row that exists, so **one inbound item is one task** however many times it is
+seen. And a pull request opened and later closed is one `source_key` across two deliveries,
+so **the close updates the task the open created** rather than filing a second one beside it.
+
+**Linkage order.** (1) The Docket entity ingestion already resolved the item to, when it
+resolved one and it is live in the target workspace — a task mirrored from a Linear issue IS
+the linked task. (2) The `inbound_task_route` row. (3) Otherwise create, through the shared
+landing resolver (`lib/task-landing.ts`) and the real `emitEvent` facade, so a routed task is
+indistinguishable from a captured one.
+
+**Cross-workspace routing is authorized, not assumed.** `params.organizationId` may name a
+workspace other than the firing event's — that is what makes "an LVBT email becomes an LVBT
+task" work when the mailbox is connected to a personal workspace. Because that is a
+cross-tenant write, the routing person (the suggestion's creator / the event's actor) must
+resolve to an **active** actor in the target workspace via their linked user, and the task is
+written under that actor. No membership → logged no-op, exactly like the cross-tenant
+refusals in `task.assign` and `task.applyLabel`. `projectId` and `labelId` belonging to
+another workspace are dropped rather than written.
+
+**Every decision not to act is logged**, as a structured `task.route.skipped` line with a
+reason (`not_inbound`, `no_source_key`, `suggestion_unavailable`, `not_a_member`, `no_team`).
+Routing that quietly does nothing is the failure mode nobody can debug.
+
+**Reaching Athena.** A routed task emits a real `created` event, which is the same event
+`handleAthenaAssignmentEvent` observes — so an Athena assignment scoped to a project (or to a
+parent task) fires its event triggers for routed work with no extra wiring. `params.projectId`
+is the handle that puts routed items inside an assignment's scope.
+
+The mail path also needs the mail's own words on the event to be routable at all, so the
+`docket.email_suggestion` detail carries `subject`/`sender`/`snippet` alongside the funnel
+verdict. Without them the strongest condition a rule could express is "anything the funnel
+scored highly", which is a firehose rather than a rule.
+
+Worked example — the headline case:
+
+```jsonc
+{
+  "name": "LVBT opportunities → LVBT workspace",
+  "on": { "kind": "created", "subjectType": "email_suggestion" },
+  "when": { "op": "contains", "path": "detail.subject", "value": "LVBT" },
+  "then": [
+    {
+      "type": "task.route",
+      "params": { "organizationId": "<lvbt org id>", "priority": "high" },
+    },
+  ],
+}
+```
 
 ### Shipped default rules (seeded, editable data — `rules-store.ts`)
 

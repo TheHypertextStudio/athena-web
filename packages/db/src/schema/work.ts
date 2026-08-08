@@ -26,12 +26,13 @@ import {
   programStatus,
   projectStatus,
   provenanceSource,
+  sourceSystem,
   syncMode,
   taskPriority,
   visibility,
 } from '../enums';
 import { notBlank } from './constraints';
-import { actor, auditColumns, team } from './identity';
+import { actor, auditColumns, organization, team } from './identity';
 import { integration } from './crosscutting';
 
 /**
@@ -287,5 +288,61 @@ export const task = pgTable(
     ),
     dateInRange('task_start_date_range', t.startDate),
     dateInRange('task_due_date_range', t.dueDate),
+  ],
+);
+
+/**
+ * The link between one inbound item and the task an automation rule routed it to.
+ *
+ * @remarks
+ * The ledger that makes stream-monitoring-to-task-creation usable rather than a duplicate
+ * factory. Every `task.route` action writes one row keyed by
+ * `(organization_id, source_system, source_key)`, where `source_key` is the inbound item's
+ * *stable* external identity — an email's RFC 5322 Message-ID, a GitHub pull request's node
+ * id — and NOT the identity of the delivery that carried it. Two consequences follow, and
+ * both are the point:
+ *
+ * - **Idempotence.** The same email re-listed by a later mailbox sweep, or the same webhook
+ *   redelivered, resolves to the row that already exists and updates that task. One inbound
+ *   item is one task, however many times it is seen.
+ * - **Linkage.** A pull request that is opened and later closed is one `source_key` across
+ *   two deliveries, so the close updates the task the open created instead of filing a second
+ *   one next to it.
+ *
+ * `organization_id` is the workspace the task LANDED in, which is the routing target and may
+ * differ from {@link inboundTaskRoute.originOrganizationId} — the workspace whose integration
+ * received the item. A personal mailbox feeding work into a client's workspace is the case
+ * that separation exists for, and the unique key uses the target so the same item may legitimately
+ * route into two workspaces without either one duplicating it.
+ */
+export const inboundTaskRoute = pgTable(
+  'inbound_task_route',
+  {
+    ...auditColumns(),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => task.id, { onDelete: 'cascade' }),
+    /** Which tool the item arrived from (`gmail` | `github` | `linear` | …). */
+    sourceSystem: sourceSystem('source_system').notNull(),
+    /** The item's stable external identity — the dedupe and linkage key (see the remarks). */
+    sourceKey: text('source_key').notNull(),
+    /** Canonical open-in-source URL captured at routing time (the provenance a person clicks). */
+    sourceUrl: text('source_url'),
+    /** The integration the item arrived through, when it arrived through one. */
+    sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
+      onDelete: 'set null',
+    }),
+    /** The workspace the item arrived in, when it differs from the workspace routed to. */
+    originOrganizationId: text('origin_organization_id').references(() => organization.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    uniqueIndex('inbound_task_route_source_uq').on(t.organizationId, t.sourceSystem, t.sourceKey),
+    index('inbound_task_route_task_idx').on(t.taskId),
+    // A key that is present but empty would collapse every keyless item in a workspace onto one
+    // task — the exact failure the unique index above exists to prevent, arriving through the
+    // back door. Routing declines to act without a real key; this is the floor under that.
+    notBlank('inbound_task_route_source_key_not_blank', t.sourceKey),
   ],
 );

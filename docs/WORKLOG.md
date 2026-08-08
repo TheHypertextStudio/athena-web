@@ -98,6 +98,53 @@ task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provide
 
 ---
 
+### [C6-001] Stream monitoring becomes task creation — the `task.route` automation action
+
+- **Status**: REVIEW
+- **Started**: 2026-08-08
+- **Priority**: P1
+- **Description**: Initiative step C6, in the user's words: "if I get an email about a
+  limited-time LVBT opportunity, a task appears." Ingestion already existed and was not rebuilt.
+  The Gmail sweep (`lib/email-to-task/sweep.ts` → `synthesize.ts`) ends at a pending
+  `email_suggestion`; the GitHub/Linear webhook drain (`routes/event-sync.ts`) ends at a canonical
+  `event`. Both already hand their result to the automation engine. What was missing was any
+  action a rule could dispatch that **creates** a task from an inbound item: every `task.*`
+  handler acted on a Docket task that already existed, and `suggestion.autoAccept` could only
+  materialize into the suggestion's own workspace.
+- **Approach**: One new action, `task.route`, backed by a shared mutation
+  (`lib/automation/route-task.ts`) and a new `inbound_task_route` ledger keyed on the inbound
+  item's _stable external identity_ — an email's RFC 5322 Message-ID, a pull request's node id —
+  never on the delivery that carried it. That single key buys both properties the feature lives or
+  dies on: a re-listed thread or a redelivered webhook converges on the task that exists
+  (idempotence), and a PR opened then closed is one identity across two deliveries so the close
+  updates what the open created (linkage, not duplication). Routing may name another workspace,
+  which is the actual LVBT case since the mailbox hangs off a personal workspace; because that is
+  a cross-tenant write, the routing person is re-resolved to an **active** actor in the target via
+  their linked user and the task is written under that actor, or it is a logged no-op.
+- **Notes**: Two supporting changes were needed and are not incidental. (1) The
+  `docket.email_suggestion` event detail now carries the mail's `subject`/`sender`/`snippet`;
+  without them the strongest condition a rule could express was "anything the funnel scored
+  highly", which is a firehose, not a rule. (2) `projectInboundDraft` now carries the subject's
+  `externalId`/`externalUrl`, which is what lets a rule route an external item that resolved to no
+  Docket entity at all, and what links two deliveries about one item.
+  Athena assignment triggers needed no new mechanism: a routed task emits a real `created` event
+  through the same facade `handleAthenaAssignmentEvent` observes, so an assignment scoped to a
+  project picks up routed work. `params.projectId` is the handle that puts it in scope.
+- **Files Changed**: `packages/db/src/schema/work.ts`,
+  `packages/db/drizzle/0076_inbound_task_route.sql` (new), `packages/types/src/event.ts`,
+  `apps/api/src/lib/automation/route-task.ts` (new), `handlers.ts`, `event.ts`,
+  `apps/api/src/lib/email-to-task/synthesize.ts`, `apps/api/src/lib/task-landing.ts`,
+  `apps/api/src/routes/event-sync.ts`,
+  `apps/api/tests/routes/automation-task-routing.test.ts` (new), `automation-hooks.test.ts`,
+  `docs/engineering/specs/automations.md`.
+- **Blockers**: None. `pnpm --filter @docket/api test` → 304 files / 3497 tests passing;
+  `pnpm typecheck` → 20/20; `pnpm --filter @docket/api lint` clean.
+- **Learnings**: The funnel's promo cues (`lib/email-to-task/funnel.ts`) include the literal
+  phrase `limited time`, and a promo match floors the score at 5 — so mail worded exactly like the
+  headline sentence never becomes a suggestion and therefore never reaches a routing rule. The
+  routing mechanism is not the constraint there; the pre-filter is. Left as follow-up rather than
+  silently retuned, because loosening a cost filter is a decision with a bill attached.
+
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 
 - **Status**: REVIEW

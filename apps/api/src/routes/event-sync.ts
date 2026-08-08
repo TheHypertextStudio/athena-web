@@ -444,6 +444,13 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<Processed
           // upstream is closing it. See `docs/engineering/hub-architecture.md`, which traces
           // `Linear → event → task → attachment → Gmail` as the intended path.
           docketEntityId: association.docketEntityId,
+          // The subject's own external id and permalink, which is what lets a rule route an
+          // external item that resolved to no Docket entity at all into a task, and lets a
+          // later event about the SAME item (a PR opened, then closed) find that task instead
+          // of creating a second one. `draft.externalId` is the delivery's id; the entity ref
+          // is the item's, so the entity wins when both are present.
+          externalId: draft.entity?.externalId ?? draft.externalId ?? null,
+          externalUrl: entityRef?.url ?? draft.permalink ?? null,
           title: draft.title,
           detail: draft.detail ?? null,
           occurredAt,

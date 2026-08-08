@@ -175,11 +175,17 @@ export async function persistSuggestions(
       title: draft.title,
       subject: { type: 'email_suggestion', id: row.id, title: draft.title },
       // The funnel verdict rides along so pipeline rules can match on it
-      // (e.g. dismiss-promotions matches `detail.category === 'promotions'`).
+      // (e.g. dismiss-promotions matches `detail.category === 'promotions'`), and so does the
+      // email's own subject/sender/snippet — a routing rule ("anything about an LVBT
+      // opportunity belongs in the LVBT workspace") is a condition on the mail, not on the
+      // classifier, and the predicate interpreter can only read what the event carries.
       detail: {
         schema: 'docket.email_suggestion',
         category: verdict.category ?? null,
         confidence: verdict.score,
+        subject: thread.subject,
+        sender: thread.sender,
+        snippet: thread.snippet,
       },
     });
   }

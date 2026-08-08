@@ -34,6 +34,19 @@ export interface AutomationEvent {
   /** The subject's display title, when known. */
   readonly subjectTitle?: string;
   /**
+   * The external identity of the thing the event is about, for events that came from another
+   * tool — a GitHub pull request's id, a Linear issue's id.
+   *
+   * @remarks
+   * The *entity's* id, deliberately not the delivery's. A pull request that is opened and later
+   * closed arrives as two events carrying two `dedupeKey`s and one `externalId`, which is what
+   * lets `task.route` recognize the second event as being about the task the first one created.
+   * Absent for internal Docket events, which address their subject by `subjectId` instead.
+   */
+  readonly externalId?: string;
+  /** Canonical open-in-source URL for the subject, when the provider gave one. */
+  readonly externalUrl?: string;
+  /**
    * The event's typed detail pocket flattened to a record (paths like `detail.category`,
    * `detail.toState`). Always present; empty when the event carried no detail.
    */
@@ -75,6 +88,10 @@ export interface InboundEventProjectionInput {
   readonly entityKind: string | null;
   /** The Docket entity the external entity resolved to, when enrichment resolved one. */
   readonly docketEntityId: string | null;
+  /** The subject's native id in the source system, when the draft carried a subject. */
+  readonly externalId?: string | null;
+  /** The subject's canonical source URL (the draft's permalink), when the provider gave one. */
+  readonly externalUrl?: string | null;
   readonly title: string;
   readonly detail: unknown;
   readonly occurredAt: Date;
@@ -105,6 +122,8 @@ export function projectInboundDraft(input: InboundEventProjectionInput): Automat
       input.docketEntityId !== null && { subjectType, subjectId: input.docketEntityId }),
     ...(input.entityKind !== null && { entityKind: input.entityKind }),
     subjectTitle: input.title,
+    ...(input.externalId != null && { externalId: input.externalId }),
+    ...(input.externalUrl != null && { externalUrl: input.externalUrl }),
     detail,
     occurredAt: input.occurredAt,
   };

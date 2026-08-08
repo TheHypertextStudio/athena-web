@@ -97,7 +97,14 @@ describe('hook site 1 — emitEvent runs automation rules post-commit', () => {
       actorId: humanActorId,
       title: '50% off everything',
       subject: { type: 'email_suggestion', id: suggestionId, title: '50% off everything' },
-      detail: { schema: 'docket.email_suggestion', category: 'promotions', confidence: 5 },
+      detail: {
+        schema: 'docket.email_suggestion',
+        category: 'promotions',
+        confidence: 5,
+        subject: '50% off everything',
+        sender: 'deals@shop.example',
+        snippet: 'Limited time only — unsubscribe any time.',
+      },
     });
 
     const row = one(

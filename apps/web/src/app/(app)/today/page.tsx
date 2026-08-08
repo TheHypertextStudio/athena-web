@@ -38,24 +38,25 @@ export default function TodayPage(): JSX.Element {
   const now = useNow(60_000);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-10 px-6 py-10 @2xl:px-10 @2xl:py-14 @4xl:px-12">
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-6 px-6 py-8 @2xl:px-10 @2xl:py-10 @4xl:px-12">
+      {/* Tightened so the composer sits near the top of the fold. The masthead used to spend a
+          `gap-3` stack inside a `gap-10` column on top of `py-14`, which put roughly a quarter of
+          a 900px viewport between opening the page and reaching the one thing you came to do. */}
       <Stack
         as="header"
-        gap={3}
+        gap={1}
         className="motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-700 motion-safe:ease-out"
       >
         {/* "Today" at display size over the date at headline size. The in-app type scale tops out at
             text-title-large, so these editorial sizes are a deliberate, surface-specific choice for the daily
             landing (a fixed display size, not the marketing clamp which grows much larger). */}
-        <Stack gap={1}>
-          <span className="text-on-surface-variant text-sm font-medium tracking-wide">
-            {greetingFor(now.getHours())}
-          </span>
-          <h1 className="text-on-surface text-[3rem] leading-[1.1] font-semibold tracking-[-0.01em]">
-            Today
-          </h1>
-        </Stack>
-        <p className="text-on-surface-variant text-2xl">{heading}</p>
+        <span className="text-on-surface-variant text-label-large tracking-wide">
+          {greetingFor(now.getHours())}
+        </span>
+        <h1 className="text-on-surface text-[3rem] leading-[1.1] font-semibold tracking-[-0.01em]">
+          Today
+        </h1>
+        <p className="text-on-surface-variant text-title-medium">{heading}</p>
         {/* No "Open Athena for today" door here. Athena is the engine behind every door, not a
             place you go — and the capture box directly below this is already one of those doors,
             with the global pill a third. Three entry points to one engine on a single screen is

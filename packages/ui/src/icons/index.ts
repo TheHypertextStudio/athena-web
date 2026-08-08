@@ -19,6 +19,8 @@ import type SvgIcon from '@mui/material/SvgIcon';
 export { default as Activity } from '@mui/icons-material/Timeline';
 export { default as Apple } from '@mui/icons-material/Apple';
 export { default as ArrowRight } from '@mui/icons-material/ArrowForward';
+/** The send affordance on a composer. Points up because the text travels up into the thread. */
+export { default as ArrowUp } from '@mui/icons-material/ArrowUpward';
 export { default as AtSign } from '@mui/icons-material/AlternateEmail';
 export { default as Building } from '@mui/icons-material/CorporateFare';
 export { default as Blueprint } from '@mui/icons-material/ArchitectureOutlined';

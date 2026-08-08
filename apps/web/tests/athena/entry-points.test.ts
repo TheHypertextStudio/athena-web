@@ -6,8 +6,11 @@ const root = resolve(import.meta.dirname, '../../../..');
 const read = (path: string): string => readFileSync(resolve(root, path), 'utf8');
 
 describe('ambient Athena entry points', () => {
+  // `/today` is deliberately absent from this list. Its Athena door is not a button in the
+  // masthead any more — it is the capture composer's destination mode, asserted on its own below.
+  // A page-level "Open Athena for today" *beside* a field that already sends to Athena made the
+  // engine look like a place you navigate to, which is the opposite of the model.
   it.each([
-    'apps/web/src/app/(app)/today/page.tsx',
     'apps/web/src/app/(app)/tasks/all-tasks-client.tsx',
     'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/page.tsx',
     'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/page.tsx',
@@ -38,6 +41,10 @@ describe('ambient Athena entry points', () => {
   it('routes the Today prompt into the shared dock instead of creating a local mini session UI', () => {
     const source = read('apps/web/src/components/today/today-prompt.tsx');
     expect(source).toContain('useAthenaPanel');
+    // The contextual door `/today` used to carry as a masthead button. It hands Athena the
+    // workspace *and* the draft, so it is strictly more contextual than the button was.
+    expect(source).toContain('openAthena({ workspaceId: orgId, workspaceName: orgLabel }');
+    expect(source).toContain('CaptureMode');
     expect(source).not.toContain("api.v1.orgs[':orgId'].sessions.$post");
     expect(source).not.toContain('AthenaSessionNotice');
     expect(source).not.toContain('SessionStatusPill');

@@ -24,7 +24,7 @@ import type { HubTaskItem } from '@docket/types';
 import { cn } from '@docket/ui';
 import { ArrowRight } from '@docket/ui/icons';
 import { dragSourceProps } from '@docket/ui/lib/draggable';
-import { Skeleton, Stack } from '@docket/ui/primitives';
+import { Button, Skeleton, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import Link from 'next/link';
@@ -89,18 +89,27 @@ export default function NextUp({
 
   return (
     <Stack as="section" gap={4} aria-labelledby="today-next-up-heading">
-      <h2 id="today-next-up-heading" className="text-on-surface text-lg font-semibold">
+      <h2 id="today-next-up-heading" className="text-on-surface text-title-medium font-semibold">
         Next up
       </h2>
 
       {loading ? (
         <NextUpRowsPlaceholder />
       ) : picks.length === 0 ? (
-        // One quiet line, not a 12-unit bordered box around a reassurance and two instructions.
-        // "You're clear for now. Capture a thought above, or timebox work onto your calendar."
-        // told the reader how they should feel and then pointed at two controls already on screen.
-        // An empty day is not an error state and does not need consoling or a diagram.
-        <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
+        // A line and one control — the section-level empty-state shape used verbatim one component
+        // away in `agenda-list-arrangement.tsx`. No border, no box, no glyph disc: those belong to
+        // the page-level `EmptyState`, and the 12-unit bordered panel that used to sit here was
+        // half of what made an ordinary clear day read as a placeholder.
+        //
+        // The action is the calendar, not capture. The composer is directly above this section, so
+        // pointing back at it would be the redundancy the copy pass just removed; timeboxing the
+        // day is the thing you cannot already do from here.
+        <Stack gap={2} role="status">
+          <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
+          <Button asChild variant="outline" size="sm" className="self-start">
+            <Link href="/calendar">Plan your day</Link>
+          </Button>
+        </Stack>
       ) : (
         <Stack as="ul" gap={2}>
           {picks.map((pick, i) => {

@@ -19,10 +19,11 @@
  * Enter captures; ⌘/Ctrl+Enter hands the same text to Athena instead, which is also what the
  * global Athena pill does.
  */
-import { ArrowRight } from '@docket/ui/icons';
+import { ArrowUp, CornerDownLeft, ListChecks, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
+import { readStoredString, writeStoredValue } from '@docket/ui/lib/browser-storage';
 import Link from 'next/link';
-import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
+import { type JSX, type KeyboardEvent, useCallback, useEffect, useState } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
@@ -37,6 +38,19 @@ interface CaptureNotice {
   /** Where the task lives, for the follow-the-work link. */
   href: string;
 }
+
+/**
+ * Where this box sends what you typed.
+ *
+ * @remarks
+ * A persisted setting, not a per-submit choice. The two peer buttons this replaced made every
+ * entry a mode decision before typing was worth anything, on the surface whose premise is that you
+ * write plainly and the product works out the rest. You pick a destination once and it stays.
+ */
+type CaptureMode = 'task' | 'athena';
+
+/** Where the chosen destination survives a reload. */
+const CAPTURE_MODE_KEY = 'docket.today.capture-mode';
 
 /** Props for {@link TodayPrompt}. */
 export interface TodayPromptProps {
@@ -56,6 +70,13 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
   const [busy, setBusy] = useState<'capture' | null>(null);
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Read on mount, never in the initializer: this renders on the server, and an initializer that
+  // returned the stored mode on the client and the default on the server leaves the DOM stuck on
+  // whatever the server emitted. See `@docket/ui/lib/browser-storage`.
+  const [mode, setModeState] = useState<CaptureMode>('task');
+  useEffect(() => {
+    if (readStoredString(CAPTURE_MODE_KEY) === 'athena') setModeState('athena');
+  }, []);
 
   // No empty-workspace fork. This box used to run a `tasks` probe purely to decide whether to
   // show an onboarding heading, a different placeholder, swapped button emphasis, and a different
@@ -105,27 +126,39 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
     setText('');
   }, [openAthena, orgId, orgLabel, text]);
 
+  /** Send the draft wherever the active mode points. */
+  const submit = useCallback((): void => {
+    if (mode === 'athena') askAthena();
+    else void capture();
+  }, [mode, askAthena, capture]);
+
+  const setMode = useCallback((next: CaptureMode): void => {
+    setModeState(next);
+    writeStoredValue(CAPTURE_MODE_KEY, next);
+  }, []);
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>): void => {
       if (event.key !== 'Enter' || event.shiftKey) return;
       event.preventDefault();
       if (!canSubmit) return;
-      // Enter commits; ⌘/Ctrl+Enter hands the text to Athena instead.
-      if (event.metaKey || event.ctrlKey) askAthena();
-      else void capture();
+      // Enter sends in the active mode. ⌘/Ctrl+Enter sends too, and is the chord to rely on: while
+      // the `@` menu is open `MentionTextarea` swallows a plain Enter to pick a mention and lets
+      // only this one through (see `mention-textarea.tsx`).
+      submit();
     },
-    [canSubmit, capture, askAthena],
+    [canSubmit, submit],
   );
+
+  const nextMode: CaptureMode = mode === 'task' ? 'athena' : 'task';
+  const modeLabel = mode === 'task' ? 'Task' : 'Athena';
 
   return (
     <div className="flex flex-col gap-2">
-      {/* No heading and no explainer above the box, on an empty workspace or a full one. What used
-          to sit here — a rhetorical "What's on your plate?" over two sentences describing what
-          pasting does and promising nothing lands without approval — was the field narrating
-          itself. The field has a placeholder, two named buttons, and a target workspace under it;
-          a person who can read those does not need the paragraph, and one who cannot is not helped
-          by it. Reassurance about approval belongs where approval happens, not here. */}
-      <div className="border-outline-variant bg-surface-container-low focus-within:ring-ring focus-within:border-ring flex flex-col gap-3 rounded-2xl border p-4 transition-colors duration-(--dur-base) ease-(--ease-out) focus-within:ring-1 @2xl:p-5">
+      {/* No heading and no explainer above the box. What used to sit here — a rhetorical
+          "What's on your plate?" over two sentences describing what pasting does — was the field
+          narrating itself to the person already using it. */}
+      <div className="border-outline-variant bg-surface-container-low focus-within:ring-ring focus-within:border-ring flex flex-col gap-2 rounded-2xl border p-3 transition-colors duration-(--dur-base) ease-(--ease-out) focus-within:ring-2 @2xl:p-4">
         <MentionTextarea
           value={text}
           onChange={(next) => {
@@ -135,32 +168,54 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
           {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
           insertMode="context"
           onKeyDown={onKeyDown}
-          rows={text.includes('\n') || text.length > 90 ? 3 : 2}
-          // One placeholder, not two. The empty-workspace variant said "Paste your firehose here —
-          // Athena will sort it out…", which named an internal metaphor for the input and then
-          // promised an outcome. The buttons below already say what the two outcomes are.
+          // Measured, not guessed. This was `rows={text.length > 90 ? 3 : 2}` — a stand-in for
+          // "has it wrapped yet" that is wrong at every width it was not tuned for.
+          rows={1}
+          autoGrow
+          maxRows={10}
           placeholder="Capture a task, paste a plan, or ask Athena…"
           aria-label="Capture a task or ask Athena"
           disabled={orgId === null}
-          className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
+          className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent px-1 pt-1 text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
         />
-        {/* One action, not a fork. Two peer buttons made every entry a mode choice the person had
-            to make before typing was worth anything, on a surface whose whole premise is that you
-            write in plain language and the product works out what you meant. Athena is still one
-            keystroke away (⌘↵) and one tap away on the global pill; it is not a second submit.
-
-            The "into <workspace>" caption went with them. It labelled a destination nobody chose
-            here — on a personal workspace it read "into <your name>'s space", which is noise. */}
-        <div className="flex justify-end">
+        {/* The bottom row: destination on the left, send on the right. One send, because a field
+            with two peer submit buttons makes every entry a mode decision before typing is worth
+            anything. The destination is a setting you flip and it stays, which is what lets the
+            send button be a bare arrow — the mode pill is already saying where the text goes. */}
+        <div className="flex items-center gap-2">
           <Button
             type="button"
-            disabled={!canSubmit}
+            variant="ghost"
+            controlSize="xs"
+            className="rounded-full"
+            aria-pressed={mode === 'athena'}
+            title={`Sending to ${modeLabel}. Switch to ${nextMode === 'task' ? 'Task' : 'Athena'}.`}
             onClick={() => {
-              void capture();
+              setMode(nextMode);
             }}
           >
-            {busy === 'capture' ? 'Adding…' : 'Add task'}
-            <ArrowRight />
+            {mode === 'task' ? <ListChecks /> : <Sparkles />}
+            {modeLabel}
+          </Button>
+          <span className="text-on-surface-variant text-label-small ml-auto hidden items-center gap-1 @lg:flex">
+            <CornerDownLeft aria-hidden="true" className="size-3.5" />
+            to send
+          </span>
+          {/* Filled only once there is something to send. A permanently filled button meant the
+              resting state of an empty field was a loud control for an action that was not yet
+              available. `rounded-full` overrides the primitive's `rounded-md`; it is the one
+              circular control in the app and it earns that by being the composer's single action. */}
+          <Button
+            type="button"
+            iconOnly
+            controlSize="md"
+            variant={canSubmit ? 'default' : 'ghost'}
+            className="ml-auto rounded-full @lg:ml-0"
+            disabled={!canSubmit}
+            aria-label={busy === 'capture' ? 'Adding…' : `Send to ${modeLabel}`}
+            onClick={submit}
+          >
+            <ArrowUp />
           </Button>
         </div>
       </div>

@@ -16,7 +16,7 @@
 import { cn } from '@docket/ui/lib/utils';
 import type { MentionItem } from '@docket/types';
 import { formatMentionLink } from '@docket/types';
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { TextareaHTMLAttributes } from 'react';
 
 import MentionMenu from './mention-menu';
@@ -48,6 +48,19 @@ export interface MentionTextareaProps extends Omit<
   readonly insertMode?: MentionInsertMode;
   /** Called with the reference on insert, so a context surface can carry it alongside the text. */
   readonly onReference?: (item: MentionItem) => void;
+  /**
+   * Grow the field to fit its own content, up to {@link maxRows}.
+   *
+   * @remarks
+   * Off by default: a persisted field with a fixed `rows` is a stable target, and changing that
+   * under every existing caller would move four Athena composers at once. Composers opt in.
+   *
+   * The alternative callers reach for is a ternary on `value.length`, which is a guess about where
+   * text wraps and is wrong at every width it was not tuned for. This measures instead.
+   */
+  readonly autoGrow?: boolean;
+  /** Row cap for {@link autoGrow}; past it the field scrolls. Defaults to 12. */
+  readonly maxRows?: number;
 }
 
 /** A caret anchor Radix can position against. */
@@ -69,6 +82,8 @@ export default function MentionTextarea({
   orgId,
   insertMode = 'prose',
   onReference,
+  autoGrow = false,
+  maxRows = 12,
   className,
   onKeyDown,
   ...rest
@@ -95,6 +110,22 @@ export default function MentionTextarea({
   // One narrowing carrying both values, rather than a boolean the JSX then has to re-check.
   const session = orgId !== undefined && trigger !== undefined ? { orgId, trigger } : undefined;
   const open = session !== undefined;
+
+  // Measure-then-set, in a layout effect so the height lands in the same frame as the text and the
+  // field never paints one row short. `height = auto` first because `scrollHeight` reports the
+  // content's height only when it is not already being clipped by the height we set last time.
+  //
+  // The cap is computed from the element's own resolved `lineHeight` rather than a magic pixel
+  // count, so a caller restyling the type does not silently change how many rows fit.
+  useLayoutEffect(() => {
+    const field = fieldRef.current;
+    if (!autoGrow || !field) return;
+    field.style.height = 'auto';
+    const lineHeight = Number.parseFloat(getComputedStyle(field).lineHeight);
+    const cap = Number.isFinite(lineHeight) ? lineHeight * maxRows : Number.POSITIVE_INFINITY;
+    field.style.height = `${String(Math.min(field.scrollHeight, cap))}px`;
+    field.style.overflowY = field.scrollHeight > cap ? 'auto' : 'hidden';
+  }, [autoGrow, maxRows, value]);
 
   const close = useCallback(() => {
     setTrigger(undefined);

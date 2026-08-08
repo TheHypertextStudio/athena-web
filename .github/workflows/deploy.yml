@@ -224,3 +224,50 @@ jobs:
 
       - name: Show Cloud Run URL
         run: echo "docket-admin=${{ steps.deploy-admin.outputs.url }}"
+
+  # The Cloudflare runner is additive today: the API env file above pins
+  # ATHENA_ASYNC_RUNNER_ENABLED to "false", so no production traffic reaches this Worker until a
+  # deliberate flip PR changes that line (docs/engineering/cloudflare-athena-execution.md,
+  # "Production rollout and flag flip"). It still runs after deploy-api so a runner revision can
+  # never precede the API revision that understands its callbacks.
+  #
+  # An operator provides this configuration once, before the first run:
+  # - Repository variable CLOUDFLARE_ACCOUNT_ID — the Cloudflare account that owns
+  #   docket-athena-runner. It doubles as this job's switch: environment-scoped variables are not
+  #   visible in a job-level `if`, so it must live at repository level. While it is unset the job
+  #   skips and the pipeline stays green.
+  # - Repository secret CLOUDFLARE_API_TOKEN — an API token for that account, limited to
+  #   Workers Scripts:Edit, Queues:Edit, and Workflows:Edit.
+  # - The docket-athena-runs and docket-athena-runs-dlq queues plus the three Worker secrets
+  #   (DOCKET_TO_CLOUDFLARE_HMAC_SECRET, CLOUDFLARE_TO_DOCKET_HMAC_SECRET, DOCKET_API_URL),
+  #   created with `wrangler queues create` / `wrangler secret put` per the doc above. This job
+  #   only deploys; it creates no queues and writes no secrets.
+  deploy-runner:
+    name: Deploy Athena runner
+    needs: deploy-api
+    if: vars.CLOUDFLARE_ACCOUNT_ID != ''
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      # A filtered install so this job costs one workspace, not the monorepo. The deploy runs
+      # the runner's own wrangler pin (apps/runner/package.json), so CI and an operator's local
+      # deploy always use the same wrangler.
+      - run: pnpm install --frozen-lockfile --filter @docket/runner...
+
+      - name: Deploy docket-athena-runner
+        working-directory: apps/runner
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy

@@ -38,7 +38,7 @@ const SECRET_NAME = 'docket-cron-secret';
 const SECRET_REDACTED = '***REDACTED***';
 
 /** A scheduled HTTP cron job: an endpoint to hit and how often. */
-interface CronJob {
+export interface CronJob {
   /** Cloud Scheduler job id. */
   readonly name: string;
   /** Path under the API host to POST (joined with `API_URL`). */
@@ -49,8 +49,8 @@ interface CronJob {
   readonly description: string;
 }
 
-/** The jobs Docket needs. Both target secret-guarded, idempotent, retry-safe sweeps. */
-const JOBS: readonly CronJob[] = [
+/** The jobs Docket needs. All target secret-guarded, idempotent, retry-safe sweeps. */
+export const JOBS: readonly CronJob[] = [
   {
     name: 'docket-sync-connectors',
     path: '/internal/cron/sync-connectors',
@@ -315,14 +315,42 @@ function failOrSkip(action: string, err: string): never {
 }
 
 /** The route file the drift check reads, relative to the repo root. */
-const CRON_ROUTES_FILE = 'apps/api/src/routes/cron.ts';
+export const CRON_ROUTES_FILE = 'apps/api/src/routes/cron.ts';
+
+/** Parse the cron paths (`.post('/name'`) out of the cron route file's source. */
+export function parseCronRoutes(source: string): readonly string[] {
+  const routes: string[] = [];
+  for (const match of source.matchAll(/\.post\(\s*'\/([A-Za-z0-9-]+)'/g)) {
+    const name = match[1];
+    if (name) routes.push(`/internal/cron/${name}`);
+  }
+  return routes;
+}
+
+/** Routes and jobs that fail to line up: `unscheduled` never runs, `dangling` POSTs a 404. */
+export interface RouteDrift {
+  readonly unscheduled: readonly string[];
+  readonly dangling: readonly string[];
+}
+
+/** Compare the declared routes against the job paths. Pure so the tests can pin it. */
+export function computeRouteDrift(
+  routes: readonly string[],
+  jobs: readonly Pick<CronJob, 'path'>[],
+): RouteDrift {
+  const routeSet = new Set(routes);
+  const scheduled = new Set(jobs.map((job) => job.path));
+  return {
+    unscheduled: routes.filter((route) => !scheduled.has(route)),
+    dangling: jobs.map((job) => job.path).filter((jobPath) => !routeSet.has(jobPath)),
+  };
+}
 
 /**
  * Warn when `cron.ts` and `JOBS` disagree. The two are hand-maintained views of the same set,
  * and five routes once shipped without a job entry — every scheduled behavior behind them was
- * silently dead in prod. A route with no job never runs; a job with no route POSTs a 404
- * forever. Warn-only: provisioning the jobs that do line up is still worth doing, and the
- * warning surfaces in every deploy log and every manual run.
+ * silently dead in prod. Warn-only: provisioning the jobs that do line up is still worth doing,
+ * and the warning surfaces in every deploy log and every manual run.
  */
 function warnOnRouteDrift(): void {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -333,19 +361,12 @@ function warnOnRouteDrift(): void {
     warn(`drift check skipped — could not read ${CRON_ROUTES_FILE}`);
     return;
   }
-  const routes = new Set<string>();
-  for (const match of source.matchAll(/\.post\(\s*'\/([A-Za-z0-9-]+)'/g)) {
-    const name = match[1];
-    if (name) routes.add(`/internal/cron/${name}`);
+  const drift = computeRouteDrift(parseCronRoutes(source), JOBS);
+  for (const route of drift.unscheduled) {
+    warn(`cron route ${route} has no scheduler job — it never runs in prod. Add it to JOBS.`);
   }
-  const scheduled = new Set(JOBS.map((job) => job.path));
-  for (const route of routes) {
-    if (!scheduled.has(route))
-      warn(`cron route ${route} has no scheduler job — it never runs in prod. Add it to JOBS.`);
-  }
-  for (const job of scheduled) {
-    if (!routes.has(job))
-      warn(`job targets ${job}, but ${CRON_ROUTES_FILE} declares no such route.`);
+  for (const jobPath of drift.dangling) {
+    warn(`job targets ${jobPath}, but ${CRON_ROUTES_FILE} declares no such route.`);
   }
 }
 
@@ -390,4 +411,7 @@ function main(): void {
   if (dryRun) console.log('  (dry run — no GCP calls were made)');
 }
 
-main();
+// Self-invoke only when run directly (the tests import JOBS and the drift helpers).
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main();
+}

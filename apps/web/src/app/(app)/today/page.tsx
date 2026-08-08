@@ -3,7 +3,6 @@
 import { Button, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
-import { AthenaContextAction } from '@/components/athena/athena-context-action';
 import { GhostProposals } from '@/components/today/ghost-proposals';
 import NextUp from '@/components/today/next-up';
 import { TodayPrompt } from '@/components/today/today-prompt';
@@ -24,10 +23,14 @@ function greetingFor(hour: number): string {
  * TodayPage — the caller's calm daily landing.
  *
  * @remarks
- * A single focused column: a large "Today" over the date, the hybrid capture / ask-Athena box, and
- * "Next up" (the next few timeboxed blocks, or tasks due today). The day's full agenda is not on this
- * surface — it lives in the shell's portable agenda rail (registered globally, rides along on every
- * page), so the Today page itself just renders its masthead + capture + the "Next up" peek.
+ * A single focused column: a large "Today" over the date, the capture box, and "Next up" (the next
+ * few timeboxed blocks, or tasks due today). The day's full agenda is not on this surface — it
+ * lives in the shell's portable agenda rail (registered globally, rides along on every page), so
+ * the Today page itself just renders its masthead + capture + the "Next up" peek.
+ *
+ * The masthead carries no Athena door of its own. Athena is the engine behind every door rather
+ * than a place to be opened, and this page already has two of those doors — the capture box and
+ * the global pill.
  */
 export default function TodayPage(): JSX.Element {
   const { data, loading, error, refetch, taskTitle, orgName, heading, activeOrgId } =
@@ -53,13 +56,10 @@ export default function TodayPage(): JSX.Element {
           </h1>
         </Stack>
         <p className="text-on-surface-variant text-2xl">{heading}</p>
-        <div>
-          <AthenaContextAction
-            label="Open Athena for today"
-            context={activeOrgId ? { workspaceId: activeOrgId } : null}
-            variant="ghost"
-          />
-        </div>
+        {/* No "Open Athena for today" door here. Athena is the engine behind every door, not a
+            place you go — and the capture box directly below this is already one of those doors,
+            with the global pill a third. Three entry points to one engine on a single screen is
+            the model leaking into the layout. */}
       </Stack>
 
       <TodayPrompt

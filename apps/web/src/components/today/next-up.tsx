@@ -96,16 +96,11 @@ export default function NextUp({
       {loading ? (
         <NextUpRowsPlaceholder />
       ) : picks.length === 0 ? (
-        <Stack
-          align="center"
-          gap={2}
-          className="border-outline-variant bg-surface-container-low/60 justify-center rounded-2xl border p-12 text-center"
-        >
-          <p className="text-on-surface text-lg font-medium">Nothing scheduled</p>
-          <p className="text-on-surface-variant max-w-sm text-sm">
-            You&apos;re clear for now. Capture a thought above, or timebox work onto your calendar.
-          </p>
-        </Stack>
+        // One quiet line, not a 12-unit bordered box around a reassurance and two instructions.
+        // "You're clear for now. Capture a thought above, or timebox work onto your calendar."
+        // told the reader how they should feel and then pointed at two controls already on screen.
+        // An empty day is not an error state and does not need consoling or a diagram.
+        <p className="text-on-surface-variant text-body-medium">Nothing scheduled.</p>
       ) : (
         <Stack as="ul" gap={2}>
           {picks.map((pick, i) => {

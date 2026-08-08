@@ -229,8 +229,8 @@ test.fixme('personal Athena dock, workbench, context, redirects, and responsive 
   const { releaseApproval, readApprovalPath } = await installAthenaFixture(page, orgId);
 
   await page.goto('/today');
-  // Exact: '/today' also renders its own page-level "Open Athena for today" door, whose name
-  // contains this one's as a substring — only the floating pulse button carries the queue count.
+  // `/today` no longer renders a page-level Athena door of its own, so the floating pulse button
+  // is the only control by this name — and the only one that carries the queue count.
   await expect(page.getByRole('button', { name: 'Open Athena', exact: true })).toContainText(
     '1 needs you',
   );
@@ -246,7 +246,9 @@ test.fixme('personal Athena dock, workbench, context, redirects, and responsive 
   await page.getByText('Technical details').click();
   await expect(page.getByText(/sunsama_create_task/)).toBeVisible();
   await page.getByRole('button', { name: 'Close Athena' }).click();
-  await page.getByRole('button', { name: 'Open Athena for today' }).click();
+  // Reopened from the floating pill rather than a Today-specific door. That door is gone: Athena
+  // is the engine behind every door, not a place a page offers to take you to.
+  await page.getByRole('button', { name: 'Open Athena', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Athena' })).toBeVisible();
 
   await page.goto(`/orgs/${orgId}/agents`);

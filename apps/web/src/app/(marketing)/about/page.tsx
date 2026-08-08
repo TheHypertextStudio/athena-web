@@ -1,93 +1,49 @@
 import type { Metadata } from 'next';
 import type { JSX } from 'react';
 
-import { CtaBand } from '@/components/marketing/cta-band';
+import { ClosingSection } from '@/components/marketing/closing-section';
+import { SUPPORT_EMAIL } from '@/lib/support-contact';
 
 /** About page metadata. */
 export const metadata: Metadata = {
   title: 'About',
-  description:
-    'Why Docket exists: a calm command center for the many organizations one person can run.',
+  description: 'What Docket does, who builds it, and how to get in touch.',
 };
 
-interface Principle {
-  number: string;
-  title: string;
-  body: string;
-}
-
-const PRINCIPLES: readonly Principle[] = [
-  {
-    number: '01',
-    title: 'Separation by default',
-    body: 'Every organization is its own world — its own people, tools, and vocabulary. Nothing leaks between the startup and the nonprofit unless you choose it to.',
-  },
-  {
-    number: '02',
-    title: 'Unification on top',
-    body: 'Your command center gathers the organizations you belong to into one daily view, so running many things feels like running one.',
-  },
-  {
-    number: '03',
-    title: 'On top of your tools',
-    body: 'Docket coordinates the work; your documents, calendars, and code stay where they already live. We connect, we do not replace.',
-  },
-  {
-    number: '04',
-    title: 'People and agents, together',
-    body: 'Agents are teammates you can hand work to and supervise — never a black box. You always see the steps and approve what matters.',
-  },
-];
-
-/** About page — editorial essay register: Fraunces display, measured prose, numbered principles. */
+/**
+ * About — three paragraphs and nothing else.
+ *
+ * @remarks
+ * What Docket does, who builds it, and how to reach us. This page previously carried a set of
+ * numbered principles under the heading "What we hold to", which is a values statement rather
+ * than anything a reader came for.
+ */
 export default function AboutPage(): JSX.Element {
   return (
     <>
-      <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-16">
-        <p className="text-ink-muted text-sm font-medium">About Docket</p>
-        <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight text-balance">
-          Most people run more than one thing.
+      <section className="mx-auto w-full max-w-3xl px-6 pt-20 pb-20">
+        <h1 className="font-display text-display-large-small text-ink tracking-tight text-balance">
+          About Docket
         </h1>
-        <div className="text-ink-muted mt-8 flex flex-col gap-5 text-lg leading-relaxed">
+        <div className="text-ink-muted mt-10 flex flex-col gap-6 text-lg leading-relaxed">
           <p>
-            A founder is also a volunteer. An organizer is also building something on the side. The
-            tools we use assume you live inside a single workspace — but real life spills across
-            many.
+            Docket is one tool for planning, scheduling, and tracking work. Not a lighter Linear,
+            not a friendlier Asana. The estimate and the hours you log both belong to the same task,
+            so you find out where you were wrong instead of never checking. A membership drive or a
+            support rota that never ships gets its own type, instead of getting flagged overdue for
+            months the way it would in a tool that only knows &quot;project.&quot;
           </p>
+          <p>Docket is operated by The Hypertext Studio.</p>
           <p>
-            Docket is the command center for all of it. Each organization keeps its own context;
-            your day brings them together. It is, in spirit, &ldquo;Linear for everything&rdquo; —
-            the same calm, fast, structured feel, pointed at every kind of work instead of just one.
-          </p>
-          <p>
-            Athena, Docket&rsquo;s built-in agent, is along for the ride when you want the help —
-            but Docket is agent-agnostic, and the work model comes first. The product is the point;
-            the agent is a participant.
+            Questions, access requests, and deletion requests can be sent to{' '}
+            <a className="text-ink underline" href={`mailto:${SUPPORT_EMAIL}`}>
+              {SUPPORT_EMAIL}
+            </a>
+            .
           </p>
         </div>
       </section>
-      <section className="border-outline-variant border-t">
-        <div className="mx-auto w-full max-w-6xl px-6 py-16">
-          <p className="text-ink-muted text-sm font-medium">What we hold to</p>
-          <dl className="mt-8 grid gap-x-12 gap-y-12 sm:grid-cols-2">
-            {PRINCIPLES.map((principle) => (
-              <div
-                key={principle.number}
-                className="border-outline-variant flex flex-col gap-3 border-t pt-5"
-              >
-                <span aria-hidden className="text-sienna font-mono text-sm">
-                  {principle.number}
-                </span>
-                <dt className="font-display text-ink text-2xl leading-snug tracking-tight">
-                  {principle.title}
-                </dt>
-                <dd className="text-ink-muted text-base">{principle.body}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      </section>
-      <CtaBand />
+      <ClosingSection pricing />
     </>
   );
 }

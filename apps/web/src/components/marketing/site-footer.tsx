@@ -25,17 +25,13 @@ const LINK_CLASS =
 const COLUMNS: readonly FooterColumn[] = [
   {
     title: 'Product',
-    links: [
-      { href: '/#features', label: 'Features' },
-      { href: '/pricing', label: 'Pricing' },
-    ],
+    links: [{ href: '/pricing', label: 'Pricing' }],
     entryLink: true,
   },
   {
     title: 'Company',
     links: [
       { href: '/about', label: 'About' },
-      { href: '/#how-it-works', label: 'How it works' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/terms', label: 'Terms' },
     ],
@@ -78,9 +74,8 @@ export function SiteFooter(): JSX.Element {
         ))}
       </div>
       <div className="border-outline-variant border-t">
-        <div className="text-ink-muted mx-auto flex w-full max-w-6xl flex-col gap-1 px-6 py-6 font-mono text-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-ink-muted mx-auto w-full max-w-6xl px-6 py-6 font-mono text-xs">
           <p>© Docket. All rights reserved.</p>
-          <p>Set in Fraunces &amp; IBM Plex.</p>
         </div>
       </div>
     </footer>

@@ -31,7 +31,7 @@ export default function manifest(): MetadataRoute.Manifest {
     id: '/',
     name: 'Docket',
     short_name: 'Docket',
-    description: 'Docket — run every organization from one calm place.',
+    description: 'Docket — one tool for every kind of work.',
     start_url: '/today',
     scope: '/',
     display: 'standalone',

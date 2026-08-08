@@ -27,7 +27,7 @@ const display = Fraunces({
 /** Metadata for marketing pages. */
 export const metadata: Metadata = {
   title: {
-    default: 'Docket — run every organization from one calm place',
+    default: 'Docket — one tool for every kind of work',
     template: '%s — Docket',
   },
   description: META_DESCRIPTION,

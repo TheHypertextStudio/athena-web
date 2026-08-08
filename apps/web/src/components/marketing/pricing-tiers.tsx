@@ -20,9 +20,9 @@ const TIERS: readonly Tier[] = [
     name: 'Free',
     price: '$0',
     cadence: 'forever',
-    description: 'Your personal command center. No card required.',
+    description: 'One workspace, no card required.',
     features: [
-      'One personal workspace',
+      'One workspace',
       'Unlimited projects and tasks',
       'Connect your own tools',
       'MCP access for AI clients',
@@ -47,14 +47,13 @@ const TIERS: readonly Tier[] = [
 export function PricingTiers(): JSX.Element {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
-      <div className="flex max-w-2xl flex-col gap-3">
-        <p className="text-ink-muted text-sm font-medium">Pricing</p>
+      <div className="flex max-w-2xl flex-col gap-4">
         <h1 className="font-display text-display-large-small text-ink tracking-tight text-balance">
-          Free until you need more than one workspace
+          Free until you run more than one workspace.
         </h1>
-        <p className="text-ink-muted text-balance">
-          Start with your personal space at no cost. Upgrade to Pro when you want to run multiple
-          workspaces from the same account.
+        <p className="text-ink-muted text-lg text-balance">
+          A workspace is one organization, with its own people, settings, and connected tools. The
+          first one costs nothing. Pro adds the rest.
         </p>
       </div>
       <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:max-w-2xl">

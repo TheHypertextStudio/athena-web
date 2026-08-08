@@ -1,30 +1,39 @@
 import type { JSX } from 'react';
 
 import { HeroActions } from './marketing-cta';
+import { PlaceholderSurface } from './placeholder-surface';
 
 /**
- * Editorial hero — left-aligned Fraunces display headline over a hairline rule,
- * a Plex Mono eyebrow, and a single filled-ink CTA. No badges, no gradient blobs,
- * no centered SaaS symmetry.
+ * Hero — display headline, one supporting line, the action row, then a wide product plate.
  *
  * @remarks
+ * The plate is wider than the text measure and runs past it on the right. The previous hero put
+ * everything inside one narrow left column and left the right half of a 1280px viewport empty,
+ * which read as an unfinished page rather than as restraint.
+ *
  * The action row is delegated to {@link HeroActions} so it can reflect the session without making
  * the whole hero a Client Component.
  */
 export function Hero(): JSX.Element {
   return (
     <section className="mx-auto w-full max-w-6xl px-6">
-      <div className="border-outline-variant flex flex-col gap-8 border-b pt-20 pb-14 sm:pt-28 sm:pb-16">
-        <p className="text-ink-muted text-sm font-medium">For people who run more than one thing</p>
-        <h1 className="font-display text-display-large text-ink wonk max-w-4xl tracking-tight text-balance">
-          Run every organization from one calm place.
+      <div className="flex flex-col gap-7 pt-20 sm:pt-28">
+        <h1 className="font-display text-display-large text-ink wonk max-w-3xl tracking-tight text-balance">
+          Docket is one tool for planning, scheduling, and tracking every kind of work.
         </h1>
-        <p className="text-ink-muted max-w-2xl text-lg text-balance">
-          Docket is the command center for the work you actually do — your startup, your nonprofit,
-          your side projects. Each one keeps its own space; your day comes together in a single
-          view.
+        <p className="text-ink-muted max-w-xl text-lg text-balance">
+          Engineering teams have had software like this for a decade. Everyone else runs a project
+          tracker, a calendar, and a timesheet that never agree. No single tool has all of the
+          information, so there is nothing complete for an agent to work from either.
         </p>
         <HeroActions />
+      </div>
+      <div className="mt-16 sm:mt-20">
+        <PlaceholderSurface
+          label="Today — the landing view, tasks across every organization"
+          aspect="aspect-[16/9]"
+          tone="paper"
+        />
       </div>
     </section>
   );

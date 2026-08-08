@@ -1,14 +1,13 @@
 import type { Metadata } from 'next';
 import type { JSX } from 'react';
 
-import { CtaBand } from '@/components/marketing/cta-band';
+import { ClosingSection } from '@/components/marketing/closing-section';
 import { PricingTiers } from '@/components/marketing/pricing-tiers';
 
 /** Pricing page metadata. */
 export const metadata: Metadata = {
   title: 'Pricing',
-  description:
-    'Docket is free for your personal command center. Pay only when you bring people into a shared organization.',
+  description: 'Docket is free for one workspace. You pay when you run more than one.',
 };
 
 interface Faq {
@@ -16,21 +15,24 @@ interface Faq {
   answer: string;
 }
 
+/**
+ * One framing of the price, everywhere: free for one workspace, paid beyond that.
+ *
+ * @remarks
+ * These answers used to contradict the tier cards. The cards said the $8 unlocked multiple
+ * workspaces; the FAQ said it triggered when you invited other people. Both cannot be true, and a
+ * reader who notices stops believing the rest of the page.
+ */
 const FAQS: readonly Faq[] = [
   {
     question: 'Do I need a credit card to start?',
     answer:
-      'No. Your personal command center and your first organization are free, with no card required. You only add billing when you invite other people into a shared organization.',
+      'No. One workspace is free with no card required. You add billing when you want to run more than one from the same account.',
   },
   {
-    question: 'How does billing work across organizations?',
+    question: 'What counts as a workspace?',
     answer:
-      'Billing is per organization, so each venture you run is charged on its own — handy when a startup and a nonprofit live side by side in your Docket.',
-  },
-  {
-    question: 'What happens when my trial ends?',
-    answer:
-      'If you do not continue, your work stays exportable for a grace period before anything is removed, so you are never locked out of your own data.',
+      'One organization, with its own people, settings, and connected tools. Your personal space is a workspace too, and it is the free one.',
   },
   {
     question: 'Is there a discount for nonprofits?',
@@ -58,7 +60,7 @@ export default function PricingPage(): JSX.Element {
           </dl>
         </div>
       </section>
-      <CtaBand />
+      <ClosingSection pricing={false} />
     </>
   );
 }

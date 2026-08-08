@@ -51,7 +51,7 @@ const mono = IBM_Plex_Mono({
  */
 export const metadata: Metadata = {
   title: 'Docket',
-  description: 'Docket — run every organization from one calm place.',
+  description: 'Docket — one tool for every kind of work.',
   applicationName: 'Docket',
   // iOS has no manifest support for the home screen: these tags are what Safari actually reads
   // when someone adds Docket to their home screen. `apple-icon.png` (a Next file convention in

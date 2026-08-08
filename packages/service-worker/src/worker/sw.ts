@@ -102,12 +102,18 @@ self.addEventListener('activate', (event) => {
     (async () => {
       // Cache names carry the version, so dropping everything not owned by this version is the
       // whole eviction story — no per-entry expiry bookkeeping.
-      const names = await caches.keys();
-      await Promise.all(
-        names
-          .filter((name) => name.startsWith('docket-') && !OWNED_CACHES.has(name))
-          .map((name) => caches.delete(name)),
-      );
+      try {
+        const names = await caches.keys();
+        await Promise.all(
+          names
+            .filter((name) => name.startsWith('docket-') && !OWNED_CACHES.has(name))
+            .map((name) => caches.delete(name)),
+        );
+      } catch {
+        // Eviction is best-effort (storage denied, quota, private browsing). `claim()` below must
+        // still run: it is what fires `controllerchange` in open tabs, and skipping it strands an
+        // accepted update behind a Reload button that does nothing.
+      }
       // Safe here because activation only follows an accepted update (or every tab closing), so no
       // live tab is swapped mid-session.
       await self.clients.claim();

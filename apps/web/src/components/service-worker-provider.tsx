@@ -48,6 +48,14 @@ interface MaybeWorkerHost {
 /** How long to wait between update checks triggered by the tab regaining focus. */
 const UPDATE_CHECK_THROTTLE_MS = 60_000;
 
+/**
+ * How long an accepted update gets to activate and claim the page before the tab reloads anyway.
+ * Activation is normally near-instant; this only fires when the handshake breaks (a missed
+ * `controllerchange`, activation stalled in the worker), where reloading on the old worker still
+ * beats a Reload button that visibly does nothing.
+ */
+const APPLY_FALLBACK_MS = 4_000;
+
 /** Published service-worker state. */
 interface ServiceWorkerValue {
   /** Applies the waiting update and reloads, or `null` when no update is waiting. */
@@ -79,12 +87,27 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
 
     let registration: ServiceWorkerRegistration | undefined;
     let disposed = false;
+    const offeredListeners: [ServiceWorker, () => void][] = [];
 
     // Prompt only when an existing worker is being replaced. On a first visit a worker also
     // reaches `installed`, but nothing on screen is stale — asking someone to reload a page they
     // just opened would be noise.
     const offerIfStale = (worker: ServiceWorker | null): void => {
-      if (!disposed && worker && container.controller) setWaiting(worker);
+      if (disposed || !worker || !container.controller) {
+        return;
+      }
+      // An offered worker can go redundant before anyone clicks Reload — superseded by a newer
+      // install during a rolling deploy, or activated from another tab (where controllerchange
+      // handles the reload). Withdraw the offer then, or the banner outlives the worker it
+      // promises to activate and the button goes dead.
+      const onStateChange = (): void => {
+        if (worker.state === 'redundant') {
+          setWaiting((current) => (current === worker ? null : current));
+        }
+      };
+      worker.addEventListener('statechange', onStateChange);
+      offeredListeners.push([worker, onStateChange]);
+      setWaiting(worker);
     };
 
     const onControllerChange = (): void => {
@@ -94,21 +117,29 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       window.location.reload();
     };
 
+    const onUpdateFound = (): void => {
+      const installing = registration?.installing;
+      if (!installing) {
+        return;
+      }
+      installing.addEventListener('statechange', () => {
+        if (installing.state === 'installed') {
+          offerIfStale(installing);
+        }
+      });
+    };
+
     const register = async (): Promise<void> => {
       try {
         registration = await container.register('/sw.js');
-        if (disposed) return;
+        if (disposed) {
+          return;
+        }
 
         // A worker may already be waiting from an earlier visit that was never reloaded.
         offerIfStale(registration.waiting);
 
-        registration.addEventListener('updatefound', () => {
-          const installing = registration?.installing;
-          if (!installing) return;
-          installing.addEventListener('statechange', () => {
-            if (installing.state === 'installed') offerIfStale(installing);
-          });
-        });
+        registration.addEventListener('updatefound', onUpdateFound);
       } catch {
         // See the note above: not user-actionable, and the error object must not be read.
       }
@@ -122,11 +153,15 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       void registration.update();
     };
 
+    const onLoad = (): void => {
+      void register();
+    };
+
     // Registering after `load` keeps the install off the critical path of the first paint.
     if (document.readyState === 'complete') {
       void register();
     } else {
-      window.addEventListener('load', () => void register(), { once: true });
+      window.addEventListener('load', onLoad, { once: true });
     }
 
     container.addEventListener('controllerchange', onControllerChange);
@@ -136,15 +171,37 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
       disposed = true;
       container.removeEventListener('controllerchange', onControllerChange);
       document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('load', onLoad);
+      registration?.removeEventListener('updatefound', onUpdateFound);
+      for (const [worker, listener] of offeredListeners) {
+        worker.removeEventListener('statechange', listener);
+      }
     };
   }, []);
 
   const applyUpdate = useCallback((): void => {
-    if (!waiting) return;
+    if (!waiting) {
+      return;
+    }
+    if (waiting.state === 'redundant') {
+      // A deploy raced the click: this worker was superseded before it could activate. The
+      // statechange withdrawal normally clears the banner first; this is the belt for the race
+      // where the click lands in between.
+      setWaiting(null);
+      return;
+    }
     // `type`, never `message`: the error-source policy's AST scan flags any property named
     // `message` under `src/`, and the worker matches on `type` accordingly.
     waiting.postMessage({ type: 'SKIP_WAITING' });
-    setWaiting(null);
+    // No optimistic dismissal: the banner clears by the page reloading (controllerchange), so a
+    // failed handshake can never silently swallow the prompt. If activation stalls, force the
+    // reload — see APPLY_FALLBACK_MS.
+    window.setTimeout(() => {
+      if (!reloadingRef.current) {
+        reloadingRef.current = true;
+        window.location.reload();
+      }
+    }, APPLY_FALLBACK_MS);
   }, [waiting]);
 
   const value = useMemo<ServiceWorkerValue>(
@@ -163,10 +220,7 @@ export function UpdateBanner({ onApply }: { readonly onApply: () => void }): JSX
       aria-live="polite"
       className="border-outline-variant bg-surface-container-high text-on-surface text-body-medium flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2"
     >
-      <span className="font-medium">A new version of Docket is ready</span>
-      <span className="text-on-surface-variant min-w-0 flex-1">
-        Reload to pick it up. Your open work stays where it is.
-      </span>
+      <span className="text-label-large min-w-0 flex-1 truncate">Update ready</span>
       <Button variant="outline" size="sm" onClick={onApply}>
         Reload
       </Button>

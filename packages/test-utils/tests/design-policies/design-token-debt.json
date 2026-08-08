@@ -160,12 +160,6 @@
     "raw-type-utility": 6,
     "shadow-outside-overlay": 1
   },
-  "apps/web/src/components/agenda/agenda-header.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/agenda/agenda-list-arrangement.tsx": {
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/agenda/agenda-timebox-form.tsx": {
     "raw-type-utility": 1
   },
@@ -201,8 +195,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/components/athena/athena-panel-provider.tsx": {
-    "raw-type-utility": 16,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 16
   },
   "apps/web/src/components/athena/athena-workbench.tsx": {
     "raw-type-utility": 26
@@ -397,9 +390,6 @@
   },
   "apps/web/src/components/search/search-client.tsx": {
     "raw-type-utility": 13
-  },
-  "apps/web/src/components/service-worker-provider.tsx": {
-    "raw-type-utility": 1
   },
   "apps/web/src/components/settings/automations-tab.tsx": {
     "raw-type-utility": 21
@@ -657,12 +647,6 @@
   },
   "packages/ui/src/components/shell/WorkspaceSwitcher.tsx": {
     "raw-type-utility": 6
-  },
-  "packages/ui/src/components/shell/tab-item.tsx": {
-    "shadow-outside-overlay": 1
-  },
-  "packages/ui/src/components/shell/tab-overflow-menu.tsx": {
-    "raw-type-utility": 3
   },
   "packages/ui/src/components/views/EntityListRow.tsx": {
     "raw-type-utility": 3

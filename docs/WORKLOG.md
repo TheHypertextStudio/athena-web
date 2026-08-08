@@ -4149,6 +4149,44 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [SHELL-TABS-001] Make the document tab strip legible and the PWA update banner honest
+
+- **Completed**: 2026-08-07
+- **Priority**: P1
+- **Summary**: Inactive tabs rendered transparent on the `surface-container` strip and vanished
+  into it; the focused selected tab drew an outer `ring-ring` halo in the same color family as its
+  fill; titles truncated at 160px; and the update banner both over-explained ("Your open work
+  stays where it is") and lied — `applyUpdate` cleared the banner optimistically while the worker's
+  `activate` could reject during cache eviction before `clients.claim()`, so `controllerchange`
+  never fired and Reload did nothing.
+- **Tab grammar decision**: tabs are app chrome, not chips, so the chip selection role
+  (`bg-secondary-container`) was removed rather than polished. Inactive tabs rest one ramp step
+  above the strip (`surface-container-high` → hover `-highest`); the active tab wears the content
+  panel's own `bg-surface` — the open document's tab sits on the document's layer. No ring, no
+  shadow; focus is `focusRingInset`. Width cap `max-w-40` → `max-w-60`. Values align with the
+  chip/CONTROL grammar (`rounded-md`, `text-label-large`) without merging the identities.
+- **Banner lifecycle**: `applyUpdate` verifies the waiting worker isn't `redundant`, posts
+  `SKIP_WAITING` without dismissing, and force-reloads after 4s if `controllerchange` never
+  arrives; a `statechange` listener withdraws an offer whose worker went redundant (kills the
+  dead button and the banner-after-update flap under rolling deploys); `activate` wraps eviction
+  in try/catch so `clients.claim()` always runs; effect cleanup removes every listener
+  (strict-mode double mount). Copy is now `Update ready` + `Reload`.
+- **Files Changed**: `packages/ui/src/components/shell/{tab-item,TabBar,tab-overflow-menu}.tsx`,
+  `apps/web/src/components/service-worker-provider.tsx`,
+  `packages/service-worker/src/worker/sw.ts`, shell tests, two new test files
+  (`apps/web/tests/components/service-worker-provider.test.tsx`,
+  `packages/service-worker/tests/sw-handshake.test.ts`), design-token debt ledger (−3 entries for
+  the touched files, −3 stale entries the ratchet test flagged).
+- **Verified**: per-package suites (ui 522, service-worker 66, web 1784) plus a live handshake in
+  the dev stack — staged a byte-changed `sw.js`, banner appeared, Reload landed on the new worker,
+  no banner afterward. Screenshots light+dark of pill states, inset focus ring, and the banner.
+- **Known remainder**: `apps/web/src/components/scheduling/scheduling-item-body.tsx` carries one
+  unledgered `leading-none` from commit 3f64dd6d that fails the design-token policy test;
+  pre-existing, spun off as its own task.
+- **Learnings**: the tab bar was a sixth hand-rolled tab strip; the semantic split that resolved
+  the restyle argument is chrome-vs-content — selection roles belong to content controls, surface
+  continuity belongs to chrome.
+
 ### [INGEST-001] Associate third-party activity with the Docket entities it concerns
 
 - **Completed**: 2026-08-07

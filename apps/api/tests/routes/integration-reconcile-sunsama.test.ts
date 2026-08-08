@@ -97,8 +97,9 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
 
     const importedAt = '2026-08-02T00:00:00.000Z';
     const mapped = sunsamaAccountToImportedItems(account.tasks, SUNSAMA_ROUTING, importedAt);
-    const items = mapped.map((m) => m.item);
-    expect(items).toHaveLength(7);
+    const items = mapped.flatMap((m) => [m.item, ...m.childItems]);
+    // 7 active tasks + 3 subtasks (2 on su-001, 1 on su-004), each its own child row.
+    expect(items).toHaveLength(10);
 
     // This test reconciles every routed task into ONE (org, team) — proving the reconcile step
     // itself (provenance + idempotency); resolving each destination workspace name to its own
@@ -109,7 +110,7 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       writable: null,
     });
     expect(tally).toEqual({
-      inserted: 7,
+      inserted: 10,
       pulled: 0,
       pushed: 0,
       deleted: 0,
@@ -127,11 +128,11 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
           eq(schema.task.sourceIntegrationId, integration.id),
         ),
       );
-    expect(rows).toHaveLength(7);
+    expect(rows).toHaveLength(10);
 
-    // WIL-01's reconciliation acceptance, computed for real: every Sunsama task id maps to
-    // exactly one Docket task id, and the unmatched list on both sides is empty.
-    const sunsamaIds = new Set(account.tasks.map((t) => t.id));
+    // WIL-01's reconciliation acceptance, computed for real: every Sunsama task and subtask id
+    // maps to exactly one Docket task id, and the unmatched list on both sides is empty.
+    const sunsamaIds = new Set(items.map((item) => item.provenance.externalId));
     const docketExternalIds = new Set(
       rows.map((row) => row.externalId).filter((id): id is string => id !== null),
     );
@@ -147,6 +148,32 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       expect(row.source).toBe('linked');
       expect(row.sourceIntegrationId).toBe(integration.id);
     }
+
+    const byExternalId = new Map(rows.map((row) => [row.externalId, row]));
+
+    // The §5.3 closure, observed in the database: the planned day landed on task.startDate, the
+    // estimate on task.estimateMinutes — no longer dropped by the shared write path.
+    const planned = byExternalId.get('su-004');
+    expect(planned?.startDate?.toISOString().slice(0, 10)).toBe('2026-08-03');
+    expect(planned?.estimateMinutes).toBe(90);
+    const backlogged = byExternalId.get('su-001');
+    expect(backlogged?.startDate).toBeNull(); // a backlog item has explicitly no planned day
+    expect(backlogged?.estimateMinutes).toBe(45);
+
+    // Each Sunsama subtask is now its own child row, parented to the migrated task and keeping
+    // its own completion state.
+    const doneChild = byExternalId.get('sub-001a');
+    const openChild = byExternalId.get('sub-001b');
+    expect(doneChild?.parentTaskId).toBe(backlogged?.id);
+    expect(openChild?.parentTaskId).toBe(backlogged?.id);
+    expect(doneChild?.title).toBe('Attach the W-9');
+    expect(doneChild?.state).toBe('done'); // the team's completed-type state
+    expect(openChild?.state).not.toBe('done');
+    expect(byExternalId.get('sub-004a')?.parentTaskId).toBe(planned?.id);
+    // Parents are top-level: no accidental self- or cross-linkage.
+    for (const parent of ['su-001', 'su-004']) {
+      expect(byExternalId.get(parent)?.parentTaskId).toBeNull();
+    }
   });
 
   it('a second run against the unchanged fixture creates zero duplicates and mutates zero pre-existing rows', async () => {
@@ -154,21 +181,21 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
     const integration = await seedSunsamaIntegration(orgId, humanActorId);
     const account = await readFixtureAccount();
     const importedAt = '2026-08-02T00:00:00.000Z';
-    const items = sunsamaAccountToImportedItems(account.tasks, SUNSAMA_ROUTING, importedAt).map(
-      (m) => m.item,
+    const items = sunsamaAccountToImportedItems(account.tasks, SUNSAMA_ROUTING, importedAt).flatMap(
+      (m) => [m.item, ...m.childItems],
     );
 
     const first = await reconcileTasks(orgId, humanActorId, integration, teamId, items, {
       assigneeId: null,
       writable: null,
     });
-    expect(first.inserted).toBe(7);
+    expect(first.inserted).toBe(10);
 
     const afterFirst = await db
       .select()
       .from(schema.task)
       .where(eq(schema.task.sourceIntegrationId, integration.id));
-    expect(afterFirst).toHaveLength(7);
+    expect(afterFirst).toHaveLength(10);
     const updatedAtById = new Map(afterFirst.map((row) => [row.id, row.updatedAt.toISOString()]));
 
     // Re-read + re-map + reconcile again, exactly as a second `pnpm sunsama:import` invocation
@@ -178,7 +205,7 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       secondAccount.tasks,
       SUNSAMA_ROUTING,
       importedAt,
-    ).map((m) => m.item);
+    ).flatMap((m) => [m.item, ...m.childItems]);
     const second = await reconcileTasks(orgId, humanActorId, integration, teamId, secondItems, {
       assigneeId: null,
       writable: null,
@@ -199,7 +226,7 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
       .select()
       .from(schema.task)
       .where(eq(schema.task.sourceIntegrationId, integration.id));
-    expect(afterSecond).toHaveLength(7); // zero duplicates
+    expect(afterSecond).toHaveLength(10); // zero duplicates — child rows included
     for (const row of afterSecond) {
       // zero pre-existing rows mutated: same row id, same updatedAt as after the first run.
       expect(updatedAtById.get(row.id)).toBe(row.updatedAt.toISOString());
@@ -216,8 +243,14 @@ describe('Sunsama → Docket, end to end on the fixture', () => {
     );
     const groups = groupSunsamaImportedItemsByWorkspace(mapped);
 
-    const counts: Record<string, number> = {};
-    for (const [workspace, groupedItems] of groups) counts[workspace] = groupedItems.length;
-    expect(counts).toEqual(routingReport.perWorkspace);
+    // The routing report counts source tasks; each bucket additionally carries the subtasks of
+    // its parents as child items, so compare against parents only.
+    const parentCounts: Record<string, number> = {};
+    for (const [workspace, groupedItems] of groups) {
+      parentCounts[workspace] = groupedItems.filter(
+        (item) => typeof item.parentExternalId !== 'string',
+      ).length;
+    }
+    expect(parentCounts).toEqual(routingReport.perWorkspace);
   });
 });

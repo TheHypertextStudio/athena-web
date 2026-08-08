@@ -115,6 +115,36 @@ export interface ImportedItem {
   /** Due date (RFC3339 date) when the source carries one; `null` means explicitly unset. */
   readonly dueDate?: string | null;
   /**
+   * The day work on the item is planned to start (RFC3339 date), when the source carries one.
+   *
+   * @remarks
+   * `undefined` means the provider has no start-date concept, so reconciliation leaves the local
+   * value alone; `null` means the source explicitly has none (e.g. a backlog item), which a pull
+   * applies as a clear. Written to `task.startDate` — the field the scheduler plans from.
+   */
+  readonly startDate?: string | null;
+  /**
+   * Estimated effort in minutes, when the source carries one.
+   *
+   * @remarks
+   * Same absent-vs-null semantics as {@link ImportedItem.startDate}. Written to
+   * `task.estimateMinutes`; zero is a legitimate estimate ("no work left"), so consumers must not
+   * treat it as unset.
+   */
+  readonly estimateMinutes?: number | null;
+  /**
+   * The external id of this item's parent within the same integration, when the source nests work.
+   *
+   * @remarks
+   * Makes the item a child task: reconciliation resolves the referenced
+   * {@link ItemProvenance.externalId} to its linked `task` row and writes `task.parentTaskId`.
+   * `undefined` means the provider carries no hierarchy information (the local parent is left
+   * alone); `null` means the item is explicitly top-level. A parent id that resolves to nothing
+   * in the batch or the integration's linked tasks degrades to a top-level insert rather than
+   * failing the sync — hierarchy is metadata, not a precondition for keeping the work.
+   */
+  readonly parentExternalId?: string | null;
+  /**
    * True when this item is a tombstone — deleted at the source — rather than live content.
    *
    * @remarks

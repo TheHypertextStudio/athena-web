@@ -300,3 +300,270 @@ describe('reconcileTasks — the Notion connector (WIL-12: Docket wins, the loss
     });
   });
 });
+
+/**
+ * The shared-contract fields every connector adapter can now carry (the closure of
+ * `docs/migration/sunsama-to-docket.md` §5.3): `startDate`, `estimateMinutes`, and
+ * `parentExternalId`, deliberately exercised here with a generic provider rather than Sunsama —
+ * the point of putting them on `ImportedItem` is that they are not Sunsama-isms.
+ */
+describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on the shared contract', () => {
+  /** Seed a plain read-only connector integration to reconcile into. */
+  async function seedIntegration(orgId: string, actorId: string) {
+    return one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: orgId,
+          provider: 'gtasks',
+          pattern: 'connector',
+          roles: ['work'],
+          createdBy: actorId,
+        })
+        .returning(),
+    );
+  }
+
+  it('persists startDate and estimateMinutes on insert, including a zero-minute estimate', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const tally = await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'planned-1',
+          startDate: '2026-08-03',
+          estimateMinutes: 0,
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'planned-1',
+            importedAt: '2026-08-01T00:00:00.000Z',
+            externalUpdatedAt: '2026-08-01T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+    expect(tally.inserted).toBe(1);
+
+    const row = one(
+      await db.select().from(schema.task).where(eq(schema.task.externalId, 'planned-1')),
+    );
+    expect(row.startDate?.toISOString().slice(0, 10)).toBe('2026-08-03');
+    expect(row.estimateMinutes).toBe(0); // zero is a real estimate, not "unset"
+    expect(row.parentTaskId).toBeNull();
+  });
+
+  it('links a child to its parent even when the child precedes the parent in the batch', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const child = remote({
+      id: 'child-1',
+      title: 'The child',
+      parentExternalId: 'parent-1',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'child-1',
+        importedAt: '2026-08-01T00:00:00.000Z',
+      },
+    });
+    const parent = remote({
+      id: 'parent-1',
+      title: 'The parent',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'parent-1',
+        importedAt: '2026-08-01T00:00:00.000Z',
+      },
+    });
+
+    // Child FIRST: the depth ordering inside reconcileTasks must still insert the parent first.
+    const tally = await reconcileTasks(orgId, humanActorId, integration, teamId, [child, parent], {
+      assigneeId: null,
+      writable: null,
+    });
+    expect(tally.inserted).toBe(2);
+
+    const parentRow = one(
+      await db.select().from(schema.task).where(eq(schema.task.externalId, 'parent-1')),
+    );
+    const childRow = one(
+      await db.select().from(schema.task).where(eq(schema.task.externalId, 'child-1')),
+    );
+    expect(childRow.parentTaskId).toBe(parentRow.id);
+    expect(parentRow.parentTaskId).toBeNull();
+  });
+
+  it('inserts a child whose parent id resolves to nothing as top-level rather than failing', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const orphan = remote({
+      id: 'orphan-1',
+      parentExternalId: 'nowhere-to-be-found',
+      provenance: {
+        provider: 'gtasks',
+        externalId: 'orphan-1',
+        importedAt: '2026-08-01T00:00:00.000Z',
+      },
+    });
+    const tally = await reconcileTasks(orgId, humanActorId, integration, teamId, [orphan], {
+      assigneeId: null,
+      writable: null,
+    });
+    expect(tally.inserted).toBe(1);
+    const row = one(
+      await db.select().from(schema.task).where(eq(schema.task.externalId, 'orphan-1')),
+    );
+    expect(row.parentTaskId).toBeNull();
+  });
+
+  it('a pull without the fields leaves local startDate/estimateMinutes alone; an explicit null clears', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const localRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Locally planned',
+          state: 'todo',
+          startDate: new Date('2026-08-10T00:00:00.000Z'),
+          estimateMinutes: 25,
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'pull-1',
+          externalUpdatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'), // clean: updatedAt == anchor
+        })
+        .returning(),
+    );
+
+    // A provider without the concepts (both fields absent) pulls a newer title…
+    await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'pull-1',
+          title: 'Renamed remotely',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'pull-1',
+            importedAt: '2026-08-01T00:00:00.000Z',
+            externalUpdatedAt: '2026-02-01T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+    const afterAbsent = one(
+      await db.select().from(schema.task).where(eq(schema.task.id, localRow.id)),
+    );
+    // …and the locally-set planning fields survive untouched.
+    expect(afterAbsent.title).toBe('Renamed remotely');
+    expect(afterAbsent.startDate?.toISOString()).toBe('2026-08-10T00:00:00.000Z');
+    expect(afterAbsent.estimateMinutes).toBe(25);
+
+    // A provider that carries the concepts and says "explicitly unset" clears them.
+    await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'pull-1',
+          title: 'Renamed remotely',
+          startDate: null,
+          estimateMinutes: null,
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'pull-1',
+            importedAt: '2026-08-01T00:00:00.000Z',
+            externalUpdatedAt: '2026-03-01T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+    const afterNull = one(
+      await db.select().from(schema.task).where(eq(schema.task.id, localRow.id)),
+    );
+    expect(afterNull.startDate).toBeNull();
+    expect(afterNull.estimateMinutes).toBeNull();
+  });
+
+  it('a pull can update the fields and re-parent under another linked task', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const parentRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'The parent',
+          state: 'todo',
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'reparent-parent',
+          externalUpdatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        })
+        .returning(),
+    );
+    const childRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Was top-level',
+          state: 'todo',
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'reparent-child',
+          externalUpdatedAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        })
+        .returning(),
+    );
+
+    await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'reparent-child',
+          title: 'Now a subtask',
+          startDate: '2026-09-01',
+          estimateMinutes: 15,
+          parentExternalId: 'reparent-parent',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'reparent-child',
+            importedAt: '2026-08-01T00:00:00.000Z',
+            externalUpdatedAt: '2026-02-01T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+
+    const after = one(await db.select().from(schema.task).where(eq(schema.task.id, childRow.id)));
+    expect(after.parentTaskId).toBe(parentRow.id);
+    expect(after.startDate?.toISOString().slice(0, 10)).toBe('2026-09-01');
+    expect(after.estimateMinutes).toBe(15);
+  });
+});

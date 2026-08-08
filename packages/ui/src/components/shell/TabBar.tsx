@@ -13,9 +13,11 @@
  * handles {@link TabBarProps.onClose}. It renders nothing when no documents are open, so it
  * costs no vertical space until the caller actually opens one.
  *
- * @remarks Layout model — each tab is a **fixed width** that never shrinks. Inside it the title
- * **flexes** (`flex-1 min-w-0`) and truncates with an ellipsis, while the close button is pinned
- * to the right edge (`shrink-0`); the two never overlap regardless of title length. The title is
+ * @remarks Layout model — each tab **flexes between a floor and a ceiling** (`min-w-24` to
+ * `max-w-60`): tabs spread into free width so titles get room before truncating, and shrink
+ * toward the floor under crowding. Inside a tab the title **flexes** (`flex-1 min-w-0`) and
+ * truncates with an ellipsis, while the close button is pinned to the right edge (`shrink-0`);
+ * the two never overlap regardless of title length. The title is
  * the host's routing anchor (via {@link TabBarProps.renderLink}, which is handed the flex classes
  * so the anchor itself participates in the tab's flex row). A crowded bar **scrolls horizontally
  * only** — the strip clips vertical overflow so the chrome never grows a second row or a vertical
@@ -26,12 +28,14 @@
  * @remarks Surface model — the bar is its **own bar on the canvas**: its container inherits the
  * shell's tinted `surface-container` tone (no panel surface, no divider border), so it reads as
  * chrome floating above the main content panel rather than a strip *inside* it. Each tab is a
- * **detached floating pill** — fully rounded (`rounded-lg`), vertically centred, and a consistent
- * height — that sits *on* the canvas rather than being welded to the panel below; the bar keeps a
- * real visual gap above the main panel (the shell gutter) so the strip and the panel read as two
- * separate layers. The **active** pill is visually *lifted* (`surface-container-highest` fill plus
- * a subtle ring + shadow) and inks its label in `on-surface`; **inactive** pills stay calm
- * (transparent, muted `on-surface-variant`), stepping up to `surface-container-high` on hover.
+ * **detached pill** at the control radius, vertically centred, and a consistent height. The bar
+ * keeps a real visual gap above the main panel (the shell gutter) so the strip and the panel read
+ * as two separate layers. Tab state is pure tonal hierarchy, no ring and no shadow: **inactive**
+ * pills rest one ramp step above the strip (`surface-container-high`, muted `on-surface-variant`
+ * ink) and step to `surface-container-highest` on hover; the **active** pill wears the content
+ * panel's own `surface` tone — the tab for the open document sits on the same layer as the
+ * document, which is what distinguishes this chrome from the selection-role (`secondary-container`)
+ * grammar that content chips use.
  *
  * @remarks Inline responsiveness — the icon-only controls (each tab's close button and the
  * pinned overflow trigger) carry a {@link Tooltip} naming them on hover/focus, so a wordless
@@ -80,11 +84,11 @@ export function TabBar({
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div className="no-print bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-1.5">
+      <div className="no-print bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-2">
         <div
           role="tablist"
           aria-label="Open documents"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden px-1.5"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden px-2"
         >
           {tabs.map((tab) => (
             <TabItem

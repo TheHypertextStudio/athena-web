@@ -41,7 +41,7 @@ export function OverflowMenu({
             type="button"
             aria-label={`Open documents (${String(tabs.length)})`}
             className={cn(
-              'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface data-[state=open]:bg-surface-container-high flex h-8 shrink-0 items-center gap-0.5 self-center rounded-lg px-1.5 text-xs font-medium transition-colors',
+              'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface data-[state=open]:bg-surface-container-high text-label-medium flex h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-1.5 transition-colors',
               focusRing,
             )}
           >
@@ -52,9 +52,7 @@ export function OverflowMenu({
         <TooltipContent>All open documents</TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" width="lg">
-        <DropdownMenuLabel className="text-on-surface-variant text-xs">
-          Open documents
-        </DropdownMenuLabel>
+        <DropdownMenuLabel className="text-on-surface-variant">Open documents</DropdownMenuLabel>
         {tabs.map((tab) => {
           const Icon = TYPE_ICON[tab.type];
           const active = tab.key === activeKey;

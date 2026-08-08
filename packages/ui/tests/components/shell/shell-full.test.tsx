@@ -1104,22 +1104,20 @@ describe('TabBar', () => {
     const bar = container.firstElementChild as HTMLElement;
     expect(bar).toHaveClass('bg-surface-container');
     expect(bar).not.toHaveClass('bg-surface-container-low', 'border-b');
-    // Every tab is a fully-rounded floating pill, NOT welded to the panel below: no top-only
-    // rounding, no self-stretch, no panel surface fill.
+    // Every tab is a detached pill at the control radius, NOT welded to the panel below: no
+    // top-only rounding, no self-stretch.
     const activeTab = screen.getByText('Q3 Launch').closest<HTMLElement>('[role="tab"]')!;
     const inactiveTab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
     for (const tab of [activeTab, inactiveTab]) {
-      expect(tab).toHaveClass('rounded-lg');
-      expect(tab).not.toHaveClass('rounded-t-lg', 'self-stretch', 'bg-surface');
+      expect(tab).toHaveClass('rounded-md');
+      expect(tab).not.toHaveClass('rounded-t-lg', 'self-stretch');
     }
-    // The active pill takes the selected secondary fill plus a shadow; the inactive pill stays
-    // transparent and calm in the muted on-surface-variant.
-    expect(activeTab).toHaveClass(
-      'bg-secondary-container',
-      'shadow-sm',
-      'text-on-secondary-container',
-    );
-    expect(inactiveTab).toHaveClass('text-on-surface-variant');
+    // State is pure tonal hierarchy — no ring, no shadow, no chip selection role. The active pill
+    // wears the content panel's own `surface` tone (the open document's layer); the inactive pill
+    // rests one ramp step above the strip so it reads as a pill rather than vanishing into it.
+    expect(activeTab).toHaveClass('bg-surface', 'text-on-surface');
+    expect(activeTab).not.toHaveClass('bg-secondary-container', 'shadow-sm', 'ring-1');
+    expect(inactiveTab).toHaveClass('bg-surface-container-high', 'text-on-surface-variant');
     expect(inactiveTab).not.toHaveClass('bg-secondary-container', 'ring-1', 'shadow-sm');
   });
 
@@ -1134,10 +1132,10 @@ describe('TabBar', () => {
     );
     const tab = screen.getByText('Fix the build').closest<HTMLElement>('[role="tab"]')!;
     // A width RANGE rather than one rigid width: tabs shrink toward `min-w-24` so more of them fit
-    // before the strip has to scroll on a phone, and stop at `max-w-40` so a lone tab is not
+    // before the strip has to scroll on a phone, and stop at `max-w-60` so a lone tab is not
     // stretched across the bar. The floor is what keeps a crowded bar readable instead of
     // squeezing every tab down to its close button.
-    expect(tab).toHaveClass('min-w-24', 'max-w-40', 'flex-1', 'shrink');
+    expect(tab).toHaveClass('min-w-24', 'max-w-60', 'flex-1', 'shrink');
     // The title is the routing anchor itself, made the flexing child so it fills + truncates.
     const link = within(tab).getByRole('link', { name: 'Fix the build' });
     expect(link).toHaveClass('flex-1', 'min-w-0');

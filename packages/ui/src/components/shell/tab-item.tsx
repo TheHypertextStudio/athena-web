@@ -4,7 +4,13 @@ import * as React from 'react';
 
 import { X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { focusRing, Tooltip, TooltipContent, TooltipTrigger } from '../../primitives';
+import {
+  focusRing,
+  focusRingInset,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '../../primitives';
 
 import type { OpenTab, TabRenderLink } from './tab-types';
 import { TYPE_ICON } from './tab-types';
@@ -24,10 +30,10 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
       role="tab"
       aria-selected={active}
       className={cn(
-        'group text-body-medium relative flex h-8 max-w-40 min-w-24 flex-1 shrink items-center rounded-lg transition-colors',
+        'group text-label-large relative flex h-8 max-w-60 min-w-24 flex-1 shrink items-center rounded-md transition-colors',
         active
-          ? 'text-on-secondary-container bg-secondary-container shadow-sm'
-          : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
+          ? 'bg-surface text-on-surface'
+          : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface',
       )}
     >
       {renderLink(
@@ -37,8 +43,8 @@ export function TabItem({ tab, active, renderLink, onClose }: TabItemProps): Rea
           <span className="min-w-0 flex-1 truncate">{tab.title}</span>
         </>,
         cn(
-          'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-lg py-1.5 pr-1 pl-2.5',
-          focusRing,
+          'flex h-full min-w-0 flex-1 items-center gap-1.5 rounded-md py-1.5 pr-1 pl-2.5',
+          focusRingInset,
         ),
       )}
       <Tooltip>

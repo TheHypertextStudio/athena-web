@@ -4186,6 +4186,14 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Learnings**: the tab bar was a sixth hand-rolled tab strip; the semantic split that resolved
   the restyle argument is chrome-vs-content — selection roles belong to content controls, surface
   continuity belongs to chrome.
+- **Follow-up (same day)**: the strip's horizontal inset dropped to zero at `lg` so the first
+  pill and the overflow trigger sit flush with the content column (the 8px inset was the reported
+  misalignment; mobile keeps the inset because the panel is full-bleed there). The overflow
+  trigger gained the inactive-tab resting fill so it reads as a control. The update prompt left
+  the top banner slot entirely: it is now `UpdateCard`, a whole-card-is-the-button `bg-surface`
+  card docked at the bottom of the sidebar above the account row (the Claude desktop "Relaunch to
+  update" pattern), hidden while the rail is collapsed like the recovery nudge. The offline
+  notice keeps the banner slot to itself. Handshake re-verified live through the card.
 
 ### [INGEST-001] Associate third-party activity with the Docket entities it concerns
 

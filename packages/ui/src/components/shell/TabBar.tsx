@@ -84,11 +84,17 @@ export function TabBar({
 
   return (
     <TooltipProvider delayDuration={400}>
-      <div className="no-print bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-2">
+      {/*
+        No horizontal inset at `lg`: the first pill's left edge and the overflow trigger's right
+        edge sit flush with the content column, so the strip lines up with the panel (and any
+        banner) below instead of floating 8px inside them. Mobile keeps a small inset because the
+        panel is full-bleed there and a pill hugging the bezel has no breathing room.
+      */}
+      <div className="no-print bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-2 lg:pr-0">
         <div
           role="tablist"
           aria-label="Open documents"
-          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden px-2"
+          className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overflow-y-hidden px-2 lg:px-0"
         >
           {tabs.map((tab) => (
             <TabItem

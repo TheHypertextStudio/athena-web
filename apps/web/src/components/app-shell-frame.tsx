@@ -33,7 +33,7 @@ import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/co
 import { QueryPersistence } from '@/components/query-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
-import { UpdateBanner, useServiceWorkerUpdate } from '@/components/service-worker-provider';
+import { UpdateCard, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
 import {
   FocusPanel,
@@ -398,6 +398,17 @@ function AppShellAgendaSkeleton(): JSX.Element {
  * {@link AppShell} provides *around* the sidebar node — a caller assembling that node cannot read it,
  * but anything rendered inside it can.
  */
+/**
+ * The update prompt, docked above the account row. Hidden while the rail is collapsed for the
+ * same reason as the recovery nudge: an icon-wide rail has no room for a card, and an update can
+ * wait until the rail is open.
+ */
+function SidebarUpdateCard({ onApply }: { readonly onApply: () => void }): JSX.Element | null {
+  const { collapsed } = useShellSidebar();
+  if (collapsed) return null;
+  return <UpdateCard onApply={onApply} />;
+}
+
 function SidebarRecoveryNudge({
   personalOrgId,
   userId,
@@ -542,7 +553,7 @@ function AppShellInner({
   const { tabs, activeKey, closeTab } = useOpenDocuments();
 
   // Registration itself lives at the root so it happens on every route; the shell only consumes
-  // the result, so the update prompt can share the one banner slot with the offline notice.
+  // the result, docking the update card at the bottom of the sidebar.
   const { applyUpdate } = useServiceWorkerUpdate();
 
   // The tickless read, never `useTimerState`. The Focus panel owns the once-a-second clock; a
@@ -557,8 +568,6 @@ function AppShellInner({
   const standingNotice =
     offline && !unavailable ? (
       <OfflineBanner online={offline.online} onRetry={offline.onRetry} />
-    ) : applyUpdate ? (
-      <UpdateBanner onApply={applyUpdate} />
     ) : null;
 
   // The sidebar's unread badge polls on a focus-only minute interval, sharing the inbox's
@@ -659,6 +668,7 @@ function AppShellInner({
           <AppShellAccountSkeleton />
         ) : (
           <>
+            {applyUpdate ? <SidebarUpdateCard onApply={applyUpdate} /> : null}
             <SidebarRecoveryNudge personalOrgId={personalOrgId} userId={userId} />
             <AccountMenu onCreateWorkspace={onCreateWorkspace} />
           </>

@@ -41,7 +41,9 @@ export function OverflowMenu({
             type="button"
             aria-label={`Open documents (${String(tabs.length)})`}
             className={cn(
-              'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface data-[state=open]:bg-surface-container-high text-label-medium flex h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-1.5 transition-colors',
+              // Rests on the same raised step as an inactive tab, so it reads as a pressable
+              // control in the strip rather than a stray count floating on the canvas.
+              'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface data-[state=open]:bg-surface-container-highest data-[state=open]:text-on-surface text-label-medium flex h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-2 transition-colors',
               focusRing,
             )}
           >

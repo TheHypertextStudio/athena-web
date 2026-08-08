@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ServiceWorkerProvider,
-  UpdateBanner,
+  UpdateCard,
   useServiceWorkerUpdate,
 } from '../../src/components/service-worker-provider';
 
@@ -72,13 +72,13 @@ let container: FakeContainer;
 const reload = vi.fn();
 const originalLocation = window.location;
 
-/** Renders the banner exactly as the shell does: only when an update is actually applicable. */
+/** Renders the update card exactly as the shell does: only when an update is applicable. */
 function Probe(): React.JSX.Element {
   const { applyUpdate } = useServiceWorkerUpdate();
   if (!applyUpdate) {
     return <div data-testid="no-update" />;
   }
-  return <UpdateBanner onApply={applyUpdate} />;
+  return <UpdateCard onApply={applyUpdate} />;
 }
 
 async function mount(): Promise<ReturnType<typeof render>> {
@@ -123,7 +123,7 @@ describe('ServiceWorkerProvider', () => {
   it('offers a reload when a worker is waiting behind a live controller', async () => {
     container.registration.waiting = new FakeWorker();
     await mount();
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
   });
 
   it('offers a reload when an update installs mid-session', async () => {
@@ -135,23 +135,23 @@ describe('ServiceWorkerProvider', () => {
       container.registration.emit('updatefound');
       installing.become('installed');
     });
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
   });
 
   it('keeps the banner up after accepting — the reload is what dismisses it', async () => {
     const waiting = new FakeWorker();
     container.registration.waiting = waiting;
     await mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
     expect(waiting.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
     // No optimistic dismissal: a handshake that stalls must not silently swallow the prompt.
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
   });
 
   it('reloads exactly once when the new worker takes over', async () => {
     container.registration.waiting = new FakeWorker();
     await mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
     act(() => {
       container.emit('controllerchange');
       container.emit('controllerchange');
@@ -163,7 +163,7 @@ describe('ServiceWorkerProvider', () => {
     container.registration.waiting = new FakeWorker();
     await mount();
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
     expect(reload).not.toHaveBeenCalled();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4_000);
@@ -175,7 +175,7 @@ describe('ServiceWorkerProvider', () => {
     container.registration.waiting = new FakeWorker();
     await mount();
     vi.useFakeTimers();
-    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
     act(() => {
       container.emit('controllerchange');
     });
@@ -189,7 +189,7 @@ describe('ServiceWorkerProvider', () => {
     const waiting = new FakeWorker();
     container.registration.waiting = waiting;
     await mount();
-    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Update ready' })).toBeInTheDocument();
     act(() => {
       waiting.become('redundant');
     });
@@ -203,7 +203,7 @@ describe('ServiceWorkerProvider', () => {
     // The state flips without the statechange event landing first — the exact race applyUpdate
     // guards against.
     waiting.state = 'redundant';
-    fireEvent.click(screen.getByRole('button', { name: 'Reload' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Update ready' }));
     expect(waiting.postMessage).not.toHaveBeenCalled();
     expect(screen.getByTestId('no-update')).toBeInTheDocument();
   });

@@ -1,6 +1,8 @@
 'use client';
 
-import { Button } from '@docket/ui/primitives';
+import { ArrowRight } from '@docket/ui/icons';
+import { focusRing } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
 import {
   type JSX,
   type ReactNode,
@@ -22,9 +24,9 @@ import {
  * installed early — offline support must be bootstrapped before it is needed, and an app that only
  * registered after sign-in would never cache its offline page for a first-run install.
  *
- * The update state is published through context rather than rendered here, so the shell can place
- * {@link UpdateBanner} in its one banner slot and order it against the offline notice, instead of
- * two independent banners stacking.
+ * The update state is published through context rather than rendered here, so the shell can dock
+ * {@link UpdateCard} at the bottom of its sidebar — out of the content column entirely, where an
+ * update prompt can wait without competing with the offline notice or the work on screen.
  *
  * The worker installs and then **waits**: `sw.ts` deliberately omits `skipWaiting()` on install, so
  * a new version never takes over a live tab and mixes old chunks with new ones mid-session. The
@@ -212,18 +214,29 @@ export function ServiceWorkerProvider({ children }: { children: ReactNode }): JS
   return <ServiceWorkerContext value={value}>{children}</ServiceWorkerContext>;
 }
 
-/** The inline "new version ready" prompt, rendered by the shell in its banner slot. */
-export function UpdateBanner({ onApply }: { readonly onApply: () => void }): JSX.Element {
+/**
+ * The "new version ready" prompt: a card docked at the bottom of the sidebar, above the account
+ * row. The whole card is the action — one label, one press, no explanatory copy. It steps up to
+ * the panel `surface` tone from the sidebar's canvas, the same separation every other card in the
+ * shell uses, so it reads as an affordance rather than an alert.
+ */
+export function UpdateCard({ onApply }: { readonly onApply: () => void }): JSX.Element {
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="border-outline-variant bg-surface-container-high text-on-surface text-body-medium flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border px-3 py-2"
-    >
-      <span className="text-label-large min-w-0 flex-1 truncate">Update ready</span>
-      <Button variant="outline" size="sm" onClick={onApply}>
-        Reload
-      </Button>
+    <div role="status" aria-live="polite">
+      <button
+        type="button"
+        onClick={onApply}
+        className={cn(
+          'group bg-surface text-on-surface text-label-large hover:bg-surface-container-lowest flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors',
+          focusRing,
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate text-left">Update ready</span>
+        <ArrowRight
+          aria-hidden="true"
+          className="text-on-surface-variant size-4 shrink-0 transition-transform group-hover:translate-x-0.5"
+        />
+      </button>
     </div>
   );
 }

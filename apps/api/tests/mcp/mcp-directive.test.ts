@@ -305,6 +305,66 @@ describe('acknowledge_directive tool', () => {
     expect(rows[0]?.enforced).toBe(true);
   });
 
+  it('rejects a directiveId the caller was never issued, and writes nothing', async () => {
+    const seed = await seedHubUser();
+    const now = new Date();
+    await seedReadyDay(
+      seed,
+      now.toISOString().slice(0, 10),
+      now,
+      new Date(now.getTime() + 60 * 60 * 1000),
+    );
+    const client = await connect(ctxFor(seed, ['work:read', 'work:write']));
+    // The caller has a real directive; the ack still names an id that never existed, which an
+    // unattended client could otherwise use to pile up audit rows keyed by fiction.
+    await readDirective(client);
+
+    const res = (await client.callTool({
+      name: 'acknowledge_directive',
+      arguments: { directiveId: 'dir_never_issued', appliedPosture: 'on_track', enforced: true },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toContain('not_found');
+
+    const rows = await db
+      .select()
+      .from(schema.directiveAcknowledgment)
+      .where(eq(schema.directiveAcknowledgment.hubId, seed.hubId));
+    expect(rows).toHaveLength(0);
+  });
+
+  it('will not acknowledge another Hub’s directive', async () => {
+    const owner = await seedHubUser();
+    const now = new Date();
+    await seedReadyDay(
+      owner,
+      now.toISOString().slice(0, 10),
+      now,
+      new Date(now.getTime() + 60 * 60 * 1000),
+    );
+    const ownerClient = await connect(ctxFor(owner, ['work:read']));
+    const theirs = await readDirective(ownerClient);
+
+    // A different person holding a genuinely-issued id: the lookup is scoped to the caller's
+    // own Hub, so the answer is "no such directive", never a write into someone else's audit.
+    const stranger = await seedHubUser();
+    const strangerClient = await connect(ctxFor(stranger, ['work:read', 'work:write']));
+    const res = (await strangerClient.callTool({
+      name: 'acknowledge_directive',
+      arguments: {
+        directiveId: theirs.directiveId,
+        appliedPosture: theirs.posture,
+        enforced: true,
+      },
+    })) as CallToolResult;
+    expect(res.isError).toBe(true);
+    expect((res.content[0] as { text: string }).text).toContain('not_found');
+
+    const rows = await db.select().from(schema.directiveAcknowledgment);
+    expect(rows.filter((row) => row.hubId === owner.hubId)).toHaveLength(0);
+    expect(rows.filter((row) => row.hubId === stranger.hubId)).toHaveLength(0);
+  });
+
   it('denies the write to a token lacking work:write, and writes nothing', async () => {
     const seed = await seedHubUser();
     const client = await connect(ctxFor(seed, ['work:read']));

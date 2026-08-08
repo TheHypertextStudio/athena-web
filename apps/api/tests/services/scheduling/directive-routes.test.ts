@@ -401,6 +401,29 @@ describe('GET /directive — posture and gates', () => {
     expect(rows, 'a retry must overwrite, not append').toHaveLength(1);
     expect(rows[0]?.enforced).toBe(true);
   });
+
+  it('404s an acknowledgement naming a directiveId the Hub was never issued', async () => {
+    const { directive, hubId } = await seedDay('DirectiveAckUnknown');
+    // The day has a real directive; the ack still names an id that never existed for it.
+    expect((await directive.request(`/?date=${DAY}`)).status).toBe(200);
+
+    const res = await directive.request('/acknowledge', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        directiveId: 'd_never_issued',
+        appliedPosture: 'on_track',
+        enforced: false,
+      }),
+    });
+    expect(res.status).toBe(404);
+
+    const rows = await db
+      .select()
+      .from(schema.directiveAcknowledgment)
+      .where(eq(schema.directiveAcknowledgment.hubId, hubId));
+    expect(rows, 'a refused acknowledgement must write nothing').toHaveLength(0);
+  });
 });
 
 describe('the end-of-day review gates the close of the day', () => {

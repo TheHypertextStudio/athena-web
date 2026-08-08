@@ -830,13 +830,21 @@ export async function confirmTomorrow(
  * Idempotent by upsert on `(hubId, directiveId)`: a retry after a dropped connection overwrites
  * the same row rather than appending a duplicate.
  *
+ * Only an id this Hub was actually issued is accepted: the write is preceded by a lookup
+ * against `day_directive`, so a caller cannot ack another Hub's directive and an unattended
+ * client cannot pile up audit rows keyed by ids that never existed. The check is against the
+ * *current* snapshot ids because those are the only ones stored — `directiveId` is overwritten
+ * in place when the posture moves — so an ack racing a posture change is refused, and the
+ * client re-reads and acks the state that actually stands, which is the honest reading of
+ * "acknowledging the state it saw".
+ *
  * @param db - The database client.
  * @param input.hubId - The Hub.
  * @param input.clientId - Whichever registered client sent it; null for the app's own UI.
  * @param input.body - The acknowledgement.
  * @param input.userId - The acknowledging user, when there is one.
  * @param input.now - The acknowledgement instant.
- * @returns the acknowledgement receipt.
+ * @returns the acknowledgement receipt, or null when the directiveId was never this Hub's.
  */
 export async function recordAcknowledgment(
   db: Database,
@@ -847,7 +855,19 @@ export async function recordAcknowledgment(
     readonly userId: string | null;
     readonly now: Date;
   },
-): Promise<{ acknowledged: true; acknowledgedAt: string }> {
+): Promise<{ acknowledged: true; acknowledgedAt: string } | null> {
+  const issued = await db
+    .select({ id: dayDirective.id })
+    .from(dayDirective)
+    .where(
+      and(
+        eq(dayDirective.hubId, input.hubId),
+        eq(dayDirective.directiveId, input.body.directiveId),
+      ),
+    )
+    .limit(1);
+  if (issued.length === 0) return null;
+
   const values = {
     hubId: input.hubId,
     directiveId: input.body.directiveId,

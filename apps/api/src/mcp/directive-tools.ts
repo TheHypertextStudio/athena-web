@@ -15,6 +15,7 @@ import { db } from '@docket/db';
 import { DirectivePosture } from '@docket/types';
 import { z } from 'zod';
 
+import { NotFoundError } from '../error';
 import { recordAcknowledgment } from '../services/scheduling/directive-service';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
@@ -29,7 +30,7 @@ export function registerDirectiveTools(server: McpRegistrar, ctx: McpContext): v
     {
       title: 'Acknowledge a directive',
       description:
-        'Report what the calling client did with a directive read from `docket://hub/directive`: which posture it acted on, whether it changed device state in response, and an optional note. Echo the `directiveId` from the payload that was acted on. Retries are safe — a directive holds one acknowledgment, and a repeat call overwrites it rather than appending a duplicate.',
+        'Report what the calling client did with a directive read from `docket://hub/directive`: which posture it acted on, whether it changed device state in response, and an optional note. Echo the `directiveId` from the payload that was acted on — an id the caller was never issued (or one superseded by a posture change since the read) is refused with not_found; re-read the resource and acknowledge the current state. Retries are safe — a directive holds one acknowledgment, and a repeat call overwrites it rather than appending a duplicate.',
       inputSchema: {
         directiveId: z
           .string()
@@ -73,6 +74,11 @@ export function registerDirectiveTools(server: McpRegistrar, ctx: McpContext): v
           userId,
           now: new Date(),
         });
+        // An id this Hub was never issued is refused, not recorded: the audit table holds
+        // only acknowledgments of directives that actually stood, and a caller holding
+        // another Hub's id learns nothing beyond "no such directive". A stale id (the
+        // posture moved since the read) lands here too — re-read and ack the current state.
+        if (receipt === null) throw new NotFoundError('Directive not found');
         return jsonResult(receipt);
       }),
   );

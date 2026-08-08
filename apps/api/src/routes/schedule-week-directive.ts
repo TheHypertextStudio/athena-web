@@ -123,7 +123,9 @@ The posture is a deterministic schedule-adherence check over timeboxes and the w
 
 **Idempotent by upsert on \`(hub, directiveId)\`** — a retried call after a dropped connection overwrites the same row rather than appending a duplicate, so \`directiveId\` doubles as the dedupe key and no separate idempotency header is needed.
 
-**Side effect:** upserts one \`directive_acknowledgment\` row. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub.`,
+**Only an id this Hub was issued is accepted.** A \`directiveId\` that never belonged to the caller's Hub — or one superseded by a posture change since the read — returns **404**; re-read the directive and acknowledge the state that stands.
+
+**Side effect:** upserts one \`directive_acknowledgment\` row. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the directiveId was never theirs.`,
     }),
     zJson(AcknowledgeDirectiveInput),
     async (c) => {
@@ -137,6 +139,7 @@ The posture is a deterministic schedule-adherence check over timeboxes and the w
         userId: session.user.id,
         now: new Date(),
       });
+      if (receipt === null) throw new NotFoundError('Directive not found');
       return ok(c, AcknowledgeDirectiveOutput, receipt);
     },
   )

@@ -67,12 +67,13 @@ function ItemBodyContent({
 }: Pick<SchedulingItemBodyProps, 'density' | 'height' | 'timeRange' | 'content'>): JSX.Element {
   // A block too short for a time line still gets its title. It used to render as a featureless
   // coloured bar with the title only in the accessibility tree — a dead element on the one surface
-  // whose entire job is saying what is happening. `leading-none` and no vertical padding is what
+  // whose entire job is saying what is happening. Solid leading (line-height = the token's own
+  // font size, via the theme variable rather than a raw utility) and no vertical padding is what
   // buys one 14px line inside an 18px block, so the round-3 type floor holds.
   if (density === 'marker') {
     return (
       <span
-        className="text-label-large sticky block w-full truncate leading-none"
+        className="text-label-large sticky block w-full truncate leading-[var(--text-label-large)]"
         style={STICKY_LABEL_STYLE}
       >
         {content}

@@ -4180,9 +4180,10 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Verified**: per-package suites (ui 522, service-worker 66, web 1784) plus a live handshake in
   the dev stack — staged a byte-changed `sw.js`, banner appeared, Reload landed on the new worker,
   no banner afterward. Screenshots light+dark of pill states, inset focus ring, and the banner.
-- **Known remainder**: `apps/web/src/components/scheduling/scheduling-item-body.tsx` carries one
-  unledgered `leading-none` from commit 3f64dd6d that fails the design-token policy test;
-  pre-existing, spun off as its own task.
+- **Known remainder**: resolved same day — the `leading-none` in
+  `apps/web/src/components/scheduling/scheduling-item-body.tsx` became
+  `leading-[var(--text-label-large)]`, the scan's sanctioned form (a variable reference is a token
+  reference), computing to the identical 14px solid line. The policy suite is fully green.
 - **Learnings**: the tab bar was a sixth hand-rolled tab strip; the semantic split that resolved
   the restyle argument is chrome-vs-content — selection roles belong to content controls, surface
   continuity belongs to chrome.

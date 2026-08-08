@@ -1,0 +1,16 @@
+{
+  "fits": {
+    "viewport": 390,
+    "dropdown": {
+      "width": 352,
+      "right": 364,
+      "overflows": false
+    },
+    "context": {
+      "width": 224,
+      "right": 236,
+      "overflows": false
+    },
+    "documentScrollsSideways": false
+  }
+}

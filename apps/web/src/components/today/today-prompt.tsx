@@ -68,10 +68,24 @@ export interface TodayPromptProps {
   orgLabel: string;
   /** Invoked after a successful capture so the host can refresh the plan. */
   onCaptured?: () => void;
+  /**
+   * Expand this page into the Athena conversation, carrying the draft with it.
+   *
+   * @remarks
+   * When the host supplies this, Athena mode stays on the page instead of opening the ⌘J dock.
+   * Same conversation either way — the dock and this render the one persistent thread — so this is
+   * a choice about where it appears, not about how many there are.
+   */
+  onStartSession?: () => void;
 }
 
 /** The hybrid prompt box: capture a task, or hand the thought to Athena. */
-export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): JSX.Element {
+export function TodayPrompt({
+  orgId,
+  orgLabel,
+  onCaptured,
+  onStartSession,
+}: TodayPromptProps): JSX.Element {
   const { openAthena } = useAthenaPanel();
   const [text, setText] = useState('');
   const mentionOrgId = useMentionOrgId(orgId);
@@ -130,9 +144,13 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
     if (!orgId || !text.trim()) return;
     setError(null);
     setNotice(null);
+    // The draft goes to the same place either way. `openAthena` seeds the shared thread and the
+    // host, if it hosts one, then expands into that thread in place rather than sliding the dock
+    // over the page you were already reading.
     openAthena({ workspaceId: orgId, workspaceName: orgLabel }, text.trim());
     setText('');
-  }, [openAthena, orgId, orgLabel, text]);
+    onStartSession?.();
+  }, [openAthena, orgId, orgLabel, text, onStartSession]);
 
   /** Send the draft wherever the active mode points. */
   const submit = useCallback((): void => {
@@ -166,7 +184,10 @@ export function TodayPrompt({ orgId, orgLabel, onCaptured }: TodayPromptProps): 
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
           "What's on your plate?" over two sentences describing what pasting does — was the field
           narrating itself to the person already using it. */}
-      <div className="border-outline-variant focus-within:border-primary flex flex-col gap-2 border-b pb-2 transition-colors duration-(--dur-base) ease-(--ease-out)">
+      <div
+        className="border-outline-variant focus-within:border-primary flex flex-col gap-2 border-b pb-2 transition-colors duration-(--dur-base) ease-(--ease-out)"
+        style={{ viewTransitionName: 'today-composer' }}
+      >
         <MentionTextarea
           value={text}
           onChange={(next) => {

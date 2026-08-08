@@ -215,31 +215,47 @@ Docket only ever shows you one of two altitudes at a time, and a thin strip down
 
 Each screen below records the decided layout and key behaviors. Flagship screens include a domain‑neutral wireframe.
 
-### 8.1 Hub — Today cockpit (+ Inbox, Search)
+### 8.1 Hub — Today (+ Inbox, Search)
 
-Today is the screen you open first every morning, the one that answers the question "if I do nothing else, what actually matters right now?" If you run more than one venture, you know the failure mode well: a startup tab, a nonprofit spreadsheet, a personal to-do list, and a calendar that's a separate app entirely, with the real plan living only in your head. Today collapses all of that into one cockpit. The middle Plan column is a short list you build by hand each morning, pulling the few things you intend to do from any of your ventures, so it might hold "finalize the Q3 budget" from your startup right above "send the grant report" from your nonprofit. Every line carries a small colored chip naming the venture it belongs to, so the contexts sit side by side without ever blurring together. Beside it, your calendar shows the day's actual shape, and a Needs-Attention column gathers the things that will bite you if ignored: work due today, anything stuck waiting on something else, and approvals an AI worker is holding for your sign-off. The screen is shaped this way because a person juggling several organizations doesn't need more dashboards, they need one honest plan; Today is deliberately a calm, finite list of what you've chosen, not an anxious dump of everything that exists.
+Today is the screen you open first every morning, and it answers two questions. _Where does everything stand?_ — what an agent is holding for your sign-off, what is stuck, what you meant to do. And _what am I starting now?_ — because the other reason you open it is that you arrived with something already in your head.
 
-The flagship daily surface: a **three‑pane** cockpit — your **Plan**, your **Calendar**, and a **Needs‑Attention** column — with work **grouped by organization**.
+If you run more than one venture you know the failure mode: a startup tab, a nonprofit spreadsheet, a personal to-do list, and a calendar that is a separate app entirely, with the real plan living only in your head. Today collapses that into one place, with every line carrying a small coloured chip naming the venture it belongs to, so the contexts sit side by side without blurring together. It is deliberately a calm, finite page — what you have chosen and what is waiting on you, not an anxious dump of everything that exists.
+
+**One column, two states.** The prompt sits first, under the date. Below it, and only when they hold something: Athena's proposals, then what needs you, then the day's work. A clear day is a short page — nothing renders a heading over an empty list.
 
 ```
-┌───┬──────────────┬──────────────────────────────────────────────────────┐
-│ ◉ │  HUB          │  Today · Thu Jun 5                        [ Plan day ▸]│
-│   │  ──────────── │  ───────────────────────────────────────────────────  │
-│ Ⓐ │ ▸ Today       │  PLAN              CALENDAR          NEEDS ATTENTION    │
-│ Ⓝ │   Inbox       │  ▾ Acme Ⓐ          9  ▢ standup      ⚠ Approvals (2)   │
-│ Ⓟ │   Portfolio   │   ☐ Q3 budget Ⓐ    10 ▢▢ deep work    • Athena: donor  │
-│   │   Search      │   ☐ Hire JD   Ⓐ    12 ▢ lunch          notes  Ⓝ [▸]    │
-│ + │              │  ▾ Hope Fund Ⓝ     1  ▢ board prep   ⛔ Blocked (3)     │
-│   │              │   ☐ Grant rpt Ⓝ    3  ▢ 1:1          ⏰ Due today (2)   │
-│   │              │   ☐ Volunteers Ⓝ                     📨 Inbox (5)       │
-│   │              │  + pull from any org…                                   │
-└───┴──────────────┴──────────────────────────────────────────────────────┘
-  rail   Hub sidebar     Ⓐ Acme(startup) · Ⓝ Hope Fund(nonprofit) · Ⓟ Personal
+┌───┬──────────────┬──────────────────────────────────────────┬────────────┐
+│ ◉ │  HUB          │  Today  Thu Jun 5                        │  AGENDA    │
+│   │  ──────────── │  ─────────────────────────────────────   │  ────────  │
+│ Ⓐ │ ▸ Today       │  What needs doing?                       │  9  standup│
+│ Ⓝ │   Inbox       │  ─────────────────── [ ☑ Add task ⌄ ]    │ 10  deep   │
+│ Ⓟ │   Portfolio   │                                          │ 12  lunch  │
+│   │   Search      │  PROPOSED BY ATHENA                       │  1  board  │
+│ + │              │   ⬚ Draft donor notes        [Approve 4]  │  3  1:1    │
+│   │              │                                          │            │
+│   │              │  NEEDS YOU                                │            │
+│   │              │   Waiting on your approval  2             │            │
+│   │              │   ◷ Send the donor notes            Ⓝ    │            │
+│   │              │   Blocked  3                              │            │
+│   │              │   ◷ Ship the rollout                Ⓐ    │            │
+│   │              │                                          │            │
+│   │              │  TODAY                                    │            │
+│   │              │  Acme Ⓐ                                   │            │
+│   │              │   ☐ Q3 budget                  Jun 5  Ⓐ  │            │
+│   │              │  Hope Fund Ⓝ                              │            │
+│   │              │   ☐ Grant report               Jun 5  Ⓝ  │            │
+└───┴──────────────┴──────────────────────────────────────────┴────────────┘
+  rail   Hub sidebar        Ⓐ Acme · Ⓝ Hope Fund · Ⓟ Personal      shell rail
 ```
 
-- **Approvals: digest → detail.** Today shows a compact approvals digest (one‑tap for low‑risk); the full diff/question is handled in the Inbox.
+- **There is no Calendar pane.** The shell's agenda rail renders the day on _every_ route, so a calendar column here would be the same grid twice on one screen. Today shows the day's _work_; the rail shows its _shape_.
+- **The prompt names its destination.** Capture and Athena are not a preference between two flavours of the same thing: capture is a deterministic insert (first line becomes the title, the rest becomes the description — no parsing), while Athena spawns a task, an agent, and an approval loop. The control says which one it will do; it never infers.
+- **Starting with Athena expands in place.** The prompt grows into the conversation and the resting content steps out of the way — no navigation, no panel sliding over what you were reading. It is the _same_ single conversation the ⌘J dock and `/athena` open; Today is one more door onto it. Voice is a mode of that conversation, so `Talk` sits in its header here exactly as it does on the Athena surface.
+- **Approvals lead.** They come first under the prompt because an agent is holding for a human — nothing else on the page is waiting on you in that sense. The full diff or question is still handled in the Inbox.
 - **Inbox is split** from a passive **Activity feed** (action vs. awareness).
 - **Org rail:** badged + reorderable. **Search:** one `Cmd+K` unified command palette (entities + navigation + actions + org‑switch; Hub‑global vs. org‑local toggle).
+
+> **Superseded:** this section previously specified a three-pane cockpit — Plan · Calendar · Needs-Attention side by side, with a `[ Plan day ▸ ]` header action. The calendar pane went when the agenda rail became global; the `Plan day` button was replaced by focus-refetch (`docs/engineering/specs/data-layer.md`); and the remaining two panes read better stacked in one column than split into thirds. The Plan column's "+ pull from any org…" affordance is still unbuilt.
 
 ### 8.2 Portfolio — cross‑org roadmap
 

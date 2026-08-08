@@ -1,40 +1,59 @@
 'use client';
 
 import { Button } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import { type JSX, useCallback, useState } from 'react';
 
 import { GhostProposals } from '@/components/today/ghost-proposals';
 import NeedsYou from '@/components/today/needs-you';
 import TodaysWork from '@/components/today/todays-work';
+import TodaySession from '@/components/today/today-session';
 import { TodayPrompt } from '@/components/today/today-prompt';
+import { startViewTransition } from '@/lib/view-transition';
 
 import { useTodayData } from './use-today-data';
 
 /**
- * TodayPage — where the day starts: what is waiting on you, and what you meant to do.
+ * TodayPage — where the day starts, in two states.
  *
  * @remarks
- * Two jobs, in this order:
+ * **At rest** it answers where things stand. The prompt sits first, because the usual reason to
+ * open this page is that you arrived with something in your head; then Athena's proposals, then
+ * what is waiting on your approval or blocked, then the day's own tasks. That order is not
+ * chronological — a proposal or an approval will not move without you, and a plan you wrote
+ * yesterday will. Anything holding nothing renders nothing, so a clear day is a short page rather
+ * than a column of empty panels.
  *
- * 1. **Start something.** The prompt is the first thing under the date, because the most common
- *    reason to open this page is that you arrived with something in your head.
- * 2. **See where things stand.** Athena's proposals, then what is waiting on your approval or
- *    blocked, then the day's own tasks.
+ * **Engaged**, it is the conversation. Starting something with Athena does not navigate: the
+ * prompt expands in place and the resting content steps out of the way, so the page you were
+ * reading becomes the session you are in. `startViewTransition` plus a shared
+ * `view-transition-name` on the prompt and the session makes that one box growing rather than two
+ * screens swapping — the app's standing rule, and the reason it degrades to an instant change under
+ * `prefers-reduced-motion` for free.
  *
- * The order is deliberate and it is not chronological: a proposal or an approval will not move
- * without you, and a plan you wrote yesterday will. Anything with nothing in it renders nothing —
- * a clear day should be a short page, not a column of empty panels.
+ * It is still only **one** conversation. The session rendered here is the same persistent thread
+ * the ⌘J dock and `/athena` open; Today is another door onto it, not a place that grows its own.
  *
  * **Not a three-pane cockpit.** `docs/core/mvp-plan.md` §8.1 specifies Plan · Calendar ·
  * Needs-Attention side by side. The calendar pane is gone because the shell's agenda rail renders
  * the same day on every route, and the remaining two read better stacked in one column than split
  * into panes that each get a third of the width.
- *
- * **No Athena door of its own.** Athena is the engine behind every door rather than a place to be
- * opened, and this page already has two — the prompt, and the global pill.
  */
 export default function TodayPage(): JSX.Element {
   const { data, loading, error, refetch, orgName, heading, activeOrgId } = useTodayData();
+  const [inSession, setInSession] = useState(false);
+
+  const openSession = useCallback(() => {
+    startViewTransition(() => {
+      setInSession(true);
+    });
+  }, []);
+  const closeSession = useCallback(() => {
+    startViewTransition(() => {
+      setInSession(false);
+    });
+    // The day may have moved while the conversation was open — Athena files work as it goes.
+    refetch();
+  }, [refetch]);
 
   return (
     <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-8 px-6 py-8 @2xl:px-10 @2xl:py-10">
@@ -48,33 +67,40 @@ export default function TodayPage(): JSX.Element {
         <span className="text-on-surface-variant ml-2 font-normal">{heading}</span>
       </h1>
 
-      <TodayPrompt
-        orgId={activeOrgId}
-        orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
-        onCaptured={refetch}
-      />
+      {inSession && activeOrgId ? (
+        <TodaySession orgId={activeOrgId} onClose={closeSession} />
+      ) : (
+        <>
+          <TodayPrompt
+            orgId={activeOrgId}
+            orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
+            onCaptured={refetch}
+            onStartSession={activeOrgId ? openSession : undefined}
+          />
 
-      {error ? (
-        <div
-          role="alert"
-          className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
-        >
-          <span>{error}</span>
-          <Button variant="outline" size="sm" onClick={refetch}>
-            Try again
-          </Button>
-        </div>
-      ) : null}
+          {error ? (
+            <div
+              role="alert"
+              className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
+            >
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={refetch}>
+                Try again
+              </Button>
+            </div>
+          ) : null}
 
-      <GhostProposals orgId={activeOrgId} onApplied={refetch} />
+          <GhostProposals orgId={activeOrgId} onApplied={refetch} />
 
-      <NeedsYou
-        approvals={data?.needsAttention.approvals ?? []}
-        blocked={data?.needsAttention.blocked ?? []}
-        orgName={orgName}
-      />
+          <NeedsYou
+            approvals={data?.needsAttention.approvals ?? []}
+            blocked={data?.needsAttention.blocked ?? []}
+            orgName={orgName}
+          />
 
-      <TodaysWork plan={data?.plan ?? []} orgName={orgName} loading={loading} />
+          <TodaysWork plan={data?.plan ?? []} orgName={orgName} loading={loading} />
+        </>
+      )}
     </div>
   );
 }

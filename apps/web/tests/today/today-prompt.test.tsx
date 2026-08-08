@@ -108,6 +108,29 @@ describe('TodayPrompt', () => {
     });
   });
 
+  it('asks its host to expand into the session instead of sliding the dock over the page', () => {
+    const onStartSession = vi.fn();
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" onStartSession={onStartSession} />);
+    fireEvent.click(screen.getByRole('button', { name: /Switch to Athena/ }));
+    typeDraft('Plan the launch');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
+
+    // Both happen: the draft seeds the one shared thread, and the host expands into that thread.
+    expect(openAthena).toHaveBeenCalledOnce();
+    expect(onStartSession).toHaveBeenCalledOnce();
+  });
+
+  it('still opens the dock when the host hosts no session of its own', () => {
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
+    fireEvent.click(screen.getByRole('button', { name: /Switch to Athena/ }));
+    typeDraft('Plan the launch');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ask Athena' }));
+
+    expect(openAthena).toHaveBeenCalledOnce();
+  });
+
   it('leaves Shift+Enter to insert a newline rather than sending', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     const field = typeDraft('First line');

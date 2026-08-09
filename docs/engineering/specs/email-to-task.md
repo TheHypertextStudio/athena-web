@@ -233,6 +233,18 @@ dedupeKey)`.
 2. **Funnel (cost control)** — a **cheap classifier** (heuristics or Haiku) scores task-worthiness;
    most mail drops here for ~free. The threshold is a runtime config value (not a literal). Only
    survivors reach synthesis.
+
+   **The funnel defers to the person's own rules.** It runs before any rule does, so a generic
+   heuristic would otherwise get the last word on mail a person explicitly asked for — and a real
+   limited-time opportunity is worded exactly like the promotional mail the filter exists to drop.
+   Before scoring, the sweep loads the workspace's enabled routing rules (those acting on an
+   `email_suggestion` with `task.route`) and projects each down to the sender/keyword literals it
+   names. A thread matching one of those cues is exempt from the promotional floor and its
+   `promotions` tag, and passes regardless of threshold. Mail matching no rule keeps the full
+   filter. Only positive clauses count — a negated clause names mail a rule _excludes_ — and a
+   dismiss rule's keywords never count as interest. The cost is bounded and self-inflicted: the
+   extra synthesis calls are exactly the mail the person's own rules asked to have routed.
+
 3. **Synthesize** — feed the thread to Athena (`createAndRunFromPrompt` → `propose_change`
    `create_task`, model `claude-opus-4-8`). Persist an `emailSuggestion` (+ pending attachment
    drafts). **Full enrichment**: title, description, dueDate, project/program, priority, subtasks.

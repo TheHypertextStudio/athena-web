@@ -137,13 +137,60 @@ task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provide
   `apps/api/src/routes/event-sync.ts`,
   `apps/api/tests/routes/automation-task-routing.test.ts` (new), `automation-hooks.test.ts`,
   `docs/engineering/specs/automations.md`.
-- **Blockers**: None. `pnpm --filter @docket/api test` → 304 files / 3497 tests passing;
-  `pnpm typecheck` → 20/20; `pnpm --filter @docket/api lint` clean.
-- **Learnings**: The funnel's promo cues (`lib/email-to-task/funnel.ts`) include the literal
-  phrase `limited time`, and a promo match floors the score at 5 — so mail worded exactly like the
-  headline sentence never becomes a suggestion and therefore never reaches a routing rule. The
-  routing mechanism is not the constraint there; the pre-filter is. Left as follow-up rather than
-  silently retuned, because loosening a cost filter is a decision with a bill attached.
+- **Blockers**: None. `pnpm --filter @docket/api test` → 306 files / 3514 tests passing;
+  `pnpm --filter @docket/api typecheck` clean; `pnpm --filter @docket/integrations test` → 47 files
+  / 915 tests passing; lint clean on both.
+- **Learnings**: The funnel's promo cues (`lib/email-to-task/funnel.ts`) include the literal phrase
+  `limited time`, and a promo match floors the score at 5 — so mail worded exactly like the
+  headline sentence never became a suggestion and therefore never reached a routing rule. The
+  routing mechanism was never the constraint; the pre-filter was. **Now fixed** (see the follow-up
+  below): the funnel takes the person's own routing rules as evidence and exempts mail they name.
+  The deeper lesson is about the test, not the filter. The routing suite entered at
+  `persistSuggestions`, which _does_ run the funnel — the bug hid because every fixture was worded
+  like ordinary correspondence, so the scorer's judgement of promotional mail was never on the
+  line. A green suite proved the plumbing, not the scenario. Fixtures worded like the real thing
+  are the difference between a test that covers a path and one that covers the case.
+
+### [C6-002] The funnel defers to the person's own routing rules
+
+- **Status**: REVIEW
+- **Started**: 2026-08-09
+- **Priority**: P1
+- **Description**: The defect [C6-001] found and deferred. `funnel.ts` floors any thread matching
+  a promo cue to a score of 5 and tags it `promotions`, and `limited time` is one of those cues.
+  The headline scenario the whole step exists for — "if I get an email about a limited-time LVBT
+  opportunity, a task appears" — was therefore suppressed before any routing rule could see it.
+- **Approach**: The ordering that causes this (funnel → synthesize → emit → rules) is right for
+  cost and wrong for intent, so rather than reorder it, one narrow back-channel closes the gap.
+  `lib/automation/routing-cues.ts` reads the workspace's enabled rules that act on an
+  `email_suggestion` with `task.route` and projects each down to the sender/keyword literals it
+  names; `persistSuggestions` loads them once per batch and hands them to the classifier. A thread
+  matching a cue skips the promotional floor **and** the `promotions` tag (the tag alone would hand
+  it straight to the shipped dismiss-promotions rule) and passes regardless of threshold. Deleting
+  `limited time` was rejected: bulk mail leans on that phrase constantly, and gutting the filter
+  trades one silent failure for a noisier one. The hyphenated spelling was **added** to the cue
+  list instead, so the filter is strictly stronger and the exemption is what does the rescuing.
+- **Notes**: Two restrictions keep the exemption from becoming a hole. A `suggestion.dismiss`
+  rule's keywords never count as interest (that would invert the person's meaning), and clauses
+  under a `not` are skipped (they name mail a rule excludes). The cue match is deliberately looser
+  than the predicate interpreter — case-insensitive where `contains` is case-sensitive — because
+  the two failure modes are not symmetric: over-keeping costs one synthesis call, over-dropping
+  costs the person the task they asked for.
+- **Files Changed**: `apps/api/src/lib/email-to-task/funnel.ts`,
+  `apps/api/src/lib/automation/routing-cues.ts` (new),
+  `apps/api/src/lib/email-to-task/synthesize.ts`, `packages/integrations/src/fixtures.ts`,
+  `apps/api/tests/routes/email-sweep-routing.test.ts` (new),
+  `apps/api/tests/lib/automation/routing-cues.test.ts` (new),
+  `apps/api/tests/lib/email-to-task/funnel.test.ts`,
+  `packages/integrations/tests/connector/connector-mail.test.ts`,
+  `docs/engineering/specs/email-to-task.md`.
+- **Blockers**: None. Counts as recorded under [C6-001] above.
+- **Learnings**: The new suite enters at `sweepEmailSuggestions` — the scheduled entrypoint cron
+  calls — and the mock mailbox now carries a fixture worded the awkward way ("Limited-time LVBT
+  opportunity…", partner-list footer and all). It was **mutation-tested**: with the funnel fix
+  reverted the headline test fails at `expect(lvbt).toBeDefined()`, because no suggestion row is
+  ever written. A test that passes either way would have proved nothing, which is exactly the trap
+  that let this ship.
 
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 

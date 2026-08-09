@@ -518,10 +518,13 @@ export const LINEAR_WORK_GRAPH: WorkGraphSnapshot = {
  * keyed by mail-capable provider.
  *
  * @remarks
- * Two fixtures per provider, chosen to exercise the email-to-task funnel both ways
- * offline: one actionable thread from a real person (passes), and one promotional
+ * Three fixtures per provider, chosen to exercise the email-to-task funnel in every
+ * direction offline: one actionable thread from a real person (passes), one promotional
  * thread from a no-reply sender (floored + tagged `promotions`, so the seeded
- * dismiss-promotions automation fires). Timestamps anchor to {@link FIXED_NOW}; the
+ * dismiss-promotions automation fires), and one thread that reads like promotional mail
+ * but is the opportunity a routing rule was written for — it is floored like the promo
+ * when no rule names it and survives when one does, which is the difference the funnel's
+ * routing-cue exemption exists to make. Timestamps anchor to {@link FIXED_NOW}; the
  * RFC 5322 `Message-ID`s are stable for cross-provider dedup tests.
  */
 export const MAIL_THREAD_SUMMARIES: Readonly<
@@ -545,6 +548,19 @@ export const MAIL_THREAD_SUMMARIES: Readonly<
       receivedAt: FIXED_NOW,
       rfc822MessageId: '<promo-0001@shop.example.com>',
       externalUrl: 'https://mail.mock.docket.local/#all/gmail-thread-promo',
+    },
+    {
+      threadId: 'gmail-thread-lvbt-opportunity',
+      // Worded the way a real opportunity from a partner list actually arrives: urgency wording
+      // and a list footer, both of which the funnel reads as promotional. Only a routing rule
+      // naming LVBT tells the difference between this and the thread above it.
+      subject: 'Limited-time LVBT opportunity: spring showcase sponsor slot',
+      snippet:
+        'We can hold the LVBT sponsor slot for a limited time — confirm by Friday and we will send the agreement. You are on our partner list; unsubscribe any time.',
+      from: 'Showcase Partnerships <partnerships@showcase.example>',
+      receivedAt: FIXED_NOW,
+      rfc822MessageId: '<lvbt-opportunity-0001@showcase.example>',
+      externalUrl: 'https://mail.mock.docket.local/#all/gmail-thread-lvbt-opportunity',
     },
   ],
 };

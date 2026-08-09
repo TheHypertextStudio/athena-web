@@ -14,6 +14,7 @@ import type { TaskSynthesizer } from '@docket/agent-runtime';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { emitEvent } from '../../routes/event-emit';
+import { loadMailRoutingCues } from '../automation/routing-cues';
 import { classifyTaskWorthiness, type ThreadSignal } from './funnel';
 
 /** A thread to consider: the funnel signal plus its provider + RFC 5322 identity. */
@@ -62,13 +63,21 @@ export interface PersistSuggestionsResult {
  * already suggested are skipped **before** synthesis — so the (potentially paid) model is
  * never re-run on a thread a previous sweep already proposed. The unique
  * `(organizationId, externalThreadId)` index is the race-safety net behind that check.
+ *
+ * The org's routing rules are loaded once per batch and handed to the classifier, because the
+ * funnel runs before any rule does and would otherwise discard mail the person explicitly asked
+ * to have routed. See {@link loadMailRoutingCues}.
  */
 export async function persistSuggestions(
   input: PersistSuggestionsInput,
 ): Promise<PersistSuggestionsResult> {
+  const routingCues = await loadMailRoutingCues(input.organizationId);
   // Classify once and carry the verdict through (its score/category are reused below).
   const worthy = input.threads
-    .map((thread) => ({ thread, verdict: classifyTaskWorthiness(thread, input.threshold) }))
+    .map((thread) => ({
+      thread,
+      verdict: classifyTaskWorthiness(thread, input.threshold, routingCues),
+    }))
     .filter((candidate) => candidate.verdict.worthy);
   if (worthy.length === 0) {
     return {

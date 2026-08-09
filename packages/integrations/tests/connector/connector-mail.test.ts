@@ -58,10 +58,13 @@ describe('MockConnector listThreads', () => {
     expect(page.threads.map((t) => t.threadId)).toEqual([
       'gmail-thread-actionable',
       'gmail-thread-promo',
+      'gmail-thread-lvbt-opportunity',
     ]);
-    // The two fixtures exercise the funnel both ways: a person vs a no-reply promo sender.
+    // The fixtures exercise the funnel in every direction: a person, a no-reply promo sender,
+    // and a promotional-sounding thread that a routing rule can rescue.
     expect(page.threads[0]?.from).toContain('ada@example.com');
     expect(page.threads[1]?.from).toContain('no-reply@');
+    expect(page.threads[2]?.subject).toContain('Limited-time LVBT opportunity');
     expect(page.threads[0]?.rfc822MessageId).toBeDefined();
 
     const bounded = await mail.listThreads({ connectionId: 'conn_1', maxThreads: 1 });

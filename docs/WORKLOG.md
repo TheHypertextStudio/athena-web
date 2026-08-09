@@ -192,6 +192,49 @@ task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provide
   ever written. A test that passes either way would have proved nothing, which is exactly the trap
   that let this ship.
 
+### [C6-003] The lost race closes its suggestion, and the drain's identity derivation is covered
+
+- **Status**: REVIEW
+- **Started**: 2026-08-09
+- **Priority**: P1
+- **Description**: Two gaps a pre-merge review found in [C6-001], both downstream of the
+  transaction fix rather than in it. (1) `routeInboundItemToTask`'s lost-race path adopted the
+  winner's task but never called `markSuggestionRouted`, so a losing delivery that came from the
+  mail path left its `email_suggestion` `pending` with a null `createdTaskId` while a task for
+  that same email already existed. `acceptSuggestion` decides on `suggestion.status` alone and
+  never reads `inbound_task_route`, so accepting that stale row — by hand or via a
+  `suggestion.autoAccept` rule — opened a second, unlinked task for one email: exactly the
+  duplicate the ledger exists to prevent. (2) The identity `processOne` derives for the engine
+  (`draft.entity?.externalId ?? draft.externalId`, `entityRef?.url ?? draft.permalink`) had no
+  test at all, because every routing case entered at `projectInboundDraft` with hand-supplied
+  values and skipped the derivation.
+- **Approach**: (1) One line, matching what the `existingTaskId !== undefined` branch a few lines
+  above already does in the equivalent situation — mark the loser's suggestion against the
+  **winner's** task, so both rows name the one task that exists. (2) A test that drains a real
+  GitHub payload through `sweepInboundEvents` with the real `RealGitHubObserver` (`APP_MODE=test`
+  otherwise selects `MockObserver`, whose drafts carry neither a delivery id nor a permalink,
+  which is why this was invisible).
+- **Notes**: The reachability for (1) is one email in two connected mailboxes: the funnel's
+  Message-ID dedupe is scoped to a single workspace, so the same mail produces one suggestion per
+  mailbox, and both carry the same RFC 5322 Message-ID — one ledger key, one target workspace, a
+  genuine race. The webhook shape that separates the two identities in (2) is a **review comment**:
+  every other GitHub event's delivery object _is_ its entity (a `pull_request` event's id and the
+  pull request's id are the same string), but a comment's delivery is the comment and its entity is
+  the pull request. The test asserts the canonical `event` row still records the comment's own id
+  and anchor URL — the control proving the two strings differ — while the routing ledger records
+  the pull request's, and then closes the PR in a second delivery and finds the same task.
+- **Files Changed**: `apps/api/src/lib/automation/route-task.ts`,
+  `apps/api/tests/routes/automation-task-routing.test.ts`.
+- **Blockers**: None. `pnpm --filter @docket/api test` → 306 files / 3518 tests passing (3516
+  before, +2 new); `pnpm --filter @docket/api typecheck` clean; lint clean.
+- **Learnings**: Both tests were proved by mutation. The race test fails red at
+  `expected 'pending' to be 'accepted'`; with the intermediate assertions relaxed it goes further
+  and shows `acceptSuggestion` returning `accepted` — the second task, observed rather than
+  argued. The derivation test fails on both halves when the two `??` chains are flipped
+  (`sourceKey` becomes the comment's `5501`, `sourceUrl` the comment anchor). The pattern behind
+  both gaps is the same one [C6-001] recorded: a suite that enters below the code under test
+  proves the plumbing, not the case.
+
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 
 - **Status**: REVIEW

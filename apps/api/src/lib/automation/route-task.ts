@@ -495,6 +495,13 @@ export async function routeInboundItemToTask(
     const winner = await existingRoute(targetOrgId, item);
     if (!winner) return { kind: 'skipped', reason: 'no_source_key' };
     await applyParamsToTask(winner.taskId, targetOrgId, params);
+    // Against the WINNER's task, for the same reason the already-routed branch above does it:
+    // this delivery's suggestion is no longer pending once a task for its mail exists. Leaving
+    // it pending would leave the loser's row in the review queue, and `acceptSuggestion` decides
+    // on the suggestion's status alone — it never consults the routing ledger — so a person, or
+    // a `suggestion.autoAccept` rule, accepting it would open the second task for this one email
+    // that losing the race was supposed to prevent.
+    if (item.suggestionId !== null) await markSuggestionRouted(item, winner.taskId, event);
     return { kind: 'updated', taskId: winner.taskId };
   }
 

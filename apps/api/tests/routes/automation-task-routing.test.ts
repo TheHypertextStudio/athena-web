@@ -5,24 +5,31 @@
  * These run the real seams, not stand-ins for them. The mail cases enter at
  * {@link persistSuggestions} (the exact function the scheduled mailbox sweep calls once it has a
  * page of threads) and travel the production path from there: funnel → suggestion row → the real
- * `emitEvent` facade → the automation engine → the default handler registry. The webhook cases
- * enter at {@link projectInboundDraft}, the pure projection the webhook drain feeds the engine.
- * Everything downstream of those two entry points is the code that runs in production.
+ * `emitEvent` facade → the automation engine → the default handler registry. Most webhook cases
+ * enter at {@link projectInboundDraft}, the pure projection the webhook drain feeds the engine;
+ * the identity case enters a step earlier still, at {@link sweepInboundEvents} with a real
+ * provider payload, because which identity the drain *derives* for that projection is itself the
+ * thing under test. Everything downstream of those entry points is the code that runs in
+ * production.
  *
  * The four properties under test are the ones that decide whether an automation like this is
  * usable: it routes to the right workspace, it links rather than duplicates, it is idempotent,
  * and it does nothing at all when no rule matches.
  */
 import { and, eq, isNull } from 'drizzle-orm';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { TaskSynthesizer } from '@docket/agent-runtime';
+import { RealGitHubObserver } from '@docket/integrations';
 
 import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
-import { projectInboundDraft } from '../../src/lib/automation/event';
+import * as container from '../../src/container';
+import { sweepInboundEvents } from '../../src/routes/event-sync';
+import { projectEmitInput, projectInboundDraft } from '../../src/lib/automation/event';
 import { routeInboundItemToTask } from '../../src/lib/automation/route-task';
 import { runAutomationsForEvent } from '../../src/lib/automation/runtime';
+import { acceptSuggestion } from '../../src/lib/email-to-task/accept';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';
 
 let schema!: typeof DbModule;
@@ -105,6 +112,32 @@ async function seedTwoWorkspaces() {
     lvbtActorId,
     integrationId,
   };
+}
+
+/**
+ * A second connected mailbox, in its own workspace, belonging to the same person.
+ *
+ * @remarks
+ * The situation the routing key was chosen for: one email reaching two mailboxes carries one
+ * RFC 5322 Message-ID under two provider thread ids, so it becomes two `email_suggestion` rows
+ * (each workspace's funnel dedupes only against its own) that route to a single ledger key.
+ */
+async function seedSecondMailbox(userId: string) {
+  const org = await seedBaseOrg(db, schema);
+  const actorId = await addMember(db, schema, org.orgId, userId, 'owner');
+  const integrationId = one(
+    await db
+      .insert(schema.integration)
+      .values({
+        organizationId: org.orgId,
+        provider: 'gmail',
+        pattern: 'connector',
+        roles: ['signal'],
+        createdBy: actorId,
+      })
+      .returning({ id: schema.integration.id }),
+  ).id;
+  return { orgId: org.orgId, actorId, integrationId };
 }
 
 /** Store a rule as the data it is: an `automation_rule` row, exactly as the API writes one. */
@@ -585,6 +618,20 @@ async function orphanTasksIn(orgId: string) {
     .where(and(eq(schema.task.organizationId, orgId), isNull(schema.inboundTaskRoute.id)));
 }
 
+/** One suggestion's `created` event, projected exactly as the emit facade projects one. */
+function mailDelivery(organizationId: string, actorId: string, suggestionId: string) {
+  return projectEmitInput(
+    {
+      organizationId,
+      kind: 'created',
+      actorId,
+      title: LVBT_THREAD.subject,
+      subject: { type: 'email_suggestion', id: suggestionId, title: LVBT_THREAD.subject },
+    },
+    new Date('2026-08-08T09:00:00.000Z'),
+  );
+}
+
 /** One GitHub pull-request delivery, projected exactly as the webhook drain projects one. */
 function prDelivery(organizationId: string, externalId: string) {
   return projectInboundDraft({
@@ -638,6 +685,79 @@ describe('two deliveries of one item racing each other still produce exactly one
     }
   });
 
+  it('closes the losing delivery’s suggestion, so accepting it later opens nothing', async () => {
+    const w = await seedTwoWorkspaces();
+    const mailboxB = await seedSecondMailbox(w.userId);
+
+    // One message, two connected mailboxes. The provider thread ids differ and each workspace's
+    // funnel dedupe only ever looks at its own rows, so this is two `email_suggestion` rows for
+    // one email — and both carry the same RFC 5322 Message-ID, which is the key routing dedupes
+    // on. Two suggestions, one routing key, one target workspace.
+    const viaMailboxB: CandidateThread = { ...LVBT_THREAD, threadId: 'thread_lvbt_sponsorship_b' };
+    const fromA = one(
+      (await sweep(w.personalOrgId, w.integrationId, w.personalActorId, [LVBT_THREAD]))
+        .suggestionIds,
+    );
+    const fromB = one(
+      (await sweep(mailboxB.orgId, mailboxB.integrationId, mailboxB.actorId, [viaMailboxB]))
+        .suggestionIds,
+    );
+
+    const [outcomeA, outcomeB] = await Promise.all([
+      routeInboundItemToTask(mailDelivery(w.personalOrgId, w.personalActorId, fromA), {
+        organizationId: w.lvbtOrgId,
+      }),
+      routeInboundItemToTask(mailDelivery(mailboxB.orgId, mailboxB.actorId, fromB), {
+        organizationId: w.lvbtOrgId,
+      }),
+    ]);
+
+    // One task, as ever — and one of the two deliveries lost the ledger race and adopted it.
+    const routedTaskId = one(await tasksIn(w.lvbtOrgId)).id;
+    expect(await orphanTasksIn(w.lvbtOrgId)).toHaveLength(0);
+    expect([outcomeA, outcomeB].filter((o) => o.kind === 'created')).toHaveLength(1);
+
+    // The point of this case: BOTH suggestions record the task that exists. Leaving the loser's
+    // row pending would leave the review queue holding an email that already became a task, and
+    // accepting it — by hand or by a `suggestion.autoAccept` rule — would make the second task
+    // this whole module exists to prevent, because `acceptSuggestion` reads the suggestion's
+    // status and never the routing ledger.
+    const loser =
+      outcomeA.kind === 'created'
+        ? { orgId: mailboxB.orgId, actorId: mailboxB.actorId, suggestionId: fromB }
+        : { orgId: w.personalOrgId, actorId: w.personalActorId, suggestionId: fromA };
+    for (const [orgId, suggestionId] of [
+      [w.personalOrgId, fromA],
+      [mailboxB.orgId, fromB],
+    ] as const) {
+      const row = one(
+        await db
+          .select()
+          .from(schema.emailSuggestion)
+          .where(
+            and(
+              eq(schema.emailSuggestion.id, suggestionId),
+              eq(schema.emailSuggestion.organizationId, orgId),
+            ),
+          ),
+      );
+      expect(row.status).toBe('accepted');
+      expect(row.createdTaskId).toBe(routedTaskId);
+    }
+
+    // And the accept itself, run against the loser's row exactly as the review queue or an
+    // autoAccept rule would run it: it finds nothing left to do, and no second task appears.
+    const accepted = await acceptSuggestion({
+      organizationId: loser.orgId,
+      suggestionId: loser.suggestionId,
+      actorId: loser.actorId,
+      overrides: {},
+    });
+    expect(accepted.kind).toBe('already_resolved');
+    expect(await tasksIn(loser.orgId)).toHaveLength(0);
+    expect(await tasksIn(w.lvbtOrgId)).toHaveLength(1);
+  });
+
   it('lets a genuine database error surface instead of reading it as a lost race', async () => {
     const w = await seedTwoWorkspaces();
     const event = prDelivery(w.personalOrgId, 'pr_broken_9002');
@@ -663,6 +783,160 @@ describe('two deliveries of one item racing each other still produce exactly one
     expect(await tasksIn(w.personalOrgId)).toHaveLength(0);
     expect(await routesIn(w.personalOrgId)).toHaveLength(0);
     expect(await orphanTasksIn(w.personalOrgId)).toHaveLength(0);
+  });
+});
+
+/**
+ * The GitHub delivery that separates the two identities: a review comment on pull request 12.
+ *
+ * @remarks
+ * Every other webhook shape hides the distinction, because the delivery's own object *is* the
+ * entity — a `pull_request` event's id and the pull request's id are the same string. A comment
+ * is the case where they diverge: the delivery is the comment (its own id, its own anchor URL),
+ * the entity it concerns is the pull request. Which of the two the drain hands the engine decides
+ * whether a comment and a later close land on one task or on two.
+ */
+const PR_REVIEW_COMMENT = {
+  action: 'created',
+  installation: { id: 4242 },
+  comment: {
+    id: 5501,
+    body: 'Can we confirm the booking copy before this ships?',
+    html_url: 'https://github.com/lvbt/site/pull/12#discussion_r5501',
+    updated_at: '2026-08-08T10:05:00Z',
+    user: { login: 'ada' },
+  },
+  pull_request: {
+    id: 9101,
+    number: 12,
+    title: 'Fix the booking form',
+    state: 'open',
+    html_url: 'https://github.com/lvbt/site/pull/12',
+    updated_at: '2026-08-08T10:00:00Z',
+  },
+} as const;
+
+/** The same pull request, closed — the second delivery that must find the first one's task. */
+const PR_CLOSED = {
+  action: 'closed',
+  installation: { id: 4242 },
+  pull_request: {
+    id: 9101,
+    number: 12,
+    title: 'Fix the booking form',
+    state: 'closed',
+    merged: true,
+    html_url: 'https://github.com/lvbt/site/pull/12',
+    updated_at: '2026-08-08T11:00:00Z',
+  },
+} as const;
+
+describe('the drain hands routing the entity’s identity, not the delivery’s', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Queue one GitHub delivery for the drain, exactly as the webhook receiver records one. */
+  async function queueDelivery(
+    orgId: string,
+    integrationId: string,
+    externalEventId: string,
+    eventType: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    await db.insert(schema.inboundEvent).values({
+      organizationId: orgId,
+      integrationId,
+      provider: 'github',
+      externalEventId,
+      eventType,
+      payload,
+      signatureVerified: true,
+    });
+  }
+
+  it('routes a review comment by the pull request’s id and URL, not the comment’s', async () => {
+    const org = await seedBaseOrg(db, schema);
+    const integrationId = one(
+      await db
+        .insert(schema.integration)
+        .values({
+          organizationId: org.orgId,
+          provider: 'github',
+          pattern: 'connector',
+          roles: ['signal'],
+          status: 'connected',
+          connection: { externalWorkspaceId: '4242' },
+          createdBy: org.humanActorId,
+        })
+        .returning({ id: schema.integration.id }),
+    ).id;
+    await addRule(
+      org.orgId,
+      { kind: 'comment', source: 'github' },
+      { op: 'and', nodes: [] },
+      [{ type: 'task.route', params: {} }],
+      'GitHub activity → a task',
+    );
+    await addRule(
+      org.orgId,
+      { kind: 'completed', source: 'github' },
+      { op: 'and', nodes: [] },
+      [{ type: 'task.route', params: { state: 'done' } }],
+      'a closed PR → its task is done',
+    );
+
+    // The real GitHub observer, on a real GitHub payload. `APP_MODE=test` otherwise selects the
+    // mock, whose drafts carry neither a delivery id nor a permalink — which is exactly why the
+    // derivation under test has been invisible to every routing test so far.
+    vi.spyOn(container, 'buildObserver').mockReturnValue(
+      new RealGitHubObserver({ signingSecret: 'test-secret' }),
+    );
+
+    await queueDelivery(
+      org.orgId,
+      integrationId,
+      'gh_comment_5501',
+      'pull_request_review_comment',
+      PR_REVIEW_COMMENT,
+    );
+    await sweepInboundEvents(new Date('2026-08-08T10:06:00.000Z'));
+
+    // The canonical event row records the delivery: the comment's own id and its anchor URL.
+    // This is the control — it proves the two identities really are different strings here, so
+    // the ledger assertions below are a choice the drain made and not a coincidence.
+    const commentEvent = one(
+      await db
+        .select()
+        .from(schema.event)
+        .where(
+          and(eq(schema.event.organizationId, org.orgId), eq(schema.event.sourceSystem, 'github')),
+        ),
+    );
+    expect(commentEvent).toMatchObject({
+      kind: 'comment',
+      externalId: '5501',
+      permalink: PR_REVIEW_COMMENT.comment.html_url,
+    });
+
+    // Routing, though, was handed the pull request — its id and its URL, not the comment's.
+    const routedTaskId = one(await tasksIn(org.orgId)).id;
+    expect(one(await routesIn(org.orgId))).toMatchObject({
+      taskId: routedTaskId,
+      sourceSystem: 'github',
+      sourceKey: '9101',
+      sourceUrl: PR_CLOSED.pull_request.html_url,
+    });
+
+    // And that is what the preference is for: the close arrives as a different delivery, with a
+    // different id and a different dedupe key, and lands on the task the comment opened. Keying
+    // on the delivery would have filed a second task here.
+    await queueDelivery(org.orgId, integrationId, 'gh_pr_closed_9101', 'pull_request', PR_CLOSED);
+    await sweepInboundEvents(new Date('2026-08-08T11:01:00.000Z'));
+
+    expect(await tasksIn(org.orgId)).toHaveLength(1);
+    expect(await routesIn(org.orgId)).toHaveLength(1);
+    expect(one(await tasksIn(org.orgId))).toMatchObject({ id: routedTaskId, state: 'done' });
   });
 });
 

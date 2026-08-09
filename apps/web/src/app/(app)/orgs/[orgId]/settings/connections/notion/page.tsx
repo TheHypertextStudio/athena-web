@@ -10,6 +10,7 @@
  * databases, identity matching and sync history do not fit — and burying them three levels deep
  * inside a card is what made the existing connector configuration hard to find.
  */
+import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
@@ -25,6 +26,14 @@ export default function NotionMirrorPage(): JSX.Element {
       <SectionHeader
         title="Notion"
         description="Build databases in your Notion workspace from your Docket work, and keep them current."
+        action={
+          <NextLink
+            href={`/orgs/${orgId}/settings/connections`}
+            className="text-on-surface-variant text-body-medium hover:underline"
+          >
+            Back to Connections
+          </NextLink>
+        }
       />
       <NotionMirrorPanel orgId={orgId} />
     </div>

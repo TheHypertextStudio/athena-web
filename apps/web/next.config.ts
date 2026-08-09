@@ -95,16 +95,17 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
-      {
-        source: '/orgs/:orgId/settings/connections',
-        destination: '/settings/connections',
-        permanent: false,
-      },
-      {
-        source: '/orgs/:orgId/settings/connections/google-calendar',
-        destination: '/settings/connections/google-calendar',
-        permanent: false,
-      },
+      // NOTE: `connections` and its `google-calendar` child are deliberately NOT redirected here,
+      // unlike every other entry below. Those redirects predate the org-scoped Connections page
+      // being real: `ConnectionsPanel` renders a "This workspace" section stating outright that a
+      // workspace's connections are shared and admin-managed, and the whole Notion mirror feature
+      // (designed databases, identity matching) is `organization_id`-scoped data. Redirecting them
+      // here silently discarded `:orgId` and dropped a team member into the CALLER's personal
+      // workspace's connections instead of their team's — for every link anywhere in the app that
+      // points at `/orgs/:orgId/settings/connections*`, not merely the Settings sidebar. Every
+      // other section redirected below is genuinely caller/user-identity-scoped (see e.g.
+      // `connected-accounts/page.tsx`'s own doc comment: "the OAuth grant belongs to the user, not
+      // an org") and those redirects are intentional, not the same bug.
       {
         source: '/orgs/:orgId/settings/connected-accounts',
         destination: '/settings/connections',

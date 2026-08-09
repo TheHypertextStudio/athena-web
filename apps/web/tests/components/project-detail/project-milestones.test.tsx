@@ -80,6 +80,7 @@ function milestone(overrides: Partial<MilestoneOut> & { id: string; name: string
 /** A minimal task fixture, paired with its milestone id, for the per-row progress bar. */
 function milestoneTask(id: string, state: string, milestoneId: string | null): MilestoneTask {
   const task: TaskOut = {
+    labels: [],
     id: TaskId.parse(id),
     organizationId: ORG_ID,
     teamId: TEAM_ID,

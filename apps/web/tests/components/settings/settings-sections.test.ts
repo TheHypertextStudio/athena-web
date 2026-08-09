@@ -95,6 +95,7 @@ describe('shared workspace sections', () => {
       'general',
       'members',
       'work-structure',
+      'labels',
       'templates',
       'import',
       'automations',

@@ -65,6 +65,7 @@ const fixtures = vi.hoisted(() => {
     isCurrent: false,
   };
   const task = {
+    labels: [],
     id: '01ARZ3NDEKTSV4RRFFQ69G5FA3',
     organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
     title: 'Ship the cadence overview',

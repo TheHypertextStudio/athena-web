@@ -34,6 +34,7 @@ import {
   type Column,
   EntityTable,
   type EntityTableGroup,
+  LabelChipRow,
   StatusIcon,
 } from '@docket/ui/components';
 import Link from 'next/link';
@@ -138,6 +139,20 @@ export function buildTaskColumns({
           />
         ) : (
           <span className="text-on-surface truncate">{task.title}</span>
+        ),
+    },
+    // Labels — the workspace's own vocabulary. Sheds first (priority 3) because it is the most
+    // optional fact on a row: useful when you have labels, absent for a workspace that has none.
+    {
+      key: 'labels',
+      header: headerFor(catalog, 'labels', 'Labels'),
+      minWidth: '7rem',
+      priority: 3,
+      render: (task) =>
+        task.labels.length > 0 ? (
+          <LabelChipRow labels={task.labels} />
+        ) : (
+          <span className="text-on-surface-variant">—</span>
         ),
     },
     // Assignee — relation field; the avatar encodes the actor kind by shape.

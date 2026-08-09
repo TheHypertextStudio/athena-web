@@ -64,6 +64,12 @@ export const queryKeys = {
   // The settings page reads every kind at once and each composer picker reads one, so the kind is
   // part of the key: the four picker reads cache apart, and the coarse `templates(orgId)` prefix
   // invalidates all of them plus the settings list after any write.
+  // Two reads, deliberately keyed apart. Pickers want the bare list and read it constantly; the
+  // settings page wants the same list plus usage counts, which cost five aggregate queries. A
+  // shared key would make every picker open pay for counts nobody is looking at.
+  labels: (orgId: string) => ['org', orgId, 'labels'] as const,
+  labelsWithCounts: (orgId: string) => ['org', orgId, 'labels', 'counts'] as const,
+  labelGroups: (orgId: string) => ['org', orgId, 'label-groups'] as const,
   templates: (orgId: string) => ['org', orgId, 'templates'] as const,
   templatesOfKind: (orgId: string, targetType: string) =>
     ['org', orgId, 'templates', targetType] as const,

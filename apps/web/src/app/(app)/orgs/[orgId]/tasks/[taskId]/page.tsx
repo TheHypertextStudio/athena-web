@@ -33,10 +33,13 @@ import { TaskTimerButton } from '@/components/time-tracking';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
 import {
   cycleOptions as toCycleOptions,
+  labelOptions as toLabelOptions,
   memberActorOptions,
   programOptions as toProgramOptions,
   projectOptions as toProjectOptions,
 } from '@/components/pickers/options';
+import { labelsDef, useCreateLabel } from '@/components/labels/queries';
+import { useApiListQuery } from '@/lib/query';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
@@ -136,6 +139,27 @@ export default function TaskDetailPage(): JSX.Element {
   const cycleOptions = useMemo<readonly PickerOption[]>(
     () => toCycleOptions(cycles, formatWindow),
     [cycles],
+  );
+  const labelsQ = useApiListQuery(labelsDef(orgId));
+  const labelOptions = useMemo<readonly PickerOption[]>(
+    () => toLabelOptions(labelsQ.data?.items ?? []),
+    [labelsQ.data],
+  );
+  const createLabel = useCreateLabel(orgId);
+  // Inline creation attaches as it creates: the user typed the name into *this* task's picker,
+  // so leaving them to then find and tick it would be a second step nobody asked for.
+  const onCreateLabel = useCallback(
+    (name: string): void => {
+      createLabel.mutate(
+        { name },
+        {
+          onSuccess: (created) => {
+            patchTask({ labels: [...(task?.labels ?? []).map((l) => l.id), created.id] });
+          },
+        },
+      );
+    },
+    [createLabel, patchTask, task?.labels],
   );
   const milestoneOptions = useMemo<readonly PickerOption[]>(
     () =>
@@ -369,6 +393,8 @@ export default function TaskDetailPage(): JSX.Element {
           programOptions={programOptions}
           milestoneOptions={milestoneOptions}
           cycleOptions={cycleOptions}
+          labelOptions={labelOptions}
+          onCreateLabel={onCreateLabel}
           estimationScale={estimationScale}
           canEdit={canEdit}
           onPatch={patchTask}

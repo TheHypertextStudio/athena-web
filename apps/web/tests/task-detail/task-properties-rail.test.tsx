@@ -41,6 +41,7 @@ function task(overrides: Partial<TaskDetail> = {}): TaskDetail {
     priority: 'none',
     provenance: NATIVE,
     createdAt: '2026-08-01T09:00:00.000Z',
+    labels: [],
     blocking: [],
     blockedBy: [],
     subtasks: [],
@@ -58,6 +59,8 @@ function renderRail(
       projectLabel="Project"
       programLabel="Program"
       cycleLabel="Cycle"
+      labelOptions={[]}
+      onCreateLabel={() => undefined}
       projectOptions={[]}
       programOptions={[]}
       milestoneOptions={[]}
@@ -112,8 +115,8 @@ describe('TaskPropertiesRail — structure without rules', () => {
     const rows = [...aside.querySelectorAll('div')].filter((element) =>
       element.className.split(/\s+/).includes('h-9'),
     );
-    // Four Placement rows + four Schedule rows.
-    expect(rows).toHaveLength(8);
+    // Four Placement rows + one Labels row + four Schedule rows.
+    expect(rows).toHaveLength(9);
     for (const row of rows) {
       expect(row.className).toContain('items-center');
       expect(row.className).not.toContain('items-start');

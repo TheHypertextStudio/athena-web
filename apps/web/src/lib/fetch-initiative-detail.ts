@@ -51,7 +51,7 @@ export function fetchInitiativeDetail(
         api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
         api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
         api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-        api.v1.orgs[':orgId'].labels.$get({ param: { orgId } }),
+        api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
       ]);
     if (!detailRes.ok) {
       return rpcErrorResponse<InitiativeDetailData>(detailRes);

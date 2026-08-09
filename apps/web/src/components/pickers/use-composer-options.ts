@@ -133,7 +133,7 @@ export function useComposerOptions(
   const labelsQ = useApiQuery(
     apiQueryOptions(
       ['org', orgId, 'labels'],
-      () => api.v1.orgs[':orgId'].labels.$get({ param: { orgId } }),
+      () => api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
       'Could not load labels.',
       { enabled: on('labels'), staleTime: STALE.static },
     ),

@@ -10,6 +10,7 @@ import {
   ActorId,
   type CommentOut,
   CycleId,
+  LabelId,
   MilestoneId,
   type Priority,
   ProgramId,
@@ -59,6 +60,15 @@ export interface TaskPatch {
    */
   startDate?: string | null;
   dueDate?: string | null;
+  /**
+   * The task's complete label set, replacing whatever it carried.
+   *
+   * @remarks
+   * Replace-set, not merge: send every label the task should end up with, and `[]` to clear it.
+   * The server collapses any exclusive-group collision on the way in, so a picker can send both
+   * members of a single-choice group and get the one the user clicked last.
+   */
+  labels?: readonly string[];
 }
 
 /** Stable mutation callbacks + pending/error state returned by {@link useTaskMutations}. */
@@ -205,6 +215,9 @@ export function useTaskMutations(
         ...(patch.estimate !== undefined ? { estimate: patch.estimate } : {}),
         ...(patch.startDate !== undefined ? { startDate: patch.startDate } : {}),
         ...(patch.dueDate !== undefined ? { dueDate: patch.dueDate } : {}),
+        ...(patch.labels !== undefined
+          ? { labels: patch.labels.map((id) => LabelId.parse(id)) }
+          : {}),
       };
       return unwrap(
         () =>

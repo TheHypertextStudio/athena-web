@@ -1,5 +1,5 @@
 import type { LucideIcon } from '@docket/ui/icons';
-import { Inbox, LayoutTemplate, Settings, Workflow } from '@docket/ui/icons';
+import { Inbox, LayoutTemplate, Settings, Tag, Workflow } from '@docket/ui/icons';
 
 /** One Settings section in the sub-navigation. */
 export interface SettingsSection {
@@ -44,6 +44,13 @@ export const PERSONAL_SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] =
         description: 'Set how deeply strategic initiatives can be nested.',
         icon: Workflow,
         href: 'work-structure',
+      },
+      {
+        key: 'labels',
+        label: 'Labels',
+        description: 'The words you use that Docket does not ship.',
+        icon: Tag,
+        href: 'labels',
       },
       {
         key: 'templates',

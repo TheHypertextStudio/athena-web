@@ -50,6 +50,7 @@ import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity
 import { api } from '@/lib/api';
 import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
 import { queryKeys, apiQueryOptions, useApiMutation, useApiQuery, unwrap } from '@/lib/query';
+import { useCreateLabel } from '@/components/labels/queries';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { userErrorMessage } from '@/lib/problem';
@@ -124,6 +125,7 @@ export default function InitiativeDetailPage(): JSX.Element {
     programNoun.toLowerCase(),
     projectNoun.toLowerCase(),
   );
+  const createLabel = useCreateLabel(orgId);
   const postUpdate = useApiMutation<UpdateOut, { body: string; health?: Health }>({
     mutationFn: (input) =>
       unwrap(
@@ -343,6 +345,18 @@ export default function InitiativeDetailPage(): JSX.Element {
               }}
               onLabelsChange={(labelIds) => {
                 mutations.patchInitiative({ labelIds: [...labelIds] });
+              }}
+              onCreateLabel={(name) => {
+                createLabel.mutate(
+                  { name },
+                  {
+                    onSuccess: (created) => {
+                      mutations.patchInitiative({
+                        labelIds: [...detail.labels.map((l) => l.id), created.id],
+                      });
+                    },
+                  },
+                );
               }}
             />
           </EntityMetadataRow>

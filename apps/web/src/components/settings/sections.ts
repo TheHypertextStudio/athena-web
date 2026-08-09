@@ -12,6 +12,7 @@ import {
   LayoutTemplate,
   Settings,
   Sparkles,
+  Tag,
   Users,
   Workflow,
 } from '@docket/ui/icons';
@@ -57,6 +58,13 @@ export const SETTINGS_SECTION_GROUPS: readonly SettingsSectionGroup[] = [
         description: 'Set how deeply strategic initiatives can be nested.',
         icon: Workflow,
         href: 'work-structure',
+      },
+      {
+        key: 'labels',
+        label: 'Labels',
+        description: 'The words this workspace uses that Docket does not ship.',
+        icon: Tag,
+        href: 'labels',
       },
       {
         key: 'templates',

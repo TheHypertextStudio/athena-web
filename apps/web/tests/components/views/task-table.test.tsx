@@ -138,6 +138,7 @@ interface TaskFixture {
 /** A minimal task fixture with the fields the shared columns read (ids parsed to branded types). */
 function task(fixture: TaskFixture): TaskOut {
   return {
+    labels: [],
     id: TaskId.parse(fixture.id),
     organizationId: OrganizationId.parse(ORG_ID),
     teamId: TeamId.parse(TEAM_ID),
@@ -155,7 +156,15 @@ function task(fixture: TaskFixture): TaskOut {
 describe('buildTaskColumns', () => {
   it('declares the shared column vocabulary with catalog-derived headers', () => {
     const keys = columns.map((c) => c.key);
-    expect(keys).toEqual(['glyph', 'title', 'assigneeId', 'dueDate', 'estimate', 'timer']);
+    expect(keys).toEqual([
+      'glyph',
+      'title',
+      'labels',
+      'assigneeId',
+      'dueDate',
+      'estimate',
+      'timer',
+    ]);
 
     // The leading glyph is always-kept and label-less; the title is the one flexing column.
     const glyph = columns[0];
@@ -223,8 +232,8 @@ describe('TaskTable', () => {
 
     const row = screen.getByText('Bare task').closest('a');
     expect(row).not.toBeNull();
-    // Assignee, due, and estimate each fall back to the em-dash placeholder.
-    expect(within(row as HTMLElement).getAllByText('—')).toHaveLength(3);
+    // Labels, assignee, due, and estimate each fall back to the em-dash placeholder.
+    expect(within(row as HTMLElement).getAllByText('—')).toHaveLength(4);
   });
 
   it('renders grouped tasks under full-width group headers', () => {

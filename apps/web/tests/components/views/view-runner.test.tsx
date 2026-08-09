@@ -94,6 +94,7 @@ const catalog = buildTaskCatalog({
  * carries neither, so it lands in *every* field's synthesized empty bucket. */
 function task(id: string, title: string, withProject: boolean): TaskOut {
   return {
+    labels: [],
     id: TaskId.parse(id),
     organizationId: OrganizationId.parse(ORG_ID),
     teamId: TeamId.parse(TEAM_ID),

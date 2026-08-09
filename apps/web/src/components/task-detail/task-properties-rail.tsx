@@ -32,8 +32,8 @@
  * of its own.
  */
 import type { EstimationScale, TaskDetail } from '@docket/types';
-import { DatePicker, EntityPicker, type PickerOption } from '@docket/ui/components';
-import { Flag, FolderKanban, Layers, RefreshCw } from '@docket/ui/icons';
+import { DatePicker, EntityPicker, LabelsPicker, type PickerOption } from '@docket/ui/components';
+import { Flag, FolderKanban, Layers, RefreshCw, Tag } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX, ReactNode } from 'react';
 
@@ -119,6 +119,10 @@ export interface TaskPropertiesRailProps {
   programOptions: readonly PickerOption[];
   milestoneOptions: readonly PickerOption[];
   cycleOptions: readonly PickerOption[];
+  /** Every label offerable to this task, each carrying its colour swatch as its `icon`. */
+  labelOptions: readonly PickerOption[];
+  /** Create a label from a name typed into the picker, and attach it. */
+  onCreateLabel: (name: string) => void;
   /**
    * The workspace's configured estimation scale, or `null` while it loads.
    *
@@ -146,6 +150,8 @@ export function TaskPropertiesRail({
   programOptions,
   milestoneOptions,
   cycleOptions,
+  labelOptions,
+  onCreateLabel,
   estimationScale,
   canEdit,
   onPatch,
@@ -230,6 +236,28 @@ export function TaskPropertiesRail({
             clearLabel={`No ${cycleLabel.toLowerCase()}`}
             searchPlaceholder={`Search ${cycleLabel.toLowerCase()}s…`}
             ariaLabel={cycleLabel}
+            readOnly={!canEdit}
+            triggerClassName={PROPERTY_CONTROL_CLASS}
+          />
+        </PropertyRow>
+      </div>
+
+      {/* Labels — the workspace's own vocabulary, the one dimension Docket does not define. */}
+      <div role="group" aria-label="Labels" className="flex flex-col">
+        <PropertyRow label="Labels">
+          <LabelsPicker
+            options={labelOptions}
+            value={task.labels.map((l) => l.id)}
+            onToggle={(labelId) => {
+              const next = task.labels.some((l) => l.id === labelId)
+                ? task.labels.filter((l) => l.id !== labelId).map((l) => l.id)
+                : [...task.labels.map((l) => l.id), labelId];
+              onPatch({ labels: next });
+            }}
+            onCreate={onCreateLabel}
+            placeholder="Add labels"
+            triggerIcon={<Tag className="text-on-surface-variant size-4" />}
+            ariaLabel="Labels"
             readOnly={!canEdit}
             triggerClassName={PROPERTY_CONTROL_CLASS}
           />

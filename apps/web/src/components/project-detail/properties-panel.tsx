@@ -37,6 +37,14 @@ export interface PropertiesPanelProps {
   onProgramChange: (programId: string | null) => void;
   onInitiativesChange: (initiativeIds: readonly string[]) => void;
   onLabelsChange: (labelIds: readonly string[]) => void;
+  /**
+   * Create a label from a name typed into the picker, and attach it.
+   *
+   * @remarks
+   * Optional: omitting it hides the inline `Create "…"` row, which is what a read-only or
+   * capability-limited viewer should see.
+   */
+  onCreateLabel?: (name: string) => void;
 }
 
 /** Shared chip trigger wiring so every property in the metadata row reads as the same pill. */
@@ -72,6 +80,7 @@ export function PropertiesPanel({
   onProgramChange,
   onInitiativesChange,
   onLabelsChange,
+  onCreateLabel,
 }: PropertiesPanelProps): JSX.Element {
   const programLabel = useVocabulary('program');
   const initiativeLabel = useVocabulary('initiative');
@@ -155,6 +164,7 @@ export function PropertiesPanel({
             : [...labelIds, labelId];
           onLabelsChange(next);
         }}
+        {...(onCreateLabel ? { onCreate: onCreateLabel } : {})}
         placeholder="Add labels"
         searchPlaceholder="Filter labels…"
         emptyText="No labels"

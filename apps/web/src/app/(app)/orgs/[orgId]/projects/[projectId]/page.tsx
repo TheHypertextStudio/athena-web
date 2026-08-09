@@ -52,6 +52,7 @@ import { CreateTaskDialog } from '@/components/tasks/create-task';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { api } from '@/lib/api';
 import { queryKeys, unwrap, useApiMutation } from '@/lib/query';
+import { useCreateLabel } from '@/components/labels/queries';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { useProjectDetailPage } from '@/lib/use-project-detail-page';
 import { useRenameTask } from '@/lib/use-rename-task';
@@ -105,6 +106,7 @@ export default function ProjectDetailPage(): JSX.Element {
   // Deleting a project hits `capabilityGuard('manage')` server-side, so the affordance is gated on
   // `manage` — a strictly stronger bar than the `contribute`-level `canEdit` used for field edits.
   const canDelete = useOrgCapability(detail?.members ?? [], detail?.roles ?? [], 'manage');
+  const createLabel = useCreateLabel(orgId);
 
   // A `?milestoneId=` deep link (e.g. from search results) always resolves on the Overview tab,
   // where the Milestones panel lives — force it active, then scroll to and highlight the row once
@@ -351,6 +353,18 @@ export default function ProjectDetailPage(): JSX.Element {
               onInitiativesChange={setInitiatives}
               onLabelsChange={(labelIds) => {
                 patchProject({ labelIds });
+              }}
+              onCreateLabel={(name) => {
+                // Create and attach in one go: the name was typed into *this* project's picker,
+                // so making the user then find and tick it would be a step nobody asked for.
+                createLabel.mutate(
+                  { name },
+                  {
+                    onSuccess: (created) => {
+                      patchProject({ labelIds: [...labels.map((l) => l.id), created.id] });
+                    },
+                  },
+                );
               }}
             />
           </EntityMetadataRow>

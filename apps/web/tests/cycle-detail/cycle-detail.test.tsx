@@ -132,6 +132,7 @@ const PROJECT_ID = '01HZZZ0000000000000000PR01';
 
 /** One committed task inside a project, so the project-name lookup is actually exercised. */
 const TASK: TaskOut = {
+  labels: [],
   id: TaskId.parse('01HZZZ0000000000000000TK01'),
   organizationId: OrganizationId.parse(ORG_ID),
   title: 'Migrate the billing webhooks',

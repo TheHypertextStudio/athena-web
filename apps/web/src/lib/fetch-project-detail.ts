@@ -129,7 +129,7 @@ export function fetchProjectDetail(
       api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
         param: { orgId, subjectType: 'project', subjectId: projectId },
       }),
-      api.v1.orgs[':orgId'].labels.$get({ param: { orgId } }),
+      api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
     ]);
 
     if (!projectsRes.ok) {

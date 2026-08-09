@@ -74,6 +74,14 @@ export interface InitiativePropertiesPanelProps {
   onPriorityChange: (priority: InitiativePriority) => void;
   onCadenceChange: (updateCadence: InitiativeUpdateCadence) => void;
   onLabelsChange: (labelIds: readonly string[]) => void;
+  /**
+   * Create a label from a name typed into the picker, and attach it.
+   *
+   * @remarks
+   * Optional: omitting it hides the inline `Create "…"` row, which is what a read-only or
+   * capability-limited viewer should see.
+   */
+  onCreateLabel?: (name: string) => void;
 }
 
 /** Shared chip trigger wiring so every property in the metadata row reads as the same pill. */
@@ -111,6 +119,7 @@ export function InitiativePropertiesPanel({
   onPriorityChange,
   onCadenceChange,
   onLabelsChange,
+  onCreateLabel,
 }: InitiativePropertiesPanelProps): JSX.Element {
   const readOnly = !canEdit;
   const labelIds = useMemo<readonly string[]>(() => labels.map((label) => label.id), [labels]);
@@ -190,6 +199,7 @@ export function InitiativePropertiesPanel({
             : [...labelIds, labelId];
           onLabelsChange(next);
         }}
+        {...(onCreateLabel ? { onCreate: onCreateLabel } : {})}
         placeholder="Add labels"
         searchPlaceholder="Filter labels…"
         emptyText="No labels"

@@ -12,6 +12,12 @@
  * - `Home` / `End` — jump to the first / last row.
  * - `Enter` — activate the active row (toggles a group, opens a data row).
  * - `Escape` — clear the active row.
+ * - an unmodified single letter on an active row — a property-edit hotkey (`onPropertyKey`),
+ *   e.g. `L` for labels.
+ *
+ * A keydown whose target is a text-entry element (an `input`, `textarea`, `select`, or anything
+ * `contentEditable`) is ignored entirely, at every key above — a row rendering an inline editor
+ * must keep its own keystrokes.
  *
  * The hook is presentation-agnostic: it does not touch the DOM beyond returning an
  * `onKeyDown` handler and the current `activeIndex`, so the {@link ListView} can scroll the
@@ -23,6 +29,12 @@ import * as React from 'react';
 export interface ListKeyboardEvent {
   /** The pressed key value. */
   readonly key: string;
+  /** The event's target, used only for the text-entry guard. */
+  readonly target?: EventTarget | null;
+  /** Modifier state, used only to exclude modified keystrokes from `onPropertyKey`. */
+  readonly ctrlKey?: boolean;
+  readonly metaKey?: boolean;
+  readonly altKey?: boolean;
   /** Prevent the browser's default key behavior when the hook handles it. */
   preventDefault: () => void;
 }
@@ -37,6 +49,17 @@ export interface UseListKeyboardOptions {
   onActiveChange?: (index: number) => void;
   /** The initial active index. Defaults to `-1` (no active row). */
   initialIndex?: number;
+  /**
+   * Handle a plain (unmodified) single-letter keydown on the active row — a property-edit
+   * hotkey (`L` for labels, and future `S`/`A`/`P`/`D`).
+   *
+   * @remarks
+   * Never called when no row is active, when a modifier (`⌘`/`Ctrl`/`Alt`) is held, or when the
+   * event target is a text-entry element. Receives the lowercased key and the active row index.
+   * Return `true` to consume the keystroke (`preventDefault`); return `false`/`undefined` to let
+   * it fall through untouched, so a future in-row editor can still claim the same letter.
+   */
+  onPropertyKey?: (key: string, index: number) => boolean;
 }
 
 /** The value returned by {@link useListKeyboard}. */
@@ -56,10 +79,23 @@ function clampIndex(index: number, rowCount: number): number {
   return index;
 }
 
+/** Whether a keydown's target is an element that owns its own keystrokes. */
+function isTextEntryTarget(target: EventTarget | null | undefined): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
+/** Whether `key` is a single, unmodified letter eligible for `onPropertyKey` dispatch. */
+function isPlainLetterKey(event: ListKeyboardEvent): boolean {
+  return /^[a-zA-Z]$/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey;
+}
+
 /**
- * Manage arrow / Enter / Esc grid keyboard navigation over flattened list rows.
+ * Manage arrow / Enter / Esc / property-key grid keyboard navigation over flattened list rows.
  *
- * @param options - The row count and activation/active-change callbacks.
+ * @param options - The row count and activation/active-change/property-key callbacks.
  * @returns the active index, an imperative setter, and the grid `onKeyDown` handler.
  *
  * @example
@@ -73,6 +109,7 @@ export function useListKeyboard({
   onActivate,
   onActiveChange,
   initialIndex = -1,
+  onPropertyKey,
 }: UseListKeyboardOptions): UseListKeyboardResult {
   const [activeIndex, setActiveIndexState] = React.useState<number>(initialIndex);
 
@@ -92,6 +129,16 @@ export function useListKeyboard({
 
   const onKeyDown = React.useCallback(
     (event: ListKeyboardEvent) => {
+      if (isTextEntryTarget(event.target)) return;
+
+      if (onPropertyKey && activeIndex >= 0 && isPlainLetterKey(event)) {
+        const handled = onPropertyKey(event.key.toLowerCase(), activeIndex);
+        if (handled) {
+          event.preventDefault();
+          return;
+        }
+      }
+
       switch (event.key) {
         case 'ArrowDown': {
           event.preventDefault();
@@ -129,7 +176,7 @@ export function useListKeyboard({
           break;
       }
     },
-    [activeIndex, rowCount, onActivate, setActiveIndex],
+    [activeIndex, rowCount, onActivate, setActiveIndex, onPropertyKey],
   );
 
   return { activeIndex, setActiveIndex, onKeyDown };

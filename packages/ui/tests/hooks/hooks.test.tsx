@@ -10,9 +10,9 @@ import { useMediaQuery } from '../../src/hooks/useMediaQuery';
 import { useRedirectIfAuthenticated } from '../../src/hooks/useRedirectIfAuthenticated';
 import { useVocabulary, VocabularyProvider } from '../../src/hooks/useVocabulary';
 
-/** Minimal KeyboardEvent stand-in for the hook's handler (only `key` + `preventDefault`). */
-function keyEvent(key: string): ListKeyboardEvent {
-  return { key, preventDefault: vi.fn() };
+/** Minimal KeyboardEvent stand-in for the hook's handler (only the fields it reads). */
+function keyEvent(key: string, overrides: Partial<ListKeyboardEvent> = {}): ListKeyboardEvent {
+  return { key, preventDefault: vi.fn(), ...overrides };
 }
 
 describe('useListKeyboard', () => {
@@ -117,6 +117,100 @@ describe('useListKeyboard', () => {
       result.current.onKeyDown(keyEvent('Tab'));
     });
     expect(result.current.activeIndex).toBe(1);
+  });
+
+  it('ignores every handled key when the event target is a text-entry element', () => {
+    const onActiveChange = vi.fn();
+    const { result } = renderHook(() => useListKeyboard({ rowCount: 3, onActiveChange }));
+    const input = document.createElement('input');
+    act(() => {
+      result.current.onKeyDown(keyEvent('ArrowDown', { target: input }));
+    });
+    expect(result.current.activeIndex).toBe(-1);
+    expect(onActiveChange).not.toHaveBeenCalled();
+  });
+
+  it('ignores a handled key when the target is contenteditable', () => {
+    const { result } = renderHook(() => useListKeyboard({ rowCount: 3, initialIndex: 1 }));
+    const div = document.createElement('div');
+    Object.defineProperty(div, 'isContentEditable', { value: true });
+    act(() => {
+      result.current.onKeyDown(keyEvent('Escape', { target: div }));
+    });
+    expect(result.current.activeIndex).toBe(1);
+  });
+
+  it('fires onPropertyKey for an unmodified letter on the active row and consumes it when handled', () => {
+    const onPropertyKey = vi.fn().mockReturnValue(true);
+    const { result } = renderHook(() =>
+      useListKeyboard({ rowCount: 3, initialIndex: 1, onPropertyKey }),
+    );
+    const event = keyEvent('l');
+    act(() => {
+      result.current.onKeyDown(event);
+    });
+    expect(onPropertyKey).toHaveBeenCalledWith('l', 1);
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it('lowercases the dispatched key', () => {
+    const onPropertyKey = vi.fn().mockReturnValue(true);
+    const { result } = renderHook(() =>
+      useListKeyboard({ rowCount: 2, initialIndex: 0, onPropertyKey }),
+    );
+    act(() => {
+      result.current.onKeyDown(keyEvent('L'));
+    });
+    expect(onPropertyKey).toHaveBeenCalledWith('l', 0);
+  });
+
+  it('leaves an unhandled property key untouched (no preventDefault)', () => {
+    const onPropertyKey = vi.fn().mockReturnValue(false);
+    const { result } = renderHook(() =>
+      useListKeyboard({ rowCount: 2, initialIndex: 0, onPropertyKey }),
+    );
+    const event = keyEvent('q');
+    act(() => {
+      result.current.onKeyDown(event);
+    });
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('never dispatches onPropertyKey for a modified keystroke', () => {
+    const onPropertyKey = vi.fn();
+    const { result } = renderHook(() =>
+      useListKeyboard({ rowCount: 3, initialIndex: 0, onPropertyKey }),
+    );
+    act(() => {
+      result.current.onKeyDown(keyEvent('l', { metaKey: true }));
+    });
+    act(() => {
+      result.current.onKeyDown(keyEvent('l', { ctrlKey: true }));
+    });
+    act(() => {
+      result.current.onKeyDown(keyEvent('l', { altKey: true }));
+    });
+    expect(onPropertyKey).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch onPropertyKey when no row is active', () => {
+    const onPropertyKey = vi.fn();
+    const { result } = renderHook(() => useListKeyboard({ rowCount: 3, onPropertyKey }));
+    act(() => {
+      result.current.onKeyDown(keyEvent('l'));
+    });
+    expect(onPropertyKey).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch onPropertyKey for multi-character keys (arrows, Enter, etc.)', () => {
+    const onPropertyKey = vi.fn();
+    const { result } = renderHook(() =>
+      useListKeyboard({ rowCount: 3, initialIndex: 0, onPropertyKey }),
+    );
+    act(() => {
+      result.current.onKeyDown(keyEvent('ArrowDown'));
+    });
+    expect(onPropertyKey).not.toHaveBeenCalled();
   });
 
   it('setActiveIndex clamps to range and to -1, firing onActiveChange only for valid rows', () => {

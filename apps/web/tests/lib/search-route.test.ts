@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { OrganizationId, type SearchRoute } from '@docket/types';
 
-import { hrefForSearchRoute, isExternalSearchHref } from '@/lib/search-route';
+import { hrefForSearchRoute, isExternalSearchHref, labelFilterHref } from '@/lib/search-route';
 
 const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
 
@@ -77,5 +77,12 @@ describe('hrefForSearchRoute', () => {
         href: '/agenda?eventId=cal_1',
       }),
     ).toBe('/search?kind=calendar_event&id=cal_1');
+  });
+});
+
+describe('labelFilterHref', () => {
+  it('builds the same pre-filtered task-list URL the label search-hit route uses', () => {
+    const href = labelFilterHref(ORG, 'label_1');
+    expect(href).toBe(`/orgs/${ORG}/tasks?filter=labels%3Aeq%3Alabel_1`);
   });
 });

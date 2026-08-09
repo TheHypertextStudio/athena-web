@@ -61,7 +61,7 @@ function hrefForEntity(
     // This previously pointed at `my-work?labelId=`, a param no page read — so a label hit in
     // search opened an unfiltered list. Mirrors `entityHref` in the API, which builds the same URL.
     case 'label':
-      return withQuery(`/orgs/${organizationId}/tasks`, 'filter', `labels:eq:${entityId}`);
+      return labelFilterHref(organizationId, entityId);
     case 'saved_view':
       return withQuery(`/orgs/${organizationId}/views`, 'viewId', entityId);
     case 'calendar_event':
@@ -100,6 +100,15 @@ function normalizeInternalHref(href: string): string {
     return href;
   }
   return `/search?href=${encodeURIComponent(href)}`;
+}
+
+/**
+ * The task-list URL pre-filtered to one label, in the view toolbar's `filter=field:op:value`
+ * codec — mirrors `entityHref`'s label case in `apps/api/src/search/routes.ts`; if either side's
+ * shape changes, the other must change with it.
+ */
+export function labelFilterHref(organizationId: string, labelId: string): string {
+  return withQuery(`/orgs/${organizationId}/tasks`, 'filter', `labels:eq:${labelId}`);
 }
 
 function withQuery(base: string, key: string, value: string): string {

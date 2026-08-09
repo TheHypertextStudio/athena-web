@@ -46,11 +46,6 @@ export const LabelColorKeySchema = z
     'Palette token for the label, resolved to a light/dark color pair at render time. Not a hex string.',
   );
 
-/** True when `value` is one of the palette token keys. */
-export function isLabelColorKey(value: string): value is LabelColorKey {
-  return (LABEL_COLOR_KEYS as readonly string[]).includes(value);
-}
-
 /**
  * Pick the palette token for the `n`th label in an org, by rotation.
  *

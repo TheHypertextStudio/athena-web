@@ -139,6 +139,33 @@ export function useAcknowledgeAgenda(date: string) {
   });
 }
 
+/**
+ * Answer one of the morning's proposals — keep it on today, or move it out.
+ *
+ * @remarks
+ * A deferral moves the block for real, which is why this invalidates the whole plan prefix: the
+ * week, the day's directive and its check-ins all just changed shape.
+ */
+export function useDecideMorningProposal(date: string) {
+  return useApiMutation<DayStartOut, { key: string; decision: 'keep' | 'defer'; deferTo?: string }>(
+    {
+      mutationFn: async (variables) => {
+        const res = await api.v1.directive['day-start'].decide.$post({
+          query: { date },
+          json: {
+            key: variables.key,
+            decision: variables.decision,
+            ...(variables.deferTo === undefined ? {} : { deferTo: variables.deferTo }),
+          },
+        });
+        if (!res.ok) throw new Error('decide failed');
+        return await res.json();
+      },
+      invalidateKeys: [PLAN_PREFIX],
+    },
+  );
+}
+
 /** Answer one check-in. */
 export function useRespondToCheckIn() {
   return useApiMutation<

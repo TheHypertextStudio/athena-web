@@ -22,6 +22,7 @@ import {
   DayReviewOut,
   DayStartOut,
   DirectiveOut,
+  MorningDecisionInput,
   ReorganizeResultOut,
   ReviewAnswerInput,
   ReviewDispositionInput,
@@ -41,6 +42,7 @@ import {
   answerReviewPrompt,
   computeDirective,
   confirmTomorrow,
+  decideMorningProposal,
   disposeReviewItem,
   ensureCheckIns,
   loadDayContext,
@@ -163,6 +165,50 @@ Side-effect-free apart from lazily creating the day's directive row. Session-onl
       const scope = await resolveDay(session.user.id, date);
       const context = await loadDayContext(db, scope);
       const payload = await readDayStart(db, context, {});
+      return ok(c, DayStartOut, payload);
+    },
+  )
+  .post(
+    '/day-start/decide',
+    apiDoc({
+      tag: 'Directive',
+      summary: 'Answer one of the morning’s proposals',
+      response: DayStartOut,
+      description: `Record what the person decided about one proposed block during the morning walk-through — keep it on today, or move it out — and return the day-start payload as it now stands.
+
+**\`defer\` is a real move, not a label.** The block leaves today for \`deferTo\` (tomorrow by default), keeping its clock time so a deferral across a DST boundary does not silently shift an hour. That is the whole difference between a morning review and a morning reading: a decision that costs the day nothing is theatre, and the morning release signal that follows it would mean nothing either.
+
+**Only Docket's own blocks are deferable.** A block a person placed by hand, or one that arrived from an external calendar, is offered for review but returns **422** on a deferral — moving it would be Docket editing someone else's diary. \`keep\` is accepted for any block.
+
+**Side effects:** moves the block when deferring, and records the decision on \`day_directive.morning_decisions\` so a reload does not lose the walk-through. Decisions are keyed by calendar item id and replace wholesale, so answering twice is idempotent. Session-only, no capability; 401 when unauthenticated, 404 if the caller has no Hub or the key is not in today's proposals.`,
+    }),
+    zQuery(dayQuery),
+    zJson(MorningDecisionInput),
+    async (c) => {
+      const session = c.get('session');
+      if (!session?.user) throw new AuthError();
+      const { date } = c.req.valid('query');
+      const body = c.req.valid('json');
+      const scope = await resolveDay(session.user.id, date);
+      const context = await loadDayContext(db, scope);
+      const result = await decideMorningProposal(db, context, {
+        key: body.key,
+        decision: body.decision,
+        deferTo: body.deferTo,
+        now: new Date(),
+      });
+      if (result.status === 'not_found') throw new NotFoundError('Proposal not found');
+      if (result.status === 'not_deferable') {
+        throw new ValidationError([
+          {
+            path: ['key'],
+            message: 'Docket can only move blocks it placed itself.',
+          },
+        ]);
+      }
+      // Re-read the day: a deferral just changed what is on it.
+      const after = await loadDayContext(db, scope);
+      const payload = await readDayStart(db, after, {});
       return ok(c, DayStartOut, payload);
     },
   )

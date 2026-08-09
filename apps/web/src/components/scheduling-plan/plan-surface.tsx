@@ -28,6 +28,7 @@ import {
   useDayCheckIns,
   useDayReview,
   useDayStart,
+  useDecideMorningProposal,
   useDirective,
   useDisposeReviewItem,
   useGenerateWeek,
@@ -105,6 +106,7 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
 
   const generate = useGenerateWeek(weekStartDate);
   const acknowledge = useAcknowledgeAgenda(date);
+  const decide = useDecideMorningProposal(date);
   const reorganize = useReorganizeDay(date);
   const respond = useRespondToCheckIn();
   const dispose = useDisposeReviewItem(date);
@@ -177,6 +179,10 @@ export function PlanSurface(props: PlanSurfaceProps = {}): JSX.Element {
                 onAcknowledge={() => {
                   acknowledge.mutate({});
                 }}
+                onDecide={(input) => {
+                  decide.mutate(input);
+                }}
+                deciding={decide.isPending}
                 onReorganize={() => {
                   reorganize.mutate({});
                 }}

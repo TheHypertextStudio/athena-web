@@ -374,6 +374,19 @@ export const SchedulingPreferencesOut = z
       .describe(
         'Shapes allowed to absorb leftover availability so the week has no large unplanned holes. Only backfill-eligible shapes are accepted.',
       ),
+    checkInCadenceMinutes: z
+      .number()
+      .int()
+      .min(30)
+      .max(480)
+      .describe(
+        "How far apart the day's check-ins fall when no block boundary suggests a better moment. The user's own rhythm, not a fixed product cadence.",
+      ),
+    autoReorganizeOnDrift: z
+      .boolean()
+      .describe(
+        'When true, a day that has genuinely slipped gets the rest of it re-cut without being asked. When false the drift is still reported, and the re-cut waits for an explicit request.',
+      ),
     maxUnplannedGapMinutes: z
       .number()
       .int()
@@ -415,6 +428,8 @@ export const SchedulingPreferencesUpdate = z
     commitments: z.array(SchedulingCommitmentInput).max(100).optional(),
     reflectionForMeetings: z.boolean().optional(),
     backfillShapes: z.array(WorkShape).max(6).optional(),
+    checkInCadenceMinutes: z.number().int().min(30).max(480).optional(),
+    autoReorganizeOnDrift: z.boolean().optional(),
     maxUnplannedGapMinutes: z.number().int().min(15).max(480).optional(),
     minTransitGapMinutes: z.number().int().min(5).max(120).optional(),
     maxTransitGapMinutes: z.number().int().min(15).max(480).optional(),

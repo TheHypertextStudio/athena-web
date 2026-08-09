@@ -21,6 +21,7 @@ import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';
 import { sweepCalendarSync } from './calendar-sync-sweep';
 import { sweepConnectorSync } from './integration-sync';
+import { sweepDayCadence } from './day-cadence-sweep';
 import { sweepDirectivePosture } from './directive-sweep';
 import { sweepInboundEvents } from './event-sync';
 import { sweepDailyDigests } from './daily-digest';
@@ -169,6 +170,16 @@ const cron = new Hono()
   .post('/directive-posture', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepDirectivePosture(new Date());
+    return c.json({ swept: true, ...result });
+  })
+  // Day-cadence sweep: the proactive half of the daily loop. Materializes each configured Hub's
+  // check-ins, re-cuts the remainder of a day that has genuinely drifted (subject to that Hub's
+  // own `autoReorganizeOnDrift` setting and a cooldown), and fires every check-in that has come
+  // due — each exactly once, claimed on `fired_at IS NULL`. A pass over a healthy day writes
+  // nothing and notifies nobody, so a scheduler retry is a no-op.
+  .post('/day-cadence', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await sweepDayCadence(new Date());
     return c.json({ swept: true, ...result });
   })
   // User-owned Athena schedules are assignment-scoped, five-minute minimum, and re-authorize the

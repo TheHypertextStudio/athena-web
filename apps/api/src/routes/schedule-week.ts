@@ -259,6 +259,8 @@ function serializePreferences(
     ),
     reflectionForMeetings: preferences.reflectionForMeetings,
     backfillShapes: [...preferences.backfillShapes],
+    checkInCadenceMinutes: preferences.checkInCadenceMinutes,
+    autoReorganizeOnDrift: preferences.autoReorganizeOnDrift,
     maxUnplannedGapMinutes: preferences.maxUnplannedGapMinutes,
     minTransitGapMinutes: preferences.minTransitGapMinutes,
     maxTransitGapMinutes: preferences.maxTransitGapMinutes,

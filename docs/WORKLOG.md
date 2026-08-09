@@ -235,6 +235,57 @@ task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provide
   both gaps is the same one [C6-001] recorded: a suite that enters below the code under test
   proves the plumbing, not the case.
 
+### [CADENCE-001] Give Athena a proactive cadence — call the daily loop nobody was calling
+
+- **Status**: REVIEW
+- **Started**: 2026-08-08
+- **Priority**: P1
+- **Description**: The daily loop was written as pure decisions (`services/scheduling/day-loop.ts`)
+  meeting the database (`directive-service.ts`), and the proactive half of it had no caller.
+  `ensureCheckIns` ran only when someone opened `GET /v1/directive/check-ins`, so a day nobody
+  looked at had no check-ins at all. `day_check_in.fired_at` was written by no code path in the
+  repository, so a check-in never announced itself. `reorganizeRemainingDay` had exactly one
+  caller — `POST /v1/directive/reorganize`, a button. `checkInSignalsDrift` had none at all.
+- **Approach**: One new scheduled behavior registered exactly like the other sixteen: a cron route
+  `POST /internal/cron/day-cadence` → `sweepDayCadence(now)` (`routes/day-cadence-sweep.ts`),
+  a `JOBS` entry at the same 5-minute cadence as the posture sweep, and the `tests/tooling`
+  ratchet extended from sixteen paths to seventeen in the same commit. Per Hub, per pass:
+  materialize the day's check-ins; re-cut the remainder when `assessDrift` says the day has
+  genuinely slipped; fire every check-in that has come due, each exactly once. Nothing here is a
+  second scheduling mechanism — it hangs off the one that step B3 provisioned.
+- **Notes**: Two premises in the brief needed correcting against the code. (1) `sweepDirectivePosture`
+  already exists and is already scheduled, so the posture half of WIL-36 is not missing — what was
+  missing is everything that _acts_ on the posture. (2) The morning walk-through UI already existed
+  (`day-start-review.tsx`) with keep/defer/drop controls, but they were `useState` and nothing else:
+  a deferral moved no calendar row and a reload lost the walk-through. So the fix there was to give
+  the decisions somewhere to go (`day_directive.morning_decisions`, `POST /day-start/decide`) and to
+  mount the surface on `/today`, not to build a second one.
+  **New decisions are pure and testable**: `assessDrift` takes the posture, the day's check-ins,
+  the last re-cut and `now`, and returns a verdict. The cooldown is what makes a five-minute cadence
+  liveable; an admission answered _since_ the last re-cut is never suppressed, because it is
+  information that re-cut could not have had.
+  **Config, not hardcoding**: `checkInCadenceMinutes` and `autoReorganizeOnDrift` are per-Hub
+  columns on `scheduling_preference` exposed through the existing preferences DTO. The hours and
+  timezone that bound the day were already customer configuration.
+- **Files Changed**: `apps/api/src/routes/day-cadence-sweep.ts` (new), `apps/api/src/routes/cron.ts`,
+  `apps/api/src/services/scheduling/day-loop.ts` (`assessDrift`), `directive-service.ts`
+  (`decideMorningProposal`, morning proposals, cadence wired into `ensureCheckIns`),
+  `repository.ts` (`claimCheckInFire`, `deferCalendarItemToDate`, new preference fields),
+  `apps/api/src/routes/schedule-week-directive.ts` (`POST /day-start/decide`),
+  `apps/api/src/routes/schedule-week.ts`, `packages/db/src/schema/scheduling.ts`,
+  `packages/db/drizzle/0077_day_cadence_config.sql` (new), `packages/types/src/scheduling.ts`,
+  `packages/types/src/scheduling-directive.ts`, `scripts/scheduler-setup.ts`,
+  `tests/tooling/scheduler-setup.test.ts`, `apps/web/src/components/today/morning-review.tsx` (new),
+  `apps/web/src/app/(app)/today/page.tsx`, `apps/web/src/components/scheduling-plan/*`,
+  `apps/api/tests/routes/day-cadence-sweep.test.ts` (new),
+  `apps/api/tests/services/scheduling/day-loop.test.ts`, `directive-routes.test.ts`.
+- **Blockers**: None.
+- **Learnings**: The headline test was mutation-checked — disabling the `reorganizeRemainingDay`
+  call made it fail on the _calendar row_, not merely on a counter, which is the property this
+  initiative keeps losing. Counter equality assertions are unusable in a fleet sweep's tests: every
+  Hub a sibling test seeded is still in the table, so anything that must be exact is asserted
+  against the Hub's own rows.
+
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 
 - **Status**: REVIEW

@@ -172,6 +172,53 @@ export const AcknowledgeDirectiveOutput = z
 /** Acknowledge-directive-output value. */
 export type AcknowledgeDirectiveOutput = z.infer<typeof AcknowledgeDirectiveOutput>;
 
+/** Where one proposed block stands in the morning walk-through. */
+export const MorningDecision = z.enum(['proposed', 'kept', 'deferred']).meta({
+  id: 'MorningDecision',
+  description:
+    "`proposed` is Docket's opening position on a block and the state every block starts in; `kept` and `deferred` are the person's answer to it.",
+});
+/** Morning-decision value. */
+export type MorningDecision = z.infer<typeof MorningDecision>;
+
+/** One block Docket proposes for today, and what the person decided about it. */
+export const MorningProposalOut = z
+  .object({
+    key: z.string().describe("The proposal's stable key — the block's calendar item id."),
+    calendarItemId: z.string(),
+    taskId: z.string().nullable(),
+    organizationId: z.string().nullable(),
+    title: z.string(),
+    shape: WorkShape.nullable(),
+    startsAt: z.string(),
+    endsAt: z.string(),
+    decision: MorningDecision,
+    deferredTo: DateString.nullable().describe(
+      'The local date a deferred block was moved to; null while it is proposed or kept.',
+    ),
+    deferable: z
+      .boolean()
+      .describe(
+        'Whether Docket may move this block at all. False for anything a person placed by hand or that arrived from an external calendar — those are theirs to move, not ours.',
+      ),
+  })
+  .meta({ id: 'MorningProposalOut' });
+/** Morning-proposal value. */
+export type MorningProposalOut = z.infer<typeof MorningProposalOut>;
+
+/** Whether the morning walk-through can be confirmed, and whether it has been. */
+export const MorningConfirmOut = z
+  .object({
+    available: z
+      .boolean()
+      .describe('True once every proposal has an answer, so confirming means something.'),
+    outstanding: z.number().int().min(0).describe('Proposals still awaiting a decision.'),
+    confirmedAt: z.string().nullable(),
+  })
+  .meta({ id: 'MorningConfirmOut' });
+/** Morning-confirm value. */
+export type MorningConfirmOut = z.infer<typeof MorningConfirmOut>;
+
 /** The day-start payload: is the agenda ready, and has the person been through it. */
 export const DayStartOut = z
   .object({
@@ -180,6 +227,12 @@ export const DayStartOut = z
     readiness: DirectiveAgendaReadiness,
     ready: z.boolean().describe('True only when `readiness` is `ready`.'),
     agenda: z.array(DirectivePlanItemOut),
+    proposals: z
+      .array(MorningProposalOut)
+      .describe(
+        'The same day as the walk-through sees it: one proposal per block, each carrying its own decision. This is what makes the morning a review rather than a reading — Docket proposes, the person keeps or defers, and only then is there anything to confirm. Empty whenever `ready` is false, for the same reason `agenda` is.',
+      ),
+    confirm: MorningConfirmOut,
     acknowledgedAt: z
       .string()
       .nullable()
@@ -193,6 +246,26 @@ export const DayStartOut = z
   });
 /** Day-start value. */
 export type DayStartOut = z.infer<typeof DayStartOut>;
+
+/**
+ * Answering one of the morning's proposals.
+ *
+ * @remarks
+ * `defer` is a real move, not a label: the block leaves today for `deferTo` (tomorrow by
+ * default). That is the whole difference between a morning review and a morning reading — the
+ * decision has to cost the day something or it is theatre.
+ */
+export const MorningDecisionInput = z
+  .object({
+    key: z.string().describe("The proposal's key, as returned by day-start."),
+    decision: z.enum(['keep', 'defer']),
+    deferTo: DateString.optional().describe(
+      'Which local date a deferred block moves to. Defaults to tomorrow.',
+    ),
+  })
+  .meta({ id: 'MorningDecisionInput' });
+/** Morning-decision-input value. */
+export type MorningDecisionInput = z.infer<typeof MorningDecisionInput>;
 
 /** How a person answered a check-in. */
 export const CheckInResponse = z.enum(['on_track', 'behind', 'switched', 'done']).meta({

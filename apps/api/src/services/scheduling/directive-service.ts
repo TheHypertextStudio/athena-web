@@ -12,7 +12,7 @@
  * It never publishes an enforcement instruction and never names a consumer. Grep this file for
  * any product name and you should find none; the same is true of every type it returns.
  */
-import type { Database } from '@docket/db';
+import type { Database, StoredMorningDecision } from '@docket/db';
 import { dayCheckIn, dayDirective, dayReview, directiveAcknowledgment, genId } from '@docket/db';
 import type {
   AcknowledgeDirectiveInput,
@@ -22,6 +22,7 @@ import type {
   DayStartOut,
   DirectiveAgendaReadiness,
   DirectiveOut,
+  MorningDecision,
   ReconcileDisposition,
   ReviewPromptKey,
   ReviewStepKey,
@@ -40,6 +41,7 @@ import {
   reorganizeDay,
 } from './day-loop';
 import {
+  deferCalendarItemToDate,
   displaceCalendarItem,
   ensureDayDirective,
   hasRunCovering,
@@ -66,7 +68,7 @@ const REVIEW_STEP_TITLES: Readonly<Record<ReviewStepKey, string>> = Object.freez
 });
 
 /** The check-in question copy — application-owned, never a model's words. */
-function checkInPrompt(blockTitle: string | null): string {
+export function checkInPrompt(blockTitle: string | null): string {
   return blockTitle === null
     ? 'Nothing is blocked out right now — how is the day going?'
     : `Still on "${blockTitle}"?`;
@@ -293,23 +295,142 @@ export async function readDayStart(
     timezone: context.timezone,
     directiveId: genId(),
   });
+  const ready = context.readiness === 'ready';
+  const proposals = ready ? buildMorningProposals(context, row.morningDecisions) : [];
+  const outstanding = proposals.filter((p) => p.decision === 'proposed').length;
   return {
     date: context.date,
     timezone: context.timezone,
     readiness: context.readiness,
-    ready: context.readiness === 'ready',
+    ready,
     // An unready day returns no agenda at all rather than an empty one: an empty list would be
     // indistinguishable from a genuinely clear day, and a consumer would release its gate.
-    agenda:
-      context.readiness === 'ready'
-        ? context.blocks.map((b) => toPlanItem(b, options.appUrl ?? null))
-        : [],
+    agenda: ready ? context.blocks.map((b) => toPlanItem(b, options.appUrl ?? null)) : [],
+    proposals,
+    confirm: {
+      // A confirm is only meaningful once every proposal has an answer — and a day with nothing
+      // on it has nothing to answer, so it is confirmable immediately rather than never.
+      available: ready && outstanding === 0,
+      outstanding,
+      confirmedAt: row.agendaAcknowledgedAt?.toISOString() ?? null,
+    },
     acknowledgedAt: row.agendaAcknowledgedAt?.toISOString() ?? null,
     gate: dayStartGate({
-      agendaReady: context.readiness === 'ready',
+      agendaReady: ready,
       acknowledgedAt: row.agendaAcknowledgedAt,
     }),
   };
+}
+
+/**
+ * Turn today's blocks into the morning's proposals, folding in whatever has been decided.
+ *
+ * @remarks
+ * Derived from the live day rather than materialized at first read, deliberately: a block the
+ * scheduler moved, a block someone finished early, and a block deferred out of today must all be
+ * reflected the next time the walk-through is opened. Decisions are the only part persisted,
+ * and they are keyed by calendar item id — so a decision about a block that has since left the
+ * day simply stops appearing, rather than haunting the list.
+ */
+function buildMorningProposals(
+  context: DayContext,
+  stored: readonly StoredMorningDecision[],
+): z.input<typeof DayStartOut>['proposals'] {
+  const byKey = new Map(stored.map((d) => [d.key, d]));
+  return context.blocks.map((block) => {
+    const decided = byKey.get(block.calendarItemId);
+    return {
+      key: block.calendarItemId,
+      calendarItemId: block.calendarItemId,
+      taskId: block.taskId,
+      organizationId: block.organizationId,
+      title: block.title,
+      shape: block.shape,
+      startsAt: new Date(block.start).toISOString(),
+      endsAt: new Date(block.end).toISOString(),
+      decision: asMorningDecision(decided?.decision),
+      deferredTo: decided?.deferredTo ?? null,
+      // Docket only ever moves its own blocks. A hand-placed or externally-synced one is offered
+      // for review but not for deferral — moving it would be Docket editing someone else's diary.
+      deferable: block.schedulerOwned,
+    };
+  });
+}
+
+/** Narrow a stored decision string to the wire vocabulary; anything unknown reads as undecided. */
+function asMorningDecision(value: string | undefined): MorningDecision {
+  return value === 'kept' || value === 'deferred' ? value : 'proposed';
+}
+
+/** The outcome of answering one morning proposal. */
+export type MorningDecisionResult =
+  | { readonly status: 'recorded'; readonly deferredTo: string | null }
+  | { readonly status: 'not_found' }
+  | { readonly status: 'not_deferable' };
+
+/**
+ * Record the person's answer to one of the morning's proposals.
+ *
+ * @remarks
+ * `defer` is a real move and not a label: the block leaves today for `deferTo`, written through
+ * {@link deferCalendarItemToDate}, which refuses anything the scheduler did not place. That is
+ * what makes the walk-through a review — a decision that costs the day nothing is theatre, and
+ * the morning signal that follows it would mean nothing either.
+ *
+ * @param db - The database client.
+ * @param context - The day.
+ * @param input.key - The proposal's key.
+ * @param input.decision - Keep it on today, or move it out.
+ * @param input.deferTo - Which local date a deferred block moves to; defaults to tomorrow.
+ * @param input.now - When the decision was made.
+ * @returns whether it was recorded, and where a deferred block went.
+ */
+export async function decideMorningProposal(
+  db: Database,
+  context: DayContext,
+  input: {
+    readonly key: string;
+    readonly decision: 'keep' | 'defer';
+    readonly deferTo?: string | undefined;
+    readonly now: Date;
+  },
+): Promise<MorningDecisionResult> {
+  const block = context.blocks.find((b) => b.calendarItemId === input.key);
+  if (block === undefined) return { status: 'not_found' };
+  if (input.decision === 'defer' && !block.schedulerOwned) return { status: 'not_deferable' };
+
+  let deferredTo: string | null = null;
+  if (input.decision === 'defer') {
+    const target = input.deferTo ?? addDays(context.date, 1);
+    const moved = await deferCalendarItemToDate(db, {
+      calendarItemId: block.calendarItemId,
+      userId: context.userId,
+      toDate: target,
+      timezone: context.timezone,
+    });
+    // The row check above and this one can disagree only if the block stopped being the
+    // scheduler's between them; reporting "not deferable" is the honest answer either way.
+    if (moved === null) return { status: 'not_deferable' };
+    deferredTo = target;
+  }
+
+  const row = await ensureDayDirective(db, {
+    hubId: context.hubId,
+    date: context.date,
+    timezone: context.timezone,
+    directiveId: genId(),
+  });
+  const next: StoredMorningDecision[] = [
+    ...row.morningDecisions.filter((d) => d.key !== input.key),
+    {
+      key: input.key,
+      decision: input.decision === 'keep' ? 'kept' : 'deferred',
+      deferredTo,
+      decidedAt: input.now.toISOString(),
+    },
+  ];
+  await db.update(dayDirective).set({ morningDecisions: next }).where(eq(dayDirective.id, row.id));
+  return { status: 'recorded', deferredTo };
 }
 
 /** The outcome of trying to acknowledge the morning agenda. */
@@ -385,6 +506,8 @@ export async function ensureCheckIns(db: Database, context: DayContext): Promise
     blocks: context.blocks,
     dayStart: bounds.start,
     dayEnd: bounds.end,
+    // The Hub's own rhythm, not a product constant — see `checkInCadenceMinutes`.
+    cadenceMinutes: preferences.checkInCadenceMinutes,
   });
   if (planned.length === 0) return 0;
   const inserted = await db

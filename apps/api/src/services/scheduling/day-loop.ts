@@ -232,6 +232,82 @@ export function checkInSignalsDrift(response: CheckInResponse | null): boolean {
   return response === 'behind' || response === 'switched';
 }
 
+/** Why a day is considered to have drifted, or null when it has not. */
+export type DriftTrigger = 'posture' | 'check_in';
+
+/** How long after a re-cut the day is left alone before another one is considered. */
+export const REORGANIZE_COOLDOWN_MINUTES = 45;
+
+/** The verdict on whether the rest of a day should be re-cut right now, and why. */
+export interface DriftVerdict {
+  /** What tripped, or null when nothing did. */
+  readonly trigger: DriftTrigger | null;
+  /** True only when something tripped *and* the day is not inside its cooldown. */
+  readonly shouldReorganize: boolean;
+  /** True when a trigger fired but the cooldown suppressed acting on it. */
+  readonly cooledDown: boolean;
+}
+
+/** One answered-or-not check-in, as the drift decision reads it. */
+export interface CheckInSignal {
+  readonly response: CheckInResponse | null;
+  readonly respondedAt: Date | null;
+}
+
+/**
+ * Decide whether a day has drifted far enough to re-cut, from two independent signals.
+ *
+ * @remarks
+ * Pure, and separated from the sweep that calls it so "at 14:45, on a day whose 11:00 block never
+ * finished and which was already re-cut at 14:20, does Athena touch the calendar?" is a test
+ * rather than an anecdote.
+ *
+ * Two signals, because they catch genuinely different failures. The **posture** signal is the
+ * clock's opinion and catches a day nobody is answering for. A **check-in answer** of `behind` or
+ * `switched` is the person's own account, and it counts even while the clock still looks fine —
+ * the point of asking is to believe the answer.
+ *
+ * The **cooldown is the restraint that makes this safe to run every five minutes.** Without it a
+ * day that stays drifted would be re-cut on every tick, and a schedule that rearranges itself
+ * under a person is worse than one that slips. A check-in answered *since* the last re-cut is
+ * new information and is honoured on its own terms; the clock merely continuing to be late is not.
+ *
+ * @param input.posture - The posture just computed for the day.
+ * @param input.checkIns - The day's check-ins.
+ * @param input.lastReorganizedAt - When the day was last re-cut, if it has been.
+ * @param input.now - The instant being evaluated.
+ * @returns the trigger, whether to act, and whether the cooldown suppressed acting.
+ */
+export function assessDrift(input: {
+  readonly posture: DirectivePosture;
+  readonly checkIns: readonly CheckInSignal[];
+  readonly lastReorganizedAt: Date | null;
+  readonly now: Date;
+}): DriftVerdict {
+  const since = input.lastReorganizedAt?.getTime() ?? null;
+  const freshAdmission = input.checkIns.some(
+    (c) =>
+      checkInSignalsDrift(c.response) &&
+      c.respondedAt !== null &&
+      (since === null || c.respondedAt.getTime() > since),
+  );
+  const trigger: DriftTrigger | null = freshAdmission
+    ? 'check_in'
+    : input.posture === 'intervention_recommended'
+      ? 'posture'
+      : null;
+  if (trigger === null) return { trigger: null, shouldReorganize: false, cooledDown: false };
+
+  // A person's fresh admission is never suppressed: they answered *after* the last re-cut, so it
+  // is information the last re-cut could not have had.
+  if (trigger === 'check_in') {
+    return { trigger, shouldReorganize: true, cooledDown: false };
+  }
+  const cooledDown =
+    since !== null && input.now.getTime() - since < REORGANIZE_COOLDOWN_MINUTES * 60_000;
+  return { trigger, shouldReorganize: !cooledDown, cooledDown };
+}
+
 /** One block the reorganization moved. */
 export interface BlockMove {
   readonly calendarItemId: string;

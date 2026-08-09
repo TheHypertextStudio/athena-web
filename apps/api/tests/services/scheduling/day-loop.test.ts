@@ -4,6 +4,8 @@ import { defaultAvailabilityWindows } from '../../../src/services/scheduling/ava
 import type { DayBlock } from '../../../src/services/scheduling/day-loop';
 import {
   MIN_CHECK_INS_PER_DAY,
+  REORGANIZE_COOLDOWN_MINUTES,
+  assessDrift,
   buildCheckInSchedule,
   computeDirectivePosture,
   dayBounds,
@@ -362,5 +364,123 @@ describe('gates', () => {
     for (const forbidden of ['lock', 'block ', 'quit', 'kill', 'shutdown', 'overlay', 'app']) {
       expect(serialized, `gate leaked an enforcement word: ${forbidden}`).not.toContain(forbidden);
     }
+  });
+});
+
+describe('assessDrift — whether a day gets re-cut, and how often', () => {
+  const NOW = new Date(at(15 * 60));
+
+  /** One answered check-in, at a wall-clock minute of the same day. */
+  function answered(
+    response: 'behind' | 'switched' | 'on_track' | 'done',
+    minuteOfDay: number,
+  ): { response: 'behind' | 'switched' | 'on_track' | 'done'; respondedAt: Date } {
+    return { response, respondedAt: new Date(at(minuteOfDay)) };
+  }
+
+  it('says nothing about a day that is on track and has admitted nothing', () => {
+    expect(
+      assessDrift({
+        posture: 'on_track',
+        checkIns: [answered('on_track', 14 * 60), { response: null, respondedAt: null }],
+        lastReorganizedAt: null,
+        now: NOW,
+      }),
+    ).toEqual({ trigger: null, shouldReorganize: false, cooledDown: false });
+  });
+
+  it('does not act on attention_needed — one late block is a slip, not a day to re-cut', () => {
+    expect(
+      assessDrift({ posture: 'attention_needed', checkIns: [], lastReorganizedAt: null, now: NOW }),
+    ).toMatchObject({ trigger: null, shouldReorganize: false });
+  });
+
+  it('acts on the clock once the posture reaches intervention_recommended', () => {
+    expect(
+      assessDrift({
+        posture: 'intervention_recommended',
+        checkIns: [],
+        lastReorganizedAt: null,
+        now: NOW,
+      }),
+    ).toEqual({ trigger: 'posture', shouldReorganize: true, cooledDown: false });
+  });
+
+  it('holds the clock signal off inside the cooldown, so a five-minute tick is not a five-minute re-cut', () => {
+    const justRecut = new Date(NOW.getTime() - (REORGANIZE_COOLDOWN_MINUTES - 5) * 60_000);
+    expect(
+      assessDrift({
+        posture: 'intervention_recommended',
+        checkIns: [],
+        lastReorganizedAt: justRecut,
+        now: NOW,
+      }),
+    ).toEqual({ trigger: 'posture', shouldReorganize: false, cooledDown: true });
+  });
+
+  it('acts again once the cooldown has elapsed', () => {
+    const old = new Date(NOW.getTime() - (REORGANIZE_COOLDOWN_MINUTES + 1) * 60_000);
+    expect(
+      assessDrift({
+        posture: 'intervention_recommended',
+        checkIns: [],
+        lastReorganizedAt: old,
+        now: NOW,
+      }),
+    ).toMatchObject({ shouldReorganize: true, cooledDown: false });
+  });
+
+  it('believes the person over the clock: "behind" re-cuts a day the posture calls healthy', () => {
+    expect(
+      assessDrift({
+        posture: 'on_track',
+        checkIns: [answered('behind', 14 * 60 + 30)],
+        lastReorganizedAt: null,
+        now: NOW,
+      }),
+    ).toEqual({ trigger: 'check_in', shouldReorganize: true, cooledDown: false });
+  });
+
+  it('treats "switched" as drift too, and "done" as nothing at all', () => {
+    const base = { posture: 'on_track', lastReorganizedAt: null, now: NOW } as const;
+    expect(assessDrift({ ...base, checkIns: [answered('switched', 14 * 60)] })).toMatchObject({
+      trigger: 'check_in',
+    });
+    expect(assessDrift({ ...base, checkIns: [answered('done', 14 * 60)] })).toMatchObject({
+      trigger: null,
+    });
+  });
+
+  it('never suppresses an admission made since the last re-cut — that re-cut could not have had it', () => {
+    expect(
+      assessDrift({
+        posture: 'on_track',
+        checkIns: [answered('behind', 14 * 60 + 58)],
+        lastReorganizedAt: new Date(at(14 * 60 + 55)),
+        now: NOW,
+      }),
+    ).toEqual({ trigger: 'check_in', shouldReorganize: true, cooledDown: false });
+  });
+
+  it('does not re-honour an admission the last re-cut already answered', () => {
+    expect(
+      assessDrift({
+        posture: 'on_track',
+        checkIns: [answered('behind', 14 * 60 + 30)],
+        lastReorganizedAt: new Date(at(14 * 60 + 40)),
+        now: NOW,
+      }),
+    ).toMatchObject({ trigger: null, shouldReorganize: false });
+  });
+
+  it('is deterministic: the same inputs give the same verdict, every time', () => {
+    const input = {
+      posture: 'intervention_recommended',
+      checkIns: [answered('on_track', 13 * 60), answered('behind', 14 * 60 + 50)],
+      lastReorganizedAt: new Date(at(14 * 60)),
+      now: NOW,
+    } as const;
+    const runs = Array.from({ length: 25 }, () => assessDrift(input));
+    for (const run of runs) expect(run).toEqual(runs[0]);
   });
 });

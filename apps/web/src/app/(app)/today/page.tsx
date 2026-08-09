@@ -4,6 +4,7 @@ import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useState } from 'react';
 
 import { GhostProposals } from '@/components/today/ghost-proposals';
+import { MorningReview } from '@/components/today/morning-review';
 import NeedsYou from '@/components/today/needs-you';
 import TodaysWork from '@/components/today/todays-work';
 import TodaySession from '@/components/today/today-session';
@@ -89,6 +90,12 @@ export default function TodayPage(): JSX.Element {
               </Button>
             </div>
           ) : null}
+
+          {/* The walk-through sits above the proposals and the day's own work: on a morning that
+              has not been answered for yet, deciding the day is the thing to do first, and
+              everything below it is a reading of a day that has not been agreed. It renders
+              nothing once it is done, so it is not a permanent banner. */}
+          <MorningReview onChanged={refetch} />
 
           <GhostProposals orgId={activeOrgId} onApplied={refetch} />
 

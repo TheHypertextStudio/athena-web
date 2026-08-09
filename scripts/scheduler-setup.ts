@@ -168,6 +168,17 @@ export const JOBS: readonly CronJob[] = [
     description:
       "Docket: directive-posture sweep (recomputes each configured Hub's daily posture and notifies subscribed clients only on change).",
   },
+  // Matches the posture cadence: a check-in is only worth firing within half an hour of its
+  // scheduled moment, and a drifted day should not sit un-re-cut for longer than the posture
+  // that noticed it. The `fired_at` claim and the re-cut cooldown make an overlapping tick
+  // harmless.
+  {
+    name: 'docket-day-cadence',
+    path: '/internal/cron/day-cadence',
+    schedule: '*/5 * * * *',
+    description:
+      "Docket: day-cadence sweep (materializes each configured Hub's check-ins, re-cuts a drifted day's remainder, and fires every check-in that has come due).",
+  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

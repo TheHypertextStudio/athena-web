@@ -1,28 +1,29 @@
 'use client';
 
 /**
- * The morning agenda walk-through.
+ * The morning agenda walk-through: propose, defer, confirm.
  *
  * @remarks
- * Not a static list. The day is walked one block at a time, and each block gets a decision —
- * keep it, move it out of today, or drop it — before the review can be marked done. That is the
- * difference between "here is your day" and "you have been through your day", and only the
- * second is a signal anything downstream can act on.
+ * Not a static list. Docket **proposes** the day one block at a time; the person keeps each block
+ * or **defers** it out of today; only once every proposal has an answer is there anything to
+ * **confirm**. That is the difference between "here is your day" and "you have been through your
+ * day", and only the second is a signal anything downstream can act on.
+ *
+ * **The decisions live on the server.** They were local component state until they had somewhere
+ * to go, which meant a deferral moved nothing and a reload lost the walk-through — a review whose
+ * decisions cost the day nothing is theatre. Each answer is a write, and a deferral moves the
+ * block for real; `proposals` comes back from the same read that produces the agenda.
  *
  * The gate is stated plainly at the top: what is still outstanding, and what releases it. The
  * copy never says what holding the gate should *cost* — that is entirely the consuming client's
  * decision, and Docket does not have that vocabulary.
  */
-import type { DayStartOut, DirectiveOut } from '@docket/types';
+import type { DayStartOut, DirectiveOut, MorningProposalOut } from '@docket/types';
 import { Button, ControlGroup, Separator, Stack, Text, Toolbar } from '@docket/ui/primitives';
 import { CheckCircle2, ScheduleOutlined } from '@docket/ui/icons';
 import type { JSX } from 'react';
-import { useState } from 'react';
 
 import { WorkShapeChip } from './work-shape-chip';
-
-/** A person's decision about one block during the morning walk-through. */
-type MorningDecision = 'keep' | 'defer' | 'drop';
 
 /** Application-owned copy for each posture. Never a server sentence, never a model's words. */
 const POSTURE_HEADLINE: Readonly<Record<DirectiveOut['posture'], string>> = {
@@ -55,6 +56,9 @@ export interface DayStartReviewProps {
   readonly directive: DirectiveOut | undefined;
   readonly onAcknowledge: () => void;
   readonly acknowledging: boolean;
+  /** Invoked when the person answers one proposal. */
+  readonly onDecide?: (input: { key: string; decision: 'keep' | 'defer' }) => void;
+  readonly deciding?: boolean;
   /** Invoked when the person asks for the rest of the day to be re-cut. */
   readonly onReorganize?: () => void;
   readonly reorganizing?: boolean;
@@ -63,16 +67,12 @@ export interface DayStartReviewProps {
 /**
  * The start-of-day surface.
  *
- * @param props - The handshake payload, the directive, and the release action.
+ * @param props - The handshake payload, the directive, and the review's actions.
  * @returns the review.
  */
 export function DayStartReview(props: DayStartReviewProps): JSX.Element {
   const { dayStart } = props;
-  const [decisions, setDecisions] = useState<Record<string, MorningDecision>>({});
-  const decided = dayStart.agenda.filter(
-    (item) => decisions[item.calendarItemId ?? item.title] !== undefined,
-  ).length;
-  const allDecided = dayStart.agenda.length > 0 && decided === dayStart.agenda.length;
+  const decided = dayStart.proposals.length - dayStart.confirm.outstanding;
   const released = dayStart.acknowledgedAt !== null;
 
   if (!dayStart.ready) {
@@ -102,7 +102,7 @@ export function DayStartReview(props: DayStartReviewProps): JSX.Element {
             <Text token="body-small" tone="muted">
               {released
                 ? `Reviewed at ${clock(dayStart.acknowledgedAt, dayStart.timezone)}`
-                : `${String(decided)} of ${String(dayStart.agenda.length)} decided`}
+                : `${String(decided)} of ${String(dayStart.proposals.length)} decided`}
             </Text>
           </Stack>
         }
@@ -119,7 +119,7 @@ export function DayStartReview(props: DayStartReviewProps): JSX.Element {
             )}
             <Button
               onClick={props.onAcknowledge}
-              disabled={released || !allDecided || props.acknowledging}
+              disabled={released || !dayStart.confirm.available || props.acknowledging}
             >
               {released ? 'Reviewed' : props.acknowledging ? 'Saving…' : "I've been through today"}
             </Button>
@@ -130,53 +130,76 @@ export function DayStartReview(props: DayStartReviewProps): JSX.Element {
       <GateNotice gate={dayStart.gate} directive={props.directive} />
 
       <Stack gap={2} as="ol" data-testid="morning-agenda">
-        {dayStart.agenda.map((item) => {
-          const key = item.calendarItemId ?? item.title;
-          const decision = decisions[key];
-          return (
-            <li
-              key={key}
-              className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl px-4 py-3 @2xl:flex-row @2xl:items-center @2xl:justify-between"
-              data-testid="morning-agenda-item"
-              data-decision={decision ?? 'undecided'}
-            >
-              <Stack gap={1} className="min-w-0">
-                <div className="text-on-surface-variant flex items-center gap-1">
-                  <ScheduleOutlined fontSize="inherit" aria-hidden />
-                  <Text token="body-small" tone="muted" numeric>
-                    {clock(item.startsAt, dayStart.timezone)} –{' '}
-                    {clock(item.endsAt, dayStart.timezone)}
-                  </Text>
-                </div>
-                <Text token="title-small" truncate>
-                  {item.title}
-                </Text>
-                {item.shape === null ? null : (
-                  <div>
-                    <WorkShapeChip shape={item.shape} controlSize="xs" />
-                  </div>
-                )}
-              </Stack>
-              <ControlGroup controlSize="sm" className="shrink-0">
-                {(['keep', 'defer', 'drop'] as const).map((choice) => (
-                  <Button
-                    key={choice}
-                    variant={decision === choice ? 'secondary' : 'ghost'}
-                    aria-pressed={decision === choice}
-                    disabled={released}
-                    onClick={() => {
-                      setDecisions((current) => ({ ...current, [key]: choice }));
-                    }}
-                  >
-                    {choice === 'keep' ? 'Keep' : choice === 'defer' ? 'Move out' : 'Drop'}
-                  </Button>
-                ))}
-              </ControlGroup>
-            </li>
-          );
-        })}
+        {dayStart.proposals.map((proposal) => (
+          <ProposalRow
+            key={proposal.key}
+            proposal={proposal}
+            timezone={dayStart.timezone}
+            locked={released || props.deciding === true}
+            {...(props.onDecide ? { onDecide: props.onDecide } : {})}
+          />
+        ))}
       </Stack>
     </Stack>
+  );
+}
+
+/** One proposed block and the two answers it takes. */
+function ProposalRow(props: {
+  readonly proposal: MorningProposalOut;
+  readonly timezone: string;
+  readonly locked: boolean;
+  readonly onDecide?: (input: { key: string; decision: 'keep' | 'defer' }) => void;
+}): JSX.Element {
+  const { proposal } = props;
+  const choices = (['keep', 'defer'] as const).filter(
+    // A block Docket did not place is offered for review but not for deferral — moving it would
+    // be Docket editing someone else's diary, and an enabled button that 422s is worse than none.
+    (choice) => choice === 'keep' || proposal.deferable,
+  );
+  return (
+    <li
+      className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl px-4 py-3 @2xl:flex-row @2xl:items-center @2xl:justify-between"
+      data-testid="morning-agenda-item"
+      data-decision={proposal.decision}
+    >
+      <Stack gap={1} className="min-w-0">
+        <div className="text-on-surface-variant flex items-center gap-1">
+          <ScheduleOutlined fontSize="inherit" aria-hidden />
+          <Text token="body-small" tone="muted" numeric>
+            {clock(proposal.startsAt, props.timezone)} – {clock(proposal.endsAt, props.timezone)}
+          </Text>
+        </div>
+        <Text token="title-small" truncate>
+          {proposal.title}
+        </Text>
+        {proposal.shape === null ? null : (
+          <div>
+            <WorkShapeChip shape={proposal.shape} controlSize="xs" />
+          </div>
+        )}
+      </Stack>
+      <ControlGroup controlSize="sm" className="shrink-0">
+        {choices.map((choice) => {
+          const chosen =
+            (choice === 'keep' && proposal.decision === 'kept') ||
+            (choice === 'defer' && proposal.decision === 'deferred');
+          return (
+            <Button
+              key={choice}
+              variant={chosen ? 'secondary' : 'ghost'}
+              aria-pressed={chosen}
+              disabled={props.locked || props.onDecide === undefined}
+              onClick={() => {
+                props.onDecide?.({ key: proposal.key, decision: choice });
+              }}
+            >
+              {choice === 'keep' ? 'Keep' : 'Move out'}
+            </Button>
+          );
+        })}
+      </ControlGroup>
+    </li>
   );
 }
 

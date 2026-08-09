@@ -1,4 +1,5 @@
 import type * as DbModule from '@docket/db';
+import type { DayStartOut } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -81,6 +82,16 @@ async function seedDay(label: string, options: { plan?: boolean } = {}): Promise
   return { directive, planner, userId, hubId: hubRow.id };
 }
 
+/** The Hub id belonging to a seeded user. */
+async function hubOf(userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ id: schema.hub.id })
+    .from(schema.hub)
+    .where(eq(schema.hub.userId, userId))
+    .limit(1);
+  return row?.id ?? null;
+}
+
 describe('directive feed — authentication and Hub resolution', () => {
   it('401s every route when there is no session', async () => {
     const app = appWithSession(directiveFeed, null);
@@ -159,6 +170,177 @@ describe('GET /directive/day-start — the wake handshake', () => {
     expect(body.ready).toBe(true);
     expect(body.agenda.length).toBeGreaterThan(0);
     expect(body.acknowledgedAt).toBeNull();
+  });
+});
+
+describe('the morning agenda review — propose, defer, confirm', () => {
+  it('proposes every block, and will not offer a confirm until each one has an answer', async () => {
+    const { directive } = await seedDay('DirectiveMorningPropose');
+
+    const res = await directive.request(`/day-start?date=${DAY}`);
+    const body = (await res.json()) as DayStartOut;
+
+    // PROPOSE: one proposal per block, every one of them Docket's opening position and none of
+    // them yet the person's. This is the difference between a day to read and a day to answer.
+    expect(body.proposals.length).toBeGreaterThan(0);
+    expect(body.proposals.length).toBe(body.agenda.length);
+    expect(body.proposals.every((p) => p.decision === 'proposed')).toBe(true);
+    expect(body.proposals.every((p) => p.deferredTo === null)).toBe(true);
+    expect(body.proposals.every((p) => p.key === p.calendarItemId)).toBe(true);
+
+    // CONFIRM is not offered while anything is unanswered, and says how much is left.
+    expect(body.confirm.available).toBe(false);
+    expect(body.confirm.outstanding).toBe(body.proposals.length);
+    expect(body.confirm.confirmedAt).toBeNull();
+  });
+
+  it('records a keep, moves a deferral off the day for real, and then offers the confirm', async () => {
+    const { directive, userId } = await seedDay('DirectiveMorningDecide');
+    const opening = (await (
+      await directive.request(`/day-start?date=${DAY}`)
+    ).json()) as DayStartOut;
+    expect(opening.proposals.length).toBeGreaterThanOrEqual(2);
+    const [first, second] = opening.proposals;
+
+    // KEEP: recorded, and the outstanding count moves by exactly one.
+    const kept = (await (
+      await directive.request(`/day-start/decide?date=${DAY}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: first!.key, decision: 'keep' }),
+      })
+    ).json()) as DayStartOut;
+    expect(kept.proposals.find((p) => p.key === first!.key)?.decision).toBe('kept');
+    expect(kept.confirm.outstanding).toBe(opening.confirm.outstanding - 1);
+    expect(kept.confirm.available).toBe(false);
+
+    // DEFER: the block genuinely leaves today. A decision that costs the day nothing is theatre,
+    // so this is asserted on the calendar row and not on the payload alone.
+    const deferRes = await directive.request(`/day-start/decide?date=${DAY}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: second!.key, decision: 'defer' }),
+    });
+    expect(deferRes.status).toBe(200);
+    const [movedRow] = await db
+      .select({ startsAt: schema.calendarItem.startsAt })
+      .from(schema.calendarItem)
+      .where(eq(schema.calendarItem.id, second!.calendarItemId));
+    expect(movedRow?.startsAt?.toISOString().slice(0, 10)).toBe('2026-10-07');
+
+    // The deferred block is gone from today, and the decision was persisted rather than held in
+    // whichever page happened to make it.
+    const afterDefer = (await deferRes.json()) as DayStartOut;
+    expect(afterDefer.proposals.map((p) => p.key)).not.toContain(second!.key);
+    const [directiveRow] = await db
+      .select({ decisions: schema.dayDirective.morningDecisions })
+      .from(schema.dayDirective)
+      .where(eq(schema.dayDirective.hubId, (await hubOf(userId)) ?? ''));
+    expect(directiveRow?.decisions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: second!.key,
+          decision: 'deferred',
+          deferredTo: '2026-10-07',
+        }),
+      ]),
+    );
+
+    // Decide the rest of the day, and only then is there a confirm to make.
+    for (const proposal of afterDefer.proposals.filter((p) => p.decision === 'proposed')) {
+      await directive.request(`/day-start/decide?date=${DAY}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: proposal.key, decision: 'keep' }),
+      });
+    }
+    const ready = (await (await directive.request(`/day-start?date=${DAY}`)).json()) as DayStartOut;
+    expect(ready.confirm.outstanding).toBe(0);
+    expect(ready.confirm.available).toBe(true);
+
+    // CONFIRM: the same signal that has always released the day-start gate.
+    await directive.request(`/day-start/acknowledge?date=${DAY}`, { method: 'POST' });
+    const confirmed = (await (
+      await directive.request(`/day-start?date=${DAY}`)
+    ).json()) as DayStartOut;
+    expect(confirmed.confirm.confirmedAt).not.toBeNull();
+    expect(confirmed.gate.state).toBe('open');
+  });
+
+  it('answering the same proposal twice replaces the decision rather than stacking it', async () => {
+    const { directive, userId } = await seedDay('DirectiveMorningIdempotent');
+    const opening = (await (
+      await directive.request(`/day-start?date=${DAY}`)
+    ).json()) as DayStartOut;
+    const key = opening.proposals[0]!.key;
+    for (let i = 0; i < 3; i += 1) {
+      await directive.request(`/day-start/decide?date=${DAY}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key, decision: 'keep' }),
+      });
+    }
+    const [row] = await db
+      .select({ decisions: schema.dayDirective.morningDecisions })
+      .from(schema.dayDirective)
+      .where(eq(schema.dayDirective.hubId, (await hubOf(userId)) ?? ''));
+    expect(row?.decisions.filter((d) => d.key === key)).toHaveLength(1);
+  });
+
+  it('404s a key that is not one of today’s proposals', async () => {
+    const { directive } = await seedDay('DirectiveMorningUnknownKey');
+    const res = await directive.request(`/day-start/decide?date=${DAY}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: 'not-a-block', decision: 'keep' }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('refuses to defer a block Docket did not place', async () => {
+    const { directive, userId } = await seedDay('DirectiveMorningHandPlaced');
+    const layerId = one(
+      await db
+        .select({ id: schema.calendarLayer.id })
+        .from(schema.calendarLayer)
+        .where(eq(schema.calendarLayer.userId, userId))
+        .limit(1),
+    ).id;
+    const handPlaced = one(
+      await db
+        .insert(schema.calendarItem)
+        .values({
+          userId,
+          layerId,
+          connectionId: null,
+          kind: 'native_block',
+          provider: 'docket',
+          status: 'confirmed',
+          syncState: 'clean',
+          title: 'Coffee with Sam',
+          startsAt: new Date('2026-10-06T18:00:00.000Z'),
+          endsAt: new Date('2026-10-06T19:00:00.000Z'),
+          origin: 'user',
+        })
+        .returning({ id: schema.calendarItem.id }),
+    ).id;
+
+    const body = (await (await directive.request(`/day-start?date=${DAY}`)).json()) as DayStartOut;
+    const proposal = body.proposals.find((p) => p.key === handPlaced);
+    // It is still proposed — the morning reviews the whole day, not only Docket's part of it.
+    expect(proposal?.deferable).toBe(false);
+
+    const res = await directive.request(`/day-start/decide?date=${DAY}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: handPlaced, decision: 'defer' }),
+    });
+    expect(res.status).toBe(422);
+    const [row] = await db
+      .select({ startsAt: schema.calendarItem.startsAt })
+      .from(schema.calendarItem)
+      .where(eq(schema.calendarItem.id, handPlaced));
+    expect(row?.startsAt?.toISOString()).toBe('2026-10-06T18:00:00.000Z');
   });
 });
 

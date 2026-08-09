@@ -41,13 +41,14 @@ import type {
   WorkShape,
 } from '@docket/types';
 import { WORK_SHAPES, workShapeProfile } from '@docket/types';
-import { and, eq, gte, inArray, isNotNull, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNotNull, isNull, lt, lte, sql } from 'drizzle-orm';
 
 import type { BusyItem } from './availability';
 import { defaultAvailabilityWindows } from './availability';
+import { DEFAULT_CHECK_IN_CADENCE_MINUTES } from './day-loop';
 import type { ActualsIndex } from './duration-model';
 import type { PlannedBlock } from './week-planner';
-import { addDays, instantAt, localDateString } from './zoned-time';
+import { addDays, instantAt, localDateString, localMinuteOfDay } from './zoned-time';
 
 /** A Hub's resolved scheduling configuration, defaults filled in. */
 export interface ResolvedSchedulingPreferences {
@@ -57,6 +58,10 @@ export interface ResolvedSchedulingPreferences {
   readonly commitments: readonly SchedulingCommitment[];
   readonly reflectionForMeetings: boolean;
   readonly backfillShapes: readonly WorkShape[];
+  /** Fallback spacing between the day's check-ins, in minutes. */
+  readonly checkInCadenceMinutes: number;
+  /** Whether a drifted day is re-cut without being asked. */
+  readonly autoReorganizeOnDrift: boolean;
   readonly maxUnplannedGapMinutes: number;
   readonly minTransitGapMinutes: number;
   readonly maxTransitGapMinutes: number;
@@ -113,6 +118,8 @@ export async function loadSchedulingPreferences(
       commitments: [],
       reflectionForMeetings: true,
       backfillShapes: DEFAULT_BACKFILL_SHAPES,
+      checkInCadenceMinutes: DEFAULT_CHECK_IN_CADENCE_MINUTES,
+      autoReorganizeOnDrift: true,
       maxUnplannedGapMinutes: 60,
       minTransitGapMinutes: 15,
       maxTransitGapMinutes: 120,
@@ -156,6 +163,8 @@ export async function loadSchedulingPreferences(
       const shape = asWorkShape(s);
       return shape === null ? [] : [shape];
     }),
+    checkInCadenceMinutes: row.checkInCadenceMinutes,
+    autoReorganizeOnDrift: row.autoReorganizeOnDrift,
     maxUnplannedGapMinutes: row.maxUnplannedGapMinutes,
     minTransitGapMinutes: row.minTransitGapMinutes,
     maxTransitGapMinutes: row.maxTransitGapMinutes,
@@ -215,6 +224,8 @@ export async function saveSchedulingPreferences(
     backfillShapes: (update.backfillShapes ?? current.backfillShapes).filter(
       (s) => workShapeProfile(s).backfillEligible,
     ),
+    checkInCadenceMinutes: update.checkInCadenceMinutes ?? current.checkInCadenceMinutes,
+    autoReorganizeOnDrift: update.autoReorganizeOnDrift ?? current.autoReorganizeOnDrift,
     maxUnplannedGapMinutes: update.maxUnplannedGapMinutes ?? current.maxUnplannedGapMinutes,
     minTransitGapMinutes: update.minTransitGapMinutes ?? current.minTransitGapMinutes,
     maxTransitGapMinutes: update.maxTransitGapMinutes ?? current.maxTransitGapMinutes,
@@ -770,6 +781,93 @@ export async function moveCalendarItem(
     .update(calendarItem)
     .set({ startsAt: input.start, endsAt: input.end })
     .where(and(eq(calendarItem.id, input.calendarItemId), eq(calendarItem.userId, input.userId)));
+}
+
+/**
+ * Claim one check-in for firing, exactly once.
+ *
+ * @remarks
+ * The write is conditional on `fired_at IS NULL`, so two overlapping sweep ticks — or a scheduler
+ * retry after a dropped response — cannot both claim the same check-in and send the person two
+ * notifications for one moment. The caller notifies only when this returns true, which is what
+ * keeps `fired_at` an honest record of a delivery attempt rather than a row that was touched.
+ *
+ * @param db - The database client.
+ * @param input.checkInId - The check-in.
+ * @param input.hubId - The owning Hub, so one Hub can never fire another's.
+ * @param input.at - The firing instant.
+ * @returns whether this call is the one that claimed it.
+ */
+export async function claimCheckInFire(
+  db: Database,
+  input: { readonly checkInId: string; readonly hubId: string; readonly at: Date },
+): Promise<boolean> {
+  const claimed = await db
+    .update(dayCheckIn)
+    .set({ firedAt: input.at })
+    .where(
+      and(
+        eq(dayCheckIn.id, input.checkInId),
+        eq(dayCheckIn.hubId, input.hubId),
+        isNull(dayCheckIn.firedAt),
+      ),
+    )
+    .returning({ id: dayCheckIn.id });
+  return claimed.length > 0;
+}
+
+/**
+ * Move one of the scheduler's own blocks to another local date, keeping its clock time.
+ *
+ * @remarks
+ * Restricted to `origin = 'scheduler'` for the same reason {@link displaceCalendarItem} is: a
+ * block a person placed by hand, or one that arrived from an external calendar, is theirs to move.
+ * Docket deferring it would be Docket editing someone else's calendar.
+ *
+ * @param db - The database client.
+ * @param input.calendarItemId - The block.
+ * @param input.userId - Its owner, so one person cannot defer another's block.
+ * @param input.toDate - The local date to move it to.
+ * @param input.timezone - The timezone the clock time is preserved in.
+ * @returns the block's new bounds, or null when there was no such movable block.
+ */
+export async function deferCalendarItemToDate(
+  db: Database,
+  input: {
+    readonly calendarItemId: string;
+    readonly userId: string;
+    readonly toDate: string;
+    readonly timezone: string;
+  },
+): Promise<{ start: Date; end: Date } | null> {
+  const rows = await db
+    .select({ startsAt: calendarItem.startsAt, endsAt: calendarItem.endsAt })
+    .from(calendarItem)
+    .where(
+      and(
+        eq(calendarItem.id, input.calendarItemId),
+        eq(calendarItem.userId, input.userId),
+        eq(calendarItem.origin, 'scheduler'),
+      ),
+    )
+    .limit(1);
+  const row = rows[0];
+  if (row?.startsAt == null || row.endsAt === null) return null;
+
+  // The clock time is preserved rather than the instant, so a block deferred across a DST
+  // boundary still lands at "10am" instead of drifting an hour.
+  const minuteOfDay = localMinuteOfDay(row.startsAt, input.timezone);
+  const durationMinutes = Math.max(
+    1,
+    Math.round((row.endsAt.getTime() - row.startsAt.getTime()) / 60_000),
+  );
+  const start = instantAt(input.toDate, minuteOfDay, input.timezone);
+  const end = new Date(start.getTime() + durationMinutes * 60_000);
+  await db
+    .update(calendarItem)
+    .set({ startsAt: start, endsAt: end })
+    .where(and(eq(calendarItem.id, input.calendarItemId), eq(calendarItem.userId, input.userId)));
+  return { start, end };
 }
 
 /** Archive a block the day no longer has room for, preserving it for the evening review. */

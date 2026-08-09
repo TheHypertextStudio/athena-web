@@ -92,6 +92,17 @@ export const schedulingPreference = pgTable(
     commitments: jsonb('commitments').$type<StoredCommitment[]>().notNull().default([]),
     reflectionForMeetings: boolean('reflection_for_meetings').notNull().default(true),
     backfillShapes: jsonb('backfill_shapes').$type<string[]>().notNull().default([]),
+    /**
+     * How far apart the day's check-ins fall when no block boundary suggests a better moment.
+     * A person's own rhythm, not a product constant: some days want asking every ninety minutes
+     * and some want being left alone until lunch.
+     */
+    checkInCadenceMinutes: integer('check_in_cadence_minutes').notNull().default(150),
+    /**
+     * Whether a day that has genuinely slipped gets its remainder re-cut without being asked.
+     * Off leaves the drift visible in the posture and waits for an explicit re-cut.
+     */
+    autoReorganizeOnDrift: boolean('auto_reorganize_on_drift').notNull().default(true),
     maxUnplannedGapMinutes: integer('max_unplanned_gap_minutes').notNull().default(60),
     minTransitGapMinutes: integer('min_transit_gap_minutes').notNull().default(15),
     maxTransitGapMinutes: integer('max_transit_gap_minutes').notNull().default(120),
@@ -140,6 +151,18 @@ export const scheduleRun = pgTable(
   ],
 );
 
+/** One morning walk-through decision about a proposed block, as persisted. */
+export interface StoredMorningDecision {
+  /** The proposed block's stable key — its calendar item id. */
+  key: string;
+  /** `kept` | `deferred`. */
+  decision: string;
+  /** The local date a deferred block was moved to; null for a kept one. */
+  deferredTo: string | null;
+  /** When the decision was made, ISO-8601. */
+  decidedAt: string;
+}
+
 /**
  * The computed daily directive for one Hub-day.
  *
@@ -172,6 +195,17 @@ export const dayDirective = pgTable(
      * once (writes are conditional on it being null), so a client cannot manufacture a second one.
      */
     agendaAcknowledgedAt: timestamp('agenda_acknowledged_at'),
+    /**
+     * What the person decided about each proposed block during the morning walk-through.
+     *
+     * Persisted rather than held in the client so a reload does not lose the walk-through, and so
+     * "have they actually been through today" is answerable by anything that asks — the morning
+     * signal is only honest if the decisions behind it survive the page that made them.
+     */
+    morningDecisions: jsonb('morning_decisions')
+      .$type<StoredMorningDecision[]>()
+      .notNull()
+      .default([]),
     reviewCompletedAt: timestamp('review_completed_at'),
     lastReorganizedAt: timestamp('last_reorganized_at'),
     computedAt: timestamp('computed_at').notNull().defaultNow(),

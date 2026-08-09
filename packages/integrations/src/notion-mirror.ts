@@ -535,16 +535,24 @@ export class NotionMirrorClient {
         return undefined;
       }
       const properties = (op.properties ?? {}) as never;
-      const page =
-        op.kind === 'create'
-          ? await this.notion.pages.create({
-              parent: { type: 'data_source_id', data_source_id: op.dataSourceId },
-              properties,
-            })
-          : await this.notion.pages.update({
-              page_id: op.externalPageId ?? '',
-              properties,
-            });
+      let page;
+      if (op.kind === 'create') {
+        page = await this.notion.pages.create({
+          parent: { type: 'data_source_id', data_source_id: op.dataSourceId },
+          properties,
+        });
+      } else {
+        const pageId = op.externalPageId;
+        if (pageId === undefined) {
+          // `page_id: ''` reaches Notion as an opaque validation error naming a field the caller
+          // never set. Failing here names the actual problem: an update with nothing to update.
+          throw new ConnectorError('Notion update requested with no page id', {
+            provider: 'notion',
+            kind: 'provider',
+          });
+        }
+        page = await this.notion.pages.update({ page_id: pageId, properties });
+      }
       if (!isFullPage(page)) {
         throw new ConnectorError('Notion accepted the write but returned no page anchor', {
           provider: 'notion',

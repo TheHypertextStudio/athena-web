@@ -27,7 +27,7 @@
  * operator has to go digging for, it is accepted and written to the inbox like any other
  * delivery: durable, queryable, and already the place inbound webhook data lives.
  */
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import { asRecord, str } from './json';
 import type {
@@ -153,9 +153,14 @@ export class RealNotionObserver implements Observer {
 
     const token = readVerificationToken(payload);
     if (token !== undefined) {
-      // No workspace to route to yet; recorded unrouted so the operator can read the token back.
+      // No workspace to route to yet, so the delivery is recorded unrouted. The id is a DIGEST of
+      // the token, never a slice of it: `external_event_id` is a plain indexed text column, and
+      // putting part of a signing secret there would leave it queryable by anything that can read
+      // the inbox. Hashing still dedupes a retried handshake and still distinguishes two different
+      // subscriptions, which is all the id has to do.
+      const digest = createHash('sha256').update(token).digest('hex').slice(0, 32);
       return {
-        externalEventId: `verification:${token.slice(0, 16)}`,
+        externalEventId: `verification:${digest}`,
         eventType: NOTION_VERIFICATION_EVENT,
       };
     }

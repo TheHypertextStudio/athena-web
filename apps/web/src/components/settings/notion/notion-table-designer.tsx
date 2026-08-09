@@ -302,7 +302,10 @@ export function NotionTableDesigner({
                 renameColumn(open.field, e.target.value);
               }}
               onBlur={() => {
-                commitColumns(columns);
+                // Only when the title actually moved. The database-title field above already
+                // guards this way; without it, tabbing through the editor writes on every blur.
+                const saved = design.database.propertyMap[open.field]?.title;
+                if (open.title.trim().length > 0 && open.title !== saved) commitColumns(columns);
               }}
             />
           </label>

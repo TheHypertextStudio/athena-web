@@ -202,8 +202,12 @@ export interface NotionPeopleModel {
 
 /** Read the Notion↔Docket identity matching for this connection. */
 export function useNotionPeople(orgId: string, integrationId: string): NotionPeopleModel {
-  const peopleQ = useApiQuery(
-    apiQueryOptions(
+  // Disabled without a connection. The hub calls this before it knows whether Notion is connected
+  // (hooks run ahead of its early return), and an empty id would request
+  // `/integrations//notion/people` — a guaranteed 404 on every render of the not-connected page.
+  const enabled = integrationId.length > 0;
+  const peopleQ = useApiQuery({
+    ...apiQueryOptions(
       queryKeys.notionMirrorPeople(orgId, integrationId),
       () =>
         api.v1.orgs[':orgId'].integrations[':id'].notion.people.$get({
@@ -211,9 +215,10 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
         }),
       'Could not load people.',
     ),
-  );
-  const unmatchedQ = useApiQuery(
-    apiQueryOptions(
+    enabled,
+  });
+  const unmatchedQ = useApiQuery({
+    ...apiQueryOptions(
       [...queryKeys.notionMirrorPeople(orgId, integrationId), 'docket-only'],
       () =>
         api.v1.orgs[':orgId'].integrations[':id'].notion['unmatched-people'].$get({
@@ -221,13 +226,14 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
         }),
       'Could not load people.',
     ),
-  );
+    enabled,
+  });
 
   const people: readonly NotionWorkspacePerson[] = peopleQ.data?.items ?? [];
   const loadError = peopleQ.error ?? unmatchedQ.error;
 
   return {
-    loading: peopleQ.isPending || unmatchedQ.isPending,
+    loading: enabled && (peopleQ.isPending || unmatchedQ.isPending),
     error: loadError ? userErrorMessage(loadError, 'Could not load people.') : null,
     matched: people.filter((p) => p.actorId !== null),
     unmatched: people.filter((p) => p.actorId === null),

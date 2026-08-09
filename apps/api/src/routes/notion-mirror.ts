@@ -12,7 +12,7 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
-import { actor, db, externalActor, integration, organization } from '@docket/db';
+import { actor, db, externalActor, integration } from '@docket/db';
 import {
   NotionMirrorDatabaseOut,
   NotionMirrorDesignOut,
@@ -129,12 +129,7 @@ A rename never re-binds. Provisioned columns keep their Notion \`propertyId\`, w
       await assertNotionIntegration(orgId, id);
       await ensureDesigns(orgId, id, c.get('actorCtx').actorId);
       const row = await loadDesign(orgId, id, entity);
-      const skinRows = await db
-        .select({ vocabulary: organization.vocabulary })
-        .from(organization)
-        .where(eq(organization.id, orgId))
-        .limit(1);
-      await applyDesignPatch(row, body, skinRows[0]?.vocabulary ?? null);
+      await applyDesignPatch(row, body);
       return ok(c, NotionMirrorDesignOut, await buildDesignOut(orgId, id, entity));
     },
   )

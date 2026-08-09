@@ -14,7 +14,7 @@
  */
 import type { NotionMirrorDatabaseOut } from '@docket/types';
 import { cn } from '@docket/ui';
-import { ArrowRight, CheckCircle2, CircleAlert, OpenInNew } from '@docket/ui/icons';
+import { ArrowRight, CheckCircle2, CircleAlert } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
@@ -112,7 +112,6 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
     );
   }
 
-  const integrationId = model.integration.id;
   const designHref = (entity: string): string =>
     `/orgs/${orgId}/settings/connections/notion/${entity}`;
   const needsPeople = people.unmatched.length > 0;
@@ -179,21 +178,6 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
           Rows Docket owns are read-only in Notion. Edits to two-way fields flow back.
         </p>
       </section>
-
-      {model.integration.connection.externalWorkspaceName !== undefined ? (
-        <a
-          href="https://www.notion.so"
-          target="_blank"
-          rel="noreferrer"
-          className="text-primary text-label-large w-fit hover:underline"
-        >
-          Open in Notion <OpenInNew aria-hidden="true" className="inline size-3.5" />
-        </a>
-      ) : null}
-
-      <span className="sr-only" data-testid="notion-mirror-integration">
-        {integrationId}
-      </span>
     </div>
   );
 }

@@ -215,14 +215,12 @@ export function availableFields(
  *
  * @param row - The current design row.
  * @param patch - The requested change.
- * @param skin - The org's vocabulary skin, for defaulting a newly added column's title.
  * @returns the updated row.
  * @throws {ConflictError} When the title column is missing or a field is unknown.
  */
 export async function applyDesignPatch(
   row: MirrorDatabaseRow,
   patch: NotionMirrorDesignPatch,
-  skin: VocabularySkin | null,
 ): Promise<MirrorDatabaseRow> {
   const spec = MIRROR_ENTITY_SPECS[row.entityType];
   const update: Partial<typeof notionMirrorDatabase.$inferInsert> = {};
@@ -238,6 +236,22 @@ export async function applyDesignPatch(
         `The ${required.label} column cannot be removed — Notion requires one title column.`,
       );
     }
+    // Notion keys a database's schema by property NAME, so two columns sharing a title collapse
+    // into one property — the second silently replacing the first, and both Docket fields then
+    // binding to the same property id. The designer lets titles be edited freely, so this is one
+    // ordinary rename away; refuse it here rather than lose a column on provision.
+    const seenTitles = new Map<string, string>();
+    for (const column of patch.columns) {
+      const key = column.title.trim().toLowerCase();
+      const claimed = seenTitles.get(key);
+      if (claimed !== undefined) {
+        throw new ConflictError(
+          `Two columns are both called "${column.title.trim()}". Notion needs each column to have its own name.`,
+        );
+      }
+      seenTitles.set(key, column.field);
+    }
+
     const next: Record<string, NotionColumnBinding> = {};
     let order = 0;
     for (const column of patch.columns) {
@@ -282,7 +296,6 @@ export async function applyDesignPatch(
   const next = updated[0];
   /* v8 ignore next -- @preserve defensive: the row was loaded in this same request. */
   if (!next) throw new NotFoundError('Notion database design not found');
-  void skin;
   return next;
 }
 

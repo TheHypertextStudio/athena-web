@@ -28,6 +28,7 @@ export * from './mcp-oauth';
 export * from './mock-connector';
 export * from './mock-linear-agent';
 export * from './notion-mapping';
+export * from './notion-mirror';
 export * from './notion-mirror-schema';
 export * from './sunsama';
 export * from './sunsama-connector';

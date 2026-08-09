@@ -2,6 +2,7 @@
 
 import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
 import { DecorativeIcon } from '@docket/ui/primitives';
+import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from './card-note';
@@ -45,6 +46,15 @@ interface IntegrationProviderCardProps {
   configOpen: boolean;
   /** The config panel content, rendered inline when `configOpen` (built by the caller). */
   configPanel: JSX.Element | null;
+  /**
+   * Route to this provider's own settings page, when it has one instead of an inline panel.
+   *
+   * @remarks
+   * Notion's case: nine designed databases, a table designer, identity matching and sync history
+   * do not fit in a card disclosure. Without this link that page is reachable only by typing the
+   * URL, so it is the provider's entry point rather than a convenience.
+   */
+  manageHref?: string | null;
   /** Connect this provider on the current surface (pattern is fixed by the surface). */
   onConnect: () => void;
   /** Finish (pending) or repair (error) a connection — validates the credential, launching the
@@ -112,6 +122,7 @@ export function IntegrationProviderCard({
   configurable,
   configOpen,
   configPanel,
+  manageHref,
   onConnect,
   onReconnect,
   onSync,
@@ -137,6 +148,14 @@ export function IntegrationProviderCard({
             {existing ? statusSubtitle(existing) : (mechanics ?? connectHint)}
           </span>
         </div>
+        {existing && manageHref ? (
+          <NextLink
+            href={manageHref}
+            className="text-primary text-label-large shrink-0 hover:underline"
+          >
+            {existing.status === 'connected' ? 'Manage' : 'Set up'}
+          </NextLink>
+        ) : null}
         {existing ? (
           <IntegrationRowActions
             status={existing.status}

@@ -263,5 +263,23 @@ export function connectionCardCopy(provider: string): ConnectionCardCopy {
  * the generic card: Notion's picker is the list of Notion databases to sync.
  */
 export function hasInlineConfigPanel(provider: string): boolean {
-  return provider === 'linear' || provider === 'notion';
+  return provider === 'linear';
+}
+
+/**
+ * The dedicated settings page a provider manages itself on, when it has one.
+ *
+ * @remarks
+ * Notion outgrew the inline disclosure: nine designed databases, a table designer, identity
+ * matching and sync history do not fit inside a card, and burying them three levels deep is what
+ * made connector configuration hard to find in the first place. A provider with a page here shows
+ * a link on its card instead of a Configure toggle — which is also the ONLY way to reach the page,
+ * so it is not optional garnish.
+ *
+ * @param provider - The connector provider id.
+ * @param orgId - The workspace whose settings the link points into.
+ * @returns the route, or null for a provider configured inline.
+ */
+export function providerManageHref(provider: string, orgId: string): string | null {
+  return provider === 'notion' ? `/orgs/${orgId}/settings/connections/notion` : null;
 }

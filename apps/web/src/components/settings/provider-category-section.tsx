@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 
 import { IntegrationConfigPanel } from './integration-config-panel';
 import { IntegrationProviderCard } from './integration-provider-card';
+import { providerManageHref } from './integrations-config';
 import { LinearAddAccountRow } from './linear-add-account-row';
 import { SettingsSubsection } from './settings-subsection';
 import type { LinearAddModel } from './linear-add-account-row';
@@ -77,6 +78,7 @@ function ProviderRow({
       configurable={row.configurable}
       configOpen={row.state.configOpen}
       configPanel={configPanel}
+      manageHref={providerManageHref(row.provider.provider, orgId)}
       onConnect={row.actions.connect}
       onReconnect={() => {
         void row.actions.reconnect();

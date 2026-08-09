@@ -41,6 +41,8 @@ export interface NotionMirrorModel {
   totalRows: number;
   /** Where to go to connect Notion when it is not connected yet. */
   connectionsHref: string;
+  /** When the mirror last ran, in words, or null when it never has. */
+  lastSyncedLabel: string | null;
 }
 
 /** Read the Notion connection and the databases designed against it. */
@@ -78,6 +80,103 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
     provisionedCount: databases.filter((d) => d.provisionedAt !== null).length,
     totalRows: databases.reduce((sum, d) => sum + d.rowCount, 0),
     connectionsHref: `/orgs/${orgId}/settings/connections`,
+    lastSyncedLabel: relativeSyncLabel(
+      databases.map((d) => d.lastPushedAt).filter((v): v is string => v !== null),
+    ),
+  };
+}
+
+/**
+ * The most recent projection across every database, in words.
+ *
+ * @remarks
+ * Per-database timestamps would be noise — the passes run together — so the hub states the one
+ * fact a reader wants: how stale is what I am looking at in Notion.
+ */
+function relativeSyncLabel(timestamps: readonly string[]): string | null {
+  if (timestamps.length === 0) return null;
+  const latest = Math.max(...timestamps.map((t) => Date.parse(t)).filter((n) => !Number.isNaN(n)));
+  if (!Number.isFinite(latest)) return null;
+  const minutes = Math.round((Date.now() - latest) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${String(minutes)} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${String(hours)} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.round(hours / 24);
+  return `${String(days)} day${days === 1 ? '' : 's'} ago`;
+}
+
+/** The setup surface's view model: choose a page, then create the databases. */
+export interface NotionSetupModel {
+  loading: boolean;
+  error: string | null;
+  /** Notion pages Docket may build under — empty is legitimate, not a failure. */
+  parentPages: readonly { id: string; title: string }[];
+  /** True while the provision run is in flight. */
+  creating: boolean;
+  /** Create the databases under the chosen page. */
+  create: (containerPageId: string) => void;
+}
+
+/**
+ * Read the pages Docket may build under, and create the databases.
+ *
+ * @remarks
+ * The provision route answers 200 carrying the sync run, so a *failed* run is a successful HTTP
+ * response describing a failure. This surfaces that as an error rather than as success — the whole
+ * point of the never-report-success-when-nothing-happened rule.
+ */
+export function useNotionSetup(orgId: string, integrationId: string): NotionSetupModel {
+  const [error, setError] = useState<string | null>(null);
+  const enabled = integrationId.length > 0;
+
+  const pagesQ = useApiQuery({
+    ...apiQueryOptions(
+      [...queryKeys.notionMirrorDatabases(orgId, integrationId), 'parent-pages'],
+      () =>
+        api.v1.orgs[':orgId'].integrations[':id'].notion['parent-pages'].$get({
+          param: { orgId, id: integrationId },
+        }),
+      'Could not load your Notion pages.',
+    ),
+    enabled,
+  });
+
+  const create = useApiMutation({
+    mutationFn: (containerPageId: string) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations[':id'].notion.provision.$post({
+            param: { orgId, id: integrationId },
+            json: { containerPageId },
+          }),
+        'Could not create your Notion databases.',
+      ),
+    invalidateKeys: [queryKeys.notionMirrorDatabases(orgId, integrationId)],
+    onSuccess: (run: { status: string }) => {
+      // A failed run still arrives as a 200. Reporting it as success is exactly the dishonesty
+      // this codebase refuses.
+      setError(
+        run.status === 'succeeded'
+          ? null
+          : 'Docket could not finish creating your Notion databases. Check the connection and try again.',
+      );
+    },
+    onError: (e: Error) => {
+      setError(userErrorMessage(e, 'Could not create your Notion databases.'));
+    },
+  });
+
+  return {
+    loading: enabled && pagesQ.isPending,
+    error:
+      error ??
+      (pagesQ.error ? userErrorMessage(pagesQ.error, 'Could not load your Notion pages.') : null),
+    parentPages: pagesQ.data?.items ?? [],
+    creating: create.isPending,
+    create: (containerPageId) => {
+      create.mutate(containerPageId);
+    },
   };
 }
 

@@ -145,31 +145,42 @@ test.describe('notion mirror visuals', () => {
       // band, not something a user hits, since the real action invalidates through `useApiMutation`.
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       const { orgId } = await signUpAndOnboard(page, `NotionProv${viewport.name}`);
-      const integrationId = await connectNotion(page, orgId);
+      await connectNotion(page, orgId);
       await seedWork(page, orgId);
 
-      const parents = await apiJson<{ items: { id: string }[] }>(
-        page,
-        `/v1/orgs/${orgId}/integrations/${integrationId}/notion/parent-pages`,
-      );
-      const run = await apiJson<{ status: string; error: string | null }>(
-        page,
-        `/v1/orgs/${orgId}/integrations/${integrationId}/notion/provision`,
-        { method: 'POST', body: { containerPageId: parents.items[0]?.id } },
-      );
-      // The route answers 200 carrying the run, so a failed provision would otherwise be
-      // screenshotted as an empty state and pass.
-      expect(run.status, run.error ?? 'no error recorded').toBe('succeeded');
-
+      // The setup card: the affordance that turns a design into real databases. Captured before
+      // provisioning, because it only exists in that state.
       await page.goto(orgHref(orgId, 'settings/connections/notion'), {
         waitUntil: 'domcontentloaded',
       });
-      await expect(page.getByText(/rows in 9 databases/)).toBeVisible({
+      await expect(page.getByText('Create these in Notion')).toBeVisible({
         timeout: TIMEOUTS.pageReady,
       });
+      await shot(page, `notion-setup-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-setup-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
+
+      // Provision by CLICKING, not by POSTing. Driving it out of band leaves the already-loaded
+      // page serving the unprovisioned response from the service worker's cache; the real button
+      // goes through `useApiMutation` and invalidates, which is also what a user does.
+      await page.getByRole('button', { name: 'Create in Notion' }).click();
+      await expect(page.getByText(/rows in 9 databases/)).toBeVisible({ timeout: TIMEOUTS.sweep });
       await shot(page, `notion-hub-provisioned-${viewport.name}-light.png`);
       await setColorScheme(page, 'dark');
       await shot(page, `notion-hub-provisioned-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
+
+      // People: the surface "Match people" actually leads to now.
+      await page.goto(orgHref(orgId, 'settings/connections/notion/people'), {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect(page.getByText(/have no Notion account/)).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
+      await shot(page, `notion-people-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-people-${viewport.name}-dark.png`);
       await setColorScheme(page, 'light');
     });
   }

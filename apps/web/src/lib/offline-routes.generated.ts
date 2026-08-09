@@ -127,6 +127,10 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/page')).default,
   },
   {
+    pattern: '/orgs/[orgId]/settings/connections/notion/people',
+    load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/notion/people/page')).default,
+  },
+  {
     pattern: '/orgs/[orgId]/settings/connections',
     load: async () => (await import('@/app/(app)/orgs/[orgId]/settings/connections/page')).default,
   },

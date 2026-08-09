@@ -20,6 +20,7 @@ import NextLink from 'next/link';
 import type { JSX } from 'react';
 
 import { EMPTY_DATABASE_HINT, entityLabel } from './notion-copy';
+import { NotionSetupCard } from './notion-setup-card';
 import { useNotionMirror, useNotionPeople } from './use-notion-mirror-controller';
 
 /** Props for {@link NotionMirrorPanel}. */
@@ -145,7 +146,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
             Their assignments won’t reach Docket until they are.
           </p>
           <NextLink
-            href={`/orgs/${orgId}/settings/connections/notion/person`}
+            href={`/orgs/${orgId}/settings/connections/notion/people`}
             className="text-primary text-label-large mt-2 inline-block hover:underline"
           >
             Match people <ArrowRight aria-hidden="true" className="inline size-3.5" />
@@ -165,6 +166,9 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
         <p className="text-on-surface-variant text-body-small max-w-prose">
           {nothingProvisioned ? EMPTY_DATABASE_HINT : 'Docket keeps these current.'}
         </p>
+        {nothingProvisioned ? (
+          <NotionSetupCard orgId={orgId} integrationId={model.integration.id} />
+        ) : null}
         <ul className="border-outline-variant bg-surface-container-low mt-1 overflow-hidden rounded-xl border">
           {model.databases.map((database) => (
             <DatabaseRow
@@ -176,6 +180,7 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
         </ul>
         <p className="text-on-surface-variant text-body-small mt-1">
           Rows Docket owns are read-only in Notion. Edits to two-way fields flow back.
+          {model.lastSyncedLabel !== null ? ` Last synced ${model.lastSyncedLabel}.` : ''}
         </p>
       </section>
     </div>

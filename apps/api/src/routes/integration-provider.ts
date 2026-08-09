@@ -466,6 +466,9 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
 /** Serialize a task row to its {@link TaskOut} representation. */
 export function toTaskOut(t: TaskRow): z.input<typeof TaskOut> {
   return {
+    // Provider payloads carry no Docket labels: the reconciler mirrors provider-side
+    // labels through its own path, and echoing ours back would look like an instruction.
+    labels: [],
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,

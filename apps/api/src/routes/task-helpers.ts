@@ -5,14 +5,28 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError, ValidationError } from '../error';
+import type { LabelRefRow } from '../lib/labels';
 import { rawResultRowCount, rawResultRows } from '../lib/raw-result';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
 
-/** toOut converts internal API route data into the public API response shape. */
-export function toOut(t: TaskRow): z.input<typeof TaskOut> {
+/**
+ * Convert a task row into the public API response shape.
+ *
+ * @remarks
+ * `labels` is required rather than defaulting to `[]` on purpose: a task's labels live in a join
+ * table, so every caller has to decide whether to hydrate them, and a default would let a caller
+ * quietly ship a permanently unlabeled response. Making it required turns that decision into a
+ * compile error at each call site. Pass `[]` where labels genuinely do not apply.
+ *
+ * @param t - The task row.
+ * @param labels - The task's labels, from `labelsForSubject(s)`.
+ * @returns The serialized task.
+ */
+export function toOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeof TaskOut> {
   return {
+    labels: [...labels],
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,

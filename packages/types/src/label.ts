@@ -151,6 +151,25 @@ export const LabelMerge = z
 /** Validated label-merge body. */
 export type LabelMerge = z.infer<typeof LabelMerge>;
 
+/**
+ * The slim label shape carried inline on a labeled entity.
+ *
+ * @remarks
+ * Everything a chip needs to render and nothing else. List endpoints embed this rather than the
+ * full {@link LabelOut} because a labeled list of 200 tasks would otherwise repeat the org id,
+ * scope, and group on every row for no reader — and because a row that has to look up its own
+ * label is a row that flashes unlabeled first.
+ */
+export const LabelRef = z
+  .object({
+    id: LabelId.describe('Opaque label id.'),
+    name: z.string().describe('Label text.'),
+    color: z.string().describe('Palette token key; may be a legacy hex on a mirrored label.'),
+  })
+  .meta({ id: 'LabelRef', description: 'A label as carried inline on a labeled entity.' });
+/** Slim label reference value. */
+export type LabelRef = z.infer<typeof LabelRef>;
+
 /** Full label representation returned by reads. */
 export const LabelOut = z
   .object({

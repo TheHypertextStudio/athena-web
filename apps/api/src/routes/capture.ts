@@ -47,6 +47,8 @@ function deriveTitle(text: string): string {
 /** Project an active task row into the {@link TaskOut} wire shape. */
 function toOut(t: TaskRow): z.input<typeof TaskOut> {
   return {
+    // Quick capture creates a bare task; it has no labels yet by construction.
+    labels: [],
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,

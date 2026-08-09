@@ -22,6 +22,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
 import { isWithinWindow, normalizeCadenceWeeks } from '../lib/cycle-window';
+import { labelsForSubjects } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
@@ -280,10 +281,17 @@ const cycles = new Hono<AppEnv>()
         else buckets.set(key, [t]);
       }
 
+      // One batched read for every committed task, rather than one per row while grouping.
+      const labelsByTask = await labelsForSubjects(
+        'task',
+        orgId,
+        tasks.map((t) => t.id),
+      );
+
       const groups: z.input<typeof CycleTasksOut>['groups'] = [...buckets.entries()].map(
         ([key, list]) => ({
           ...(groupBy === 'project' ? { projectId: key } : { programId: key }),
-          tasks: list.map(taskToOut),
+          tasks: list.map((t) => taskToOut(t, labelsByTask.get(t.id) ?? [])),
         }),
       );
       return ok(c, CycleTasksOut, { groupBy, groups });

@@ -21,6 +21,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { labelsForSubjects, type LabelRefRow } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -51,8 +52,10 @@ function toOut(p: ProgramRow): z.input<typeof ProgramOut> {
 /** Project a task row into its `TaskOut` wire shape (shared with the tasks router). */
 function taskToOut(
   t: TaskRow,
+  labels: readonly LabelRefRow[],
 ): z.input<typeof ProgramWorkOut>['groups'][number]['segments'][number]['tasks'][number] {
   return {
+    labels: [...labels],
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,
@@ -354,6 +357,13 @@ const programs = new Hono<AppEnv>()
         bucket.push(t);
       }
 
+      // One batched read for the whole work view; the grouping below just looks labels up.
+      const labelsByTask = await labelsForSubjects(
+        'task',
+        orgId,
+        taskRows.map((t) => t.id),
+      );
+
       const payload: z.input<typeof ProgramWorkOut> = {
         groups: [...groups.entries()].map(([cycleKey, byProject]) => {
           const cy = cycleKey === '\0' ? null : cycleById.get(cycleKey);
@@ -376,7 +386,7 @@ const programs = new Hono<AppEnv>()
                       /* v8 ignore next -- @preserve defensive: projectKey came from a project row, so its name is always in the map */
                       name: projectNameById.get(projectKey) ?? null,
                     },
-              tasks: tasks.map(taskToOut),
+              tasks: tasks.map((t) => taskToOut(t, labelsByTask.get(t.id) ?? [])),
             })),
           };
         }),

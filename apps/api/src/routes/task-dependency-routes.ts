@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, CycleError, NotFoundError, ValidationError } from '../error';
 import { serializableTx } from '../lib/serializable-tx';
+import { labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -53,7 +54,14 @@ export const taskDependencyRoutes = new Hono<AppEnv>()
         .where(
           and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
         );
-      return ok(c, pageOf(TaskOut), { items: rows.map(toOut) });
+      const labelsByTask = await labelsForSubjects(
+        'task',
+        orgId,
+        rows.map((t) => t.id),
+      );
+      return ok(c, pageOf(TaskOut), {
+        items: rows.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
+      });
     },
   )
   .post(
@@ -84,6 +92,10 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId ?? parent.projectId);
 
       const state = body.state ?? parent.state;
+      // `SubtaskCreate.labels` was accepted and discarded here for the same reason
+      // `TaskCreate.labels` was: nothing ever wrote the join. Resolve against the parent's team,
+      // which the subtask inherits.
+      const resolvedLabels = await resolveLabelSet(orgId, body.labels, { teamId: parent.teamId });
 
       const inserted = await db
         .insert(task)
@@ -110,8 +122,11 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('subtask insert returned no row');
+      if (resolvedLabels.length > 0) {
+        await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, resolvedLabels));
+      }
       await enqueueSearchUpsert(orgId, 'task', row.id);
-      return ok(c, TaskOut, toOut(row));
+      return ok(c, TaskOut, toOut(row, resolvedLabels));
     },
   )
   .get(

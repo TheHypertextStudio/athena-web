@@ -22,6 +22,20 @@ import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 
+/**
+ * A label as the API serializes it inline: the unbranded row form of `LabelRef`.
+ *
+ * @remarks
+ * Serializers here return `z.input` shapes, where ids are plain strings — the brand is minted by
+ * the response schema on the way out. Declaring that shape once keeps every caller from having to
+ * assert a database string into a branded id.
+ */
+export interface LabelRefRow {
+  readonly id: string;
+  readonly name: string;
+  readonly color: string;
+}
+
 /** A transaction handle, as Drizzle hands it to a `db.transaction` callback. */
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -31,10 +45,14 @@ type Db = typeof db | Tx;
 /** The entities that can carry labels. */
 export type LabelableKind = 'task' | 'project' | 'initiative' | 'program' | 'resource';
 
-/** A resolved label, carrying just enough of its group to enforce exclusivity. */
-export interface ResolvedLabel {
-  readonly id: string;
-  readonly name: string;
+/**
+ * A resolved label: the chip fields plus just enough of its group to enforce exclusivity.
+ *
+ * @remarks
+ * Deliberately a superset of {@link LabelRefRow}, so a route that has just written a label set
+ * can serialize it directly instead of reading back what it only now wrote.
+ */
+export interface ResolvedLabel extends LabelRefRow {
   readonly groupId: string | null;
   /** Null when ungrouped or when the group is a non-exclusive (purely visual) cluster. */
   readonly exclusiveGroupId: string | null;
@@ -58,7 +76,16 @@ interface LabelJoin {
   ) => Promise<unknown>;
   /** Count attachments per label id, for the settings page's usage counts. */
   readonly countsFor: (dbh: Db, orgId: string) => Promise<{ labelId: string; count: number }[]>;
+  /** Read every attachment for a batch of subjects, joined to the label itself. */
+  readonly hydrate: (
+    dbh: Db,
+    orgId: string,
+    subjectIds: readonly string[],
+  ) => Promise<{ subjectId: string; id: string; name: string; color: string }[]>;
 }
+
+/** The label columns a chip needs; shared by every join's `hydrate`. */
+const LABEL_REF_COLUMNS = { id: label.id, name: label.name, color: label.color };
 
 const JOINS: Record<LabelableKind, LabelJoin> = {
   task: {
@@ -73,6 +100,13 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .from(taskLabel)
         .where(eq(taskLabel.organizationId, orgId))
         .groupBy(taskLabel.labelId),
+    hydrate: (dbh, orgId, subjectIds) =>
+      dbh
+        .select({ subjectId: taskLabel.taskId, ...LABEL_REF_COLUMNS })
+        .from(taskLabel)
+        .innerJoin(label, eq(label.id, taskLabel.labelId))
+        .where(and(eq(taskLabel.organizationId, orgId), inArray(taskLabel.taskId, [...subjectIds])))
+        .orderBy(label.name),
   },
   project: {
     clear: (tx, id) => tx.delete(projectLabel).where(eq(projectLabel.projectId, id)),
@@ -86,6 +120,18 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .from(projectLabel)
         .where(eq(projectLabel.organizationId, orgId))
         .groupBy(projectLabel.labelId),
+    hydrate: (dbh, orgId, subjectIds) =>
+      dbh
+        .select({ subjectId: projectLabel.projectId, ...LABEL_REF_COLUMNS })
+        .from(projectLabel)
+        .innerJoin(label, eq(label.id, projectLabel.labelId))
+        .where(
+          and(
+            eq(projectLabel.organizationId, orgId),
+            inArray(projectLabel.projectId, [...subjectIds]),
+          ),
+        )
+        .orderBy(label.name),
   },
   initiative: {
     clear: (tx, id) => tx.delete(initiativeLabel).where(eq(initiativeLabel.initiativeId, id)),
@@ -99,6 +145,18 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .from(initiativeLabel)
         .where(eq(initiativeLabel.organizationId, orgId))
         .groupBy(initiativeLabel.labelId),
+    hydrate: (dbh, orgId, subjectIds) =>
+      dbh
+        .select({ subjectId: initiativeLabel.initiativeId, ...LABEL_REF_COLUMNS })
+        .from(initiativeLabel)
+        .innerJoin(label, eq(label.id, initiativeLabel.labelId))
+        .where(
+          and(
+            eq(initiativeLabel.organizationId, orgId),
+            inArray(initiativeLabel.initiativeId, [...subjectIds]),
+          ),
+        )
+        .orderBy(label.name),
   },
   program: {
     clear: (tx, id) => tx.delete(programLabel).where(eq(programLabel.programId, id)),
@@ -112,6 +170,18 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .from(programLabel)
         .where(eq(programLabel.organizationId, orgId))
         .groupBy(programLabel.labelId),
+    hydrate: (dbh, orgId, subjectIds) =>
+      dbh
+        .select({ subjectId: programLabel.programId, ...LABEL_REF_COLUMNS })
+        .from(programLabel)
+        .innerJoin(label, eq(label.id, programLabel.labelId))
+        .where(
+          and(
+            eq(programLabel.organizationId, orgId),
+            inArray(programLabel.programId, [...subjectIds]),
+          ),
+        )
+        .orderBy(label.name),
   },
   resource: {
     clear: (tx, id) => tx.delete(resourceLabel).where(eq(resourceLabel.resourceId, id)),
@@ -125,6 +195,18 @@ const JOINS: Record<LabelableKind, LabelJoin> = {
         .from(resourceLabel)
         .where(eq(resourceLabel.organizationId, orgId))
         .groupBy(resourceLabel.labelId),
+    hydrate: (dbh, orgId, subjectIds) =>
+      dbh
+        .select({ subjectId: resourceLabel.resourceId, ...LABEL_REF_COLUMNS })
+        .from(resourceLabel)
+        .innerJoin(label, eq(label.id, resourceLabel.labelId))
+        .where(
+          and(
+            eq(resourceLabel.organizationId, orgId),
+            inArray(resourceLabel.resourceId, [...subjectIds]),
+          ),
+        )
+        .orderBy(label.name),
   },
 };
 
@@ -193,8 +275,7 @@ export async function resolveLabelSet(
 
   const rows = await dbh
     .select({
-      id: label.id,
-      name: label.name,
+      ...LABEL_REF_COLUMNS,
       groupId: label.groupId,
       groupExclusive: labelGroup.exclusive,
     })
@@ -210,6 +291,7 @@ export async function resolveLabelSet(
       {
         id: r.id,
         name: r.name,
+        color: r.color,
         groupId: r.groupId,
         // A non-exclusive group is a visual cluster, so it must not constrain the write.
         exclusiveGroupId: r.groupExclusive === true ? r.groupId : null,
@@ -278,6 +360,57 @@ export async function attachLabels(
   const next = applyExclusivity(union);
   await replaceLabels(tx, kind, subjectId, orgId, next);
   return next;
+}
+
+/**
+ * Read the labels attached to a batch of subjects, in one query.
+ *
+ * @remarks
+ * The batch shape is the point. A list endpoint hydrates its whole page with a single call, so
+ * rendering label chips on 200 rows costs one extra query rather than 200 — and the rows arrive
+ * already labeled instead of flashing unlabeled while each one fetches its own.
+ *
+ * Labels come back sorted by name so a row's chips are in a stable order between reads.
+ *
+ * @param kind - Which entity the subjects are.
+ * @param orgId - The verified tenant id.
+ * @param subjectIds - The subjects to hydrate; an empty list short-circuits.
+ * @param dbh - Optional handle, to read inside an open transaction.
+ * @returns A map of subject id → its labels. Unlabeled subjects are absent.
+ */
+export async function labelsForSubjects(
+  kind: LabelableKind,
+  orgId: string,
+  subjectIds: readonly string[],
+  dbh: Db = db,
+): Promise<Map<string, LabelRefRow[]>> {
+  const byId = new Map<string, LabelRefRow[]>();
+  if (subjectIds.length === 0) return byId;
+  const rows = await JOINS[kind].hydrate(dbh, orgId, subjectIds);
+  for (const row of rows) {
+    const list = byId.get(row.subjectId) ?? [];
+    list.push({ id: row.id, name: row.name, color: row.color });
+    byId.set(row.subjectId, list);
+  }
+  return byId;
+}
+
+/**
+ * Read the labels attached to one subject.
+ *
+ * @param kind - Which entity the subject is.
+ * @param orgId - The verified tenant id.
+ * @param subjectId - The subject's id.
+ * @param dbh - Optional handle, to read inside an open transaction.
+ * @returns Its labels, sorted by name; empty when unlabeled.
+ */
+export async function labelsForSubject(
+  kind: LabelableKind,
+  orgId: string,
+  subjectId: string,
+  dbh: Db = db,
+): Promise<LabelRefRow[]> {
+  return (await labelsForSubjects(kind, orgId, [subjectId], dbh)).get(subjectId) ?? [];
 }
 
 /**

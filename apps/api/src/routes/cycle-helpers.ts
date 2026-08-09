@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
+import type { LabelRefRow } from '../lib/labels';
 import {
   type CycleWindowSlot,
   isWithinWindow,
@@ -49,8 +50,9 @@ export function toOut(cy: CycleRow, now?: Date): z.input<typeof CycleOut> {
 }
 
 /** Project an active task row into the {@link TaskOut} wire shape. */
-export function taskToOut(t: TaskRow): z.input<typeof TaskOut> {
+export function taskToOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeof TaskOut> {
   return {
+    labels: [...labels],
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,

@@ -1,6 +1,16 @@
 /** `@docket/api` — tasks router (mounted at `/v1/orgs/:orgId/tasks`). */
 import { type Capability, satisfies } from '@docket/authz';
-import { actor, cycle, db, program, project, task, taskDependency, team } from '@docket/db';
+import {
+  actor,
+  cycle,
+  db,
+  program,
+  project,
+  task,
+  taskDependency,
+  taskLabel,
+  team,
+} from '@docket/db';
 import {
   pageOf,
   TaskArchived,
@@ -11,12 +21,13 @@ import {
   TaskStateUpdate,
   TaskUpdate,
 } from '@docket/types';
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { CapabilityError, CycleError, NotFoundError, ValidationError } from '../error';
+import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
 import { setTaskState } from '../lib/task-state';
@@ -142,6 +153,11 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
         ? await resolveStateTransition(orgId, body.teamId, body.state ?? firstState.key)
         : { state: body.state ?? 'backlog', completedAt: null, canceledAt: null };
 
+      // Labels were accepted by the DTO and silently dropped here until now. Resolve against the
+      // task's own team so a team-limited label is offerable, and let the shared write path
+      // collapse any exclusive-group collision.
+      const resolvedLabels = await resolveLabelSet(orgId, body.labels, { teamId: body.teamId });
+
       const inserted = await db
         .insert(task)
         .values({
@@ -170,6 +186,10 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
       if (!row) throw new Error('task insert returned no row');
 
+      if (resolvedLabels.length > 0) {
+        await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, resolvedLabels));
+      }
+
       // Stream: record the creation, plus an assignment event when it lands on someone.
       const subject = { type: 'task', id: row.id, title: row.title };
       await emitEvent({
@@ -191,7 +211,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       // No creation entry is written: the row's own `createdAt`/`createdBy` are that record, and
       // the activity endpoint projects the entry from them (see `lib/task-audit.ts`).
       await enqueueTaskSearchIndex(orgId, row.id);
-      return ok(c, TaskOut, toOut(row));
+      return ok(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
     },
   )
   .get(
@@ -202,12 +222,30 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
       response: pageOf(TaskOut),
       description: `List the org's active (non-archived) tasks, newest-first. Ordering is a stable keyset on \`(createdAt DESC, id DESC)\`, so paging never skips or repeats a row even as tasks are created concurrently. Archived (soft-deleted) tasks are excluded — fetch those contexts via their parent/project surfaces, not here.
 
-Pagination is opt-in via the cursor query: omit \`limit\` to receive the full active-task list in one response (legacy behavior); supply \`limit\` to receive a bounded page plus a \`nextCursor\` you pass back as \`cursor\` to fetch the next page. \`nextCursor\` is \`null\` on the final page. An optional \`programId\` narrows the list to tasks under that Program — carrying its \`program_id\` directly, or belonging to one of the Program's Projects (the same union a Program's own work view applies). Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
+Pagination is opt-in via the cursor query: omit \`limit\` to receive the full active-task list in one response (legacy behavior); supply \`limit\` to receive a bounded page plus a \`nextCursor\` you pass back as \`cursor\` to fetch the next page. \`nextCursor\` is \`null\` on the final page. An optional \`labelId\` narrows the list to tasks carrying that label; an optional \`programId\` narrows the list to tasks under that Program — carrying its \`program_id\` directly, or belonging to one of the Program's Projects (the same union a Program's own work view applies). Requires org membership (\`view\`); no extra capability. Each item is a {@link TaskOut} (the flat task shape without dependency/subtask edges — use \`GET /:id\` for those). Returns a cursor page of {@link TaskOut}.`,
     }),
     zQuery(TaskListQuery),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const { cursor, limit, programId } = c.req.valid('query');
+      const { cursor, limit, programId, labelId } = c.req.valid('query');
+
+      // Label filter: an EXISTS against the join, so a task carrying the label once is returned
+      // once — a plain inner join would duplicate rows and corrupt the keyset page size.
+      const labelFilter =
+        labelId === undefined
+          ? undefined
+          : exists(
+              db
+                .select({ one: sql`1` })
+                .from(taskLabel)
+                .where(
+                  and(
+                    eq(taskLabel.taskId, task.id),
+                    eq(taskLabel.labelId, labelId),
+                    eq(taskLabel.organizationId, orgId),
+                  ),
+                ),
+            );
 
       // Same "under the Program" union the Program's own work view applies: a task carrying the
       // Program directly, or belonging to one of the Program's Projects.
@@ -235,12 +273,22 @@ Pagination is opt-in via the cursor query: omit \`limit\` to receive the full ac
             isNull(task.archivedAt),
             seekAfter(task.createdAt, task.id, cursor),
             ...(programFilter ? [programFilter] : []),
+            ...(labelFilter ? [labelFilter] : []),
           ),
         )
         .orderBy(desc(task.createdAt), desc(task.id));
       const rows = await (limit === undefined ? base : base.limit(limit + 1));
       const { items, nextCursor } = pageResult(rows, limit, (r) => r.createdAt);
-      return ok(c, pageOf(TaskOut), { items: items.map(toOut), nextCursor });
+      // One extra query for the whole page rather than one per row.
+      const labelsByTask = await labelsForSubjects(
+        'task',
+        orgId,
+        items.map((t) => t.id),
+      );
+      return ok(c, pageOf(TaskOut), {
+        items: items.map((t) => toOut(t, labelsByTask.get(t.id) ?? [])),
+        nextCursor,
+      });
     },
   )
   .get(
@@ -281,7 +329,7 @@ A cross-org or unknown id 404s (existence-hiding: another tenant's task is indis
         );
 
       const detail: z.input<typeof TaskDetail> = {
-        ...toOut(row),
+        ...toOut(row, await labelsForSubject('task', orgId, row.id)),
         milestoneId: row.milestoneId,
         cycleId: row.cycleId,
         parentTaskId: row.parentTaskId,
@@ -392,9 +440,20 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
           : {}),
       };
 
+      // A labels-only body has an empty column patch but is not a no-op.
+      const patchLabels =
+        body.labels === undefined
+          ? undefined
+          : await resolveLabelSet(orgId, body.labels, { teamId: before.teamId });
+
       // An empty patch body is a valid no-op: Drizzle rejects an empty `.set({})`.
       if (Object.keys(patch).length === 0) {
-        return ok(c, TaskOut, toOut(await loadTask(orgId, id)));
+        if (patchLabels !== undefined) {
+          await db.transaction((tx) => replaceLabels(tx, 'task', id, orgId, patchLabels));
+          await enqueueTaskSearchIndex(orgId, id);
+        }
+        const current = await loadTask(orgId, id);
+        return ok(c, TaskOut, toOut(current, await labelsForSubject('task', orgId, id)));
       }
 
       // Date validity, second layer: the DTO checked the days this request carries against each
@@ -445,8 +504,11 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
         actorId: ctx.actorId,
         changes: await resolveTaskChangeLabels(orgId, diffTaskFields(before, row)),
       });
+      if (patchLabels !== undefined) {
+        await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, patchLabels));
+      }
       await enqueueTaskSearchIndex(orgId, row.id);
-      return ok(c, TaskOut, toOut(row));
+      return ok(c, TaskOut, toOut(row, await labelsForSubject('task', orgId, row.id)));
     },
   )
   .delete(
@@ -502,7 +564,7 @@ The transition is resolved server-side: entering a terminal state derives \`comp
       // Shared with the task.setStatus automation action — one transition implementation.
       const next = await setTaskState({ organizationId: orgId, taskId: id, state, actorId });
       if (!next) throw new NotFoundError('Task not found');
-      return ok(c, TaskOut, toOut(next));
+      return ok(c, TaskOut, toOut(next, await labelsForSubject('task', orgId, next.id)));
     },
   )
   .route('/', taskDependencyRoutes)

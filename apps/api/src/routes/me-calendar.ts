@@ -64,6 +64,7 @@ import {
 } from '../calendar/calendar-write';
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
+import { labelsForSubject } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -395,7 +396,8 @@ const meCalendar = new Hono<AppEnv>()
         });
       }
 
-      return ok(c, TaskOut, toOut(created));
+      // Freshly created from a calendar item, which carries no labels of its own.
+      return ok(c, TaskOut, toOut(created, []));
     },
   )
   .post(
@@ -559,7 +561,12 @@ const meCalendar = new Hono<AppEnv>()
       });
       return ok(c, CalendarItemTaskLinkResultOut, {
         link: toCalendarItemTaskLinkOut(link),
-        task: toOut(linkedTask),
+        task: toOut(
+          linkedTask,
+          // Hub-scoped route: the tenant key comes from the task row, which `linkTaskToItem`
+          // already resolved through the caller's own memberships.
+          await labelsForSubject('task', linkedTask.organizationId, linkedTask.id),
+        ),
       });
     },
   )

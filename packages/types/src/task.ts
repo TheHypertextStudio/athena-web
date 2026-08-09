@@ -17,6 +17,7 @@
 import { z } from 'zod';
 
 import { Priority } from './capability';
+import { LabelRef } from './label';
 import { CursorQuery } from './pagination';
 import {
   ActorId,
@@ -34,6 +35,9 @@ import {
 export const TaskListQuery = CursorQuery.extend({
   programId: ProgramId.optional().describe(
     'Restrict the list to tasks under a Program — carrying its `programId` directly, or belonging to one of the Program’s Projects. Omit for the full active-task list.',
+  ),
+  labelId: LabelId.optional().describe(
+    'Restrict the list to tasks carrying this label. Combines with `programId` as an AND. Omit for no label filter.',
   ),
 }).meta({ id: 'TaskListQuery', description: 'Query filters for listing tasks.' });
 /** Validated task-list query value. */
@@ -348,6 +352,11 @@ export const TaskOut = z
     provenance: TaskProvenance.describe(
       'Machine-readable origin metadata for the sync engine — NOT a task property to render. See {@link TaskProvenance} and {@link taskOriginLabel}.',
     ),
+    labels: z
+      .array(LabelRef)
+      .describe(
+        'Labels attached to the task, sorted by name. Embedded rather than referenced by id so a list row can render its chips without a second read.',
+      ),
     createdAt: z.string().describe('Creation timestamp (ISO 8601).'),
   })
   .meta({ id: 'TaskOut', description: 'A task.' });

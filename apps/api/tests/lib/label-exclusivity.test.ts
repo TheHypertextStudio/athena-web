@@ -14,7 +14,13 @@ import { applyExclusivity, type ResolvedLabel } from '../../src/lib/labels';
 
 /** Build a resolved label; `exclusiveGroup` null means ungrouped or a visual-only cluster. */
 function mk(id: string, exclusiveGroup: string | null = null): ResolvedLabel {
-  return { id, name: id, groupId: exclusiveGroup, exclusiveGroupId: exclusiveGroup };
+  return {
+    id,
+    name: id,
+    color: 'blue',
+    groupId: exclusiveGroup,
+    exclusiveGroupId: exclusiveGroup,
+  };
 }
 
 describe('applyExclusivity', () => {

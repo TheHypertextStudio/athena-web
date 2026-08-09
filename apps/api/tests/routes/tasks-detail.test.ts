@@ -744,3 +744,154 @@ describe('tasks subtasks (GET + POST /:id/subtasks)', () => {
     ).toBe(404);
   });
 });
+
+describe('task labels', () => {
+  /** Create an org-global label directly, returning its id. */
+  async function seedLabel(orgId: string, name: string, groupId?: string): Promise<string> {
+    const [row] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name, color: 'blue', groupId: groupId ?? null })
+      .returning();
+    return row!.id;
+  }
+
+  it('writes labels on create and returns them — the join was never written before', async () => {
+    // `TaskCreate.labels` was validated and then silently discarded: the create handler never
+    // touched `task_label`, and `TaskOut` had no `labels` field to return them in. The web
+    // composer had been sending labels into the void.
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const bugId = await seedLabel(orgId, 'bug');
+
+    const id = await createTask(writer, teamId, { labels: [bugId] });
+
+    const rows = await db.select().from(schema.taskLabel).where(eq(schema.taskLabel.taskId, id));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.labelId).toBe(bugId);
+
+    const detail = await json<{ labels: { id: string; name: string }[] }>(
+      await writer.request(`/${id}`),
+    );
+    expect(detail.labels).toHaveLength(1);
+    expect(detail.labels[0]!.name).toBe('bug');
+  });
+
+  it('replaces the whole set on patch, and clears it with an empty array', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const [a, b] = [await seedLabel(orgId, 'alpha'), await seedLabel(orgId, 'beta')];
+    const id = await createTask(writer, teamId, { labels: [a] });
+
+    const patch = async (labels: string[]): Promise<{ labels: { id: string }[] }> =>
+      json(
+        await writer.request(`/${id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ labels }),
+        }),
+      );
+
+    // Replace-set, not merge.
+    expect((await patch([b])).labels.map((l) => l.id)).toEqual([b]);
+    expect((await patch([])).labels).toEqual([]);
+  });
+
+  it('a labels-only patch is not treated as an empty no-op', async () => {
+    // The patch handler short-circuits when the column patch is empty; a body carrying only
+    // labels produces exactly that, and would otherwise be silently dropped a second time.
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const labelId = await seedLabel(orgId, 'solo');
+    const id = await createTask(writer, teamId);
+
+    const res = await writer.request(`/${id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ labels: [labelId] }),
+    });
+    expect(res.status).toBe(200);
+    expect((await json<{ labels: { id: string }[] }>(res)).labels.map((l) => l.id)).toEqual([
+      labelId,
+    ]);
+  });
+
+  it('collapses an exclusive group to the last label asked for', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const [group] = await db
+      .insert(schema.labelGroup)
+      .values({ organizationId: orgId, name: 'Type', exclusive: true })
+      .returning();
+    const feature = await seedLabel(orgId, 'feature', group!.id);
+    const bug = await seedLabel(orgId, 'bug', group!.id);
+
+    // Both members sent at once: exclusivity is enforced server-side, not just in the picker.
+    const id = await createTask(writer, teamId, { labels: [feature, bug] });
+    const detail = await json<{ labels: { id: string }[] }>(await writer.request(`/${id}`));
+    expect(detail.labels.map((l) => l.id)).toEqual([bug]);
+  });
+
+  it('lets a non-exclusive group keep both members', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const [group] = await db
+      .insert(schema.labelGroup)
+      .values({ organizationId: orgId, name: 'Area', exclusive: false })
+      .returning();
+    const fe = await seedLabel(orgId, 'frontend', group!.id);
+    const be = await seedLabel(orgId, 'backend', group!.id);
+
+    const id = await createTask(writer, teamId, { labels: [fe, be] });
+    const detail = await json<{ labels: { id: string }[] }>(await writer.request(`/${id}`));
+    expect(detail.labels).toHaveLength(2);
+  });
+
+  it('404s on a label from another org rather than silently ignoring it', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const other = await seedBaseOrg(db, schema);
+    const foreign = await seedLabel(other.orgId, 'foreign');
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+
+    const res = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'T', teamId, labels: [foreign] }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it('filters the list by labelId, returning each match once', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const labelId = await seedLabel(orgId, 'filtered');
+    const tagged = await createTask(writer, teamId, { title: 'tagged', labels: [labelId] });
+    await createTask(writer, teamId, { title: 'untagged' });
+
+    const listed = await json<{ items: { id: string }[] }>(
+      await writer.request(`/?labelId=${labelId}`),
+    );
+    expect(listed.items.map((t) => t.id)).toEqual([tagged]);
+  });
+
+  it('writes labels on subtask create, which had the same silent drop', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const labelId = await seedLabel(orgId, 'child');
+    const parentId = await createTask(writer, teamId);
+
+    const res = await writer.request(`/${parentId}/subtasks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'sub', labels: [labelId] }),
+    });
+    expect(res.status).toBe(200);
+    const created = await json<{ id: string; labels: { id: string }[] }>(res);
+    expect(created.labels.map((l) => l.id)).toEqual([labelId]);
+
+    const rows = await db
+      .select()
+      .from(schema.taskLabel)
+      .where(eq(schema.taskLabel.taskId, created.id));
+    expect(rows).toHaveLength(1);
+  });
+});

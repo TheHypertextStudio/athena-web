@@ -1,9 +1,30 @@
 # Notion sync
 
-> **Status**: Shipped (connector + two-way sync + Docket-wins conflict resolution)
-> **Owner surface**: `packages/integrations/src/notion*.ts`, `apps/api/src/routes/sync-notion.ts`
+> **Status**: Two modes. **Linked databases** shipped (connector + two-way sync + Docket-wins
+> conflict resolution). **Docket-designed databases** in progress — schema, field catalog, SDK
+> provider edge, webhooks, designer API and UI, and the sync decision logic are landed and tested;
+> the pass that drives them under the sync lease is not yet wired.
+> **Owner surface**: `packages/integrations/src/notion*.ts`, `apps/api/src/routes/notion-mirror*.ts`,
+> `apps/api/src/routes/sync-notion.ts`
 > **Related**: [`integration-sync.md`](./integration-sync.md) (the shared sync spine),
 > [`../../migration/sunsama-to-docket.md`](../../migration/sunsama-to-docket.md)
+
+## 0. Two modes, one connection
+
+Docket relates to a Notion workspace in two independent ways, on one integration row:
+
+|                     | **Linked databases** (§1–§7)                                          | **Docket-designed databases** (§8)                                                |
+| ------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Who owns the schema | Notion. Docket derives a mapping from whatever the database declares. | Docket. The user shapes it in a table designer.                                   |
+| Direction           | Notion → Docket, with task edits pushed back                          | Docket → Notion, with edits read back on two entities                             |
+| Scope               | Tasks                                                                 | Tasks, projects, initiatives, programs, teams, cycles, milestones, labels, people |
+| Answers             | "I already keep my work in Notion."                                   | "I want my Docket work visible and editable in Notion."                           |
+
+Neither disturbs the other. A workspace can run one, the other, or both — and a task already
+linked from an existing database is **excluded** from the designed Tasks database, so the same
+work never appears twice in one Notion workspace.
+
+---
 
 Docket syncs Notion databases with Docket's own tasks, in both directions, **with Docket as the
 source of truth on conflict**. It does not, and per §3a cannot, sync Notion's built-in personal "My
@@ -266,3 +287,104 @@ Setup:
 
 Everything else — the lease, the `sync_run` rows, the cron sweep, the cursor bookkeeping — is the
 shared spine in [`integration-sync.md`](./integration-sync.md). Notion adds no parallel engine.
+
+---
+
+## 8. Docket-designed databases
+
+The inverse of everything above: Docket creates the databases, authors their schema, and projects
+its own work into them.
+
+### 8.1 The table designer is the setup surface
+
+Not a wizard that reports what it built — a designer that shows the database before it exists,
+rendered as a Notion-style table and filled with the workspace's **real** rows. The user renames
+the database, renames or removes columns, and chooses how each person-valued field appears. What
+they approve is what gets provisioned.
+
+When an entity has no rows yet the preview falls back to plainly generic samples and says so. A
+designer that quietly shows invented data teaches the reader to distrust every number on it.
+
+Under every column header sits the Docket field it is bound to, in mono. Once titles are
+user-chosen, the link between "the column called DRI" and `task.assignee` is otherwise invisible.
+
+### 8.2 Bindings address property ids, never titles
+
+`property_map` binds a Docket field key to a Notion **property id**. Titles are user-chosen here
+and freely renameable inside Notion; ids survive a rename and titles do not. Binding by title
+would let someone rename a column in Notion and silently sever the sync.
+
+The map also carries an explicit `order`. `property_map` is a `jsonb` column and PostgreSQL
+normalizes object key order (by key length, then bytes), so insertion order is gone by the first
+read back — relying on it silently rearranged every design's columns.
+
+### 8.3 A person is a per-column representation choice
+
+Notion's native `people` property can only reference members of the Notion workspace, which in
+most workspaces is not most of the roster. So how a person appears is chosen per column:
+
+- **Plain text** — the default. The only representation that holds every human, including those
+  with no Notion account and no Docket account.
+- **Notion person** — native @-mentions and notifications, for the matched subset only.
+- **A People table Docket creates** — everyone gets a row, account or not.
+- **A table you already keep** — a relation to an existing directory.
+
+The projected People database keeps its native `people` column _separate_ from its title, rather
+than treating it as a representation of the same field: the title must hold every actor, the
+native column can only hold the matched subset, and both are wanted at once.
+
+### 8.4 Provenance lives in a side table
+
+`notion_mirror_database` (one per entity kind) and `notion_mirror_row` (one per projected record),
+deliberately **not** the provenance columns on `task`/`project`/`cycle`. A task can be linked
+_from_ an existing database and projected _into_ a designed one simultaneously — two Notion pages,
+one slot — and `initiative`/`program`/`team`/`milestone`/`actor` have no provenance columns at
+all, where `source = 'linked'` would be false anyway.
+
+### 8.5 Webhooks, and the echo guard
+
+Notion webhooks wake the pull-back through the existing `/internal/ingest` inbox. Polling remains
+the safety net, because deliveries get missed and a connector that quietly stops syncing is the
+failure this codebase refuses.
+
+Docket's own writes fire webhooks, so replaying them would loop forever. Two guards:
+
+- **Authors.** The payload carries `authors: [{ id, type }]`. A delivery authored _solely_ by
+  Docket's own bot is dropped. Every author must be the bot — a page a person edited in the same
+  window lists both, and that delivery carries a real change.
+- **Timestamps.** Polling has no author information, so `isRemoteEdited` compares against
+  `last_pushed_at` rather than the anchor: only an edit made after Docket's own write counts.
+
+### 8.6 Direction, per entity
+
+Tasks and projects are two-way; everything else is a projection. On a projection, an edit made in
+Notion is drift — Docket's values are restored **and the loss is recorded**, because a revert the
+user cannot see is indistinguishable from data loss.
+
+Two-way entities follow the same matrix as §5: a one-sided remote change is pulled, a one-sided
+local change is pushed, and when both moved Docket wins regardless of which is newer, with the
+losing remote values recorded first. Absence never deletes — an incremental read returns only what
+changed, so a missing row is unchanged, not gone.
+
+### 8.7 The rate limit is a design constraint
+
+Notion allows roughly three requests a second. A content hash over the _projected_ values means an
+entity whose `updated_at` moved for a reason this database does not carry costs no write at all.
+Rich text caps at 2000 characters and relations at 100 per request; both truncate and report what
+they dropped.
+
+### 8.8 The SDK is the source of truth
+
+`@notionhq/client` supplies every request and response shape, pins the API version, retries
+throttled requests, and ships the webhook signature helpers. Docket's narrower schema — nine
+entities, twelve property kinds, four person representations — is pinned to it by two type-level
+assertions that fail the build if it drifts. That immediately caught a real difference:
+`databases.create` and `dataSources.update` do not accept the same property union.
+
+### 8.9 What is not wired yet
+
+The provisioning/projection/pull-back pass exists as a provider client
+(`NotionMirrorClient`), a pure planner (`notion-mirror-plan.ts`) and a pure value projector
+(`notion-mirror-values.ts`), all tested. The orchestration that runs them under
+`runLeasedSync` with `purpose: 'notion_mirror'` — and the incremental `last_edited_time` cursor in
+`integration.sync_state` — are the remaining work.

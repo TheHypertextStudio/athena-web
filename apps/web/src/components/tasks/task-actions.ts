@@ -20,11 +20,12 @@
  * so they are built once in a memo over dependencies React itself keeps stable. The array is
  * therefore identical on every re-render, and the registration effect runs exactly once.
  */
-import { ArrowRight, CheckCircle2, Link, Plus, Workflow } from '@docket/ui/icons';
+import { ArrowRight, CheckCircle2, Link, Plus, Tag, Workflow } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
+import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { api } from '@/lib/api';
 import {
   type ActionContext,
@@ -66,6 +67,7 @@ function allComplete(context: ActionContext): boolean {
 export function useRegisterTaskActions(): void {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const pickerOverlay = usePickerOverlay();
 
   const definitions = useMemo<readonly ActionDefinition[]>(() => {
     /** Invalidate everything that shows a task after a write. */
@@ -137,6 +139,24 @@ export function useRegisterTaskActions(): void {
         },
       },
       {
+        id: 'task.label',
+        label: 'Labels…',
+        icon: Tag,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        shortcutHint: 'L',
+        keywords: ['tag', 'tags'],
+        run: (context) => {
+          if (context.organizationId === null) return;
+          pickerOverlay.open({
+            kind: 'labels',
+            organizationId: context.organizationId,
+            objects: context.objects,
+          });
+        },
+      },
+      {
         id: 'task.copyLink',
         label: 'Copy link',
         icon: Link,
@@ -170,7 +190,7 @@ export function useRegisterTaskActions(): void {
         },
       },
     ]);
-  }, [router, queryClient]);
+  }, [router, queryClient, pickerOverlay]);
 
   useRegisterActionDomain('task', definitions);
 }

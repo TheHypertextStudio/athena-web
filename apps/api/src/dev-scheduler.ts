@@ -21,6 +21,7 @@ import { getContainer } from './container';
 import { sweepLegacyMentions } from './content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from './content/unfurl-sweep';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
+import { sweepConnectorSync } from './routes/integration-sync';
 import { processSearchIndexJobs } from './search/process-jobs';
 import { sweepElicitations } from './services/elicitation-service';
 
@@ -39,6 +40,12 @@ export function startDevScheduler(): void {
       // arrive and "nothing pends forever" would be false in exactly the environment it is
       // demonstrated in.
       await sweepElicitations(now);
+      // Background connector sync was the one sweep with no local driver at all, so scheduled
+      // syncing could not be exercised in development — only the manual "Sync now" button, which
+      // takes a different path and hides every scheduling bug. Safe on a 3s tick because the
+      // sweep gates each integration on its own `syncCadenceMinutes` and returns the rest
+      // untouched, so this runs what is genuinely due and nothing else.
+      await sweepConnectorSync(now);
       await processSearchIndexJobs({ limit: 50 });
       await sweepResourceUnfurls(getContainer().unfurler, now);
       await sweepLegacyMentions();

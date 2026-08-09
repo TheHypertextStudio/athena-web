@@ -339,12 +339,22 @@ const SESSION_UPDATE_AGE_S = 60 * 60 * 24;
  */
 const SESSION_FRESH_AGE_S = 60 * 5;
 
-/** Connector rows funded by each Better Auth identity provider. */
+/**
+ * Connector rows funded by each Better Auth identity provider.
+ *
+ * @remarks
+ * Unlinking an identity revokes the grant every connector in its list borrows, so those rows are
+ * demoted to `error` rather than left claiming to be connected. A provider missing from this map
+ * is therefore not a cosmetic omission: its integration keeps reporting `connected` after the
+ * grant is gone, right up until the next sync fails — which is precisely the "never report
+ * success when nothing happened" invariant being broken.
+ */
 const CONNECTORS_BY_IDENTITY: Readonly<Record<string, readonly string[]>> = {
   google: ['calendar', 'drive', 'gmail', 'gtasks'],
   github: ['github'],
   linear: ['linear'],
   microsoft: ['outlook'],
+  notion: ['notion'],
 };
 
 /**

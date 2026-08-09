@@ -397,6 +397,7 @@ describe('CalendarItemTaskLinkResultOut', () => {
         createdAt: '2026-07-01T00:00:00.000Z',
       },
       task: {
+        labels: [],
         id: TASK_ID,
         organizationId: ORG_ID,
         title: 'Follow up',

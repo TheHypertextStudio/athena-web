@@ -312,6 +312,29 @@ draft; a control with that reach should not look like one without it.
    selected checkmark appears. Docket forbids an interactive element changing size, so the filter
    chip _swaps_ its own icon for the checkmark. Same width, selected or not.
 
+### The label chip
+
+A label is the one chip whose colour is chosen by a person rather than derived from a state, so
+it is worth naming how that stays under control.
+
+**Colour is a palette key, never a stored hex.** `label.color` holds one of ten token keys, and
+`LabelChip` emits it as `data-label-color` for the stylesheet to resolve into a per-theme triple
+(`--label-dot`, `--label-container`, `--label-on-container`). A fixed colour cannot serve both
+themes — surfaces run L 0.98–0.90 in light and L 0.175–0.36 in dark — so the key, not the value,
+is what gets stored. The hues extend `ORG_ACCENT_PALETTE` so org accents and labels read as one
+family, and `slate` is the neutral a person opts into, never one the rotation assigns. An
+unrecognised value (a hex on a label mirrored from a connected tool) falls back to `slate`.
+
+**Tint plus dot, never a saturated fill.** Ten filled hues cannot all hold readable text in both
+themes, and a wall of filled chips shouts louder than the work they annotate. The saturated dot
+doubles as the required leading mark, so a label chip is never a bare text pill (`CRAFT-13`).
+
+**Two forms, following Badge-vs-Chip exactly.** On a list row a label is something you read: the
+round, non-interactive Badge shape, capped at two with a `+N` whose `title` keeps the rest
+reachable. On a detail page it is something you press: the 8px-cornered Chip shape. A removable
+chip is two controls rather than one, since a single target could not distinguish "filter by
+this" from "take this off", and a nested button is invalid markup.
+
 ### How icon-less chips are prevented
 
 `ChipProps` is a discriminated union. A chip must supply `icon`, **or** `avatar`, **or** a

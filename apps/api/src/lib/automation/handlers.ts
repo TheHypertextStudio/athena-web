@@ -9,21 +9,13 @@
  * act on the `email_suggestion` subject the event fired on. See
  * `docs/engineering/specs/automations.md`.
  */
-import {
-  actor,
-  attachment,
-  db,
-  emailSuggestion,
-  label,
-  notification,
-  task,
-  taskLabel,
-} from '@docket/db';
+import { actor, attachment, db, emailSuggestion, notification, task, taskLabel } from '@docket/db';
 import { Priority } from '@docket/types';
 import type { MailAction } from '@docket/integrations';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { attachLabels, resolveLabelSet } from '../labels';
 import { setTaskState } from '../task-state';
 import { acceptSuggestion } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
@@ -252,7 +244,14 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
     },
   });
 
-  // task.applyLabel — attach an org label to the firing task (idempotent via the join PK).
+  // task.applyLabel — attach an org label to the firing task.
+  //
+  // Goes through the shared `attachLabels` write path rather than inserting the join directly,
+  // so a rule obeys label-group exclusivity exactly as a person does: applying `Type: Bug` to a
+  // task already carrying `Type: Feature` swaps it rather than stacking both. A rule is the
+  // caller most likely to violate that invariant at scale, and an invariant only the picker
+  // honours is decorative. Still idempotent — re-applying a label the task already has is a
+  // no-op after the union collapses.
   registry.register({
     type: 'task.applyLabel',
     run: async (ctx, params): Promise<void> => {
@@ -261,22 +260,29 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
       if (!parsed.success) return;
       const row = await taskOf(event);
       if (!row) return;
-      const labelRow = await db
-        .select({ id: label.id })
-        .from(label)
-        .where(
-          and(eq(label.id, parsed.data.labelId), eq(label.organizationId, event.organizationId)),
-        )
-        .limit(1);
-      if (!labelRow[0]) return; // not an org label — no-op, never cross-tenant
-      await db
-        .insert(taskLabel)
-        .values({
-          taskId: row.id,
-          labelId: parsed.data.labelId,
-          organizationId: event.organizationId,
-        })
-        .onConflictDoNothing();
+
+      const orgId = event.organizationId;
+      // Resolve against the task's own team so a team-limited label is applicable; an id that is
+      // unknown, cross-tenant, or scoped elsewhere throws, which is a no-op for the rule.
+      let incoming;
+      try {
+        incoming = await resolveLabelSet(orgId, [parsed.data.labelId], { teamId: row.teamId });
+      } catch {
+        return;
+      }
+      if (incoming.length === 0) return;
+
+      const existing = await db
+        .select({ labelId: taskLabel.labelId })
+        .from(taskLabel)
+        .where(eq(taskLabel.taskId, row.id));
+      const current = await resolveLabelSet(
+        orgId,
+        existing.map((e) => e.labelId),
+        { teamId: row.teamId },
+      );
+
+      await db.transaction((tx) => attachLabels(tx, 'task', row.id, orgId, current, incoming));
     },
   });
 

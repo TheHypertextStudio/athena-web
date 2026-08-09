@@ -788,9 +788,53 @@ export const integration = pgTable(
 );
 ```
 
-### 6.6 `label` (org-scoped, optional team scope; m2m Task)
+### 6.6 `label` + `label_group` (org-scoped, optional team scope; m2m with five entities)
+
+Labels are Docket's one deliberate escape hatch. The product ships no custom fields — statuses,
+priorities, and health are the app's own opinions — so labels carry every dimension an org needs
+that Docket does not model. That is also why they get exactly one structural idea, the group, and
+no more.
+
+A **group** is a named set of labels and the only place _exclusivity_ can be recorded: with
+`exclusive` true (the default), applying one member releases every other member, which is how an
+org expresses a single-select dimension (`Type: Bug | Feature`) without a custom-field engine.
+A non-exclusive group is purely visual clustering. Exclusivity is enforced in the shared write
+path (`apps/api/src/lib/labels.ts`), never in the picker alone — a label attached by an automation
+rule, an MCP tool, or the Linear reconciler obeys the same rule a person does.
+
+`color` holds a palette **token key** (`blue`, `amber`, …), not a hex. One fixed value cannot read
+against both themes — surfaces run L 0.98–0.90 in light and L 0.175–0.36 in dark — so the key
+resolves to a per-theme triple at render time. Rows mirrored from a provider may still carry a
+legacy hex; readers snap those to the nearest token rather than failing.
+
+`label.group` is a **legacy** free-text cluster key that no code has ever written. It is retained
+(dropping a column is the one irreversible migration) and superseded by `group_id`.
 
 ```ts
+export const labelGroup = pgTable(
+  'label_group',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    exclusive: boolean('exclusive').notNull().default(true),
+    sortOrder: integer('sort_order').notNull().default(0),
+    teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    // Scope mirrors `label` exactly; a group and its members must share one scope.
+    uniqueIndex('label_group_org_name_global_uq')
+      .on(t.organizationId, t.name)
+      .where(sql`${t.teamId} is null`),
+    uniqueIndex('label_group_team_name_uq')
+      .on(t.teamId, t.name)
+      .where(sql`${t.teamId} is not null`),
+  ],
+);
+
 export const label = pgTable(
   'label',
   {
@@ -799,16 +843,39 @@ export const label = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-    color: text('color').notNull(), // hex
-    group: text('group'),
+    color: text('color').notNull(), // a LabelColorKey palette token, NOT a hex
+    group: text('group'), // legacy, always null — see group_id
+    groupId: text('group_id').references(() => labelGroup.id, { onDelete: 'set null' }),
     teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }), // optional team scope
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
+      onDelete: 'set null',
+    }),
+    externalId: text('external_id'),
   },
   (t) => [
-    index('label_org_idx').on(t.organizationId),
-    uniqueIndex('label_org_name_uq').on(t.organizationId, t.name), // (open issue: per-org vs per-team uniqueness)
+    // Per-org-global PLUS per-team, resolved in DECISIONS.md: two teams can each own a `Bug`.
+    uniqueIndex('label_org_name_global_uq')
+      .on(t.organizationId, t.name)
+      .where(sql`${t.teamId} is null`),
+    uniqueIndex('label_team_name_uq')
+      .on(t.teamId, t.name)
+      .where(sql`${t.teamId} is not null`),
+    uniqueIndex('label_source_uq')
+      .on(t.sourceIntegrationId, t.externalId)
+      .where(sql`${t.externalId} is not null`),
+    index('label_org_group_idx').on(t.organizationId, t.groupId),
   ],
 );
 ```
+
+Deleting a group nulls its members' `group_id` rather than cascading: dissolving a dimension must
+never silently delete the vocabulary inside it.
+
+**Scope is decided after the fact, not at creation.** Every label is born workspace-wide;
+narrowing it to a team is a curation action in settings. Inline creation — the path most labels
+are actually born through — therefore never asks about org topology. Narrowing is non-destructive:
+attachments outside the team are kept, the label simply stops being _offered_ elsewhere.
 
 ### 6.7 `comment` (polymorphic subject; agents post as their actor)
 
@@ -914,7 +981,15 @@ export const initiativeProgram = pgTable(
 );
 ```
 
-### 7.3 `task_label` (m2m Task↔Label)
+### 7.3 `task_label` and the other four label joins (m2m Entity↔Label)
+
+Five entities carry labels: `task`, `project`, `initiative`, `program`, and `external_resource`
+(the Library). `project_label`, `initiative_label`, `program_label`, and `resource_label` all take
+the shape below with their own subject column.
+
+Cycles and milestones are deliberately excluded, and the reasoning belongs here so it is not
+re-litigated: a cycle is a date range, so labelling a time box means nothing; a milestone is read
+through its project, so label the project.
 
 ```ts
 export const taskLabel = pgTable(

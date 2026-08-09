@@ -81,7 +81,9 @@ export type ResourceType = (typeof RESOURCE_TYPES)[number];
 > - **Update / Comment**: derive from their polymorphic `subject` resource (the Project/Program/Initiative/Task they attach to). Authoring requires `comment` on the subject.
 > - **Session / Session Activity**: derive from the Session's `task_id` resource (or, if no task, the Org). See §9.
 > - **Saved View**: the View _definition_ is Org-member metadata; its _results_ are always re-scoped per requester (§7.4). A View is not a grantable resource.
-> - **Label**: org/team metadata; `contribute` on a Task lets you attach existing Labels; creating Labels needs `manage` on Team or Org.
+> - **Label**: org/team metadata; `contribute` on a Task lets you attach existing Labels, and also lets you **create** one. `manage` is required to rename, recolour, regroup, re-scope, merge, or delete a Label, and to create or change a Label group.
+>
+>   The split is not arbitrary. Most labels are born inline from a picker, mid-thought, by whoever is doing the work; gating that on `manage` would defeat the affordance the feature depends on. Adding vocabulary is cheap and reversible. Restructuring or destroying vocabulary the whole workspace already reads is neither — a rename lands on every row carrying it, and a merge is irreversible. (This supersedes an earlier "creating Labels needs `manage`"; see `DECISIONS.md`.)
 
 #### 2.1 Resolving a resource's containment ancestors
 

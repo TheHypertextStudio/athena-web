@@ -58,8 +58,12 @@ worth. Two exceptions and one near-miss are worth knowing:
 Adding a field to a payload has a hard prerequisite: **the template editor must be able to show
 it.** A field the editor cannot render is a value nobody chose, written on the author's behalf.
 That is why `estimate` is absent from `TaskTemplateDraft` (the task composer has no estimate
-control) and `labelIds` is absent from `ProjectTemplateDraft` (the project composer links
-initiatives, not labels).
+control).
+
+`labelIds` is also absent from `ProjectTemplateDraft`, but **not** for that reason — the project
+composer does carry a label picker, so the prerequisite is met. It is simply not carried yet.
+Projects, initiatives, and programs are all labelable, and a project template that cannot apply a
+label has the same gap the task one was written to close.
 
 ## API
 

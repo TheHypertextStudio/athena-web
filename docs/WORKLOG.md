@@ -1,11 +1,102 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-07
+> **Last Updated**: 2026-08-09
 
 ---
 
 ## Active Tasks
+
+### [LABELS-001] Give labels a product — definition, groups, merge, and filtering
+
+- **Status**: REVIEW
+- **Started**: 2026-08-09
+- **Priority**: P1
+- **Description**: Labels shipped as a table, three join tables, and a CRUD router, and then
+  nothing ever used them. There was no way to create, rename, recolour, group, merge, or delete a
+  label anywhere in the product — `grep 'labels.$post'` in `apps/web` returned nothing, so the
+  picker could only choose among labels inserted by hand. Task label writes were validated and then
+  silently discarded (`tasks.ts` never touched `task_label`, and `TaskOut` had no `labels` field),
+  so the web composer had been sending label ids into the void since it was written. No field
+  catalog declared labels, so nothing could filter by one. `label.group` was modelled, API-exposed,
+  and read by nothing.
+- **Approach**: Five slices, each committed on its own.
+
+  **Groups became rows.** `label.group` could say which labels belong together but had nowhere to
+  record that picking one should _release_ the others — the whole point of a label group, and what
+  lets an org express a single-select dimension (`Type: Bug | Feature`) without Docket growing a
+  custom-field engine. `label_group` carries an `exclusive` flag defaulting to true, since a group
+  whose members can all coexist is just visual clustering and that was already free. Exclusivity is
+  enforced in one shared write path (`lib/labels.ts`), not in the picker: `applyExclusivity`'s
+  last-occurrence-wins rule lets one function serve both "replace the whole set" and "add one
+  label" without either caller special-casing the other.
+
+  **Colour became a key.** `color` was an unconstrained string written straight into a CSS
+  background. One fixed value cannot read against both themes, so it is now a palette token
+  resolving to a per-theme triple, via the same `data-*` mechanism as the density system. It is
+  also optional on create — the server assigns by rotation — which is what lets inline creation be
+  a single keystroke rather than a dialog.
+
+  **Creation moved to where the work is.** Typing an unmatched name into any label picker offers
+  `Create "…"`, and creating attaches in the same motion. The match is case-insensitive because the
+  DB uniques are case-sensitive by decision, so this is the only place `Bug` beside `bug` can be
+  stopped.
+
+  **Settings became about curation, not creation.** Usage counts, an explicit unused section, and
+  merge — because an import arrives carrying a provider's labels nobody chose, and re-tagging
+  hundreds of rows by hand is not a real option. Renaming onto an existing name offers to merge
+  rather than refusing; refusing leaves someone staring at the two duplicates they were trying to
+  fix.
+
+  **Filtering used a slot that already existed.** `FieldDescriptor.values` had shipped for
+  multi-valued fields and nothing had exercised it. The Label field derives its options from the
+  rows themselves — `TaskOut.labels` embeds each name — so there is no extra query, and the menu
+  only offers labels that appear in this list.
+
+- **Notes**: Three things the brief did not anticipate.
+
+  (1) `permissions.md` said creating a label needs `manage`; the router used `contribute`. Gating
+  creation on admin would have defeated inline creation for everyone actually doing the work, so
+  this resolved in favour of the code and drew the line elsewhere: `contribute` to add vocabulary,
+  `manage` to restructure or destroy it.
+
+  (2) The label search hit had **two** href builders and both pointed at params no page read — the
+  API built `?labelId=`, the web remapper overrode it with `my-work?labelId=`. Both now emit the
+  view toolbar's own `filter=field:op:value` codec, which is the dialect the page already parses.
+
+  (3) A claim written into `lib/labels.ts`'s own docstring — that every caller obeys exclusivity —
+  was false when written: `task.applyLabel` inserted the join directly, so a rule could stack two
+  members of a single-choice group. A rule is the caller most likely to break that invariant at
+  scale, so the handler was moved onto the shared path rather than the docstring softened.
+
+  Also corrected a false justification in `templates.md`: `labelIds` is absent from
+  `ProjectTemplateDraft`, but not because "the project composer links initiatives, not labels" —
+  that composer does have a label picker. It is simply not carried yet.
+
+- **Files Changed**: `packages/db/src/schema/{crosscutting,joins}.ts`,
+  `packages/db/drizzle/0075_small_marvel_zombies.sql`, `packages/types/src/{label,task,primitives}.ts`,
+  `apps/api/src/lib/labels.ts` (new), `apps/api/src/routes/{labels,tasks,task-helpers,
+task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provider,me-calendar}.ts`,
+  `apps/api/src/lib/automation/handlers.ts`, `apps/api/src/search/routes.ts`,
+  `packages/ui/src/components/atoms/LabelChip.tsx` (new),
+  `packages/ui/src/components/pickers/{PickerList,LabelsPicker}.tsx`,
+  `packages/ui/src/styles/globals.css`,
+  `apps/web/src/components/labels/*` (new), `apps/web/src/app/(app)/orgs/[orgId]/settings/labels/page.tsx` (new),
+  `apps/web/src/components/views/{task-catalog,task-table}.tsx`,
+  `apps/web/src/components/task-detail/task-properties-rail.tsx`, `apps/web/src/lib/{search-route,use-task-mutations}.ts`,
+  plus specs (`data-model`, `permissions`, `automations`, `templates`, `design-system`, `DECISIONS`).
+- **Learnings**: Making `toOut`'s new `labels` argument **required** rather than defaulting it to
+  `[]` was the highest-leverage decision in the whole change — the compiler then enumerated all
+  eight call sites, which is how the same silent-drop in the programs, cycles, subtask, and
+  calendar-link responses surfaced at all. A default would have shipped four more permanently-empty
+  label lists.
+
+  The opposite lesson landed the same day: a `?? []` guard added "in case a persisted cache
+  predates the field" was dead code, because the cache buster already combines the build id. The
+  lint rule caught it. Defending against something the architecture prevents reads as caution and
+  is really just noise.
+
+---
 
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 

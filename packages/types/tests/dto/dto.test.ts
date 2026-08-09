@@ -416,6 +416,7 @@ describe('task DTOs', () => {
 
   it('TaskOut parses', () => {
     const parsed = TaskOut.parse({
+      labels: [],
       id: ID,
       organizationId: ID2,
       title: 'T',

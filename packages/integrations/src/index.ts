@@ -30,6 +30,7 @@ export * from './mock-linear-agent';
 export * from './notion-mapping';
 export * from './notion-mirror';
 export * from './notion-mirror-schema';
+export * from './notion-mirror-values';
 export * from './sunsama';
 export * from './sunsama-connector';
 export * from './sunsama-fixtures';

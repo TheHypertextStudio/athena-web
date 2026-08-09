@@ -26,6 +26,7 @@ export * from './safe-fetch';
 export * from './unfurl';
 export * from './mcp-oauth';
 export * from './mock-connector';
+export * from './mock-notion-mirror';
 export * from './mock-linear-agent';
 export * from './notion-mapping';
 export * from './notion-mirror';

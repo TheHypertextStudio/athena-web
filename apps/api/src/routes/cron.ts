@@ -18,6 +18,7 @@ import { sweepAccountExports } from '../account/export';
 import { env } from '../env';
 import { sweepLifecycle } from '../billing/lifecycle';
 import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
+import { sweepNotionMirror } from './notion-mirror-reconcile';
 import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';
 import { sweepCalendarSync } from './calendar-sync-sweep';
 import { sweepConnectorSync } from './integration-sync';
@@ -67,8 +68,13 @@ const cron = new Hono()
   // rather than vanishing.
   .post('/sync-connectors', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const result = await sweepConnectorSync(new Date());
-    return c.json({ swept: true, ...result });
+    const now = new Date();
+    const result = await sweepConnectorSync(now);
+    // A separate purpose on the same tick: the Notion mirror pushes Docket's work OUT, which is
+    // the opposite direction from the connector sweep above and runs on its own leased runs.
+    // Reported separately so a failure in one is never hidden by the other's success.
+    const notionMirror = await sweepNotionMirror(now);
+    return c.json({ swept: true, ...result, notionMirror });
   })
   // Elicitation deadlines: nothing Athena asks may pend forever. A question whose raiser declared
   // a defensible default is answered by Athena with her reasoning recorded; every other overdue

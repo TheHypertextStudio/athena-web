@@ -338,13 +338,42 @@ function asConnectorError(err: unknown, context: string): ConnectorError {
 }
 
 /**
+ * The capability the mirror's sync passes depend on.
+ *
+ * @remarks
+ * Extracted so the reconciler names an interface rather than a class, which is what lets
+ * {@link import('./mock-notion-mirror').MockNotionMirror} stand in for it. That matters beyond
+ * testing: the repo's zero-external-accounts rule means the whole provision → project → pull-back
+ * flow has to be exercisable on a laptop with no Notion workspace at all.
+ */
+export interface NotionMirrorPort {
+  /** Docket's own bot user id — the echo guard's other half. */
+  botId(): Promise<string>;
+  /** Pages the integration may parent a database under. */
+  listParentPages(): Promise<MirrorParentPage[]>;
+  /** The workspace's people, never its bots. */
+  listWorkspaceUsers(): Promise<MirrorExternalPerson[]>;
+  /** Create a database and its initial data source. */
+  provisionDatabase(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase>;
+  /** Bring a provisioned data source's schema up to the current design. */
+  updateDatabaseSchema(
+    dataSourceId: string,
+    spec: MirrorDatabaseSpec,
+  ): Promise<Record<string, string>>;
+  /** Apply one row write. */
+  writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined>;
+  /** Read the rows edited since a cursor. */
+  queryChanges(dataSourceId: string, since?: string): Promise<MirrorChange[]>;
+}
+
+/**
  * The Notion mirror's I/O edge.
  *
  * @remarks
  * Thin by design: every non-trivial transformation lives in the pure helpers above or in
  * `./notion-mirror-schema`, so the untestable part is only the network call itself.
  */
-export class NotionMirrorClient {
+export class NotionMirrorClient implements NotionMirrorPort {
   private readonly notion: Client;
 
   /**

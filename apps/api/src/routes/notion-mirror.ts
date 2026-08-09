@@ -15,6 +15,7 @@
 import { actor, db, externalActor, integration } from '@docket/db';
 import {
   NotionMirrorDatabaseOut,
+  SyncRunOut,
   NotionMirrorDesignOut,
   NotionMirrorDesignPatch,
   NotionMirrorEntity,
@@ -26,12 +27,16 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { NotFoundError } from '../error';
+import { buildNotionMirror } from '../container';
+import { ConflictError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 
+import { resolveConnectorToken } from './integration-provider';
+import { toSyncRunOut } from './integration-sync';
+import { runNotionMirrorSync } from './notion-mirror-reconcile';
 import {
   applyDesignPatch,
   buildDesignOut,
@@ -45,10 +50,13 @@ const mirrorParam = z.object({ id: z.string() });
 /** Path params for one entity's design. */
 const entityParam = z.object({ id: z.string(), entity: NotionMirrorEntity });
 
-/** Assert the integration exists in this org and is the Notion connector. */
-async function assertNotionIntegration(orgId: string, id: string): Promise<void> {
+/** Load the integration, asserting it exists in this org and is the Notion connector. */
+async function assertNotionIntegration(
+  orgId: string,
+  id: string,
+): Promise<typeof integration.$inferSelect> {
   const rows = await db
-    .select({ provider: integration.provider })
+    .select()
     .from(integration)
     .where(and(eq(integration.id, id), eq(integration.organizationId, orgId)))
     .limit(1);
@@ -56,6 +64,30 @@ async function assertNotionIntegration(orgId: string, id: string): Promise<void>
   // Existence-hiding: a cross-tenant id and a non-Notion id answer the same way, so neither
   // confirms that some other workspace's integration exists.
   if (row?.provider !== 'notion') throw new NotFoundError('Integration not found');
+  return row;
+}
+
+/**
+ * Resolve the Notion access token for a read-only provider call.
+ *
+ * @remarks
+ * Returns undefined in local/test mode, where the container hands back the in-memory mirror and
+ * no token is meaningful.
+ */
+async function mirrorToken(
+  c: { get: (k: 'actorCtx') => { orgId: string } },
+  id: string,
+): Promise<string | undefined> {
+  const rows = await db
+    .select({ createdBy: integration.createdBy, externalAccountId: integration.externalAccountId })
+    .from(integration)
+    .where(eq(integration.id, id))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return undefined;
+  const result = await resolveConnectorToken(row.createdBy, 'notion', row.externalAccountId);
+  if (!result.ok || result.token === 'mock') return undefined;
+  return result.token;
 }
 
 /** The Notion mirror router. */
@@ -131,6 +163,70 @@ A rename never re-binds. Provisioned columns keep their Notion \`propertyId\`, w
       const row = await loadDesign(orgId, id, entity);
       await applyDesignPatch(row, body);
       return ok(c, NotionMirrorDesignOut, await buildDesignOut(orgId, id, entity));
+    },
+  )
+  .get(
+    '/parent-pages',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'List Notion pages a database can be created under',
+      capability: 'manage',
+      response: pageOf(z.object({ id: z.string(), title: z.string() })),
+      description: `The Notion pages this integration may parent its designed databases under — the pages the person shared with Docket during consent.
+
+An empty list is a legitimate and common state, not an error: a public Notion integration only sees what it was explicitly granted. The setup flow must say so and offer a re-consent path rather than presenting it as a failure.`,
+    }),
+    zParam(mirrorParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await assertNotionIntegration(orgId, id);
+      const token = await mirrorToken(c, id);
+      const pages = await buildNotionMirror(token).listParentPages();
+      return ok(c, pageOf(z.object({ id: z.string(), title: z.string() })), {
+        items: pages.map((page) => ({ id: page.id, title: page.title })),
+      });
+    },
+  )
+  .post(
+    '/provision',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Create the designed databases in Notion',
+      capability: 'manage',
+      response: SyncRunOut,
+      description: `Record the chosen parent page and run a full mirror pass: create every designed-but-missing database, read back any Notion edits, then project Docket's rows.
+
+Runs on the shared leased sync spine, so it returns a real {@link SyncRunOut} with the same durable history as every other sync — a failure is recorded rather than surfaced as an optimistic 200. A pass that exhausts its Notion write budget reports what it actually wrote and resumes on the next sweep instead of claiming completion.
+
+Requires \`manage\`. Returns 409 when another run already holds the integration's lease.`,
+    }),
+    zParam(mirrorParam),
+    zJson(z.object({ containerPageId: z.string().min(1) })),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { containerPageId } = c.req.valid('json');
+      const row = await assertNotionIntegration(orgId, id);
+      await ensureDesigns(orgId, id, actorId);
+
+      // Spread the existing config: `config` is a wholesale replace, so writing only the mirror
+      // key would drop `listIds` and silently unlink every database the other mode syncs.
+      const config = row.config;
+      const updated = await db
+        .update(integration)
+        .set({ config: { ...config, notionMirror: { containerPageId } } })
+        .where(eq(integration.id, id))
+        .returning();
+      const fresh = updated[0];
+      /* v8 ignore next -- @preserve defensive: the row was loaded in this same request. */
+      if (!fresh) throw new NotFoundError('Integration not found');
+
+      const run = await runNotionMirrorSync(fresh, { actorId, trigger: 'manual' });
+      if (!run) throw new ConflictError('A sync is already running for this connection.');
+      return ok(c, SyncRunOut, toSyncRunOut(run));
     },
   )
   .get(

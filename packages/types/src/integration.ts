@@ -138,6 +138,16 @@ export const ConnectorConfig = z
       .describe(
         'The external list a pushed native task is created in (the write-back target for new tasks).',
       ),
+    notionMirror: z
+      .object({
+        containerPageId: z
+          .string()
+          .describe('The Notion page Docket creates its designed databases under.'),
+      })
+      .optional()
+      .describe(
+        'Docket-designed Notion databases. Set when the user picks a parent page; absent means nothing has been provisioned. Distinct from `listIds`, which selects EXISTING Notion databases to link — the two modes coexist on one integration.',
+      ),
     pushNativeTasks: z
       .boolean()
       .optional()

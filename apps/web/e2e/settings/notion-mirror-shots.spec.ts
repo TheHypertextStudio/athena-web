@@ -86,6 +86,8 @@ test.describe('notion mirror visuals', () => {
       await shot(page, `notion-disconnected-${viewport.name}-dark.png`);
       await setColorScheme(page, 'light');
 
+      await seedWork(page, orgId);
+
       // 2. Connected, designed, nothing created in Notion yet — the state right after connecting.
       await connectNotion(page, orgId);
       await page.goto(notionHref, { waitUntil: 'domcontentloaded' });
@@ -105,7 +107,6 @@ test.describe('notion mirror visuals', () => {
       await shot(page, `notion-designer-sample-${viewport.name}-light.png`);
 
       // 4. The designer with REAL rows — the state the surface exists for.
-      await seedWork(page, orgId);
       await page.goto(orgHref(orgId, 'settings/connections/notion/task'), {
         waitUntil: 'domcontentloaded',
       });
@@ -133,6 +134,43 @@ test.describe('notion mirror visuals', () => {
         timeout: TIMEOUTS.pageReady,
       });
       await shot(page, `notion-designer-people-${viewport.name}-light.png`);
+    });
+  }
+
+  for (const viewport of VIEWPORTS) {
+    test(`provisioned hub (${viewport.name})`, async ({ page }) => {
+      // Deliberately a separate test with its own page. Provisioning here happens through the API
+      // rather than the UI, so a page that had already rendered the unprovisioned hub would keep
+      // serving that from the service worker's cache — an artifact of driving the app out of
+      // band, not something a user hits, since the real action invalidates through `useApiMutation`.
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const { orgId } = await signUpAndOnboard(page, `NotionProv${viewport.name}`);
+      const integrationId = await connectNotion(page, orgId);
+      await seedWork(page, orgId);
+
+      const parents = await apiJson<{ items: { id: string }[] }>(
+        page,
+        `/v1/orgs/${orgId}/integrations/${integrationId}/notion/parent-pages`,
+      );
+      const run = await apiJson<{ status: string; error: string | null }>(
+        page,
+        `/v1/orgs/${orgId}/integrations/${integrationId}/notion/provision`,
+        { method: 'POST', body: { containerPageId: parents.items[0]?.id } },
+      );
+      // The route answers 200 carrying the run, so a failed provision would otherwise be
+      // screenshotted as an empty state and pass.
+      expect(run.status, run.error ?? 'no error recorded').toBe('succeeded');
+
+      await page.goto(orgHref(orgId, 'settings/connections/notion'), {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect(page.getByText(/rows in 9 databases/)).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
+      await shot(page, `notion-hub-provisioned-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-hub-provisioned-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
     });
   }
 

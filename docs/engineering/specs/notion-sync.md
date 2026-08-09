@@ -1,9 +1,10 @@
 # Notion sync
 
-> **Status**: Two modes. **Linked databases** shipped (connector + two-way sync + Docket-wins
-> conflict resolution). **Docket-designed databases** in progress — schema, field catalog, SDK
-> provider edge, webhooks, designer API and UI, and the sync decision logic are landed and tested;
-> the pass that drives them under the sync lease is not yet wired.
+> **Status**: Two modes, both running. **Linked databases** shipped (connector + two-way sync +
+> Docket-wins conflict resolution). **Docket-designed databases** provision, project and read back
+> under the shared sync lease, driven by webhooks with polling as the safety net. Remaining: the
+> `pull`/`adopt` directions (a Notion row becoming a Docket entity) and the incremental
+> `last_edited_time` cursor for the linked mode — see §8.9.
 > **Owner surface**: `packages/integrations/src/notion*.ts`, `apps/api/src/routes/notion-mirror*.ts`,
 > `apps/api/src/routes/sync-notion.ts`
 > **Related**: [`integration-sync.md`](./integration-sync.md) (the shared sync spine),
@@ -381,10 +382,33 @@ entities, twelve property kinds, four person representations — is pinned to it
 assertions that fail the build if it drifts. That immediately caught a real difference:
 `databases.create` and `dataSources.update` do not accept the same property union.
 
-### 8.9 What is not wired yet
+### 8.9 How a pass runs, and what is still open
 
-The provisioning/projection/pull-back pass exists as a provider client
-(`NotionMirrorClient`), a pure planner (`notion-mirror-plan.ts`) and a pure value projector
-(`notion-mirror-values.ts`), all tested. The orchestration that runs them under
-`runLeasedSync` with `purpose: 'notion_mirror'` — and the incremental `last_edited_time` cursor in
-`integration.sync_state` — are the remaining work.
+`runNotionMirrorSync` executes on the shared leased spine with `purpose: 'notion_mirror'`, ordered
+**provision → pull back → project**. That order is load-bearing: pulling first means a remote edit
+made since the last sweep is reconciled against the values Docket is about to write, rather than
+being clobbered by a projection that then rediscovers its own write as a remote change.
+
+Provisioning runs in two waves, because a Notion relation must name an existing data source: every
+database is created with its scalar columns, then each is patched to add relations once their
+targets exist. It skips anything already carrying a data source id, which makes it the repair path
+too.
+
+A shared write budget (400 writes at ~3/second) is spent across every entity so one large database
+cannot starve the rest. A pass that exhausts it reports what it actually wrote and sets
+`stampFullSync: false`, so the sweep resumes next tick instead of being recorded as a complete sync
+it never was.
+
+`sweepNotionMirror` is a separate sweep rather than a branch inside `sweepConnectorSync` — calling
+the spine from the spine would be an import cycle, and the two purposes deserve independent
+cadences anyway. It runs on the same cron tick and in the dev scheduler.
+
+The whole flow runs with **no Notion account**: `MockNotionMirror` is a behavioural in-memory
+workspace (pages stored, `last_edited_time` advancing, `since` honoured, trash surfaced), selected
+by the container in `local`/`test` mode exactly as `MockConnector` is.
+
+**Still open.** The `pull` and `adopt` directions — reading a Notion row's properties back into a
+Docket entity, and adopting a row somebody created there — are planned by `planMirrorRow` but not
+applied; they need the per-entity inverse of `notion-mirror-entities.ts`, which does not exist yet.
+Until then a conflict record carries honest gaps for the remote field values rather than invented
+ones. The incremental `last_edited_time` cursor for the **linked** mode (§4) is also still to come.

@@ -32,6 +32,9 @@ import {
   RealMcpConnector,
   RealPushSender,
   RealConnector,
+  MockNotionMirror,
+  NotionMirrorClient,
+  type NotionMirrorPort,
   RealGitHubObserver,
   RealNotionObserver,
   RealLinearObserver,
@@ -238,6 +241,23 @@ function connectorApiBase(
  *
  * @param provider - The integration provider to connect to.
  * @param token - The provider access token used outside local/test mode.
+ * @param runtimeEnv - Optional runtime configuration override for tests.
+ */
+export function buildNotionMirror(
+  token: string | undefined,
+  runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
+): NotionMirrorPort {
+  // Same seam as `buildConnector`: the whole provision → project → pull-back flow has to run on a
+  // laptop with no Notion workspace, per the zero-external-accounts rule.
+  if (localMode(runtimeEnv)) return new MockNotionMirror();
+  return new NotionMirrorClient(required('NOTION_ACCESS_TOKEN', token));
+}
+
+/**
+ * Build the connector for a provider, mocked in local/test mode.
+ *
+ * @param provider - The connector provider.
+ * @param token - The OAuth access token.
  * @param runtimeEnv - Optional runtime configuration override for tests.
  */
 export function buildConnector(

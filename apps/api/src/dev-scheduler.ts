@@ -22,6 +22,7 @@ import { sweepLegacyMentions } from './content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from './content/unfurl-sweep';
 import { sweepCalendarSync } from './routes/calendar-sync-sweep';
 import { sweepConnectorSync } from './routes/integration-sync';
+import { sweepNotionMirror } from './routes/notion-mirror-reconcile';
 import { processSearchIndexJobs } from './search/process-jobs';
 import { sweepElicitations } from './services/elicitation-service';
 
@@ -46,6 +47,7 @@ export function startDevScheduler(): void {
       // sweep gates each integration on its own `syncCadenceMinutes` and returns the rest
       // untouched, so this runs what is genuinely due and nothing else.
       await sweepConnectorSync(now);
+      await sweepNotionMirror(now);
       await processSearchIndexJobs({ limit: 50 });
       await sweepResourceUnfurls(getContainer().unfurler, now);
       await sweepLegacyMentions();

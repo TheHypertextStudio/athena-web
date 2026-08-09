@@ -1,7 +1,7 @@
 'use client';
 
 import { CornerDownLeft, type LucideIcon } from '@docket/ui/icons';
-import { menuBadge, menuItemClass, menuTrailingText } from '@docket/ui/primitives';
+import { MENU_METRICS, menuBadge, menuItemClass, menuTrailingText } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { isValidElement, type JSX } from 'react';
 
@@ -29,7 +29,10 @@ function paletteIcon(icon: PaletteItem['icon']): JSX.Element {
     return <Icon aria-hidden="true" className="shrink-0" />;
   }
   return (
-    <span aria-hidden="true" className="shrink-0">
+    <span
+      aria-hidden="true"
+      className={cn('flex shrink-0 items-center justify-center', MENU_METRICS.iconBox)}
+    >
       {icon}
     </span>
   );

@@ -45,7 +45,7 @@ import type { JSX } from 'react';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { TaskTimerButton } from '@/components/time-tracking';
-import { objectKey } from '@/lib/actions';
+import { objectKey, type ObjectRef } from '@/lib/actions';
 import { entityDragSource } from '@/lib/entity-drag';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -82,7 +82,7 @@ function taskObject(task: TaskOut) {
     id: task.id,
     organizationId: task.organizationId,
     title: task.title,
-  };
+  } satisfies ObjectRef;
 }
 
 /** Props for {@link buildTaskColumns}. */

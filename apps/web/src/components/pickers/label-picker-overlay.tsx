@@ -31,7 +31,7 @@ import { LabelId } from '@docket/types';
 import { PickerList, type PickerOption } from '@docket/ui/components';
 import { Popover, PopoverAnchor, PopoverContent, Skeleton } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchor } from '@docket/ui/primitives';
-import { useQueries, useQueryClient } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState, type JSX } from 'react';
 
 import { objectKey } from '@/lib/actions';
@@ -95,7 +95,6 @@ export function resolveCloseFocusTarget(anchor: PopoverVirtualAnchor | null): HT
 /** The popover {@link PickerOverlayProvider} mounts while a labels request is open. */
 export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps): JSX.Element {
   const { organizationId: orgId, objects, current: suppliedCurrent } = request;
-  const queryClient = useQueryClient();
 
   const labelsQ = useApiListQuery(labelsDef(orgId));
   const allLabels: readonly LabelOut[] = labelsQ.data?.items ?? [];
@@ -150,12 +149,6 @@ export function LabelPickerOverlay({ request, onClose }: LabelPickerOverlayProps
           }),
         WRITE_ERROR_FALLBACK,
       ),
-    onSuccess: (_updated, variables) => {
-      // Per-task-id invalidation, since a single `useApiMutation` instance here writes N
-      // different tasks across a session — `invalidateKeys` below is fixed at hook-creation time
-      // and can't carry a variable taskId, so the fine-grained key is invalidated here instead.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.task(orgId, variables.taskId) });
-    },
     invalidateKeys: [['org', orgId, 'task-graph'], queryKeys.tasks(orgId)],
   });
 

@@ -156,6 +156,21 @@ describe('CommandPalette — # label sub-mode', () => {
       expect(screen.queryByRole('option', { name: /Bug/ })).not.toBeInTheDocument();
     });
   });
+
+  it('wraps the label swatch in a flex container so its explicit size actually applies', async () => {
+    renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '#bug' } });
+    const row = await screen.findByRole('option', { name: /Bug/ });
+
+    // The swatch (a bare `<span>` sized via `size-2.5`) is an empty inline element -- `width`
+    // and `height` never apply to inline elements, only to block or flex-item boxes. Its
+    // wrapper must therefore itself be `flex` (making the swatch a flex item) or the swatch
+    // renders at 0x0, invisible. jsdom does no real layout, so this asserts on the class that
+    // produces that layout rather than on measured pixels.
+    const swatchWrapper = row.querySelector('span[aria-hidden="true"]');
+    expect(swatchWrapper).not.toBeNull();
+    expect(swatchWrapper).toHaveClass('flex');
+  });
 });
 
 describe('CommandPalette — # with no bound organization', () => {

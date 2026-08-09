@@ -34,6 +34,7 @@ import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import { ConnectorConfig } from '@docket/types';
 
 import { buildNotionMirror } from '../container';
+import { syncExternalActors } from './integration-identity';
 import { recordSyncConflict } from './sync-notion';
 import { runLeasedSync, type RunSyncOptions, type SyncRunRow } from './integration-sync';
 import type { IntegrationRow } from './integration-provider';
@@ -570,6 +571,23 @@ export async function runNotionMirrorSync(
       mirror: buildNotionMirror(token === 'mock' ? undefined : token),
       now,
     };
+
+    // Learn who is in the Notion workspace BEFORE anything else. Without this the people surface
+    // has nothing to show and no decision to offer — the mapping rows it reads are written here
+    // and nowhere else. Email matching and the immunity of a manual link are `syncExternalActors`'
+    // existing behaviour; this only supplies the roster.
+    const workspacePeople = await ctx.mirror.listWorkspaceUsers();
+    await syncExternalActors(
+      ctx.orgId,
+      ctx.integrationId,
+      workspacePeople.map((person) => ({
+        externalId: person.externalId,
+        displayName: person.name,
+        ...(person.email !== undefined ? { email: person.email } : {}),
+        ...(person.avatarUrl !== undefined ? { avatarUrl: person.avatarUrl } : {}),
+        active: true,
+      })),
+    );
 
     await provisionMirror(ctx, parentPageId);
 

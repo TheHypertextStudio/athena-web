@@ -19,6 +19,7 @@ import {
   NotionMirrorDesignOut,
   NotionMirrorDesignPatch,
   NotionMirrorEntity,
+  NotionPersonResolve,
   NotionWorkspacePerson,
   pageOf,
 } from '@docket/types';
@@ -261,6 +262,95 @@ Notion's own user list mixes integration bots in with people (a real workspace u
           actorId: row.actorId,
           matchedBy: row.matchedBy,
         })),
+      });
+    },
+  )
+  .post(
+    '/people/:externalId/resolve',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Decide what one unmatched Notion person maps to',
+      capability: 'manage',
+      response: NotionWorkspacePerson,
+      description: `Resolve one Notion workspace member, returning the updated {@link NotionWorkspacePerson}.
+
+\`create_actor\` adds them to Docket as a person with **no account** — the same \`actor{kind:'human', user_id:null}\` row \`POST /orgs/:orgId/members\` creates — and links the mapping to it. That is the common case: most people in a Notion workspace are not Docket users, and refusing to represent them would make their assignments unroutable.
+
+\`match_existing\` links them to an actor you name and marks the mapping \`manual\`, which makes it immune to the email re-matching every sync performs. A human's explicit decision always outranks an automatic one.
+
+\`skip\` leaves the mapping unmatched on purpose. It stays visible rather than disappearing, because an unmatched person is a queryable state, not an absence.
+
+Requires \`manage\`. A missing mapping 404s (\`Person not found\`); \`match_existing\` without a valid same-org \`actorId\` 404s (\`Actor not found\`).`,
+    }),
+    zParam(z.object({ id: z.string(), externalId: z.string() })),
+    zJson(NotionPersonResolve),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id, externalId } = c.req.valid('param');
+      const body = c.req.valid('json');
+      await assertNotionIntegration(orgId, id);
+
+      const rows = await db
+        .select()
+        .from(externalActor)
+        .where(
+          and(
+            eq(externalActor.integrationId, id),
+            eq(externalActor.organizationId, orgId),
+            eq(externalActor.externalId, externalId),
+          ),
+        )
+        .limit(1);
+      const mapping = rows[0];
+      if (!mapping) throw new NotFoundError('Person not found');
+
+      let actorId: string | null = null;
+      if (body.action === 'match_existing') {
+        if (body.actorId === undefined) throw new ConflictError('Choose someone to match them to.');
+        const found = await db
+          .select({ id: actor.id })
+          .from(actor)
+          .where(and(eq(actor.id, body.actorId), eq(actor.organizationId, orgId)))
+          .limit(1);
+        if (!found[0]) throw new NotFoundError('Actor not found');
+        actorId = body.actorId;
+      } else if (body.action === 'create_actor') {
+        const inserted = await db
+          .insert(actor)
+          .values({
+            organizationId: orgId,
+            kind: 'human',
+            // Docket's account-less person: assignable everywhere, owns no login. Exactly what a
+            // Notion member who has never used Docket should be.
+            userId: null,
+            displayName: mapping.displayName,
+            avatar: mapping.avatarUrl,
+          })
+          .returning();
+        const created = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert always returns a row */
+        if (!created) throw new NotFoundError('Actor not found');
+        actorId = created.id;
+      }
+
+      const updated = await db
+        .update(externalActor)
+        // `manual` on any explicit decision, so the next sync's email pass never overrides it.
+        .set({ actorId, matchedBy: actorId === null ? null : 'manual' })
+        .where(eq(externalActor.id, mapping.id))
+        .returning();
+      const next = updated[0];
+      /* v8 ignore next -- @preserve defensive: the row was loaded in this same request. */
+      if (!next) throw new NotFoundError('Person not found');
+
+      return ok(c, NotionWorkspacePerson, {
+        externalId: next.externalId,
+        name: next.displayName,
+        email: next.email,
+        avatarUrl: next.avatarUrl,
+        actorId: next.actorId,
+        matchedBy: next.matchedBy,
       });
     },
   )

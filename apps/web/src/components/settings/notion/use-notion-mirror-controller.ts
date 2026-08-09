@@ -152,7 +152,13 @@ export function useNotionSetup(orgId: string, integrationId: string): NotionSetu
           }),
         'Could not create your Notion databases.',
       ),
-    invalidateKeys: [queryKeys.notionMirrorDatabases(orgId, integrationId)],
+    // People too, not just the databases: provisioning is what LEARNS the Notion roster, so a
+    // reader who provisions and then opens "Match people" would otherwise be shown the empty list
+    // cached before anyone was known.
+    invalidateKeys: [
+      queryKeys.notionMirrorDatabases(orgId, integrationId),
+      queryKeys.notionMirrorPeople(orgId, integrationId),
+    ],
     onSuccess: (run: { status: string }) => {
       // A failed run still arrives as a 200. Reporting it as success is exactly the dishonesty
       // this codebase refuses.
@@ -287,6 +293,12 @@ export interface NotionPeopleModel {
   matched: readonly NotionWorkspacePerson[];
   /** Notion members with no Docket actor — the only group that needs a decision. */
   unmatched: readonly NotionWorkspacePerson[];
+  /** The org's people, for the "match to someone" picker. */
+  roster: readonly { id: string; displayName: string }[];
+  /** The externalId currently being resolved, or null. */
+  resolving: string | null;
+  /** Decide what one Notion person maps to. */
+  resolve: (externalId: string, decision: PersonDecision) => void;
   /**
    * Docket people with no Notion account.
    *
@@ -299,12 +311,20 @@ export interface NotionPeopleModel {
   docketOnly: number;
 }
 
+/** One decision about an unmatched person. */
+export type PersonDecision =
+  | { readonly action: 'create_actor' }
+  | { readonly action: 'match_existing'; readonly actorId: string }
+  | { readonly action: 'skip' };
+
 /** Read the Notion↔Docket identity matching for this connection. */
 export function useNotionPeople(orgId: string, integrationId: string): NotionPeopleModel {
   // Disabled without a connection. The hub calls this before it knows whether Notion is connected
   // (hooks run ahead of its early return), and an empty id would request
   // `/integrations//notion/people` — a guaranteed 404 on every render of the not-connected page.
   const enabled = integrationId.length > 0;
+  const [error, setError] = useState<string | null>(null);
+  const [resolving, setResolving] = useState<string | null>(null);
   const peopleQ = useApiQuery({
     ...apiQueryOptions(
       queryKeys.notionMirrorPeople(orgId, integrationId),
@@ -328,12 +348,48 @@ export function useNotionPeople(orgId: string, integrationId: string): NotionPeo
     enabled,
   });
 
+  const rosterQ = useApiQuery({
+    ...apiQueryOptions(
+      queryKeys.members(orgId),
+      () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
+      'Could not load your people.',
+    ),
+    enabled,
+  });
+
+  const resolveOne = useApiMutation({
+    mutationFn: (input: { externalId: string; decision: PersonDecision }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].integrations[':id'].notion.people[':externalId'].resolve.$post({
+            param: { orgId, id: integrationId, externalId: input.externalId },
+            json: input.decision,
+          }),
+        'Could not save that decision.',
+      ),
+    invalidateKeys: [queryKeys.notionMirrorPeople(orgId, integrationId), queryKeys.members(orgId)],
+    onSuccess: () => {
+      setError(null);
+      setResolving(null);
+    },
+    onError: (e: Error) => {
+      setError(userErrorMessage(e, 'Could not save that decision.'));
+      setResolving(null);
+    },
+  });
+
   const people: readonly NotionWorkspacePerson[] = peopleQ.data?.items ?? [];
   const loadError = peopleQ.error ?? unmatchedQ.error;
 
   return {
     loading: enabled && (peopleQ.isPending || unmatchedQ.isPending),
-    error: loadError ? userErrorMessage(loadError, 'Could not load people.') : null,
+    error: error ?? (loadError ? userErrorMessage(loadError, 'Could not load people.') : null),
+    roster: (rosterQ.data?.items ?? []).map((m) => ({ id: m.actorId, displayName: m.displayName })),
+    resolving,
+    resolve: (externalId, decision) => {
+      setResolving(externalId);
+      resolveOne.mutate({ externalId, decision });
+    },
     matched: people.filter((p) => p.actorId !== null),
     unmatched: people.filter((p) => p.actorId === null),
     docketOnly: unmatchedQ.data?.docketOnly ?? 0,

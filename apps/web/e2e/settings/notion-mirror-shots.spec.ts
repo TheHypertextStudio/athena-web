@@ -91,9 +91,9 @@ test.describe('notion mirror visuals', () => {
       // 2. Connected, designed, nothing created in Notion yet — the state right after connecting.
       await connectNotion(page, orgId);
       await page.goto(notionHref, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByRole('heading', { name: 'Docket in Notion' })).toBeVisible({
-        timeout: TIMEOUTS.pageReady,
-      });
+      await expect(page.getByRole('heading', { name: 'Tables Docket builds for you' })).toBeVisible(
+        { timeout: TIMEOUTS.pageReady },
+      );
       await shot(page, `notion-hub-${viewport.name}-light.png`);
       await setColorScheme(page, 'dark');
       await shot(page, `notion-hub-${viewport.name}-dark.png`);
@@ -165,7 +165,12 @@ test.describe('notion mirror visuals', () => {
       // page serving the unprovisioned response from the service worker's cache; the real button
       // goes through `useApiMutation` and invalidates, which is also what a user does.
       await page.getByRole('button', { name: 'Create in Notion' }).click();
-      await expect(page.getByText(/rows in 9 databases/)).toBeVisible({ timeout: TIMEOUTS.sweep });
+      // The setup card disappearing is the honest signal that provisioning landed — the hub no
+      // longer reports row counts, because a reader does not care that Projects has four rows.
+      await expect(page.getByText('Create these in Notion')).toBeHidden({
+        timeout: TIMEOUTS.sweep,
+      });
+      await expect(page.getByText(/Last updated/)).toBeVisible({ timeout: TIMEOUTS.ui });
       await shot(page, `notion-hub-provisioned-${viewport.name}-light.png`);
       await setColorScheme(page, 'dark');
       await shot(page, `notion-hub-provisioned-${viewport.name}-dark.png`);

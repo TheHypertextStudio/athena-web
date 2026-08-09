@@ -334,6 +334,26 @@ export const NotionWorkspacePerson = z
 /** Notion workspace-person value. */
 export type NotionWorkspacePerson = z.infer<typeof NotionWorkspacePerson>;
 
+/** The decision a person makes about one unmatched Notion member. */
+export const NotionPersonResolve = z
+  .object({
+    action: z
+      .enum(['create_actor', 'match_existing', 'skip'])
+      .describe(
+        '`create_actor` adds them to Docket as a person with no account; `match_existing` links them to an actor you name; `skip` leaves them unmatched on purpose.',
+      ),
+    actorId: z
+      .string()
+      .optional()
+      .describe('Required for `match_existing` — the Docket actor to link them to.'),
+  })
+  .meta({
+    id: 'NotionPersonResolve',
+    description: 'Resolve one unmatched Notion workspace member.',
+  });
+/** Notion person-resolve value. */
+export type NotionPersonResolve = z.infer<typeof NotionPersonResolve>;
+
 /** What to do with an unmatched Notion person. */
 export const NotionPersonResolution = z
   .enum(['create_actor', 'match_existing', 'invite', 'skip'])

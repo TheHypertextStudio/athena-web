@@ -107,8 +107,6 @@ test.describe('notion mirror provisioning', () => {
     await page.goto(orgHref(orgId, 'settings/connections/notion'), {
       waitUntil: 'domcontentloaded',
     });
-    await expect(page.getByText(/rows in 9 databases/)).toBeVisible({
-      timeout: TIMEOUTS.pageReady,
-    });
+    await expect(page.getByText(/Last updated/)).toBeVisible({ timeout: TIMEOUTS.pageReady });
   });
 });

@@ -21,7 +21,7 @@
  */
 import type { NotionMirrorDesignOut, NotionPersonRepresentation } from '@docket/types';
 import { cn } from '@docket/ui';
-import { Plus, X } from '@docket/ui/icons';
+import { Plus, Settings } from '@docket/ui/icons';
 import { Input, Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 import { useMemo, useState } from 'react';
@@ -176,7 +176,8 @@ export function NotionTableDesigner({
       </div>
 
       <p className="text-on-surface-variant text-body-small max-w-prose">
-        {directionNote(design.database.direction)}
+        This is what the table will look like in Notion, filled with your own rows. Click a column
+        to rename it or change what it shows. {directionNote(design.database.direction)}
       </p>
 
       {/* A wide table must scroll inside its own container; the page itself never scrolls
@@ -186,7 +187,6 @@ export function NotionTableDesigner({
           <thead>
             <tr className="bg-surface-container">
               {columns.map((column) => {
-                const def = fieldsByKey.get(column.field);
                 const isOpen = openColumn === column.field;
                 return (
                   <th
@@ -203,27 +203,26 @@ export function NotionTableDesigner({
                         setOpenColumn(isOpen ? null : column.field);
                       }}
                       aria-expanded={isOpen}
-                      className="flex flex-col items-start gap-0.5 text-left"
+                      className="group flex w-full flex-col items-start gap-0.5 text-left"
                     >
-                      <span className="text-on-surface text-body-medium">{column.title}</span>
+                      <span className="flex w-full items-center justify-between gap-2">
+                        <span className="text-on-surface text-body-medium truncate">
+                          {column.title}
+                        </span>
+                        {/* An explicit affordance. The header used to be the only way to open the
+                            editor, styled as plain text — so the fact that a column is
+                            configurable at all was something you had to guess. */}
+                        <Settings
+                          aria-hidden="true"
+                          className="text-on-surface-variant size-3.5 shrink-0 opacity-60 group-hover:opacity-100"
+                        />
+                      </span>
                       {/* The Docket field this column is bound to. Kept visible because the
                           title is user-chosen and the binding is otherwise invisible. */}
                       <span className="text-on-surface-variant text-label-small font-mono">
                         {entity}.{column.field}
                       </span>
                     </button>
-                    {def?.required === false ? (
-                      <button
-                        type="button"
-                        aria-label={`Remove the ${column.title} column`}
-                        onClick={() => {
-                          removeColumn(column.field);
-                        }}
-                        className="text-on-surface-variant hover:text-error sr-only focus:not-sr-only"
-                      >
-                        <X aria-hidden="true" className="size-3.5" />
-                      </button>
-                    ) : null}
                   </th>
                 );
               })}

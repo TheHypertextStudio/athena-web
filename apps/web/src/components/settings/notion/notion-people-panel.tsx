@@ -17,10 +17,11 @@
  */
 import { cn } from '@docket/ui';
 import { CheckCircle2, CircleAlert, User } from '@docket/ui/icons';
-import { Skeleton } from '@docket/ui/primitives';
+import { Button, Select, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+import { useState } from 'react';
 
-import { useNotionPeople } from './use-notion-mirror-controller';
+import { useNotionPeople, type PersonDecision } from './use-notion-mirror-controller';
 
 /** Props for {@link NotionPeoplePanel}. */
 export interface NotionPeoplePanelProps {
@@ -76,12 +77,7 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-on-surface-variant text-body-small max-w-prose">
-        {people.matched.length} matched by email · {people.unmatched.length} need a decision ·{' '}
-        {people.docketOnly} in Docket only
-      </p>
-
+    <div className="@container flex flex-col gap-4">
       {people.unmatched.length > 0 ? (
         <section
           className="border-outline-variant overflow-hidden rounded-xl border"
@@ -91,29 +87,26 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
             <CircleAlert aria-hidden="true" className="text-error size-4" />
             <span className="text-on-surface text-label-large">
               {people.unmatched.length === 1
-                ? '1 person needs a decision'
-                : `${String(people.unmatched.length)} people need a decision`}
+                ? '1 person to sort out'
+                : `${String(people.unmatched.length)} people to sort out`}
             </span>
           </div>
           <p className="text-on-surface-variant text-body-small border-outline-variant border-t px-4 py-2">
-            Until these are matched, anything assigned to them in Notion can’t reach Docket.
+            These people work in your Notion workspace but Docket doesn’t know who they are. Until
+            you say, anything assigned to them in Notion can’t reach Docket.
           </p>
           <ul>
             {people.unmatched.map((person) => (
-              <li
+              <UnmatchedRow
                 key={person.externalId}
-                className="border-outline-variant bg-surface-container-low flex items-center gap-3 border-t px-4 py-3"
-              >
-                <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
-                  {initials(person.name)}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span className="text-on-surface text-body-medium truncate">{person.name}</span>
-                  <span className="text-on-surface-variant text-body-small truncate">
-                    {person.email ?? 'No email in Notion'} · in Notion only
-                  </span>
-                </span>
-              </li>
+                name={person.name}
+                email={person.email}
+                busy={people.resolving === person.externalId}
+                roster={people.roster}
+                onDecide={(decision) => {
+                  people.resolve(person.externalId, decision);
+                }}
+              />
             ))}
           </ul>
         </section>
@@ -138,6 +131,70 @@ export function NotionPeoplePanel({ orgId, integrationId }: NotionPeoplePanelPro
         detail="They still get a row in the People database and can be assigned work there — Notion just can’t @-mention them."
       />
     </div>
+  );
+}
+
+/**
+ * One unmatched person, with the decision attached to them.
+ *
+ * @remarks
+ * The decision lives on the row rather than behind a modal because there is usually more than one
+ * to make and they are independent: a dialog per person would turn a two-minute pass into twenty
+ * clicks. "Add to Docket" is first because it is overwhelmingly the common answer — most people in
+ * a Notion workspace have never used Docket, and adding them as a person with no account is what
+ * makes their assignments routable at all.
+ */
+function UnmatchedRow(props: {
+  name: string;
+  email: string | null;
+  busy: boolean;
+  roster: readonly { id: string; displayName: string }[];
+  onDecide: (decision: PersonDecision) => void;
+}): JSX.Element {
+  const [choice, setChoice] = useState('create_actor');
+
+  return (
+    <li className="border-outline-variant bg-surface-container-low flex flex-col gap-3 border-t px-4 py-3 @xl:flex-row @xl:items-center">
+      <span className="bg-surface-container text-on-surface-variant text-body-small flex size-8 shrink-0 items-center justify-center rounded-full">
+        {initials(props.name)}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-on-surface text-body-medium truncate">{props.name}</span>
+        <span className="text-on-surface-variant text-body-small truncate">
+          {props.email ?? 'No email in Notion'}
+        </span>
+      </span>
+      <div className="flex shrink-0 items-center gap-2">
+        <Select
+          aria-label={`What should Docket do about ${props.name}?`}
+          value={choice}
+          disabled={props.busy}
+          onChange={(e) => {
+            setChoice(e.target.value);
+          }}
+          className="w-56"
+        >
+          <option value="create_actor">Add to Docket as a new person</option>
+          <option value="skip">Don’t sync them</option>
+          {props.roster.map((member) => (
+            <option key={member.id} value={`match:${member.id}`}>
+              This is {member.displayName}
+            </option>
+          ))}
+        </Select>
+        <Button
+          disabled={props.busy}
+          onClick={() => {
+            if (choice === 'create_actor') props.onDecide({ action: 'create_actor' });
+            else if (choice === 'skip') props.onDecide({ action: 'skip' });
+            else
+              props.onDecide({ action: 'match_existing', actorId: choice.slice('match:'.length) });
+          }}
+        >
+          {props.busy ? 'Saving…' : 'Apply'}
+        </Button>
+      </div>
+    </li>
   );
 }
 

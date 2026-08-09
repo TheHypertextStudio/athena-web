@@ -29,7 +29,7 @@ test('a person can reach Notion from Connections and create the databases', asyn
 
   // The card must offer a way in. Without this link the page below is URL-only.
   await notionCard.getByRole('link', { name: /Manage|Set up/ }).click();
-  await expect(page.getByRole('heading', { name: 'Docket in Notion' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Tables Docket builds for you' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
 
@@ -37,7 +37,11 @@ test('a person can reach Notion from Connections and create the databases', asyn
   await expect(page.getByText('Create these in Notion')).toBeVisible();
   await page.getByRole('button', { name: 'Create in Notion' }).click();
 
-  await expect(page.getByText(/rows in 9 databases/)).toBeVisible({ timeout: TIMEOUTS.sweep });
+  await expect(page.getByText('Create these in Notion')).toBeHidden({ timeout: TIMEOUTS.sweep });
+
+  // Every table offers a way to configure it. This is the assertion that would have caught a hub
+  // whose only affordance was a name styled as body text.
+  await expect(page.getByRole('link', { name: 'Configure' })).toHaveCount(9);
 
   // And the people surface is reachable rather than landing on a not-found.
   await page.goto(orgHref(orgId, 'settings/connections/notion/people'), {
@@ -47,4 +51,11 @@ test('a person can reach Notion from Connections and create the databases', asyn
     timeout: TIMEOUTS.pageReady,
   });
   await expect(page.getByText(/have no Notion account/)).toBeVisible();
+  // An unmatched person can actually be RESOLVED, not merely counted. The mock workspace has
+  // three; resolving one must leave two, which is what proves the decision was applied rather
+  // than the list simply re-rendering.
+  const decisions = page.getByRole('button', { name: 'Apply' });
+  await expect(decisions).toHaveCount(3);
+  await decisions.first().click();
+  await expect(decisions).toHaveCount(2, { timeout: TIMEOUTS.ui });
 });

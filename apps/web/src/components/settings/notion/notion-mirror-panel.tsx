@@ -13,13 +13,12 @@
  * Pure presentation — all reads and writes live in `use-notion-mirror-controller.ts`.
  */
 import type { NotionMirrorDatabaseOut } from '@docket/types';
-import { cn } from '@docket/ui';
 import { ArrowRight, CheckCircle2, CircleAlert } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import NextLink from 'next/link';
 import type { JSX } from 'react';
 
-import { EMPTY_DATABASE_HINT, entityLabel } from './notion-copy';
+import { EMPTY_DATABASE_HINT, entityLabel, tableMeaning } from './notion-copy';
 import { NotionSetupCard } from './notion-setup-card';
 import { useNotionMirror, useNotionPeople } from './use-notion-mirror-controller';
 
@@ -29,7 +28,14 @@ export interface NotionMirrorPanelProps {
   orgId: string;
 }
 
-/** One database row in the hub list. */
+/**
+ * One table in the hub list: what it does, and the button that configures it.
+ *
+ * @remarks
+ * Row counts are gone. "Projects · 4" answers a question nobody has, while the thing a reader
+ * actually wants — will my Notion edits survive, and how do I change what appears — was invisible:
+ * the only affordance used to be the table's name, styled as body text.
+ */
 function DatabaseRow({
   database,
   designHref,
@@ -37,36 +43,20 @@ function DatabaseRow({
   database: NotionMirrorDatabaseOut;
   designHref: string;
 }): JSX.Element {
-  const provisioned = database.provisionedAt !== null;
-  // Only worth showing once the user has renamed the database. Until then it repeats the title
-  // straight back ("Tasks … Tasks"), which is noise standing where information should be.
-  const renamed = database.title !== entityLabel(database.entityType);
   return (
-    <li className="border-outline-variant flex items-center gap-3 border-b px-4 py-2 last:border-b-0">
+    <li className="border-outline-variant flex flex-col gap-2 border-b px-4 py-3 last:border-b-0 @lg:flex-row @lg:items-center @lg:gap-4">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="text-on-surface text-label-large">{database.title}</span>
+        <span className="text-on-surface-variant text-body-small">
+          {tableMeaning(database.direction, entityLabel(database.entityType))}
+        </span>
+      </span>
       <NextLink
         href={designHref}
-        className="text-on-surface text-label-large min-w-0 flex-1 truncate hover:underline"
+        className="border-outline-variant text-on-surface text-label-large hover:bg-surface-container shrink-0 self-start rounded-lg border px-3 py-1.5 @lg:self-auto"
       >
-        {database.title}
+        Configure
       </NextLink>
-      {renamed ? (
-        <span className="text-on-surface-variant text-body-small hidden @md:inline">
-          {entityLabel(database.entityType)}
-        </span>
-      ) : null}
-      <span className="text-on-surface-variant text-body-small w-16 text-right tabular-nums">
-        {provisioned ? database.rowCount.toLocaleString() : '—'}
-      </span>
-      <span
-        className={cn(
-          'text-body-small shrink-0 rounded-full px-2 py-0.5 text-center whitespace-nowrap',
-          database.direction === 'two_way'
-            ? 'bg-primary/10 text-primary'
-            : 'text-on-surface-variant',
-        )}
-      >
-        {database.direction === 'two_way' ? 'Two-way' : 'From Docket'}
-      </span>
     </li>
   );
 }
@@ -155,16 +145,11 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
       ) : null}
 
       <section className="flex flex-col gap-2" aria-label="Docket in Notion">
-        <div className="flex items-baseline justify-between gap-3">
-          <h2 className="text-on-surface text-title-small">Docket in Notion</h2>
-          <span className="text-on-surface-variant text-body-small tabular-nums">
-            {nothingProvisioned
-              ? 'Not created yet'
-              : `${model.totalRows.toLocaleString()} rows in ${String(model.provisionedCount)} databases`}
-          </span>
-        </div>
+        <h2 className="text-on-surface text-title-small">Tables Docket builds for you</h2>
         <p className="text-on-surface-variant text-body-small max-w-prose">
-          {nothingProvisioned ? EMPTY_DATABASE_HINT : 'Docket keeps these current.'}
+          {nothingProvisioned
+            ? EMPTY_DATABASE_HINT
+            : 'Each of these is a Notion database Docket fills in and keeps current. Configure one to change its name or which columns it has.'}
         </p>
         {nothingProvisioned ? (
           <NotionSetupCard orgId={orgId} integrationId={model.integration.id} />
@@ -178,10 +163,11 @@ export function NotionMirrorPanel({ orgId }: NotionMirrorPanelProps): JSX.Elemen
             />
           ))}
         </ul>
-        <p className="text-on-surface-variant text-body-small mt-1">
-          Rows Docket owns are read-only in Notion. Edits to two-way fields flow back.
-          {model.lastSyncedLabel !== null ? ` Last synced ${model.lastSyncedLabel}.` : ''}
-        </p>
+        {model.lastSyncedLabel !== null ? (
+          <p className="text-on-surface-variant text-body-small mt-1">
+            Last updated {model.lastSyncedLabel}.
+          </p>
+        ) : null}
       </section>
     </div>
   );

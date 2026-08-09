@@ -88,6 +88,23 @@ export function excludedRowsNote(count: number): string {
     : `${String(count)} tasks are left out because they already sync to one of your own Notion databases.`;
 }
 
+/**
+ * What one table does, in a sentence a reader can act on.
+ *
+ * @remarks
+ * Replaces the "Two-way / From Docket" chip, which named a mechanism nobody asked about. What a
+ * person needs to know before clicking Configure is whether their edits in Notion will survive.
+ *
+ * @param direction - Whether the table accepts edits from Notion.
+ * @param plural - The org's own plural term for the entity.
+ * @returns one line of plain meaning.
+ */
+export function tableMeaning(direction: 'two_way' | 'push', plural: string): string {
+  return direction === 'two_way'
+    ? `Your ${plural.toLowerCase()} appear in Notion, and edits there come back to Docket.`
+    : `A live copy of your ${plural.toLowerCase()} in Notion. Edits there get replaced.`;
+}
+
 /** Says which way a database's edits flow, in the user's terms. */
 export function directionNote(direction: 'two_way' | 'push'): string {
   return direction === 'two_way'

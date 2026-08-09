@@ -27,7 +27,7 @@
  */
 import * as React from 'react';
 
-import { Check, Search, X } from '../../icons';
+import { Check, Plus, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
 import { MENU_METRICS, menuFocusRing, menuItemClass, menuSupporting } from '../../primitives';
 
@@ -67,6 +67,24 @@ export interface PickerListProps<TValue extends string = string> {
    * its label and the callback to invoke when chosen (e.g. "No lead", "No project").
    */
   clear?: { label: string; onClear: () => void } | null;
+  /**
+   * An optional "create what you just typed" row, rendered last.
+   *
+   * @remarks
+   * This is where most labels are actually born: mid-thought, in the middle of doing the work,
+   * from someone who has just typed a word the org does not have yet. Sending them to a settings
+   * page to define it first is how a taxonomy ends up unused.
+   *
+   * `render` builds the row's text from the live query (e.g. `Create "onboarding"`), and
+   * `canCreate` decides whether the row appears at all for that query — a picker passes a
+   * case-insensitive existence check here so typing `Bug` when `bug` exists offers the existing
+   * label instead of a near-duplicate beside it.
+   */
+  create?: {
+    render: (query: string) => string;
+    canCreate: (query: string, options: readonly PickerOption<TValue>[]) => boolean;
+    onCreate: (query: string) => void;
+  } | null;
   /** Accessible label for the listbox. */
   ariaLabel?: string;
 }
@@ -96,6 +114,7 @@ export function PickerList<TValue extends string = string>({
   searchPlaceholder = 'Search…',
   emptyText = 'No matches',
   clear = null,
+  create = null,
   ariaLabel,
 }: PickerListProps<TValue>): React.JSX.Element {
   const [query, setQuery] = React.useState('');
@@ -113,14 +132,22 @@ export function PickerList<TValue extends string = string>({
   // set, not `filtered` — narrowing the query shouldn't make the column pop in and out.
   const hasAnyIcon = React.useMemo(() => options.some((option) => option.icon != null), [options]);
 
-  // Build the flat row model: an optional clear row, then the filtered options. Keeping a
-  // single flat array makes arrow-key navigation and Enter activation uniform across rows.
-  const rows = React.useMemo<{ kind: 'clear' | 'option'; option?: PickerOption<TValue> }[]>(() => {
-    const list: { kind: 'clear' | 'option'; option?: PickerOption<TValue> }[] = [];
+  const trimmedQuery = query.trim();
+  const showCreate =
+    create != null && trimmedQuery.length > 0 && create.canCreate(trimmedQuery, options);
+
+  // Build the flat row model: an optional clear row, the filtered options, then an optional
+  // create row. Keeping a single flat array makes arrow-key navigation and Enter activation
+  // uniform across every row kind — the create row is reachable by Down-arrow like any other.
+  const rows = React.useMemo<
+    { kind: 'clear' | 'option' | 'create'; option?: PickerOption<TValue> }[]
+  >(() => {
+    const list: { kind: 'clear' | 'option' | 'create'; option?: PickerOption<TValue> }[] = [];
     if (clear) list.push({ kind: 'clear' });
     for (const option of filtered) list.push({ kind: 'option', option });
+    if (showCreate) list.push({ kind: 'create' });
     return list;
-  }, [clear, filtered]);
+  }, [clear, filtered, showCreate]);
 
   // Clamp the active index whenever the row set shrinks (e.g. as the query narrows).
   React.useEffect(() => {
@@ -137,9 +164,14 @@ export function PickerList<TValue extends string = string>({
         clear?.onClear();
         return;
       }
+      if (row.kind === 'create') {
+        create?.onCreate(trimmedQuery);
+        setQuery('');
+        return;
+      }
       if (row.option && !row.option.disabled) onSelect(row.option.value);
     },
-    [rows, clear, onSelect],
+    [rows, clear, create, trimmedQuery, onSelect],
   );
 
   const onKeyDown = React.useCallback(
@@ -236,6 +268,28 @@ export function PickerList<TValue extends string = string>({
                   >
                     <X aria-hidden="true" className="shrink-0 opacity-70" />
                     <span className="truncate">{clear?.label}</span>
+                  </button>
+                </li>
+              );
+            }
+            if (row.kind === 'create') {
+              return (
+                <li key="__create__" role="option" aria-selected={false}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      create?.onCreate(trimmedQuery);
+                      setQuery('');
+                    }}
+                    onMouseEnter={() => {
+                      setActiveIndex(index);
+                    }}
+                    className={cn(PICKER_ROW_METRICS, 'text-on-surface', menuFocusRing, {
+                      'bg-on-surface/10': active,
+                    })}
+                  >
+                    <Plus aria-hidden="true" className="shrink-0 opacity-70" />
+                    <span className="truncate">{create?.render(trimmedQuery)}</span>
                   </button>
                 </li>
               );

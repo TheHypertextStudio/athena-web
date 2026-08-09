@@ -25,6 +25,14 @@ export {
 } from './atoms/StatusIcon';
 export { IdentityGlyph, type IdentityGlyphProps } from './atoms/IdentityGlyph';
 export {
+  LabelChip,
+  type LabelChipColor,
+  type LabelChipProps,
+  LabelChipRow,
+  type LabelChipRowProps,
+  labelColorKey,
+} from './atoms/LabelChip';
+export {
   EntityList,
   type EntityListProps,
   EntityListRow,

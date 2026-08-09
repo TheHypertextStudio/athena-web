@@ -10,6 +10,11 @@
  * label's name) and falls back to a calm "Add labels" prompt when empty. Selection is
  * *controlled*: the caller owns the `value` array and is told of each toggle through
  * `onToggle`. Each option carries its own swatch as its `icon`, supplied by the caller.
+ *
+ * Passing `onCreate` turns on inline creation: typing a name the org does not have offers a
+ * `Create "…"` row. This is the path most labels are actually born through, so the match is
+ * case-insensitive — typing `Bug` where `bug` exists offers the existing label rather than a
+ * near-duplicate beside it, which is the failure mode that turns a picker into a junk drawer.
  */
 import * as React from 'react';
 
@@ -49,6 +54,11 @@ export interface LabelsPickerProps<TValue extends string = string> {
   triggerVariant?: 'ghost' | 'outline';
   /** Extra classes for the trigger. */
   triggerClassName?: string;
+  /**
+   * Create a label from the typed text. Supply this to enable the inline `Create "…"` row; omit
+   * it (as the initiatives reuse of this picker does) and the row never appears.
+   */
+  onCreate?: (name: string) => void;
 }
 
 /** Summarize the selected labels into a compact trigger label, or `undefined` when none. */
@@ -88,6 +98,7 @@ export function LabelsPicker<TValue extends string = string>({
   readOnly,
   triggerVariant = 'ghost',
   triggerClassName,
+  onCreate,
 }: LabelsPickerProps<TValue>): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
   const summary = summarize(value, options);
@@ -121,6 +132,17 @@ export function LabelsPicker<TValue extends string = string>({
           searchPlaceholder={searchPlaceholder}
           emptyText={emptyText}
           ariaLabel={ariaLabel}
+          create={
+            onCreate
+              ? {
+                  render: (q) => `Create “${q}”`,
+                  // Case- and whitespace-insensitive, matching the server's own dedupe rule.
+                  canCreate: (q, opts) =>
+                    !opts.some((o) => o.label.trim().toLowerCase() === q.trim().toLowerCase()),
+                  onCreate,
+                }
+              : null
+          }
         />
       </PopoverContent>
     </Popover>

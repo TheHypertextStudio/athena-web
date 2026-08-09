@@ -905,3 +905,70 @@ describe('DateRangePicker', () => {
     });
   });
 });
+
+describe('LabelsPicker inline creation', () => {
+  const LABELS: PickerOption[] = [
+    { value: 'l1', label: 'bug' },
+    { value: 'l2', label: 'design' },
+  ];
+
+  /** Open the picker's popover and return its search input. */
+  async function openPicker(ui: React.ReactElement): Promise<HTMLElement> {
+    render(ui);
+    fireEvent.click(screen.getByRole('button'));
+    return await screen.findByRole('textbox');
+  }
+
+  it('offers a create row for a name the org does not have', async () => {
+    const onCreate = vi.fn();
+    const input = await openPicker(
+      <LabelsPicker options={LABELS} value={[]} onToggle={vi.fn()} onCreate={onCreate} />,
+    );
+    fireEvent.change(input, { target: { value: 'onboarding' } });
+
+    const create = await screen.findByText('Create “onboarding”');
+    fireEvent.click(create);
+    expect(onCreate).toHaveBeenCalledWith('onboarding');
+  });
+
+  it('offers the existing label instead of a near-duplicate when case differs', async () => {
+    // The DB unique is case-sensitive by decision, so this is where `Bug` beside `bug` has to
+    // be prevented — otherwise every picker slowly fills with the same label twice.
+    const onCreate = vi.fn();
+    const input = await openPicker(
+      <LabelsPicker options={LABELS} value={[]} onToggle={vi.fn()} onCreate={onCreate} />,
+    );
+    fireEvent.change(input, { target: { value: 'BUG' } });
+
+    expect(screen.queryByText(/^Create/)).toBeNull();
+  });
+
+  it('never offers creation for a blank query', async () => {
+    const input = await openPicker(
+      <LabelsPicker options={LABELS} value={[]} onToggle={vi.fn()} onCreate={vi.fn()} />,
+    );
+    fireEvent.change(input, { target: { value: '   ' } });
+    expect(screen.queryByText(/^Create/)).toBeNull();
+  });
+
+  it('omits the create row entirely when the caller supplies no handler', async () => {
+    // The initiatives reuse of this picker passes no `onCreate`; it must not offer to
+    // create an initiative from a label picker.
+    const input = await openPicker(<LabelsPicker options={LABELS} value={[]} onToggle={vi.fn()} />);
+    fireEvent.change(input, { target: { value: 'brand new' } });
+    expect(screen.queryByText(/^Create/)).toBeNull();
+  });
+
+  it('reaches the create row by keyboard like any other row', async () => {
+    // The create row joins the same flat row model, so Down-arrow walks onto it and Enter
+    // activates it — it is not a mouse-only affordance.
+    const onCreate = vi.fn();
+    const input = await openPicker(
+      <LabelsPicker options={LABELS} value={[]} onToggle={vi.fn()} onCreate={onCreate} />,
+    );
+    fireEvent.change(input, { target: { value: 'onboarding' } });
+    // Query matches nothing, so the create row is the only row and is already active.
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onCreate).toHaveBeenCalledWith('onboarding');
+  });
+});

@@ -114,6 +114,53 @@
   --state-canceled: oklch(0.5 0.03 25);
 
   /*
+   * Label palette (light). Ten hues, each in three roles.
+   *
+   * A label's stored `color` is one of these keys, never a hex — a single fixed value cannot
+   * read against both themes, since surfaces run L 0.98-0.90 here and L 0.175-0.36 in dark.
+   * Resolving a key to a per-theme triple is what lets the same label look right in both.
+   *
+   * - `dot`   the saturated swatch, the chip's required leading mark (CRAFT-13: no bare pills)
+   * - `container`    a low-chroma tint for the chip's own background
+   * - `on-container` text on that tint, held above 4.5:1
+   *
+   * Chips are tint + dot, never a saturated fill: a filled chip at ten hues cannot keep
+   * readable text in both themes, and it would shout louder than the work it annotates.
+   * Hues extend `ORG_ACCENT_PALETTE` so org accents and labels read as one family; `slate` is
+   * the near-neutral you opt into and is never auto-assigned.
+   */
+  --label-blue-dot: oklch(0.55 0.18 250);
+  --label-blue-container: oklch(0.94 0.035 250);
+  --label-blue-on-container: oklch(0.38 0.13 250);
+  --label-indigo-dot: oklch(0.5 0.13 280);
+  --label-indigo-container: oklch(0.94 0.03 280);
+  --label-indigo-on-container: oklch(0.36 0.11 280);
+  --label-violet-dot: oklch(0.55 0.17 300);
+  --label-violet-container: oklch(0.94 0.035 300);
+  --label-violet-on-container: oklch(0.38 0.13 300);
+  --label-plum-dot: oklch(0.53 0.15 325);
+  --label-plum-container: oklch(0.94 0.033 325);
+  --label-plum-on-container: oklch(0.37 0.12 325);
+  --label-pink-dot: oklch(0.55 0.18 350);
+  --label-pink-container: oklch(0.94 0.035 350);
+  --label-pink-on-container: oklch(0.38 0.13 350);
+  --label-coral-dot: oklch(0.62 0.13 25);
+  --label-coral-container: oklch(0.94 0.035 25);
+  --label-coral-on-container: oklch(0.4 0.12 25);
+  --label-amber-dot: oklch(0.55 0.15 75);
+  --label-amber-container: oklch(0.94 0.04 75);
+  --label-amber-on-container: oklch(0.38 0.1 75);
+  --label-green-dot: oklch(0.52 0.16 150);
+  --label-green-container: oklch(0.93 0.04 150);
+  --label-green-on-container: oklch(0.36 0.11 150);
+  --label-teal-dot: oklch(0.55 0.12 195);
+  --label-teal-container: oklch(0.93 0.035 195);
+  --label-teal-on-container: oklch(0.37 0.09 195);
+  --label-slate-dot: oklch(0.55 0.02 264);
+  --label-slate-container: oklch(0.93 0.008 264);
+  --label-slate-on-container: oklch(0.38 0.015 264);
+
+  /*
    * MD3 tonal surface system (light).
    *
    * The canvas is `--surface-container` — a subtly cool-tinted neutral just off pure white,
@@ -242,6 +289,42 @@
     --state-started: oklch(0.78 0.13 250);
     --state-completed: oklch(0.78 0.14 150);
     --state-canceled: oklch(0.72 0.03 25);
+
+    /*
+     * Label palette (dark). Same ten keys, re-tuned rather than re-derived: dots brighten to
+     * carry against a dark canvas, containers become dim low-chroma tints just above the
+     * surface, and the text role flips to a light tone. See the light block for the roles.
+     */
+    --label-blue-dot: oklch(0.74 0.15 250);
+    --label-blue-container: oklch(0.32 0.055 250);
+    --label-blue-on-container: oklch(0.88 0.06 250);
+    --label-indigo-dot: oklch(0.72 0.13 280);
+    --label-indigo-container: oklch(0.32 0.05 280);
+    --label-indigo-on-container: oklch(0.88 0.055 280);
+    --label-violet-dot: oklch(0.74 0.14 300);
+    --label-violet-container: oklch(0.32 0.055 300);
+    --label-violet-on-container: oklch(0.89 0.06 300);
+    --label-plum-dot: oklch(0.73 0.13 325);
+    --label-plum-container: oklch(0.32 0.05 325);
+    --label-plum-on-container: oklch(0.89 0.055 325);
+    --label-pink-dot: oklch(0.75 0.15 350);
+    --label-pink-container: oklch(0.33 0.055 350);
+    --label-pink-on-container: oklch(0.89 0.06 350);
+    --label-coral-dot: oklch(0.76 0.13 25);
+    --label-coral-container: oklch(0.33 0.05 25);
+    --label-coral-on-container: oklch(0.89 0.055 25);
+    --label-amber-dot: oklch(0.79 0.13 75);
+    --label-amber-container: oklch(0.33 0.045 75);
+    --label-amber-on-container: oklch(0.9 0.06 75);
+    --label-green-dot: oklch(0.76 0.14 150);
+    --label-green-container: oklch(0.31 0.05 150);
+    --label-green-on-container: oklch(0.89 0.06 150);
+    --label-teal-dot: oklch(0.76 0.11 195);
+    --label-teal-container: oklch(0.31 0.04 195);
+    --label-teal-on-container: oklch(0.89 0.05 195);
+    --label-slate-dot: oklch(0.72 0.015 264);
+    --label-slate-container: oklch(0.32 0.01 264);
+    --label-slate-on-container: oklch(0.88 0.012 264);
 
     /*
      * MD3 tonal surface system (dark).
@@ -542,6 +625,83 @@
   [data-density='spacious'] {
     --row-h: 3rem;
     --row-py: 0.75rem;
+  }
+
+  /*
+   * Label colors, keyed off the `data-label-color` attribute `LabelChip` emits.
+   *
+   * Same shape as the density system above and for the same reason: the component names a key,
+   * the stylesheet owns what that key means, and both themes come along for free. The
+   * alternative — the inline `style={{ background: label.color }}` this replaces — cannot
+   * respond to a theme change at all.
+   *
+   * The `:root` fallback is `slate`, so a label carrying a legacy hex from a mirrored provider
+   * renders as the quiet neutral instead of as nothing.
+   */
+  :root {
+    --label-dot: var(--label-slate-dot);
+    --label-container: var(--label-slate-container);
+    --label-on-container: var(--label-slate-on-container);
+  }
+
+  [data-label-color='blue'] {
+    --label-dot: var(--label-blue-dot);
+    --label-container: var(--label-blue-container);
+    --label-on-container: var(--label-blue-on-container);
+  }
+
+  [data-label-color='indigo'] {
+    --label-dot: var(--label-indigo-dot);
+    --label-container: var(--label-indigo-container);
+    --label-on-container: var(--label-indigo-on-container);
+  }
+
+  [data-label-color='violet'] {
+    --label-dot: var(--label-violet-dot);
+    --label-container: var(--label-violet-container);
+    --label-on-container: var(--label-violet-on-container);
+  }
+
+  [data-label-color='plum'] {
+    --label-dot: var(--label-plum-dot);
+    --label-container: var(--label-plum-container);
+    --label-on-container: var(--label-plum-on-container);
+  }
+
+  [data-label-color='pink'] {
+    --label-dot: var(--label-pink-dot);
+    --label-container: var(--label-pink-container);
+    --label-on-container: var(--label-pink-on-container);
+  }
+
+  [data-label-color='coral'] {
+    --label-dot: var(--label-coral-dot);
+    --label-container: var(--label-coral-container);
+    --label-on-container: var(--label-coral-on-container);
+  }
+
+  [data-label-color='amber'] {
+    --label-dot: var(--label-amber-dot);
+    --label-container: var(--label-amber-container);
+    --label-on-container: var(--label-amber-on-container);
+  }
+
+  [data-label-color='green'] {
+    --label-dot: var(--label-green-dot);
+    --label-container: var(--label-green-container);
+    --label-on-container: var(--label-green-on-container);
+  }
+
+  [data-label-color='teal'] {
+    --label-dot: var(--label-teal-dot);
+    --label-container: var(--label-teal-container);
+    --label-on-container: var(--label-teal-on-container);
+  }
+
+  [data-label-color='slate'] {
+    --label-dot: var(--label-slate-dot);
+    --label-container: var(--label-slate-container);
+    --label-on-container: var(--label-slate-on-container);
   }
 
   /*

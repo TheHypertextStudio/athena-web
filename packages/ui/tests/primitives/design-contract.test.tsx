@@ -750,3 +750,61 @@ describe('MD3 menu spec — both mappings render from one source', () => {
     expect(menuContentClass('vibrant')).not.toMatch(/(?:^|\s)border(?:\s|$)/);
   });
 });
+
+describe('label palette', () => {
+  /** The palette keys `LabelChip` will ask the stylesheet to resolve. */
+  const LABEL_KEYS = [
+    'blue',
+    'indigo',
+    'violet',
+    'plum',
+    'pink',
+    'coral',
+    'amber',
+    'green',
+    'teal',
+    'slate',
+  ] as const;
+
+  const ROLES = ['dot', 'container', 'on-container'] as const;
+
+  /** The dark-theme block, where a key added only to `:root` would go missing. */
+  const DARK_BLOCK = GLOBALS_CSS.slice(GLOBALS_CSS.indexOf('@media (prefers-color-scheme: dark)'));
+
+  it('declares all three roles for every key', () => {
+    // A key missing a role renders the chip with an inherited background — invisible in tests,
+    // visible only as an unreadable chip in the browser.
+    for (const key of LABEL_KEYS) {
+      for (const role of ROLES) {
+        expect(GLOBALS_CSS, `${key} ${role}`).toContain(`--label-${key}-${role}:`);
+      }
+    }
+  });
+
+  it('re-declares every key in the dark theme', () => {
+    // This is the invariant that silently breaks: someone adds an eleventh hue to `:root`,
+    // forgets the dark block, and the chip inherits the light tint on a dark surface. A stored
+    // hex had exactly this failure mode, which is why colours became keys in the first place.
+    for (const key of LABEL_KEYS) {
+      for (const role of ROLES) {
+        expect(DARK_BLOCK, `${key} ${role} (dark)`).toContain(`--label-${key}-${role}:`);
+      }
+    }
+  });
+
+  it('maps every key through a data-label-color rule', () => {
+    // The component emits the key as an attribute; without a matching rule it falls through to
+    // the `:root` neutral and every label in the product renders grey.
+    for (const key of LABEL_KEYS) {
+      expect(GLOBALS_CSS, key).toContain(`[data-label-color='${key}']`);
+    }
+  });
+
+  it('gives the resolved variables a neutral fallback at :root', () => {
+    // A label mirrored from a connected tool still carries that provider's hex. It must render
+    // as the quiet neutral, not as nothing.
+    for (const role of ROLES) {
+      expect(GLOBALS_CSS, role).toContain(`--label-${role}: var(--label-slate-${role})`);
+    }
+  });
+});

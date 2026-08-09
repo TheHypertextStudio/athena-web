@@ -92,13 +92,19 @@ export default function LabelsSettingsPage(): JSX.Element {
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
 
   const byName = (a: LabelOut, b: LabelOut): number => a.name.localeCompare(b.name);
-  const used = labels.filter((l) => (l.usageCount ?? 0) > 0);
-  const unused = labels.filter((l) => (l.usageCount ?? 0) === 0).sort(byName);
-  const grouped = new Set(
-    groups.flatMap((g) => used.filter((l) => l.groupId === g.id).map((l) => l.id)),
-  );
-  const loose = used.filter((l) => !grouped.has(l.id) && l.teamId == null).sort(byName);
-  const teamScoped = used.filter((l) => !grouped.has(l.id) && l.teamId != null).sort(byName);
+  const groupIds = new Set(groups.map((g) => g.id));
+
+  // Group membership is structural, so a group always lists every member — including ones nothing
+  // currently uses. Filing those under "Not used" instead would make the group look like it had
+  // silently lost a member, and "nothing carries these, deleting costs nothing" is the wrong
+  // advice about one arm of a single-choice dimension.
+  const inGroup = (l: LabelOut): boolean => l.groupId != null && groupIds.has(l.groupId);
+  const ungrouped = labels.filter((l) => !inGroup(l));
+
+  const unused = ungrouped.filter((l) => (l.usageCount ?? 0) === 0).sort(byName);
+  const used = ungrouped.filter((l) => (l.usageCount ?? 0) > 0);
+  const loose = used.filter((l) => l.teamId == null).sort(byName);
+  const teamScoped = used.filter((l) => l.teamId != null).sort(byName);
 
   const rowProps = (label: LabelOut): Parameters<typeof LabelSettingsRow>[0] => ({
     label,
@@ -156,7 +162,7 @@ export default function LabelsSettingsPage(): JSX.Element {
             <GroupSection
               key={group.id}
               group={group}
-              labels={used.filter((l) => l.groupId === group.id).sort(byName)}
+              labels={labels.filter((l) => l.groupId === group.id).sort(byName)}
               canManage={canManage}
               onToggleExclusive={(exclusive) => {
                 updateGroup.mutate({ id: group.id, exclusive });

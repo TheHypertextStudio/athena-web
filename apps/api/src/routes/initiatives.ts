@@ -11,7 +11,6 @@ import {
   entityDisplay,
   initiative,
   initiativeHierarchyLink,
-  initiativeLabel,
   initiativeProgram,
   initiativeProject,
   organization,
@@ -40,6 +39,7 @@ import type { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -48,7 +48,6 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import {
-  assertInitiativeLabels,
   assertOwnerInOrg,
   associatedPrograms,
   associatedProjects,
@@ -112,7 +111,9 @@ const initiatives = new Hono<AppEnv>()
       const { orgId, actorId } = c.get('actorCtx');
       const body = c.req.valid('json');
       await assertOwnerInOrg(orgId, body.ownerId);
-      const labelIds = await assertInitiativeLabels(orgId, body.labelIds);
+      // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
+      // task does. Initiatives have no team, so only workspace-wide labels are offerable.
+      const labels = await resolveLabelSet(orgId, body.labelIds);
       const row = await db.transaction(async (tx) => {
         const inserted = await tx
           .insert(initiative)
@@ -133,14 +134,8 @@ const initiatives = new Hono<AppEnv>()
         const created = inserted[0];
         /* v8 ignore next -- @preserve defensive: insert always returns one row */
         if (!created) throw new Error('initiative insert returned no row');
-        if (labelIds.length > 0) {
-          await tx.insert(initiativeLabel).values(
-            labelIds.map((labelId) => ({
-              initiativeId: created.id,
-              labelId,
-              organizationId: orgId,
-            })),
-          );
+        if (labels.length > 0) {
+          await replaceLabels(tx, 'initiative', created.id, orgId, labels);
         }
         return created;
       });
@@ -231,7 +226,9 @@ const initiatives = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       await assertOwnerInOrg(orgId, body.ownerId);
-      const labelIds = await assertInitiativeLabels(orgId, body.labelIds);
+      // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
+      // task does. Initiatives have no team, so only workspace-wide labels are offerable.
+      const labels = await resolveLabelSet(orgId, body.labelIds);
       const row = await db.transaction(async (tx) => {
         const values: Partial<typeof initiative.$inferInsert> = {
           ...(body.name !== undefined ? { name: body.name } : {}),
@@ -261,14 +258,7 @@ const initiatives = new Hono<AppEnv>()
         const changed = updated[0];
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {
-          await tx.delete(initiativeLabel).where(eq(initiativeLabel.initiativeId, id));
-          if (labelIds.length > 0) {
-            await tx
-              .insert(initiativeLabel)
-              .values(
-                labelIds.map((labelId) => ({ initiativeId: id, labelId, organizationId: orgId })),
-              );
-          }
+          await replaceLabels(tx, 'initiative', id, orgId, labels);
         }
         return changed;
       });

@@ -219,34 +219,45 @@ describe('projects detail router', () => {
     expect((await json<{ id: string; name: string }>(res)).name).toBe('Seeded');
   });
 
-  it('replaces Project labels and rejects team-scoped labels', async () => {
+  it("replaces Project labels, admitting its own team's and rejecting another team's", async () => {
+    // A label limited to team X applies to team X's own project. The narrower earlier rule
+    // rejected *every* team-scoped label on a project, which meant a team label could go on that
+    // team's tasks but not its projects — an inconsistency with no justification behind it, and
+    // one that would half-break the "Limit to a team" settings action.
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
     const id = await seedProject(orgId, teamId, humanActorId);
+    const [otherTeam] = await db
+      .insert(schema.team)
+      .values({ organizationId: orgId, name: 'Elsewhere', key: 'ELS' })
+      .returning();
     const inserted = await db
       .insert(schema.label)
       .values([
-        { organizationId: orgId, name: 'Funding', color: '#b35c00' },
-        { organizationId: orgId, teamId, name: 'Internal', color: '#5f6368' },
+        { organizationId: orgId, name: 'Funding', color: 'amber' },
+        { organizationId: orgId, teamId, name: 'Internal', color: 'slate' },
+        { organizationId: orgId, teamId: otherTeam!.id, name: 'Theirs', color: 'teal' },
       ])
       .returning();
 
-    const attached = await writer.request(`/${id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ labelIds: [inserted[0]!.id] }),
-    });
+    const patchLabels = async (labelIds: string[]): Promise<Response> =>
+      writer.request(`/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ labelIds }),
+      });
+
+    const attached = await patchLabels([inserted[0]!.id]);
     expect(attached.status).toBe(200);
     expect(
       await db.select().from(schema.projectLabel).where(eq(schema.projectLabel.projectId, id)),
     ).toEqual([expect.objectContaining({ labelId: inserted[0]!.id })]);
 
-    const rejected = await writer.request(`/${id}`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ labelIds: [inserted[1]!.id] }),
-    });
-    expect(rejected.status).toBe(404);
+    // The project's own team's label is offerable to it.
+    expect((await patchLabels([inserted[1]!.id])).status).toBe(200);
+
+    // Another team's label is not, and 404s rather than being silently dropped.
+    expect((await patchLabels([inserted[2]!.id])).status).toBe(404);
   });
 
   it('deletes a project (manage), then 404s on re-read', async () => {

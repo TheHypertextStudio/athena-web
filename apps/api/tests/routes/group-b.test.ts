@@ -20,6 +20,7 @@ beforeAll(async () => {
   r['agents'] = (await import('../../src/routes/agents')).default;
   r['tasks'] = (await import('../../src/routes/tasks')).default;
   r['projects'] = (await import('../../src/routes/projects')).default;
+  r['initiatives'] = (await import('../../src/routes/initiatives')).default;
   r['updates'] = (await import('../../src/routes/updates')).default;
   r['activity'] = (await import('../../src/routes/activity')).default;
   r['grants'] = (await import('../../src/routes/grants')).default;
@@ -843,5 +844,78 @@ describe('billing router (GET status only; checkout/portal covered elsewhere)', 
     const res = await w.request('/', { method: 'GET' });
     expect(res.status).toBe(200);
     expect(await res.json()).toBeNull();
+  });
+});
+
+describe('project + initiative labels obey group exclusivity', () => {
+  /** Seed an exclusive group with two members; returns their ids. */
+  async function seedExclusivePair(orgId: string): Promise<{ featureId: string; bugId: string }> {
+    const [group] = await db
+      .insert(schema.labelGroup)
+      .values({ organizationId: orgId, name: 'Type', exclusive: true })
+      .returning();
+    const mk = async (name: string): Promise<string> => {
+      const [row] = await db
+        .insert(schema.label)
+        .values({ organizationId: orgId, name, color: 'blue', groupId: group!.id })
+        .returning();
+      return row!.id;
+    };
+    return { featureId: await mk('feature'), bugId: await mk('bug') };
+  }
+
+  it('collapses an exclusive group on project create and patch', async () => {
+    // Projects wrote `project_label` directly and so bypassed exclusivity entirely — a single
+    // -choice dimension held for tasks and quietly did not for projects.
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { featureId, bugId } = await seedExclusivePair(orgId);
+    const w = appWithActor(r['projects'], orgId, ['manage'], humanActorId);
+
+    const created = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'P', teamId, labelIds: [featureId, bugId] }),
+    });
+    expect(created.status).toBe(200);
+    const projectId = (await body<{ id: string }>(created)).id;
+
+    const attached = await db
+      .select()
+      .from(schema.projectLabel)
+      .where(eq(schema.projectLabel.projectId, projectId));
+    expect(attached.map((a) => a.labelId)).toEqual([bugId]);
+
+    // And again on patch, which took a separate code path.
+    const patched = await w.request(`/${projectId}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ labelIds: [bugId, featureId] }),
+    });
+    expect(patched.status).toBe(200);
+    const after = await db
+      .select()
+      .from(schema.projectLabel)
+      .where(eq(schema.projectLabel.projectId, projectId));
+    expect(after.map((a) => a.labelId)).toEqual([featureId]);
+  });
+
+  it('collapses an exclusive group on initiative create', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const { featureId, bugId } = await seedExclusivePair(orgId);
+    const w = appWithActor(r['initiatives'], orgId, ['manage'], humanActorId);
+
+    const created = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'I', labelIds: [featureId, bugId] }),
+    });
+    expect(created.status).toBe(200);
+    const initiativeId = (await body<{ id: string }>(created)).id;
+
+    const attached = await db
+      .select()
+      .from(schema.initiativeLabel)
+      .where(eq(schema.initiativeLabel.initiativeId, initiativeId));
+    expect(attached.map((a) => a.labelId)).toEqual([bugId]);
   });
 });

@@ -7,12 +7,10 @@ import {
   entityDisplay,
   initiative,
   initiativeProject,
-  label,
   milestone,
   program,
   project,
   projectDependency,
-  projectLabel,
   task,
   team,
 } from '@docket/db';
@@ -26,13 +24,14 @@ import {
   ProjectProgress,
   ProjectUpdate,
 } from '@docket/types';
-import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { replaceLabels, resolveLabelSet } from '../lib/labels';
 import { ok } from '../lib/ok';
 import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
@@ -133,21 +132,6 @@ async function validatedInitiativeIds(
   return unique;
 }
 
-/** Validate and de-duplicate organization-global Project Labels. */
-async function validatedLabelIds(
-  orgId: string,
-  labelIds: readonly string[] | undefined,
-): Promise<string[]> {
-  const unique = [...new Set(labelIds ?? [])];
-  if (unique.length === 0) return [];
-  const rows = await db
-    .select({ id: label.id })
-    .from(label)
-    .where(and(eq(label.organizationId, orgId), isNull(label.teamId), inArray(label.id, unique)));
-  if (rows.length !== unique.length) throw new NotFoundError('Label not found');
-  return unique;
-}
-
 /**
  * Compute a Project's weighted completion roll-up from its Tasks.
  *
@@ -213,9 +197,11 @@ const projects = new Hono<AppEnv>()
 
       // `initiativeIds` writes `initiative_project` association rows; validate each lives in
       // the caller's org BEFORE the transaction so a bad id rejects the whole create.
-      const [initiativeIds, labelIds] = await Promise.all([
+      const [initiativeIds, labels] = await Promise.all([
         validatedInitiativeIds(orgId, body.initiativeIds),
-        validatedLabelIds(orgId, body.labelIds),
+        // Through the shared resolver, so a project obeys label-group exclusivity exactly as a
+        // task does. Resolved against the project's own team, so a team-limited label applies.
+        resolveLabelSet(orgId, body.labelIds, { teamId: body.teamId }),
       ]);
 
       const row = await db.transaction(async (tx) => {
@@ -251,14 +237,8 @@ const projects = new Hono<AppEnv>()
             })),
           );
         }
-        if (labelIds.length > 0) {
-          await tx.insert(projectLabel).values(
-            labelIds.map((labelId) => ({
-              projectId: created.id,
-              labelId,
-              organizationId: orgId,
-            })),
-          );
+        if (labels.length > 0) {
+          await replaceLabels(tx, 'project', created.id, orgId, labels);
         }
         return created;
       });
@@ -461,7 +441,17 @@ const projects = new Hono<AppEnv>()
       await assertRefInOrg(actor, orgId, body.leadId, 'Lead not found');
       await assertRefInOrg(program, orgId, body.programId, 'Program not found');
       await assertRefInOrg(team, orgId, body.teamId, 'Team not found');
-      const labelIds = await validatedLabelIds(orgId, body.labelIds);
+      // The project's team can move in the same request; resolve against whichever it ends up on.
+      const existingTeam = (
+        await db
+          .select({ teamId: project.teamId })
+          .from(project)
+          .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+          .limit(1)
+      )[0]?.teamId;
+      const labels = await resolveLabelSet(orgId, body.labelIds, {
+        teamId: body.teamId ?? existingTeam ?? null,
+      });
 
       const patch = {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -498,14 +488,7 @@ const projects = new Hono<AppEnv>()
         const changed = updated[0];
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {
-          await tx.delete(projectLabel).where(eq(projectLabel.projectId, id));
-          if (labelIds.length > 0) {
-            await tx
-              .insert(projectLabel)
-              .values(
-                labelIds.map((labelId) => ({ projectId: id, labelId, organizationId: orgId })),
-              );
-          }
+          await replaceLabels(tx, 'project', id, orgId, labels);
         }
         return changed;
       });

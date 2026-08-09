@@ -305,6 +305,54 @@ export async function resolveLabelSet(
 }
 
 /**
+ * Resolve labels a subject *already carries*, leniently.
+ *
+ * @remarks
+ * Deliberately not {@link resolveLabelSet}. That one answers "may these be applied?" and throws on
+ * anything unoffered, which is right for a write the caller is proposing. This one answers "what
+ * is on this thing?", where rejection makes no sense — the rows are already attached.
+ *
+ * The distinction is load-bearing because narrowing a label to a team is non-destructive by
+ * design: subjects outside that team keep it. Resolving an existing set strictly would therefore
+ * throw on exactly the state the scoping feature creates, and in the automation engine — whose
+ * contract is that a rule may misfire but must never throw — that would turn a settings tweak
+ * into failing rules on unrelated tasks.
+ *
+ * Unknown ids are dropped rather than raised: a label deleted between the join read and this one
+ * is not an error, it is just gone.
+ *
+ * @param orgId - The verified tenant id.
+ * @param labelIds - Ids read off a join table.
+ * @param dbh - Optional handle, to read inside an open transaction.
+ * @returns The resolved labels, without exclusivity collapse (the stored set is what it is).
+ */
+export async function resolveAttachedLabels(
+  orgId: string,
+  labelIds: readonly string[],
+  dbh: Db = db,
+): Promise<ResolvedLabel[]> {
+  const unique = [...new Set(labelIds)];
+  if (unique.length === 0) return [];
+  const rows = await dbh
+    .select({
+      ...LABEL_REF_COLUMNS,
+      groupId: label.groupId,
+      groupExclusive: labelGroup.exclusive,
+    })
+    .from(label)
+    .leftJoin(labelGroup, eq(labelGroup.id, label.groupId))
+    .where(and(eq(label.organizationId, orgId), inArray(label.id, unique)));
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    color: r.color,
+    groupId: r.groupId,
+    exclusiveGroupId: r.groupExclusive === true ? r.groupId : null,
+  }));
+}
+
+/**
  * Replace a subject's entire label set, inside a caller-supplied transaction.
  *
  * @param tx - The open transaction; the caller owns the boundary.

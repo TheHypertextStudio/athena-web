@@ -137,3 +137,39 @@ describe('task.applyLabel', () => {
     expect(await labelsOn(row!.id)).toEqual([]);
   });
 });
+
+describe('task.applyLabel — a label narrowed to another team', () => {
+  it('does not throw when the task already carries one', async () => {
+    // Narrowing a label to a team is non-destructive by design: subjects outside that team keep
+    // it. Resolving the existing set strictly would therefore throw on exactly the state the
+    // scoping feature creates, and the handler contract is that a rule may misfire but must
+    // never throw. This is the regression that pairing those two decisions produced.
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const [otherTeam] = await db
+      .insert(schema.team)
+      .values({ organizationId: orgId, name: 'Elsewhere', key: 'ELS' })
+      .returning();
+
+    const [stranded] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'stranded', color: 'blue', teamId: otherTeam!.id })
+      .returning();
+    const [fresh] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'fresh', color: 'green' })
+      .returning();
+
+    const [row] = await db
+      .insert(schema.task)
+      .values({ organizationId: orgId, teamId, title: 'T', state: 'todo', createdBy: humanActorId })
+      .returning();
+    // The attachment predates the narrowing, exactly as the settings action leaves it.
+    await db
+      .insert(schema.taskLabel)
+      .values({ taskId: row!.id, labelId: stranded!.id, organizationId: orgId });
+
+    await expect(applyLabel(orgId, row!.id, fresh!.id)).resolves.toBeUndefined();
+    // The stranded label survives — the rule adds, it does not tidy up after scoping.
+    expect(await labelsOn(row!.id)).toEqual([stranded!.id, fresh!.id].sort());
+  });
+});

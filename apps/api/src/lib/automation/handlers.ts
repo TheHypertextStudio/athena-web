@@ -15,7 +15,7 @@ import type { MailAction } from '@docket/integrations';
 import { and, eq, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { attachLabels, resolveLabelSet } from '../labels';
+import { attachLabels, resolveAttachedLabels, resolveLabelSet } from '../labels';
 import { setTaskState } from '../task-state';
 import { acceptSuggestion } from '../email-to-task/accept';
 import { emitEvent } from '../../routes/event-emit';
@@ -276,10 +276,12 @@ export function buildAutomationRegistry(deps: HandlerDeps): Registry {
         .select({ labelId: taskLabel.labelId })
         .from(taskLabel)
         .where(eq(taskLabel.taskId, row.id));
-      const current = await resolveLabelSet(
+      // Lenient on purpose: these labels are already attached, and narrowing one to a team is
+      // non-destructive, so a strict resolve would throw on exactly the state that creates —
+      // turning a settings tweak into failing rules on unrelated tasks.
+      const current = await resolveAttachedLabels(
         orgId,
         existing.map((e) => e.labelId),
-        { teamId: row.teamId },
       );
 
       await db.transaction((tx) => attachLabels(tx, 'task', row.id, orgId, current, incoming));

@@ -320,6 +320,40 @@ task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provide
   `apps/api/src/routes/day-cadence-sweep.ts`,
   `apps/api/tests/services/scheduling/directive-service.test.ts`,
   `apps/api/tests/routes/day-cadence-sweep.test.ts`, `docs/engineering/deployment.md`.
+- **Review follow-ups (2026-08-09)**: the two items the same pre-merge panel raised that were still
+  open when the branch landed. Neither is a behavior change. 4. **The on-by-default re-cut is now written down.** `auto_reorganize_on_drift` defaults to
+  `true`, so migration `0077` turned proactive re-cutting on for every existing Hub and
+  `loadSchedulingPreferences` returns `true` for a Hub with no row — no opt-in, and live every
+  five minutes. That default was **not** flipped: it is the capability the area exists to
+  deliver, and off-by-default would have shipped it to nobody. What was missing was the record,
+  so `auto-scheduling.md` §5 now states plainly that it defaults on for everyone, why, and how
+  to turn it off — and separates the two switches, because they are not equivalent.
+  `autoReorganizeOnDrift: false` (`PUT /v1/schedule-week/preferences`) stops the re-cut; the
+  Notifications → Workflow → Web toggle stops only the **announcement** and leaves the calendar
+  moving silently, which is worse than what someone reaching for it wants. Both were verified
+  against the code before being written down: `workflow` is not a locked category
+  (`lockedPreference` locks `security` and `account` only), `announceReorganization` passes no
+  `preferenceMode` so resolution defaults to `respect_user_preferences`, and the checkbox is
+  really rendered and really patched. The honest cost surfaced in the process and is now in §7:
+  **no surface writes `autoReorganizeOnDrift`**, so the real kill switch is API-only today.
+  The stale "No posture sweep cron" bullet in §7 was corrected in the same pass; it directly
+  contradicted the new paragraph, and it had already been false since this initiative shipped. 5. **The two review components have tests.** `day-start-review.tsx` and `morning-review.tsx` had
+  none, on the surface where a click moves a real calendar block. `tests/scheduling-plan/`
+  (new) pins that each answer reaches `onDecide` with **that row's own key**, that a
+  `deferable: false` proposal renders "Keep" and no "Move out" at all, that every row locks
+  while a decision is in flight, and that an acknowledged day stays readable but unanswerable.
+  `tests/today/morning-review.test.tsx` pins the three separate conditions that must each render
+  **nothing** — not loaded, not planned, already walked through — plus the one that must render.
+  - **Follow-up files**: `docs/engineering/specs/auto-scheduling.md`,
+    `apps/web/tests/scheduling-plan/day-start-review.test.tsx`,
+    `apps/web/tests/today/morning-review.test.tsx`.
+  - **Learnings**: all four new behavioral assertions were proved by mutation before being trusted.
+    Dropping `proposal.deferable` from the choice filter fails the non-deferable test with
+    `[ 'Keep', 'Move out' ]`; dropping `props.locked` from the buttons' `disabled` fails both the
+    in-flight and acknowledged tests on `toBeDisabled`; removing the `acknowledgedAt !== null`
+    guard fails "stops asking" on `toBeEmptyDOMElement`. The first draft of the non-deferable test
+    asserted over _every_ button in the row and caught `WorkShapeChip`'s chip — a reminder that
+    `getAllByRole('button')` in a component test is an assertion about the whole subtree.
 
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 

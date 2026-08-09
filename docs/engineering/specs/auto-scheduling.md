@@ -238,6 +238,47 @@ When the day has slipped, the block being worked is the **earliest overrun** one
 block's window happens to contain the clock, because on a slipped day that block is precisely the
 one nobody has started.
 
+### Proactive re-cutting defaults ON, for every Hub
+
+`POST /v1/directive/reorganize` is the button, but it is no longer the only caller.
+`sweepDayCadence` (`POST /internal/cron/day-cadence`, provisioned at `*/5 * * * *`) re-cuts the
+rest of a Hub's day **without being asked** whenever `assessDrift` says the day has genuinely
+slipped, subject only to a cooldown.
+
+**`scheduling_preference.auto_reorganize_on_drift` defaults to `true`.** Migration
+`0077_day_cadence_config.sql` added the column `DEFAULT true NOT NULL`, so every Hub that already
+had a `scheduling_preference` row got proactive re-cutting turned on at migration time, and
+`loadSchedulingPreferences` returns `true` for a Hub with no row at all. There is no opt-in step
+and never was one: a person who has never opened a settings screen has a calendar that rearranges
+its own afternoon.
+
+That is deliberate, not an oversight. A chief of staff who notices the day has come apart and then
+waits to be asked before doing anything about it is not doing the job — proactive re-cutting is the
+capability this whole area exists to deliver, and shipping it off-by-default would have shipped it
+to nobody. The restraints above are what make it safe to have on: only future, scheduler-placed
+blocks move, nothing in progress or hand-placed or externally synced is touched, displaced work is
+archived rather than deleted, and the cooldown stops a five-minute tick from becoming a schedule
+that rearranges itself under you.
+
+**Turning it off — two switches that do different things.** They are worth stating separately
+because turning off the wrong one leaves the behaviour running and only removes the evidence.
+
+1. **Stop the re-cut.** `PUT /v1/schedule-week/preferences` with
+   `{"autoReorganizeOnDrift": false}`. `sweepDayCadence` reads it per Hub per pass, so drift is
+   still assessed and still reflected in the posture, and `POST /v1/directive/reorganize` still
+   works on request — the day simply stops being re-cut unasked. **This is API-only today.** The
+   field is on `SchedulingPreferencesOut`/`SchedulingPreferencesUpdate` and the web app reads it
+   (`use-schedule-plan.ts`), but no surface writes it, so in practice a person cannot yet reach
+   this switch from the product. That gap is the honest cost of the default and is listed in §7.
+2. **Stop the announcement only.** Settings → Notifications → the **Workflow** row's **Web**
+   checkbox. `announceReorganization` dispatches with `category: 'workflow'`, `channels: ['web']`
+   and no `preferenceMode`, so channel resolution defaults to `respect_user_preferences`;
+   `workflow` is not a locked category (`lockedPreference` locks only `security` and `account`),
+   so the toggle really does suppress the notification, with reason `user_disabled_channel`. **The
+   re-cut still happens.** Unchecking this box does not calm the calendar down, it makes the
+   calendar move silently — which is the opposite of what someone reaching for it usually wants,
+   and the reason switch 1 is the real kill switch.
+
 ### End of day
 
 A defined three-step flow, all required, because "reflect on your day" as an empty textarea is a box
@@ -281,9 +322,14 @@ others. All failure copy is application-owned; no server sentence is ever render
   `acknowledge_directive` tool. The computation, persistence and REST surface all exist and are
   shared; registering the MCP resource/tool over the same service is the remaining step, and it adds
   no new logic.
-- **No posture sweep cron.** Posture is computed on read rather than on a 5-minute timer, so a
-  consumer polling the feed always sees a current value, but nothing is _pushed_ and no
-  `notifications/resources/updated` fires. The sweep in §4 of the companion spec is the upgrade.
+- **No `notifications/resources/updated` push.** Posture is swept on a 5-minute timer
+  (`sweepDirectivePosture`) and acted on by `sweepDayCadence` at the same cadence, and a consumer
+  polling the feed always sees a current value — but nothing is pushed over MCP, because there is
+  no MCP resource to push (see the first bullet).
+- **No settings surface for `autoReorganizeOnDrift` or `checkInCadenceMinutes`.** Both are per-Hub
+  columns carried through `PUT /v1/schedule-week/preferences`, and the web app reads preferences
+  but writes none of them. Until a surface exists, the kill switch for the proactive re-cutting
+  described in §5 is reachable only through the API.
 - **No LLM-driven posture.** Explicitly deferred, per the companion spec.
 - **No timezone-aware `?date` inference for a consumer in another zone.** The day is always resolved
   in the Hub's own timezone.

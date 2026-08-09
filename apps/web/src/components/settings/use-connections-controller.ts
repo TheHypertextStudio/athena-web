@@ -205,7 +205,11 @@ export function useConnectionsController({
     loading: data.loading,
     loadError: data.loadError,
     intro: {
-      text: 'Connect a tool to keep it in sync with Docket. The tool stays the source of truth; Docket mirrors your work.',
+      // Deliberately does NOT claim the external tool is the source of truth. That was true when
+      // every connector was a read-only mirror, and it is now false for the ones that matter
+      // most: Notion resolves a contested edit in Docket's favour, and a Docket-designed Notion
+      // database is Docket's data projected outward. Each connection states its own direction.
+      text: 'Keep Docket and the tools you already work in step with each other. Each connection sets what syncs, and which way.',
       crossHref: `/orgs/${orgId}/settings/import`,
       crossText: 'Moving off a tool entirely? Import it →',
     },

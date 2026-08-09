@@ -93,22 +93,28 @@ export function LinearAgentInstallCard({
     <section aria-label="Agents" className="flex flex-col gap-3">
       <h2 className="text-on-surface-variant text-xs font-medium">Agents</h2>
       <div className="bg-surface-container-low overflow-hidden rounded-xl">
-        <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
-          <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
-            <Sparkles aria-hidden="true" className="size-4" />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-on-surface text-body-medium font-medium">
-              Athena as a Linear Agent
+        {/* Stacks below `sm` rather than wrapping. With one flex row, the action's long label
+            ("Install Athena as a Linear Agent") has a wide min-content width and no room to wrap
+            to its own line, so it squeezed the `min-w-0` text column below its own min-content
+            and the title broke one word per line at 390px. */}
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <span className="bg-surface-container text-on-surface-variant flex size-9 shrink-0 items-center justify-center rounded-lg">
+              <Sparkles aria-hidden="true" className="size-4" />
             </span>
-            <span className="text-on-surface-variant text-xs">
-              Let teammates @-mention and delegate to Athena directly inside Linear.
-            </span>
-            {isConnected ? (
-              <span className="text-on-surface-variant text-xs">
-                {workspaceName ? `Installed to ${workspaceName}` : 'Installed'}
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-on-surface text-body-medium font-medium">
+                Athena as a Linear Agent
               </span>
-            ) : null}
+              <span className="text-on-surface-variant text-xs">
+                Let teammates @-mention and delegate to Athena directly inside Linear.
+              </span>
+              {isConnected ? (
+                <span className="text-on-surface-variant text-xs">
+                  {workspaceName ? `Installed to ${workspaceName}` : 'Installed'}
+                </span>
+              ) : null}
+            </div>
           </div>
           {integrationsQ.isPending ? (
             <span className="text-on-surface-variant text-xs">Checking…</span>

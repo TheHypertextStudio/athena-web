@@ -55,6 +55,15 @@ export const queryKeys = {
   integrationLists: (orgId: string, integrationId: string) =>
     ['org', orgId, 'integrations', integrationId, 'lists'] as const,
   integrationsDirectory: (orgId: string) => ['org', orgId, 'integrations-directory'] as const,
+  /** The Docket-designed Notion databases for one integration. */
+  notionMirrorDatabases: (orgId: string, integrationId: string) =>
+    ['org', orgId, 'integrations', integrationId, 'notion', 'databases'] as const,
+  /** One entity's table design plus its preview rows. */
+  notionMirrorDesign: (orgId: string, integrationId: string, entity: string) =>
+    ['org', orgId, 'integrations', integrationId, 'notion', 'design', entity] as const,
+  /** Notion workspace members and their Docket actor matches. */
+  notionMirrorPeople: (orgId: string, integrationId: string) =>
+    ['org', orgId, 'integrations', integrationId, 'notion', 'people'] as const,
   mcpIntegrations: (orgId: string) => ['org', orgId, 'mcp-integrations'] as const,
   emailSuggestions: (orgId: string) => ['org', orgId, 'email-suggestions'] as const,
   emailSuggestionThread: (orgId: string, suggestionId: string) =>

@@ -25,7 +25,9 @@
  * as {@link EntityTableGroup}s so the full-width group headers span every column, consistent with
  * how a grouped entity roster renders. Activating a row opens the task detail via a real Next.js
  * `Link` (right-clickable / new-tab-openable), with the roving-tabindex keyboard navigation the
- * table owns.
+ * table owns. Pressing `L` on the focused row opens the shared label picker (via
+ * {@link usePickerOverlay}) seeded with that row's own labels, since a task row already has them
+ * in hand and needs no fetch to show them.
  */
 import type { TaskOut } from '@docket/types';
 import {
@@ -41,7 +43,9 @@ import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { TaskTimerButton } from '@/components/time-tracking';
+import { objectKey } from '@/lib/actions';
 import { entityDragSource } from '@/lib/entity-drag';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -263,6 +267,8 @@ export function TaskTable({
   defaultCollapsed,
   className,
 }: TaskTableProps): JSX.Element {
+  const pickerOverlay = usePickerOverlay();
+
   return (
     <EntityTable<TaskOut>
       aria-label={label}
@@ -291,6 +297,23 @@ export function TaskTable({
             }
           : undefined
       }
+      onRowPropertyKey={(key, task, anchor) => {
+        if (key !== 'l') return false;
+        const object = {
+          kind: 'task' as const,
+          id: task.id,
+          organizationId: task.organizationId,
+          title: task.title,
+        };
+        pickerOverlay.open({
+          kind: 'labels',
+          organizationId: task.organizationId,
+          objects: [object],
+          current: new Map([[objectKey(object), task.labels.map((l) => l.id)]]),
+          anchor,
+        });
+        return true;
+      }}
       defaultCollapsed={defaultCollapsed}
       className={className}
     />

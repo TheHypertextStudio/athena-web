@@ -23,7 +23,7 @@
  */
 import '@testing-library/jest-dom/vitest';
 
-import { ActorId, OrganizationId, TaskId, TeamId, type TaskOut } from '@docket/types';
+import { ActorId, LabelId, OrganizationId, TaskId, TeamId, type TaskOut } from '@docket/types';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -53,6 +53,11 @@ vi.mock('../../../src/lib/api', () => ({
   },
 }));
 
+const { open } = vi.hoisted(() => ({ open: vi.fn() }));
+vi.mock('@/components/pickers/picker-overlay', () => ({
+  usePickerOverlay: () => ({ open }),
+}));
+
 /** A JSON response shaped like the RPC client's. */
 function jsonResponse(body: unknown, status = 200): Response {
   return {
@@ -80,6 +85,7 @@ function withQueryClient(children: ReactNode): ReactNode {
 beforeEach(() => {
   activeGet.mockReset();
   recordsPost.mockReset();
+  open.mockReset();
   activeGet.mockResolvedValue({
     ok: true,
     status: 200,
@@ -105,6 +111,8 @@ const ADA_ID = '01HZZZ000000000000000000AD';
 const TASK_1 = '01HZZZ0000000000000000T001';
 const TASK_2 = '01HZZZ0000000000000000T002';
 const TASK_3 = '01HZZZ0000000000000000T003';
+const TASK_4 = '01HZZZ0000000000000000T004';
+const LABEL_1 = '01HZZZ00000000000000000AB1';
 
 /** Resolve the fixture assignee; anything else is a neutral fallback. */
 function resolveActor(id: string): TaskTableActor {
@@ -133,12 +141,17 @@ interface TaskFixture {
   assigneeId?: string;
   estimateMinutes?: number;
   dueDate?: string;
+  labelIds?: readonly string[];
 }
 
 /** A minimal task fixture with the fields the shared columns read (ids parsed to branded types). */
 function task(fixture: TaskFixture): TaskOut {
   return {
-    labels: [],
+    labels: (fixture.labelIds ?? []).map((id) => ({
+      id: LabelId.parse(id),
+      name: id,
+      color: 'gray',
+    })),
     id: TaskId.parse(fixture.id),
     organizationId: OrganizationId.parse(ORG_ID),
     teamId: TeamId.parse(TEAM_ID),
@@ -285,5 +298,39 @@ describe('TaskTable', () => {
     // navigation attempt would have thrown/warned here; asserting the row is still on screen
     // with its href intact is the reachable proxy for "did not activate the row".
     expect(row).toHaveAttribute('href', `/orgs/${ORG_ID}/tasks/${TASK_1}`);
+  });
+
+  it('opens the label picker for the focused row on L, with its current labels attached', () => {
+    const fixtureTask = task({ id: TASK_4, title: 'Label me', labelIds: [LABEL_1] });
+    render(
+      withQueryClient(
+        <TaskTable
+          label="Tasks"
+          columns={columns}
+          tasks={[fixtureTask]}
+          taskHref={(t) => `/orgs/${ORG_ID}/tasks/${t.id}`}
+        />,
+      ),
+    );
+
+    const grid = screen.getByRole('grid');
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'l' });
+
+    expect(open).toHaveBeenCalledWith({
+      kind: 'labels',
+      organizationId: fixtureTask.organizationId,
+      objects: [
+        {
+          kind: 'task',
+          id: fixtureTask.id,
+          organizationId: fixtureTask.organizationId,
+          title: fixtureTask.title,
+        },
+      ],
+      current: new Map([[`task:${fixtureTask.id}`, fixtureTask.labels.map((l) => l.id)]]),
+      anchor: expect.anything(),
+    });
   });
 });

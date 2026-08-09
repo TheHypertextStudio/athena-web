@@ -108,6 +108,13 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
 }));
 
+// The shared `TaskTable` the overview renders through now opens the label picker on its own `L`
+// hotkey, which needs a mounted `PickerOverlayProvider`. This test exercises the overview, not the
+// picker, so the overlay hook is stubbed the same way `task-actions.test.tsx` stubs it.
+vi.mock('../../src/components/pickers/picker-overlay', () => ({
+  usePickerOverlay: () => ({ open: vi.fn() }),
+}));
+
 // The URL is read through the app's own location source rather than Next's router, so that is what
 // a test presents. See `src/lib/app-location.tsx`.
 vi.mock('../../src/lib/app-location', () => ({

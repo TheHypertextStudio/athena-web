@@ -39,6 +39,7 @@ export * from './grant';
 export * from './agent';
 export * from './athena';
 export * from './integration';
+export * from './notion-mirror';
 export * from './identity';
 export * from './google-oauth';
 export * from './oauth-client';

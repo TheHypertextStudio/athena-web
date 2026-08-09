@@ -94,11 +94,23 @@ export const syncRunStatus = pgEnum('sync_run_status', ['running', 'succeeded', 
 export const syncTrigger = pgEnum('sync_trigger', ['manual', 'scheduled']);
 
 /**
- * What a sync run pulled: the task-mirror pass (`task_sync`) or the email-to-task ingest
- * (`email_ingest`). Both run on the same leased spine and write the same `sync_run`
- * history; the purpose keeps their runs distinguishable in the UI and in scheduling logic.
+ * What a sync run did: the task-mirror pass (`task_sync`), the email-to-task ingest
+ * (`email_ingest`), or the Notion mirror (`notion_mirror`) that projects Docket entities into
+ * Docket-designed Notion databases and reads edits back. All run on the same leased spine and
+ * write the same `sync_run` history; the purpose keeps their runs distinguishable in the UI and
+ * in scheduling logic.
+ *
+ * @remarks
+ * `notion_mirror` is an `ALTER TYPE … ADD VALUE` on an existing enum, which PostgreSQL requires
+ * to COMMIT before the value can be used — see `ENUM_PREFLIGHT` in `./migrate.ts` for the
+ * pre-commit that makes that safe under Drizzle's single-transaction migrator, and note that its
+ * migration statement must therefore carry `IF NOT EXISTS`.
  */
-export const syncRunPurpose = pgEnum('sync_run_purpose', ['task_sync', 'email_ingest']);
+export const syncRunPurpose = pgEnum('sync_run_purpose', [
+  'task_sync',
+  'email_ingest',
+  'notion_mirror',
+]);
 /**
  * Integration pattern: replace (migration), complement (connector), or an installed
  * app-actor front door (agent) — e.g. Linear's Agent platform, which authenticates as a

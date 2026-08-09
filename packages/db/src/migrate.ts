@@ -22,23 +22,45 @@ import { openPglite } from './client';
 const migrationsFolder = resolve(dirname(fileURLToPath(import.meta.url)), '../drizzle');
 
 /**
- * Repair the historical integration-status enum before Drizzle opens its all-migrations transaction.
+ * Enum values that must be COMMITTED before Drizzle opens its all-migrations transaction.
  *
  * @remarks
- * Migration 0004 introduced `pending` and 0005 used it as a default. PostgreSQL requires an enum
- * value addition to COMMIT before that value can be used, while Drizzle 0.45 runs every pending
- * migration in one transaction. Fresh databases now create the complete enum in 0000; databases
- * paused before 0004 need this idempotent preflight so the value is committed before `migrate()`.
- * An undefined enum (`42704`) is the expected fresh-database case and is left for 0000 to create.
+ * PostgreSQL requires an `ALTER TYPE … ADD VALUE` to commit before that value can be *used*,
+ * while Drizzle 0.45 runs every pending migration in one transaction. A migration that adds a
+ * value and any later one that references it therefore deadlock (`55P04`) on a database paused
+ * between the two. Each statement here is the idempotent pre-commit for one such value:
+ *
+ * - `integration_status.pending` — added by 0004, used as a column default by 0005.
+ * - `sync_run_purpose.notion_mirror` — added by 0075, written by the Notion mirror's sync runs.
+ *
+ * Because these run first, the corresponding migration statement would otherwise fail on a
+ * duplicate label, so **every value listed here must be added with `IF NOT EXISTS` in its
+ * migration too** (0004 line 3 is the precedent).
+ *
+ * Fresh databases create each enum complete in its own `CREATE TYPE`, so an undefined type
+ * (`42704`) is the expected new-database case and is skipped rather than treated as a failure.
  */
-async function ensurePendingIntegrationStatus(execute: () => Promise<unknown>): Promise<void> {
-  try {
-    await execute();
-  } catch (err) {
-    if (typeof err === 'object' && err !== null && 'code' in err && err.code === '42704') {
-      return;
+const ENUM_PREFLIGHT: readonly string[] = [
+  `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
+  `ALTER TYPE "public"."sync_run_purpose" ADD VALUE IF NOT EXISTS 'notion_mirror'`,
+];
+
+/**
+ * Apply every {@link ENUM_PREFLIGHT} statement, tolerating a not-yet-created type.
+ *
+ * @param execute - Runs one SQL statement on the open connection, outside the migrator's
+ *   transaction. Each statement is independent: one skipped type never suppresses the rest.
+ */
+async function ensureEnumValues(execute: (statement: string) => Promise<unknown>): Promise<void> {
+  for (const statement of ENUM_PREFLIGHT) {
+    try {
+      await execute(statement);
+    } catch (err) {
+      if (typeof err === 'object' && err !== null && 'code' in err && err.code === '42704') {
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
 }
 
@@ -80,11 +102,7 @@ export async function main(): Promise<void> {
 
   if (url.startsWith('pglite:')) {
     const client = openPglite(url);
-    await ensurePendingIntegrationStatus(() =>
-      client.exec(
-        `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
-      ),
-    );
+    await ensureEnumValues((statement) => client.exec(statement));
     await migratePglite(drizzlePglite(client), { migrationsFolder });
     await client.close();
   } else {
@@ -101,11 +119,7 @@ export async function main(): Promise<void> {
         console.warn(notice);
       },
     });
-    await ensurePendingIntegrationStatus(() =>
-      client.unsafe(
-        `ALTER TYPE "public"."integration_status" ADD VALUE IF NOT EXISTS 'pending' BEFORE 'connected'`,
-      ),
-    );
+    await ensureEnumValues((statement) => client.unsafe(statement));
     await migratePostgres(drizzlePostgres(client), { migrationsFolder });
     await client.end();
   }

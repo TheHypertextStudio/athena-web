@@ -455,3 +455,103 @@ describe('EntityTable — keyboard navigation', () => {
     expect(screen.getByRole('row', { name: /Billing revamp/ })).not.toHaveAttribute('data-active');
   });
 });
+
+describe('EntityTable — property-key hotkeys', () => {
+  it('forwards a property key with the active row and its anchor element', () => {
+    const onRowPropertyKey =
+      vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        onRowPropertyKey={onRowPropertyKey}
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'l' });
+    expect(onRowPropertyKey).toHaveBeenCalledTimes(1);
+    const [key, row, anchor] = onRowPropertyKey.mock.calls[0]!;
+    expect(key).toBe('l');
+    expect(row).toBe(ROWS[0]);
+    expect(anchor).toBe(screen.getByRole('row', { name: /Billing revamp/ }));
+  });
+
+  it('resolves the anchor when rows render through a custom renderRowLink', () => {
+    const onRowPropertyKey =
+      vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        renderRowLink={({ children, ...linkProps }) => (
+          <a data-testid="link" {...linkProps}>
+            {children}
+          </a>
+        )}
+        onRowPropertyKey={onRowPropertyKey}
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    fireEvent.keyDown(grid, { key: 'l' });
+    expect(onRowPropertyKey).toHaveBeenCalledWith('l', ROWS[0], screen.getAllByTestId('link')[0]);
+  });
+
+  it('never forwards a property key when the active row is a group header', () => {
+    const onRowPropertyKey =
+      vi.fn<(key: string, row: Row, anchor: HTMLElement | null) => boolean>();
+    const GROUPS: EntityTableGroup<Row>[] = [
+      { id: 'g-one', label: 'First bucket', rows: [ROWS[0]!] },
+    ];
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        groups={GROUPS}
+        getRowKey={getRowKey}
+        onRowPropertyKey={onRowPropertyKey}
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' }); // -> the group header is the first flat row
+    fireEvent.keyDown(grid, { key: 'l' });
+    expect(onRowPropertyKey).not.toHaveBeenCalled();
+  });
+
+  it('prevents the default keydown when onRowPropertyKey reports it handled the key', () => {
+    const onRowPropertyKey = vi.fn().mockReturnValue(true);
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        onRowPropertyKey={onRowPropertyKey}
+      />,
+    );
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    const notCancelled = fireEvent.keyDown(grid, { key: 'l' });
+    expect(notCancelled).toBe(false); // dispatchEvent returns false once preventDefault runs
+  });
+
+  it('does nothing when no onRowPropertyKey handler is supplied', () => {
+    render(<EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />);
+    const grid = screen.getByRole('grid', { name: 'Items' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(() => {
+      fireEvent.keyDown(grid, { key: 'l' });
+    }).not.toThrow();
+  });
+});

@@ -152,6 +152,7 @@ export function EntityTableRow<T>({
       type="button"
       role="row"
       aria-pressed={selected || undefined}
+      aria-current={ariaCurrent}
       data-active={active ? '' : undefined}
       data-selected={selected ? '' : undefined}
       tabIndex={-1}

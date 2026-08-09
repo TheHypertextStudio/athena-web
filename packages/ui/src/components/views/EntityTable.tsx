@@ -67,6 +67,16 @@ export interface EntityTableProps<T> {
   renderRowLink?: (props: EntityTableRowLinkProps) => React.ReactNode;
   /** Activate (open) a row on click / Enter. */
   onRowClick?: (row: T) => void;
+  /**
+   * Handle a property-edit hotkey (`L`, and future `S`/`A`/`P`/`D`) on the active data row.
+   *
+   * @remarks
+   * Never called when the active flattened row is a group-header boundary. `anchor` is the active
+   * row's DOM element (via its `aria-current="true"` marker, which every row-render branch —
+   * button, anchor, and custom `renderRowLink` — already carries), for positioning a popover
+   * against it. Return `true` to consume the keystroke.
+   */
+  onRowPropertyKey?: (key: string, row: T, anchor: HTMLElement | null) => boolean;
   /** Warm a row's destination cache on hover/focus (prefetch-on-intent). Optional; no-op if unset. */
   onRowPrefetch?: (row: T) => void;
   /**
@@ -123,6 +133,7 @@ export function EntityTable<T>({
   rowHref,
   renderRowLink,
   onRowClick,
+  onRowPropertyKey,
   onRowPrefetch,
   rowDrag,
   selected,
@@ -189,9 +200,21 @@ export function EntityTable<T>({
     [flat, toggleGroup, onRowClick],
   );
 
+  const handlePropertyKey = React.useCallback(
+    (key: string, index: number): boolean => {
+      if (!onRowPropertyKey) return false;
+      const entry = flat[index];
+      if (entry?.kind !== 'row') return false;
+      const anchor = scrollRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
+      return onRowPropertyKey(key, entry.row, anchor);
+    },
+    [flat, onRowPropertyKey],
+  );
+
   const { activeIndex, onKeyDown } = useListKeyboard({
     rowCount: flat.length,
     onActivate: activateRow,
+    onPropertyKey: handlePropertyKey,
   });
 
   const handleSelectRow = React.useCallback(

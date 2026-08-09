@@ -13,7 +13,7 @@
  * usable: it routes to the right workspace, it links rather than duplicates, it is idempotent,
  * and it does nothing at all when no rule matches.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -21,6 +21,7 @@ import type { TaskSynthesizer } from '@docket/agent-runtime';
 
 import { addMember, getDb, one, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 import { projectInboundDraft } from '../../src/lib/automation/event';
+import { routeInboundItemToTask } from '../../src/lib/automation/route-task';
 import { runAutomationsForEvent } from '../../src/lib/automation/runtime';
 import { persistSuggestions, type CandidateThread } from '../../src/lib/email-to-task/synthesize';
 
@@ -563,6 +564,105 @@ describe('routing declines rather than guesses', () => {
 
     const task = one(await tasksIn(w.lvbtOrgId));
     expect(task.projectId).toBeNull(); // routed, but not into a workspace it cannot see
+  });
+});
+
+/**
+ * Every task in a workspace with no routing-ledger row pointing at it.
+ *
+ * @remarks
+ * The orphan detector. A task in this set is one the ledger cannot see, so the next delivery of
+ * the same item creates another one beside it — and it reached the workspace without the
+ * `created` event or search-index entry the create path emits. Zero is the only acceptable
+ * count, and asserting on it is stronger than counting tasks, because a leaked task and a
+ * correctly adopted one are both "one extra row" until you ask which of them the ledger knows.
+ */
+async function orphanTasksIn(orgId: string) {
+  return db
+    .select({ id: schema.task.id, title: schema.task.title })
+    .from(schema.task)
+    .leftJoin(schema.inboundTaskRoute, eq(schema.inboundTaskRoute.taskId, schema.task.id))
+    .where(and(eq(schema.task.organizationId, orgId), isNull(schema.inboundTaskRoute.id)));
+}
+
+/** One GitHub pull-request delivery, projected exactly as the webhook drain projects one. */
+function prDelivery(organizationId: string, externalId: string) {
+  return projectInboundDraft({
+    organizationId,
+    kind: 'created',
+    source: 'github',
+    entityKind: 'work_item',
+    docketEntityId: null,
+    externalId,
+    externalUrl: 'https://github.com/lvbt/site/pull/12',
+    title: 'Opened PR: Fix the booking form',
+    detail: { schema: 'github.pull_request', number: 12, merged: false, draft: false },
+    occurredAt: new Date('2026-08-08T10:00:00.000Z'),
+  });
+}
+
+describe('two deliveries of one item racing each other still produce exactly one task', () => {
+  it('rolls the loser back instead of committing a task the ledger cannot see', async () => {
+    const w = await seedTwoWorkspaces();
+    const event = prDelivery(w.personalOrgId, 'pr_raced_9001');
+
+    // Both deliveries read the ledger, both find nothing, and both go on to create. This is a
+    // redelivered webhook, or two rules that both name `task.route` for one email — not a
+    // synthetic scenario. Only one of them can win the unique index on
+    // (organizationId, sourceSystem, sourceKey); the question is what happens to the other's
+    // half-finished work.
+    const [first, second] = await Promise.all([
+      routeInboundItemToTask(event, {}),
+      routeInboundItemToTask(event, {}),
+    ]);
+
+    // The headline invariant, asserted first: the loser's task insert was rolled back rather
+    // than committed. Before the sentinel throw, a normal return from the transaction callback
+    // committed it, leaving a real task in the workspace with no ledger row, no `created` event
+    // and no search entry.
+    expect(await orphanTasksIn(w.personalOrgId)).toHaveLength(0);
+
+    // Exactly one task, and exactly one ledger row naming it.
+    const tasks = await tasksIn(w.personalOrgId);
+    expect(tasks).toHaveLength(1);
+    const routes = await routesIn(w.personalOrgId);
+    expect(routes).toHaveLength(1);
+    expect(one(routes).taskId).toBe(one(tasks).id);
+
+    // And the loser adopted the winner's task rather than reporting a second creation.
+    const outcomes = [first, second];
+    expect(outcomes.filter((o) => o.kind === 'created')).toHaveLength(1);
+    expect(outcomes.filter((o) => o.kind === 'updated')).toHaveLength(1);
+    for (const outcome of outcomes) {
+      expect(outcome).toMatchObject({ taskId: one(tasks).id });
+    }
+  });
+
+  it('lets a genuine database error surface instead of reading it as a lost race', async () => {
+    const w = await seedTwoWorkspaces();
+    const event = prDelivery(w.personalOrgId, 'pr_broken_9002');
+
+    // A rule naming a team that does not exist. The task insert violates its `team_id` foreign
+    // key inside the transaction — a real write failure, not a race. Catching the race by a
+    // broad `catch` rather than by its own type would swallow this and hand the caller a
+    // confident `updated`/`skipped` for a task that was never written.
+    const error = await routeInboundItemToTask(event, { teamId: 'tem_does_not_exist' }).then(
+      (outcome) => {
+        throw new Error(`expected a database error, but routing reported ${outcome.kind}`);
+      },
+      (err: unknown) => err,
+    );
+    // Drizzle wraps the driver's error, so the failing statement is the message and the
+    // constraint violation itself is the cause. Both say the same thing: this is a write that
+    // failed, and it reached the caller rather than being absorbed as a race.
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toMatch(/Failed query: insert into "task"/);
+    expect(String((error as { cause?: unknown }).cause)).toMatch(/foreign key/i);
+
+    // Nothing was left behind, and nothing was quietly reported as routed.
+    expect(await tasksIn(w.personalOrgId)).toHaveLength(0);
+    expect(await routesIn(w.personalOrgId)).toHaveLength(0);
+    expect(await orphanTasksIn(w.personalOrgId)).toHaveLength(0);
   });
 });
 

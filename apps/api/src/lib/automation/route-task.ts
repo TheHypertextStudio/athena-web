@@ -279,6 +279,29 @@ async function attachLabel(taskId: string, orgId: string, labelId: string): Prom
     .onConflictDoNothing();
 }
 
+/**
+ * Raised inside the create transaction when the ledger insert hit the unique index: another
+ * delivery of this same item routed it first.
+ *
+ * @remarks
+ * A *thrown* sentinel rather than a returned flag, because only a throw rolls a Drizzle
+ * transaction back. Both drivers this repo runs on commit whatever the callback returns —
+ * postgres-js issues `commit` on the normal path and `rollback` only from its `catch`, and the
+ * PGlite session delegates to the same contract. So returning "I lost the race" would leave the
+ * task row this callback already inserted committed with no ledger row, no `created` event and
+ * no search entry: precisely the orphan the one-item-one-task invariant exists to prevent.
+ *
+ * It is a dedicated class so the handler below can catch this one condition and nothing else. A
+ * bare catch-all there would read a real database failure as a lost race and report `updated`
+ * for a write that never happened.
+ */
+class InboundRouteRaceLost extends Error {
+  constructor() {
+    super('inbound route lost the insert race to a concurrent delivery');
+    this.name = 'InboundRouteRaceLost';
+  }
+}
+
 /** The route row for one item in one workspace, if the item has already been routed there. */
 async function existingRoute(
   targetOrgId: string,
@@ -384,77 +407,88 @@ export async function routeInboundItemToTask(
       ? params.projectId
       : null;
 
-  const created = await db.transaction(async (tx) => {
-    const [taskRow] = await tx
-      .insert(task)
-      .values({
-        organizationId: targetOrgId,
-        title: item.title,
-        description: item.description,
-        teamId: params.teamId ?? landing.teamId,
-        projectId,
-        state: params.state ?? landing.state,
-        priority: params.priority ?? item.priority ?? 'none',
-        assigneeId: landing.assigneeId,
-        cycleId: landing.cycleId,
-        dueDate: item.dueDate ?? undefined,
-        source: 'native',
-        createdBy: writerActorId,
-      })
-      .returning();
-    /* v8 ignore next -- @preserve defensive: insert always returns a row */
-    if (!taskRow) throw new Error('routed task insert returned no row');
+  const created = await db
+    .transaction(async (tx) => {
+      const [taskRow] = await tx
+        .insert(task)
+        .values({
+          organizationId: targetOrgId,
+          title: item.title,
+          description: item.description,
+          teamId: params.teamId ?? landing.teamId,
+          projectId,
+          state: params.state ?? landing.state,
+          priority: params.priority ?? item.priority ?? 'none',
+          assigneeId: landing.assigneeId,
+          cycleId: landing.cycleId,
+          dueDate: item.dueDate ?? undefined,
+          source: 'native',
+          createdBy: writerActorId,
+        })
+        .returning();
+      /* v8 ignore next -- @preserve defensive: insert always returns a row */
+      if (!taskRow) throw new Error('routed task insert returned no row');
 
-    // The ledger row and the task are one fact: a task with no route row would be re-created by
-    // the next delivery, which is the duplicate this whole module exists to prevent. A conflict
-    // means a concurrent route won the race — that writer's task is the real one, so this
-    // transaction rolls back rather than leaving an orphan.
-    const [routeRow] = await tx
-      .insert(inboundTaskRoute)
-      .values({
-        organizationId: targetOrgId,
-        createdBy: writerActorId,
-        taskId: taskRow.id,
-        sourceSystem: item.sourceSystem,
-        sourceKey: item.sourceKey,
-        sourceUrl: item.sourceUrl,
-        sourceIntegrationId: item.integrationId,
-        originOrganizationId: event.organizationId,
-      })
-      .onConflictDoNothing({
-        target: [
-          inboundTaskRoute.organizationId,
-          inboundTaskRoute.sourceSystem,
-          inboundTaskRoute.sourceKey,
-        ],
-      })
-      .returning({ id: inboundTaskRoute.id });
-    if (!routeRow) return null; // raced — another writer routed this same item first
-
-    // The source email rides along as the task's provenance: the thread a person can open, the
-    // integration and thread id the `mail.*` actions later act through.
-    let attachmentId: string | null = null;
-    if (item.suggestionId !== null && item.sourceUrl !== null) {
-      const meta = item.emailMeta as { subject?: string } | null;
-      const [att] = await tx
-        .insert(attachment)
+      // The ledger row and the task are one fact: a task with no route row would be re-created
+      // by the next delivery, which is the duplicate this whole module exists to prevent. A
+      // conflict means a concurrent route won the race — that writer's task is the real one, so
+      // this throws {@link InboundRouteRaceLost} to roll the task and attachment inserts back.
+      // Returning here would commit them instead: a normal return from a Drizzle transaction
+      // callback is a `commit`, and only a throw is a `rollback`.
+      const [routeRow] = await tx
+        .insert(inboundTaskRoute)
         .values({
           organizationId: targetOrgId,
           createdBy: writerActorId,
-          subjectType: 'task',
-          subjectId: taskRow.id,
-          kind: 'email',
-          title: meta?.subject ?? item.title,
-          url: item.sourceUrl,
+          taskId: taskRow.id,
+          sourceSystem: item.sourceSystem,
+          sourceKey: item.sourceKey,
+          sourceUrl: item.sourceUrl,
           sourceIntegrationId: item.integrationId,
-          externalId: item.sourceKey,
-          metadata: item.emailMeta,
+          originOrganizationId: event.organizationId,
         })
-        .returning({ id: attachment.id });
-      attachmentId = att?.id ?? null;
-    }
-    return { taskRow, attachmentId };
-  });
+        .onConflictDoNothing({
+          target: [
+            inboundTaskRoute.organizationId,
+            inboundTaskRoute.sourceSystem,
+            inboundTaskRoute.sourceKey,
+          ],
+        })
+        .returning({ id: inboundTaskRoute.id });
+      if (!routeRow) throw new InboundRouteRaceLost(); // another writer routed this item first
+
+      // The source email rides along as the task's provenance: the thread a person can open, the
+      // integration and thread id the `mail.*` actions later act through.
+      let attachmentId: string | null = null;
+      if (item.suggestionId !== null && item.sourceUrl !== null) {
+        const meta = item.emailMeta as { subject?: string } | null;
+        const [att] = await tx
+          .insert(attachment)
+          .values({
+            organizationId: targetOrgId,
+            createdBy: writerActorId,
+            subjectType: 'task',
+            subjectId: taskRow.id,
+            kind: 'email',
+            title: meta?.subject ?? item.title,
+            url: item.sourceUrl,
+            sourceIntegrationId: item.integrationId,
+            externalId: item.sourceKey,
+            metadata: item.emailMeta,
+          })
+          .returning({ id: attachment.id });
+        attachmentId = att?.id ?? null;
+      }
+      return { taskRow, attachmentId };
+    })
+    // Only the race sentinel, and deliberately nothing else. A catch-all here would read a
+    // genuine database failure — a bad foreign key, a dead connection — as "somebody beat me to
+    // it" and report a confident `updated` for a write that never happened. Every other error
+    // stays loud and reaches the caller.
+    .catch((error: unknown) => {
+      if (!(error instanceof InboundRouteRaceLost)) throw error;
+      return null;
+    });
 
   if (!created) {
     // Lost the race. The winner's task is the one task this item gets; adopt it.

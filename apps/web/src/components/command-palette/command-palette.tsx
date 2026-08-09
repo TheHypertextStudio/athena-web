@@ -1,9 +1,9 @@
 'use client';
 
-import { Command, Search } from '@docket/ui/icons';
+import { Command, Search, Tag, X } from '@docket/ui/icons';
 import { menuContentClass, menuLabel, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type JSX, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 
@@ -14,6 +14,7 @@ import { usePaletteKeyboard } from './use-palette-keyboard';
 import { filterCommands } from './filter';
 import { useCommandActions } from './use-command-actions';
 import { useHubSearch } from './use-hub-search';
+import { PALETTE_MODES, parsePrefix, useLabelPaletteMode } from './sub-modes';
 
 /** The display order + heading label for each section in the list. */
 const SECTION_ORDER: readonly { section: PaletteSection; label: string }[] = [
@@ -58,6 +59,10 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<PaletteScope>('hub');
   const [activeIndex, setActiveIndex] = useState(0);
+
+  const { mode, term } = useMemo(() => parsePrefix(query), [query]);
+  const labelModeResult = useLabelPaletteMode(term, { activeOrgId, close: onClose });
+  const modeResult = mode === '#' ? labelModeResult : null;
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -105,16 +110,21 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     query,
     scope,
     close: onClose,
-    open,
+    open: open && mode === null,
   });
 
-  // The static (navigation/actions/org) commands matching the query.
-  const staticMatches = useMemo(() => filterCommands(commands, query), [commands, query]);
+  // The static (navigation/actions/org) commands matching the query — suppressed while a mode is
+  // active, since a mode's own item list takes over the list entirely.
+  const staticMatches = useMemo(
+    () => (mode !== null ? [] : filterCommands(commands, query)),
+    [mode, commands, query],
+  );
 
-  // The flat, ordered item list the keyboard navigates: search results first, then commands.
+  // The flat, ordered item list the keyboard navigates: search results first, then commands, or —
+  // while a mode is active — that mode's own items instead.
   const items = useMemo<readonly PaletteItem[]>(
-    () => [...results, ...staticMatches],
-    [results, staticMatches],
+    () => (modeResult ? modeResult.items : [...results, ...staticMatches]),
+    [modeResult, results, staticMatches],
   );
 
   // Keep the active row in range as the list shrinks/grows.
@@ -129,11 +139,21 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     row?.scrollIntoView({ block: 'nearest' });
   }, [activeIndex, open]);
 
+  // Escape exits a mode before it closes the palette — a mode is a state to back out of, not
+  // just query text — so the keyboard hook's `onClose` gets a wrapper instead of `onClose` itself.
+  const handlePaletteClose = useCallback(() => {
+    if (mode !== null) {
+      setQuery('');
+      return;
+    }
+    onClose();
+  }, [mode, onClose]);
+
   const { onKeyDown } = usePaletteKeyboard({
     items,
     activeIndex,
     setActiveIndex,
-    onClose,
+    onClose: handlePaletteClose,
     dialogRef,
   });
 
@@ -145,14 +165,25 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   const grouped = SECTION_ORDER.map((s) => ({
     ...s,
     // With an empty box these rows are recents, not matches, and calling them "Search results"
-    // would misdescribe what the reader is looking at.
-    label: s.section === 'results' && !hasQuery ? 'Recent' : s.label,
+    // would misdescribe what the reader is looking at. While a mode is active, the results
+    // section is relabeled to the mode's own name (e.g. "Labels") instead.
+    label:
+      mode !== null && s.section === 'results'
+        ? (PALETTE_MODES[mode]?.label ?? s.label)
+        : s.section === 'results' && !hasQuery
+          ? 'Recent'
+          : s.label,
     rows: items.filter((it) => it.section === s.section),
   })).filter((g) => g.rows.length > 0);
 
   const orgLocalLabel = activeOrgId ? orgName(activeOrgId) : 'This org';
-  const showResultsSkeleton = loading && results.length === 0;
-  const showEmpty = items.length === 0 && !showResultsSkeleton && !error;
+  const effectiveError = modeResult ? modeResult.error : error;
+  const showNoOrgForMode = mode !== null && activeOrgId === null;
+  const showResultsSkeleton = modeResult
+    ? modeResult.loading && modeResult.items.length === 0
+    : loading && results.length === 0;
+  const showEmpty =
+    !showNoOrgForMode && items.length === 0 && !showResultsSkeleton && !effectiveError;
 
   // While closing, run the same `tw-animate-css` exit motion the Dialog/Sheet/Dropdown primitives
   // use; on the panel's `animationend` we fully unmount by clearing the closing flag.
@@ -195,7 +226,23 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
       >
         {/* Search input + scope toggle */}
         <div className="border-outline-variant flex items-center gap-3 border-b px-4">
-          <Search aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
+          {mode !== null ? (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery('');
+                inputRef.current?.focus();
+              }}
+              className="text-on-surface-variant hover:text-on-surface text-label-large flex shrink-0 items-center gap-1"
+              aria-label={`Exit ${PALETTE_MODES[mode]?.label ?? 'filter'}`}
+            >
+              <Tag aria-hidden="true" className="size-4" />
+              {PALETTE_MODES[mode]?.label}
+              <X aria-hidden="true" className="size-3.5" />
+            </button>
+          ) : (
+            <Search aria-hidden="true" className="text-on-surface-variant size-5 shrink-0" />
+          )}
           <input
             ref={inputRef}
             type="text"
@@ -212,7 +259,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
               setActiveIndex(0);
             }}
             placeholder={
-              scope === 'org' ? `Search ${orgLocalLabel}…` : 'Search everything, or jump to…'
+              mode !== null
+                ? `Filter ${(PALETTE_MODES[mode]?.label ?? '').toLowerCase()}…`
+                : scope === 'org'
+                  ? `Search ${orgLocalLabel}…`
+                  : 'Search everything, or jump to…'
             }
             className="text-on-surface placeholder:text-on-surface-variant text-label-large h-12 flex-1 bg-transparent outline-none"
           />
@@ -229,12 +280,23 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
 
         {/* Results list */}
         <div className="min-h-0 flex-1 overflow-y-auto p-1">
-          {error ? (
+          {effectiveError ? (
             <div
               role="alert"
               className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
             >
-              {error}
+              {effectiveError}
+            </div>
+          ) : null}
+
+          {showNoOrgForMode ? (
+            <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
+              <p className="text-on-surface-variant text-body-medium">
+                {/* `mode` is non-null here — `showNoOrgForMode`'s initializer conjuncts
+                    `mode !== null`, and TS's aliased-condition narrowing carries that into this
+                    branch, so an `?? ''` fallback would be flagged as statically unreachable. */}
+                Open a workspace to filter by {(PALETTE_MODES[mode]?.label ?? 'this').toLowerCase()}
+              </p>
             </div>
           ) : null}
 
@@ -253,9 +315,11 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
               <p className="text-on-surface text-body-medium font-medium">No matches</p>
               <p className="text-on-surface-variant text-body-medium max-w-xs">
-                {hasQuery
-                  ? 'Nothing matched your search. Try a different term or switch scope.'
-                  : 'Nothing here yet. Create some work, or link a document, and it will show up.'}
+                {mode !== null
+                  ? 'No labels match.'
+                  : hasQuery
+                    ? 'Nothing matched your search. Try a different term or switch scope.'
+                    : 'Nothing here yet. Create some work, or link a document, and it will show up.'}
               </p>
             </div>
           ) : null}
@@ -266,7 +330,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
                 <li key={group.section} role="presentation">
                   <p className={menuLabel('standard')}>
                     {group.label}
-                    {group.section === 'results' && loading ? ' · searching…' : ''}
+                    {group.section === 'results' && (modeResult ? modeResult.loading : loading)
+                      ? ` · ${mode !== null ? 'loading…' : 'searching…'}`
+                      : ''}
                   </p>
                   <ul role="presentation" className="flex flex-col gap-0.5">
                     {group.rows.map((item) => {

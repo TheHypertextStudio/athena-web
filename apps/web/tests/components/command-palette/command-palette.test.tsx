@@ -1,0 +1,176 @@
+import '@testing-library/jest-dom/vitest';
+
+import { ContextProvider } from '@docket/ui/components';
+import { LabelId, OrganizationId } from '@docket/types';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { CommandPalette } from '@/components/command-palette/command-palette';
+import { makeQueryWrapper } from '../../support/query';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+// jsdom has no layout engine, so `Element.scrollIntoView` is unimplemented — the palette's
+// active-row-follows-selection effect calls it on every render, same polyfill as
+// `composer-reset.test.tsx` and `shell-first-paint.test.tsx`.
+Element.prototype.scrollIntoView = vi.fn();
+
+const push = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push }),
+}));
+
+const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
+const BUG = LabelId.parse('01ARZ3NDEKTSV4RRFFQ69G5FA1');
+
+// `command-palette.tsx` is imported statically below, so a per-test `vi.doMock` +
+// dynamic-`import()` swap (as `sub-modes.test.ts` uses for its standalone hook) would need
+// `vi.resetModules()` — which also forces a fresh `@docket/ui/components` module instance, and
+// with it a *different* `ContextProvider` React Context object than the one this file's static
+// `ContextProvider` import wraps `render()` with, so `useContextState` inside the freshly
+// re-imported tree would throw "must be used within a ContextProvider" even though a provider is
+// clearly rendered. A mutable, `vi.hoisted`-backed mock sidesteps that entirely: one real module
+// instance, and each test just points `activeOrgState.activeOrgId` at what it needs first.
+const activeOrgState = vi.hoisted(() => ({ activeOrgId: null as string | null }));
+
+vi.mock('@/components/active-org', () => ({
+  useActiveOrg: () => ({
+    orgs: [],
+    get activeOrgId() {
+      return activeOrgState.activeOrgId;
+    },
+    orgName: () => 'Acme',
+  }),
+}));
+
+const SEARCH_GET = vi.fn().mockResolvedValue({
+  ok: true,
+  status: 200,
+  json: () => Promise.resolve({ items: [] }),
+});
+const LABELS_GET = vi.fn().mockResolvedValue({
+  ok: true,
+  status: 200,
+  json: () =>
+    Promise.resolve({
+      items: [
+        {
+          id: BUG,
+          organizationId: ORG,
+          name: 'Bug',
+          color: '#ef4444',
+          teamId: null,
+          createdAt: '2026-08-01T00:00:00.000Z',
+        },
+      ],
+    }),
+});
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    v1: {
+      hub: { search: { $get: (...args: unknown[]) => SEARCH_GET(...args) } },
+      orgs: {
+        ':orgId': {
+          search: { $get: (...args: unknown[]) => SEARCH_GET(...args) },
+          labels: { $get: (...args: unknown[]) => LABELS_GET(...args) },
+        },
+      },
+    },
+  },
+}));
+
+// `vi.restoreAllMocks` (above) only restores `vi.spyOn` spies back to their original
+// implementation; it does not clear a plain `vi.fn()`'s call history or reset its
+// `mockResolvedValue`. `SEARCH_GET`/`LABELS_GET`/`push` are plain `vi.fn()`s shared across every
+// test in this file, so without an explicit clear each test would see the previous test's calls
+// still on the mock.
+beforeEach(() => {
+  SEARCH_GET.mockClear();
+  LABELS_GET.mockClear();
+  push.mockClear();
+});
+
+function renderPalette() {
+  activeOrgState.activeOrgId = ORG;
+  const { wrapper: QueryWrapper } = makeQueryWrapper();
+  const onClose = vi.fn();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryWrapper>
+      <ContextProvider initialContext={ORG}>{children}</ContextProvider>
+    </QueryWrapper>
+  );
+  render(<CommandPalette open onClose={onClose} />, { wrapper });
+  return { onClose };
+}
+
+describe('CommandPalette — # label sub-mode', () => {
+  it('enters the labels mode on #, suppressing hub search and static commands', async () => {
+    renderPalette();
+    const beforeTypingCalls = SEARCH_GET.mock.calls.length;
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: '#bu' } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /Bug/ })).toBeInTheDocument();
+    });
+    // The search endpoint is never hit *because of* entering mode (any call already in flight
+    // from the initial empty-box "recents" mount fetch, before the user typed `#`, is unrelated).
+    expect(SEARCH_GET.mock.calls.length).toBe(beforeTypingCalls);
+  });
+
+  it('navigates to the filtered task list and closes on selecting a label', async () => {
+    const { onClose } = renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '#bug' } });
+    const row = await screen.findByRole('option', { name: /Bug/ });
+    fireEvent.click(row);
+
+    expect(push).toHaveBeenCalledWith(`/orgs/${ORG}/tasks?filter=labels%3Aeq%3A${BUG}`);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('exits the mode on Escape without closing the palette', async () => {
+    const { onClose } = renderPalette();
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: '#bug' } });
+    await screen.findByRole('option', { name: /Bug/ });
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(input).toHaveValue('');
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('exits the mode when backspacing the prefix away', async () => {
+    renderPalette();
+    const input = screen.getByRole('combobox');
+    fireEvent.change(input, { target: { value: '#bug' } });
+    await screen.findByRole('option', { name: /Bug/ });
+    fireEvent.change(input, { target: { value: '' } });
+    await waitFor(() => {
+      expect(screen.queryByRole('option', { name: /Bug/ })).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('CommandPalette — # with no bound organization', () => {
+  it('shows an explanatory row instead of an empty list', async () => {
+    activeOrgState.activeOrgId = null;
+    const { wrapper: QueryWrapper } = makeQueryWrapper();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryWrapper>
+        <ContextProvider initialContext={null}>{children}</ContextProvider>
+      </QueryWrapper>
+    );
+    render(<CommandPalette open onClose={vi.fn()} />, { wrapper });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '#' } });
+
+    expect(await screen.findByText(/open a workspace/i)).toBeInTheDocument();
+    expect(LABELS_GET).not.toHaveBeenCalled();
+  });
+});

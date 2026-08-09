@@ -135,6 +135,12 @@ export const NotionColumnBinding = z
       ),
     title: z.string().min(1).describe('The column title shown in Notion. Chosen by the user.'),
     kind: NotionPropertyKind.describe('The Notion property type this column is provisioned as.'),
+    order: z
+      .number()
+      .int()
+      .describe(
+        "The column's position, left to right. Stored explicitly because `property_map` is jsonb and PostgreSQL does NOT preserve object key order — it normalizes keys by length then bytes, so relying on insertion order silently reorders the columns on the first read back.",
+      ),
     propertyId: z
       .string()
       .optional()

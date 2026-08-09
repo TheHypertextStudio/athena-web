@@ -37,23 +37,28 @@ function DatabaseRow({
   designHref: string;
 }): JSX.Element {
   const provisioned = database.provisionedAt !== null;
+  // Only worth showing once the user has renamed the database. Until then it repeats the title
+  // straight back ("Tasks … Tasks"), which is noise standing where information should be.
+  const renamed = database.title !== entityLabel(database.entityType);
   return (
-    <li className="border-outline-variant flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
+    <li className="border-outline-variant flex items-center gap-3 border-b px-4 py-2 last:border-b-0">
       <NextLink
         href={designHref}
         className="text-on-surface text-label-large min-w-0 flex-1 truncate hover:underline"
       >
         {database.title}
       </NextLink>
-      <span className="text-on-surface-variant text-body-small hidden @md:inline">
-        {entityLabel(database.entityType)}
-      </span>
+      {renamed ? (
+        <span className="text-on-surface-variant text-body-small hidden @md:inline">
+          {entityLabel(database.entityType)}
+        </span>
+      ) : null}
       <span className="text-on-surface-variant text-body-small w-16 text-right tabular-nums">
         {provisioned ? database.rowCount.toLocaleString() : '—'}
       </span>
       <span
         className={cn(
-          'text-body-small w-[5.5rem] shrink-0 rounded-full px-2 py-0.5 text-center',
+          'text-body-small shrink-0 rounded-full px-2 py-0.5 text-center whitespace-nowrap',
           database.direction === 'two_way'
             ? 'bg-primary/10 text-primary'
             : 'text-on-surface-variant',

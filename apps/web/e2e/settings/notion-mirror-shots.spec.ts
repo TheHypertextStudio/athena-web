@@ -1,0 +1,152 @@
+/**
+ * Visual capture for the Notion mirror surfaces, in every state they can be in.
+ *
+ * @remarks
+ * The states differ by *data*, not by route: whether Notion is connected at all, whether the
+ * designed databases have been created yet, whether the workspace has rows to preview, and
+ * whether a column editor is open. None of that is reachable by visiting a URL, so this spec
+ * drives each one and attaches the result.
+ *
+ * Assertions are deliberately thin — a broken flow should fail a functional spec, while these
+ * exist for a human looking at the output. The one thing they do assert is that the surface
+ * rendered at all, so a blank screenshot cannot pass as evidence.
+ */
+import type { Page } from '@playwright/test';
+
+import { signUpAndOnboard } from '../helpers/app';
+import { apiFetch, apiJson } from '../helpers/net';
+import { orgHref, TIMEOUTS } from '../helpers/constants';
+import { expect, test } from '../helpers/fixtures';
+import { setColorScheme } from '../helpers/ui';
+
+/**
+ * Where the captures land.
+ *
+ * @remarks
+ * Written to the design-audit archive rather than only attached to the Playwright report, so the
+ * evidence survives the run and can be reviewed (and diffed) alongside every previous audit.
+ */
+const SHOT_DIR = new URL(
+  '../../../../docs/design/audits/screenshots/2026-08-08-notion-mirror/',
+  import.meta.url,
+).pathname;
+
+/** Capture the full page to the audit archive. */
+async function shot(page: Page, name: string): Promise<void> {
+  await page.screenshot({ path: `${SHOT_DIR}${name}`, fullPage: true });
+}
+
+/** The two viewports the rest of the suite captures at. */
+const VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'mobile', width: 390, height: 844 },
+] as const;
+
+/** Create a Notion connection so the connected states render. */
+async function connectNotion(page: Page, orgId: string): Promise<string> {
+  const res = await apiFetch(page, `/v1/orgs/${orgId}/integrations`, {
+    method: 'POST',
+    body: { provider: 'notion', pattern: 'connector' },
+  });
+  if (!res.ok) throw new Error(`connect notion ${res.status}: ${JSON.stringify(res.body)}`);
+  return (res.body as { id: string }).id;
+}
+
+/** Give the workspace a few real rows, so the designer preview is not the sample state. */
+async function seedWork(page: Page, orgId: string): Promise<void> {
+  const teams = await apiJson<{ items: { id: string }[] }>(page, `/v1/orgs/${orgId}/teams`);
+  const teamId = teams.items[0]?.id;
+  if (teamId === undefined) return;
+  for (const title of [
+    'Fix the Route 66 timetable',
+    'Draft the outreach RFP',
+    'Survey weekday riders',
+  ]) {
+    await apiJson(page, `/v1/orgs/${orgId}/tasks`, {
+      method: 'POST',
+      body: { title, teamId },
+    });
+  }
+}
+
+test.describe('notion mirror visuals', () => {
+  for (const viewport of VIEWPORTS) {
+    test(`hub and designer (${viewport.name})`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const { orgId } = await signUpAndOnboard(page, `NotionShot${viewport.name}`);
+      const notionHref = orgHref(orgId, 'settings/connections/notion');
+
+      // 1. Not connected — the empty state that explains what connecting would get you.
+      await page.goto(notionHref, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByText('Notion isn’t connected yet')).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
+      await shot(page, `notion-disconnected-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-disconnected-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
+
+      // 2. Connected, designed, nothing created in Notion yet — the state right after connecting.
+      await connectNotion(page, orgId);
+      await page.goto(notionHref, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'Docket in Notion' })).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
+      await shot(page, `notion-hub-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-hub-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
+
+      // 3. The designer with SAMPLE rows — a workspace with none of this entity yet.
+      await page.goto(orgHref(orgId, 'settings/connections/notion/initiative'), {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect(page.getByText(/Sample rows/)).toBeVisible({ timeout: TIMEOUTS.pageReady });
+      await shot(page, `notion-designer-sample-${viewport.name}-light.png`);
+
+      // 4. The designer with REAL rows — the state the surface exists for.
+      await seedWork(page, orgId);
+      await page.goto(orgHref(orgId, 'settings/connections/notion/task'), {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect(page.getByText(/Previewing/)).toBeVisible({ timeout: TIMEOUTS.pageReady });
+      await shot(page, `notion-designer-real-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-designer-real-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
+
+      // 5. A person column's editor open — the four representations, which is the decision this
+      //    whole feature turns on.
+      await page.getByRole('button', { name: /task\.assignee/ }).click();
+      await expect(page.getByText('Plain text')).toBeVisible({ timeout: TIMEOUTS.ui });
+      await shot(page, `notion-column-editor-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await shot(page, `notion-column-editor-${viewport.name}-dark.png`);
+      await setColorScheme(page, 'light');
+
+      // 6. The People designer — where the native-account column and the account-less roster
+      //    sit side by side.
+      await page.goto(orgHref(orgId, 'settings/connections/notion/person'), {
+        waitUntil: 'domcontentloaded',
+      });
+      await expect(page.getByText(/Previewing|Sample rows/)).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
+      await shot(page, `notion-designer-people-${viewport.name}-light.png`);
+    });
+  }
+
+  test('connections page, after the copy and layout fixes', async ({ page }) => {
+    // The Linear Agent card broke one word per line here at 390px, and the intro claimed the
+    // external tool was the source of truth. Both are captured at the width that showed them.
+    await page.setViewportSize({ width: 390, height: 844 });
+    const { orgId } = await signUpAndOnboard(page, 'NotionConnShot');
+    await page.goto(orgHref(orgId, 'settings/connections'), { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/Keep Docket and the tools you already work in step/)).toBeVisible({
+      timeout: TIMEOUTS.pageReady,
+    });
+    await shot(page, 'connections-390-light.png');
+    await setColorScheme(page, 'dark');
+    await shot(page, 'connections-390-dark.png');
+  });
+});

@@ -44,14 +44,19 @@ export interface NotionTableDesignerProps {
 
 /** Read the designer's editable column list out of a loaded design. */
 function columnsOf(design: NotionMirrorDesignOut): DesignerColumn[] {
-  return Object.values(design.database.propertyMap).map((binding) => ({
-    field: binding.field,
-    title: binding.title,
-    ...(binding.representation !== undefined ? { representation: binding.representation } : {}),
-    ...(binding.relationDataSourceId !== undefined
-      ? { relationDataSourceId: binding.relationDataSourceId }
-      : {}),
-  }));
+  // Sorted, never trusted in object order: `property_map` arrives from a jsonb column, and
+  // PostgreSQL normalizes its keys by length then bytes — so `Object.values` yields the columns
+  // rearranged, which is exactly how "Status" ended up left of "Name".
+  return [...Object.values(design.database.propertyMap)]
+    .sort((a, b) => a.order - b.order)
+    .map((binding) => ({
+      field: binding.field,
+      title: binding.title,
+      ...(binding.representation !== undefined ? { representation: binding.representation } : {}),
+      ...(binding.relationDataSourceId !== undefined
+        ? { relationDataSourceId: binding.relationDataSourceId }
+        : {}),
+    }));
 }
 
 /** The table designer for one entity. */

@@ -358,6 +358,7 @@ export function defaultPropertyMap(
 ): NotionPropertyMap {
   const spec = MIRROR_ENTITY_SPECS[entity];
   const map: Record<string, NotionColumnBinding> = {};
+  let order = 0;
   for (const field of spec.defaultColumns) {
     const def = spec.fields.find((f) => f.field === field);
     if (def === undefined) continue;
@@ -365,6 +366,7 @@ export function defaultPropertyMap(
       field,
       title: defaultColumnTitle(entity, field, skin) ?? def.label,
       kind: def.kind,
+      order: order++,
       // Person-valued fields default to plain text: the only representation that can hold a
       // human with no Notion account, which is most of them in most workspaces.
       ...(def.personValued === true ? { representation: 'text' as const } : {}),
@@ -401,12 +403,22 @@ export function writableFields(entity: NotionMirrorEntity): readonly string[] {
 }
 
 /**
- * Invert a property map into Notion-property-id → Docket-field-key.
+ * The designed columns in their left-to-right order.
  *
  * @remarks
- * The pull direction starts from a Notion property id and needs the Docket field. Built per run
- * rather than persisted, so it cannot drift out of agreement with the forward map. Bindings not
- * yet provisioned (no `propertyId`) are skipped — there is nothing on the Notion side to key on.
+ * `property_map` is jsonb, and PostgreSQL does not preserve object key order — it normalizes keys
+ * by length then bytes. So insertion order is lost on the first read back, and every consumer must
+ * sort by the explicit `order` instead of trusting `Object.values`.
+ *
+ * @param map - The property map.
+ * @returns the bindings, ordered.
+ */
+export function orderedColumns(map: NotionPropertyMap): NotionColumnBinding[] {
+  return Object.values(map).sort((a, b) => a.order - b.order);
+}
+
+/**
+ * Invert a property map into Notion-property-id → Docket-field-key.
  *
  * @param map - The forward property map.
  * @returns a map from Notion property id to Docket field key.

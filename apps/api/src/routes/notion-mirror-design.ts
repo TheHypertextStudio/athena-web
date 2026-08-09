@@ -239,6 +239,7 @@ export async function applyDesignPatch(
       );
     }
     const next: Record<string, NotionColumnBinding> = {};
+    let order = 0;
     for (const column of patch.columns) {
       const field = spec.fields.find((f) => f.field === column.field);
       if (!field) throw new ConflictError(`Unknown column "${column.field}".`);
@@ -247,6 +248,10 @@ export async function applyDesignPatch(
         field: column.field,
         title: column.title.trim().length > 0 ? column.title.trim() : field.label,
         kind: field.kind,
+        // The array's index IS the column order. Stored explicitly because `property_map` is
+        // jsonb and PostgreSQL normalizes object key order, so the order columns were written in
+        // is gone by the first read back.
+        order: order++,
         // Carried over so a rename never re-binds: the id is the identity, the title is a label.
         ...(previous?.propertyId !== undefined ? { propertyId: previous.propertyId } : {}),
         ...(field.personValued === true

@@ -9,6 +9,7 @@ import {
   defaultPropertyMap,
   fieldsByPropertyId,
   mirrorField,
+  orderedColumns,
   provisionedKind,
   writableFields,
 } from '../../src/notion-mirror-schema';
@@ -154,7 +155,7 @@ describe('default property map', () => {
 
 describe('provisionedKind', () => {
   it('resolves each person representation to the Notion type it actually creates', () => {
-    const base = { field: 'assignee', title: 'Assignee', kind: 'rich_text' } as const;
+    const base = { field: 'assignee', title: 'Assignee', kind: 'rich_text', order: 0 } as const;
     expect(provisionedKind({ ...base, representation: 'text' })).toBe('rich_text');
     expect(provisionedKind({ ...base, representation: 'notion_person' })).toBe('people');
     expect(provisionedKind({ ...base, representation: 'docket_people_table' })).toBe('relation');
@@ -162,15 +163,17 @@ describe('provisionedKind', () => {
   });
 
   it('falls through to the declared kind when there is no representation', () => {
-    expect(provisionedKind({ field: 'dueDate', title: 'Due', kind: 'date' })).toBe('date');
+    expect(provisionedKind({ field: 'dueDate', title: 'Due', kind: 'date', order: 0 })).toBe(
+      'date',
+    );
   });
 });
 
 describe('fieldsByPropertyId', () => {
   it('inverts the map so a pull can go from Notion property to Docket field', () => {
     const byId = fieldsByPropertyId({
-      title: { field: 'title', title: 'Name', kind: 'title', propertyId: 'abc%3A' },
-      state: { field: 'state', title: 'Status', kind: 'select', propertyId: 'xyz' },
+      title: { field: 'title', title: 'Name', kind: 'title', order: 0, propertyId: 'abc%3A' },
+      state: { field: 'state', title: 'Status', kind: 'select', order: 1, propertyId: 'xyz' },
     });
     expect(byId.get('abc%3A')).toBe('title');
     expect(byId.get('xyz')).toBe('state');
@@ -180,7 +183,7 @@ describe('fieldsByPropertyId', () => {
     // An unprovisioned binding has no Notion property to key on; including it would map
     // `undefined` and let an unrelated payload key collide with it.
     const byId = fieldsByPropertyId({
-      title: { field: 'title', title: 'Name', kind: 'title' },
+      title: { field: 'title', title: 'Name', kind: 'title', order: 0 },
     });
     expect(byId.size).toBe(0);
   });
@@ -189,13 +192,39 @@ describe('fieldsByPropertyId', () => {
     // The whole reason bindings address a property by id: renaming in Docket or in Notion must
     // not move the binding. Same id, different titles, same resolved field.
     const renamedInDocket = fieldsByPropertyId({
-      assignee: { field: 'assignee', title: 'Owner', kind: 'rich_text', propertyId: 'pid1' },
+      assignee: {
+        field: 'assignee',
+        title: 'Owner',
+        kind: 'rich_text',
+        order: 0,
+        propertyId: 'pid1',
+      },
     });
     const renamedInNotion = fieldsByPropertyId({
-      assignee: { field: 'assignee', title: 'DRI', kind: 'rich_text', propertyId: 'pid1' },
+      assignee: {
+        field: 'assignee',
+        title: 'DRI',
+        kind: 'rich_text',
+        order: 0,
+        propertyId: 'pid1',
+      },
     });
     expect(renamedInDocket.get('pid1')).toBe('assignee');
     expect(renamedInNotion.get('pid1')).toBe('assignee');
+  });
+});
+
+describe('orderedColumns', () => {
+  it('sorts by the explicit order, not by object key order', () => {
+    // PostgreSQL normalizes jsonb object keys by length then bytes, so the order the columns were
+    // written in is GONE by the first read back. This is the guard against the columns silently
+    // rearranging themselves between saving a design and looking at it again.
+    const scrambled = {
+      state: { field: 'state', title: 'Status', kind: 'select' as const, order: 1 },
+      title: { field: 'title', title: 'Name', kind: 'title' as const, order: 0 },
+      priority: { field: 'priority', title: 'Priority', kind: 'select' as const, order: 2 },
+    };
+    expect(orderedColumns(scrambled).map((c) => c.field)).toEqual(['title', 'state', 'priority']);
   });
 });
 

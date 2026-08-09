@@ -445,8 +445,10 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `search-index`                         | Drain durable search-projection jobs from entity writes and backfills                                                                               | every 2 min              |
 | `legacy-mentions`                      | Convert prose still holding the legacy shortcode mention form (self-limiting)                                                                       | hourly at :15            |
 | `unfurl-resources`                     | Resolve titles/icons/previews for pending referenced URLs                                                                                           | every 5 min              |
+| `directive-posture`                    | Recompute each configured Hub's daily posture and notify subscribed clients only on change                                                          | every 5 min              |
+| `day-cadence`                          | Materialize each configured Hub's check-ins, re-cut a drifted day's remainder, fire every check-in that has come due                                | every 5 min              |
 
-All fifteen jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
+All seventeen jobs are provisioned **as code** by `scripts/scheduler-setup.ts`, the single source of
 truth. It runs automatically after every API deploy (the `Ensure Cloud Scheduler jobs` step in
 the `deploy-api` job) and can be run by hand. The script is idempotent — it `describe`s each job
 and `update`s or `create`s it — and reads the secret from `docket-cron-secret` (never logged).
@@ -467,8 +469,16 @@ GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
 `roles/cloudscheduler.admin`, so CI may manage the jobs. (Re-run bootstrap on an existing
 project to apply these.) Cloud Scheduler must be available in the chosen `GCP_REGION`.
 
+The table above is not decoration: `scripts/scheduler-setup.ts` warns on every provisioning run
+when a route in `apps/api/src/routes/cron.ts` has no job (it never runs in prod) or a job targets
+a route that does not exist (it POSTs a 404 forever), and `tests/tooling/scheduler-setup.test.ts`
+asserts the full path set so adding one without the other fails CI. When you add a cron route,
+add its `JOBS` entry and its row here in the same commit.
+
 > If these scheduler jobs do not exist in an environment, connectors do **not** auto-sync there —
 > manual "Sync now" and the honest-status flows still work, but background mirroring is dormant.
+> The proactive day cadence is dormant with them: check-ins are only materialized and fired by
+> `day-cadence`, so without it a day gets no check-ins and no automatic re-cut.
 > The connector's `syncCadenceMinutes` (default 60) gates which integrations a given sweep
 > actually re-syncs, so the scheduler can safely run more often than any single integration's
 > cadence.

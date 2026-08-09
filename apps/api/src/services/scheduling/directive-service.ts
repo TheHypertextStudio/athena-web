@@ -28,7 +28,7 @@ import type {
   ReviewStepKey,
 } from '@docket/types';
 import { REVIEW_PROMPT_KEYS } from '@docket/types';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import type { DayBlock } from './day-loop';
@@ -377,6 +377,16 @@ export type MorningDecisionResult =
  * what makes the walk-through a review — a decision that costs the day nothing is theatre, and
  * the morning signal that follows it would mean nothing either.
  *
+ * **The decision is appended in the database, never in application memory.** The obvious shape —
+ * read the array, filter this key out, push the new answer, write the whole array back — loses a
+ * decision whenever two clients answer at once, because the second write is computed from an
+ * array that predates the first. A phone and a laptop, or simply two tabs, are enough. Both
+ * people are told "recorded" and one answer is gone. So the filter-and-append is expressed as one
+ * `UPDATE` whose new value is derived from the row's own current column: Postgres takes the row
+ * lock, and under `READ COMMITTED` re-evaluates this expression against the *updated* row when it
+ * has been waiting on a concurrent writer. Both decisions therefore survive, in either order, with
+ * no version column, no retry loop, and no window between a read and a write for one to fall into.
+ *
  * @param db - The database client.
  * @param context - The day.
  * @param input.key - The proposal's key.
@@ -420,17 +430,33 @@ export async function decideMorningProposal(
     timezone: context.timezone,
     directiveId: genId(),
   });
-  const next: StoredMorningDecision[] = [
-    ...row.morningDecisions.filter((d) => d.key !== input.key),
-    {
-      key: input.key,
-      decision: input.decision === 'keep' ? 'kept' : 'deferred',
-      deferredTo,
-      decidedAt: input.now.toISOString(),
-    },
-  ];
-  await db.update(dayDirective).set({ morningDecisions: next }).where(eq(dayDirective.id, row.id));
+  const decision: StoredMorningDecision = {
+    key: input.key,
+    decision: input.decision === 'keep' ? 'kept' : 'deferred',
+    deferredTo,
+    decidedAt: input.now.toISOString(),
+  };
+  await db
+    .update(dayDirective)
+    .set({ morningDecisions: appendMorningDecision(input.key, decision) })
+    .where(eq(dayDirective.id, row.id));
   return { status: 'recorded', deferredTo };
+}
+
+/**
+ * The stored decisions with `key` removed and `decision` appended — as one SQL expression.
+ *
+ * @remarks
+ * `WITH ORDINALITY` and the matching `ORDER BY` keep the surviving decisions in the order they
+ * were made rather than whatever order the aggregate happens to see them in, so re-answering one
+ * proposal does not shuffle the rest.
+ */
+function appendMorningDecision(key: string, decision: StoredMorningDecision): SQL {
+  return sql`(
+      select coalesce(jsonb_agg(kept.value order by kept.ordinality), '[]'::jsonb)
+      from jsonb_array_elements(${dayDirective.morningDecisions}) with ordinality as kept(value, ordinality)
+      where kept.value->>'key' is distinct from ${key}
+    ) || ${JSON.stringify([decision])}::jsonb`;
 }
 
 /** The outcome of trying to acknowledge the morning agenda. */

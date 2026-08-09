@@ -20,7 +20,7 @@
  * A counter equality here would be a test that passes or fails on file ordering.
  */
 import type * as DbModule from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { sweepDayCadence as SweepDayCadence } from '../../src/routes/day-cadence-sweep';
@@ -53,8 +53,19 @@ interface Seed {
   readonly layerId: string;
 }
 
+/** A weekday-only desk window, for the cases that need the day's capacity to be knowable. */
+function deskWindows(startHour: number, endHour: number) {
+  return [1, 2, 3, 4, 5].map((weekday) => ({
+    weekday,
+    startMinute: startHour * 60,
+    endMinute: endHour * 60,
+    kind: 'desk' as const,
+    label: 'Desk',
+  }));
+}
+
 /** Seed a user, their Hub, a scheduling preference (which is what the sweep selects on), a layer. */
-async function seedHub(): Promise<Seed> {
+async function seedHub(options: { windows?: ReturnType<typeof deskWindows> } = {}): Promise<Seed> {
   const slug = `dc-${Math.random().toString(36).slice(2, 10)}`;
   const [u] = await db
     .insert(schema.user)
@@ -64,7 +75,11 @@ async function seedHub(): Promise<Seed> {
     .insert(schema.hub)
     .values({ userId: u!.id })
     .returning({ id: schema.hub.id });
-  await db.insert(schema.schedulingPreference).values({ hubId: h!.id, timezone: TZ });
+  await db.insert(schema.schedulingPreference).values({
+    hubId: h!.id,
+    timezone: TZ,
+    ...(options.windows ? { windows: options.windows } : {}),
+  });
   const [layer] = await db
     .insert(schema.calendarLayer)
     .values({
@@ -88,7 +103,7 @@ async function seedBlock(
   title: string,
   start: Date,
   end: Date,
-  options: { origin?: 'scheduler' | 'user' } = {},
+  options: { origin?: 'scheduler' | 'user'; done?: boolean } = {},
 ): Promise<string> {
   const [row] = await db
     .insert(schema.calendarItem)
@@ -98,7 +113,8 @@ async function seedBlock(
       connectionId: null,
       kind: 'native_block',
       provider: 'docket',
-      status: 'confirmed',
+      // `free` is the calendar's own completion signal — what `loadDayBlocks` reads as done.
+      status: options.done === true ? 'free' : 'confirmed',
       syncState: 'clean',
       title,
       startsAt: start,
@@ -295,6 +311,65 @@ describe('sweepDayCadence — a day that has drifted', () => {
     expect(moved.startsAt?.toISOString()).toBe(at('13:00').toISOString());
     const intents = await intentsFor(seed.userId);
     expect(intents.filter((i) => i.idempotencyKey?.startsWith('day-recut:'))).toHaveLength(1);
+  });
+});
+
+describe('sweepDayCadence — the arithmetic in what it says', () => {
+  it('states one day, not two: the check-in body never claims more work than the day holds', async () => {
+    // A nine-to-five with nothing after it, so the re-cut genuinely runs out of room. Two of the
+    // afternoon's blocks will not fit the shortened day and are displaced out of it — which is
+    // precisely the case where a count frozen at materialization stops describing the day.
+    const seed = await seedHub({ windows: deskWindows(9, 17) });
+    await seedRun(seed);
+    await seedBlock(seed, 'Cut the trailer', at('09:00'), at('14:00'));
+    await seedBlock(seed, 'Answer the producer', at('13:00'), at('14:30'), { done: true });
+    await seedBlock(seed, 'Draft the brief', at('14:30'), at('15:30'));
+    await seedBlock(seed, 'Review the cut', at('15:30'), at('16:30'));
+    await seedBlock(seed, 'Send the invoices', at('16:30'), at('17:00'));
+    await seedBlock(seed, 'Book the studio', at('17:00'), at('17:30'));
+
+    const now = at('14:45');
+    const result = await sweepDayCadence(now);
+    // The pass under test is one where both things happen at once: the day is re-cut, and a
+    // check-in comes due and fires. That combination is what makes the two counts disagree.
+    expect(result.failed).toBe(0);
+    expect(result.reorganized).toBeGreaterThanOrEqual(1);
+    expect(result.displacedBlocks).toBeGreaterThanOrEqual(1);
+
+    const intents = await intentsFor(seed.userId);
+    const checkIn = intents.find((i) => i.idempotencyKey?.startsWith('day-check-in:'));
+    expect(checkIn).toBeDefined();
+    const text = (checkIn?.body as { text?: string } | null)?.text ?? '';
+    expect(text).toContain('re-cut');
+
+    const numbers = /^(\d+) of (\d+) blocks done, (\d+) still ahead of you\./.exec(text);
+    expect(numbers).not.toBeNull();
+    const done = Number(numbers?.[1]);
+    const total = Number(numbers?.[2]);
+    const ahead = Number(numbers?.[3]);
+
+    // The sentence has to hold together on its own terms. "1 of 4 blocks done, 4 still ahead of
+    // you" describes five blocks in a day of four, and a person reading that concludes — fairly —
+    // that the system has lost track of their day.
+    expect(done + ahead).toBeLessThanOrEqual(total);
+
+    // And it has to be true of the day as it now stands, not of the day as it was before the
+    // re-cut moved and displaced blocks underneath it.
+    const live = await db
+      .select({
+        startsAt: schema.calendarItem.startsAt,
+        endsAt: schema.calendarItem.endsAt,
+        status: schema.calendarItem.status,
+      })
+      .from(schema.calendarItem)
+      .where(
+        and(eq(schema.calendarItem.userId, seed.userId), isNull(schema.calendarItem.archivedAt)),
+      );
+    expect(total).toBe(live.length);
+    expect(done).toBe(live.filter((b) => b.status === 'free').length);
+    expect(ahead).toBe(
+      live.filter((b) => b.status !== 'free' && (b.endsAt?.getTime() ?? 0) > now.getTime()).length,
+    );
   });
 });
 

@@ -285,6 +285,41 @@ task-dependency-routes,programs,cycles,cycle-helpers,capture,integration-provide
   initiative keeps losing. Counter equality assertions are unusable in a fleet sweep's tests: every
   Hub a sibling test seeded is still in the table, so anything that must be exact is asserted
   against the Hub's own rows.
+- **Review follow-ups (2026-08-08)**: A pre-merge review returned two code-level defects and one
+  open question. Both defects are fixed, each with a test proved red against the old code first.
+  1. **A lost decision.** `decideMorningProposal` read `day_directive.morning_decisions`, filtered
+     and appended in JavaScript, and wrote the whole array back. Two clients answering different
+     proposals at once — a phone and a laptop, two tabs — both computed their new array from the
+     same pre-write read, so the second write erased the first while both people were told
+     "recorded". The filter-and-append is now one `UPDATE` whose new value is derived from the
+     row's own column (`jsonb_array_elements … WITH ORDINALITY` re-aggregated, then `||` the new
+     decision). Postgres re-evaluates that expression against the updated row under
+     `READ COMMITTED` when it has been waiting on a concurrent writer, so both decisions survive in
+     either order. A version column was rejected: it needs a migration and a retry loop, and turns
+     a lost race into a client-visible failure for a walk-through that has no reason to fail. A
+     compare-and-set on the read value was rejected for the same retry loop, plus the fact that a
+     CAS with no retry is exactly the silent drop being fixed. Re-reading before the write is not a
+     fix at all — same pattern, smaller window.
+  2. **A self-contradictory check-in.** `checkInBody` combined `day_check_in.outstanding_goals` —
+     frozen when the day's check-ins are materialized, never revised — with a live total and a live
+     done-count re-read after a same-pass re-cut. A re-cut that displaces blocks shrinks the total
+     while the frozen count still counts them, and the message read "1 of 4 blocks done, 4 still
+     ahead of you". The live day is now authoritative for all three numbers. Refreshing the frozen
+     column was the alternative and is worse: it is the record of what the rhythm was set against,
+     and rewriting it to fix a sentence would rewrite what the check-ins API reports. Because
+     `done` and `ahead` are disjoint subsets of the same list, their sum can no longer exceed the
+     total the sentence states.
+  3. **Is the cron actually provisioned?** Yes. `scripts/scheduler-setup.ts` carries the
+     `docket-day-cadence` job at `*/5 * * * *`, `.github/workflows/deploy.yml` runs
+     `scripts/scheduler-setup.ts` after every API deploy, and `tests/tooling/scheduler-setup.test.ts`
+     pins all seventeen paths so a route without a job fails CI. The real gap was documentary:
+     `docs/engineering/deployment.md` listed fifteen endpoints, omitting both `directive-posture`
+     and `day-cadence`, and said "All fifteen jobs". That table is now complete and says what goes
+     dormant when the jobs are missing.
+- **Review follow-up files**: `apps/api/src/services/scheduling/directive-service.ts`,
+  `apps/api/src/routes/day-cadence-sweep.ts`,
+  `apps/api/tests/services/scheduling/directive-service.test.ts`,
+  `apps/api/tests/routes/day-cadence-sweep.test.ts`, `docs/engineering/deployment.md`.
 
 ### [PLANDAY-001] Make day planning deterministic — wire the real planner into `plan_day`
 

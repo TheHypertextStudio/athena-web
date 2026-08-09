@@ -25,6 +25,7 @@ import {
   answerReviewPrompt,
   computeDirective,
   confirmTomorrow,
+  decideMorningProposal,
   disposeReviewItem,
   ensureCheckIns,
   loadDayContext,
@@ -397,5 +398,62 @@ describe('proposeTomorrow — a carried item with no recorded times', () => {
     const durationMinutes =
       (new Date(proposal!.endsAt).getTime() - new Date(proposal!.startsAt).getTime()) / 60_000;
     expect(durationMinutes).toBe(60);
+  });
+});
+
+describe('decideMorningProposal — two answers given at the same moment', () => {
+  it('keeps both decisions rather than letting the later write erase the earlier one', async () => {
+    const { hubId, userId } = await seedHub('DirectiveSvcMorningRace');
+    const first = block({ title: 'Cut the trailer', start: at(9 * 60), end: at(10 * 60) });
+    const second = block({ title: 'Draft the brief', start: at(10 * 60), end: at(11 * 60) });
+    const context = buildContext(hubId, userId, [first, second]);
+    await ensureDayDirective(db, { hubId, date: DATE, timezone: TZ, directiveId: genId() });
+
+    // Two clients — a phone and a laptop, or simply two tabs — answering different proposals
+    // before either write lands. Both calls read the stored array; both write one back.
+    const now = new Date(at(9 * 60));
+    const [a, b] = await Promise.all([
+      decideMorningProposal(db, context, { key: first.calendarItemId, decision: 'keep', now }),
+      decideMorningProposal(db, context, { key: second.calendarItemId, decision: 'keep', now }),
+    ]);
+
+    // Both were told their answer was recorded, so both answers must actually be there. A
+    // decision the person watched being accepted and which then vanished is the worst kind of
+    // loss: silent, and contradicted by what they were shown.
+    expect(a.status).toBe('recorded');
+    expect(b.status).toBe('recorded');
+
+    const [row] = await db
+      .select({ morningDecisions: schema.dayDirective.morningDecisions })
+      .from(schema.dayDirective)
+      .where(eq(schema.dayDirective.hubId, hubId));
+    const stored = [...(row?.morningDecisions ?? [])];
+    expect(stored.map((d) => d.key).sort()).toEqual(
+      [first.calendarItemId, second.calendarItemId].sort(),
+    );
+    for (const decision of stored) expect(decision.decision).toBe('kept');
+  });
+
+  it('re-answering one proposal replaces that answer and leaves the other alone', async () => {
+    const { hubId, userId } = await seedHub('DirectiveSvcMorningReplace');
+    const first = block({ title: 'Cut the trailer', start: at(9 * 60), end: at(10 * 60) });
+    const second = block({ title: 'Draft the brief', start: at(10 * 60), end: at(11 * 60) });
+    const context = buildContext(hubId, userId, [first, second]);
+
+    const now = new Date(at(9 * 60));
+    await decideMorningProposal(db, context, { key: first.calendarItemId, decision: 'keep', now });
+    await decideMorningProposal(db, context, { key: second.calendarItemId, decision: 'keep', now });
+    // Changing your mind about one block must not duplicate it, and must not disturb the other.
+    await decideMorningProposal(db, context, { key: first.calendarItemId, decision: 'keep', now });
+
+    const [row] = await db
+      .select({ morningDecisions: schema.dayDirective.morningDecisions })
+      .from(schema.dayDirective)
+      .where(eq(schema.dayDirective.hubId, hubId));
+    const stored = [...(row?.morningDecisions ?? [])];
+    expect(stored).toHaveLength(2);
+    expect(stored.map((d) => d.key).sort()).toEqual(
+      [first.calendarItemId, second.calendarItemId].sort(),
+    );
   });
 });

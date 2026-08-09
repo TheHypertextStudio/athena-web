@@ -239,7 +239,7 @@ async function fireDueCheckIns(
       priority: 'normal',
       channels: ['web'],
       subject: checkInPrompt(checkIn.blockTitle),
-      body: { text: checkInBody(context, checkIn.outstandingGoals, reorganized) },
+      body: { text: checkInBody(context, now, reorganized) },
       webUrl: '/today',
       // The check-in id is the natural dedupe key: one row is one moment in one day.
       idempotencyKey: `day-check-in:${checkIn.id}`,
@@ -258,17 +258,28 @@ async function fireDueCheckIns(
  * committed plan is still outstanding, and whether the rest of the day was just re-cut underneath
  * it. The second sentence exists because a schedule that changed without saying so is worse than
  * one that slipped.
+ *
+ * **Every number comes from `context`, read at `now`.** `day_check_in.outstanding_goals` is frozen
+ * when the day's check-ins are materialized and is never revised — deliberately, because it is the
+ * record of what the rhythm was set against. Reading it here mixed a count from that moment with a
+ * total and a done-count from this one, and the two stopped agreeing the instant the day changed
+ * shape: a re-cut that displaces two blocks shrinks the total while the frozen count still counts
+ * them, and the sentence claims more work than the day it is describing contains. Refreshing the
+ * column was the alternative and is worse — it would rewrite the materialized schedule the
+ * check-ins API reports, to fix a sentence. So the live day is authoritative, and because `done`
+ * and `ahead` are disjoint subsets of the same list, their sum cannot exceed the total it states.
  */
 function checkInBody(
   context: DayContext,
-  outstandingGoals: number,
+  now: Date,
   reorganized: ReorganizeOutcome | null,
 ): string {
   const done = context.blocks.filter((b) => b.done).length;
+  const ahead = context.blocks.filter((b) => !b.done && b.end > now.getTime()).length;
   const progress =
     context.blocks.length === 0
       ? 'Nothing is blocked out for today.'
-      : `${String(done)} of ${String(context.blocks.length)} blocks done, ${String(outstandingGoals)} still ahead of you.`;
+      : `${String(done)} of ${String(context.blocks.length)} blocks done, ${String(ahead)} still ahead of you.`;
   if (reorganized === null) return progress;
   return `${progress} The rest of today was just re-cut around a ${String(reorganized.driftMinutes)}-minute slip.`;
 }

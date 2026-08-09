@@ -60,6 +60,7 @@ import dependencyGraph from './dependency-graph';
 import grants from './grants';
 import initiatives from './initiatives';
 import integrations from './integrations';
+import { notionMirrorApp } from './notion-mirror';
 import integrationsLinearAgent from './integrations-linear-agent';
 import integrationsMcp from './integrations-mcp';
 import labels from './labels';
@@ -483,6 +484,9 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .route('/:orgId/email-suggestions', emailSuggestions)
   .route('/:orgId/display', entityDisplay)
   .route('/:orgId/automation-rules', automationRules)
+  // Mounted BEFORE `/:orgId/integrations` so `/:id/notion/*` is matched by this router rather
+  // than falling through to the generic integration routes.
+  .route('/:orgId/integrations/:id/notion', notionMirrorApp)
   .route('/:orgId/integrations/mcp', integrationsMcp)
   .route('/:orgId/integrations/linear-agent', integrationsLinearAgent)
   .route('/:orgId/integrations', integrations)

@@ -37,6 +37,7 @@ export * from './sunsama-mapping';
 export * from './mock-observer';
 export * from './observer';
 export * from './observer-github';
+export * from './observer-notion';
 export * from './observer-linear';
 export * from './observer-slack';
 export * from './provider-client';

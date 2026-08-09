@@ -329,6 +329,17 @@ export const CORE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'NOTION_WEBHOOK_TOKEN',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.NOTION_WEBHOOK_TOKEN,
+    where:
+      'Notion webhook subscription verification token — verifies POST /internal/ingest/notion. Minted per subscription: Notion sends it once in the unsigned handshake delivery (recorded in the inbound_event inbox) and signs every later delivery with it. Absent → the Notion mirror relies on its polling cadence.',
+    sensitive: true,
+  },
+  {
     name: 'LINEAR_WEBHOOK_SECRET',
     slice: 'auth',
     scope: 'server',

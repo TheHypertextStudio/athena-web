@@ -21,7 +21,16 @@ describe('provider catalog', () => {
       'notion',
     ]);
     expect(DIRECTORY_PROVIDER_IDS).toEqual([...CONNECTOR_PROVIDER_IDS]);
-    expect(WEBHOOK_PROVIDER_IDS).toEqual(['github', 'linear']);
+    expect(WEBHOOK_PROVIDER_IDS).toEqual(['github', 'linear', 'notion']);
+  });
+
+  test('lets a provider observe webhooks without emitting activity events', () => {
+    // Notion is the case that separates the two ideas. Its webhooks wake the mirror's pull-back,
+    // so it needs an inbound edge — but it contributes nothing to the activity feed, so it has no
+    // `source_system`. Coupling the two would force a migration adding an enum value that only
+    // ever produces drafts nothing renders.
+    expect(WEBHOOK_PROVIDER_IDS).toContain('notion');
+    expect(providerSourceSystem('notion')).toBeNull();
   });
 
   test('maps providers to their canonical event source systems', () => {

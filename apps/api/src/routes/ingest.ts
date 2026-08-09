@@ -129,6 +129,7 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
 /** The ingestion app: verify → write-ahead → 200, one provider edge per route. */
 const ingest = new Hono()
   .post('/linear', (c) => ingestWebhook(c, 'linear'))
+  .post('/notion', (c) => ingestWebhook(c, 'notion'))
   .post('/github', (c) => ingestWebhook(c, 'github'));
 
 export default ingest;

@@ -33,6 +33,7 @@ import {
   RealPushSender,
   RealConnector,
   RealGitHubObserver,
+  RealNotionObserver,
   RealLinearObserver,
   RealSmsSender,
   RealUnfurler,
@@ -69,6 +70,7 @@ export interface AppRuntimeEnv {
   readonly CLOUDFLARE_AI_GATEWAY_BASE_URL?: string;
   readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
   readonly LINEAR_WEBHOOK_SECRET?: string;
+  readonly NOTION_WEBHOOK_TOKEN?: string;
   readonly GITHUB_APP_WEBHOOK_SECRET?: string;
   readonly RESEND_API_KEY?: string;
   readonly RESEND_INBOUND_WEBHOOK_SECRET?: string;
@@ -272,6 +274,10 @@ export function buildObserver(
     case 'github':
       return new RealGitHubObserver({
         signingSecret: required('GITHUB_APP_WEBHOOK_SECRET', runtimeEnv.GITHUB_APP_WEBHOOK_SECRET),
+      });
+    case 'notion':
+      return new RealNotionObserver({
+        verificationToken: required('NOTION_WEBHOOK_TOKEN', runtimeEnv.NOTION_WEBHOOK_TOKEN),
       });
     default:
       throw new Error(`No active observer implementation for legacy provider: ${provider}`);

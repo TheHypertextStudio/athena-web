@@ -24,7 +24,7 @@ export const CONNECTOR_PROVIDER_IDS = [
 export type ConnectorProviderId = (typeof CONNECTOR_PROVIDER_IDS)[number];
 
 /** Provider ids that expose an inbound webhook observer. */
-export const WEBHOOK_PROVIDER_IDS = ['github', 'linear'] as const;
+export const WEBHOOK_PROVIDER_IDS = ['github', 'linear', 'notion'] as const;
 /** Webhook-provider id value. */
 export type WebhookProviderId = (typeof WEBHOOK_PROVIDER_IDS)[number];
 
@@ -145,7 +145,7 @@ export const PROVIDER_CATALOG = {
     id: 'notion',
     name: 'Notion',
     connector: true,
-    webhook: false,
+    webhook: true,
     directory: true,
     // `connector`, not `migration`: the sync is ONGOING and two-way, so it needs the
     // `syncMode`/`writeBack` semantics only the connector pattern carries. That Docket holds the
@@ -154,7 +154,9 @@ export const PROVIDER_CATALOG = {
     pattern: 'connector',
     roles: ['work', 'context'],
     category: 'project-management',
-    // Notion has no inbound webhook observer in Docket yet, so it contributes no event badge.
+    // Notion webhooks wake the mirror's pull-back; they are NOT an activity-feed source, so it
+    // still contributes no event badge. Adding a `source_system` member would mean a migration in
+    // service of drafts nothing renders — see `observer-notion.ts`.
     sourceSystem: null,
     connectorIdentityProvider: 'notion',
     sourceIdentityProvider: null,

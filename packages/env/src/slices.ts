@@ -129,6 +129,16 @@ export const authServer = {
   NOTION_CLIENT_ID: z.string().optional(),
   /** Notion public-integration OAuth client secret — paired with `NOTION_CLIENT_ID`. */
   NOTION_CLIENT_SECRET: z.string().optional(),
+  /**
+   * Notion webhook subscription verification token — verifies `POST /internal/ingest/notion`.
+   *
+   * @remarks
+   * Unlike Linear's app secret, this is minted per **subscription**: Notion sends it once, in the
+   * unsigned handshake delivery, and signs every later delivery with it. Absent → the Notion
+   * mirror falls back to its polling cadence, which is the designed safety net rather than an
+   * outage.
+   */
+  NOTION_WEBHOOK_TOKEN: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
   /**

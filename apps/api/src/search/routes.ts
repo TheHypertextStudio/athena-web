@@ -34,8 +34,12 @@ export function entityHref(
         : `/orgs/${organizationId}/projects?milestoneId=${entityId}`;
     case 'cycle':
       return `/orgs/${organizationId}/cycles/${entityId}`;
+    // The task list filtered by this label, expressed in the *view toolbar's* own URL codec
+    // (`filter=field:op:value`) rather than a bespoke `?labelId=`. A one-off param would need the
+    // page to grow a second way of reading a filter, and the previous `?labelId=` form was
+    // silently ignored by the tasks page for exactly that reason.
     case 'label':
-      return `/orgs/${organizationId}/tasks?labelId=${entityId}`;
+      return `/orgs/${organizationId}/tasks?filter=${encodeURIComponent(`labels:eq:${entityId}`)}`;
     case 'saved_view':
       return `/orgs/${organizationId}/views?viewId=${entityId}`;
     // The Library row, not the provider URL. The provider URL rides along on the document's

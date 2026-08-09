@@ -135,8 +135,10 @@ export default function OrgTasksClient(): JSX.Element {
           projects.map((project) => ({ value: project.id, label: project.name })),
         programOptions: (): readonly FieldOption[] =>
           programs.map((program) => ({ value: program.id, label: program.name })),
+        tasks,
       }),
     [
+      tasks,
       memberById,
       members,
       programNameById,

@@ -82,6 +82,30 @@ export interface TaskCatalogDeps {
   projectOptions: () => readonly FieldOption[];
   /** The program relation options. */
   programOptions: () => readonly FieldOption[];
+  /**
+   * The tasks this list will show, which is where the Label field gets its options.
+   *
+   * @remarks
+   * Unlike every other relation here, labels need no injected resolver: `TaskOut.labels` embeds
+   * each label's name, so the rows already carry everything the filter chips and group headers
+   * need. Deriving the options from the rows also means the menu only ever offers labels that
+   * appear in *this* list — filtering by a label nothing here carries would just empty the view.
+   *
+   * Omit it and the catalog simply has no Label field, which is the right answer for a list where
+   * filtering by label would not earn its place.
+   */
+  tasks?: readonly TaskOut[];
+}
+
+/** The distinct labels across a set of tasks, name-sorted, as filter options. */
+function labelOptionsOf(tasks: readonly TaskOut[]): readonly FieldOption[] {
+  const byId = new Map<string, string>();
+  for (const task of tasks) {
+    for (const label of task.labels) byId.set(label.id, label.name);
+  }
+  return [...byId.entries()]
+    .map(([value, label]) => ({ value, label }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 /**
@@ -91,6 +115,8 @@ export interface TaskCatalogDeps {
  * @returns the catalog over {@link TaskOut}.
  */
 export function buildTaskCatalog(deps: TaskCatalogDeps): FieldCatalog<TaskOut> {
+  const rows = deps.tasks;
+  const labelNames = rows ? new Map(labelOptionsOf(rows).map((o) => [o.value, o.label])) : null;
   return [
     {
       key: 'state',
@@ -139,6 +165,25 @@ export function buildTaskCatalog(deps: TaskCatalogDeps): FieldCatalog<TaskOut> {
       resolveLabel: deps.resolveProgram,
       groupable: true,
     },
+    ...(rows
+      ? ([
+          {
+            key: 'labels',
+            label: 'Label',
+            type: 'relation',
+            // Sorting reads `accessor`, and ordering a row by a *set* has no single honest
+            // answer, so this reports the first label and the field is not sortable.
+            accessor: (task) => task.labels[0]?.id ?? null,
+            // The multi-value slot the engine already had: filtering matches if *any* label
+            // matches, and grouping fans a task into one bucket per label — so a task with two
+            // labels appears under both, and group counts can exceed the row count.
+            values: (task) => task.labels.map((l) => l.id),
+            resolveOptions: () => labelOptionsOf(rows),
+            resolveLabel: (id) => labelNames?.get(id) ?? id,
+            groupable: true,
+          },
+        ] satisfies FieldCatalog<TaskOut>)
+      : []),
     {
       key: 'dueDate',
       label: 'Due date',

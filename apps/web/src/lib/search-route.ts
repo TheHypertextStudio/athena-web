@@ -57,8 +57,11 @@ function hrefForEntity(
       return `/orgs/${organizationId}/initiatives/${entityId}`;
     case 'cycle':
       return `/orgs/${organizationId}/cycles/${entityId}`;
+    // The org's task list, pre-filtered in the view toolbar's own `filter=field:op:value` codec.
+    // This previously pointed at `my-work?labelId=`, a param no page read — so a label hit in
+    // search opened an unfiltered list. Mirrors `entityHref` in the API, which builds the same URL.
     case 'label':
-      return withQuery(`/orgs/${organizationId}/my-work`, 'labelId', entityId);
+      return withQuery(`/orgs/${organizationId}/tasks`, 'filter', `labels:eq:${entityId}`);
     case 'saved_view':
       return withQuery(`/orgs/${organizationId}/views`, 'viewId', entityId);
     case 'calendar_event':

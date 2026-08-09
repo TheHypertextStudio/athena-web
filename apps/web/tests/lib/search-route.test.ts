@@ -36,9 +36,10 @@ describe('hrefForSearchRoute', () => {
         organizationId: ORG,
         entityKind: 'label',
         entityId: 'label_1',
-        href: `/orgs/${ORG}/tasks?labelId=label_1`,
+        // The label hit links to the task list pre-filtered in the view toolbar's own codec.
+        href: `/orgs/${ORG}/tasks?filter=labels%3Aeq%3Alabel_1`,
       }),
-    ).toBe(`/orgs/${ORG}/my-work?labelId=label_1`);
+    ).toBe(`/orgs/${ORG}/tasks?filter=labels%3Aeq%3Alabel_1`);
   });
 
   it('routes content hits to their subject with a highlight query', () => {

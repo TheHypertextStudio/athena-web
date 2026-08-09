@@ -8,6 +8,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useS
 
 import ActionDomainsProvider from '@/components/actions/action-domains-provider';
 import { ObjectContextMenuProvider } from '@/components/context-menu';
+import { PickerOverlayProvider } from '@/components/pickers/picker-overlay';
 import { InteractionProvider } from '@/lib/actions';
 import { probeSession } from '@/lib/auth-client';
 import { createQueryClient } from '@/lib/query';
@@ -48,7 +49,10 @@ export interface ProvidersProps {
  *    context menus and two answers to what a gesture does. It is inert until a surface registers
  *    an action domain — with nothing registered, a right-click resolves to no actions and the
  *    browser's own menu is deliberately left alone.
- * 6. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
+ * 6. {@link PickerOverlayProvider} — the app's one moved "edit labels on N objects" popover,
+ *    mounted above {@link ActionDomainsProvider} so both the `task.label` registry action and
+ *    every task list's `L` hotkey can summon it via `usePickerOverlay().open(...)`.
+ * 7. {@link ServiceWorkerProvider} — registers the service worker on EVERY route, not just the
  *    authenticated shell. Offline support has to be installed before it is needed, and someone
  *    arriving at `/sign-in` is exactly who benefits from the offline page being cached already.
  *
@@ -84,11 +88,13 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
                   the app's one contextmenu handler live — one introduces the domains to the
                   registry, the other renders what the registry resolves.
                 */}
-                <ActionDomainsProvider>
-                  <ObjectContextMenuProvider>
-                    <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
-                  </ObjectContextMenuProvider>
-                </ActionDomainsProvider>
+                <PickerOverlayProvider>
+                  <ActionDomainsProvider>
+                    <ObjectContextMenuProvider>
+                      <ServiceWorkerProvider>{children}</ServiceWorkerProvider>
+                    </ObjectContextMenuProvider>
+                  </ActionDomainsProvider>
+                </PickerOverlayProvider>
               </InteractionProvider>
             </QueryClientProvider>
           </AuthenticationInterlockProvider>

@@ -86,7 +86,17 @@ import {
   IntegrationUpdate,
   SyncMode,
 } from '../../src/integration';
-import { LabelCreate, LabelOut, LabelUpdate } from '../../src/label';
+import {
+  LABEL_COLOR_KEYS,
+  LabelCreate,
+  LabelGroupCreate,
+  LabelGroupOut,
+  LabelMerge,
+  LabelOut,
+  LabelUpdate,
+  nextLabelColor,
+  normalizeLabelName,
+} from '../../src/label';
 import {
   InvitationAccept,
   InvitationOut,
@@ -911,34 +921,84 @@ describe('milestone DTOs', () => {
 });
 
 describe('label DTOs', () => {
-  it('LabelCreate parses org-global + team-scoped', () => {
-    expect(LabelCreate.parse({ name: 'Bug', color: '#f00' }).teamId).toBeUndefined();
-    expect(
-      LabelCreate.parse({ name: 'Bug', color: '#f00', group: 'type', teamId: ID }).teamId,
-    ).toBe(ID);
+  it('LabelCreate takes a name alone — color and group are optional', () => {
+    const parsed = LabelCreate.parse({ name: 'Bug' });
+    expect(parsed.name).toBe('Bug');
+    // Omitted so the server can assign by rotation; inline creation depends on this staying
+    // optional, since it never asks the user to choose a color.
+    expect(parsed.color).toBeUndefined();
+    expect(parsed.groupId).toBeUndefined();
   });
 
-  it('LabelCreate rejects empty name + empty color', () => {
-    expect(LabelCreate.safeParse({ name: '', color: '#f00' }).success).toBe(false);
-    expect(LabelCreate.safeParse({ name: 'Bug', color: '' }).success).toBe(false);
+  it('LabelCreate has no teamId — a label is always born workspace-wide', () => {
+    const parsed = LabelCreate.parse({ name: 'Bug', teamId: ID });
+    expect(parsed).not.toHaveProperty('teamId');
   });
 
-  it('LabelUpdate parses nullable fields', () => {
-    expect(LabelUpdate.parse({ group: null, teamId: null }).group).toBeNull();
+  it('LabelCreate rejects a blank or whitespace-only name', () => {
+    expect(LabelCreate.safeParse({ name: '' }).success).toBe(false);
+    expect(LabelCreate.safeParse({ name: '   ' }).success).toBe(false);
   });
 
-  it('LabelOut parses', () => {
-    expect(
-      LabelOut.parse({
-        id: ID,
-        organizationId: ID2,
-        name: 'Bug',
-        color: '#f00',
-        group: null,
-        teamId: null,
-        createdAt: 'x',
-      }).color,
-    ).toBe('#f00');
+  it('LabelCreate rejects a color outside the palette', () => {
+    expect(LabelCreate.safeParse({ name: 'Bug', color: '#f00' }).success).toBe(false);
+    expect(LabelCreate.safeParse({ name: 'Bug', color: 'blue' }).success).toBe(true);
+  });
+
+  it('LabelUpdate parses nullable group + team scope', () => {
+    const parsed = LabelUpdate.parse({ groupId: null, teamId: null });
+    expect(parsed.groupId).toBeNull();
+    expect(parsed.teamId).toBeNull();
+  });
+
+  it('LabelOut parses, and tolerates a legacy hex color from a mirrored label', () => {
+    const parsed = LabelOut.parse({
+      id: ID,
+      organizationId: ID2,
+      name: 'Bug',
+      color: '#f00',
+      groupId: null,
+      teamId: null,
+      usageCount: 12,
+      external: true,
+      createdAt: 'x',
+    });
+    expect(parsed.color).toBe('#f00');
+    expect(parsed.usageCount).toBe(12);
+    expect(parsed.external).toBe(true);
+  });
+
+  it('nextLabelColor rotates deterministically and never assigns the neutral', () => {
+    const assigned = Array.from({ length: LABEL_COLOR_KEYS.length + 2 }, (_, i) =>
+      nextLabelColor(i),
+    );
+    expect(assigned).not.toContain('slate');
+    // Stable: the nth label in an org is always the same color.
+    expect(nextLabelColor(0)).toBe(nextLabelColor(LABEL_COLOR_KEYS.length - 1));
+  });
+
+  it('normalizeLabelName folds case and collapses whitespace', () => {
+    expect(normalizeLabelName('  Needs   Triage ')).toBe('needs triage');
+    expect(normalizeLabelName('Bug')).toBe(normalizeLabelName('bug'));
+  });
+
+  it('LabelGroup DTOs default to exclusive', () => {
+    expect(LabelGroupCreate.parse({ name: 'Type' }).exclusive).toBeUndefined();
+    const out = LabelGroupOut.parse({
+      id: ID,
+      organizationId: ID2,
+      name: 'Type',
+      exclusive: true,
+      sortOrder: 0,
+      teamId: null,
+      createdAt: 'x',
+    });
+    expect(out.exclusive).toBe(true);
+  });
+
+  it('LabelMerge requires a target', () => {
+    expect(LabelMerge.safeParse({}).success).toBe(false);
+    expect(LabelMerge.parse({ intoId: ID }).intoId).toBe(ID);
   });
 });
 

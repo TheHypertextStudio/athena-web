@@ -526,6 +526,13 @@
       "when": 1786133853873,
       "tag": "0074_petite_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1786257873621,
+      "tag": "0075_small_marvel_zombies",
+      "breakpoints": true
     }
   ]
 }

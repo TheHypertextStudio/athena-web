@@ -1,0 +1,355 @@
+/**
+ * `@docket/api` — the one label write path, shared by every labelable entity.
+ *
+ * @remarks
+ * Five entities carry labels (task, project, initiative, program, library resource) and four
+ * different callers write them: the REST routes, the automation engine's `task.applyLabel`, the
+ * MCP tools, and the Linear reconciler. Group exclusivity would be decorative if it were
+ * enforced in the picker, so it is enforced here instead — every one of those callers goes
+ * through {@link resolveLabelSet} and {@link replaceLabels}.
+ */
+import {
+  db,
+  initiativeLabel,
+  label,
+  labelGroup,
+  programLabel,
+  projectLabel,
+  resourceLabel,
+  taskLabel,
+} from '@docket/db';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+
+import { NotFoundError } from '../error';
+
+/** A transaction handle, as Drizzle hands it to a `db.transaction` callback. */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** A database handle that may be either the pool or an open transaction. */
+type Db = typeof db | Tx;
+
+/** The entities that can carry labels. */
+export type LabelableKind = 'task' | 'project' | 'initiative' | 'program' | 'resource';
+
+/** A resolved label, carrying just enough of its group to enforce exclusivity. */
+export interface ResolvedLabel {
+  readonly id: string;
+  readonly name: string;
+  readonly groupId: string | null;
+  /** Null when ungrouped or when the group is a non-exclusive (purely visual) cluster. */
+  readonly exclusiveGroupId: string | null;
+}
+
+/**
+ * Delete + insert for one join table.
+ *
+ * @remarks
+ * A lookup table of `{ table, column }` would not type-check across five differently-shaped
+ * tables without casting, and a cast here would be a cast on the exact line that keeps tenant
+ * data separated. Two small closures per entity stay fully typed instead.
+ */
+interface LabelJoin {
+  readonly clear: (tx: Tx, subjectId: string) => Promise<unknown>;
+  readonly attach: (
+    tx: Tx,
+    subjectId: string,
+    orgId: string,
+    labelIds: readonly string[],
+  ) => Promise<unknown>;
+  /** Count attachments per label id, for the settings page's usage counts. */
+  readonly countsFor: (dbh: Db, orgId: string) => Promise<{ labelId: string; count: number }[]>;
+}
+
+const JOINS: Record<LabelableKind, LabelJoin> = {
+  task: {
+    clear: (tx, id) => tx.delete(taskLabel).where(eq(taskLabel.taskId, id)),
+    attach: (tx, id, orgId, labelIds) =>
+      tx
+        .insert(taskLabel)
+        .values(labelIds.map((labelId) => ({ taskId: id, labelId, organizationId: orgId }))),
+    countsFor: (dbh, orgId) =>
+      dbh
+        .select({ labelId: taskLabel.labelId, count: sql<number>`count(*)::int` })
+        .from(taskLabel)
+        .where(eq(taskLabel.organizationId, orgId))
+        .groupBy(taskLabel.labelId),
+  },
+  project: {
+    clear: (tx, id) => tx.delete(projectLabel).where(eq(projectLabel.projectId, id)),
+    attach: (tx, id, orgId, labelIds) =>
+      tx
+        .insert(projectLabel)
+        .values(labelIds.map((labelId) => ({ projectId: id, labelId, organizationId: orgId }))),
+    countsFor: (dbh, orgId) =>
+      dbh
+        .select({ labelId: projectLabel.labelId, count: sql<number>`count(*)::int` })
+        .from(projectLabel)
+        .where(eq(projectLabel.organizationId, orgId))
+        .groupBy(projectLabel.labelId),
+  },
+  initiative: {
+    clear: (tx, id) => tx.delete(initiativeLabel).where(eq(initiativeLabel.initiativeId, id)),
+    attach: (tx, id, orgId, labelIds) =>
+      tx
+        .insert(initiativeLabel)
+        .values(labelIds.map((labelId) => ({ initiativeId: id, labelId, organizationId: orgId }))),
+    countsFor: (dbh, orgId) =>
+      dbh
+        .select({ labelId: initiativeLabel.labelId, count: sql<number>`count(*)::int` })
+        .from(initiativeLabel)
+        .where(eq(initiativeLabel.organizationId, orgId))
+        .groupBy(initiativeLabel.labelId),
+  },
+  program: {
+    clear: (tx, id) => tx.delete(programLabel).where(eq(programLabel.programId, id)),
+    attach: (tx, id, orgId, labelIds) =>
+      tx
+        .insert(programLabel)
+        .values(labelIds.map((labelId) => ({ programId: id, labelId, organizationId: orgId }))),
+    countsFor: (dbh, orgId) =>
+      dbh
+        .select({ labelId: programLabel.labelId, count: sql<number>`count(*)::int` })
+        .from(programLabel)
+        .where(eq(programLabel.organizationId, orgId))
+        .groupBy(programLabel.labelId),
+  },
+  resource: {
+    clear: (tx, id) => tx.delete(resourceLabel).where(eq(resourceLabel.resourceId, id)),
+    attach: (tx, id, orgId, labelIds) =>
+      tx
+        .insert(resourceLabel)
+        .values(labelIds.map((labelId) => ({ resourceId: id, labelId, organizationId: orgId }))),
+    countsFor: (dbh, orgId) =>
+      dbh
+        .select({ labelId: resourceLabel.labelId, count: sql<number>`count(*)::int` })
+        .from(resourceLabel)
+        .where(eq(resourceLabel.organizationId, orgId))
+        .groupBy(resourceLabel.labelId),
+  },
+};
+
+/** Every labelable kind, for callers that need to sweep all five joins. */
+export const LABELABLE_KINDS = Object.keys(JOINS) as readonly LabelableKind[];
+
+/**
+ * Collapse an ordered label set so at most one member of each exclusive group survives.
+ *
+ * @remarks
+ * **Last occurrence wins.** That is the rule that makes one function serve both call shapes:
+ * a picker replacing the whole set sends `[…, justClicked]`, and an automation attaching a
+ * single label sends `[…existing, incoming]` — in both, the label the caller most recently
+ * asked for is the one at the end, and it is the one that should survive.
+ *
+ * Ungrouped labels and members of non-exclusive groups always survive; they carry a null
+ * `exclusiveGroupId` and so never collide.
+ *
+ * @param labels - The desired set, in caller order.
+ * @returns The set with exclusive-group collisions resolved, preserving first-seen order.
+ */
+export function applyExclusivity(labels: readonly ResolvedLabel[]): ResolvedLabel[] {
+  // Walk backwards so the *last* member of each exclusive group is the one kept, then restore
+  // the caller's order for a stable, predictable write.
+  const claimed = new Set<string>();
+  const keptIds = new Set<string>();
+  for (let i = labels.length - 1; i >= 0; i--) {
+    const candidate = labels[i];
+    if (!candidate) continue;
+    const groupKey = candidate.exclusiveGroupId;
+    if (groupKey !== null) {
+      if (claimed.has(groupKey)) continue;
+      claimed.add(groupKey);
+    }
+    keptIds.add(candidate.id);
+  }
+  return labels.filter((l) => keptIds.has(l.id));
+}
+
+/**
+ * Validate label ids against the org (and, when given, a team) and resolve exclusivity.
+ *
+ * @remarks
+ * A label is offerable to a subject when it is workspace-wide (`teamId` null) or scoped to the
+ * subject's own team. Passing `teamId` narrows to exactly that; omitting it accepts only
+ * workspace-wide labels, which is the correct default for entities that have no team of their
+ * own.
+ *
+ * @param orgId - The verified tenant id.
+ * @param labelIds - Requested label ids, in caller order; duplicates are collapsed.
+ * @param options - Optional `teamId` to additionally admit that team's labels, and a `dbh` to
+ *   read inside an open transaction.
+ * @returns The resolved, exclusivity-collapsed set in caller order.
+ * @throws {NotFoundError} When any id is unknown, cross-org, or scoped to a different team.
+ */
+export async function resolveLabelSet(
+  orgId: string,
+  labelIds: readonly string[] | undefined,
+  options: { teamId?: string | null; dbh?: Db } = {},
+): Promise<ResolvedLabel[]> {
+  const unique = [...new Set(labelIds ?? [])];
+  if (unique.length === 0) return [];
+
+  const { teamId = null, dbh = db } = options;
+  const scope = teamId ? or(isNull(label.teamId), eq(label.teamId, teamId)) : isNull(label.teamId);
+
+  const rows = await dbh
+    .select({
+      id: label.id,
+      name: label.name,
+      groupId: label.groupId,
+      groupExclusive: labelGroup.exclusive,
+    })
+    .from(label)
+    .leftJoin(labelGroup, eq(labelGroup.id, label.groupId))
+    .where(and(eq(label.organizationId, orgId), scope, inArray(label.id, unique)));
+
+  if (rows.length !== unique.length) throw new NotFoundError('Label not found');
+
+  const byId = new Map(
+    rows.map((r) => [
+      r.id,
+      {
+        id: r.id,
+        name: r.name,
+        groupId: r.groupId,
+        // A non-exclusive group is a visual cluster, so it must not constrain the write.
+        exclusiveGroupId: r.groupExclusive === true ? r.groupId : null,
+      } satisfies ResolvedLabel,
+    ]),
+  );
+
+  // Preserve caller order — `applyExclusivity` depends on it to decide which member wins.
+  const ordered = unique.map((id) => byId.get(id)).filter((l): l is ResolvedLabel => l != null);
+  return applyExclusivity(ordered);
+}
+
+/**
+ * Replace a subject's entire label set, inside a caller-supplied transaction.
+ *
+ * @param tx - The open transaction; the caller owns the boundary.
+ * @param kind - Which entity is being labeled.
+ * @param subjectId - The entity's id.
+ * @param orgId - The verified tenant id, frozen onto every join row.
+ * @param labels - The resolved set from {@link resolveLabelSet}.
+ */
+export async function replaceLabels(
+  tx: Tx,
+  kind: LabelableKind,
+  subjectId: string,
+  orgId: string,
+  labels: readonly ResolvedLabel[],
+): Promise<void> {
+  const join = JOINS[kind];
+  await join.clear(tx, subjectId);
+  if (labels.length > 0) {
+    await join.attach(
+      tx,
+      subjectId,
+      orgId,
+      labels.map((l) => l.id),
+    );
+  }
+}
+
+/**
+ * Attach labels to a subject without disturbing the ones already on it.
+ *
+ * @remarks
+ * The incremental path, used by `task.applyLabel` and by MCP writes. It still runs the union
+ * through {@link applyExclusivity}, so attaching `Type: Bug` to something already carrying
+ * `Type: Feature` swaps rather than stacks — the same outcome a human gets in the picker.
+ *
+ * @param tx - The open transaction.
+ * @param kind - Which entity is being labeled.
+ * @param subjectId - The entity's id.
+ * @param orgId - The verified tenant id.
+ * @param existing - The subject's current labels.
+ * @param incoming - The labels to add, which win any exclusive-group collision.
+ */
+export async function attachLabels(
+  tx: Tx,
+  kind: LabelableKind,
+  subjectId: string,
+  orgId: string,
+  existing: readonly ResolvedLabel[],
+  incoming: readonly ResolvedLabel[],
+): Promise<ResolvedLabel[]> {
+  const incomingIds = new Set(incoming.map((l) => l.id));
+  const union = [...existing.filter((l) => !incomingIds.has(l.id)), ...incoming];
+  const next = applyExclusivity(union);
+  await replaceLabels(tx, kind, subjectId, orgId, next);
+  return next;
+}
+
+/**
+ * Total attachments per label across all five joins.
+ *
+ * @remarks
+ * Five grouped counts rather than one big union, because each join is a different table and the
+ * per-org label set is small and unpaginated by design. Labels with no attachments are absent
+ * from the map, which is what the settings page's "Unused" section reads.
+ *
+ * @param orgId - The verified tenant id.
+ * @param dbh - Optional handle, to read inside an open transaction.
+ * @returns A map of label id → total attachment count.
+ */
+export async function labelUsageCounts(orgId: string, dbh: Db = db): Promise<Map<string, number>> {
+  const perKind = await Promise.all(
+    LABELABLE_KINDS.map((kind) => JOINS[kind].countsFor(dbh, orgId)),
+  );
+  const totals = new Map<string, number>();
+  for (const rows of perKind) {
+    for (const row of rows) {
+      totals.set(row.labelId, (totals.get(row.labelId) ?? 0) + row.count);
+    }
+  }
+  return totals;
+}
+
+/**
+ * Move every attachment from one label onto another, then delete the source.
+ *
+ * @remarks
+ * The operation the settings page calls "merge", and the reason renaming a label into a name
+ * that already exists is offered as a merge rather than rejected as a conflict — post-import
+ * cleanup is otherwise a manual re-tagging job across hundreds of rows.
+ *
+ * Each join is re-pointed with an `insert … select … on conflict do nothing`, so a subject
+ * already carrying both labels collapses to one row instead of violating the composite primary
+ * key. The source's rows then cascade away with the source itself.
+ *
+ * @param tx - The open transaction; merge is all-or-nothing.
+ * @param orgId - The verified tenant id.
+ * @param sourceId - The label being dissolved.
+ * @param targetId - The surviving label.
+ */
+export async function mergeLabelAttachments(
+  tx: Tx,
+  orgId: string,
+  sourceId: string,
+  targetId: string,
+): Promise<void> {
+  const moves = [
+    sql`insert into task_label (task_id, label_id, organization_id)
+        select task_id, ${targetId}, organization_id from task_label
+        where label_id = ${sourceId} and organization_id = ${orgId}
+        on conflict do nothing`,
+    sql`insert into project_label (project_id, label_id, organization_id)
+        select project_id, ${targetId}, organization_id from project_label
+        where label_id = ${sourceId} and organization_id = ${orgId}
+        on conflict do nothing`,
+    sql`insert into initiative_label (initiative_id, label_id, organization_id)
+        select initiative_id, ${targetId}, organization_id from initiative_label
+        where label_id = ${sourceId} and organization_id = ${orgId}
+        on conflict do nothing`,
+    sql`insert into program_label (program_id, label_id, organization_id)
+        select program_id, ${targetId}, organization_id from program_label
+        where label_id = ${sourceId} and organization_id = ${orgId}
+        on conflict do nothing`,
+    sql`insert into resource_label (resource_id, label_id, organization_id)
+        select resource_id, ${targetId}, organization_id from resource_label
+        where label_id = ${sourceId} and organization_id = ${orgId}
+        on conflict do nothing`,
+  ];
+  for (const move of moves) await tx.execute(move);
+  await tx.delete(label).where(and(eq(label.id, sourceId), eq(label.organizationId, orgId)));
+}

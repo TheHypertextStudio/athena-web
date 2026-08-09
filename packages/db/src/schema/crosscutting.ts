@@ -576,6 +576,53 @@ export const syncRun = pgTable(
 );
 
 /**
+ * A named set of related labels, and the only place label *exclusivity* can be recorded.
+ *
+ * @remarks
+ * A group is what lets an org express a single-select dimension — `Type: Bug | Feature`,
+ * `Stage: Discovery | Build | Launch` — without Docket growing a custom-field engine. That
+ * is the whole reason this table exists: {@link label.group}, the legacy free-text cluster
+ * key, can say *which* labels belong together but has nowhere to say that picking one must
+ * release the others.
+ *
+ * `exclusive` defaults to `true` because a group whose members can all coexist is just a
+ * visual clustering, and clustering was already available for free. Choosing the stronger
+ * meaning as the default keeps the weaker one an explicit opt-out.
+ *
+ * Exclusivity is enforced in the write path (`applyLabels`), never in the picker alone — a
+ * label attached by an automation rule, an MCP tool, or the Linear reconciler has to obey
+ * the same rule a human does, or the invariant is decorative.
+ *
+ * Scope mirrors {@link label} exactly: org-global when `teamId` is null, else team-scoped,
+ * with the same partial-unique pair. A group and its members must share one scope; the API
+ * rejects a mixed set rather than silently splitting a dimension across two pickers.
+ */
+export const labelGroup = pgTable(
+  'label_group',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** When true (the default), applying one member releases every other member. */
+    exclusive: boolean('exclusive').notNull().default(true),
+    /** Manual display order within the org's settings + pickers; ties break on `name`. */
+    sortOrder: integer('sort_order').notNull().default(0),
+    teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('label_group_org_name_global_uq')
+      .on(t.organizationId, t.name)
+      .where(sql`${t.teamId} is null`),
+    uniqueIndex('label_group_team_name_uq')
+      .on(t.teamId, t.name)
+      .where(sql`${t.teamId} is not null`),
+  ],
+);
+
+/**
  * A label; org-global when `teamId` is null, otherwise team-scoped (two partial uniques).
  *
  * @remarks
@@ -583,6 +630,18 @@ export const syncRun = pgTable(
  * from an integration (e.g. Linear). Unlike `task`/`project`/`cycle`, there is no `source`
  * enum here — presence of `externalId` is itself the linked/native discriminator, since a
  * label has no other native-vs-linked lifecycle to distinguish.
+ *
+ * `color` holds a {@link LabelColorKey} palette token (`blue`, `amber`, …), not a hex
+ * string. One fixed color cannot read against both themes — app surfaces run L 0.98–0.90 in
+ * light and L 0.175–0.36 in dark — so the token resolves through `LABEL_COLORS` to a
+ * light/dark pair at render time. Rows mirrored from a provider may still hold a legacy hex;
+ * readers snap those to the nearest token rather than failing.
+ *
+ * {@link label.group} is a **legacy** free-text cluster key that no code has ever written —
+ * it shipped with the table, was never wired to a UI, and is superseded by
+ * {@link label.groupId}. It is left in place rather than dropped because dropping a column is
+ * the one irreversible migration, and an always-null column costs nothing. Do not start
+ * writing it; `groupId` is the authority.
  */
 export const label = pgTable(
   'label',
@@ -593,7 +652,9 @@ export const label = pgTable(
       .references(() => organization.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     color: text('color').notNull(),
+    /** @deprecated Legacy, always null. Use {@link label.groupId}. */
     group: text('group'),
+    groupId: text('group_id').references(() => labelGroup.id, { onDelete: 'set null' }),
     teamId: text('team_id').references(() => team.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     sourceIntegrationId: text('source_integration_id').references(() => integration.id, {
@@ -611,6 +672,8 @@ export const label = pgTable(
     uniqueIndex('label_source_uq')
       .on(t.sourceIntegrationId, t.externalId)
       .where(sql`${t.externalId} is not null`),
+    // The settings page and every grouped picker read the org's labels bucketed by group.
+    index('label_org_group_idx').on(t.organizationId, t.groupId),
   ],
 );
 

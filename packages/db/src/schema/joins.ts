@@ -2,8 +2,8 @@
  * `@docket/db` — join-table schema island (data-model §4/§5).
  *
  * @remarks
- * Initiative↔Project and Initiative↔Program many-to-many links, Task↔Label, and the
- * cross-project directed `blocks` dependency graph. Every join retains
+ * Initiative↔Project and Initiative↔Program many-to-many links, the five entity↔Label
+ * joins, and the cross-project directed `blocks` dependency graph. Every join retains
  * `organization_id` (frozen) so tenant-scoped queries never cross a join boundary.
  */
 import { sql } from 'drizzle-orm';
@@ -21,6 +21,7 @@ import { genId } from '../id';
 import { actor, organization } from './identity';
 import { initiative, program, project, task } from './work';
 import { label } from './crosscutting';
+import { externalResource } from './resources';
 
 /** Many-to-many: an Initiative groups bounded Projects. */
 export const initiativeProject = pgTable(
@@ -139,6 +140,47 @@ export const taskLabel = pgTable(
       .references(() => organization.id, { onDelete: 'cascade' }),
   },
   (t) => [primaryKey({ columns: [t.taskId, t.labelId] })],
+);
+
+/** Many-to-many: Programs ↔ Labels. */
+export const programLabel = pgTable(
+  'program_label',
+  {
+    programId: text('program_id')
+      .notNull()
+      .references(() => program.id, { onDelete: 'cascade' }),
+    labelId: text('label_id')
+      .notNull()
+      .references(() => label.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.programId, t.labelId] })],
+);
+
+/**
+ * Many-to-many: Library resources ↔ Labels.
+ *
+ * @remarks
+ * The Library is the one non-work surface that earns labels: a resource is filed once and
+ * retrieved by topic later, which is exactly what a label is for. Cycles and milestones are
+ * deliberately absent — a cycle is a date range, and a milestone is read through its project.
+ */
+export const resourceLabel = pgTable(
+  'resource_label',
+  {
+    resourceId: text('resource_id')
+      .notNull()
+      .references(() => externalResource.id, { onDelete: 'cascade' }),
+    labelId: text('label_id')
+      .notNull()
+      .references(() => label.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.resourceId, t.labelId] })],
 );
 
 /** A directed `blocks` edge (blocking → blocked); cross-project, acyclic, no self-loops. */

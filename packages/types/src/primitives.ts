@@ -99,6 +99,10 @@ export const TaskId = id<'TaskId'>().describe(
 export const LabelId = id<'LabelId'>().describe(
   'ULID id of a Label — a reusable tag applied to Tasks/Projects for filtering.',
 );
+/** Branded `LabelGroup` id. */
+export const LabelGroupId = id<'LabelGroupId'>().describe(
+  'ULID id of a Label group — a named set of related Labels, optionally mutually exclusive.',
+);
 /** Branded `Comment` id. */
 export const CommentId = id<'CommentId'>().describe(
   'ULID id of a Comment — a threaded message on a Task or other commentable entity.',

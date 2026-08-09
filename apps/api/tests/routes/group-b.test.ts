@@ -35,42 +35,227 @@ async function body<T>(res: Response): Promise<T> {
 
 describe('labels router', () => {
   it('CRUD + 403/404/422', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
-    const w = appWithActor(r['labels'], orgId, ['contribute'], humanActorId);
-    expect((await body<{ items: unknown[] }>(await w.request('/'))).items).toHaveLength(0);
-    const created = await w.request('/', {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const m = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    expect((await body<{ items: unknown[] }>(await m.request('/'))).items).toHaveLength(0);
+    const created = await m.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ name: 'bug', color: '#f00', group: 'type', teamId }),
+      body: JSON.stringify({ name: 'bug', color: 'coral' }),
     });
     expect(created.status).toBe(200);
     const id = (await body<{ id: string }>(created)).id;
-    expect((await w.request(`/${id}`)).status).toBe(200);
-    const patched = await w.request(`/${id}`, {
+    expect((await m.request(`/${id}`)).status).toBe(200);
+    const patched = await m.request(`/${id}`, {
       method: 'PATCH',
       headers: J,
-      body: JSON.stringify({ name: 'defect', color: '#0f0', group: null, teamId }),
+      body: JSON.stringify({ name: 'defect', color: 'green' }),
     });
     expect(patched.status).toBe(200);
-    expect((await w.request(`/${id}`, { method: 'DELETE' })).status).toBe(200);
+    expect((await m.request(`/${id}`, { method: 'DELETE' })).status).toBe(200);
 
     const v = appWithActor(r['labels'], orgId, ['view']);
     expect((await v.request('/', { method: 'POST', headers: J, body: '{}' })).status).toBe(403);
-    expect((await w.request(`/${MISSING}`)).status).toBe(404);
+    expect((await m.request(`/${MISSING}`)).status).toBe(404);
     expect(
       (
-        await w.request(`/${MISSING}`, {
+        await m.request(`/${MISSING}`, {
           method: 'PATCH',
           headers: J,
           body: JSON.stringify({ name: 'x' }),
         })
       ).status,
     ).toBe(404);
-    expect((await w.request(`/${MISSING}`, { method: 'DELETE' })).status).toBe(404);
+    expect((await m.request(`/${MISSING}`, { method: 'DELETE' })).status).toBe(404);
     expect(
-      (await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name: '' }) }))
+      (await m.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name: '' }) }))
         .status,
     ).toBe(422);
+  });
+
+  it('creating needs only contribute, but restructuring needs manage', async () => {
+    // The split that keeps inline creation usable: whoever is doing the work can add
+    // vocabulary, but only a manager can rename, recolor, merge, or destroy it.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const c = appWithActor(r['labels'], orgId, ['contribute'], humanActorId);
+    const created = await c.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'onboarding' }),
+    });
+    expect(created.status).toBe(200);
+    const id = (await body<{ id: string }>(created)).id;
+
+    for (const req of [
+      c.request(`/${id}`, { method: 'PATCH', headers: J, body: JSON.stringify({ name: 'x' }) }),
+      c.request(`/${id}`, { method: 'DELETE' }),
+      c.request(`/${id}/merge`, {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ intoId: MISSING }),
+      }),
+      c.request('/groups', { method: 'POST', headers: J, body: JSON.stringify({ name: 'Type' }) }),
+    ]) {
+      expect((await req).status).toBe(403);
+    }
+  });
+
+  it('assigns a color by rotation when the body omits one', async () => {
+    // Inline creation is a single keystroke precisely because it never asks for a color.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    const colors: string[] = [];
+    for (const name of ['one', 'two', 'three']) {
+      const res = await w.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ name }),
+      });
+      colors.push((await body<{ color: string }>(res)).color);
+    }
+    expect(new Set(colors).size).toBe(3);
+    expect(colors).not.toContain('slate');
+  });
+
+  it('rejects a name that collides case-insensitively', async () => {
+    // The DB unique is case-sensitive by decision, so `Bug` beside `bug` has to be stopped here
+    // or the picker fills up with near-duplicates nobody meant to create.
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name: 'bug' }) });
+    const dup = await w.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: '  BUG  ' }),
+    });
+    expect(dup.status).toBe(409);
+  });
+
+  it('merge moves attachments onto the survivor and deletes the source', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    const mk = async (name: string): Promise<string> =>
+      (
+        await body<{ id: string }>(
+          await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name }) }),
+        )
+      ).id;
+    const sourceId = await mk('bugs');
+    const targetId = await mk('bug');
+
+    const [proj] = await db
+      .insert(schema.project)
+      .values({ organizationId: orgId, teamId, name: 'P', createdBy: humanActorId })
+      .returning();
+    await db.insert(schema.projectLabel).values([
+      { projectId: proj!.id, labelId: sourceId, organizationId: orgId },
+      // Already carries the survivor too — the merge must collapse, not violate the PK.
+      { projectId: proj!.id, labelId: targetId, organizationId: orgId },
+    ]);
+
+    const merged = await w.request(`/${sourceId}/merge`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ intoId: targetId }),
+    });
+    expect(merged.status).toBe(200);
+    expect((await body<{ id: string }>(merged)).id).toBe(targetId);
+
+    expect((await w.request(`/${sourceId}`)).status).toBe(404);
+    const attachments = await db
+      .select()
+      .from(schema.projectLabel)
+      .where(eq(schema.projectLabel.projectId, proj!.id));
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0]!.labelId).toBe(targetId);
+  });
+
+  it('refuses to merge a label into itself', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    const id = (
+      await body<{ id: string }>(
+        await w.request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'solo' }),
+        }),
+      )
+    ).id;
+    const res = await w.request(`/${id}/merge`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ intoId: id }),
+    });
+    expect(res.status).toBe(409);
+  });
+
+  it('reports usage counts only when asked, and zero for an unused label', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    const usedId = (
+      await body<{ id: string }>(
+        await w.request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'used' }),
+        }),
+      )
+    ).id;
+    await w.request('/', { method: 'POST', headers: J, body: JSON.stringify({ name: 'unused' }) });
+    const [proj] = await db
+      .insert(schema.project)
+      .values({ organizationId: orgId, teamId, name: 'P2', createdBy: humanActorId })
+      .returning();
+    await db
+      .insert(schema.projectLabel)
+      .values({ projectId: proj!.id, labelId: usedId, organizationId: orgId });
+
+    const plain = await body<{ items: { usageCount?: number }[] }>(await w.request('/'));
+    expect(plain.items.every((i) => i.usageCount === undefined)).toBe(true);
+
+    const counted = await body<{ items: { name: string; usageCount: number }[] }>(
+      await w.request('/?withCounts=1'),
+    );
+    const byName = new Map(counted.items.map((i) => [i.name, i.usageCount]));
+    expect(byName.get('used')).toBe(1);
+    // Zero rather than absent — this is what the settings page's "Unused" section reads.
+    expect(byName.get('unused')).toBe(0);
+  });
+
+  it('label groups: create, list, and dissolve without deleting the labels inside', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    const groupId = (
+      await body<{ id: string; exclusive: boolean }>(
+        await w.request('/groups', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'Type' }),
+        }),
+      )
+    ).id;
+    const listed = await body<{ items: { id: string; exclusive: boolean }[] }>(
+      await w.request('/groups'),
+    );
+    expect(listed.items).toHaveLength(1);
+    // Exclusive is the default: a group whose members all coexist is just clustering.
+    expect(listed.items[0]!.exclusive).toBe(true);
+
+    const labelId = (
+      await body<{ id: string }>(
+        await w.request('/', {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ name: 'feature', groupId }),
+        }),
+      )
+    ).id;
+
+    expect((await w.request(`/groups/${groupId}`, { method: 'DELETE' })).status).toBe(200);
+    // The vocabulary survives; only the dimension is gone.
+    const survivor = await body<{ groupId: string | null }>(await w.request(`/${labelId}`));
+    expect(survivor.groupId).toBeNull();
   });
 });
 

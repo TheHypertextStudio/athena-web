@@ -85,14 +85,15 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
     ).toBe(200);
   });
 
-  it('labels: create with a teamless/groupless body + patch a single field', async () => {
+  it('labels: create with a groupless body + patch a single field', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const w = appWithActor(r['labels'], orgId, ['contribute'], humanActorId);
-    // No group (covers `group ?? null` null side) and no teamId.
+    const w = appWithActor(r['labels'], orgId, ['manage'], humanActorId);
+    // No groupId (covers the `groupId ?? null` null side); a label is always born
+    // workspace-wide, so there is no teamId on the create body at all.
     const created = await w.request('/', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ name: 'plain', color: '#111' }),
+      body: JSON.stringify({ name: 'plain', color: 'slate' }),
     });
     expect(created.status).toBe(200);
     const id = (await body<{ id: string }>(created)).id;
@@ -101,7 +102,7 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
         await w.request(`/${id}`, {
           method: 'PATCH',
           headers: J,
-          body: JSON.stringify({ color: '#222' }),
+          body: JSON.stringify({ color: 'teal' }),
         })
       ).status,
     ).toBe(200);

@@ -481,8 +481,9 @@ const initiativeAggregates = new Hono<AppEnv>()
           organizationId: row.organizationId,
           name: row.name,
           color: row.color,
-          group: row.group,
+          groupId: row.groupId,
           teamId: row.teamId,
+          external: row.externalId != null,
           createdAt: row.createdAt.toISOString(),
         })),
         resources: resourceRows.map((row) => ({

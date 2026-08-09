@@ -40,7 +40,7 @@ describe('useLabelPaletteMode', () => {
   it('shows no items and is not loading with no bound organization', () => {
     const { wrapper } = makeQueryWrapper();
     const { result } = renderHook(
-      () => useLabelPaletteMode('', { activeOrgId: null, close: vi.fn() }),
+      () => useLabelPaletteMode('', { activeOrgId: null, close: vi.fn(), enabled: true }),
       { wrapper },
     );
     expect(result.current).toEqual({ items: [], loading: false, error: null });
@@ -85,7 +85,10 @@ describe('useLabelPaletteMode', () => {
       await import('@/components/command-palette/sub-modes');
     const close = vi.fn();
     const { wrapper } = makeQueryWrapper();
-    const { result } = renderHook(() => freshHook('bu', { activeOrgId: ORG, close }), { wrapper });
+    const { result } = renderHook(
+      () => freshHook('bu', { activeOrgId: ORG, close, enabled: true }),
+      { wrapper },
+    );
 
     await waitFor(() => {
       expect(result.current.items).toHaveLength(1);
@@ -131,9 +134,10 @@ describe('useLabelPaletteMode', () => {
     const { useLabelPaletteMode: freshHook } =
       await import('@/components/command-palette/sub-modes');
     const { wrapper } = makeQueryWrapper();
-    const { result } = renderHook(() => freshHook('zzz', { activeOrgId: ORG, close: vi.fn() }), {
-      wrapper,
-    });
+    const { result } = renderHook(
+      () => freshHook('zzz', { activeOrgId: ORG, close: vi.fn(), enabled: true }),
+      { wrapper },
+    );
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
     });
@@ -142,5 +146,80 @@ describe('useLabelPaletteMode', () => {
     expect(result.current.error).toBeNull();
     expect(result.current.items).toHaveLength(0);
     vi.doUnmock('@/lib/api');
+  });
+
+  it('renders each matching label with its own color swatch instead of a generic tag icon', async () => {
+    vi.doMock('@/lib/api', () => ({
+      api: {
+        v1: {
+          orgs: {
+            ':orgId': {
+              labels: {
+                $get: vi.fn().mockResolvedValue({
+                  ok: true,
+                  status: 200,
+                  json: () =>
+                    Promise.resolve({
+                      items: [
+                        {
+                          id: BUG,
+                          organizationId: ORG,
+                          name: 'Bug',
+                          color: '#ef4444',
+                          teamId: null,
+                          createdAt: '2026-08-01T00:00:00.000Z',
+                        },
+                      ],
+                    }),
+                }),
+              },
+            },
+          },
+        },
+      },
+    }));
+    vi.resetModules();
+    const { useLabelPaletteMode: freshHook } =
+      await import('@/components/command-palette/sub-modes');
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(
+      () => freshHook('bu', { activeOrgId: ORG, close: vi.fn(), enabled: true }),
+      { wrapper },
+    );
+    await waitFor(() => {
+      expect(result.current.items).toHaveLength(1);
+    });
+    const icon = result.current.items[0]!.icon;
+    // A rendered swatch node, not a `LucideIcon` component reference.
+    expect(typeof icon).not.toBe('function');
+    expect(icon).toMatchObject({ props: { style: { background: '#ef4444' } } });
+    vi.doUnmock('@/lib/api');
+  });
+
+  describe('enabled gate', () => {
+    it('issues no request and returns no items when the mode is not active, even with a bound org', async () => {
+      const labelsGet = vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ items: [{ id: BUG, name: 'Bug', color: '#ef4444' }] }),
+      });
+      vi.doMock('@/lib/api', () => ({
+        api: { v1: { orgs: { ':orgId': { labels: { $get: labelsGet } } } } },
+      }));
+      vi.resetModules();
+      const { useLabelPaletteMode: freshHook } =
+        await import('@/components/command-palette/sub-modes');
+      const { wrapper } = makeQueryWrapper();
+      const { result } = renderHook(
+        () => freshHook('', { activeOrgId: ORG, close: vi.fn(), enabled: false }),
+        { wrapper },
+      );
+
+      expect(result.current).toEqual({ items: [], loading: false, error: null });
+      // Give any accidentally-fired query a tick to land, then confirm it never did.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(labelsGet).not.toHaveBeenCalled();
+      vi.doUnmock('@/lib/api');
+    });
   });
 });

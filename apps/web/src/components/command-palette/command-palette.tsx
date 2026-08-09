@@ -61,7 +61,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   const [activeIndex, setActiveIndex] = useState(0);
 
   const { mode, term } = useMemo(() => parsePrefix(query), [query]);
-  const labelModeResult = useLabelPaletteMode(term, { activeOrgId, close: onClose });
+  // Gate each mode's own query on the palette actually being open and in that mode -- mirroring
+  // how useHubSearch is gated (`open && mode === null`) just below -- since CommandPalette is
+  // mounted unconditionally by the app shell and only early-returns `null` below its hooks.
+  const labelModeResult = useLabelPaletteMode(term, {
+    activeOrgId,
+    close: onClose,
+    enabled: open && mode === '#',
+  });
   const modeResult = mode === '#' ? labelModeResult : null;
 
   const inputRef = useRef<HTMLInputElement>(null);

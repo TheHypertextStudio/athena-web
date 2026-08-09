@@ -10,7 +10,11 @@
  * - toggling a fully-applied label removes it from every object that has it;
  * - `current` resolves from the task-detail query when the caller omits it;
  * - inline creation applies the freshly-created label to every target immediately;
- * - the popover reports closed (`onClose`) when Radix's own dismissal fires.
+ * - the popover reports closed (`onClose`) when Radix's own dismissal fires;
+ * - a failed write reverts only the object(s) it actually failed for and surfaces an inline error
+ *   (fix-pass Important #1);
+ * - a failed task-detail or labels-list read renders an inline error instead of an endless
+ *   skeleton or a false "No labels" empty state (fix-pass Important #2).
  */
 import '@testing-library/jest-dom/vitest';
 
@@ -18,7 +22,10 @@ import { LabelId, OrganizationId } from '@docket/types';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LabelPickerOverlay } from '@/components/pickers/label-picker-overlay';
+import {
+  LabelPickerOverlay,
+  resolveCloseFocusTarget,
+} from '@/components/pickers/label-picker-overlay';
 import { makeQueryWrapper } from '../../support/query';
 
 // `vi.mock` factories are hoisted above this file's own top-level statements, so the mock
@@ -262,5 +269,161 @@ describe('LabelPickerOverlay', () => {
     await waitFor(() => {
       expect(onClose).toHaveBeenCalled();
     });
+  });
+
+  it('reverts a failed write and surfaces an inline error', async () => {
+    TASK_PATCH.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ code: 'internal' }),
+    });
+    renderOverlay({
+      request: {
+        kind: 'labels',
+        organizationId: ORG,
+        objects: [TASK_A],
+        current: new Map([['task:task_a', []]]),
+      },
+    });
+    const bugRow = await screen.findByRole('option', { name: /Bug/ });
+    expect(bugRow).toHaveAttribute('aria-selected', 'false');
+    fireEvent.click(within(bugRow).getByRole('button'));
+
+    // Optimistic: checked immediately after the click.
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /Bug/ })).toHaveAttribute('aria-selected', 'true');
+    });
+
+    // Reverted once the failing write settles, with the failure surfaced inline.
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /Bug/ })).toHaveAttribute('aria-selected', 'false');
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not update labels/i);
+  });
+
+  it('does not revert a sibling object whose write succeeded when another object in the same toggle fails', async () => {
+    TASK_PATCH.mockImplementation((args: { param: { id: string } }) => {
+      if (args.param.id === 'task_b') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: () => Promise.resolve({ code: 'internal' }),
+        });
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) });
+    });
+    renderOverlay({
+      request: {
+        kind: 'labels',
+        organizationId: ORG,
+        objects: [TASK_A, TASK_B],
+        current: new Map([
+          ['task:task_a', []],
+          ['task:task_b', []],
+        ]),
+      },
+    });
+    const bugRow = await screen.findByRole('option', { name: /Bug/ });
+    fireEvent.click(within(bugRow).getByRole('button'));
+
+    await waitFor(() => {
+      expect(TASK_PATCH).toHaveBeenCalledTimes(2);
+    });
+    await screen.findByRole('alert');
+
+    // Toggle again: task_a already carries Bug (its write was never reverted) so it is skipped;
+    // only task_b -- still missing it after its revert -- gets written again.
+    fireEvent.click(within(screen.getByRole('option', { name: /Bug/ })).getByRole('button'));
+
+    await waitFor(() => {
+      expect(TASK_PATCH).toHaveBeenCalledTimes(3);
+    });
+    const taskACalls = TASK_PATCH.mock.calls.filter(
+      (args: unknown[]) => (args[0] as { param: { id: string } }).param.id === 'task_a',
+    );
+    expect(taskACalls).toHaveLength(1);
+    const taskBCalls = TASK_PATCH.mock.calls.filter(
+      (args: unknown[]) => (args[0] as { param: { id: string } }).param.id === 'task_b',
+    );
+    expect(taskBCalls).toHaveLength(2);
+  });
+
+  it('shows an inline error instead of an endless skeleton when the task-detail fetch fails', async () => {
+    TASK_GET.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ code: 'internal' }),
+    });
+    const { wrapper } = makeQueryWrapper();
+    render(
+      <LabelPickerOverlay
+        request={{ kind: 'labels', organizationId: ORG, objects: [TASK_A] }}
+        onClose={vi.fn()}
+      />,
+      { wrapper },
+    );
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  });
+
+  it('shows an inline error instead of "No labels" when the labels fetch fails', async () => {
+    LABELS_GET.mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: () => Promise.resolve({ code: 'internal' }),
+    });
+    renderOverlay();
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(screen.queryByText('No labels')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * {@link resolveCloseFocusTarget} unit tests (fix-pass Important #3).
+ *
+ * @remarks
+ * The popover has no `PopoverTrigger` (it is anchored via `virtualRef`), so Radix's default
+ * `onCloseAutoFocus` behavior has nothing to refocus and drops focus to `<body>` on close. Driving
+ * that end-to-end through Radix's real open/close focus-restoration machinery is awkward in jsdom
+ * — this popover's `open` prop is a constant `true` (Radix is never told to transition from open
+ * to closed; the real close is `PickerOverlayProvider` unmounting the component entirely), so
+ * there is no reliable way in a component-level test to trigger Radix's own `onCloseAutoFocus`
+ * dispatch and assert `toHaveFocus()` on the result. These tests instead pin the pure
+ * target-resolution logic the handler calls directly.
+ */
+describe('resolveCloseFocusTarget', () => {
+  it('prefers the anchor element\'s enclosing [role="grid"]', () => {
+    const grid = document.createElement('div');
+    grid.setAttribute('role', 'grid');
+    const row = document.createElement('div');
+    const anchor = document.createElement('a');
+    row.appendChild(anchor);
+    grid.appendChild(row);
+    document.body.appendChild(grid);
+
+    expect(resolveCloseFocusTarget(anchor)).toBe(grid);
+
+    grid.remove();
+  });
+
+  it('falls back to the anchor element itself when there is no enclosing grid', () => {
+    const anchor = document.createElement('button');
+    document.body.appendChild(anchor);
+
+    expect(resolveCloseFocusTarget(anchor)).toBe(anchor);
+
+    anchor.remove();
+  });
+
+  it('returns null for a non-element virtual anchor', () => {
+    const virtual = { getBoundingClientRect: () => new DOMRect() };
+    expect(resolveCloseFocusTarget(virtual)).toBeNull();
+  });
+
+  it('returns null when there is no anchor at all', () => {
+    expect(resolveCloseFocusTarget(null)).toBeNull();
   });
 });

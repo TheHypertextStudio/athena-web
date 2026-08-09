@@ -1,14 +1,39 @@
 'use client';
 
-import { CornerDownLeft } from '@docket/ui/icons';
+import { CornerDownLeft, type LucideIcon } from '@docket/ui/icons';
 import { menuBadge, menuItemClass, menuTrailingText } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import type { JSX } from 'react';
+import { isValidElement, type JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
 
 import type { PaletteItem } from './types';
 import { SEARCH_KIND_LABEL } from './use-hub-search';
+
+/**
+ * Render a row's leading glyph.
+ *
+ * @remarks
+ * `PaletteItem.icon` is either a `LucideIcon` component reference (every search hit, static
+ * command, and org switch) or an already-rendered node (the `#` label mode's own color swatch).
+ * `typeof icon === 'function'` cannot tell these apart on its own: the icon components this app
+ * re-exports (`@docket/ui/icons`, backed by `@mui/icons-material`) are `forwardRef`/`memo`-wrapped,
+ * so they are `object`s at runtime, not bare functions — and passing that wrapper object straight
+ * to React as a child (instead of instantiating it) throws "Objects are not valid as a React
+ * child". `isValidElement` is the reliable discriminant instead: a wrapped icon component is not a
+ * React element (it is a component *type*), while the swatch already is one.
+ */
+function paletteIcon(icon: PaletteItem['icon']): JSX.Element {
+  if (icon != null && !isValidElement(icon)) {
+    const Icon = icon as LucideIcon;
+    return <Icon aria-hidden="true" className="shrink-0" />;
+  }
+  return (
+    <span aria-hidden="true" className="shrink-0">
+      {icon}
+    </span>
+  );
+}
 
 /** Props for {@link PaletteRow}. */
 export interface PaletteRowProps {
@@ -41,7 +66,6 @@ export function PaletteRow({
   onSelect,
   onHover,
 }: PaletteRowProps): JSX.Element {
-  const Icon = item.icon;
   return (
     <li
       id={rowId}
@@ -58,7 +82,7 @@ export function PaletteRow({
         { 'bg-on-surface/10': active },
       )}
     >
-      <Icon aria-hidden="true" className="shrink-0" />
+      {paletteIcon(item.icon)}
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
 
       {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}

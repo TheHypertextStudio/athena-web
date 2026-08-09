@@ -37,6 +37,7 @@ import type {
 } from '@docket/types';
 import { ActorAvatar, type PickerOption, StatusIcon } from '@docket/ui/components';
 import { Globe, Shield } from '@docket/ui/icons';
+import type { ReactNode } from 'react';
 
 import { statusGlyphType as cycleStatusGlyphType } from '@/components/cycles/cycle-status';
 import { statusGlyphType as programStatusGlyphType } from '@/components/programs/program-status';
@@ -341,17 +342,22 @@ export function workflowStateOptions(states: readonly WorkflowState[]): readonly
   }));
 }
 
+/**
+ * A label's own color swatch — the small solid dot every label-carrying picker (this module's
+ * {@link labelOptions} and the command palette's `#` label mode) renders as its leading glyph, so
+ * a label's identity is its own color rather than one generic tag icon everywhere it appears.
+ */
+export function labelSwatch(color: string): ReactNode {
+  return (
+    <span className="size-2.5 rounded-full" style={{ background: color }} aria-hidden="true" />
+  );
+}
+
 /** Map the org's labels into multi-select options, each with its color swatch. */
 export function labelOptions(labels: readonly LabelOut[]): readonly PickerOption[] {
   return labels.map((label) => ({
     value: label.id,
     label: label.name,
-    icon: (
-      <span
-        className="size-2.5 rounded-full"
-        style={{ background: label.color }}
-        aria-hidden="true"
-      />
-    ),
+    icon: labelSwatch(label.color),
   }));
 }

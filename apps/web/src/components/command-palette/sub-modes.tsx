@@ -17,6 +17,7 @@ import { useRouter } from 'next/navigation';
 import { useMemo } from 'react';
 
 import { labelsDef } from '@/components/labels/queries';
+import { labelSwatch } from '@/components/pickers/options';
 import { labelFilterHref } from '@/lib/search-route';
 import { userErrorMessage } from '@/lib/problem';
 import { useApiListQuery } from '@/lib/query';
@@ -53,6 +54,18 @@ export interface PaletteModeContext {
   readonly activeOrgId: string | null;
   /** Close the palette; a selected row calls this before navigating. */
   readonly close: () => void;
+  /**
+   * Whether this mode's own query should actually run.
+   *
+   * @remarks
+   * `CommandPalette` is mounted unconditionally by the app shell and only early-returns `null`
+   * below its hooks — every mode's item-list hook is still called (and would still fire its own
+   * query) on every authenticated page load, not only while the palette is open and that mode is
+   * active. The host computes `open && mode === <this mode's prefix>` once, where both are already
+   * known, and passes it here so the mode's query gates on it the same way `useHubSearch` already
+   * gates on `open && mode === null` one call site over.
+   */
+  readonly enabled: boolean;
 }
 
 /** What every mode's item-list hook returns. */
@@ -69,14 +82,17 @@ export interface PaletteModeResult {
  * @remarks
  * Labels are org-scoped and the palette can be in Hub scope with no bound org — that case returns
  * no items and issues no request rather than fanning out across every membership, so the caller
- * can show its own "open a workspace" copy instead of a bare empty list.
+ * can show its own "open a workspace" copy instead of a bare empty list. It also does not query
+ * until the caller reports the mode is actually active (see {@link PaletteModeContext.enabled}) —
+ * without that, this hook (called unconditionally by `CommandPalette`) would fetch every org's
+ * labels on every authenticated page load, whether or not the palette was ever opened.
  */
 export function useLabelPaletteMode(
   term: string,
-  { activeOrgId, close }: PaletteModeContext,
+  { activeOrgId, close, enabled: modeEnabled }: PaletteModeContext,
 ): PaletteModeResult {
   const router = useRouter();
-  const enabled = activeOrgId !== null;
+  const enabled = modeEnabled && activeOrgId !== null;
   const labelsQ = useApiListQuery({ ...labelsDef(activeOrgId ?? ''), enabled });
 
   const items = useMemo<readonly PaletteItem[]>(() => {
@@ -90,7 +106,9 @@ export function useLabelPaletteMode(
         id: `label-mode:${label.id}`,
         section: 'results' as const,
         label: label.name,
-        icon: Tag,
+        // The label's own color, not a generic tag glyph — the same swatch `LabelPickerOverlay`
+        // shows via `labelOptions`, reused rather than re-invented here.
+        icon: labelSwatch(label.color),
         run: () => {
           close();
           router.push(labelFilterHref(orgId, label.id));

@@ -69,6 +69,22 @@ function headerFor<T>(catalog: FieldCatalog<T>, key: string, fallback: string): 
   return findField(catalog, key)?.label ?? fallback;
 }
 
+/**
+ * Build the canonical `kind: 'task'` object literal a row publishes — both as its drag payload
+ * ({@link entityDragSource}) and as the `L` hotkey's {@link ObjectRef} for the label picker. Kept
+ * un-annotated (rather than typed as `ObjectRef`) so `organizationId` stays the task's own
+ * non-nullable `OrganizationId`, satisfying `EntityDragItem`'s stricter `organizationId: string`
+ * as well as the wider `ObjectRef.organizationId: string | null`.
+ */
+function taskObject(task: TaskOut) {
+  return {
+    kind: 'task' as const,
+    id: task.id,
+    organizationId: task.organizationId,
+    title: task.title,
+  };
+}
+
 /** Props for {@link buildTaskColumns}. */
 export interface TaskColumnsDeps {
   /** The task {@link FieldCatalog} (the same one the {@link FilterToolbar} drives). */
@@ -276,14 +292,7 @@ export function TaskTable({
       {...(groups ? { groups } : { rows: tasks ?? [] })}
       getRowKey={(task) => task.id}
       rowHref={(task) => taskHref(task)}
-      rowDrag={(task) =>
-        entityDragSource({
-          kind: 'task',
-          id: task.id,
-          organizationId: task.organizationId,
-          title: task.title,
-        })
-      }
+      rowDrag={(task) => entityDragSource(taskObject(task))}
       renderRowLink={({ children, ...linkProps }) => (
         // Spread rather than cherry-pick: a dropped `draggable`/`onDragStart` would silently turn
         // the row back into an undraggable one with no type error.
@@ -299,12 +308,7 @@ export function TaskTable({
       }
       onRowPropertyKey={(key, task, anchor) => {
         if (key !== 'l') return false;
-        const object = {
-          kind: 'task' as const,
-          id: task.id,
-          organizationId: task.organizationId,
-          title: task.title,
-        };
+        const object = taskObject(task);
         pickerOverlay.open({
           kind: 'labels',
           organizationId: task.organizationId,

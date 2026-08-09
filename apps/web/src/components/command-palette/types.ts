@@ -1,5 +1,6 @@
 import type { SearchDocumentKind } from '@docket/types';
 import type { LucideIcon } from '@docket/ui/icons';
+import type { ReactNode } from 'react';
 
 /**
  * The command-palette search scope.
@@ -38,8 +39,12 @@ export interface PaletteItem {
   label: string;
   /** Optional secondary line (e.g. the entity kind, or a hint). */
   hint?: string;
-  /** Leading glyph. */
-  icon: LucideIcon;
+  /**
+   * Leading glyph: either a Lucide icon component (rendered as `<Icon />`, the common case — every
+   * search hit, static command, and org switch) or a fully-rendered node such as a label's own
+   * color swatch (rendered as-is), for a mode whose rows carry an identity beyond a generic glyph.
+   */
+  icon: LucideIcon | ReactNode;
   /** Extra terms (besides `label`) the local filter matches against. */
   keywords?: readonly string[];
   /**

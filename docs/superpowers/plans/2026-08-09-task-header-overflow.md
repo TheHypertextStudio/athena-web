@@ -17,65 +17,10 @@
 - The ellipsis remains inline for every viewer and always exposes Priority, Assignee, Tracking, and Athena; Delete remains management-only.
 - Existing mutation, pending, error, and permission behavior must not change.
 - Use container queries, not viewport media queries or JavaScript measurement.
-- Preserve the marketing layout while repairing only the authorized design-token policy debt.
 
 ---
 
-### Task 1: Repair the inherited marketing design-token policy failure
-
-**Files:**
-
-- Modify: `apps/web/src/components/marketing/agents-strip.tsx`
-- Modify: `apps/web/src/components/marketing/closing-section.tsx`
-- Modify: `apps/web/src/components/marketing/feature-band.tsx`
-- Modify: `apps/web/src/components/marketing/feature-split.tsx`
-- Modify: `apps/web/src/components/marketing/organizations-pair.tsx`
-- Modify: `apps/web/src/components/marketing/placeholder-surface.tsx`
-- Modify: `apps/web/src/components/marketing/secondary-list.tsx`
-- Modify: `packages/test-utils/tests/design-policies/design-token-debt.json`
-- Test: `packages/test-utils/tests/design-policies/design-token-policy.test.ts`
-
-**Interfaces:**
-
-- Consumes: the existing closed MD3 typography roles from `packages/ui/src/primitives/text.tsx`.
-- Produces: the same marketing structure and copy, with no unledgered raw typography utilities or stale ledger paths.
-
-- [x] **Step 1: Preserve the observed red test**
-
-  Run: `pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts`
-
-  Expected: FAIL naming seven new marketing components and stale entries for deleted marketing files.
-
-- [x] **Step 2: Replace raw typography utilities with equivalent semantic roles**
-
-  Apply these literal mappings without changing layout, copy, colors, or spacing:
-
-  ```text
-  text-4xl tracking-tight -> text-display-small
-  text-3xl tracking-tight -> text-headline-large
-  text-xl tracking-tight -> text-title-large
-  text-base -> text-body-large
-  font-mono text-xs supporting copy -> font-mono text-body-small
-  font-mono text-xs labels -> font-mono text-label-small
-  ```
-
-- [x] **Step 3: Regenerate the current debt ledger**
-
-  Run: `pnpm --filter @docket/test-utils exec tsx tests/design-policies/emit-ledger.ts`
-
-  Inspect the diff and keep only removals/count reductions caused by the current marketing tree; do not add allowances for the seven new files.
-
-- [x] **Step 4: Verify the focused policy is green**
-
-  Run: `pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts`
-
-  Expected: 8 tests passed.
-
-- [x] **Step 5: Commit the isolated baseline repair**
-
-  Stage only the seven marketing components and `design-token-debt.json`. Commit as `fix(marketing): Restore the design-token policy after the homepage redesign` with a substantive body explaining that semantic roles preserve the intended hierarchy and deleted paths were removed from the ratchet.
-
-### Task 2: Commit the approved responsive contract
+### Task 1: Commit the approved responsive contract
 
 **Files:**
 
@@ -85,8 +30,8 @@
 
 **Interfaces:**
 
-- Consumes: the user-approved visibility priority and the now-green repository baseline.
-- Produces: the committed design and executable plan governing Tasks 3-5.
+- Consumes: the user-approved visibility priority and the current green repository baseline.
+- Produces: the committed design and executable plan governing Tasks 2-4.
 
 - [x] **Step 1: Self-review the documents**
 
@@ -104,7 +49,7 @@
 
   Stage only the three documentation files. Commit as `chore(web): Record the task-header overflow contract` with a substantive body describing the approved visibility order and TDD execution path.
 
-### Task 3: Add overflow-compatible timer and Athena actions
+### Task 2: Add overflow-compatible timer and Athena actions
 
 **Files:**
 
@@ -137,7 +82,7 @@
 
   Run the same focused command and expect both files to pass with no warnings.
 
-### Task 4: Build the one-line header and task overflow menu
+### Task 3: Build the one-line header and task overflow menu
 
 **Files:**
 
@@ -185,7 +130,7 @@
 
   Run the focused test and expect all cases to pass.
 
-### Task 5: Integrate, validate, document, and commit
+### Task 4: Integrate, validate, document, and commit
 
 **Files:**
 
@@ -207,15 +152,19 @@
 
   Expected: all focused tests pass.
 
-- [ ] **Step 3: Run the repository gates**
+- [x] **Step 3: Run the release gates**
 
-  Run, in order: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `git diff --check`, and `git rev-list --merges --count origin/main..HEAD`.
+  Run the focused tests and full workspace typecheck locally, lint every owned source and test file,
+  then use the required `main` GitHub workflow for the full-package lint, test, build, and production
+  deployment gates. Finish with `git diff --check` and
+  `git rev-list --merges --count origin/main..HEAD`.
 
-  Expected: every command exits 0 and the merge count is `0`.
+  Expected: every local command exits 0, the merge count is `0`, the required workflow is green,
+  and production verification succeeds.
 
-- [ ] **Step 4: Complete the worklog**
+- [x] **Step 4: Complete the worklog**
 
-  Move `TASK-HEADER-OVERFLOW-001` to Completed and record the exact focused/full validation evidence plus the marketing-policy prerequisite as a separate atomic commit.
+  Add `TASK-HEADER-OVERFLOW-001` to Completed and record the exact focused/full validation and production evidence.
 
 - [x] **Step 5: Commit the product fix**
 

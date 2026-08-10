@@ -272,38 +272,14 @@
     "raw-type-utility": 16,
     "shadow-outside-overlay": 1
   },
-  "apps/web/src/components/marketing/cta-band.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/marketing/feature-ledger.tsx": {
-    "hardcoded-color": 1,
-    "raw-type-utility": 9
-  },
   "apps/web/src/components/marketing/hero.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/marketing/how-it-works.tsx": {
     "raw-type-utility": 4
   },
   "apps/web/src/components/marketing/marketing-cta.tsx": {
     "raw-type-utility": 5
   },
-  "apps/web/src/components/marketing/pricing-note.tsx": {
-    "raw-type-utility": 5
-  },
   "apps/web/src/components/marketing/pricing-tiers.tsx": {
     "raw-type-utility": 8,
-    "shadow-outside-overlay": 1
-  },
-  "apps/web/src/components/marketing/principles-strip.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/web/src/components/marketing/product-frame.tsx": {
-    "raw-type-utility": 7,
-    "shadow-outside-overlay": 2
-  },
-  "apps/web/src/components/marketing/separation-diagram.tsx": {
-    "raw-type-utility": 9,
     "shadow-outside-overlay": 1
   },
   "apps/web/src/components/marketing/site-footer.tsx": {

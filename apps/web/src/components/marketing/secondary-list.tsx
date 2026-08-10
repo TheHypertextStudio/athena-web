@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 interface SecondaryItem {
   title: string;
   slot: string;
@@ -44,8 +46,17 @@ export function SecondaryList(): JSX.Element {
                 index < ITEMS.length - 1 ? 'md:pr-8' : ''
               }`}
             >
-              <dt className="font-display text-ink text-xl tracking-tight">{item.title}</dt>
-              <dd className="text-ink-muted/60 font-mono text-xs">{item.slot}</dd>
+              <Text as="dt" token="title-large" tone="inherit" className="font-display text-ink">
+                {item.title}
+              </Text>
+              <Text
+                as="dd"
+                token="body-small"
+                tone="inherit"
+                className="text-ink-muted/60 font-mono"
+              >
+                {item.slot}
+              </Text>
             </div>
           ))}
         </dl>

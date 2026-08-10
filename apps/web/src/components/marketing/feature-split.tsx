@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 import { PlaceholderSurface } from './placeholder-surface';
 
 /** Props for {@link FeatureSplit}. */
@@ -35,8 +37,22 @@ export function FeatureSplit({
     <section className="mx-auto w-full max-w-6xl px-6 py-20 sm:py-24">
       <div className="grid items-center gap-10 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] md:gap-16">
         <div className={side === 'left' ? 'md:order-2' : ''}>
-          <h2 className="font-display text-ink text-4xl tracking-tight text-balance">{title}</h2>
-          <p className="text-ink-muted mt-4 text-base text-balance">{description}</p>
+          <Text
+            as="h2"
+            token="display-small"
+            tone="inherit"
+            className="font-display text-ink text-balance"
+          >
+            {title}
+          </Text>
+          <Text
+            as="p"
+            token="body-large"
+            tone="inherit"
+            className="text-ink-muted mt-4 text-balance"
+          >
+            {description}
+          </Text>
         </div>
         <div className={side === 'left' ? 'md:order-1' : ''}>
           <PlaceholderSurface label={surface} aspect="aspect-[4/3]" tone="paper" />

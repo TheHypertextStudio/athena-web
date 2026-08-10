@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 import { PlaceholderSurface } from './placeholder-surface';
 
 /**
@@ -13,14 +15,24 @@ import { PlaceholderSurface } from './placeholder-surface';
 export function OrganizationsPair(): JSX.Element {
   return (
     <section className="mx-auto w-full max-w-6xl px-6 py-20 sm:py-24">
-      <h2 className="font-display text-ink max-w-2xl text-4xl tracking-tight text-balance">
+      <Text
+        as="h2"
+        token="display-small"
+        tone="inherit"
+        className="font-display text-ink max-w-2xl text-balance"
+      >
         Work across organizations
-      </h2>
-      <p className="text-ink-muted mt-4 max-w-2xl text-base text-balance">
+      </Text>
+      <Text
+        as="p"
+        token="body-large"
+        tone="inherit"
+        className="text-ink-muted mt-4 max-w-2xl text-balance"
+      >
         Running a nonprofit board, a client business, and your own errands usually means three
         separate logins and three separate task lists. In Docket, each organization&apos;s data
         stays separate, but everything you&apos;re responsible for shows up under one login.
-      </p>
+      </Text>
       <div className="mt-12 grid gap-5 sm:grid-cols-2">
         <PlaceholderSurface
           label="Organization one — its own people and tools"

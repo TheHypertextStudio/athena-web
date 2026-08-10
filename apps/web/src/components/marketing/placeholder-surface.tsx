@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 /** Props for {@link PlaceholderSurface}. */
 export interface PlaceholderSurfaceProps {
   /** What belongs in this slot, e.g. `Task list + task detail`. The plate's only content. */
@@ -29,11 +31,13 @@ export function PlaceholderSurface({ label, aspect, tone }: PlaceholderSurfacePr
         ink ? 'border-paper/30 bg-paper/5' : 'border-ink/25 bg-paper-deep/60'
       }`}
     >
-      <span
-        className={`px-6 text-center font-mono text-xs ${ink ? 'text-paper/55' : 'text-ink-muted'}`}
+      <Text
+        token="body-small"
+        tone="inherit"
+        className={`px-6 text-center font-mono ${ink ? 'text-paper/55' : 'text-ink-muted'}`}
       >
         {label}
-      </span>
+      </Text>
     </div>
   );
 }

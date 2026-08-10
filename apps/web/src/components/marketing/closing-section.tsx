@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 import { CtaBandActions } from './marketing-cta';
 
 /** Props for {@link ClosingSection}. */
@@ -31,17 +33,22 @@ export function ClosingSection({ pricing }: ClosingSectionProps): JSX.Element {
       <div className="mx-auto flex w-full max-w-6xl flex-col items-start gap-8 px-6 py-24">
         {pricing ? (
           <div className="flex flex-col gap-4">
-            <p className="font-display text-paper max-w-3xl text-4xl tracking-tight text-balance">
+            <Text
+              as="p"
+              token="display-small"
+              tone="inherit"
+              className="font-display text-paper max-w-3xl text-balance"
+            >
               Free for one workspace. $8 a month to run more.
-            </p>
-            <p className="text-base">
+            </Text>
+            <Text as="p" token="title-medium" tone="inherit">
               <Link
                 href="/pricing"
-                className="text-paper/75 hover:text-paper decoration-paper/30 font-medium underline underline-offset-4 transition-colors"
+                className="text-paper/75 hover:text-paper decoration-paper/30 underline underline-offset-4 transition-colors"
               >
                 See what each plan includes →
               </Link>
-            </p>
+            </Text>
           </div>
         ) : null}
         <CtaBandActions />

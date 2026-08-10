@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 import { PlaceholderSurface } from './placeholder-surface';
 
 /** Props for {@link FeatureBand}. */
@@ -29,16 +31,22 @@ export function FeatureBand({ title, description, surface, tone }: FeatureBandPr
   return (
     <section className={ink ? 'bg-ink' : 'border-outline-variant bg-paper-deep border-y'}>
       <div className="mx-auto w-full max-w-6xl px-6 py-20 sm:py-24">
-        <h2
-          className={`font-display text-4xl tracking-tight text-balance ${ink ? 'text-paper' : 'text-ink'}`}
+        <Text
+          as="h2"
+          token="display-small"
+          tone="inherit"
+          className={`font-display text-balance ${ink ? 'text-paper' : 'text-ink'}`}
         >
           {title}
-        </h2>
-        <p
-          className={`mt-4 max-w-2xl text-base text-balance ${ink ? 'text-paper/70' : 'text-ink-muted'}`}
+        </Text>
+        <Text
+          as="p"
+          token="body-large"
+          tone="inherit"
+          className={`mt-4 max-w-2xl text-balance ${ink ? 'text-paper/70' : 'text-ink-muted'}`}
         >
           {description}
-        </p>
+        </Text>
         <div className="mt-12">
           <PlaceholderSurface label={surface} aspect="aspect-[16/9]" tone={tone} />
         </div>

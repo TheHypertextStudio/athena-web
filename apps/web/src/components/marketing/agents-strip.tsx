@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { Text } from '@docket/ui/primitives';
+
 import { PlaceholderSurface } from './placeholder-surface';
 
 /**
@@ -18,14 +20,24 @@ export function AgentsStrip(): JSX.Element {
     <section className="border-outline-variant border-t">
       <div className="mx-auto grid w-full max-w-6xl gap-8 px-6 py-16 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center md:gap-14">
         <div>
-          <h2 className="font-display text-ink text-3xl tracking-tight text-balance">
+          <Text
+            as="h2"
+            token="headline-large"
+            tone="inherit"
+            className="font-display text-ink text-balance"
+          >
             Let your agents work with you
-          </h2>
-          <p className="text-ink-muted mt-3 text-base text-balance">
+          </Text>
+          <Text
+            as="p"
+            token="body-large"
+            tone="inherit"
+            className="text-ink-muted mt-3 text-balance"
+          >
             Ask an AI assistant about your tasks today and it has nothing to look at unless you copy
             your list into the chat by hand. An agent connected to Docket over MCP reads your actual
             projects and updates status directly, so there is nothing to copy.
-          </p>
+          </Text>
         </div>
         <PlaceholderSurface
           label="An MCP client connected to Docket"

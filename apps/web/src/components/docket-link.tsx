@@ -7,6 +7,7 @@ import type { ComponentProps, JSX, MouseEvent } from 'react';
 import { useServerReachable } from '@/components/reachability';
 import { navigateWithoutRouter } from '@/lib/app-location';
 import { useOfflineAvailability } from '@/lib/offline-availability';
+import { useOnlineStatus } from '@/lib/use-online-status';
 
 /**
  * The app's link. Behaves as `next/link` while the server answers, and keeps the shell mounted when
@@ -23,8 +24,10 @@ import { useOfflineAvailability } from '@/lib/offline-availability';
  * the route table to swap the page underneath the shell. Nothing unmounts, nothing reloads, and the
  * back button still works because the history entry is real.
  *
- * Reachability comes from the shell's own session state, not `navigator.onLine` — see
- * {@link file://./reachability.tsx} for why that distinction is load-bearing rather than pedantic.
+ * The shell's request-backed reachability remains authoritative when the browser reports an
+ * interface, because `navigator.onLine === true` cannot prove the server is reachable. Its
+ * negative answer is definitive, though: reacting to the browser's `offline` event closes the gap
+ * before a later session request has time to fail.
  *
  * Only plain left clicks are intercepted. A modified click (new tab, new window, download) is the
  * browser's business and is left alone, exactly as `next/link` leaves it alone.
@@ -40,13 +43,15 @@ export type DocketLinkProps = ComponentProps<typeof Link>;
  * @returns The link.
  */
 export default function DocketLink({ onClick, ...props }: DocketLinkProps): JSX.Element {
-  const reachable = useServerReachable();
+  const serverReachable = useServerReachable();
+  const online = useOnlineStatus();
+  const routerReachable = serverReachable && online;
   const href = typeof props.href === 'string' ? props.href : null;
-  const availability = useOfflineAvailability(href, !reachable);
+  const availability = useOfflineAvailability(href, !routerReachable);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     onClick?.(event);
-    if (reachable || event.defaultPrevented) {
+    if (routerReachable || event.defaultPrevented) {
       return;
     }
     if (!isPlainLeftClick(event)) {

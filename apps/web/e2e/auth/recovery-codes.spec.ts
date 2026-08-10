@@ -60,7 +60,7 @@ test.describe('recovery codes', () => {
     // Enrol a fresh passkey (virtual authenticator) → land in the app, signed in again.
     await page.getByRole('button', { name: 'Add a new passkey' }).click();
     await page.waitForURL('**/today**', { timeout: TIMEOUTS.ceremony });
-    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible({
+    await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible({
       timeout: TIMEOUTS.ceremony,
     });
     await attachShot(testInfo, page, 'recovery-3-signed-in.png');

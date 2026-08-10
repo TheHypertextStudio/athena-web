@@ -30,7 +30,7 @@
   behavioral API coverage for the Notion mirror designer, reconciler, and management routes. The
   Notion mirror migration and enum contract test also carry the production-gate repair. The E2E
   follow-up covers settings navigation, autosaving notification preferences, production service
-  worker readiness, and the workflow's diagnostic log command.
+  worker readiness, the workflow's diagnostic log command, and immediate offline link handling.
 - **Validation**: The local design-token policy passes 8/8, all affected package typechecks pass,
   notification preferences pass 4/4, the UI suite passes 563/563, and the targeted provider policy
   reproduces the exact GitHub failure before this contract repair. The following exact-SHA run
@@ -50,8 +50,14 @@
   migration 0078 repeated the preflighted `notion_mirror` enum addition without `IF NOT EXISTS`;
   the regression test reproduced the non-idempotent SQL before the fix, then passed 5/5 afterward.
   The real migration runner also applied all migrations to a fresh PGlite database, and the DB
-  package typecheck, lint, targeted formatting, and diff checks pass. Replacement exact-SHA CI,
-  deployment, E2E, and live production verification remain before completion.
+  package typecheck, lint, targeted formatting, and diff checks pass. Exact-SHA CI then passed its
+  full build, lint, types, policy, coverage, tooling, and secret-scan gates. The replacement E2E
+  run made three shards green and reduced the fourth to one real navigation gap: an explicit
+  browser-offline signal arrived before the request-backed reachability state changed, allowing an
+  immediate link click to fall through to Next and replace the document. The focused regression
+  failed before combining that definitive negative signal with request reachability and passes
+  afterward. Replacement deployment, E2E, and live production verification remain before
+  completion.
 - **Learnings**: A clean textual rebase can still fail a semantic ratchet when one side replaces
   ledgered files. The production gate also correctly caught Notion being added to the guided
   catalog without updating the contract that enumerates every deployable provider. A feature can

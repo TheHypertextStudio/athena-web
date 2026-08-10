@@ -25,7 +25,11 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useS
 import AccountMenu, { type AccountMenuIdentity } from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import { CreateObjectProvider } from '@/components/create-object/create-object-provider';
+import { GlobalInitiativeComposer } from '@/components/initiatives/create-initiative';
+import { GlobalProgramComposer } from '@/components/programs/create-program';
+import { GlobalProjectComposer } from '@/components/projects/create-project';
 import { GlobalTaskComposer } from '@/components/tasks/create-task';
+import { GlobalTeamComposer } from '@/components/teams/create-team';
 import Agenda from '@/components/agenda/agenda';
 import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
@@ -790,6 +794,10 @@ function AppShellInner({
               <SettingsShell active={settingsSurface}>{children}</SettingsShell>
             )}
             <GlobalTaskComposer />
+            <GlobalProjectComposer />
+            <GlobalInitiativeComposer />
+            <GlobalProgramComposer />
+            <GlobalTeamComposer />
           </AppShell>
         </AthenaPanelProvider>
       </PageScrollProvider>

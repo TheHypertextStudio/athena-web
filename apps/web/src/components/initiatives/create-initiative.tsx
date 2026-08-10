@@ -30,16 +30,29 @@ import {
   type InitiativeStatus,
   type InitiativeUpdateCadence,
 } from '@docket/types';
-import { type JSX, useCallback, useState } from 'react';
+import { ActorPicker } from '@docket/ui/components';
+import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
+import { ChevronRight } from '@docket/ui/icons';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
 import { templateMerge, useComposerDraft } from '@/components/composer/use-composer-draft';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import {
+  type CreateInitiativeRequest,
+  useCreateObject,
+} from '@/components/create-object/create-object-provider';
+import { useCreationContext } from '@/components/create-object/creation-context';
+import { WorkspacePicker } from '@/components/create-object/workspace-picker';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
+import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { queryKeys } from '@/lib/query';
 
 import { InitiativeComposerPickers } from './initiative-form-pickers';
 
@@ -72,6 +85,24 @@ export const EMPTY_INITIATIVE_DRAFT: InitiativeDraft = {
   updateCadence: 'monthly',
 };
 
+/** Destination facts supplied by the shell-global Initiative host. */
+export interface InitiativeGlobalCreation {
+  /** The currently selected destination workspace. */
+  readonly targetWorkspaceId: string | null;
+  /** The immutable opening workspace used to scope launcher defaults. */
+  readonly initialWorkspaceId: string | null;
+  /** Whether destination data and permission facts have resolved successfully. */
+  readonly ready: boolean;
+  /** Application-owned destination read error copy. */
+  readonly loadError: string | null;
+  /** Whether the signed-in member may contribute in the destination. */
+  readonly canContribute: boolean;
+  /** The signed-in member's Actor id in the destination, for personal templates. */
+  readonly currentActorId: string | null;
+  /** Complete destination-owned invalidation, callback, and routing after creation. */
+  readonly onCreated: (initiative: InitiativeOut) => void;
+}
+
 /** Props for {@link CreateInitiativeDialog}. */
 export interface CreateInitiativeDialogProps {
   /** The org the initiative is created in (from the route). */
@@ -86,6 +117,8 @@ export interface CreateInitiativeDialogProps {
   onCreated: (initiative: InitiativeOut) => void;
   /** A template to apply on open, from a `?template=` compose request. */
   defaultTemplateId?: string | null;
+  /** Destination facts when mounted by the shell-global creation host. */
+  globalCreation?: InitiativeGlobalCreation;
 }
 
 /**
@@ -101,22 +134,39 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
   onOpenChange,
   onCreated,
   defaultTemplateId = null,
+  globalCreation,
 }: CreateInitiativeDialogProps): JSX.Element {
   const initiativeNounLower = initiativeNoun.toLowerCase();
+  const previousWorkspaceId = useRef(globalCreation?.targetWorkspaceId ?? null);
+  const contextualRequestDefaultsApply =
+    globalCreation === undefined ||
+    globalCreation.targetWorkspaceId === globalCreation.initialWorkspaceId;
+  const destinationReady = globalCreation?.ready ?? true;
 
-  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open);
+  const options = useComposerOptions(orgId, COMPOSER_INCLUDE, open && destinationReady);
   const { draft, setField, updateDraft } =
     useComposerDraft<InitiativeDraft>(EMPTY_INITIATIVE_DRAFT);
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
 
-  const canSubmit = draft.name.trim().length > 0;
+  // Keep copy, dates, and enum choices portable while dropping the prior workspace's person id.
+  useEffect(() => {
+    if (globalCreation === undefined) return;
+    if (previousWorkspaceId.current === globalCreation.targetWorkspaceId) return;
+    previousWorkspaceId.current = globalCreation.targetWorkspaceId;
+    setError(null);
+    updateDraft(() => ({ ownerId: null }));
+  }, [globalCreation, updateDraft]);
+
+  const canSubmit =
+    draft.name.trim().length > 0 && destinationReady && (globalCreation?.canContribute ?? true);
 
   /** Create the theme with all set properties, then hand it to the parent. */
   const submit = useCallback(async (): Promise<void> => {
     const trimmed = draft.name.trim();
-    if (trimmed.length === 0) return;
+    if (trimmed.length === 0 || !canSubmit) return;
     setCreating(true);
     setError(null);
     try {
@@ -145,8 +195,9 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
         return;
       }
       const created = await res.json();
+      globalCreation?.onCreated(created);
       onOpenChange(false);
-      onCreated(created);
+      if (globalCreation === undefined) onCreated(created);
     } catch (caught) {
       setError(
         userErrorMessage(caught, `Something went wrong creating the ${initiativeNounLower}.`),
@@ -154,29 +205,72 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     } finally {
       setCreating(false);
     }
-  }, [draft, orgId, initiativeNounLower, onOpenChange, onCreated]);
+  }, [canSubmit, draft, globalCreation, orgId, initiativeNounLower, onOpenChange, onCreated]);
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
       heading={`New ${initiativeNounLower}`}
+      contextRow={
+        globalCreation ? (
+          <>
+            <WorkspacePicker disabled={creating} />
+            <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+            <ActorPicker
+              options={options.actorOptions}
+              value={draft.ownerId}
+              onChange={(next) => {
+                setField('ownerId', next);
+              }}
+              placeholder="Set owner"
+              clearLabel="No owner"
+              ariaLabel="Owner"
+              disabled={creating || !destinationReady}
+            />
+            <ComposerTemplateControl
+              orgId={orgId}
+              kind="initiative"
+              open={open && destinationReady}
+              autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
+              currentActorId={globalCreation.currentActorId}
+              teamId={null}
+              leadingSeparator={
+                <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+              }
+              onApply={(chosen) => {
+                updateDraft((current) =>
+                  templateMerge(current, templatePatch(chosen.payload, 'initiative'), {
+                    document: 'description',
+                    labels: ['name', 'summary'],
+                  }),
+                );
+              }}
+              disabled={creating || !destinationReady}
+            />
+          </>
+        ) : undefined
+      }
+      templateSlotVisible={globalCreation === undefined ? legacyTemplateSlotVisible : undefined}
       templateSlot={
-        <ComposerTemplateControl
-          orgId={orgId}
-          kind="initiative"
-          open={open}
-          autoApplyId={defaultTemplateId}
-          onApply={(chosen) => {
-            updateDraft((current) =>
-              templateMerge(current, templatePatch(chosen.payload, 'initiative'), {
-                document: 'description',
-                labels: ['name', 'summary'],
-              }),
-            );
-          }}
-          disabled={creating}
-        />
+        globalCreation === undefined ? (
+          <ComposerTemplateControl
+            orgId={orgId}
+            kind="initiative"
+            open={open}
+            autoApplyId={defaultTemplateId}
+            onVisibilityChange={setLegacyTemplateSlotVisible}
+            onApply={(chosen) => {
+              updateDraft((current) =>
+                templateMerge(current, templatePatch(chosen.payload, 'initiative'), {
+                  document: 'description',
+                  labels: ['name', 'summary'],
+                }),
+              );
+            }}
+            disabled={creating}
+          />
+        ) : undefined
       }
       title={draft.name}
       onTitleChange={(next) => {
@@ -194,7 +288,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
         setField('description', next);
       }}
       bodyPlaceholder="Add a description…"
-      error={error}
+      error={error ?? globalCreation?.loadError ?? null}
       creating={creating}
       canSubmit={canSubmit}
       onSubmit={() => void submit()}
@@ -202,10 +296,14 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     >
       <InitiativeComposerPickers
         actorOptions={options.actorOptions}
-        ownerId={draft.ownerId}
-        onOwnerChange={(next) => {
-          setField('ownerId', next);
-        }}
+        {...(globalCreation === undefined
+          ? {
+              ownerId: draft.ownerId,
+              onOwnerChange: (next: string | null) => {
+                setField('ownerId', next);
+              },
+            }
+          : {})}
         status={draft.status}
         onStatusChange={(next) => {
           setField('status', next);
@@ -231,3 +329,95 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
     </ComposerShell>
   );
 });
+
+/** Mount the Initiative body only for an active shell-global Initiative request. */
+export function GlobalInitiativeComposer(): JSX.Element | null {
+  const { request, closeCreate } = useCreateObject();
+
+  if (request?.kind !== 'initiative') return null;
+
+  return <GlobalInitiativeComposerDialog request={request} closeCreate={closeCreate} />;
+}
+
+/** Props for the request-bound Initiative body. */
+interface GlobalInitiativeComposerDialogProps {
+  /** The active Initiative request. */
+  readonly request: CreateInitiativeRequest;
+  /** Close the shell-global create request. */
+  readonly closeCreate: () => void;
+}
+
+/** Apply destination vocabulary before resolving labels inside the Initiative body. */
+function GlobalInitiativeComposerDialog({
+  request,
+  closeCreate,
+}: GlobalInitiativeComposerDialogProps): JSX.Element {
+  const creation = useCreationContext();
+
+  return (
+    <VocabularyProvider skin={creation.vocabulary}>
+      <GlobalInitiativeComposerBody request={request} closeCreate={closeCreate} />
+    </VocabularyProvider>
+  );
+}
+
+/** Bind Initiative reads, writes, completion, and invalidation to the destination. */
+function GlobalInitiativeComposerBody({
+  request,
+  closeCreate,
+}: GlobalInitiativeComposerDialogProps): JSX.Element {
+  const creation = useCreationContext();
+  const { data: session } = useSession();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const initiativeNoun = useVocabulary('initiative');
+
+  const targetWorkspaceId = creation.targetWorkspaceId;
+  const initialWorkspaceId = request.initialWorkspaceId ?? targetWorkspaceId;
+  const initiativeOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
+  const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
+  const currentActorId =
+    creation.members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
+  const destinationReady =
+    targetWorkspaceId !== null &&
+    creation.workspace !== null &&
+    !creation.loading &&
+    !creation.permissions.loading &&
+    creation.loadError === null;
+
+  const invalidateTargetInitiativeCaches = useCallback(
+    (workspaceId: string | null): void => {
+      if (workspaceId === null) return;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(workspaceId) });
+    },
+    [queryClient],
+  );
+
+  return (
+    <CreateInitiativeDialog
+      orgId={initiativeOrgId}
+      initiativeNoun={initiativeNoun}
+      open
+      onOpenChange={(next) => {
+        if (!next) closeCreate();
+      }}
+      onCreated={() => undefined}
+      defaultTemplateId={targetIsOriginalWorkspace ? request.defaultTemplateId : null}
+      globalCreation={{
+        targetWorkspaceId,
+        initialWorkspaceId,
+        ready: destinationReady,
+        loadError: creation.loadError,
+        canContribute: creation.permissions.canContribute,
+        currentActorId,
+        onCreated: (initiative) => {
+          invalidateTargetInitiativeCaches(targetWorkspaceId);
+          if (targetIsOriginalWorkspace) request.onCreated?.(initiative);
+          if (!targetIsOriginalWorkspace || request.sameWorkspaceCompletion === 'open') {
+            router.push(`/orgs/${initiativeOrgId}/initiatives/${initiative.id}`);
+          }
+        },
+      }}
+    />
+  );
+}

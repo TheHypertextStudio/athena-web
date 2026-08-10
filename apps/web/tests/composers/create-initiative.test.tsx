@@ -1,24 +1,11 @@
-/**
- * Behavior tests for the program-create composer's visibility picker.
- *
- * @remarks
- * The properties panel on an existing program already explains what public/private *does*
- * (`@/components/pickers/options`'s `VISIBILITY_OPTIONS`), but the create composer used to
- * build its own bare `{ value, label }` pair with no supporting copy — the exact "two bare words"
- * gap the launch note named, just reachable from a different screen. These tests pin that the
- * create composer's Visibility picker uses the same explanatory options as the properties panel,
- * and that the chosen value still threads through to the create DTO.
- *
- * The RPC client is mocked; the actor roster (the only composer option this dialog loads) is fed
- * through the mocked `$get`.
- */
+/** Behavior tests for legacy and shell-global Initiative creation. */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
-  programPost,
+  initiativePost,
   membersGet,
   agentsGet,
   templatesGet,
@@ -30,7 +17,7 @@ const {
   const creationState: { current: unknown } = { current: null };
   const createObjectState: { current: unknown } = { current: null };
   return {
-    programPost: vi.fn(),
+    initiativePost: vi.fn(),
     membersGet: vi.fn(),
     agentsGet: vi.fn(),
     templatesGet: vi.fn(),
@@ -46,7 +33,7 @@ vi.mock('../../src/lib/api', () => ({
     v1: {
       orgs: {
         ':orgId': {
-          programs: { $post: programPost },
+          initiatives: { $post: initiativePost },
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           templates: { $get: templatesGet },
@@ -72,13 +59,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
-import {
-  CreateProgramDialog,
-  GlobalProgramComposer,
-} from '../../src/components/programs/create-program';
+import { GlobalInitiativeComposer } from '../../src/components/initiatives/create-initiative';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
-import { choosePickerOption } from '../support/pickers';
 
 const ORG_ID = '0RG00000000000000000000001';
 const OWNER_ID = 'ADA00000000000000000000002';
@@ -97,7 +80,7 @@ const MEMBERS = [
 ];
 
 beforeEach(() => {
-  programPost.mockReset();
+  initiativePost.mockReset();
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
   templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
@@ -118,29 +101,8 @@ afterEach(() => {
   cleanup();
 });
 
-/** Render the composer open; returns the spy callbacks. */
-function renderComposer() {
-  const onCreated = vi.fn();
-  const onOpenChange = vi.fn();
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={client}>
-      <CreateProgramDialog
-        orgId={ORG_ID}
-        programNoun="Program"
-        open
-        onOpenChange={onOpenChange}
-        onCreated={onCreated}
-      />
-    </QueryClientProvider>,
-  );
-  return { onCreated, onOpenChange };
-}
-
-/** Render a request-bound global Program composer with a locally switchable destination. */
-function renderGlobalProgram({
+/** Render a request-bound global Initiative composer with a locally switchable destination. */
+function renderGlobalInitiative({
   request = {},
   destination = {},
 }: {
@@ -149,7 +111,7 @@ function renderGlobalProgram({
     readonly workspaceResolved?: boolean;
     readonly loading?: boolean;
     readonly loadError?: string | null;
-    readonly canManage?: boolean;
+    readonly canContribute?: boolean;
     readonly permissionsLoading?: boolean;
   };
 } = {}) {
@@ -160,7 +122,7 @@ function renderGlobalProgram({
   const onCreated = vi.fn();
   createObjectState.current = {
     request: {
-      kind: 'program',
+      kind: 'initiative',
       initialWorkspaceId: ORG_ID,
       sameWorkspaceCompletion: 'stay',
       onCreated,
@@ -207,15 +169,15 @@ function renderGlobalProgram({
       vocabulary: { preset: targetIsOriginal ? 'startup' : 'agency', overrides: {} },
       defaultTeamId: null,
       permissions: {
-        canContribute: true,
-        canManage: destination.canManage ?? true,
-        canCreate: destination.canManage ?? true,
+        canContribute: destination.canContribute ?? true,
+        canManage: true,
+        canCreate: destination.canContribute ?? true,
         loading: destination.permissionsLoading ?? false,
       },
       loading: destination.loading ?? false,
       loadError: destination.loadError ?? null,
     };
-    return <GlobalProgramComposer />;
+    return <GlobalInitiativeComposer />;
   }
 
   render(
@@ -226,8 +188,8 @@ function renderGlobalProgram({
   return { client, closeCreate, onCreated };
 }
 
-/** Make a Program template fixture for selected-person and no-team filtering. */
-function programTemplate(
+/** Make an Initiative template fixture for scope-filter behavior. */
+function initiativeTemplate(
   name: string,
   scope: 'organization' | 'personal' | 'team',
   ownerActorId: string | null,
@@ -236,34 +198,34 @@ function programTemplate(
   return {
     id: `${name.replaceAll(' ', '_')}_id`,
     organizationId: ORG_ID,
-    targetType: 'program',
+    targetType: 'initiative',
     name,
     description: null,
     scope,
     ownerActorId,
     teamId,
-    payload: { targetType: 'program' },
+    payload: { targetType: 'initiative' },
     isSeed: false,
     createdAt: '2026-01-01T00:00:00Z',
   };
 }
 
-describe('CreateProgramDialog — visibility picker', () => {
-  it('renders Workspace, Owner, then Template above the title without a duplicate Owner', async () => {
+describe('GlobalInitiativeComposer', () => {
+  it('renders Workspace, Owner, then Template above the title with no duplicate Owner', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [
-          programTemplate('My program', 'personal', OWNER_ID, null),
-          programTemplate('Team program', 'team', OWNER_ID, 'TEAM0000000000000000000005'),
+          initiativeTemplate('My theme', 'personal', OWNER_ID, null),
+          initiativeTemplate('Team theme', 'team', OWNER_ID, 'TEAM0000000000000000000005'),
         ],
       }),
     );
-    renderGlobalProgram();
+    renderGlobalInitiative();
 
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     const owner = screen.getByRole('button', { name: /Owner/ });
     const template = await screen.findByRole('button', { name: 'Template' });
-    const title = screen.getByLabelText('Program name');
+    const title = screen.getByLabelText('Initiative name');
 
     expect(
       workspace.compareDocumentPosition(owner) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -274,30 +236,30 @@ describe('CreateProgramDialog — visibility picker', () => {
     expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
 
     fireEvent.pointerDown(template, { button: 0, ctrlKey: false });
-    expect(await screen.findByText('My program')).toBeVisible();
-    expect(screen.queryByText('Team program')).toBeNull();
+    expect(await screen.findByText('My theme')).toBeVisible();
+    expect(screen.queryByText('Team theme')).toBeNull();
   });
 
-  it('disables submission when the member cannot manage the destination workspace', () => {
-    renderGlobalProgram({ destination: { canManage: false } });
-    fireEvent.change(screen.getByLabelText('Program name'), { target: { value: 'Blocked' } });
+  it('disables submission when the member cannot contribute in the destination', () => {
+    renderGlobalInitiative({ destination: { canContribute: false } });
+    fireEvent.change(screen.getByLabelText('Initiative name'), { target: { value: 'Blocked' } });
 
-    expect(screen.getByRole('button', { name: 'Create Program' })).toBeDisabled();
-    expect(programPost).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Create Initiative' })).toBeDisabled();
+    expect(initiativePost).not.toHaveBeenCalled();
   });
 
   it('retargets the POST while preserving portable fields and clearing the prior owner', async () => {
-    programPost.mockResolvedValue(
-      jsonResponse(true, { id: 'program_target', name: 'Portable program' }),
+    initiativePost.mockResolvedValue(
+      jsonResponse(true, { id: 'initiative_target', name: 'Portable initiative' }),
     );
-    const { client, closeCreate, onCreated } = renderGlobalProgram();
+    const { client, closeCreate, onCreated } = renderGlobalInitiative();
     const invalidate = vi.spyOn(client, 'invalidateQueries');
 
     await waitFor(() => {
       expect(membersGet).toHaveBeenCalled();
     });
-    fireEvent.change(screen.getByLabelText('Program name'), {
-      target: { value: 'Portable program' },
+    fireEvent.change(screen.getByLabelText('Initiative name'), {
+      target: { value: 'Portable initiative' },
     });
     fireEvent.change(screen.getByLabelText('One-sentence summary'), {
       target: { value: 'Keep this summary.' },
@@ -309,69 +271,37 @@ describe('CreateProgramDialog — visibility picker', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Owner/ }));
     fireEvent.click(await screen.findByText('Ada Lovelace'));
-    fireEvent.click(screen.getByRole('button', { name: 'Visibility — Public' }));
-    choosePickerOption(/Private/);
+    fireEvent.click(screen.getByRole('button', { name: 'Priority — No priority' }));
+    fireEvent.click(await screen.findByText('High priority'));
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
       target: { value: TARGET_ORG_ID },
     });
     await waitFor(() => {
       expect(membersGet).toHaveBeenCalledWith({ param: { orgId: TARGET_ORG_ID } });
-      expect(screen.getByRole('button', { name: 'Create Retainer' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Create Engagement' })).toBeEnabled();
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Create Retainer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Engagement' }));
 
     await waitFor(() => {
-      expect(programPost).toHaveBeenCalledTimes(1);
+      expect(initiativePost).toHaveBeenCalledTimes(1);
     });
-    expect(programPost).toHaveBeenCalledWith(
+    expect(initiativePost).toHaveBeenCalledWith(
       expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
     );
-    const body = firstJson(programPost.mock.calls);
+    const body = firstJson(initiativePost.mock.calls);
     expect(body).toMatchObject({
-      name: 'Portable program',
+      name: 'Portable initiative',
       summary: 'Keep this summary.',
       description: 'Keep this body.',
       status: 'active',
-      visibility: 'private',
+      priority: 'high',
+      updateCadence: 'monthly',
     });
     expect(body).not.toHaveProperty('ownerId');
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.programs(TARGET_ORG_ID) });
-    expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/programs/program_target`);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.initiatives(TARGET_ORG_ID) });
+    expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/initiatives/initiative_target`);
     expect(closeCreate).toHaveBeenCalledOnce();
     expect(onCreated).not.toHaveBeenCalled();
-  });
-
-  it('explains each choice in the menu instead of offering two bare words', async () => {
-    renderComposer();
-
-    fireEvent.click(screen.getByRole('button', { name: /Visibility/ }));
-    const list = await screen.findByRole('listbox');
-    const options = within(list).getAllByRole('option');
-
-    expect(options).toHaveLength(2);
-    expect(options[0]).toHaveTextContent('Public');
-    expect(options[0]).toHaveTextContent('Anyone in this workspace can find it in search.');
-    expect(options[1]).toHaveTextContent('Private');
-    expect(options[1]).toHaveTextContent('Kept out of search for anyone without access to it.');
-  });
-
-  it('defaults to public and threads a chosen visibility through the create DTO', async () => {
-    programPost.mockResolvedValue(jsonResponse(true, { id: 'prog_1', name: 'Ops' }));
-    const { onCreated } = renderComposer();
-
-    fireEvent.change(screen.getByLabelText('Program name'), { target: { value: 'Ops' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Visibility — Public' }));
-    choosePickerOption(/Private/);
-    fireEvent.click(screen.getByRole('button', { name: 'Create Program' }));
-
-    await waitFor(() => {
-      expect(programPost).toHaveBeenCalledTimes(1);
-    });
-    expect(firstJson(programPost.mock.calls)).toMatchObject({
-      name: 'Ops',
-      visibility: 'private',
-    });
-    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'prog_1' }));
   });
 });

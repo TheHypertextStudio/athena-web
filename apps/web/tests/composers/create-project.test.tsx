@@ -15,14 +15,36 @@
 import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { type JSX, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { projectPost, membersGet, agentsGet, initiativesGet } = vi.hoisted(() => ({
-  projectPost: vi.fn(),
-  membersGet: vi.fn(),
-  agentsGet: vi.fn(),
-  initiativesGet: vi.fn(),
-}));
+const {
+  projectPost,
+  membersGet,
+  agentsGet,
+  initiativesGet,
+  programsGet,
+  templatesGet,
+  creationState,
+  createObjectState,
+  sessionState,
+  routerPush,
+} = vi.hoisted(() => {
+  const creationState: { current: unknown } = { current: null };
+  const createObjectState: { current: unknown } = { current: null };
+  return {
+    projectPost: vi.fn(),
+    membersGet: vi.fn(),
+    agentsGet: vi.fn(),
+    initiativesGet: vi.fn(),
+    programsGet: vi.fn(),
+    templatesGet: vi.fn(),
+    creationState,
+    createObjectState,
+    sessionState: { data: { user: { id: 'user_1' } }, isPending: false },
+    routerPush: vi.fn(),
+  };
+});
 
 vi.mock('../../src/lib/api', () => ({
   api: {
@@ -33,13 +55,35 @@ vi.mock('../../src/lib/api', () => ({
           members: { $get: membersGet },
           agents: { $get: agentsGet },
           initiatives: { $get: initiativesGet },
+          programs: { $get: programsGet },
+          templates: { $get: templatesGet },
         },
       },
     },
   },
 }));
 
-import { CreateProjectDialog } from '../../src/components/projects/create-project';
+vi.mock('../../src/components/create-object/create-object-provider', () => ({
+  useCreateObject: () => createObjectState.current,
+}));
+
+vi.mock('../../src/components/create-object/creation-context', () => ({
+  useCreationContext: () => creationState.current,
+}));
+
+vi.mock('../../src/lib/auth-client', () => ({
+  useSession: () => sessionState,
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: routerPush }),
+}));
+
+import {
+  CreateProjectDialog,
+  GlobalProjectComposer,
+} from '../../src/components/projects/create-project';
+import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
 
 // Valid ULID-shaped ids (no I/L/O/U) so the composer's `*.parse(...)` guards accept them.
@@ -47,6 +91,11 @@ const ORG_ID = '0RG00000000000000000000001';
 const TEAM_ID = 'TEAM0000000000000000000002';
 const GRACE_ID = 'GRC00000000000000000000003';
 const Q3_ID = 'Q3000000000000000000000004';
+const PROGRAM_ID = 'PR0GRAM0000000000000000005';
+const TARGET_ORG_ID = '0RG00000000000000000000006';
+const TARGET_TEAM_ID = 'TEAM0000000000000000000007';
+const TARGET_ACTOR_ID = 'ADA00000000000000000000008';
+const SECOND_TEAM_ID = 'TEAM0000000000000000000009';
 
 /** The single (implicit) team the composer creates projects in. */
 const TEAMS: readonly TeamOut[] = [
@@ -82,11 +131,53 @@ const INITIATIVES = [
   },
 ];
 
+const PROGRAMS = [
+  {
+    id: PROGRAM_ID,
+    organizationId: ORG_ID,
+    name: 'Platform program',
+    status: 'active',
+    createdAt: '2026-01-01T00:00:00Z',
+  },
+];
+
+const TARGET_TEAMS: readonly TeamOut[] = [
+  {
+    id: TeamId.parse(TARGET_TEAM_ID),
+    organizationId: OrganizationId.parse(TARGET_ORG_ID),
+    name: 'Delivery',
+    key: 'DEL',
+    summary: null,
+    triageEnabled: true,
+  },
+];
+
+const GLOBAL_PROJECT_TEAMS: readonly TeamOut[] = [
+  ...TEAMS,
+  {
+    id: TeamId.parse(SECOND_TEAM_ID),
+    organizationId: OrganizationId.parse(ORG_ID),
+    name: 'Platform',
+    key: 'PLT',
+    summary: null,
+    triageEnabled: true,
+  },
+];
+
 beforeEach(() => {
   projectPost.mockReset();
   membersGet.mockReset().mockResolvedValue(jsonResponse(true, { items: MEMBERS }));
   agentsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
   initiativesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: INITIATIVES }));
+  programsGet.mockReset().mockResolvedValue(jsonResponse(true, { items: PROGRAMS }));
+  templatesGet.mockReset().mockResolvedValue(jsonResponse(true, { items: [] }));
+  createObjectState.current = {
+    request: null,
+    closeCreate: vi.fn(),
+    openCreate: vi.fn(),
+  };
+  creationState.current = null;
+  routerPush.mockReset();
   Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -123,7 +214,317 @@ function renderComposer() {
   return { onCreated, onOpenChange };
 }
 
+/** Render the global Project host with a destination that can be changed without moving the page. */
+function renderGlobalProject({
+  request = {},
+  destination = {},
+}: {
+  readonly request?: Record<string, unknown>;
+  readonly destination?: {
+    readonly workspaceResolved?: boolean;
+    readonly loading?: boolean;
+    readonly loadError?: string | null;
+    readonly canContribute?: boolean;
+    readonly permissionsLoading?: boolean;
+  };
+} = {}) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const closeCreate = vi.fn();
+  const onCreated = vi.fn();
+  createObjectState.current = {
+    request: {
+      kind: 'project',
+      initialWorkspaceId: ORG_ID,
+      sameWorkspaceCompletion: 'stay',
+      onCreated,
+      ...request,
+    },
+    closeCreate,
+    openCreate: vi.fn(),
+  };
+
+  function Harness(): JSX.Element {
+    const [targetWorkspaceId, setTargetWorkspaceId] = useState(ORG_ID);
+    const targetIsOriginal = targetWorkspaceId === ORG_ID;
+    const targetTeams = targetIsOriginal ? GLOBAL_PROJECT_TEAMS : TARGET_TEAMS;
+    creationState.current = {
+      workspaces: [
+        { id: ORG_ID, name: 'Alpha workspace', slug: 'alpha', avatar: null, isPersonal: true },
+        {
+          id: TARGET_ORG_ID,
+          name: 'Bravo workspace',
+          slug: 'bravo',
+          avatar: null,
+          isPersonal: false,
+        },
+      ],
+      targetWorkspaceId,
+      setTargetWorkspaceId,
+      workspace:
+        destination.workspaceResolved === false
+          ? null
+          : {
+              id: targetWorkspaceId,
+              name: targetIsOriginal ? 'Alpha workspace' : 'Bravo workspace',
+              vocabulary: { preset: targetIsOriginal ? 'startup' : 'agency', overrides: {} },
+            },
+      teams: targetTeams,
+      members: [
+        {
+          actorId: targetIsOriginal ? GRACE_ID : TARGET_ACTOR_ID,
+          organizationId: targetWorkspaceId,
+          displayName: targetIsOriginal ? 'Grace Hopper' : 'Ada Lovelace',
+          userId: 'user_1',
+        },
+      ],
+      roles: [],
+      vocabulary: { preset: targetIsOriginal ? 'startup' : 'agency', overrides: {} },
+      defaultTeamId: targetTeams[0]?.id ?? null,
+      permissions: {
+        canContribute: destination.canContribute ?? true,
+        canManage: true,
+        canCreate: destination.canContribute ?? true,
+        loading: destination.permissionsLoading ?? false,
+      },
+      loading: destination.loading ?? false,
+      loadError: destination.loadError ?? null,
+    };
+    return <GlobalProjectComposer />;
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>,
+  );
+  return { client, closeCreate, onCreated };
+}
+
+/** Resolve a provider-delayed opening workspace without changing the intended destination. */
+function renderDelayedOpeningProject() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+
+  function Harness(): JSX.Element {
+    const [resolved, setResolved] = useState(false);
+    creationState.current = {
+      workspaces: [
+        { id: ORG_ID, name: 'Alpha workspace', slug: 'alpha', avatar: null, isPersonal: true },
+      ],
+      targetWorkspaceId: resolved ? ORG_ID : null,
+      setTargetWorkspaceId: vi.fn(),
+      workspace: resolved
+        ? {
+            id: ORG_ID,
+            name: 'Alpha workspace',
+            vocabulary: { preset: 'startup', overrides: {} },
+          }
+        : null,
+      teams: GLOBAL_PROJECT_TEAMS,
+      members: [],
+      roles: [],
+      vocabulary: { preset: 'startup', overrides: {} },
+      defaultTeamId: TEAM_ID,
+      permissions: {
+        canContribute: true,
+        canManage: true,
+        canCreate: true,
+        loading: !resolved,
+      },
+      loading: !resolved,
+      loadError: null,
+    };
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => {
+            setResolved(true);
+          }}
+        >
+          Resolve opening workspace
+        </button>
+        <CreateProjectDialog
+          orgId={ORG_ID}
+          projectNoun="Project"
+          teams={GLOBAL_PROJECT_TEAMS}
+          defaultTeamId={TEAM_ID}
+          teamsLoading={!resolved}
+          defaultProgramId={PROGRAM_ID}
+          open
+          onOpenChange={() => undefined}
+          onCreated={() => undefined}
+          globalCreation={{
+            targetWorkspaceId: resolved ? ORG_ID : null,
+            initialWorkspaceId: resolved ? ORG_ID : null,
+            ready: resolved,
+            loadError: null,
+            canContribute: true,
+            currentActorId: null,
+            onCreated: () => undefined,
+          }}
+        />
+      </>
+    );
+  }
+
+  render(
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>,
+  );
+}
+
+/** Make a project template fixture without coupling these tests to transport parsing. */
+function projectTemplate(
+  name: string,
+  scope: 'organization' | 'personal' | 'team',
+  ownerActorId: string | null,
+  teamId: string | null,
+) {
+  return {
+    id: `${name.replaceAll(' ', '_')}_id`,
+    organizationId: ORG_ID,
+    targetType: 'project',
+    name,
+    description: null,
+    scope,
+    ownerActorId,
+    teamId,
+    payload: { targetType: 'project' },
+    isSeed: false,
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+}
+
 describe('CreateProjectDialog — robust composer', () => {
+  it('renders Workspace, Program, then Template above the title without duplicating Program below', async () => {
+    templatesGet.mockResolvedValue(
+      jsonResponse(true, {
+        items: [projectTemplate('General project', 'team', GRACE_ID, TEAM_ID)],
+      }),
+    );
+    renderGlobalProject();
+
+    const workspace = screen.getByRole('combobox', { name: 'Workspace' });
+    const program = screen.getByRole('button', { name: /Program/ });
+    const template = await screen.findByRole('button', { name: 'Template' });
+    const title = screen.getByLabelText('Project name');
+
+    expect(
+      workspace.compareDocumentPosition(program) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      program.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: /Program/ })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: /Team/ })).toBeVisible();
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
+    expect(workspace.closest('div.flex.flex-wrap')).toHaveClass('flex-wrap', 'justify-start');
+  });
+
+  it('disables submission while the target permission is unresolved or denied', () => {
+    renderGlobalProject({ destination: { canContribute: false } });
+
+    fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Blocked' } });
+
+    expect(screen.getByRole('button', { name: 'Create Project' })).toBeDisabled();
+    expect(projectPost).not.toHaveBeenCalled();
+  });
+
+  it('preserves an opening Program default when the delayed shell workspace resolves', async () => {
+    projectPost.mockResolvedValue(
+      jsonResponse(true, { id: 'project_delayed', name: 'Delayed project' }),
+    );
+    renderDelayedOpeningProject();
+
+    fireEvent.click(screen.getByText('Resolve opening workspace'));
+    await waitFor(() => {
+      expect(programsGet).toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /Program — Platform program/ })).toBeVisible();
+    });
+    fireEvent.change(screen.getByLabelText('Project name'), {
+      target: { value: 'Delayed project' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectPost).toHaveBeenCalledTimes(1);
+    });
+    expect(firstJson(projectPost.mock.calls)).toMatchObject({ programId: PROGRAM_ID });
+  });
+
+  it('posts portable content to the selected workspace and clears all prior workspace references', async () => {
+    projectPost.mockResolvedValue(
+      jsonResponse(true, { id: 'project_target', name: 'Portable project' }),
+    );
+    const { client, closeCreate, onCreated } = renderGlobalProject({
+      request: { defaultProgramId: PROGRAM_ID },
+    });
+    const invalidate = vi.spyOn(client, 'invalidateQueries');
+
+    await waitFor(() => {
+      expect(membersGet).toHaveBeenCalled();
+      expect(initiativesGet).toHaveBeenCalled();
+    });
+    fireEvent.change(screen.getByLabelText('Project name'), {
+      target: { value: 'Portable project' },
+    });
+    fireEvent.change(screen.getByLabelText('One-sentence summary'), {
+      target: { value: 'Keep the portable summary.' },
+    });
+    const description = screen.getByLabelText('Add a description…');
+    await act(async () => {
+      description.innerHTML = '<p>Keep the portable body.</p>';
+      fireEvent.input(description);
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Lead/ }));
+    fireEvent.click(await screen.findByText('Grace Hopper'));
+    const initiatives = screen.getByRole('button', { name: /Initiatives/ });
+    fireEvent.click(initiatives);
+    fireEvent.click(await screen.findByText('Q3 Reliability'));
+    fireEvent.click(initiatives);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Workspace' }), {
+      target: { value: TARGET_ORG_ID },
+    });
+
+    await waitFor(() => {
+      expect(programsGet).toHaveBeenCalledWith(
+        expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+      );
+      expect(screen.getByRole('button', { name: 'Create Project' })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Project' }));
+
+    await waitFor(() => {
+      expect(projectPost).toHaveBeenCalledTimes(1);
+    });
+    expect(projectPost).toHaveBeenCalledWith(
+      expect.objectContaining({ param: { orgId: TARGET_ORG_ID } }),
+    );
+    const body = firstJson(projectPost.mock.calls);
+    expect(body).toMatchObject({
+      name: 'Portable project',
+      summary: 'Keep the portable summary.',
+      description: 'Keep the portable body.',
+      teamId: TARGET_TEAM_ID,
+      status: 'planned',
+    });
+    expect(body).not.toHaveProperty('leadId');
+    expect(body).not.toHaveProperty('programId');
+    expect(body).not.toHaveProperty('initiativeIds');
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projects(TARGET_ORG_ID) });
+    expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/projects/project_target`);
+    expect(closeCreate).toHaveBeenCalledOnce();
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
   it('sends the title, description, and default team through the create DTO', async () => {
     projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_1', name: 'Atlas' }));
     const { onCreated } = renderComposer();

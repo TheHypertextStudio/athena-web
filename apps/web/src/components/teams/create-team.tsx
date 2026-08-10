@@ -17,15 +17,25 @@
  * new row via {@link CreateTeamDialogProps.onCreated}; this component closes the dialog itself.
  */
 import type { TeamOut } from '@docket/types';
+import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { Check } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Input } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useId, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { withComposerReset } from '@/components/composer/reset-on-open';
+import {
+  type CreateTeamRequest,
+  useCreateObject,
+} from '@/components/create-object/create-object-provider';
+import { useCreationContext } from '@/components/create-object/creation-context';
+import { WorkspacePicker } from '@/components/create-object/workspace-picker';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { queryKeys } from '@/lib/query';
 
 /** The longest auto-suggested key length (matches typical Linear-style team prefixes). */
 const MAX_SUGGESTED_KEY = 5;
@@ -38,6 +48,18 @@ function suggestKey(name: string): string {
     .slice(0, MAX_SUGGESTED_KEY);
 }
 
+/** Destination facts supplied by the shell-global Team host. */
+export interface TeamGlobalCreation {
+  /** Whether destination data and permission facts have resolved successfully. */
+  readonly ready: boolean;
+  /** Application-owned destination read error copy. */
+  readonly loadError: string | null;
+  /** Whether the signed-in member may manage the destination. */
+  readonly canManage: boolean;
+  /** Complete destination-owned invalidation, callback, and routing after creation. */
+  readonly onCreated: (team: TeamOut) => void;
+}
+
 /** Props for {@link CreateTeamDialog}. */
 export interface CreateTeamDialogProps {
   /** The org the team is created in (from the route). */
@@ -48,6 +70,10 @@ export interface CreateTeamDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Notify the parent that a team was created, so it can prepend the row. */
   onCreated: (team: TeamOut) => void;
+  /** Destination vocabulary label; omitted by legacy mounts to preserve their current API. */
+  teamNoun?: string;
+  /** Destination facts when mounted by the shell-global creation host. */
+  globalCreation?: TeamGlobalCreation;
 }
 
 /**
@@ -61,9 +87,13 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
   open,
   onOpenChange,
   onCreated,
+  teamNoun = 'Team',
+  globalCreation,
 }: CreateTeamDialogProps): JSX.Element {
   const keyFieldId = useId();
   const guidanceFieldId = useId();
+  const teamNounLower = teamNoun.toLowerCase();
+  const destinationReady = globalCreation?.ready ?? true;
 
   const [name, setName] = useState('');
   const [key, setKey] = useState('');
@@ -85,7 +115,11 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
     [keyDirty],
   );
 
-  const canSubmit = name.trim().length > 0 && key.trim().length > 0;
+  const canSubmit =
+    name.trim().length > 0 &&
+    key.trim().length > 0 &&
+    destinationReady &&
+    (globalCreation?.canManage ?? true);
 
   /** Create the team with the default workflow, then prepend it via the parent. */
   const submit = useCallback(async (): Promise<void> => {
@@ -109,17 +143,18 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
       if (!res.ok) {
         setError(
           userErrorMessage(
-            await readProblemError(res, 'Could not create the team.'),
-            'Could not create the team.',
+            await readProblemError(res, `Could not create the ${teamNounLower}.`),
+            `Could not create the ${teamNounLower}.`,
           ),
         );
         return;
       }
       const created = await res.json();
+      globalCreation?.onCreated(created);
       onOpenChange(false);
-      onCreated(created);
+      if (globalCreation === undefined) onCreated(created);
     } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong creating the team.'));
+      setError(userErrorMessage(caught, `Something went wrong creating the ${teamNounLower}.`));
     } finally {
       setCreating(false);
     }
@@ -134,35 +169,38 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
     orgId,
     onOpenChange,
     onCreated,
+    globalCreation,
+    teamNounLower,
   ]);
 
   return (
     <ComposerShell
       open={open}
       onOpenChange={onOpenChange}
-      heading="New team"
+      heading={`New ${teamNounLower}`}
+      contextRow={globalCreation ? <WorkspacePicker disabled={creating} /> : undefined}
       title={name}
       onTitleChange={onNameChange}
-      titlePlaceholder="Team name"
+      titlePlaceholder={`${teamNoun} name`}
       summary={summary}
       onSummaryChange={setSummary}
       summaryPlaceholder="One-sentence summary"
       summaryMaxLength={280}
       body={description}
       onBodyChange={setDescription}
-      bodyPlaceholder="What does this team own? (optional)"
-      error={error}
+      bodyPlaceholder={`What does this ${teamNounLower} own? (optional)`}
+      error={error ?? globalCreation?.loadError ?? null}
       creating={creating}
       canSubmit={canSubmit}
       onSubmit={() => void submit()}
-      submitLabel="Create team"
+      submitLabel={`Create ${teamNounLower}`}
     >
       <div className="flex flex-1 flex-wrap items-end gap-x-4 gap-y-3">
         <label htmlFor={keyFieldId} className="flex flex-col gap-1.5">
           <span className="text-on-surface-variant text-xs font-medium">Key</span>
           <Input
             id={keyFieldId}
-            aria-label="Team key"
+            aria-label={`${teamNoun} key`}
             placeholder="ENG"
             value={key}
             maxLength={10}
@@ -218,3 +256,86 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
     </ComposerShell>
   );
 });
+
+/** Mount the Team body only for an active shell-global Team request. */
+export function GlobalTeamComposer(): JSX.Element | null {
+  const { request, closeCreate } = useCreateObject();
+
+  if (request?.kind !== 'team') return null;
+
+  return <GlobalTeamComposerDialog request={request} closeCreate={closeCreate} />;
+}
+
+/** Props for the request-bound Team body. */
+interface GlobalTeamComposerDialogProps {
+  /** The active Team request. */
+  readonly request: CreateTeamRequest;
+  /** Close the shell-global create request. */
+  readonly closeCreate: () => void;
+}
+
+/** Apply destination vocabulary before resolving labels inside the Team body. */
+function GlobalTeamComposerDialog({
+  request,
+  closeCreate,
+}: GlobalTeamComposerDialogProps): JSX.Element {
+  const creation = useCreationContext();
+
+  return (
+    <VocabularyProvider skin={creation.vocabulary}>
+      <GlobalTeamComposerBody request={request} closeCreate={closeCreate} />
+    </VocabularyProvider>
+  );
+}
+
+/** Bind Team writes, completion, and invalidation to the selected destination. */
+function GlobalTeamComposerBody({
+  request,
+  closeCreate,
+}: GlobalTeamComposerDialogProps): JSX.Element {
+  const creation = useCreationContext();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const teamNoun = useVocabulary('team');
+
+  const targetWorkspaceId = creation.targetWorkspaceId;
+  const initialWorkspaceId = request.initialWorkspaceId ?? targetWorkspaceId;
+  const teamOrgId = targetWorkspaceId ?? initialWorkspaceId ?? '';
+  const targetIsOriginalWorkspace = targetWorkspaceId === initialWorkspaceId;
+  const destinationReady =
+    targetWorkspaceId !== null &&
+    creation.workspace !== null &&
+    !creation.loading &&
+    !creation.permissions.loading &&
+    creation.loadError === null;
+
+  const invalidateTargetTeamCaches = useCallback(
+    (workspaceId: string | null): void => {
+      if (workspaceId === null) return;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.teams(workspaceId) });
+    },
+    [queryClient],
+  );
+
+  return (
+    <CreateTeamDialog
+      orgId={teamOrgId}
+      teamNoun={teamNoun}
+      open
+      onOpenChange={(next) => {
+        if (!next) closeCreate();
+      }}
+      onCreated={() => undefined}
+      globalCreation={{
+        ready: destinationReady,
+        loadError: creation.loadError,
+        canManage: creation.permissions.canManage,
+        onCreated: (team) => {
+          invalidateTargetTeamCaches(targetWorkspaceId);
+          if (targetIsOriginalWorkspace) request.onCreated?.(team);
+          router.push(`/orgs/${teamOrgId}/teams`);
+        },
+      }}
+    />
+  );
+}

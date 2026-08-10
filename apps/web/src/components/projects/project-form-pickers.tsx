@@ -54,6 +54,8 @@ export interface ProjectComposerReferenceAxes {
   programId: string | null;
   /** Report a changed program. */
   onProgramChange: (id: string | null) => void;
+  /** Whether Program remains in the lower strip instead of being promoted into global context. */
+  showProgram?: boolean;
   /** The planned start date, or null. */
   startDate: string | null;
   /** The planned target date, or null. */
@@ -140,17 +142,19 @@ export function ProjectComposerPickers({
             ariaLabel="Lead"
             disabled={disabled}
           />
-          <EntityPicker
-            options={references.programOptions}
-            value={references.programId}
-            onChange={references.onProgramChange}
-            placeholder={`Set ${programLabel.toLowerCase()}`}
-            triggerIcon={<Layers className="text-on-surface-variant size-4" />}
-            clearLabel={`No ${programLabel.toLowerCase()}`}
-            searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
-            ariaLabel={programLabel}
-            disabled={disabled}
-          />
+          {references.showProgram !== false ? (
+            <EntityPicker
+              options={references.programOptions}
+              value={references.programId}
+              onChange={references.onProgramChange}
+              placeholder={`Set ${programLabel.toLowerCase()}`}
+              triggerIcon={<Layers className="text-on-surface-variant size-4" />}
+              clearLabel={`No ${programLabel.toLowerCase()}`}
+              searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
+              ariaLabel={programLabel}
+              disabled={disabled}
+            />
+          ) : null}
           <DateRangePicker
             value={{ start: references.startDate, end: references.targetDate }}
             onChange={references.onTimelineChange}

@@ -2,15 +2,16 @@
 
 import * as React from 'react';
 
-import { ChevronDown, X } from '../../icons';
+import { ChevronDown, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-  focusRing,
+  CONTROL,
+  fieldSurface,
+  menuFocusRing,
+  menuItemClass,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -26,76 +27,217 @@ interface OverflowMenuProps {
   readonly onClose: (key: string) => void;
 }
 
-/** OverflowMenu renders the shell navigation UI control for its parent workflow. */
+/** Return whether a keydown is the cross-platform open-document switcher shortcut. */
+function isOpenDocumentsShortcut(event: KeyboardEvent): boolean {
+  return (
+    (event.metaKey || event.ctrlKey) &&
+    event.shiftKey &&
+    !event.altKey &&
+    !event.repeat &&
+    event.key.toLowerCase() === 'a'
+  );
+}
+
+/** OverflowMenu renders the shell's searchable open-document switcher. */
 export function OverflowMenu({
   tabs,
   activeKey,
   renderLink,
   onClose,
 }: OverflowMenuProps): React.JSX.Element {
+  const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState('');
+  const [shortcutLabel, setShortcutLabel] = React.useState('Ctrl ⇧ A');
+  const searchRef = React.useRef<HTMLInputElement>(null);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const pendingCloseIndexRef = React.useRef<number | null>(null);
+
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const filteredTabs = React.useMemo(
+    () =>
+      normalizedQuery.length === 0
+        ? tabs
+        : tabs.filter((tab) => tab.title.toLocaleLowerCase().includes(normalizedQuery)),
+    [normalizedQuery, tabs],
+  );
+
+  const resultLinks = React.useCallback((): HTMLAnchorElement[] => {
+    const rows = contentRef.current?.querySelectorAll<HTMLElement>('[data-document-result]') ?? [];
+    return Array.from(rows).flatMap((row) => {
+      const link = row.querySelector<HTMLAnchorElement>('a[href]');
+      return link ? [link] : [];
+    });
+  }, []);
+
+  React.useEffect(() => {
+    setShortcutLabel(/Mac|iPhone|iPad/.test(navigator.userAgent) ? '⌘ ⇧ A' : 'Ctrl ⇧ A');
+  }, []);
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (!isOpenDocumentsShortcut(event)) return;
+      event.preventDefault();
+      setOpen(true);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  React.useLayoutEffect(() => {
+    const pendingIndex = pendingCloseIndexRef.current;
+    if (pendingIndex === null) return;
+    pendingCloseIndexRef.current = null;
+    const links = resultLinks();
+    const target = links[Math.min(pendingIndex, links.length - 1)];
+    if (target) target.focus();
+    else searchRef.current?.focus();
+  }, [filteredTabs, resultLinks, tabs]);
+
+  const handleOpenChange = React.useCallback((nextOpen: boolean): void => {
+    setOpen(nextOpen);
+    if (!nextOpen) setQuery('');
+  }, []);
+
+  const handleContentKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+      const links = resultLinks();
+      if (links.length === 0) return;
+      event.preventDefault();
+
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      const target = event.target instanceof Element ? event.target : null;
+      const currentRow = target?.closest<HTMLElement>('[data-document-result]') ?? null;
+      const currentLink = currentRow?.querySelector<HTMLAnchorElement>('a[href]') ?? null;
+      const currentIndex = currentLink ? links.indexOf(currentLink) : -1;
+      const nextIndex =
+        currentIndex === -1
+          ? direction === 1
+            ? 0
+            : links.length - 1
+          : (currentIndex + direction + links.length) % links.length;
+      links[nextIndex]?.focus();
+    },
+    [resultLinks],
+  );
+
   return (
-    <DropdownMenu>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
-          <DropdownMenuTrigger
+          <PopoverTrigger
             type="button"
             aria-label={`Open documents (${String(tabs.length)})`}
             className={cn(
-              // Rests on the same raised step as an inactive tab, so it reads as a pressable
-              // control in the strip rather than a stray count floating on the canvas.
               'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface data-[state=open]:bg-surface-container-highest data-[state=open]:text-on-surface text-label-medium flex h-8 shrink-0 items-center gap-0.5 self-center rounded-md px-2 transition-colors',
-              focusRing,
+              menuFocusRing,
             )}
           >
             <span className="tabular-nums">{tabs.length}</span>
             <ChevronDown aria-hidden="true" className="size-4" />
-          </DropdownMenuTrigger>
+          </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent>All open documents</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="end" width="lg">
-        <DropdownMenuLabel className="text-on-surface-variant">Open documents</DropdownMenuLabel>
-        {tabs.map((tab) => {
-          const Icon = TYPE_ICON[tab.type];
-          const active = tab.key === activeKey;
-          return (
-            <DropdownMenuItem
-              key={tab.key}
-              asChild
-              aria-current={active ? 'true' : undefined}
-              // The row keeps the menu's own padding, gap, and selection roles; the close button
-              // is the only thing this call site adds.
-              selected={active}
-            >
-              <div className="flex items-center">
-                {renderLink(
-                  tab.href,
-                  <>
-                    <Icon aria-hidden="true" className="shrink-0 opacity-70" />
-                    <span className="min-w-0 flex-1 truncate">{tab.title}</span>
-                  </>,
-                  'flex min-w-0 flex-1 items-center gap-3 outline-none',
-                )}
-                <button
-                  type="button"
-                  aria-label={`Close ${tab.title}`}
+
+      <PopoverContent
+        ref={contentRef}
+        role="dialog"
+        aria-label="Open documents"
+        align="end"
+        className="w-88"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          searchRef.current?.focus();
+        }}
+        onKeyDown={handleContentKeyDown}
+      >
+        <div
+          className={cn(
+            fieldSurface({ variant: 'filled', controlSize: 'xl' }),
+            CONTROL.xl.gap,
+            'focus-within:ring-ring flex items-center focus-within:ring-2',
+          )}
+        >
+          <Search aria-hidden="true" className={cn(CONTROL.xl.icon, 'text-on-surface-variant')} />
+          <input
+            ref={searchRef}
+            type="search"
+            aria-label="Search open documents"
+            placeholder="Search open documents"
+            value={query}
+            onChange={(event) => {
+              setQuery(event.currentTarget.value);
+            }}
+            className="placeholder:text-on-surface-variant min-w-0 flex-1 bg-transparent outline-none"
+          />
+          <kbd
+            aria-hidden="true"
+            className="text-on-surface-variant text-label-small shrink-0 tabular-nums"
+          >
+            {shortcutLabel}
+          </kbd>
+        </div>
+
+        {filteredTabs.length === 0 ? (
+          <p className="text-on-surface-variant text-body-small px-4 py-3">
+            No open documents found
+          </p>
+        ) : (
+          <div role="list" aria-label="Open document results" className="flex flex-col gap-0.5">
+            {filteredTabs.map((tab, index) => {
+              const Icon = TYPE_ICON[tab.type];
+              const active = tab.key === activeKey;
+              return (
+                <div
+                  key={tab.key}
+                  role="listitem"
+                  aria-label={tab.title}
+                  aria-current={active ? 'true' : undefined}
+                  data-document-result=""
+                  className={menuItemClass('standard', { selected: active })}
                   onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onClose(tab.key);
+                    const target = event.target instanceof Element ? event.target : null;
+                    if (target?.closest('a[href]')) handleOpenChange(false);
                   }}
-                  className={cn(
-                    'hover:bg-surface-container-high mr-1 flex size-6 shrink-0 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100',
-                    focusRing,
-                  )}
                 >
-                  <X aria-hidden="true" className="size-4" />
-                </button>
-              </div>
-            </DropdownMenuItem>
-          );
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+                  {renderLink(
+                    tab.href,
+                    <>
+                      <Icon aria-hidden="true" className="shrink-0 opacity-70" />
+                      <span className="min-w-0 flex-1 truncate">{tab.title}</span>
+                    </>,
+                    cn(
+                      'flex min-w-0 flex-1 items-center gap-3 rounded-corner-xs outline-none',
+                      menuFocusRing,
+                    ),
+                  )}
+                  <button
+                    type="button"
+                    aria-label={`Close ${tab.title}`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      pendingCloseIndexRef.current = index;
+                      onClose(tab.key);
+                    }}
+                    className={cn(
+                      CONTROL.xs.height,
+                      CONTROL.xs.width,
+                      'hover:bg-surface-container-high flex shrink-0 items-center justify-center rounded-md opacity-70 transition-opacity hover:opacity-100 focus-visible:opacity-100',
+                      menuFocusRing,
+                    )}
+                  >
+                    <X aria-hidden="true" className={CONTROL.xs.icon} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }

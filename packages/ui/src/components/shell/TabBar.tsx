@@ -21,9 +21,11 @@
  * the host's routing anchor (via {@link TabBarProps.renderLink}, which is handed the flex classes
  * so the anchor itself participates in the tab's flex row). A crowded bar **scrolls horizontally
  * only** — the strip clips vertical overflow so the chrome never grows a second row or a vertical
- * scrollbar. An always-present **overflow menu** pinned at the right edge lists *every* open
+ * scrollbar. An always-present **searchable switcher** pinned at the right edge lists *every* open
  * document (type glyph + title) so the caller can jump to or close any tab even when dozens are
- * open and most have scrolled out of view — keeping the bar usable with 3 tabs or 30.
+ * open and most have scrolled out of view. The switcher is capped at 352px, opens directly into
+ * its search field from the trigger or Command/Control+Shift+A, and uses ordinary Tab order across
+ * each link and close action instead of imposing menu semantics on a compound interactive row.
  *
  * @remarks Surface model — the bar is its **own bar on the canvas**: its container inherits the
  * shell's tinted `surface-container` tone (no panel surface, no divider border), so it reads as
@@ -38,7 +40,7 @@
  * grammar that content chips use.
  *
  * @remarks Inline responsiveness — the icon-only controls (each tab's close button and the
- * pinned overflow trigger) carry a {@link Tooltip} naming them on hover/focus, so a wordless
+ * pinned switcher trigger) carry a {@link Tooltip} naming them on hover/focus, so a wordless
  * glyph still announces its action. The bar mounts its own {@link TooltipProvider} so the
  * treatment works even when the bar is rendered outside the app-wide provider.
  */
@@ -71,8 +73,8 @@ export interface TabBarProps {
  * @remarks
  * Renders `null` when `tabs` is empty so it consumes no space until a document is opened. The
  * strip scrolls horizontally only (vertical overflow is clipped so the chrome never grows a
- * second row), and pins an {@link OverflowMenu} at the right edge that lists every open
- * document — so a bar with dozens of tabs stays navigable.
+ * second row), and pins an {@link OverflowMenu} at the right edge that filters every open
+ * document locally — so a bar with dozens of tabs stays navigable.
  */
 export function TabBar({
   tabs,

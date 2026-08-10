@@ -11,6 +11,7 @@ import {
   within,
 } from '@testing-library/react';
 import * as React from 'react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Home } from '../../../src/icons';
@@ -1175,7 +1176,7 @@ describe('TabBar', () => {
     expect(tablist).not.toHaveClass('overflow-y-auto', 'overflow-y-scroll', 'flex-wrap');
   });
 
-  it('pins an overflow menu listing every open document to jump to', async () => {
+  it('opens a fixed-width search surface instead of spending a row on a menu heading', async () => {
     render(
       <TabBar
         tabs={[TAB_A, TAB_B]}
@@ -1184,26 +1185,185 @@ describe('TabBar', () => {
         onClose={() => undefined}
       />,
     );
-    // The pinned control announces the open-document count and lives outside the scroll track.
     const trigger = screen.getByRole('button', { name: 'Open documents (2)' });
     openMenu(trigger);
-    // It lists every open document by title (type glyph + title), even those scrolled out of
-    // view — the strategy for a crowded bar. The active row is marked.
-    await waitFor(() => expect(screen.getByRole('menu')).toBeInTheDocument());
-    const menu = screen.getByRole('menu');
-    const jumpA = within(menu).getByRole('link', { name: 'Fix the build' });
+
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
+    expect(search).toHaveFocus();
+    expect(switcher).toHaveClass('w-88');
+    expect(within(switcher).queryByText('Open documents')).not.toBeInTheDocument();
+
+    const jumpA = within(switcher).getByRole('link', { name: 'Fix the build' });
     expect(jumpA).toHaveAttribute('href', '/orgs/o1/tasks/t1');
-    expect(within(menu).getByRole('link', { name: 'Q3 Launch' })).toHaveAttribute(
+    expect(within(switcher).getByRole('link', { name: 'Q3 Launch' })).toHaveAttribute(
       'href',
       '/orgs/o1/projects/p1',
     );
-    expect(within(menu).getByRole('menuitem', { name: /Q3 Launch/ })).toHaveAttribute(
+    expect(within(switcher).getByRole('listitem', { name: /Q3 Launch/ })).toHaveAttribute(
       'aria-current',
       'true',
     );
   });
 
-  it('closes any open document from the overflow menu', async () => {
+  it('filters open documents locally and renders a quiet no-results state', async () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_B.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
+
+    fireEvent.change(search, { target: { value: 'launch' } });
+    expect(within(switcher).queryByRole('link', { name: 'Fix the build' })).not.toBeInTheDocument();
+    expect(within(switcher).getByRole('link', { name: 'Q3 Launch' })).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: 'missing' } });
+    expect(within(switcher).getByText('No open documents found')).toBeInTheDocument();
+  });
+
+  it('opens from either platform shortcut while rejecting Alt and repeated keydown', async () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+
+    fireEvent.keyDown(document, { key: 'a', metaKey: true, shiftKey: true, altKey: true });
+    fireEvent.keyDown(document, { key: 'a', metaKey: true, shiftKey: true, repeat: true });
+    expect(screen.queryByRole('dialog', { name: 'Open documents' })).not.toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: 'A', ctrlKey: true, shiftKey: true });
+    expect(await screen.findByRole('searchbox', { name: 'Search open documents' })).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Open documents' })).not.toBeInTheDocument(),
+    );
+
+    fireEvent.keyDown(document, { key: 'a', metaKey: true, shiftKey: true });
+    expect(await screen.findByRole('searchbox', { name: 'Search open documents' })).toHaveFocus();
+  });
+
+  it('moves visible focus through the search, document link, and close action with Tab', async () => {
+    const user = userEvent.setup();
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'Open documents (2)' });
+    openMenu(trigger);
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    expect(
+      within(switcher).getByRole('searchbox', { name: 'Search open documents' }),
+    ).toHaveFocus();
+
+    await user.tab();
+    expect(within(switcher).getByRole('link', { name: 'Fix the build' })).toHaveFocus();
+    await user.tab();
+    expect(within(switcher).getByRole('button', { name: 'Close Fix the build' })).toHaveFocus();
+
+    fireEvent.keyDown(switcher, { key: 'Escape' });
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it('uses Arrow keys to wrap focus across document links', async () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
+    const first = within(switcher).getByRole('link', { name: 'Fix the build' });
+    const last = within(switcher).getByRole('link', { name: 'Q3 Launch' });
+
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: 'ArrowUp' });
+    expect(last).toHaveFocus();
+    fireEvent.keyDown(last, { key: 'ArrowDown' });
+    expect(first).toHaveFocus();
+  });
+
+  it('opens the focused document with Enter and dismisses the switcher', async () => {
+    const user = userEvent.setup();
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    const link = within(switcher).getByRole('link', { name: 'Q3 Launch' });
+    link.focus();
+
+    await user.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Open documents' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('balances result-row insets and removes the close action extra end margin', async () => {
+    render(
+      <TabBar
+        tabs={[TAB_A, TAB_B]}
+        activeKey={TAB_A.key}
+        renderLink={renderLink}
+        onClose={() => undefined}
+      />,
+    );
+    openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    const row = within(switcher).getByRole('listitem', { name: /Fix the build/ });
+    const close = within(row).getByRole('button', { name: 'Close Fix the build' });
+    expect(row).toHaveClass('px-4');
+    expect(close.className).not.toMatch(/\bmr-/);
+  });
+
+  it('closes a document and restores focus to the nearest remaining result', async () => {
+    function StatefulTabs(): React.JSX.Element {
+      const [tabs, setTabs] = React.useState<readonly OpenTab[]>([TAB_A, TAB_B]);
+      return (
+        <TabBar
+          tabs={tabs}
+          activeKey={TAB_A.key}
+          renderLink={renderLink}
+          onClose={(key) => {
+            setTabs((current) => current.filter((tab) => tab.key !== key));
+          }}
+        />
+      );
+    }
+
+    render(<StatefulTabs />);
+    openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    fireEvent.click(within(switcher).getByRole('button', { name: 'Close Q3 Launch' }));
+    await waitFor(() =>
+      expect(within(switcher).getByRole('link', { name: 'Fix the build' })).toHaveFocus(),
+    );
+  });
+
+  it('closes any open document from the switcher', async () => {
     const onClose = vi.fn();
     render(
       <TabBar
@@ -1214,8 +1374,8 @@ describe('TabBar', () => {
       />,
     );
     openMenu(screen.getByRole('button', { name: 'Open documents (2)' }));
-    const menu = await screen.findByRole('menu');
-    fireEvent.click(within(menu).getByRole('button', { name: 'Close Q3 Launch' }));
+    const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
+    fireEvent.click(within(switcher).getByRole('button', { name: 'Close Q3 Launch' }));
     expect(onClose).toHaveBeenCalledWith(TAB_B.key);
   });
 });

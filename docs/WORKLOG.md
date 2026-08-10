@@ -9,7 +9,7 @@
 
 ### [AGENDA-RAIL-001] Redesign the Agenda rail as a purpose-built single-day companion
 
-- **Status**: REVIEW
+- **Status**: IN_PROGRESS
 - **Started**: 2026-08-10
 - **Priority**: P1
 - **Description**: Replace the miniature full-calendar structure in the Agenda rail with a
@@ -22,14 +22,23 @@
   - [x] Confirm the structural direction and direct-creation behavior with the user.
   - [x] Record the approved design and its validation contract.
   - [x] Self-review the design for ambiguity, contradictions, and scope.
+  - [x] Write and self-review the test-first implementation plan.
+  - [ ] Preserve provider semantics and separate day context from scheduled events.
+  - [ ] Replace inherited calendar chrome with the purpose-built single-day rail shell.
+  - [ ] Improve event pacing, accents, content density, and permission presentation.
+  - [ ] Connect click, drag, all-day, and keyboard creation to one responsive draft form.
+  - [ ] Validate desktop/mobile light/dark behavior and complete the craft audit.
 - **Blockers**: None.
-- **Notes**: This task is design-only. Implementation planning begins only after the written spec
-  receives explicit review.
-- **Files Changed**: `docs/superpowers/specs/2026-08-10-agenda-rail-structural-redesign-design.md`
-  and this work log.
-- **Validation**: The spec has no TODO/TBD placeholders, Prettier passes for both changed files,
-  and `git diff --check` reports no whitespace errors. The self-review resolved keyboard-shortcut
-  ownership and ensured one draft cannot render beside a duplicate optimistic item.
+- **Notes**: The user approved implementation after reviewing the written structural direction.
+  Execution follows
+  `docs/superpowers/plans/2026-08-10-agenda-rail-structural-redesign.md` with focused red/green
+  cycles before repository-wide validation.
+- **Files Changed**: Design and implementation-plan documents plus this work log; production files
+  will be recorded as each implementation slice lands.
+- **Validation**: The spec and implementation plan have no TODO/TBD placeholders, Prettier passes
+  for all three planning files, and `git diff --check` reports no whitespace errors. Self-review
+  aligned planned test paths with the repository layout, resolved keyboard-shortcut ownership, and
+  ensured one draft cannot render beside a duplicate optimistic item.
 - **Learnings**: The rail's visual defects share one structural cause: a multi-lane calendar host
   owns single-day presentation decisions. Keeping scheduling geometry shared while moving date,
   context, scale, event presentation, and responsive draft creation into a rail shell preserves

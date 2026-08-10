@@ -1,6 +1,6 @@
 # Agenda Rail Structural Redesign
 
-> **Status**: Approved in conversation; awaiting written-spec review
+> **Status**: Approved for implementation
 > **Date**: 2026-08-10
 > **Area**: Agenda rail, shared scheduling canvas, layered calendar
 > **Refines**: `2026-06-29-portable-agenda-rail-design.md` and

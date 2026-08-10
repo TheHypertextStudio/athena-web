@@ -12,6 +12,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 
+import { fetchNotionWebhookToken } from './notion-webhook-token';
+
 // ── environments ────────────────────────────────────────────────────────────────
 
 export type Environment = 'local' | 'staging' | 'production';
@@ -129,6 +131,17 @@ export interface ProviderGroup {
    * Used for self-chosen secrets (e.g. the GitHub webhook secret) so nobody hand-runs openssl.
    */
   readonly generate?: (env: Environment) => Record<string, string>;
+  /**
+   * Vars this provider can retrieve on the operator's behalf instead of prompting for them —
+   * for a value Docket itself records durably once an external step completes, rather than one
+   * the operator types or pastes. The fetcher resolves `undefined` (never rejects) when the
+   * value isn't available YET, so the wizard can poll it for a few seconds before falling back
+   * to a manual prompt, rather than treating "not yet" as a hard failure. Keyed by var name;
+   * `env`/`project` mirror the cloud target already resolved for Secret Manager writes.
+   */
+  readonly autoFetch?: Readonly<
+    Record<string, (env: Environment, project?: string) => Promise<string | undefined>>
+  >;
   /**
    * Per-var input transforms applied to what the user enters BEFORE it is stored — so a prompt can
    * accept a friendly form and the script does the mechanical conversion (turnkey). Keyed by var
@@ -604,12 +617,20 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     optional: true,
     consoleUrl: 'https://app.notion.com/developers',
     vars: ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET', 'NOTION_WEBHOOK_TOKEN'],
-    requiredVars: ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET'],
-    optionalVars: ['NOTION_WEBHOOK_TOKEN'],
-    optionalLabel: 'Notion webhook delivery (otherwise the mirror polls)',
+    // The webhook is skippable ONLY on `local`, where there's no live Notion workspace pushing
+    // events at a public URL at all — the mock connector stands in instead. On a real
+    // environment there's no reason to leave real-time sync off, so it's required there.
+    varsForEnvironment: (env) =>
+      env === 'local'
+        ? ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET']
+        : ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET', 'NOTION_WEBHOOK_TOKEN'],
+    requiredVars: ['NOTION_CLIENT_ID', 'NOTION_CLIENT_SECRET', 'NOTION_WEBHOOK_TOKEN'],
+    autoFetch: { NOTION_WEBHOOK_TOKEN: fetchNotionWebhookToken },
     instructions: (env, urls) => [
-      'Creates a Notion Public Connection (OAuth). ~5 min. Optional — press Enter past these',
-      'prompts to skip and wire up Notion later; local dev runs against a built-in mock.',
+      'Creates a Notion Public Connection (OAuth). ~5 min.',
+      env === 'local'
+        ? 'Local dev runs against a built-in mock — press Enter past these prompts to skip.'
+        : '',
       '',
       '1) app.notion.com/developers → "Connections" → "New connection".',
       `2) Name: "${appName(env)}". Authentication method: OAuth. Installable in: "Public".`,
@@ -619,10 +640,15 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '   content) → under "User capabilities" select "Read user information including',
       '   email addresses".',
       '5) Copy Client ID and Client secret into the prompts below.',
-      '',
-      '6) Skip the "Webhooks" tab and the NOTION_WEBHOOK_TOKEN prompt below for now — Notion',
-      '   only reveals that token once, in the subscription handshake, and Docket has no',
-      '   admin page to read it back yet. The mirror polls until a subscription exists.',
+      ...(env === 'local'
+        ? []
+        : [
+            '',
+            '6) "Webhooks" tab → Create a subscription → URL:',
+            `     ${urls.apiBase}/internal/ingest/notion`,
+            '   Leave the event checkboxes at their defaults and create it. The next prompt',
+            '   fetches the verification token Notion sends you automatically — no copy-paste.',
+          ]),
     ],
   },
   {

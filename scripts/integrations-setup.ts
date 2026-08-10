@@ -40,6 +40,7 @@ import {
   outro,
   password,
   select,
+  spinner,
   text,
 } from '@clack/prompts';
 
@@ -991,6 +992,44 @@ async function resolveSetupUrls(
 
 type GuidedResult = 'complete' | 'skip' | 'exit';
 
+/**
+ * Poll a provider's {@link ProviderGroup.autoFetch} hook for a value it can retrieve on the
+ * operator's behalf, rather than prompting — e.g. a token Docket only ever sees once and
+ * records durably server-side. A short visible wait (not an instant single check) because the
+ * value typically depends on an external step the operator is doing in another window at this
+ * exact moment.
+ *
+ * @returns the fetched value, or undefined to fall back to the normal manual prompt.
+ */
+async function tryAutoFetch(
+  fetcher: (env: Environment, project?: string) => Promise<string | undefined>,
+  env: Environment,
+  project: string | undefined,
+  varName: string,
+): Promise<string | undefined> {
+  const spin = spinner();
+  spin.start(`Waiting for ${varName}`);
+  const attempts = 6;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const found = await fetcher(env, project);
+      if (found) {
+        spin.stop(`${varName} received.`);
+        return found;
+      }
+    } catch (error) {
+      spin.stop(
+        `Could not check for ${varName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return undefined;
+    }
+    spin.message(`Waiting for ${varName} (attempt ${String(attempt + 1)} of ${String(attempts)})`);
+    if (attempt < attempts - 1) await new Promise((r) => setTimeout(r, 5000));
+  }
+  spin.stop(`${varName} has not arrived yet.`);
+  return undefined;
+}
+
 /** Run provider steps with navigation and an explicit checkpoint after every operator action. */
 async function runGuidedSteps(
   group: ProviderGroup,
@@ -1002,6 +1041,7 @@ async function runGuidedSteps(
   collected: Record<string, string>,
   generatedValues: Readonly<Record<string, string>>,
   setupUrl?: string,
+  project?: string,
 ): Promise<GuidedResult> {
   let index = 0;
   while (index < steps.length) {
@@ -1032,13 +1072,17 @@ async function runGuidedSteps(
     if (current.var && shouldCollect && !generated) {
       const spec = findVar(current.var);
       if (!spec) throw new Error(`${group.title} references unknown variable ${current.var}.`);
-      const value = await promptVar(spec, {
-        env,
-        current:
-          spec.sensitive || replaceAll || status !== 'ready'
-            ? undefined
-            : currentValues.get(current.var),
-      });
+      const fetcher = group.autoFetch?.[current.var];
+      const fetched = fetcher ? await tryAutoFetch(fetcher, env, project, current.var) : undefined;
+      const value =
+        fetched ??
+        (await promptVar(spec, {
+          env,
+          current:
+            spec.sensitive || replaceAll || status !== 'ready'
+              ? undefined
+              : currentValues.get(current.var),
+        }));
       if (value !== undefined) {
         collected[current.var] = group.transform?.[current.var]?.(value) ?? value;
       }
@@ -1096,15 +1140,21 @@ async function runGuidedSteps(
         collected[current.var] = generated;
         ok(`${current.var} generated and copied without being displayed`);
       } else {
-        const value = await promptVar(spec, {
-          env,
-          current:
-            spec.sensitive || replaceAll || action === 'replace'
-              ? undefined
-              : status === 'ready'
-                ? currentValues.get(current.var)
-                : undefined,
-        });
+        const fetcher = group.autoFetch?.[current.var];
+        const fetched = fetcher
+          ? await tryAutoFetch(fetcher, env, project, current.var)
+          : undefined;
+        const value =
+          fetched ??
+          (await promptVar(spec, {
+            env,
+            current:
+              spec.sensitive || replaceAll || action === 'replace'
+                ? undefined
+                : status === 'ready'
+                  ? currentValues.get(current.var)
+                  : undefined,
+          }));
         if (value !== undefined) {
           collected[current.var] = group.transform?.[current.var]?.(value) ?? value;
         }
@@ -1366,6 +1416,7 @@ async function setupEnvironment(
           collected,
           generatedValues,
           setupUrl,
+          cloud?.project,
         );
       } else if (group.instructions) {
         guidedResult = await runGuidedSteps(
@@ -1378,6 +1429,7 @@ async function setupEnvironment(
           collected,
           generatedValues,
           setupUrl,
+          cloud?.project,
         );
       }
     }
@@ -1451,6 +1503,8 @@ async function setupEnvironment(
         replaceOptional,
         collected,
         generatedValues,
+        undefined,
+        cloud?.project,
       );
       if (guidedResult === 'exit') return;
       if (guidedResult === 'skip') {
@@ -1481,6 +1535,8 @@ async function setupEnvironment(
         editPolicy,
         collected,
         generatedValues,
+        undefined,
+        cloud?.project,
       );
       if (guidedResult === 'exit') return;
       if (guidedResult === 'skip') {

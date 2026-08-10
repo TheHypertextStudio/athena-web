@@ -174,6 +174,8 @@ describe('AppShellFrame session loading', () => {
     ).not.toBeInTheDocument();
     // Identity is known, so the account area is real rather than a placeholder.
     expect(placeholdersIn(screen.getByRole('main'))).toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Account menu' })).toBeInTheDocument();
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument();
     expect(requireAuthentication).not.toHaveBeenCalled();
   });
 

@@ -22,7 +22,7 @@ import { useRouter } from 'next/navigation';
 import { useAppPathname } from '@/lib/app-location';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import AccountMenu from '@/components/account-menu';
+import AccountMenu, { type AccountMenuIdentity } from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
 import Agenda from '@/components/agenda/agenda';
 import DayTasksPanel from '@/components/rail/day-tasks-panel';
@@ -246,6 +246,12 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
   // status ignores it, so it can never keep a signed-out person inside the shell.
   const offlineIdentity = status === 'unreachable' ? snapshot : null;
 
+  // One identity source feeds every identity-bound shell region, including the account row. The
+  // old account row started its own Better Auth hook, so a server-confirmed initial session could
+  // render no row on the server and a populated row on the first client pass. That duplicate read
+  // was the Account menu hydration mismatch captured during the switcher audit.
+  const accountIdentity = session?.user ?? initialSession ?? offlineIdentity;
+
   const userId = session?.user.id ?? initialSession?.userId ?? offlineIdentity?.userId ?? null;
   const routeOrgId = orgIdFromPath(pathname);
 
@@ -314,6 +320,7 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
             <OfflineSyncRuntime userId={userId} />
             <OpenDocumentsProvider userId={userId}>
               <AppShellInner
+                accountIdentity={accountIdentity}
                 identityUnknown={identityUnknown}
                 workspacesUnknown={workspacesUnknown}
                 sessionRejected={sessionRejected}
@@ -486,6 +493,8 @@ function railAsideFor(
 }
 
 interface AppShellInnerProps {
+  /** Display identity resolved by the outer session boundary, or `null` while genuinely unknown. */
+  accountIdentity: AccountMenuIdentity | null;
   /**
    * No live session, no server-confirmed identity, and no offline snapshot. Gates the account row
    * and the rail's per-person panels — and nothing else.
@@ -533,6 +542,7 @@ interface AppShellInnerProps {
  * mirrored into the shell context (driving the org accent + the Workspace section's hrefs).
  */
 function AppShellInner({
+  accountIdentity,
   identityUnknown,
   workspacesUnknown,
   sessionRejected,
@@ -666,7 +676,7 @@ function AppShellInner({
       onOpenSearch={openPalette}
       personalWorkspace={resolvedOrgIsPersonal}
       footer={
-        identityUnknown ? (
+        identityUnknown || !accountIdentity ? (
           <AppShellAccountSkeleton />
         ) : (
           // A real gap between every footer card, including the account row — the recovery nudge
@@ -675,7 +685,7 @@ function AppShellInner({
           <div className="flex flex-col gap-2">
             <SidebarRecoveryNudge personalOrgId={personalOrgId} userId={userId} />
             {applyUpdate ? <SidebarUpdateCard onApply={applyUpdate} /> : null}
-            <AccountMenu onCreateWorkspace={onCreateWorkspace} />
+            <AccountMenu identity={accountIdentity} onCreateWorkspace={onCreateWorkspace} />
           </div>
         )
       }

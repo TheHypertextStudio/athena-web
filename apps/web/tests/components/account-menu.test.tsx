@@ -10,15 +10,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => navigation,
 }));
 
-vi.mock('../../src/lib/auth-client', () => ({
-  authClient: {
-    useSession: () => ({ data: { user: { name: 'Ada Lovelace', email: 'ada@example.com' } } }),
-  },
-  signOut: vi.fn(),
-}));
-
 import AccountMenu from '../../src/components/account-menu';
 import { makeQueryWrapper } from '../support/query';
+
+const IDENTITY = { name: 'Ada Lovelace', email: 'ada@example.com' } as const;
 
 /**
  * Signing out now clears the persisted query cache as well as the session, so the menu reads the
@@ -36,7 +31,7 @@ afterEach(() => {
 describe('AccountMenu', () => {
   it('opens the shared create-workspace action', async () => {
     const onCreateWorkspace = vi.fn();
-    renderMenu(<AccountMenu onCreateWorkspace={onCreateWorkspace} />);
+    renderMenu(<AccountMenu identity={IDENTITY} onCreateWorkspace={onCreateWorkspace} />);
 
     const trigger = screen.getByRole('button', { name: 'Account menu' });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
@@ -57,7 +52,7 @@ describe('AccountMenu', () => {
     const dismiss = vi.fn();
     renderMenu(
       <ShellDrawerProvider dismiss={dismiss}>
-        <AccountMenu onCreateWorkspace={onCreateWorkspace} />
+        <AccountMenu identity={IDENTITY} onCreateWorkspace={onCreateWorkspace} />
       </ShellDrawerProvider>,
     );
 
@@ -74,7 +69,7 @@ describe('AccountMenu', () => {
   });
 
   it('opens the user-owned global Settings destination', async () => {
-    renderMenu(<AccountMenu onCreateWorkspace={vi.fn()} />);
+    renderMenu(<AccountMenu identity={IDENTITY} onCreateWorkspace={vi.fn()} />);
 
     const trigger = screen.getByRole('button', { name: 'Account menu' });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });

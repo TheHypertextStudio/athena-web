@@ -54,12 +54,15 @@ Gates: A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · S
    uses the shared XL 40px geometry, keeps its glyph aligned to the end, and retains 0px margin
    (`packages/ui/src/components/shell/tab-overflow-menu.tsx:217`).
 
-## External observation
+## Follow-up resolved
 
-One repeated-reload capture logged an existing hydration mismatch in the shell's Account menu
-(`apps/web/src/components/account-menu.tsx:58`). It did not involve the switcher DOM and did not
-recur as a switcher interaction failure; it is recorded here rather than silently attributed to
-this surface.
+The repeated-reload capture exposed a hydration mismatch in the shell's Account menu. Its row
+started a second Better Auth session hook even though `AppShellFrame` had already resolved the
+viewer server-side, so a server-confirmed identity and a still-pending first client session could
+produce different trees. The account row now receives the shell's one resolved display identity.
+The regression test first reproduced the missing row with a server identity and pending client
+session, then passed after the fix; a follow-up live audit completed eight authenticated hard
+reloads with the Account menu present and no hydration warnings or page errors.
 
 Verdict: **SHIP** — every dimension is at least 3 and all five gates pass for the open-document
 switcher.

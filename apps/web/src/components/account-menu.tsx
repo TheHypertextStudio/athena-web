@@ -17,8 +17,15 @@ import {
 import { useRouter } from 'next/navigation';
 import type { JSX } from 'react';
 
-import { authClient } from '@/lib/auth-client';
 import { signOutAndPurge } from '@/lib/sign-out';
+
+/** The display identity already resolved by the authenticated shell. */
+export interface AccountMenuIdentity {
+  /** The account's display name, which may be empty for legacy accounts. */
+  readonly name: string;
+  /** The account email and guaranteed fallback label. */
+  readonly email: string;
+}
 
 /**
  * The account control pinned to the foot of the app sidebar.
@@ -26,16 +33,20 @@ import { signOutAndPurge } from '@/lib/sign-out';
  * @remarks
  * Gives sign-out a visible, discoverable home instead of hiding it in the command palette only
  * (audit finding). Shows the signed-in identity (name + email) and opens a menu with global
- * workspace creation plus sign-out. Self-contained — it reads the Better Auth session directly,
- * so it renders nothing until a session exists (and on the auth screens it is never mounted).
+ * workspace creation plus sign-out. The parent shell supplies the identity it already resolved
+ * from the server session, live session, or permitted offline snapshot. Avoiding a second session
+ * read here keeps the server tree and first client tree identical during hydration.
  * One default export per the component-file convention.
  */
 export default function AccountMenu({
   onCreateWorkspace,
+  identity,
 }: {
   /** Open the shared-workspace creation flow. */
   onCreateWorkspace: () => void;
-}): JSX.Element | null {
+  /** Server/live/offline display identity resolved once by the shell. */
+  identity: AccountMenuIdentity;
+}): JSX.Element {
   const router = useRouter();
   const queryClient = useQueryClient();
   // When this menu is rendered inside the mobile off-canvas nav drawer, a selection must both act
@@ -45,10 +56,7 @@ export default function AccountMenu({
   // Inside the drawer the sidebar is always expanded, so this row is too.
   const { collapsed: sidebarCollapsed } = useShellSidebar();
   const collapsed = sidebarCollapsed && dismissDrawer === null;
-  const { data: session } = authClient.useSession();
-  if (!session) return null;
-
-  const { name, email } = session.user;
+  const { name, email } = identity;
   const label = name.trim() || email;
   const initial = (label || '?').charAt(0).toUpperCase();
 

@@ -24,6 +24,7 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useS
 
 import AccountMenu, { type AccountMenuIdentity } from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
+import { CreateObjectProvider } from '@/components/create-object/create-object-provider';
 import Agenda from '@/components/agenda/agenda';
 import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
@@ -311,43 +312,47 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
           is true behind a captive portal and true when the server itself is down. */}
       <ReachabilityProvider reachable={status !== 'unreachable'}>
         <ActiveOrgContext orgs={orgs} activeOrgId={routeOrgId} orgsError={orgsError}>
-          {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
-            know whose workspace to search — not once every workspace has loaded. */}
-          <CommandPaletteProvider enabled={!identityUnknown}>
-            <QueryPersistence userId={userId} />
-            {/* Beside the query cache and for the same reason: both bind local durable state to the
-              resolved account, and this is the first place that id is known. */}
-            <OfflineSyncRuntime userId={userId} />
-            <OpenDocumentsProvider userId={userId}>
-              <AppShellInner
-                accountIdentity={accountIdentity}
-                identityUnknown={identityUnknown}
-                workspacesUnknown={workspacesUnknown}
-                sessionRejected={sessionRejected}
-                settingsSurface={settingsSurface}
-                calendarSurface={calendarSurface}
-                showAthenaPulse={pathname !== '/athena'}
-                locationKey={pathname}
-                routeOrgId={routeOrgId}
-                userId={userId}
-                offline={
-                  status === 'unreachable'
-                    ? {
-                        online,
-                        onRetry: () => {
-                          void refetch();
-                        },
-                      }
-                    : null
-                }
-                unavailable={unavailable}
-                workspaceKey={workspaceKeyFromPath(pathname)}
-                homeKey={homeKeyFromPath(pathname)}
-              >
-                {children}
-              </AppShellInner>
-            </OpenDocumentsProvider>
-          </CommandPaletteProvider>
+          {/* Creation state belongs above the palette so commands and page launchers converge on
+            one request. Kind-specific bodies are mounted into this seam as they migrate. */}
+          <CreateObjectProvider>
+            {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
+              know whose workspace to search — not once every workspace has loaded. */}
+            <CommandPaletteProvider enabled={!identityUnknown}>
+              <QueryPersistence userId={userId} />
+              {/* Beside the query cache and for the same reason: both bind local durable state to the
+                resolved account, and this is the first place that id is known. */}
+              <OfflineSyncRuntime userId={userId} />
+              <OpenDocumentsProvider userId={userId}>
+                <AppShellInner
+                  accountIdentity={accountIdentity}
+                  identityUnknown={identityUnknown}
+                  workspacesUnknown={workspacesUnknown}
+                  sessionRejected={sessionRejected}
+                  settingsSurface={settingsSurface}
+                  calendarSurface={calendarSurface}
+                  showAthenaPulse={pathname !== '/athena'}
+                  locationKey={pathname}
+                  routeOrgId={routeOrgId}
+                  userId={userId}
+                  offline={
+                    status === 'unreachable'
+                      ? {
+                          online,
+                          onRetry: () => {
+                            void refetch();
+                          },
+                        }
+                      : null
+                  }
+                  unavailable={unavailable}
+                  workspaceKey={workspaceKeyFromPath(pathname)}
+                  homeKey={homeKeyFromPath(pathname)}
+                >
+                  {children}
+                </AppShellInner>
+              </OpenDocumentsProvider>
+            </CommandPaletteProvider>
+          </CreateObjectProvider>
         </ActiveOrgContext>
       </ReachabilityProvider>
     </ContextProvider>
